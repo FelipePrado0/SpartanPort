@@ -113,7 +113,7 @@ def main():
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('GOW3_CONTENT_SKU', 'full'))
 
         from patches import game_patchable, game_profile, game_title_id, patch_requirements, selected_patches
-        profile = game_profile(game_title_id(game))
+        profile = game_profile(game_title_id(game), game)
         patched = bool(profile) and (game_patchable(game) or bool(env.get('GOW3_FORCE_PATCHES')))
         engine_fps = 60
         # The window shows the game's icon (BMP: the format SDL loads without extra libraries).

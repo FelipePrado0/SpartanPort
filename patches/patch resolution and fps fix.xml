@@ -1,0 +1,116 @@
+<?xml version="1.0"?>
+<!-- CUSA01623 APP_VER 01.02, eboot SHA256
+     6e72330e9092e5164049b865e5568f2d450904001a73fe0a2f4b39194c195b3c.
+     Addresses checked against PT_LOAD virtual addresses in out/eboot.elf,
+     NOT byte offsets in boot.bin (which includes G3PROBE2 metadata).
+     59.94 at 0x75dd04 is loaded at 0x5f0ce0 and passed to 0x5efe10.
+     Swing energy's LEA at 0x48ff0a is redirected from the engine rate to
+     the existing 60.0 constant at 0x6fc1f8. Expected bytes are checked again
+     by the patch compiler before emitting writes. -->
+<Patch>
+    <TitleID><ID>CUSA01623</ID></TitleID>
+    <Metadata Title="God of War III Remastered" Name="Bug Fix - Texture Corruption Fix" Note="Increases the Video Arena to 2.25 GiB. Requires setting DMEM to 2048 MB or more." Author="cuesta4" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
+        <PatchList><Line Type="bytes" Address="0x007cd918" Expected="00000050" Value="00000090"/></PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 480p" Note="Decreases game output resolution to 854x480 and increases Video Arena to 2.25 GiB. Requires setting DMEM to 2048 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="kvicken + cuesta4" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0c5b" Value="56030000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005f0c63" Value="e0010000" Expected="38040000" />
+            <Line Type="bytes" Address="0x005f0c6c" Value="5603" Expected="8007" />
+            <Line Type="bytes" Address="0x005f0c73" Value="e001" Expected="3804" />
+            <Line Type="bytes" Address="0x005643e3" Value="e0010000" Expected="38040000" />
+            <Line Type="bytes" Address="0x005643f0" Value="56030000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005ff889" Value="56030000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005ff88f" Value="e0010000" Expected="38040000" />
+            <Line Type="bytes" Address="0x007cd918" Value="00000090" Expected="00000050" />
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 720p" Note="Decreases game output resolution to 1280x720 and increases Video Arena to 2.25 GiB. Requires setting DMEM to 2048 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="kvicken + cuesta4" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0c5b" Value="00050000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005f0c63" Value="d0020000" Expected="38040000" />
+            <Line Type="bytes" Address="0x005f0c6c" Value="0005" Expected="8007" />
+            <Line Type="bytes" Address="0x005f0c73" Value="d002" Expected="3804" />
+            <Line Type="bytes" Address="0x005643e3" Value="d0020000" Expected="38040000" />
+            <Line Type="bytes" Address="0x005643f0" Value="00050000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005ff889" Value="00050000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005ff88f" Value="d0020000" Expected="38040000" />
+            <Line Type="bytes" Address="0x007cd918" Value="00000090" Expected="00000050" />
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1440p" Note="Increases game output resolution to 2560x1440 and Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="kvicken + cuesta4" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0c5b" Value="000a0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005f0c63" Value="a0050000" Expected="38040000" />
+            <Line Type="bytes" Address="0x005f0c6c" Value="000a" Expected="8007" />
+            <Line Type="bytes" Address="0x005f0c73" Value="a005" Expected="3804" />
+            <Line Type="bytes" Address="0x005643e3" Value="a0050000" Expected="38040000" />
+            <Line Type="bytes" Address="0x005643f0" Value="000a0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005ff889" Value="000a0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005ff88f" Value="a0050000" Expected="38040000" />
+            <Line Type="bytes" Address="0x007c46b4" Value="000a0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x007c46b8" Value="a0050000" Expected="38040000" />
+            <Line Type="bytes" Address="0x0056bb72" Value="a0050000" Expected="38040000" />
+            <Line Type="bytes" Address="0x0060965d" Value="a0050000" Expected="38040000" />
+            <Line Type="bytes" Address="0x007f2a3c" Value="00050000" Expected="c0030000" />
+            <Line Type="bytes" Address="0x007f2a40" Value="d0020000" Expected="1c020000" />
+            <Line Type="bytes" Address="0x007cd918" Value="000000b0" Expected="00000050" />
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1800p" Note="Increases game output resolution to 3200x1800 and Video Arena to 3.25 GiB. Requires setting DMEM to 4608 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="kvicken + cuesta4" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0c5b" Value="800c0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005f0c63" Value="08070000" Expected="38040000" />
+            <Line Type="bytes" Address="0x005f0c6c" Value="800c" Expected="8007" />
+            <Line Type="bytes" Address="0x005f0c73" Value="0807" Expected="3804" />
+            <Line Type="bytes" Address="0x005643e3" Value="08070000" Expected="38040000" />
+            <Line Type="bytes" Address="0x005643f0" Value="800c0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005ff889" Value="800c0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005ff88f" Value="08070000" Expected="38040000" />
+            <Line Type="bytes" Address="0x007c46b4" Value="800c0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x007c46b8" Value="08070000" Expected="38040000" />
+            <Line Type="bytes" Address="0x0056bb72" Value="08070000" Expected="38040000" />
+            <Line Type="bytes" Address="0x0060965d" Value="08070000" Expected="38040000" />
+            <Line Type="bytes" Address="0x007f2a3c" Value="40060000" Expected="c0030000" />
+            <Line Type="bytes" Address="0x007f2a40" Value="84030000" Expected="1c020000" />
+            <Line Type="bytes" Address="0x007cd918" Value="000000d0" Expected="00000050" />
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 4K" Note="Increases game output resolution to 3840x2160 and Video Arena to approximately 4 GB (3.75 GiB). Requires setting DMEM to 6144 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="kvicken + cuesta4" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0c5b" Value="000f0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005f0c63" Value="70080000" Expected="38040000" />
+            <Line Type="bytes" Address="0x005f0c6c" Value="000f" Expected="8007" />
+            <Line Type="bytes" Address="0x005f0c73" Value="7008" Expected="3804" />
+            <Line Type="bytes" Address="0x005643e3" Value="70080000" Expected="38040000" />
+            <Line Type="bytes" Address="0x005643f0" Value="000f0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005ff889" Value="000f0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x005ff88f" Value="70080000" Expected="38040000" />
+            <Line Type="bytes" Address="0x007c46b4" Value="000f0000" Expected="80070000" />
+            <Line Type="bytes" Address="0x007c46b8" Value="70080000" Expected="38040000" />
+            <Line Type="bytes" Address="0x0056bb72" Value="70080000" Expected="38040000" />
+            <Line Type="bytes" Address="0x0060965d" Value="70080000" Expected="38040000" />
+            <Line Type="bytes" Address="0x007f2a3c" Value="80070000" Expected="c0030000" />
+            <Line Type="bytes" Address="0x007f2a40" Value="38040000" Expected="1c020000" />
+            <Line Type="bytes" Address="0x007cd918" Value="000000f0" Expected="00000050" />
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Frame Rate Patch - 120 FPS" Note="Corrects the engine delta-time floor and swing energy for up to 120 FPS. Requires setting VBlank to 120 FPS." Author="kvicken" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x0048ff0a" Expected="488d056fdd3300" Value="488d05e7c22600"/>
+            <Line Type="bytes" Address="0x0075dd04" Expected="8fc26f42" Value="0000f042"/>
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Frame Rate Patch - 240 FPS" Note="Corrects the engine delta-time floor and swing energy for up to 240 FPS. Requires setting VBlank to 240 FPS." Author="kvicken, gow3_pc" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x0048ff0a" Expected="488d056fdd3300" Value="488d05e7c22600"/>
+            <Line Type="bytes" Address="0x0075dd04" Expected="8fc26f42" Value="00007043"/>
+        </PatchList>
+    </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Skip Any Video With X Button" Note="Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy." Author="cuesta4" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
+        <PatchList>
+            <Line Type="bytes" Address="0x0041b2a3" Expected="754a" Value="7542"/>
+            <Line Type="bytes" Address="0x0041b2e7" Expected="85c00f95c00fb6c8" Value="b901000000909090"/>
+        </PatchList>
+    </Metadata>
+</Patch>

@@ -65,12 +65,34 @@ def compile_patches(xml, names, app_version, segments):
     return writes
 
 
+def validate_original_bytes(xml, names, app_version, elf):
+    """Check optional Expected bytes using ELF virtual addresses, never probe-file offsets."""
+    phoff,=struct.unpack_from('<Q',elf,0x20)
+    phentsize,phnum=struct.unpack_from('<HH',elf,0x36)
+    loads=[]
+    for i in range(phnum):
+        kind,_,offset,vaddr,_,filesz,_,_=struct.unpack_from('<IIQQQQQQ',elf,phoff+i*phentsize)
+        if kind==1: loads.append((vaddr,filesz,offset))
+    for meta in ET.parse(xml).getroot().iter('Metadata'):
+        if meta.get('Name') not in names or meta.get('AppVer')!=app_version: continue
+        for line in meta.iter('Line'):
+            if not line.get('Expected'): continue
+            expected=bytes.fromhex(line.get('Expected'))
+            address=int(line.get('Address'),0)-EBOOT_BASE
+            match=next((offset+address-vaddr for vaddr,size,offset in loads
+                        if vaddr<=address and address+len(expected)<=vaddr+size),None)
+            if match is None or elf[match:match+len(expected)]!=expected:
+                raise ValueError(f'{meta.get("Name")}: original bytes mismatch at {line.get("Address")}')
+
+
 PATCHES_DIR=Path(__file__).resolve().parent.parent/'patches'
 # Built-in patch file per game, the app version its addresses are for and, when known, the
 # sha256 of the only eboot.bin they were checked against (another build of the same version has
 # its code elsewhere: byte writes there corrupt it).
 GAMES=[({'CUSA01623'},PATCHES_DIR/'God_of_War_III_Remastered.xml','01.02',
-        'd85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299')]
+        'd85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299'),
+       ({'CUSA01623'},PATCHES_DIR/'patch resolution and fps fix.xml','01.02',
+        '6e72330e9092e5164049b865e5568f2d450904001a73fe0a2f4b39194c195b3c')]
 DMEM_RETAIL_MB=5056  # runtime_memory.c POOL_SIZE default
 
 
@@ -82,9 +104,13 @@ def game_title_id(game):
         return None
 
 
-def game_profile(title_id):
+def game_profile(title_id, game=None):
     """(title IDs, built-in XML, app version, eboot sha256 or None) for a known game, else None."""
-    return next((g for g in GAMES if title_id in g[0]),None)
+    candidates=[g for g in GAMES if title_id in g[0]]
+    if game is not None:
+        return next((g for g in candidates if eboot_matches(game,g)),
+                    candidates[0] if candidates else None)
+    return candidates[0] if candidates else None
 
 
 def eboot_matches(game, profile):
@@ -102,7 +128,7 @@ def game_patchable(game):
     """Whether the built-in patches apply to this game folder: a known game, version and build."""
     if not game:
         return False
-    profile=game_profile(game_title_id(game))
+    profile=game_profile(game_title_id(game),game)
     return bool(profile) and game_app_version(game)==profile[2] and eboot_matches(game,profile)
 
 
@@ -143,7 +169,8 @@ def external_patches(directory, app_version, exclude, ids):
     found=[]
     directory=Path(directory)
     for path in sorted(directory.glob('*.xml')) if directory.is_dir() else []:
-        if path.resolve()==Path(exclude).resolve(): continue  # the built-in file (patches/ in a checkout)
+        if path.resolve() in {Path(exclude).resolve(), *(g[1].resolve() for g in GAMES)}:
+            continue  # Built-in profiles are selected by hash, never as external patches.
         try:
             root=ET.parse(path).getroot()
         except ET.ParseError as error:
@@ -205,7 +232,7 @@ def main():
     p.add_argument('--game-dir',type=Path,default=Path(os.environ.get('GOW3_GAME_DIR','../CUSA01623')))
     a=p.parse_args()
     title=game_title_id(a.game_dir)
-    profile=game_profile(title)
+    profile=game_profile(title,a.game_dir)
     if not profile:
         write_patches(a.out,[])
         print(f'Patches: no patch profile for {title}: none applied')
@@ -223,7 +250,9 @@ def main():
         print(f'Patches: eboot.bin is not the build {xml.name} was checked against: none applied')
         return
     names=selected_patches(xml,needed,a.extra,os.environ.get('GOW3_PATCHES_ONLY')=='1')
-    segments=eboot_segments((a.out/'eboot.elf').read_bytes())
+    elf=(a.out/'eboot.elf').read_bytes()
+    segments=eboot_segments(elf)
+    validate_original_bytes(xml,names,needed,elf)
     writes=compile_patches(xml,names,needed,segments)
     if a.patches_dir:
         # After the built-in ones: an external patch of the same bytes wins.
