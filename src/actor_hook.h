@@ -3,6 +3,11 @@
 #define GOW3_ACTOR_HOOK_H
 #include <stdint.h>
 #include <string.h>
+#ifdef __cplusplus
+#define GOW3_STATIC_ASSERT static_assert
+#else
+#define GOW3_STATIC_ASSERT _Static_assert
+#endif
 
 /* CUSA01623 v01.02, image offset 0x50417: the instruction after the damage routine stores an
  * actor's new health (vmovss [r13+0x1cc], xmm0 at 0x5040e, the infinite-health cheat's site).
@@ -23,7 +28,7 @@ typedef struct {
     uint32_t seq, pad;
     uint64_t reserved;
 } Gow3ActorSlot;
-_Static_assert(sizeof(Gow3ActorSlot) == 32, "stub uses a 32-byte stride");
+GOW3_STATIC_ASSERT(sizeof(Gow3ActorSlot) == 32, "stub uses a 32-byte stride");
 
 static inline int gow3_actor_signature_match(const unsigned char *code, uint64_t size) {
     return size >= GOW3_ACTOR_HOOK_LENGTH && !memcmp(code, gow3_actor_original, GOW3_ACTOR_HOOK_LENGTH);

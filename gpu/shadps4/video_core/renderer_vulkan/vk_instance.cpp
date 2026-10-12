@@ -218,7 +218,7 @@ bool PipelineBinaryCacheRequested() {
 
 bool InitializePipelineBinaryCache(vk::Device device, bool supported,
                                    vk::PipelineBinaryKeyKHR& global_key) {
-    global_key = {};
+    global_key = vk::PipelineBinaryKeyKHR{};
     if (!PipelineBinaryCacheRequested()) {
         LOG_INFO(Render_Vulkan, "Pipeline binary cache disabled by settings; using normal compilation");
         return false;
@@ -238,7 +238,7 @@ bool InitializePipelineBinaryCache(vk::Device device, bool supported,
     if (result != vk::Result::eSuccess || !global_key.keySize ||
         global_key.keySize > VK_MAX_PIPELINE_BINARY_KEY_SIZE_KHR) {
         const auto key_size = global_key.keySize;
-        global_key = {};
+        global_key = vk::PipelineBinaryKeyKHR{};
         LOG_WARNING(Render_Vulkan,
                     "Pipeline binary cache key unavailable (result {}, size {}); using normal compilation",
                     vk::to_string(result), key_size);
