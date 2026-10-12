@@ -118,6 +118,18 @@ Patches and fixes are included and applied automatically: texture fix, skip vide
 
 ## Building from source
 
+This checkout also supports reading a PS4 PKG directly on Windows. Build the port
+with `bash build.sh`, then run `python run.py "path\to\game.pkg"`, or choose
+the PKG using Browse on the launcher's Game page. The package stays intact;
+assets are read through a read-only named-pipe filesystem bridge. Only the
+normal prepared boot image, shader caches, settings and saves are written.
+The bridge uses [LibOrbisPkg](https://github.com/maxton/LibOrbisPkg), LGPL-3.0,
+and Windows .NET Framework 4.x. `tools/build_pkg_bridge.ps1` builds the helper.
+Folder-based mod overlays are currently available only for folder inputs.
+CUSA01715 01.00 was tested through brightness setup, the main menu and the
+opening New Game cinematic; full gameplay has not been validated.
+The CUSA01623 01.02 patches and cheats are not applied to that build.
+
 Development happens on the `gow3` branch; `main` receives tested merges.
 
 1. Install MSYS2 (`winget install MSYS2.MSYS2`) and, in the **MSYS2 CLANG64** shell, the

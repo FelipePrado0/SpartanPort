@@ -7,6 +7,8 @@ from prepare import sfo
 
 
 def prepare(game, out, sku='full'):
+    from pkg_source import game_source
+    game = game_source(game)
     values=sfo((game/'sce_sys/param.sfo').read_bytes())
     params=[values.get(f'USER_DEFINED_PARAM_{i}',0) for i in range(1,5)]
     if any(type(v) is not int or not 0<=v<=0xffffffff for v in params):

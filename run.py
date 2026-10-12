@@ -8,6 +8,7 @@ The in-game "Apply and restart" runs this script again through GOW3_RESTART_COMM
 `--after PID` waits for the previous game process to end first (its GPU device and memory).
 """
 import ctypes
+import io
 import os
 from pathlib import Path
 import shutil
@@ -62,7 +63,7 @@ def find_executable(name):
     return None
 
 
-def main():
+def run_game():
     args = sys.argv[1:]
     if len(args) >= 2 and args[0] == '--after':
         wait_for(int(args[1]))
@@ -98,17 +99,23 @@ def main():
             env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
 
     game = Path(env.get('GOW3_GAME_DIR', PORT.parent / 'CUSA01623'))
-    if not (game / 'eboot.bin').is_file():
+    from pkg_source import game_source
+    source = game_source(game)
+    is_pkg = game.suffix.lower() == '.pkg'
+    if is_pkg:
+        print(f'PKG: reading game files directly from {game}', flush=True)
+    if not (source / 'eboot.bin').is_file():
         fail(f'No eboot.bin in {game} (set GOW3_GAME_DIR).')
     original_game = game.resolve()
-    game = Path(run_script('mods.py', game, '--out', out,
+    game = game if is_pkg else Path(run_script('mods.py', game, '--out', out,
                            '--mods-dir', env.get('GOW3_MODS_DIR', data / 'mods'),
                            '--config', env.get('GOW3_MODS_CONFIG', data / 'mods.json'),
                            '--enabled', env.get('GOW3_MODS_ENABLED', '1'), capture=True).strip())
     mod_view = game if game.resolve() != original_game else None
     try:
         run_script('prepare.py', game, '--out', out)
-        run_script('link_libc.py', game, '--out', out)
+        if not is_pkg:
+            run_script('link_libc.py', game, '--out', out)
         run_script('link_modules.py', game, '--out', out)
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('GOW3_CONTENT_SKU', 'full'))
 
@@ -119,7 +126,8 @@ def main():
         # The window shows the game's icon (BMP: the format SDL loads without extra libraries).
         try:
             from PIL import Image
-            with Image.open(game / 'sce_sys' / 'icon0.png') as icon:
+            icon_source = io.BytesIO((source / 'sce_sys/icon0.png').read_bytes()) if is_pkg else game / 'sce_sys/icon0.png'
+            with Image.open(icon_source) as icon:
                 icon.convert('RGBA').resize((64, 64), Image.LANCZOS).save(out / 'window_icon.bmp')
             env.setdefault('GOW3_WINDOW_ICON', str(out / 'window_icon.bmp'))
         except (ImportError, OSError):
@@ -179,6 +187,19 @@ def main():
     finally:
         if mod_view:
             shutil.rmtree(mod_view, ignore_errors=True)
+
+
+def main():
+    sys.path.insert(0, str(PORT / 'scripts'))
+    if len(sys.argv) > 1 and sys.argv[1].lower().endswith('.pkg'):
+        os.environ['GOW3_GAME_DIR'] = str(Path(sys.argv.pop(1)).resolve())
+    game = Path(os.environ.get('GOW3_GAME_DIR', PORT.parent / 'CUSA01623'))
+    if game.suffix.lower() == '.pkg':
+        from pkg_source import PkgSession
+        with PkgSession(game):
+            return run_game()
+    os.environ.pop('GOW3_PKG_PIPE', None)
+    return run_game()
 
 
 if __name__ == '__main__':

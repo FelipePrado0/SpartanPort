@@ -287,10 +287,20 @@ static void watchdog(int sig, siginfo_t *info, void *context) {
 #endif
 /* param.sfo lookup: string or integer value of key, 0 when absent. */
 static int sfo_value(const char *path, const char *key, char *text, size_t text_size, uint32_t *number) {
-    FILE *f=fopen(path,"rb");
-    if (!f) return 0;
     unsigned char data[65536];
-    size_t n=fread(data,1,sizeof(data),f); fclose(f);
+    size_t n=0;
+    if (getenv("GOW3_PKG_PIPE")) {
+        int64_t fd=runtime_file_open("/app0/sce_sys/param.sfo",0,0);
+        if (fd<0) return 0;
+        int64_t got=runtime_file_read((int)fd,data,sizeof(data));
+        runtime_file_close((int)fd);
+        if (got<0) return 0;
+        n=(size_t)got;
+    } else {
+        FILE *f=fopen(path,"rb");
+        if (!f) return 0;
+        n=fread(data,1,sizeof(data),f); fclose(f);
+    }
     if (n<20 || memcmp(data,"\0PSF",4)) return 0;
     uint32_t keys, values, count;
     memcpy(&keys,data+8,4); memcpy(&values,data+12,4); memcpy(&count,data+16,4);

@@ -1,8 +1,9 @@
 God of War III Remastered for PC (gow3_pc)
 ==========================================
 
-No game files are included. You need your own copy of God of War III Remastered: CUSA01623 with
-the 01.02 update, as a folder that contains eboot.bin, sce_module and sce_sys.
+No game files are included. Select your God of War III Remastered PS4 PKG directly.
+This build was tested with CUSA01715 version 01.00 through the menu and opening cinematic.
+The PKG is read directly; no extracted game folder is required.
 
 Requirements
 - Windows 10 (1903 or newer) or Windows 11, 64-bit.
@@ -13,13 +14,13 @@ Starting
 1. Extract this folder anywhere, for example C:\Games\gow3-windows (not inside the zip).
 2. Open "God of War III.exe". If Windows shows "Windows protected your PC", click More info,
    then Run anyway: the program is not digitally signed.
-3. Click "Choose the game folder", then Browse... next to Game folder, and select the folder
-   with eboot.bin.
+3. Click "Choose the game PKG or folder", then Browse... next to Game PKG or folder to select
+   your .pkg file. Folder... still accepts a dump with eboot.bin, sce_module and sce_sys.
 4. Back on Home, adjust the quick settings if you like, then click PLAY. The first start takes
    a little longer while the game image is prepared.
 
-Patches and fixes are included and applied automatically: texture fix, skip videos with X and
-120 FPS are on by default. Change the resolution and frame rate on Home or Performance.
+Patches are enabled only when they match your title/version. Change resolution and frame rate
+on Home or Performance.
 
 While playing
 - Insert on the keyboard, or R3 + L2 on the controller, opens the port's menu: cheats,

@@ -47,7 +47,8 @@ typedef struct {
 _Static_assert(sizeof(GuestStat)==120,"FreeBSD stat layout");
 
 typedef struct { char *names; size_t count, *offsets; unsigned char *types; } Listing;
-typedef struct { int used, host; Listing *dir; size_t position; char path[512]; } File;
+typedef struct { int used, host; Listing *dir; size_t position; char path[512]; int pkg; int64_t pkg_size, pkg_position; } File;
+#include "pkg_file_win.h"
 typedef struct { char guest[64]; char host[512]; } Mount;
 static File files[MAX_FILES];
 static Mount mounts[MAX_MOUNTS];
@@ -201,6 +202,27 @@ static int game_path(const char *p) {
 /* All operations return >=0 or -(host errno); wrappers adapt the convention. */
 static int64_t do_open(const char *guest,int flags,int mode) {
     if (game_path(guest) && (flags & (3|0x8|0x200|0x400|0x800))) return -EROFS;
+#ifdef _WIN32
+    const char *member=pkg_path(guest);
+    if (member) {
+        if (strlen(member)>=sizeof(files[0].path)) return -ENAMETOOLONG;
+        int type=0,e; int64_t size=0;
+        if ((e=pkg_info(member,&type,&size))) return -e;
+        if ((flags&0x20000) && type!=4) return -ENOTDIR;
+        Listing *dir=type==4 ? pkg_listing(member,&e) : NULL;
+        if (type==4 && !dir) return -e;
+        pthread_mutex_lock(&lock);
+        int fd=-1;
+        for (int i=3;i<MAX_FILES;++i) if (!files[i].used) { fd=i; break; }
+        if (fd>=0) {
+            files[fd]=(File){.used=1,.host=-1,.dir=dir,.pkg=1,.pkg_size=size};
+            snprintf(files[fd].path,sizeof(files[fd].path),"%s",member); ++opens;
+        }
+        pthread_mutex_unlock(&lock);
+        if (fd<0) { free_listing(dir); return -EMFILE; }
+        return fd;
+    }
+#endif
     char path[1024];
     int e=translate(guest,path,sizeof(path));
     if (e) return -e;
@@ -294,7 +316,41 @@ static void touch_for_write(void *buffer,uint64_t size) {
         *b=*b;
     }
 }
+#ifdef _WIN32
+static int64_t pkg_read_file(int fd,void *buffer,uint64_t size,int64_t offset,int advance) {
+    if (offset<0 || (!buffer && size)) return -EINVAL;
+    pthread_mutex_lock(&lock);
+    File *f=get(fd);
+    if (!f || !f->pkg || f->dir) { pthread_mutex_unlock(&lock); return -EBADF; }
+    if (advance) offset=f->pkg_position;
+    uint64_t total=0;
+    int e=0;
+    if (size>0x7ffff000) size=0x7ffff000; /* same limit as the Windows CRT */
+    if (size>(uint64_t)(INT64_MAX-offset)) { pthread_mutex_unlock(&lock); return -EINVAL; }
+    while (total<size) {
+        uint32_t count=(uint32_t)(size-total>8*1024*1024 ? 8*1024*1024 : size-total);
+        unsigned char *data=NULL; uint32_t n=0;
+        e=pkg_request(2,f->path,offset+(int64_t)total,count,&data,&n);
+        if (!e && n>count) e=EIO;
+        if (!e && n) {
+            unsigned char *destination=(unsigned char *)buffer+total;
+            touch_for_write(destination,n); memcpy(destination,data,n); total+=n;
+        }
+        free(data);
+        if (e || n<count) break;
+    }
+    if (advance) f->pkg_position+=(int64_t)total;
+    pthread_mutex_unlock(&lock);
+    if (e && !total) return -e;
+    __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,total,__ATOMIC_RELAXED);
+    return (int64_t)total;
+}
+#endif
 static int64_t do_read(int fd,void *buffer,uint64_t size) {
+#ifdef _WIN32
+    File *file=get(fd);
+    if (file && file->pkg) return pkg_read_file(fd,buffer,size,0,1);
+#endif
     int h=host_fd(fd);
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
@@ -304,6 +360,10 @@ static int64_t do_read(int fd,void *buffer,uint64_t size) {
     return n;
 }
 static int64_t do_pread(int fd,void *buffer,uint64_t size,int64_t offset) {
+#ifdef _WIN32
+    File *file=get(fd);
+    if (file && file->pkg) return pkg_read_file(fd,buffer,size,offset,0);
+#endif
     int h=host_fd(fd);
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
@@ -335,10 +395,24 @@ static int64_t do_lseek(int fd,int64_t offset,int whence) {
         if (whence==0 && offset>=0) { f->position=(size_t)offset; return offset; }
         return -EINVAL;
     }
+    if (f->pkg) {
+        pthread_mutex_lock(&lock);
+        int64_t base=whence==0 ? 0 : whence==1 ? f->pkg_position : f->pkg_size;
+        if (offset>INT64_MAX-base || offset < -base) { pthread_mutex_unlock(&lock); return -EINVAL; }
+        int64_t r=base+offset; f->pkg_position=r;
+        pthread_mutex_unlock(&lock); return r;
+    }
     int64_t r=host_lseek(f->host,offset,whence);
     return r<0 ? -errno : r;
 }
 static int64_t do_fstat(int fd,GuestStat *out) {
+#ifdef _WIN32
+    File *file=get(fd);
+    if (file && file->pkg) {
+        if (!out) return -EFAULT;
+        pkg_guest_stat(file->dir ? 4 : 8,file->pkg_size,out); return 0;
+    }
+#endif
     int h=host_fd(fd);
     HostStat s;
 #ifdef _WIN32
@@ -357,6 +431,15 @@ static int64_t do_fstat(int fd,GuestStat *out) {
     convert_stat(&s,out); return 0;
 }
 static int64_t do_stat(const char *guest,GuestStat *out) {
+#ifdef _WIN32
+    const char *member=pkg_path(guest);
+    if (member) {
+        if (!out) return -EFAULT;
+        int type=0; int64_t size=0; int e=pkg_info(member,&type,&size);
+        if (e) return -e;
+        pkg_guest_stat(type,size,out); return 0;
+    }
+#endif
     char path[1024]; HostStat s;
     int e=translate(guest,path,sizeof(path));
     if (e) return -e;
@@ -440,6 +523,14 @@ static int64_t do_truncate(const char *guest,int64_t length) {
 }
 static int64_t do_fsync(int fd) { int h=host_fd(fd); if (h<0) return -EBADF; return fsync(h) ? -errno : 0; }
 static int64_t do_access(const char *guest,int mode) {
+#ifdef _WIN32
+    const char *member=pkg_path(guest);
+    if (member) {
+        int type=0; int64_t size=0; int e=pkg_info(member,&type,&size);
+        if (e) return -e;
+        return mode&2 ? -EROFS : 0;
+    }
+#endif
     char path[1024];
     int e=translate(guest,path,sizeof(path));
     if (e) return -e;

@@ -12,6 +12,7 @@ import struct
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from pkg_source import game_source, PkgPath
 
 EBOOT_BASE=0x400000
 
@@ -20,7 +21,7 @@ def game_app_version(game):
     """APP_VER of the game folder's param.sfo ("01.02"), or None when it cannot be read."""
     try:
         from prepare import sfo
-        return sfo((Path(game) / 'sce_sys/param.sfo').read_bytes()).get('APP_VER')
+        return sfo((game_source(game) / 'sce_sys/param.sfo').read_bytes()).get('APP_VER')
     except (OSError, ValueError, ImportError):
         return None
 
@@ -76,8 +77,11 @@ DMEM_RETAIL_MB=5056  # runtime_memory.c POOL_SIZE default
 
 def game_title_id(game):
     try:
+        if not isinstance(game, PkgPath) and Path(game).suffix.lower()=='.pkg':
+            from pkg_source import pkg_metadata
+            return pkg_metadata(game).get('TITLE_ID')
         from prepare import sfo
-        return sfo((Path(game) / 'sce_sys/param.sfo').read_bytes()).get('TITLE_ID')
+        return sfo((game_source(game) / 'sce_sys/param.sfo').read_bytes()).get('TITLE_ID')
     except (OSError, ValueError, ImportError):
         return None
 
@@ -93,7 +97,7 @@ def eboot_matches(game, profile):
         return True
     import hashlib
     try:
-        return hashlib.sha256((Path(game)/'eboot.bin').read_bytes()).hexdigest()==profile[3]
+        return hashlib.sha256((game_source(game)/'eboot.bin').read_bytes()).hexdigest()==profile[3]
     except OSError:
         return False
 

@@ -53,6 +53,8 @@ ldd "$dest/bin/gow3-probe.exe" "$dest/bin/gow3-gpu-capabilities.exe" |
         cp -u "$dll" "$dest/bin/"
     done
 cp -r scripts patches "$dest/"
+mkdir -p "$dest/bin/pkg-tools"
+cp out/pkg-tools/gow3-pkg.exe out/pkg-tools/LibOrbisPkg.dll out/pkg-tools/LICENSE.txt "$dest/bin/pkg-tools/"
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 find "$dest" -name __pycache__ -prune -exec rm -r {} +
 # No game files and nothing a player made (saves, shader caches built from the game's shaders,

@@ -275,6 +275,13 @@ def save_ini(values, lines):
 def game_info(folder):
     """(title, app version) of a game folder, or None without eboot.bin."""
     folder = Path(folder or '.')
+    if folder.suffix.lower() == '.pkg':
+        try:
+            from pkg_source import pkg_metadata
+            values = pkg_metadata(folder)
+            return values.get('TITLE', APP_NAME).replace('™', '').replace('®', '').strip(), values.get('APP_VER', '?')
+        except (OSError, ValueError):
+            return None
     if not (folder / 'eboot.bin').is_file():
         return None
     try:
@@ -551,10 +558,19 @@ class Launcher:
         ttk.Entry(holder, textvariable=var, width=46).pack(side='left')
 
         def browse():
-            chosen = self.filedialog.askdirectory(title=prompt, initialdir=var.get() or str(PORT_DIR))
+            chosen = (self.filedialog.askopenfilename(title='Choose a PS4 PKG', filetypes=[('PS4 package', '*.pkg')])
+                      if key == 'game_dir' else self.filedialog.askdirectory(title=prompt, initialdir=var.get() or str(PORT_DIR)))
             if chosen:
                 var.set(str(Path(chosen)))
         ttk.Button(holder, text=_('Browse…', 'Обзор…'), command=browse).pack(side='left', padx=(6, 0))
+        if key == 'game_dir':
+            def browse_folder():
+                current = Path(var.get() or str(PORT_DIR))
+                initial = current.parent if current.suffix.lower() == '.pkg' else current
+                chosen = self.filedialog.askdirectory(title='Choose the folder with eboot.bin', initialdir=str(initial))
+                if chosen:
+                    var.set(str(Path(chosen)))
+            ttk.Button(holder, text=_('Folder…', 'Папка…'), command=browse_folder).pack(side='left', padx=(6, 0))
         ttk.Button(holder, text=_('Open', 'Открыть'), command=lambda: self.open_path(var.get(), key)).pack(
             side='left', padx=(6, 0))
         if on_change:
@@ -667,7 +683,7 @@ class Launcher:
         self.banner = tk.Canvas(page, height=self.px(330), bg=BG, highlightthickness=0, bd=0)
         self.banner.pack(fill='x')
         self.banner.bind('<Configure>', lambda _e: self.draw_banner())
-        self.banner_button = ttk.Button(self.banner, text=_('Choose the game folder'),
+        self.banner_button = ttk.Button(self.banner, text=_('Choose the game PKG or folder'),
                                         command=lambda: self.show('game'))
         quick = ttk.Frame(page, padding=(28, 14, 28, 8))
         quick.pack(fill='x')
@@ -711,7 +727,7 @@ class Launcher:
             sub = _('{} · version {}', '{} · версия {}').format(title_id or '?', info[1])
             c.create_text(33, h - 30, text=sub, anchor='w', fill=ACCENT_HI, font=('Segoe UI', 11, 'bold'))
         else:
-            c.create_text(w // 2, h // 2 - 40, text=_('Choose your game folder to play.'),
+            c.create_text(w // 2, h // 2 - 40, text=_('Choose your game PKG or folder to play.'),
                           fill=TEXT, font=('Segoe UI', 12))
             c.create_window(w // 2, h // 2, window=self.banner_button)
 
@@ -855,8 +871,8 @@ class Launcher:
                    _('Select Very Hard without completing the game. Does not change existing save difficulty. '
                      'In-game: enable before opening New Game.'))
         self.section(f, _('Folders'))
-        self.folder(f, 'game_dir', _('Game folder', 'Папка игры'),
-                    _('Choose the folder with eboot.bin', 'Выберите папку с eboot.bin'),
+        self.folder(f, 'game_dir', _('Game PKG or folder', 'Папка игры'),
+                    _('Choose a PS4 PKG, or enter the folder with eboot.bin', 'Выберите папку с eboot.bin'),
                     _('Your own dump of the game (eboot.bin, sce_module, sce_sys); God of War III Remastered: '
                       'CUSA01623, version 01.02 for the community patches.',
                       'Ваш дамп игры (eboot.bin, sce_module, sce_sys); God of War III Remastered: CUSA01623, '
@@ -1152,7 +1168,7 @@ class Launcher:
         info = game_info(self.var('game_dir', 'app').get())
         if not self.process:
             self.play_button.configure(text=_('PLAY', 'ИГРАТЬ'), state='normal' if info else 'disabled')
-            self.status.configure(text=self.summary() if info else _('Choose the game folder first.',
+            self.status.configure(text=self.summary() if info else _('Choose the game PKG or folder first.',
                                                                      'Сначала выберите папку игры.'), fg=MUTED)
 
     def summary(self):
@@ -1350,7 +1366,7 @@ class Launcher:
             return
         self.collect()
         if not game_info(self.app['game_dir']):
-            self.messagebox.showerror(APP_NAME, _('Choose the game folder with eboot.bin (CUSA01623).',
+            self.messagebox.showerror(APP_NAME, _('Choose a PS4 PKG or a game folder with eboot.bin.',
                                                   'Выберите папку игры с eboot.bin (CUSA01623).'))
             self.show('game')
             return
@@ -1656,7 +1672,7 @@ def main():
     if FROZEN and UPDATE_DIR not in PORT_DIR.parents:
         shutil.rmtree(UPDATE_DIR, ignore_errors=True)  # what a finished update left behind
     # Without a usable game folder there is nothing to play yet: open the launcher instead.
-    if '--play' in args and (Path(settings['game_dir'] or '.') / 'eboot.bin').is_file():
+    if '--play' in args and game_info(settings['game_dir']):
         sys.exit(play_without_window(settings))
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(1)  # sharp text on scaled displays

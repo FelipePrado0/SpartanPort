@@ -95,6 +95,8 @@ def patch_fs_loads(image, ph, base):
 
 
 def link(game, out, module_names=DEFAULT_MODULES):
+    from pkg_source import game_source
+    game = game_source(game)
     main = module(game / 'eboot.bin')
     raw = (out / 'boot.bin').read_bytes()
     magic, size, entry, ns, nr, ni, flags = unpack('<8s6Q', raw, 0)
