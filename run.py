@@ -112,6 +112,8 @@ def main():
         run_script('link_modules.py', game, '--out', out)
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('GOW3_CONTENT_SKU', 'full'))
 
+        # game_patchable now also recognizes a shifted dump (its sha256 is a relocation profile
+        # in patches.py), so the same patch selection and DMEM/VBlank derivation below apply to it.
         from patches import game_patchable, game_profile, game_title_id, patch_requirements, selected_patches
         profile = game_profile(game_title_id(game))
         patched = bool(profile) and (game_patchable(game) or bool(env.get('GOW3_FORCE_PATCHES')))

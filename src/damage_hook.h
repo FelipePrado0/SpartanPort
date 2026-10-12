@@ -18,6 +18,24 @@ static inline int gow3_damage_signature_match(const unsigned char *code, uint64_
     return size >= GOW3_DAMAGE_HOOK_LENGTH && !memcmp(code, gow3_damage_original, GOW3_DAMAGE_HOOK_LENGTH);
 }
 
+/* The damage routine's 10-byte signature is unique in the image, so it also anchors the enemy
+ * health-bar region on a shifted build (which may differ from the cheats' region). Returns the
+ * resolved damage-hook image offset, or UINT64_MAX when absent/ambiguous. */
+static inline uint64_t gow3_damage_resolve_offset(const unsigned char *image, uint64_t size) {
+    if (GOW3_DAMAGE_HOOK_OFFSET <= size &&
+        GOW3_DAMAGE_HOOK_LENGTH <= size - GOW3_DAMAGE_HOOK_OFFSET &&
+        gow3_damage_signature_match(image + GOW3_DAMAGE_HOOK_OFFSET, size - GOW3_DAMAGE_HOOK_OFFSET))
+        return GOW3_DAMAGE_HOOK_OFFSET;
+    uint64_t found = UINT64_MAX;
+    for (uint64_t i = 0; i + GOW3_DAMAGE_HOOK_LENGTH <= size; ++i) {
+        if (!memcmp(image + i, gow3_damage_original, GOW3_DAMAGE_HOOK_LENGTH)) {
+            if (found != UINT64_MAX) return UINT64_MAX;  /* ambiguous */
+            found = i;
+        }
+    }
+    return found;
+}
+
 /* Damage above zero is multiplied by *taken (player) or *dealt (any other actor). */
 static inline unsigned gow3_damage_build_stub(unsigned char *out, uintptr_t taken, uintptr_t dealt,
                                               uintptr_t resume) {

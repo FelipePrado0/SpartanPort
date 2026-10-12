@@ -332,14 +332,24 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
     if (strcmp(serial, "CUSA01623") || strcmp(version, "01.02")) return;
     const char *names[] = {"health", "magic", "item meter", "Rage of Sparta", "red orbs",
                            "Very Hard unlock", "infinite double jumps"};
+    /* Reference build: delta 0. A shifted build of the same version is detected from unique
+     * anchors; its hooks are relocated by that delta and still verified per hook below. */
+    int64_t build_delta = 0;
+    if (!gow3_cheat_build_delta(image, size, &build_delta))
+        build_delta = 0;  /* no anchor matched: try the fixed offsets (reference build). */
+    else if (build_delta)
+        printf("Cheats: relocated for this build (code shifted by %+lld bytes)\n",
+               (long long)build_delta);
+    uint64_t resolved[GOW3_CHEAT_HOOK_COUNT];
+    for (unsigned i = 0; i < GOW3_CHEAT_HOOK_COUNT; ++i)
+        resolved[i] = gow3_cheat_resolve_offset(&gow3_cheat_hooks[i], build_delta, image, size);
     for (unsigned id = 0; id < GOW3_CHEAT_COUNT; ++id) {
         int valid = 1;
         for (unsigned i = 0; i < GOW3_CHEAT_HOOK_COUNT; ++i) {
             const Gow3CheatHook *hook = &gow3_cheat_hooks[i];
             if (hook->id != id) continue;
-            if (hook->offset > size || hook->length > size - hook->offset ||
-                !mapped(segments, count, hook->offset, hook->length) ||
-                !gow3_cheat_signature_match(hook, image + hook->offset, size - hook->offset)) valid = 0;
+            if (resolved[i] == UINT64_MAX || !mapped(segments, count, resolved[i], hook->length))
+                valid = 0;
         }
         if (!valid) {
             printf("Cheats: %s unavailable (code signature mismatch)\n", names[id]);
@@ -351,11 +361,11 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
             const Gow3CheatHook *hook = &gow3_cheat_hooks[i];
             if (hook->id != id) continue;
             unsigned char *stub = stubs + i * 256;
-            int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + hook->offset + 5);
+            int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + resolved[i] + 5);
             if (delta < INT32_MIN || delta > INT32_MAX) { valid = 0; break; }
             relative[i] = (int32_t)delta;
             gow3_cheat_build_stub(stub, hook, gow3_cheat_flag(id),
-                                 (uintptr_t)(image + hook->offset + hook->length));
+                                 (uintptr_t)(image + resolved[i] + hook->length));
         }
         if (!valid) {
             printf("Cheats: %s unavailable (hook outside relative-jump range)\n", names[id]);
@@ -365,9 +375,9 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
         for (unsigned i = 0; i < GOW3_CHEAT_HOOK_COUNT; ++i) {
             const Gow3CheatHook *hook = &gow3_cheat_hooks[i];
             if (hook->id != id) continue;
-            image[hook->offset] = 0xe9;
-            memcpy(image + hook->offset + 1, &relative[i], 4);
-            memset(image + hook->offset + 5, 0x90, hook->length - 5);
+            image[resolved[i]] = 0xe9;
+            memcpy(image + resolved[i] + 1, &relative[i], 4);
+            memset(image + resolved[i] + 5, 0x90, hook->length - 5);
         }
         gow3_cheat_status(id);
         printf("Cheats: %s ready (live toggle, initially disabled unless saved)\n", names[id]);
@@ -381,10 +391,12 @@ static void install_actor_watch(const char *app0, Segment *segments, uint64_t co
     snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
     sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
     sfo_value(path, "APP_VER", version, sizeof(version), NULL);
-    const uint64_t at = GOW3_ACTOR_HOOK_OFFSET;
-    if (strcmp(serial, "CUSA01623") || strcmp(version, "01.02") || at > size ||
-        !mapped(segments, count, at, GOW3_ACTOR_HOOK_LENGTH) ||
-        !gow3_actor_signature_match(image + at, size - at)) {
+    /* The health-bar region can shift differently from the cheats; anchor it on the damage
+     * routine's unique signature and place the actor hook at its fixed offset from it. */
+    const uint64_t damage_at = gow3_damage_resolve_offset(image, size);
+    const uint64_t at = gow3_actor_resolve_offset(damage_at, image, size);
+    if (strcmp(serial, "CUSA01623") || strcmp(version, "01.02") || at == UINT64_MAX ||
+        !mapped(segments, count, at, GOW3_ACTOR_HOOK_LENGTH)) {
         printf("Health display: unavailable (game version or code signature mismatch)\n");
         return;
     }
@@ -460,10 +472,16 @@ static void install_stat_multipliers(const char *app0, Segment *segments, uint64
     sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
     sfo_value(path, "APP_VER", version, sizeof(version), NULL);
     const int game = !strcmp(serial, "CUSA01623") && !strcmp(version, "01.02");
-    const uint64_t damage_at = GOW3_DAMAGE_HOOK_OFFSET, pickup_at = GOW3_ORB_PICKUP_OFFSET;
-    int damage = game && damage_at < size && mapped(segments, count, damage_at, GOW3_DAMAGE_HOOK_LENGTH) &&
-                 gow3_damage_signature_match(image + damage_at, size - damage_at);
-    int pickup = game && pickup_at < size && mapped(segments, count, pickup_at, GOW3_ORB_PICKUP_LENGTH) &&
+    /* Damage multiplier shares the health-bar region: anchor on the unique damage signature.
+     * The orb-pickup prologue is too generic to scan, so it is only tried at its fixed offset
+     * (reference build); on a shifted build it stays disabled rather than risk a wrong site. */
+    const uint64_t damage_at = gow3_damage_resolve_offset(image, size);
+    const uint64_t pickup_at = GOW3_ORB_PICKUP_OFFSET;
+    int damage = game && damage_at != UINT64_MAX &&
+                 mapped(segments, count, damage_at, GOW3_DAMAGE_HOOK_LENGTH);
+    int pickup = game && pickup_at < size &&
+                 GOW3_ORB_PICKUP_LENGTH <= size - pickup_at &&
+                 mapped(segments, count, pickup_at, GOW3_ORB_PICKUP_LENGTH) &&
                  gow3_orb_pickup_signature_match(image + pickup_at, size - pickup_at);
     unsigned char *stubs = damage || pickup ? allocate(page_size) : NULL;
     if (damage) {

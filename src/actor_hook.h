@@ -29,6 +29,21 @@ static inline int gow3_actor_signature_match(const unsigned char *code, uint64_t
     return size >= GOW3_ACTOR_HOOK_LENGTH && !memcmp(code, gow3_actor_original, GOW3_ACTOR_HOOK_LENGTH);
 }
 
+/* The actor-store signature (7 bytes) occurs many times, so it cannot be scanned for on its own.
+ * It sits a fixed distance after the damage routine's unique signature in the same function
+ * (0x50417 - 0x503f3 = 0x24), so once the damage hook is located the actor hook is at the same
+ * offset from it. `damage_at` is the resolved damage-hook offset (gow3_damage_resolve_offset).
+ * Returns the actor-hook image offset verified by its own signature, or UINT64_MAX. */
+enum { GOW3_ACTOR_FROM_DAMAGE = GOW3_ACTOR_HOOK_OFFSET - 0x503f3 };
+static inline uint64_t gow3_actor_resolve_offset(uint64_t damage_at,
+                                                 const unsigned char *image, uint64_t size) {
+    if (damage_at == UINT64_MAX) return UINT64_MAX;
+    uint64_t at = damage_at + GOW3_ACTOR_FROM_DAMAGE;
+    if (at > size || GOW3_ACTOR_HOOK_LENGTH > size - at) return UINT64_MAX;
+    if (!gow3_actor_signature_match(image + at, size - at)) return UINT64_MAX;
+    return at;
+}
+
 static inline unsigned gow3_actor_build_stub(unsigned char *out, uintptr_t slots, uintptr_t resume) {
     static const unsigned char body[] = {
         0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, slots */

@@ -50,6 +50,67 @@ static inline int gow3_cheat_signature_match(const Gow3CheatHook *hook,
                                             const unsigned char *code, uint64_t size) {
     return size >= hook->length && !memcmp(code, hook->original, hook->length);
 }
+
+/* Some dumps of CUSA01623 v01.02 are a different byte-exact build whose code sits at a shifted
+ * offset: the reference build's addresses do not match, so every hook would fail with a
+ * "code signature mismatch". Such a build shifts the whole code region by one constant delta, so
+ * we detect that delta once from an anchor hook whose signature occurs EXACTLY ONCE in the image
+ * (so the match is unambiguous), then relocate every other hook by the same delta and still
+ * verify each one's own signature at the relocated offset before trusting it.
+ *
+ * Returns 1 and sets *delta when a single consistent shift is found (0 for the reference build),
+ * or 0 when no anchor matches uniquely (unknown dump: hooks stay disabled, as before). */
+static inline int gow3_cheat_find_signature_unique(const unsigned char *image, uint64_t size,
+                                                   const unsigned char *sig, unsigned length,
+                                                   uint64_t *at) {
+    uint64_t found = UINT64_MAX;
+    for (uint64_t i = 0; i + length <= size; ++i) {
+        if (!memcmp(image + i, sig, length)) {
+            if (found != UINT64_MAX) return 0;  /* ambiguous */
+            found = i;
+        }
+    }
+    if (found == UINT64_MAX) return 0;
+    *at = found;
+    return 1;
+}
+
+/* Anchors with a single occurrence in the image: Very Hard (0xc77ea) and the double-jump check
+ * (0x95d51). Named statics (not compound literals) so the header is valid in C and C++ alike. */
+static const unsigned char gow3_cheat_anchor_very_hard[8] = {0xb8,3,0,0,0,0xf6,0xc1,8};
+static const unsigned char gow3_cheat_anchor_double_jump[9] = {0x41,0xf6,0x84,0x24,0xac,4,0,0,4};
+
+static inline int gow3_cheat_build_delta(const unsigned char *image, uint64_t size, int64_t *delta) {
+    const struct { uint32_t offset; unsigned length; const unsigned char *sig; }
+    anchors[] = {
+        {0xc77ea, 8, gow3_cheat_anchor_very_hard},
+        {0x95d51, 9, gow3_cheat_anchor_double_jump},
+    };
+    int64_t agreed = 0;
+    int have = 0;
+    for (unsigned a = 0; a < sizeof(anchors) / sizeof(anchors[0]); ++a) {
+        uint64_t at;
+        if (!gow3_cheat_find_signature_unique(image, size, anchors[a].sig, anchors[a].length, &at))
+            continue;
+        int64_t d = (int64_t)at - (int64_t)anchors[a].offset;
+        if (have && d != agreed) return 0;  /* anchors disagree: not a simple uniform shift */
+        agreed = d;
+        have = 1;
+    }
+    if (!have) return 0;
+    *delta = agreed;
+    return 1;
+}
+
+/* The hook's offset relocated by the build delta, verified by its own signature there.
+ * Returns the resolved image offset, or UINT64_MAX when it cannot be placed safely. */
+static inline uint64_t gow3_cheat_resolve_offset(const Gow3CheatHook *hook, int64_t delta,
+                                                 const unsigned char *image, uint64_t size) {
+    int64_t at = (int64_t)hook->offset + delta;
+    if (at < 0 || (uint64_t)at > size || hook->length > size - (uint64_t)at) return UINT64_MAX;
+    if (!gow3_cheat_signature_match(hook, image + at, size - (uint64_t)at)) return UINT64_MAX;
+    return (uint64_t)at;
+}
 static inline unsigned gow3_cheat_build_stub(unsigned char *out, const Gow3CheatHook *hook,
                                             uintptr_t flag, uintptr_t resume) {
     /* Keep the SysV red zone, GPRs and condition flags intact; no host call on the hot path. */

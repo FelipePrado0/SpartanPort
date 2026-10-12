@@ -47,7 +47,7 @@ def encode(line):
     raise ValueError(f'unsupported patch type {kind!r}')
 
 
-def compile_patches(xml, names, app_version, segments):
+def compile_patches(xml, names, app_version, segments, profile=None):
     found={}
     for meta in ET.parse(xml).getroot().iter('Metadata'):
         if meta.get('Name') in names and meta.get('AppVer')==app_version and meta.get('AppElf','eboot.bin')=='eboot.bin':
@@ -56,12 +56,25 @@ def compile_patches(xml, names, app_version, segments):
     if missing: raise ValueError(f'patches not found for app version {app_version}: {missing}')
     writes=[]
     for name in names:
+        lines=[]
+        skip=None
         for line in found[name].iter('Line'):
-            offset=int(line.get('Address'),0)-EBOOT_BASE
+            address=relocate_address(int(line.get('Address'),0),profile)
+            if address is None:
+                skip=int(line.get('Address'),0)
+                break
+            offset=address-EBOOT_BASE
             data=encode(line)
             if not any(start<=offset and offset+len(data)<=end for start,end in segments):
-                raise ValueError(f'{name}: address {line.get("Address")} is outside the eboot')
-            writes.append((offset,data))
+                raise ValueError(f'{name}: address {address:#x} is outside the eboot')
+            lines.append((offset,data))
+        if skip is not None:
+            # One write of this patch has no measured relocation for this dump: skip the whole
+            # patch (a half-applied resolution patch would be worse) and tell the user.
+            print(f'Patches: {name} skipped on this dump (address {skip:#x} not yet mapped)',
+                  file=sys.stderr)
+            continue
+        writes+=lines
     return writes
 
 
@@ -72,6 +85,62 @@ PATCHES_DIR=Path(__file__).resolve().parent.parent/'patches'
 GAMES=[({'CUSA01623'},PATCHES_DIR/'God_of_War_III_Remastered.xml','01.02',
         'd85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299')]
 DMEM_RETAIL_MB=5056  # runtime_memory.c POOL_SIZE default
+
+# Some dumps of CUSA01623 v01.02 are a different byte-exact build whose code/rodata sit at a
+# shifted address per region (the reference XML addresses do not land on the right bytes). For a
+# recognized dump we relocate each patch write by its region's measured delta before compiling,
+# so the writes still hit the intended instruction. Deltas were measured by locating the original
+# values (native 1920x1080, the 59.94 frame-rate float, the hook signatures) in the dump; see
+# tools/find_originals.py and tools/validate_4k.py. Each (start, end) is a PS4 vaddr range and
+# delta is added to addresses inside it. A patch address outside every listed range for a known
+# shifted dump is rejected (its region was not measured, so writing blind would corrupt code).
+PATCH_PROFILES={
+    # Saxon's / PkgExtractor CUSA01623 (== CUSA01715) 01.02 dump.
+    '6e72330e9092e5164049b865e5568f2d450904001a73fe0a2f4b39194c195b3c':{
+        'label':'shifted build (0x120/-0x10/-0x8 by region)',
+        # Code regions shift by small per-region deltas; the data segment (vaddr >= 0x7c0000:
+        # resolution tables and the video-arena dword) matches the reference byte for byte, so
+        # delta 0 there. Each range's original bytes were confirmed in the dump (1920x1080,
+        # 960x540, the 0x50000000 arena) via tools/vaddr_bytes.py.
+        'regions':[
+            (0x564000,0x565000,-0x10),   # resolution writes (code)
+            (0x56b000,0x56c000,-0x10),   # resolution write, 1440p+ (code)
+            (0x5f0000,0x5f1000,0x120),   # resolution dword/word writes (code)
+            (0x5ff000,0x600000,0x120),   # resolution writes (code)
+            (0x7c4000,0x7c5000,0x0),     # 1440p+ resolution-table pair (data)
+            (0x7cd000,0x7ce000,0x0),     # texture / resolution video-arena dword (data)
+            (0x7f2000,0x7f3000,0x0),     # 1440p+ resolution pair (data)
+            (0x41b000,0x41c000,0x0),     # skip-video writes (code matches reference)
+            # NOT relocated yet (raise "no measured relocation" instead of corrupting):
+            # - 0x609000 (0x60953d, a 1440p+/4K code write): the site is ambiguous between
+            #   delta 0 and -0x10 and needs disassembly to place safely.
+            # - 0x48f000 / 0x75d000 (the 120/240 FPS lea + float): the lea carries a
+            #   rip-relative disp32 to the 60.0 constant, which a plain address shift cannot
+            #   fix; it needs a recomputed displacement.
+            # So on this dump: 480p and 720p work; 1440p/1800p/4K and the FPS patch are not
+            # supported until those sites are measured.
+        ],
+    },
+}
+
+
+def eboot_sha256(game):
+    import hashlib
+    try:
+        return hashlib.sha256((Path(game)/'eboot.bin').read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def relocate_address(address, profile):
+    """Shift a PS4 vaddr by its region's delta for a recognized shifted dump, or None when the
+    address is in no measured region (so the caller skips that patch rather than writing blind)."""
+    if not profile:
+        return address
+    for start,end,delta in profile['regions']:
+        if start<=address<end:
+            return address+delta
+    return None
 
 
 def game_title_id(game):
@@ -99,11 +168,15 @@ def eboot_matches(game, profile):
 
 
 def game_patchable(game):
-    """Whether the built-in patches apply to this game folder: a known game, version and build."""
+    """Whether the built-in patches apply to this game folder: a known game and version, and
+    either the reference build or a recognized shifted dump (relocated per region, see
+    PATCH_PROFILES)."""
     if not game:
         return False
     profile=game_profile(game_title_id(game))
-    return bool(profile) and game_app_version(game)==profile[2] and eboot_matches(game,profile)
+    if not profile or game_app_version(game)!=profile[2]:
+        return False
+    return eboot_matches(game,profile) or eboot_sha256(game) in PATCH_PROFILES
 
 
 # God of War III notes: the texture fix and the resolution patches both resize the video arena;
@@ -211,20 +284,24 @@ def main():
         print(f'Patches: no patch profile for {title}: none applied')
         return
     ids,xml,needed,_sha=profile
-    # The patches are byte writes at the addresses of one game build: on another they would
-    # corrupt code, so such a game runs unpatched.
+    # The patches are byte writes at the addresses of one game build. On the reference build they
+    # apply directly; on a recognized shifted build they are relocated per region (reloc_profile);
+    # on any other build they would corrupt code, so it runs unpatched unless GOW3_FORCE_PATCHES.
     version=game_app_version(a.game_dir)
     if version!=needed and not os.environ.get('GOW3_FORCE_PATCHES'):
         write_patches(a.out,[])
         print(f'Patches: game version {version}, {xml.name} is for {needed}: none applied')
         return
-    if not eboot_matches(a.game_dir,profile) and not os.environ.get('GOW3_FORCE_PATCHES'):
+    reloc_profile=PATCH_PROFILES.get(eboot_sha256(a.game_dir))
+    if not eboot_matches(a.game_dir,profile) and not reloc_profile and not os.environ.get('GOW3_FORCE_PATCHES'):
         write_patches(a.out,[])
         print(f'Patches: eboot.bin is not the build {xml.name} was checked against: none applied')
         return
+    if reloc_profile:
+        print(f'Patches: recognized dump, relocating for {reloc_profile["label"]}')
     names=selected_patches(xml,needed,a.extra,os.environ.get('GOW3_PATCHES_ONLY')=='1')
     segments=eboot_segments((a.out/'eboot.elf').read_bytes())
-    writes=compile_patches(xml,names,needed,segments)
+    writes=compile_patches(xml,names,needed,segments,reloc_profile)
     if a.patches_dir:
         # After the built-in ones: an external patch of the same bytes wins.
         writes+=compile_external(external_selection(external_patches(a.patches_dir,needed,xml,ids),
