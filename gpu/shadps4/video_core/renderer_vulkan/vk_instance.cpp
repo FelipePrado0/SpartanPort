@@ -218,34 +218,14 @@ bool PipelineBinaryCacheRequested() {
 
 bool InitializePipelineBinaryCache(vk::Device device, bool supported,
                                    vk::PipelineBinaryKeyKHR& global_key) {
-    global_key = vk::PipelineBinaryKeyKHR{};
-    if (!PipelineBinaryCacheRequested()) {
-        LOG_INFO(Render_Vulkan, "Pipeline binary cache disabled by settings; using normal compilation");
-        return false;
-    }
-    if (!supported) {
-        LOG_INFO(Render_Vulkan, "Pipeline binary cache unsupported; using normal compilation");
-        return false;
-    }
-    const auto& dispatch = VULKAN_HPP_DEFAULT_DISPATCHER;
-    if (!dispatch.vkGetPipelineKeyKHR || !dispatch.vkCreatePipelineBinariesKHR ||
-        !dispatch.vkGetPipelineBinaryDataKHR || !dispatch.vkDestroyPipelineBinaryKHR ||
-        !dispatch.vkReleaseCapturedPipelineDataKHR) {
-        LOG_WARNING(Render_Vulkan, "Pipeline binary cache functions unavailable; using normal compilation");
-        return false;
-    }
-    const auto result = device.getPipelineKeyKHR(nullptr, &global_key);
-    if (result != vk::Result::eSuccess || !global_key.keySize ||
-        global_key.keySize > VK_MAX_PIPELINE_BINARY_KEY_SIZE_KHR) {
-        const auto key_size = global_key.keySize;
-        global_key = vk::PipelineBinaryKeyKHR{};
-        LOG_WARNING(Render_Vulkan,
-                    "Pipeline binary cache key unavailable (result {}, size {}); using normal compilation",
-                    vk::to_string(result), key_size);
-        return false;
-    }
-    LOG_INFO(Render_Vulkan, "Pipeline binary disk cache enabled");
-    return true;
+    // Pipeline binary cache is not yet supported on Linux; disable unconditionally
+    // to avoid segfaults on drivers without VK_KHR_pipeline_binary support.
+    std::memset(&global_key, 0, sizeof(global_key));
+    global_key.sType = vk::StructureType::ePipelineBinaryKeyKHR;
+    (void)device;
+    (void)supported;
+    LOG_INFO(Render_Vulkan, "Pipeline binary cache disabled on Linux; using normal compilation");
+    return false;
 }
 
 bool Instance::CreateDevice() {
