@@ -91,6 +91,17 @@ fi
 "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -mgeneral-regs-only -c src/isa_emulate.c -o out/isa_emulate.o
 "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -no-pie "${includes[@]}" -I. -Isrc src/probe.c "${runtime[@]}" src/cpu_check.c src/vulkan_smoke.c out/isa_emulate.o src/isa_rewrite.c out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/gow3-probe
 echo "Built $PWD/out/gow3-probe"
+# DLSS (NVIDIA RTX): DLSS_SDK_ROOT=<github.com/NVIDIA/DLSS checkout> builds the bridge
+# (gpu/dlss_bridge) and puts it with NVIDIA's runtime next to gow3-probe, where the port looks for
+# them. Without them DLSS is unavailable and falls back to FSR 3.1. Neither is part of the repo.
+if [[ -n ${DLSS_SDK_ROOT:-} ]]; then
+    cmake -S gpu/dlss_bridge -B out/dlss-bridge -G Ninja -DCMAKE_BUILD_TYPE=Release \
+        -DDLSS_SDK_ROOT="$DLSS_SDK_ROOT" >/dev/null
+    ninja -C out/dlss-bridge >/dev/null
+    cp -f out/dlss-bridge/libgow3_dlss.so out/
+    cp -f "$DLSS_SDK_ROOT"/lib/Linux_x86_64/rel/libnvidia-ngx-dlss.so.* out/
+    echo "DLSS: bridge and $(basename "$DLSS_SDK_ROOT"/lib/Linux_x86_64/rel/libnvidia-ngx-dlss.so.*) in out/"
+fi
 # GPU check for run.sh (live_resolution=auto): links only the Vulkan loader.
 "$CC" -std=c11 -O2 -Wall -Wextra -Werror -Igpu/shadps4 tools/gpu_capabilities.c "${libraries[@]}" -o out/gow3-gpu-capabilities
 if [[ ${1:-} == --test ]]; then
