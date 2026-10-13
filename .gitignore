@@ -8,6 +8,8 @@ pgo/
 *.png
 last_run.log
 dist/
+*.AppImage
+*.AppImage.new
 packaging/runtime-paths.nix
 fsr4_411/
 vkd3d-proton.cache
