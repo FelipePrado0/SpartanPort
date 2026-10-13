@@ -138,9 +138,11 @@ INI_DEFAULTS = {'upscaler': 'fsr4', 'preset': '1', 'sharpen': '1', 'sharpness': 
                 'rcas_strength': '75', 'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
-APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623')), 'user_dir': '',
+APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623')),
+                'game_update_dir': os.environ.get('GOW3_UPDATE_DIR', ''), 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
-                'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '',
+                'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'gpu_type': '',
+                'temporal_upscaler': '', 'dlss_preset': '', 'upscale_mode': 'quality',
                 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True, 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation'}
@@ -204,6 +206,51 @@ DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', 
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
              ('2', ('Precise',))]
+# GOW3_GPU_TYPE (vk_instance.cpp): the kind of graphics card used first; the other one when missing.
+GPU_TYPES = [('', ('Automatic (dedicated first)',)), ('discrete', ('Dedicated',)), ('integrated', ('Integrated',))]
+
+
+def gpu_choices():
+    """GPU_TYPES named after the cards Vulkan reports (the game picks one of each kind by type)."""
+    try:
+        from gow3_gpus import DISCRETE, INTEGRATED, vulkan_gpus
+        gpus = vulkan_gpus()
+    except (OSError, AttributeError, ValueError, ImportError):
+        gpus = []
+    first = {kind: name for name, kind in reversed(gpus)}
+    if DISCRETE not in first and INTEGRATED not in first:
+        return GPU_TYPES
+    auto = first.get(DISCRETE) or first.get(INTEGRATED)
+    choices = [('', (_('Automatic: {}').format(auto),))]
+    if DISCRETE in first:
+        choices.append(('discrete', (_('{} (dedicated)').format(first[DISCRETE]),)))
+    if INTEGRATED in first:
+        choices.append(('integrated', (_('{} (integrated)').format(first[INTEGRATED]),)))
+    return choices
+# GOW3_UPSCALER: run.sh/run.py turn the temporal upscalers off unless one is chosen here.
+# GOW3_DLSS_PRESET (vk_dlss.cpp): the DLSS model; empty forces the newest one of the SDK.
+DLSS_PRESETS = [('', ('M: DLSS 4.5, newest (heavier)',)), ('K', ('K: DLSS 4 (lighter, NVIDIA\'s DLAA default)',)),
+                ('J', ('J: DLSS 4, less ghosting, more flicker',)), ('default', ('Driver default',))]
+# With a temporal upscaler the render resolution follows the mode, as in PC games: the output
+# divided by the mode's factor, rounded to the resolution patches the game has (render_for).
+UPSCALE_MODES = [('dlaa', ('Native AA (DLAA, no upscale)',)), ('quality', ('Quality (1.5x)',)),
+                 ('balanced', ('Balanced (1.7x)',)), ('performance', ('Performance (2x)',)),
+                 ('ultra', ('Ultra Performance (3x)',))]
+UPSCALE_FACTORS = {'dlaa': 1.0, 'quality': 1.5, 'balanced': 1.72, 'performance': 2.0, 'ultra': 3.0}
+RENDER_HEIGHTS = {'480p': 480, '720p': 720, 'native': 1080, '1440p': 1440, '1800p': 1800, '4K': 2160}
+
+
+def render_for(output, mode):
+    """The render resolution (gow3.ini value) closest to output height / the mode's factor."""
+    target = int(output.split('x')[1]) / UPSCALE_FACTORS.get(mode, 1.5)
+    return min(RENDER_HEIGHTS, key=lambda r: (abs(RENDER_HEIGHTS[r] - target), -RENDER_HEIGHTS[r]))
+
+
+TEMPORAL_UPSCALERS = [('', ('Off',)), ('fsr3', ('FSR 3.1 (experimental)',)),
+                      ('dlss', ('DLSS / DLAA (NVIDIA RTX, experimental)',))]
+# The log page's quick filters (case-insensitive; "|" separates alternatives).
+LOG_FILTERS = ['', 'Upscaler|Camera motion|Object motion', 'Upscaler stats', '<Warning>|<Error>|<Critical>',
+               'Patches|Update:|Mods:', 'Guest fault|STOP|Fault']
 FRAMES_QUEUED = [('1', ('1 (lowest latency)',)), ('2', ('2',)), ('0', ('Unlimited',))]
 UI_LANGUAGES = gow3_lang.LANGUAGE_NAMES
 
@@ -282,19 +329,56 @@ def game_info(folder):
         return APP_NAME, '?'
 
 
+def update_problem(game_dir, update_dir):
+    """Why the update folder cannot be used with the game folder, or None."""
+    if not update_dir:
+        return None
+    if not (Path(update_dir) / 'eboot.bin').is_file():
+        return _('The update folder has no eboot.bin: choose the CUSAxxxxx-UPDATE folder itself.')
+    from patches import game_title_id
+    update_id, game_id = game_title_id(update_dir), game_title_id(game_dir)
+    if game_id and update_id != game_id:
+        return _('The update is for {}, the game folder is {}.').format(update_id, game_id)
+    return None
+
+
+def patch_options_available(folder):
+    """{'render_resolution': bool, 'engine_fps': bool}: whether the game build has resolution
+    and frame rate patches (they are byte patches of one build; others ignore those options)."""
+    import xml.etree.ElementTree as ET
+    from patches import game_app_version, game_patchable, game_profile, game_title_id
+    names = []
+    try:
+        profile = game_profile(game_title_id(folder), game_app_version(folder)) if folder else None
+        if profile and game_patchable(folder):
+            names = [m.get('Name', '') for m in ET.parse(profile[1]).getroot().iter('Metadata')
+                     if m.get('AppVer') == profile[2]]
+    except (OSError, ET.ParseError):
+        pass
+    return {'render_resolution': any(n.startswith('Resolution Patch') for n in names),
+            'engine_fps': any(n.startswith('Frame Rate Patch') for n in names)}
+
+
+def build_dir(game_dir, update_dir):
+    """The folder whose eboot.bin and param.sfo the game runs with: the update when one is set."""
+    return update_dir if update_dir and (Path(update_dir) / 'eboot.bin').is_file() else game_dir
+
+
 def game_profile_of(folder):
     """(title id, (ids, built-in XML, app version)) of a game with a patch profile, else (id, None)."""
-    from patches import game_profile, game_title_id
+    from patches import game_app_version, game_profile, game_title_id
     title_id = game_title_id(folder) if folder else None
-    return title_id, game_profile(title_id)
+    return title_id, game_profile(title_id, game_app_version(folder) if folder else None)
 
 
 def game_environment(s):
     env = dict(os.environ)
     env['GOW3_GAME_DIR'] = s['game_dir']
+    env['GOW3_UPDATE_DIR'] = s.get('game_update_dir', '')
     # The launcher's patch selection is the whole list (run.py, patches.py).
-    title_id, profile = game_profile_of(s['game_dir'])
-    chosen = s.get('game_patches', {}).get(title_id) if title_id else None
+    title_id, profile = game_profile_of(build_dir(s['game_dir'], s.get('game_update_dir')))
+    from patches import patch_key
+    chosen = s.get('game_patches', {}).get(patch_key(title_id, profile)) if title_id else None
     if profile and chosen is not None:
         env['GOW3_PATCHES'] = ';'.join(chosen)
         env['GOW3_PATCHES_ONLY'] = '1'
@@ -310,7 +394,9 @@ def game_environment(s):
         env['GOW3_USER_NAME'] = str(s['player_name']).strip()
     if s['hdr']:
         env['GOW3_HDR'] = '1'
-    for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS')):
+    env['GOW3_UPSCALER'] = s.get('temporal_upscaler') or 'none'
+    env['GOW3_DLSS_PRESET'] = s.get('dlss_preset') or 'M'
+    for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS'), ('gpu_type', 'GOW3_GPU_TYPE')):
         if s[key]:
             env[name] = s[key]
     env['GOW3_BACKGROUND_WARMUP'] = '1' if s.get('background_warmup', True) else '0'
@@ -350,6 +436,8 @@ class Launcher:
         self.process = self.job = None
         self.downloading = False
         self.output = queue.Queue()
+        self.log_lines = []  # the game's output, shown through the log page's filter
+        self.patch_option_boxes = {}  # startup options a game build may lack (refresh_quick)
         self.banner_source = self.banner_image = None
         self.ui_calls = queue.Queue()  # work for the Tk thread from helper threads
         self.mod_order, self.mod_vars, self.patch_vars = [], {}, {}
@@ -538,14 +626,16 @@ class Launcher:
             row=r, column=0, columnspan=2, sticky='w', pady=(top, 0))
         self.tk.Frame(parent, bg=LINE, height=1).grid(row=r + 1, column=0, columnspan=2, sticky='we', pady=(2, 2))
 
-    def folder(self, parent, key, title, prompt, hint=None, on_change=None):
+    def folder(self, parent, key, title, prompt, hint=None, on_change=None, start=None):
+        """start: where the dialog opens while the field is empty (a callable), else the port."""
         ttk = self.ttk
         var = self.var(key, 'app')
         holder = ttk.Frame(parent)
         ttk.Entry(holder, textvariable=var, width=46).pack(side='left')
 
         def browse():
-            chosen = self.filedialog.askdirectory(title=prompt, initialdir=var.get() or str(PORT_DIR))
+            chosen = self.filedialog.askdirectory(title=prompt, initialdir=var.get() or (start and start())
+                                                  or str(PORT_DIR))
             if chosen:
                 var.set(str(Path(chosen)))
         ttk.Button(holder, text=_('Browse…', 'Обзор…'), command=browse).pack(side='left', padx=(6, 0))
@@ -652,6 +742,7 @@ class Launcher:
         elif name == 'graphics':
             self.refresh_fsr4()
         elif name == 'home':
+            self.refresh_quick()
             self.refresh_status()
 
     def build_home(self):
@@ -668,13 +759,25 @@ class Launcher:
         ttk.Label(quick, text=_('Quick settings', 'Основное').upper(), style='Section.TLabel').grid(
             row=0, column=0, columnspan=4, sticky='w')
         tk.Frame(quick, bg=LINE, height=1).grid(row=1, column=0, columnspan=4, sticky='we', pady=(2, 6))
-        items = ((_('Display mode'), 'display_mode', DISPLAY_MODES), (_('Frame rate limit'), 'fps_limit', FPS_LIMITS),
-                 (_('Render resolution'), 'render_resolution', RESOLUTION_CHOICES),
-                 (_('Engine frame rate'), 'engine_fps', ENGINE_FPS_CHOICES))
-        for index, (title, key, options) in enumerate(items):
+        # In the order the image is made: render, temporal upscale to the output, the window.
+        items = ((_('Render resolution'), 'render_resolution', 'ini', RESOLUTION_CHOICES),
+                 (_('Temporal upscaler'), 'temporal_upscaler', 'app', TEMPORAL_UPSCALERS),
+                 (_('Upscaler mode'), 'upscale_mode', 'app', UPSCALE_MODES),
+                 (_('Output resolution', 'Разрешение вывода'), 'output_res', 'ini', OUTPUTS),
+                 (_('Display mode'), 'display_mode', 'ini', DISPLAY_MODES),
+                 (_('Frame rate limit'), 'fps_limit', 'ini', FPS_LIMITS),
+                 (_('Engine frame rate'), 'engine_fps', 'ini', ENGINE_FPS_CHOICES))
+        for index, (title, key, store, options) in enumerate(items):
             r, c = 2 + index // 2, (index % 2) * 2
             ttk.Label(quick, text=title).grid(row=r, column=c, sticky='w', pady=6, padx=(0, 12))
-            self.choice(quick, key, 'ini', options, width=18).grid(row=r, column=c + 1, sticky='w', padx=(0, 40))
+            box = self.choice(quick, key, store, options, width=24)
+            box.grid(row=r, column=c + 1, sticky='w', padx=(0, 40))
+            self.patch_option_boxes.setdefault(key, []).append(box)
+        self.chain_label = ttk.Label(quick, style='Muted.TLabel')
+        self.chain_label.grid(row=2 + len(items) // 2, column=0, columnspan=4, sticky='w', pady=(6, 0))
+        for key in ('render_resolution', 'temporal_upscaler', 'upscale_mode', 'output_res', 'engine_fps'):
+            self.var(key, 'app' if key in ('temporal_upscaler', 'upscale_mode') else 'ini').trace_add(
+                'write', lambda *_a: self.refresh_quick())
 
     def draw_banner(self):
         """The cover art of the selected dump (sce_sys/pic1.png) under the title."""
@@ -702,7 +805,8 @@ class Launcher:
             c.create_text(30, h - 74, text=APP_NAME.upper(), anchor='w', fill=TEXT, font=('Georgia', 32))
         if info:
             title_id = game_profile_of(folder)[0]
-            sub = _('{} · version {}', '{} · версия {}').format(title_id or '?', info[1])
+            version = (game_info(self.build_dir()) or info)[1]
+            sub = _('{} · version {}', '{} · версия {}').format(title_id or '?', version)
             c.create_text(33, h - 30, text=sub, anchor='w', fill=ACCENT_HI, font=('Segoe UI', 11, 'bold'))
         else:
             c.create_text(w // 2, h // 2 - 40, text=_('Choose your game folder to play.'),
@@ -774,7 +878,11 @@ class Launcher:
     def build_display(self):
         tk, ttk = self.tk, self.ttk
         f = self.scrolled_page('display', _('Display'), _('How the game appears on your screen.'))
-        self.section(f, _('Window', 'Окно'), top=4)
+        self.section(f, _('Graphics card'), top=4)
+        self.row(f, _('Graphics card'), self.choice(f, 'gpu_type', 'app', gpu_choices(), width=46),
+                 _('For computers with two: the dedicated one is faster, the integrated one uses less battery. '
+                   'When the chosen one is not available the game uses the other. The log names the card used.'))
+        self.section(f, _('Window', 'Окно'))
         self.row(f, _('Display mode'), self.choice(f, 'display_mode', 'ini', DISPLAY_MODES),
                  _('Borderless covers the screen without changing the display mode.'))
         self.check(f, 'vsync', 'ini', _('VSync'), _('Off allows tearing for the lowest latency.'))
@@ -782,6 +890,22 @@ class Launcher:
                    _('When HDR is on in Windows and the display supports it.',
                      'Если HDR включён в Windows и монитор его поддерживает.'))
         self.section(f, _('Scaling and sharpening'))
+        self.row(f, _('Temporal upscaler'), self.choice(f, 'temporal_upscaler', 'app', TEMPORAL_UPSCALERS),
+                 _('Rebuilds the game\'s image at the Output resolution below from the Render resolution '
+                   '(Performance page): render at 720p and output 1080p for more FPS and less power. At the same '
+                   'size it only smooths edges (DLAA) and costs a little. Experimental: tell us if something '
+                   'leaves trails or shakes. The log prints "Upscaler stats" every 10 s (Log page).'))
+        self.row(f, _('Upscaler mode'), self.choice(f, 'upscale_mode', 'app', UPSCALE_MODES, width=46),
+                 _('Like in PC games: the game renders smaller and the upscaler rebuilds the Output resolution. '
+                   'Quality renders at about 1/1.5 of it, Performance at 1/2. The Render resolution follows it '
+                   '(the game has 480p, 720p, 1080p, 1440p, 1800p and 4K).'))
+        self.row(f, _('Output resolution', 'Разрешение вывода'), self.choice(f, 'output_res', 'ini', OUTPUTS),
+                 _('What DLSS / FSR 3.1 produce (the HUD is drawn at this size too); best the size of your '
+                   'window or screen. FSR 1 fits anything else to the window. The in-game menu (Insert > '
+                   'Image) shows every stage.'))
+        self.row(f, _('DLSS model'), self.choice(f, 'dlss_preset', 'app', DLSS_PRESETS, width=46),
+                 _('Which DLSS model runs (with DLSS chosen above). The overlay and the log show the DLSS version '
+                   'and model in use.'))
         self.check(f, 'fsr1', 'ini', _('Upscale with FSR 1'),
                    _('Enlarges a smaller game image to the window. With Render resolution 720p (Performance) '
                      'it raises the FPS; at the size of the window it does nothing.'))
@@ -808,11 +932,14 @@ class Launcher:
                  _('The engine frame rate (below) is the highest it can go.'))
         self.row(f, _('Frames queued'), self.choice(f, 'frames_queued', 'ini', FRAMES_QUEUED),
                  _('1 is the lowest input latency; more can raise FPS when the graphics card is the limit.'))
-        self.row(f, _('Engine frame rate'), self.choice(f, 'engine_fps', 'ini', ENGINE_FPS_CHOICES),
-                 _('The highest frame rate the game itself runs at (a game patch).'), restart=True)
-        self.row(f, _('Render resolution'), self.choice(f, 'render_resolution', 'ini', RESOLUTION_CHOICES),
-                 _('The size the game draws at; higher is sharper and slower. A resolution patch replaces the '
-                   'texture fix and reserves the memory it needs.'), restart=True)
+        self.patch_option_boxes.setdefault('engine_fps', []).append(self.row(
+            f, _('Engine frame rate'), self.choice(f, 'engine_fps', 'ini', ENGINE_FPS_CHOICES),
+            _('The highest frame rate the game itself runs at (a game patch).'), restart=True))
+        self.patch_option_boxes.setdefault('render_resolution', []).append(self.row(
+            f, _('Render resolution'), self.choice(f, 'render_resolution', 'ini', RESOLUTION_CHOICES),
+                 _('The size the game draws at; higher is sharper and slower. With a temporal upscaler it '
+                   'follows the Upscaler mode (Display page). A resolution patch replaces the texture fix and '
+                   'reserves the memory it needs.'), restart=True))
         self.section(f, _('Shaders'))
         self.check(f, 'pipeline_binary_cache', 'app', _('Use pipeline binary cache (A/B test)'),
                    _('Reuse saved Vulkan pipelines. Disable to compare FPS with normal compilation. '
@@ -852,6 +979,11 @@ class Launcher:
                       'CUSA01623, version 01.02 for the community patches.',
                       'Ваш дамп игры (eboot.bin, sce_module, sce_sys); God of War III Remastered: CUSA01623, '
                       'версия 01.02 для патчей сообщества.'), on_change=self.game_changed)
+        self.folder(f, 'game_update_dir', _('Update folder'), _('Choose the update folder with eboot.bin'),
+                    _('Optional: the game update as a separate folder (CUSAxxxxx-UPDATE: eboot.bin, sce_sys). '
+                      'It is applied over the game folder at every start; neither folder is changed.'),
+                    on_change=self.game_changed,
+                    start=lambda: str(Path(self.var('game_dir', 'app').get() or PORT_DIR).parent))
         self.folder(f, 'user_dir', _('Saves folder', 'Папка сохранений'),
                     _('Choose the saves folder', 'Выберите папку сохранений'),
                     _('Empty: {} (shader caches are kept there too).',
@@ -863,6 +995,9 @@ class Launcher:
 
     def user_dir(self):
         return Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user')
+
+    def build_dir(self):
+        return build_dir(self.var('game_dir', 'app').get(), self.var('game_update_dir', 'app').get())
 
     def build_save_backups(self, f):
         """run.py backs the saves up before every start; one of them can be restored here."""
@@ -928,7 +1063,7 @@ class Launcher:
         for widget in f.winfo_children():
             widget.destroy()
         f.columnconfigure(1, weight=1)
-        folder = self.var('game_dir', 'app').get()
+        folder = self.build_dir()
         title_id, profile = game_profile_of(folder)
         self.game_patch_title, self.game_patch_vars = None, {}
         if not profile:
@@ -936,7 +1071,8 @@ class Launcher:
             return
         _ids, xml, version = profile[:3]
         metas = [m for m in ET.parse(xml).getroot().iter('Metadata') if m.get('AppVer') == version]
-        chosen = self.app.get('game_patches', {}).get(title_id)
+        from patches import patch_key
+        chosen = self.app.get('game_patches', {}).get(patch_key(title_id, profile))
         on = set(chosen) if chosen is not None else {m.get('Name') for m in metas
                                                          if m.get('isEnabled', 'false').lower() == 'true'}
         self.note(f, _('{} · version {} · {}. Resolution and frame rate patches follow Performance.',
@@ -949,7 +1085,7 @@ class Launcher:
             self.game_patch_vars[name] = var
             author = meta.get('Author')
             self.check(f, None, None, name + (f'  ({author})' if author else ''), meta.get('Note'), var=var)
-        self.game_patch_title = title_id
+        self.game_patch_title = patch_key(title_id, profile)
 
     def store_game_patches(self):
         """The page's selection into settings (the whole list for this game, without the resolution
@@ -1118,6 +1254,10 @@ class Launcher:
         ttk.Label(top, text=_('Log', 'Журнал').upper(), font=('Georgia', 20)).pack(side='left')
         ttk.Button(top, text=_('Copy', 'Копировать'), command=self.copy_log).pack(side='right')
         ttk.Button(top, text=_('Clear', 'Очистить'), command=lambda: self.set_log('')).pack(side='right', padx=6)
+        self.log_filter = tk.StringVar()
+        ttk.Combobox(top, textvariable=self.log_filter, values=LOG_FILTERS, width=40).pack(side='right', padx=6)
+        ttk.Label(top, text=_('Filter (a|b)')).pack(side='right')
+        self.log_filter.trace_add('write', lambda *_a: self.show_log())
         self.log = tk.Text(page, wrap='none', bg='#0a0808', fg='#cfc6bc', insertbackground=TEXT, relief='flat',
                            font=('Consolas', 9), padx=8, pady=6, state='disabled', highlightthickness=0)
         bar = ttk.Scrollbar(page, command=self.log.yview)
@@ -1128,6 +1268,11 @@ class Launcher:
     # ---- state -------------------------------------------------------------------------------
     def game_changed(self):
         folder = self.var('game_dir', 'app').get()
+        update = self.var('game_update_dir', 'app')
+        # shadPS4's layout: the update beside the game, in <game folder>-UPDATE.
+        sibling = Path(folder.rstrip('/\\') + '-UPDATE') if folder else None
+        if not update.get() and sibling and (sibling / 'eboot.bin').is_file():
+            update.set(str(sibling))
         info = game_info(folder)
         title = info[0] if info else APP_NAME
         self.root.title(f'{title} (PC)')
@@ -1137,22 +1282,67 @@ class Launcher:
         self.banner_source = None
         self.draw_banner()
         self.set_icon()
+        self.refresh_quick()
         self.refresh_status()
+
+    def refresh_quick(self):
+        """Home's resolution chain, and the startup options this game build cannot apply off."""
+        if not getattr(self, 'chain_label', None):
+            return
+        available = patch_options_available(self.build_dir())
+        upscaler = self.var('temporal_upscaler', 'app').get()
+        mode = self.var('upscale_mode', 'app').get()
+        if upscaler and available['render_resolution']:
+            # The mode decides the render resolution (set only when it changes: the trace).
+            wanted = render_for(self.var('output_res', 'ini').get(), mode)
+            if self.var('render_resolution', 'ini').get() != wanted:
+                self.var('render_resolution', 'ini').set(wanted)
+                return  # the trace calls this again
+        notes = []
+        for key, ok in available.items():
+            automatic = key == 'render_resolution' and bool(upscaler)
+            for box in self.patch_option_boxes.get(key, []):
+                if box.winfo_exists():
+                    box.configure(state='readonly' if ok and not automatic else 'disabled')
+            if not ok:
+                notes.append(_('{}: no patch for this game build').format(
+                    _('Render resolution') if key == 'render_resolution' else _('Engine frame rate')))
+        for box in self.patch_option_boxes.get('upscale_mode', []):
+            if box.winfo_exists():
+                box.configure(state='readonly' if upscaler and available['render_resolution'] else 'disabled')
+        resolution = self.var('render_resolution', 'ini').get() if available['render_resolution'] else 'native'
+        render = dict((v, t[0]) for v, t in RESOLUTION_CHOICES).get(resolution, '?')
+        chain = _('The game renders at {}').format(render)
+        if upscaler:
+            chain += ' → {} → {}'.format('DLSS' if upscaler == 'dlss' else 'FSR 3.1',
+                                         self.var('output_res', 'ini').get().replace('x', '×'))
+        chain += _(' → fitted to the window (FSR 1 if enabled on Display)')
+        self.chain_label.configure(text=chain + ('\n' + '; '.join(notes) if notes else ''))
 
     def refresh_status(self):
         info = game_info(self.var('game_dir', 'app').get())
+        problem = info and update_problem(self.var('game_dir', 'app').get(), self.var('game_update_dir', 'app').get())
         if not self.process:
-            self.play_button.configure(text=_('PLAY', 'ИГРАТЬ'), state='normal' if info else 'disabled')
+            self.play_button.configure(text=_('PLAY', 'ИГРАТЬ'), state='normal' if info and not problem else 'disabled')
+            if problem:
+                self.status.configure(text=problem, fg=ACCENT_HI)
+                return
             self.status.configure(text=self.summary() if info else _('Choose the game folder first.',
                                                                      'Сначала выберите папку игры.'), fg=MUTED)
 
     def summary(self):
+        """Render resolution, temporal upscaler and output, then engine and patches."""
         self.store_game_patches()
-        title_id, _profile = game_profile_of(self.var('game_dir', 'app').get())
-        names = self.app.get('game_patches', {}).get(title_id) or []
+        title_id, profile = game_profile_of(self.build_dir())
+        from patches import patch_key
+        names = self.app.get('game_patches', {}).get(patch_key(title_id, profile)) or []
         resolution = dict((v, t[0]) for v, t in RESOLUTION_CHOICES).get(self.var('render_resolution', 'ini').get(), '?')
+        upscaler = self.var('temporal_upscaler', 'app').get()
+        if upscaler:
+            name = 'DLSS' if upscaler == 'dlss' else 'FSR 3.1'
+            resolution = f"{resolution} → {name} → {self.var('output_res', 'ini').get().replace('x', '×')}"
         from patches import game_patchable
-        if not game_patchable(self.var('game_dir', 'app').get()):
+        if not game_patchable(self.build_dir()):
             return _('{} · 60 FPS engine · patches not available for this game build').format(resolution)
         return _('{} · {} FPS engine · {} patches').format(resolution, self.var('engine_fps', 'ini').get(), len(names))
 
@@ -1239,7 +1429,7 @@ class Launcher:
             ttk.Button(presets, text=_('Save', 'Сохранить'), command=self.save_mod_preset).pack(side='left', padx=(6, 0))
             ttk.Button(presets, text=_('Delete', 'Удалить'), command=self.delete_mod_preset).pack(side='left', padx=(6, 0))
         chosen = load_json(DATA_DIR / 'patches.json', {})
-        _title_id, game = game_profile_of(self.var('game_dir', 'app').get())
+        _title_id, game = game_profile_of(self.build_dir())
         found = external_patches(Path(self.var('patches_dir', 'app').get() or DATA_DIR / 'patches'),
                                  game[2], game[1], game[0]) if game else []
         old = {n: v.get() for n, v in self.patch_vars.items()}
@@ -1345,6 +1535,10 @@ class Launcher:
                                                   'Выберите папку игры с eboot.bin (CUSA01623).'))
             self.show('game')
             return
+        if problem := update_problem(self.app['game_dir'], self.app.get('game_update_dir')):
+            self.messagebox.showerror(APP_NAME, problem)
+            self.show('game')
+            return
         self.set_log('')
         try:
             self.process = subprocess.Popen(run_command(), cwd=PORT_DIR, env=game_environment(self.app),
@@ -1355,16 +1549,27 @@ class Launcher:
             self.process = None
             return
         self.job = GameJob(self.process)
-        threading.Thread(target=self.read_output, args=(self.process,), daemon=True).start()
+        # As --play: the whole output also goes to <saves folder>/last_run.log.
+        try:
+            self.user_dir().mkdir(parents=True, exist_ok=True)
+            run_log = open(self.user_dir() / 'last_run.log', 'w', encoding='utf-8', buffering=1)
+        except OSError:
+            run_log = None
+        threading.Thread(target=self.read_output, args=(self.process, run_log), daemon=True).start()
         self.play_button.configure(text=_('RUNNING'), state='disabled')
         self.status.configure(text=_('Preparing the game; it opens in its own window…',
                                      'Подготовка игры; она откроется в своём окне…'), fg=TEXT)
         if self.app.get('close_on_play'):
             self.root.after(5000, self.root.destroy)  # the game keeps running
 
-    def read_output(self, process):
+    def read_output(self, process, run_log=None):
         for raw in iter(process.stdout.readline, b''):
-            self.output.put(raw.decode('utf-8', errors='replace'))
+            text = raw.decode('utf-8', errors='replace')
+            if run_log:
+                run_log.write(text)
+            self.output.put(text)
+        if run_log:
+            run_log.close()
         self.output.put((process.wait(),))
 
     def drain_output(self):
@@ -1389,20 +1594,41 @@ class Launcher:
             pass
         self.root.after(100, self.drain_output)
 
+    def log_matches(self, line):
+        """Whether a line passes the log filter: any of its "|"-separated parts, ignoring case."""
+        wanted = self.log_filter.get() if getattr(self, 'log_filter', None) else ''
+        parts = [p.strip().casefold() for p in wanted.split('|') if p.strip()]
+        return not parts or any(p in line.casefold() for p in parts)
+
     def append(self, text):
+        self.log_lines.extend(text.splitlines(keepends=True))
+        del self.log_lines[:-MAX_LOG_LINES]
+        shown = ''.join(line for line in text.splitlines(keepends=True) if self.log_matches(line))
+        if not shown:
+            return
         self.log.configure(state='normal')
-        self.log.insert('end', text)
+        self.log.insert('end', shown)
         lines = int(self.log.index('end-1c').split('.')[0])
         if lines > MAX_LOG_LINES:
             self.log.delete('1.0', f'{lines - MAX_LOG_LINES}.0')
         self.log.see('end')
         self.log.configure(state='disabled')
 
-    def set_log(self, text):
+    def show_log(self):
+        """The kept output again, through the current filter."""
         self.log.configure(state='normal')
         self.log.delete('1.0', 'end')
-        self.log.insert('end', text)
+        self.log.insert('end', ''.join(line for line in self.log_lines if self.log_matches(line)))
+        self.log.see('end')
         self.log.configure(state='disabled')
+
+    def set_log(self, text):
+        self.log_lines = []
+        self.log.configure(state='normal')
+        self.log.delete('1.0', 'end')
+        self.log.configure(state='disabled')
+        if text:
+            self.append(text)
 
     def copy_log(self):
         self.root.clipboard_clear()
