@@ -18,7 +18,7 @@ class ModTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()  # the long name: build_overlay resolves the game folder
         self.game = self.root / 'CUSA01623'
         self.assets = self.game / 'dvdroot_ps4' / 'data'
         self.assets.mkdir(parents=True)

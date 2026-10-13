@@ -15,7 +15,7 @@ class PackagedVulkanTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
+        self.root = Path(self.tmp.name).resolve()  # the long name: the driver paths come back resolved
         self.icds = self.root / "icds"
         self.libs = self.root / "host-libs"
         self.icds.mkdir()
@@ -61,11 +61,12 @@ class PackagedVulkanTests(unittest.TestCase):
         self.library("libc.so.6")
         self.manifest()
         self.assertIn("host NVIDIA", self.configure())
-        driver_json = Path(self.env["VK_DRIVER_FILES"].split(":")[0])
+        bundled = self.env["GOW3_BUNDLED_VK_DRIVER_FILES"]
+        driver_json = Path(self.env["VK_DRIVER_FILES"].removesuffix(":" + bundled))  # a drive letter holds a colon too
         data = json.loads(driver_json.read_text())
         self.assertEqual(data["ICD"]["api_version"], "1.3.0")
         self.assertEqual(Path(data["ICD"]["library_path"]).resolve(), driver)
-        cache = Path(self.env["LD_LIBRARY_PATH"].split(":")[0])
+        cache = Path(self.env["LD_LIBRARY_PATH"].removesuffix(":/bundled/lib"))
         self.assertEqual((cache / compiler.name).resolve(), compiler)
         self.assertFalse((cache / "libc.so.6").exists())
         self.assertTrue(self.env["VK_DRIVER_FILES"].endswith(":/bundled/radeon.json:/bundled/intel.json"))

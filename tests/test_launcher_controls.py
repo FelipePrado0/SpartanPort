@@ -104,14 +104,14 @@ class ControlMapTest(unittest.TestCase):
             self.assertIn(key, launcher.APP_DEFAULTS)
         env = launcher.game_environment({**launcher.APP_DEFAULTS, 'player_name': ' Kratos '})
         self.assertEqual(env['GOW3_USER_NAME'], 'Kratos')
-        for key in ('display_mode', 'fps_limit', 'render_resolution', 'engine_fps', 'rcas_strength'):
+        for key in ('display_mode', 'fps_limit', 'render_resolution', 'engine_fps'):
             self.assertIn(key, launcher.INI_DEFAULTS)
 
     def test_graphics_defaults_match_the_game(self):
         d = launcher.INI_DEFAULTS
         self.assertEqual((d['display_mode'], d['vsync'], d['fps_limit'], d['engine_fps']), ('windowed', '1', '0', '120'))
         self.assertEqual([v for v, _t in launcher.FPS_LIMITS], ['30', '60', '120', '240', '0'])
-        self.assertEqual((d['fsr1'], d['rcas'], d['rcas_strength'], d['frames_queued']), ('0', '1', '75', '1'))
+        self.assertEqual(d['frames_queued'], '1')
         self.assertEqual([v for v, _t in launcher.FRAMES_QUEUED], ['1', '2', '0'])
         self.assertNotIn('GOW3_FRAMES_AHEAD', launcher.game_environment({**launcher.APP_DEFAULTS, 'frames_ahead': '2'}))
 
@@ -366,7 +366,8 @@ class GameFilesTest(unittest.TestCase):
             """Whether the game was started. The copy runs in a worker thread that presses Play
             again through ui_calls: both run here, in order."""
             with mock.patch.object(launcher.subprocess, 'Popen', return_value=mock.Mock()) as start, \
-                    mock.patch.object(launcher, 'GameJob'), mock.patch.object(launcher.threading, 'Thread') as thread:
+                    mock.patch.object(launcher, 'GameJob'), mock.patch.object(launcher.threading, 'Thread') as thread, \
+                    mock.patch.object(launcher, 'open_play_log', return_value=launcher._NullLog()):
                 app.play()
                 for call in thread.call_args_list:  # grows while the workers press Play again
                     target = call.kwargs.get('target')
@@ -520,7 +521,7 @@ class GpuChoiceTest(unittest.TestCase):
 
 class ReleaseVersionTest(unittest.TestCase):
     def test_god_of_war_release_is_newer_than_the_inherited_tags(self):
-        self.assertEqual(launcher.VERSION, '2.1.7')
+        self.assertEqual(launcher.VERSION, '2.1.8')
         self.assertGreater(launcher.version_tuple(launcher.VERSION), launcher.version_tuple('windows-v1.5'))
         self.assertGreater(launcher.version_tuple('windows-v2.2'), launcher.version_tuple(launcher.VERSION))
 

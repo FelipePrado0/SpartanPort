@@ -6,6 +6,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
@@ -13,6 +14,23 @@ import gow3_launcher_win as launcher  # noqa: E402
 
 
 class RunLogTest(unittest.TestCase):
+    def test_play_passes_the_run_log_to_the_output_reader(self):
+        owner = launcher.Launcher.__new__(launcher.Launcher)
+        owner.process = None
+        owner.app = {**launcher.APP_DEFAULTS, 'game_dir': 'synthetic-game'}
+        for name in ('collect', 'offer_system_files', 'set_log', 'play_button', 'status'):
+            setattr(owner, name, mock.Mock(return_value=True))
+        process, log = mock.Mock(), launcher._NullLog()
+        with mock.patch.object(launcher, 'game_info', return_value=('God of War III', '01.02')), \
+                mock.patch.object(launcher, 'missing_game_files', return_value=[]), \
+                mock.patch.object(launcher, 'open_play_log', return_value=log), \
+                mock.patch.object(launcher.subprocess, 'Popen', return_value=process), \
+                mock.patch.object(launcher, 'GameJob'), \
+                mock.patch.object(launcher.threading, 'Thread') as thread:
+            owner.play()
+        self.assertEqual(thread.call_args.kwargs['args'], (process, log))
+        self.assertEqual(thread.call_args.kwargs['target'], owner.read_output)
+
     def test_log_path_follows_the_saves_folder_setting(self):
         self.assertEqual(launcher.run_log_path({'user_dir': ''}),
                          launcher.DATA_DIR / 'user' / 'last_run.log')

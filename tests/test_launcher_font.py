@@ -61,5 +61,45 @@ class HeadingFontTest(unittest.TestCase):
         self.assertEqual(launcher.heading_font(15, every_language=True), ('Georgia', 15))
 
 
+class LatinHeadingsTest(unittest.TestCase):
+    """The face has ASCII only: Latin-script languages use it with the accents stripped from headings."""
+    def setUp(self):
+        self.saved = launcher.LANG, launcher.FONT_LOADED
+        launcher.FONT_LOADED = True
+
+    def tearDown(self):
+        launcher.LANG, launcher.FONT_LOADED = self.saved
+
+    def test_latin_script_languages_use_the_loaded_font(self):
+        for lang in ('pt', 'es', 'fr', 'de', 'it'):
+            launcher.LANG = lang
+            self.assertEqual(launcher.heading_font(12), ('GodOfWar', 12), lang)
+
+    def test_other_scripts_keep_the_fallback(self):
+        for lang in ('ru', 'ar'):
+            launcher.LANG = lang
+            self.assertEqual(launcher.heading_font(12), ('Georgia', 12), lang)
+
+    def test_headings_lose_their_accents_in_the_loaded_font(self):
+        launcher.LANG = 'pt'
+        self.assertEqual(launcher.heading_text('GRÁFICOS'), 'GRAFICOS')
+        self.assertEqual(launcher.heading_text('Avançado'), 'Avancado')
+        self.assertEqual(launcher.heading_text('Straße · Œuvre'), 'Strasse · OEuvre')
+
+    def test_headings_keep_their_text_outside_the_font(self):
+        launcher.LANG = 'ru'
+        self.assertEqual(launcher.heading_text('Графика'), 'Графика')
+        launcher.LANG, launcher.FONT_LOADED = 'pt', False
+        self.assertEqual(launcher.heading_text('GRÁFICOS'), 'GRÁFICOS')
+
+    def test_the_game_name_keeps_other_scripts_whole(self):
+        """The game's name (every_language) only loses Latin accents: Cyrillic, kana and hangul
+        letters are not decomposed (Й is not И, ゴ is not コ)."""
+        launcher.LANG = 'ru'
+        for name in ('ГЕРОЙ ВОЙНЫ · ЁЖ', 'ゴッド・オブ・ウォーIII', '갓 오브 워 III'):
+            self.assertEqual(launcher.heading_text(name, every_language=True), name)
+        self.assertEqual(launcher.heading_text('GRÁFICOS', every_language=True), 'GRAFICOS')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -2109,9 +2109,13 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
         const RingBinding* ring = num_ring_stages ? FindRingBinding(stage, buffer_index) : nullptr;
         if (ring) {
             // Copied by the GPU command thread into the constant ring (read-only).
-            if (FrameCapture::Active() && memory->IsValidGpuMapping(ring->address, 0)) {
+            // gow3: dump the ring's own copy, not the guest address. A binding whose bytes came
+            // from the host keeps `address` as a label only, and it can be zero; IsValidGpuMapping
+            // merely range checks against the 40 bit GPU limit, so zero passed through and the
+            // dump read address zero (crash on the frame capture key).
+            if (FrameCapture::Active()) {
                 FrameCapture::Buffer(stage.pgm_hash, buffer_index, ring->address,
-                                     reinterpret_cast<const void*>(ring->address), ring->size);
+                                     constant_ring->Data(ring->offset), ring->size);
             }
             if (!desc.IsSpecial()) {
                 if (ring->size == 864 && gbuffer_draw &&

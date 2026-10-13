@@ -10,7 +10,7 @@ whole library directory (which would also replace the package's libc/GTK/SDL).
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import sys
 
 MANIFEST_DIRS = (
@@ -39,17 +39,17 @@ def host_nvidia(manifest_dirs, library_dirs):
         for manifest in sorted(directory.glob("*nvidia*.json")):
             try:
                 data = json.loads(manifest.read_text())
-                library = Path(data["ICD"]["library_path"])
+                library = PurePosixPath(data["ICD"]["library_path"])  # a Linux manifest: POSIX, whatever the host
             except (OSError, ValueError, KeyError, TypeError):
                 continue
             if "nvidia" not in library.name.lower():
                 continue
             if library.is_absolute():
-                candidates = [library, *(d / library.name for d in library_dirs)]
+                candidates = [Path(library), *(d / library.name for d in library_dirs)]
             elif len(library.parts) > 1:
-                candidates = [manifest.parent / library]
+                candidates = [manifest.parent / Path(library)]
             else:
-                candidates = [d / library for d in library_dirs]
+                candidates = [d / library.name for d in library_dirs]
             for candidate in candidates:
                 if elf64(candidate):
                     return data, candidate.resolve()
