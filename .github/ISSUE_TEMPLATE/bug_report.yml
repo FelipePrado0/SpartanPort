@@ -1,0 +1,68 @@
+name: Bug report
+description: Visual glitch, crash, audio issue, or anything that doesn't behave as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening: search existing issues for your GPU/error first, it may already be tracked.
+
+  - type: input
+    id: version
+    attributes:
+      label: Port version
+      description: Shown in the launcher title bar (e.g. v2.1.7)
+      placeholder: v2.1.7
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver version
+      placeholder: "RX 6600, Adrenalin 26.8.1"
+    validations:
+      required: true
+
+  - type: input
+    id: cpu
+    attributes:
+      label: CPU
+      placeholder: "Ryzen 7 5700X"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: What you expected vs what actually happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: user/last_run.log
+      description: Attach the file from the port's folder (drag and drop it here). Required for crashes, black screens, graphics glitches and performance issues.
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or video
+      description: Especially for visual glitches, attach the raw in-game capture, not a photo of the screen when possible.
+    validations:
+      required: false

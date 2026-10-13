@@ -1,0 +1,50 @@
+name: Game won't launch / crashes on startup
+description: Black screen, instant close, "prepare failed", param.sfo errors, etc.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Most launch failures come from an incomplete or misplaced game dump (missing `param.sfo`,
+        wrong update version, wrong folder selected). Check the README's setup section before
+        filing, it covers the folder layout the launcher expects.
+
+  - type: input
+    id: version
+    attributes:
+      label: Port version
+      placeholder: v2.1.7
+    validations:
+      required: true
+
+  - type: input
+    id: game_version
+    attributes:
+      label: Game build / update version
+      description: e.g. 01.00, 01.02, region (CUSA01623, CUSA01715, CUSA01740...)
+    validations:
+      required: true
+
+  - type: textarea
+    id: folder
+    attributes:
+      label: Selected game folder
+      description: Screenshot of the folder you pointed the launcher at, showing eboot.bin, sce_sys and sce_module.
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Exact error message
+      description: Copy the full text shown by the launcher or the game window, don't paraphrase it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: user/last_run.log
+      description: Attach the file from the port's folder.
+    validations:
+      required: true
