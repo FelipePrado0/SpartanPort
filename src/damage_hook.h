@@ -3,6 +3,7 @@
 #define GOW3_DAMAGE_HOOK_H
 #include <stdint.h>
 #include <string.h>
+#include "signature.h"
 
 /* CUSA01623 v01.02, image offset 0x503f3, inside the damage routine: the actor's health before
  * the hit is at [rbp-0x5c], the damage at [rbp-0x60]; the game then clamps the difference to
@@ -13,6 +14,7 @@ static const unsigned char gow3_damage_original[GOW3_DAMAGE_HOOK_LENGTH] = {
     0xc5,0xfa,0x10,0x45,0xa4,  /* vmovss xmm0, [rbp-0x5c] */
     0xc5,0xfa,0x5c,0x45,0xa0   /* vsubss xmm0, xmm0, [rbp-0x60] */
 };
+static const Gow3Signature gow3_damage_site = {"c5 fa 10 45 a4 c5 fa 5c 45 a0 c5 f0 57 c9 c5 fa 5f c1", 0};
 
 static inline int gow3_damage_signature_match(const unsigned char *code, uint64_t size) {
     return size >= GOW3_DAMAGE_HOOK_LENGTH && !memcmp(code, gow3_damage_original, GOW3_DAMAGE_HOOK_LENGTH);

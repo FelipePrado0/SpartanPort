@@ -59,15 +59,6 @@ class GameProfileTests(unittest.TestCase):
         self.assertIsNone(game_profile('CUSA99999'))
         self.assertIsNone(game_profile(None))
 
-    def test_cuesta_profile_for_the_european_title_and_the_us_update_build(self):
-        cuesta = ROOT / 'patches/God_of_War_III_Remastered_cuesta.xml'
-        self.assertEqual(game_profile('CUSA01715')[1:3], (cuesta, '01.02'))
-        with tempfile.TemporaryDirectory() as folder:
-            (Path(folder) / 'eboot.bin').write_bytes(b'not an eboot')
-            self.assertEqual(game_profile('CUSA01623', folder)[1], GOW3)  # unknown build: first profile
-        self.assertTrue(all(g[1].is_file() for g in GAMES))
-        self.assertTrue(all(g[4].is_file() for g in GAMES if g[4]))
-
     def test_unavailable_frame_rate_patch_falls_back_to_the_highest_lower_one(self):
         from graphics_options import restrict_to_available
         available = {'Bug Fix - Texture Corruption Fix', 'Frame Rate Patch - 120 FPS'}
@@ -92,36 +83,124 @@ class GameProfileTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             selected_patches(GOW3, '01.02', 'Resolution Patch - 4K;Resolution Patch - 720p')
 
-    def test_eboot_build_check(self):
-        from patches import eboot_matches
-        with tempfile.TemporaryDirectory() as folder:
-            (Path(folder) / 'eboot.bin').write_bytes(b'another build')
-            self.assertFalse(eboot_matches(folder, game_profile('CUSA01623')))
-            self.assertTrue(eboot_matches(folder, None))  # no profile: nothing to check
-
-    def test_unported_build(self):
-        import hashlib
+    def test_profile_by_title_for_any_region(self):
         from unittest import mock
         import patches
+        self.assertEqual(game_profile('CUSA01715')[1], GOW3)
+        self.assertEqual(game_profile('CUSA99999', 'God of War® III Remastered')[1], GOW3)
+        self.assertIsNone(game_profile('CUSA99999', 'Another Game'))
+        with mock.patch.object(patches, 'game_sfo', return_value={'TITLE_ID': 'CUSA77777', 'TITLE': 'God of War III Remastered'}):
+            self.assertTrue(patches.game_patchable('folder'))
+        self.assertFalse(patches.game_patchable(None))
         with tempfile.TemporaryDirectory() as folder:
-            (Path(folder) / 'eboot.bin').write_bytes(b'full update')
-            self.assertIsNone(patches.unported_build(folder))  # unknown build
-            sha = hashlib.sha256(b'full update').hexdigest()
-            with mock.patch.dict(patches.UNPORTED_BUILDS, {sha: 'full 01.02 update'}):
-                self.assertEqual(patches.unported_build(folder), 'full 01.02 update')
-        self.assertIsNone(patches.unported_build(None))
-        # The full 01.02 update (eboot 6e72...) has the cuesta profile now.
-        full_update = '6e72330e9092e5164049b865e5568f2d450904001a73fe0a2f4b39194c195b3c'
-        self.assertNotIn(full_update, patches.UNPORTED_BUILDS)
-        self.assertIn(full_update, [g[3] for g in patches.GAMES])
+            self.assertFalse(patches.game_patchable(folder))  # no param.sfo: unknown game
 
-    def test_game_patchable(self):
-        from patches import game_patchable
-        with tempfile.TemporaryDirectory() as folder:
-            folder = Path(folder)
-            (folder / 'eboot.bin').write_bytes(b'another build')
-            self.assertFalse(game_patchable(folder))  # no param.sfo: unknown game
-            self.assertFalse(game_patchable(None))
+
+class SignatureTests(unittest.TestCase):
+    XML = """<?xml version="1.0"?>
+<Patch>
+  <Metadata Name="Found" AppVer="01.02">
+    <PatchList><Line Type="bytes" Address="0x401004" Value="9090" Pattern="11 22 ?? 44 55 66" At="1"/></PatchList>
+  </Metadata>
+  <Metadata Name="Call" AppVer="01.02">
+    <PatchList><Line Type="bytes" Address="0x401010" Value="e8{rel:there:0}" Pattern="aa bb cc dd ee" At="0"/></PatchList>
+    <Target Name="there" Address="0x401100" Pattern="e9 ?? ?? ?? ?? 77 88" At="1" Ref="1"/>
+  </Metadata>
+  <Metadata Name="Missing" AppVer="01.02">
+    <PatchList>
+      <Line Type="bytes" Address="0x401004" Value="9090" Pattern="11 22 ?? 44 55 66" At="1"/>
+      <Line Type="bytes" Address="0x401020" Value="90" Pattern="de ad be ef" At="0"/>
+    </PatchList>
+  </Metadata>
+</Patch>"""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.xml = Path(directory.name) / 'test.xml'
+        self.xml.write_text(self.XML)
+        image = bytearray(0x400)
+        image[0x40:0x46] = bytes.fromhex('112233445566')
+        image[0x80:0x85] = bytes.fromhex('aabbccddee')
+        image[0x200:0x207] = bytes.fromhex('e9') + (0x300 - 0x205).to_bytes(4, 'little', signed=True) + bytes.fromhex('7788')
+        self.image = bytes(image)
+
+    def test_sites_found_anywhere_and_rel32_recomputed(self):
+        skipped = {}
+        writes = compile_patches(self.xml, ['Found', 'Call', 'Missing'], None, [(0, 0x400)], self.image, skipped)
+        call = (0x300 - (0x80 + 5)).to_bytes(4, 'little', signed=True)
+        self.assertEqual(writes, [(0x41, b'\x90\x90'), (0x80, b'\xe8' + call)])
+        # One site of the patch is missing: the whole patch is left out, with the reason.
+        self.assertEqual(skipped, {'Missing': 'signature not found'})
+
+    def test_ambiguous_signature_is_skipped(self):
+        image = bytearray(self.image)
+        image[0x100:0x106] = image[0x40:0x46]
+        skipped = {}
+        self.assertEqual(compile_patches(self.xml, ['Found'], None, [(0, 0x400)], bytes(image), skipped), [])
+        self.assertEqual(skipped, {'Found': 'signature found more than once'})
+
+    def test_without_the_image_the_reference_addresses_are_used(self):
+        writes = compile_patches(self.xml, ['Found', 'Call'], '01.02', [(0, 0x10000)])
+        self.assertEqual(writes[0], (0x1004, b'\x90\x90'))
+        self.assertEqual(writes[1][0], 0x1010)
+
+    def test_signatures_match_the_full_update_eboot(self):
+        # Without that eboot.bin here: the original bytes others published for it must be the
+        # fixed bytes of each signature at its site, with one shift per code region.
+        import json
+        import re
+        known = json.loads((ROOT / 'tests/data/eboot_6e72_sites.json').read_text())
+        fixed = lambda pattern, at, n: [None if b == '??' else int(b, 16) for b in pattern.split()][at:at + n]
+        shifts = {}
+        metas = {m.get('Name'): list(m.iter('Line')) for m in ET.parse(GOW3).getroot().iter('Metadata')}
+        for name, sites in known['patches'].items():
+            for index, address, original in sites:
+                line = metas[name][index]
+                ours = fixed(line.get('Pattern'), int(line.get('At')), len(original) // 2)
+                self.assertTrue(all(b is None or b == o for b, o in zip(ours, bytes.fromhex(original))),
+                                f'{name} line {index}')
+                reference = int(line.get('Address'), 0)
+                shifts.setdefault(reference >> 16, set()).add(int(address, 0) - reference)
+        self.assertTrue(all(len(s) == 1 for s in shifts.values()), shifts)
+        header = (ROOT / 'src/cheat_hook.h').read_text()
+        hooks = re.findall(r'\{(0x[0-9a-f]+),GOW3_CHEAT_\w+,\d+,\d+,\s*\{([^}]*)\},.*?\{"([^"]+)",(\d+)\}\}',
+                           header, re.S)
+        for name, (address, original) in known['cheats'].items():
+            # The cheats' region moved -0x10 (Rage of Sparta has two sites with the same bytes).
+            match = [h for h in hooks if bytes(int(b, 0) for b in h[1].split(',')).hex() == original
+                     and int(h[0], 0) - 0x10 == int(address, 0)]
+            self.assertEqual(len(match), 1, name)
+            _, _, pattern, at = match[0]
+            self.assertEqual(fixed(pattern, int(at), len(original) // 2), list(bytes.fromhex(original)), name)
+
+    @unittest.skipUnless(os.environ.get('GOW3_GAME'), 'GOW3_GAME (game folder) not set')
+    def test_gow3_signatures_in_the_reference_and_a_moved_build(self):
+        from prepare import parse_self
+        from patches import eboot_image
+        elf, *_ = parse_self((Path(os.environ['GOW3_GAME']) / 'eboot.bin').read_bytes())
+        image = eboot_image(bytes(elf))
+        names = [m.get('Name') for m in ET.parse(GOW3).getroot().iter('Metadata')]
+        segments = [(0, len(image))]
+        # The reference build: the signatures give exactly the Address writes.
+        for name in names:
+            self.assertEqual(compile_patches(GOW3, [name], None, segments, image, {}),
+                             compile_patches(GOW3, [name], '01.02', segments), name)
+        # A build whose code moved like the full 01.02 update's: +0x120 from 0x1f0000 to 0x210000,
+        # data unchanged (the bytes taken out keep the data at its address).
+        moved = image[:0x1f0000] + bytes(0x120) + image[0x1f0000:0x210000] + image[0x210120:]
+        self.assertEqual(len(moved), len(image))
+        shift = lambda at: at + 0x120 if 0x1f0000 <= at < 0x210000 else at
+        for name in ('Resolution Patch - 4K', 'Skip Intro'):
+            reference = compile_patches(GOW3, [name], None, segments, image, {})
+            found = compile_patches(GOW3, [name], None, segments, moved, {})
+            self.assertEqual([at for at, _ in found], [shift(at) for at, _ in reference], name)
+        # Skip Intro's cave moved: the boot call into it is recomputed, the flag (data) is not.
+        writes = dict(compile_patches(GOW3, ['Skip Intro'], None, segments, moved, {}))
+        rel = lambda data, at, end: end + int.from_bytes(data[at:at + 4], 'little', signed=True)
+        self.assertEqual(rel(writes[0x01b36a], 1, 0x01b36f), shift(0x212170))
+        flag = rel(writes[0x0c8440], 2, 0x0c844a)  # the getter (not moved) and the cave share it
+        self.assertEqual(rel(writes[shift(0x212170)], 2, shift(0x212170) + 10), flag)
 
     def test_gow3_patches_compile(self):
         names = [m.get('Name') for m in ET.parse(GOW3).getroot().iter('Metadata')]

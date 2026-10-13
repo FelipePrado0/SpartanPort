@@ -150,7 +150,7 @@ class GpuChoiceTest(unittest.TestCase):
 
 class ReleaseVersionTest(unittest.TestCase):
     def test_god_of_war_release_is_newer_than_the_inherited_tags(self):
-        self.assertEqual(launcher.VERSION, '2.1.6')
+        self.assertEqual(launcher.VERSION, '2.1.7')
         self.assertGreater(launcher.version_tuple(launcher.VERSION), launcher.version_tuple('windows-v1.5'))
         self.assertGreater(launcher.version_tuple('windows-v2.2'), launcher.version_tuple(launcher.VERSION))
 

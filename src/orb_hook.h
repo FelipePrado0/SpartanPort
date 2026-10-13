@@ -3,12 +3,15 @@
 #define GOW3_ORB_HOOK_H
 #include <stdint.h>
 #include <string.h>
+#include "signature.h"
 
-static const uint32_t gow3_orb_calls[] = {0x6a775, 0x6fa33, 0x6fbd7};
-static const unsigned char gow3_orb_call_bytes[][5] = {
-    {0xe8, 0x76, 0x02, 0x00, 0x00},
-    {0xe8, 0xb8, 0xaf, 0xff, 0xff},
-    {0xe8, 0x14, 0xae, 0xff, 0xff}
+/* The red orb setter (image offset 0x6a9f0 in the reference build) and its three callers that
+ * add gains, found by signature in any build; each call must still target the setter. */
+static const Gow3Signature gow3_orb_setter_site = {"55 48 89 e5 c5 fa 5d 05 ?? ?? ?? ?? c5 fa 11 87 e8 01 00 00", 0};
+static const Gow3Signature gow3_orb_call_sites[3] = {
+    {"48 89 df e8 ?? ?? ?? ?? c4 e1 fa 2c 75 f0 bf 04 00 00 00", 3},
+    {"c4 e1 fa 2a c8 c5 fa 58 c1 e8 ?? ?? ?? ?? 8b b3 44 01 00 00", 9},
+    {"c4 e1 fa 2a c8 c5 fa 58 c1 4c 89 f7 e8 ?? ?? ?? ??", 12}
 };
 static inline void gow3_orb_build_stub(unsigned char code[26], uintptr_t helper, uintptr_t setter) {
     static const unsigned char pattern[26] = {
@@ -19,15 +22,19 @@ static inline void gow3_orb_build_stub(unsigned char code[26], uintptr_t helper,
     memcpy(code + 3, &helper, 8);
     memcpy(code + 16, &setter, 8);
 }
-static inline int gow3_orb_signatures_match(const unsigned char* image, uint64_t size) {
-    static const unsigned char setter[] = {
-        0x55,0x48,0x89,0xe5,0xc5,0xfa,0x5d,0x05,0x20,0xa4,0x28,0x00,
-        0xc5,0xfa,0x11,0x87,0xe8,0x01,0x00,0x00
-    };
-    if (size < 0x6fbdc || memcmp(image + 0x6a9f0, setter, sizeof(setter))) return 0;
-    for (unsigned i = 0; i < 3; ++i)
-        if (memcmp(image + gow3_orb_calls[i], gow3_orb_call_bytes[i], 5)) return 0;
-    return 1;
+/* The setter's offset with its three call sites in calls[], or UINT64_MAX when the code is not
+ * found or a call does not reach the setter. */
+static inline uint64_t gow3_orb_find(const unsigned char *image, uint64_t size, uint64_t calls[3]) {
+    const uint64_t setter = gow3_signature_find(image, size, &gow3_orb_setter_site);
+    if (setter == UINT64_MAX) return UINT64_MAX;
+    for (unsigned i = 0; i < 3; ++i) {
+        calls[i] = gow3_signature_find(image, size, &gow3_orb_call_sites[i]);
+        int32_t relative;
+        if (calls[i] == UINT64_MAX || image[calls[i]] != 0xe8) return UINT64_MAX;
+        memcpy(&relative, image + calls[i] + 1, 4);
+        if ((int64_t)calls[i] + 5 + relative != (int64_t)setter) return UINT64_MAX;
+    }
+    return setter;
 }
 
 /* Orb pickup, image offset 0x6a480 (one caller, 0xbf496): rdi is the player's stats; xmm0
@@ -41,6 +48,7 @@ static const unsigned char gow3_orb_pickup_original[GOW3_ORB_PICKUP_LENGTH] = {
     0x53,                /* push rbx */
     0x48,0x83,0xec,0x18  /* sub rsp, 0x18 */
 };
+static const Gow3Signature gow3_orb_pickup_site = {"55 48 89 e5 53 48 83 ec 18 c5 fa 11 5d f0 c5 fa 11 55 f4", 0};
 
 static inline int gow3_orb_pickup_signature_match(const unsigned char *code, uint64_t size) {
     return size >= GOW3_ORB_PICKUP_LENGTH && !memcmp(code, gow3_orb_pickup_original, GOW3_ORB_PICKUP_LENGTH);

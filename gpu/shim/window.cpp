@@ -62,6 +62,8 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
         Gow3Settings::Get().display_mode = Gow3Graphics::Borderless;
     }
     ApplyDisplayMode(Gow3Settings::Get().display_mode);
+    // gow3: the game has no mouse; the in-game menu draws its own cursor (Gow3Overlay::SetOpen).
+    SDL_HideCursor();
     int w = 0, h = 0;
     SDL_GetWindowSizeInPixels(window, &w, &h);
     width = w;

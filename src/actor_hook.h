@@ -3,6 +3,7 @@
 #define GOW3_ACTOR_HOOK_H
 #include <stdint.h>
 #include <string.h>
+#include "signature.h"
 
 /* CUSA01623 v01.02, image offset 0x50417: the instruction after the damage routine stores an
  * actor's new health (vmovss [r13+0x1cc], xmm0 at 0x5040e, the infinite-health cheat's site).
@@ -14,6 +15,7 @@ static const unsigned char gow3_actor_original[GOW3_ACTOR_HOOK_LENGTH] = {
     0x49,0x8b,0x45,0x00,  /* mov rax, [r13] */
     0x4c,0x89,0xef        /* mov rdi, r13 */
 };
+static const Gow3Signature gow3_actor_site = {"49 8b 45 00 4c 89 ef ff 90 f8 00 00 00 85 c0 74 76", 0};
 
 /* What the stub records for the player (slots[0]) and the last other actor hit (slots[1]).
  * Written by the game thread, read by the overlay; seq changes on every hit. */

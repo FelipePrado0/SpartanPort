@@ -1,4 +1,8 @@
-# God of War III Remastered for PC
+# God of War III Remastered for PC 
+
+<div align="center">
+  <a href="https://ko-fi.com/S7O428PBCC" target="_blank"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi"></a>
+</div>
 
 **English** | [Português (Brasil)](README.pt-BR.md)
 
@@ -16,7 +20,8 @@ It is a fork of [Supermedo's Windows port](https://github.com/Supermedo/bloodbor
 [deadinside28's bloodborne_pc](https://github.com/deadinside28/bloodborne_pc) (see
 [Credits](#credits)).
 
-> **No game files are included.** You need a dump from your own PS4 (CUSA01623, version 01.02).
+> **No game files are included.** You need a dump from your own PS4 (tested: CUSA01623 and
+> CUSA01715, versions 01.00 and 01.02).
 > This project is not affiliated with Sony Interactive Entertainment or Santa Monica Studio.
 > God of War is a trademark of Sony Interactive Entertainment.
 
@@ -63,9 +68,10 @@ Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.
 **You need**
 - Windows 10 (1903 or newer) or Windows 11, 64-bit.
 - A graphics card with Vulkan 1.3 and an up-to-date driver.
-- Your own copy of God of War III Remastered: **CUSA01623 with the 01.02 update**, as a folder
-  that contains `eboot.bin`, `sce_module` and `sce_sys`. No game files are included in this
-  download.
+- Your own copy of God of War III Remastered, as a folder that contains `eboot.bin`,
+  `sce_module` and `sce_sys`. Tested: **CUSA01623 (US) and CUSA01715 (EU), versions 01.00 and
+  01.02** (full update). Other regions and versions may work but are untested: if you try one,
+  please open an issue with your `user/last_run.log`. No game files are included in this download.
 
 **Steps**
 1. Download `gow3-windows.zip` from the
@@ -149,22 +155,24 @@ window. From a source tree: `GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py` af
   needs network access. The AppImage ran in a Wayland session, in X11 through XWayland and in a native Xorg session (AMD, Mesa).
 - **Icon:** the AppImage, the launcher and the game window use `packaging/linux/gow3.png` when that
   file exists at build time, and `launcher/gow3.png` otherwise.
-- **Patches:** the full 01.02 update (`eboot.bin` sha256 `6e72330e…`) uses the patch file from
-  cuesta4 (`patches/God_of_War_III_Remastered_cuesta.xml`). The European title (CUSA01715) is patched
-  only when every byte the patches overwrite matches; it has not been tested.
+- **Patches:** the same patch file serves the full 01.02 update (`eboot.bin` sha256 `6e72330e…`) and
+  the European title (CUSA01715): the patches and cheats find their sites by signature.
 - **Graphics (experimental):** the temporal upscalers (FSR 3.1, FSR 4, TAA, DLSS) are off by default;
   the switch is at the top of that page.
 
 ## Requirements
 
 - Windows 10 (1903 or newer) or Windows 11, 64-bit.
+- A 64-bit processor with the PS4's instruction sets (AVX, F16C, BMI1, MOVBE, LZCNT): Intel
+  Haswell (2013) or newer, AMD Ryzen or newer. The game's own code runs on the CPU as it is, so
+  an older processor stops at start with a `STOP: this CPU lacks` line in the log.
 - A graphics card with Vulkan 1.3 and a current driver.
-- Your copy of the game: CUSA01623 with the 01.02 update applied (the folder with `eboot.bin`,
-  `sce_module` and `sce_sys`).
-- The patches are applied only to the `eboot.bin` they were checked against byte by byte
-  (sha256 `d85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299`), and the in-game
-  hooks (cheats, multipliers, health bar) only where the code they change has the expected
-  bytes. Otherwise the game starts without them, and the log and the menu say why.
+- Your copy of the game (the folder with `eboot.bin`, `sce_module` and `sce_sys`). Tested:
+  CUSA01623 and CUSA01715, versions 01.00 and 01.02.
+- The patches and the in-game hooks (cheats, multipliers, health bar) find their sites by
+  signature: the original bytes around each one, wherever a release placed that code
+  (`tools/make_signatures.py`). A site that is not found leaves only that patch or hook off; the
+  game starts without it, and the log and the menu say why.
 - To build from source: [MSYS2](https://www.msys2.org) and [Python 3](https://www.python.org) with Pillow
   (`pip install pillow`, used for the game's icon and cover art).
 

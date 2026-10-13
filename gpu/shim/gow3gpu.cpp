@@ -24,7 +24,6 @@
 #include "../gow3gpu.h"
 #include "common/elf_info.h"
 #include "common/logging/log.h"
-#include "common/rdtsc.h"
 #include "core/libraries/kernel/orbis_error.h"
 #include "core/libraries/libs.h"
 #include "core/memory.h"
@@ -44,6 +43,7 @@ typedef void (*RuntimeGpuRange)(uintptr_t address, uint64_t size);
 uint64_t runtime_process_time_us(void);
 uint64_t runtime_process_time_counter(void);
 uint64_t runtime_tsc_frequency(void);
+uint64_t runtime_read_tsc(void);
 int32_t* runtime_errno(void);
 void runtime_memory_set_gpu_hooks(RuntimeGpuRange map, RuntimeGpuRange unmap, RuntimeGpuRange invalidate);
 }
@@ -155,7 +155,7 @@ boost::icl::interval_set<VAddr> AddressSpace::GetUsableRegions() {
 // Kernel services the vendored libraries call directly.
 namespace Libraries::Kernel {
 u64 PS4_SYSV_ABI sceKernelGetTscFrequency() { return runtime_tsc_frequency(); }
-u64 PS4_SYSV_ABI sceKernelReadTsc() { return Common::FencedRDTSC(); }
+u64 PS4_SYSV_ABI sceKernelReadTsc() { return runtime_read_tsc(); }
 u64 PS4_SYSV_ABI sceKernelGetProcessTime() { return runtime_process_time_us(); }
 u64 PS4_SYSV_ABI sceKernelGetProcessTimeCounter() { return runtime_process_time_counter(); }
 u64 PS4_SYSV_ABI sceKernelGetProcessTimeCounterFrequency() { return 1'000'000'000; }

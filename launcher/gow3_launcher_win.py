@@ -50,7 +50,7 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 NEW_GROUP = {} if WINDOWS else {'start_new_session': True}
 UI_FONT, MONO_FONT, SERIF_FONT = 'Segoe UI', 'Consolas', 'Georgia'
 # This build; GitHub release tags are windows-v<VERSION>.
-VERSION = '2.1.6'
+VERSION = '2.1.7'
 RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
@@ -538,9 +538,9 @@ def steam_launch_command():
 
 def game_profile_of(folder):
     """(title id, (ids, built-in XML, app version)) of a game with a patch profile, else (id, None)."""
-    from patches import game_profile, game_title_id
+    from patches import game_profile_for, game_title_id
     title_id = game_title_id(folder) if folder else None
-    return title_id, game_profile(title_id, folder or None)
+    return title_id, game_profile_for(folder)
 
 
 def game_environment(s):
@@ -1184,10 +1184,10 @@ class Launcher:
         self.section(f, _('Folders'))
         self.folder(f, 'game_dir', _('Game folder', 'Папка игры'),
                     _('Choose the folder with eboot.bin', 'Выберите папку с eboot.bin'),
-                    _('Your own dump of the game (eboot.bin, sce_module, sce_sys); God of War III Remastered: '
-                      'CUSA01623, version 01.02 for the community patches.',
-                      'Ваш дамп игры (eboot.bin, sce_module, sce_sys); God of War III Remastered: CUSA01623, '
-                      'версия 01.02 для патчей сообщества.'), on_change=self.game_changed)
+                    _('Your own dump of the game (eboot.bin, sce_module, sce_sys): God of War III Remastered, '
+                      'any region and version.',
+                      'Ваш дамп игры (eboot.bin, sce_module, sce_sys): God of War III Remastered, '
+                      'любой регион и версия.'), on_change=self.game_changed)
         self.folder(f, 'update_dir', _('Update folder (optional)'),
                     _('Choose the folder of the update (eboot.bin, sce_sys)'),
                     _('Only if the update is dumped apart from the game: it is laid over the game folder '
@@ -1519,13 +1519,15 @@ class Launcher:
         title_id, _profile = game_profile_of(self.meta_dir())
         names = self.app.get('game_patches', {}).get(title_id) or []
         resolution = dict((v, t[0]) for v, t in RESOLUTION_CHOICES).get(self.var('render_resolution', 'ini').get(), '?')
-        from patches import game_patchable, unported_build
-        folder = self.meta_dir()
-        if not game_patchable(folder):
-            if unported_build(folder):
-                return _('{} · 60 FPS engine · full 01.02 update detected: patch support in progress').format(resolution)
-            return _('{} · 60 FPS engine · patches not available for this game build').format(resolution)
-        return _('{} · {} FPS engine · {} patches').format(resolution, self.var('engine_fps', 'ini').get(), len(names))
+        from patches import game_patchable, patch_status
+        if not game_patchable(self.meta_dir()):
+            return _('{} · 60 FPS engine · no patches for this game').format(resolution)
+        text = _('{} · {} FPS engine · {} patches').format(resolution, self.var('engine_fps', 'ini').get(), len(names))
+        # Which patches the game's eboot.bin had is known once the game has started (patches.py).
+        status = patch_status(DATA_DIR / 'out')
+        if status and status.get('skipped'):
+            text += ' · ' + _('{} not found in this eboot.bin at the last start (see Log)').format(len(status['skipped']))
+        return text
 
     def refresh_fsr4(self):
         total, missing = len(fsr4_files()), len(fsr4_missing())

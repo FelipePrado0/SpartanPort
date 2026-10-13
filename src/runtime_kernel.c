@@ -12,7 +12,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/time.h>
-#include <x86intrin.h>
 #ifndef _WIN32
 #include <sys/random.h>
 #include <sys/resource.h>
@@ -85,27 +84,15 @@ static ABI uint64_t process_time_counter(void) {
     return (uint64_t)(t.tv_sec-process_start.tv_sec)*1000000000+(uint64_t)(t.tv_nsec-process_start.tv_nsec);
 }
 static ABI uint64_t process_time_frequency(void) { return 1000000000; }
-static ABI uint64_t read_tsc(void) { return __rdtsc(); }
-static uint64_t tsc_hz;
-static ABI uint64_t tsc_frequency(void) {
-    if (!tsc_hz) {
-        struct timespec a,b,nap={0,20000000};
-        clock_gettime(CLOCK_MONOTONIC,&a); uint64_t t0=__rdtsc();
-#ifdef _WIN32
-        (void)nap; compat_sleep_ns(20000000);
-#else
-        nanosleep(&nap,NULL);
-#endif
-        clock_gettime(CLOCK_MONOTONIC,&b); uint64_t t1=__rdtsc();
-        uint64_t ns=(uint64_t)(b.tv_sec-a.tv_sec)*1000000000+(uint64_t)(b.tv_nsec-a.tv_nsec);
-        tsc_hz=(t1-t0)*1000000000/(ns ? ns : 1);
-    }
-    return tsc_hz;
-}
+/* The guest's TSC is the process clock in nanoseconds. The raw rdtsc differs per core on some
+ * hosts (3.9 s apart on a Xeon E5-2680 v4, #42), so a thread moving cores made the game jump. */
+static ABI uint64_t read_tsc(void) { return process_time_counter(); }
+static ABI uint64_t tsc_frequency(void) { return 1000000000; }
 /* Shared with the GPU library so flip/label timestamps use the guest's clock. */
 uint64_t runtime_process_time_us(void) { return process_time(); }
 uint64_t runtime_process_time_counter(void) { return process_time_counter(); }
 uint64_t runtime_tsc_frequency(void) { return tsc_frequency(); }
+uint64_t runtime_read_tsc(void) { return read_tsc(); }
 static int sleep_ns(uint64_t ns) {
 #ifdef _WIN32
     compat_sleep_ns(ns);

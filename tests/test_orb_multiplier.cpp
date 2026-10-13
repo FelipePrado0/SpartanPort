@@ -38,16 +38,17 @@ int main(int argc, char** argv) {
     assert(Gow3Orbs::ClampMultiplier(101) == 100);
     assert(Gow3Orbs::ClampMultiplier(std::numeric_limits<float>::infinity()) == 1);
     std::vector<unsigned char> image(0x6fbdc);
-    assert(!gow3_orb_signatures_match(image.data(), image.size()));
-    assert(!gow3_orb_signatures_match(image.data(), 1));
+    uint64_t calls[3];
+    assert(gow3_orb_find(image.data(), image.size(), calls) == UINT64_MAX);
+    assert(gow3_orb_find(image.data(), 1, calls) == UINT64_MAX);
     if (argc > 1) {
         FILE* file = std::fopen(argv[1], "rb");
         assert(file && !std::fseek(file, 0x4000, SEEK_SET));
         assert(std::fread(image.data(), 1, image.size(), file) == image.size());
         std::fclose(file);
-        assert(gow3_orb_signatures_match(image.data(), image.size()));
-        image[gow3_orb_calls[1]] ^= 1;
-        assert(!gow3_orb_signatures_match(image.data(), image.size()));
+        assert(gow3_orb_find(image.data(), image.size(), calls) == 0x6a9f0);
+        image[calls[1] + 1] ^= 1;
+        assert(gow3_orb_find(image.data(), image.size(), calls) == UINT64_MAX);
     }
 #ifdef _WIN32
     auto* stub = static_cast<unsigned char*>(VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));

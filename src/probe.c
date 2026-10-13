@@ -6,6 +6,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include "runtime.h"
+#include "cpu_check.h"
 #include "orb_hook.h"
 #include "cheat_hook.h"
 #include "actor_hook.h"
@@ -324,25 +325,24 @@ extern uintptr_t gow3_damage_multiplier(int taken);
 extern uintptr_t gow3_orb_pickup_multiplier(unsigned kind);
 extern void gow3_stat_multipliers_status(int damage, int orb_pickup);
 
-static void install_cheats(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
-    char path[4096], serial[32] = "", version[32] = "";
-    snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
-    sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
-    sfo_value(path, "APP_VER", version, sizeof(version), NULL);
-    if (strcmp(serial, "CUSA01623") || strcmp(version, "01.02")) return;
+/* The hooks below find their sites by signature (src/signature.h), so they work in any region
+ * and version of the game whose code matches; a site that is not found leaves its feature off. */
+static void install_cheats(Segment *segments, uint64_t count, uint64_t size) {
     const char *names[] = {"health", "magic", "item meter", "Rage of Sparta", "red orbs",
                            "Very Hard unlock", "infinite double jumps"};
+    uint64_t at[GOW3_CHEAT_HOOK_COUNT];
+    for (unsigned i = 0; i < GOW3_CHEAT_HOOK_COUNT; ++i)
+        at[i] = gow3_signature_find(image, size, &gow3_cheat_hooks[i].site);
     for (unsigned id = 0; id < GOW3_CHEAT_COUNT; ++id) {
         int valid = 1;
         for (unsigned i = 0; i < GOW3_CHEAT_HOOK_COUNT; ++i) {
             const Gow3CheatHook *hook = &gow3_cheat_hooks[i];
             if (hook->id != id) continue;
-            if (hook->offset > size || hook->length > size - hook->offset ||
-                !mapped(segments, count, hook->offset, hook->length) ||
-                !gow3_cheat_signature_match(hook, image + hook->offset, size - hook->offset)) valid = 0;
+            if (at[i] == UINT64_MAX || !mapped(segments, count, at[i], hook->length) ||
+                !gow3_cheat_signature_match(hook, image + at[i], size - at[i])) valid = 0;
         }
         if (!valid) {
-            printf("Cheats: %s unavailable (code signature mismatch)\n", names[id]);
+            printf("Cheats: %s unavailable (code not found in this eboot.bin)\n", names[id]);
             continue;
         }
         unsigned char *stubs = allocate(page_size);
@@ -351,11 +351,11 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
             const Gow3CheatHook *hook = &gow3_cheat_hooks[i];
             if (hook->id != id) continue;
             unsigned char *stub = stubs + i * 256;
-            int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + hook->offset + 5);
+            int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + at[i] + 5);
             if (delta < INT32_MIN || delta > INT32_MAX) { valid = 0; break; }
             relative[i] = (int32_t)delta;
             gow3_cheat_build_stub(stub, hook, gow3_cheat_flag(id),
-                                 (uintptr_t)(image + hook->offset + hook->length));
+                                 (uintptr_t)(image + at[i] + hook->length));
         }
         if (!valid) {
             printf("Cheats: %s unavailable (hook outside relative-jump range)\n", names[id]);
@@ -365,9 +365,9 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
         for (unsigned i = 0; i < GOW3_CHEAT_HOOK_COUNT; ++i) {
             const Gow3CheatHook *hook = &gow3_cheat_hooks[i];
             if (hook->id != id) continue;
-            image[hook->offset] = 0xe9;
-            memcpy(image + hook->offset + 1, &relative[i], 4);
-            memset(image + hook->offset + 5, 0x90, hook->length - 5);
+            image[at[i]] = 0xe9;
+            memcpy(image + at[i] + 1, &relative[i], 4);
+            memset(image + at[i] + 5, 0x90, hook->length - 5);
         }
         gow3_cheat_status(id);
         printf("Cheats: %s ready (live toggle, initially disabled unless saved)\n", names[id]);
@@ -376,16 +376,11 @@ static void install_cheats(const char *app0, Segment *segments, uint64_t count, 
 
 /* Damage hook for the enemy health bar (src/actor_hook.h). Always
  * installed when the code matches: it only records values; the overlay decides what to show. */
-static void install_actor_watch(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
-    char path[4096], serial[32] = "", version[32] = "";
-    snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
-    sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
-    sfo_value(path, "APP_VER", version, sizeof(version), NULL);
-    const uint64_t at = GOW3_ACTOR_HOOK_OFFSET;
-    if (strcmp(serial, "CUSA01623") || strcmp(version, "01.02") || at > size ||
-        !mapped(segments, count, at, GOW3_ACTOR_HOOK_LENGTH) ||
+static void install_actor_watch(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t at = gow3_signature_find(image, size, &gow3_actor_site);
+    if (at == UINT64_MAX || !mapped(segments, count, at, GOW3_ACTOR_HOOK_LENGTH) ||
         !gow3_actor_signature_match(image + at, size - at)) {
-        printf("Health display: unavailable (game version or code signature mismatch)\n");
+        printf("Health display: unavailable (code not found in this eboot.bin)\n");
         return;
     }
     unsigned char *stub = allocate(page_size);
@@ -404,29 +399,25 @@ static void install_actor_watch(const char *app0, Segment *segments, uint64_t co
     printf("Health display: damage hook ready (enemy health bar in the menu)\n");
 }
 
-static void install_orb_multiplier(const char *app0, Segment *segments, uint64_t count,
-                                   uint64_t size) {
-    char path[4096], serial[32] = "", version[32] = "";
-    snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
-    sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
-    sfo_value(path, "APP_VER", version, sizeof(version), NULL);
-    if (strcmp(serial, "CUSA01623") || strcmp(version, "01.02") ||
-        !gow3_orb_signatures_match(image, size)) {
-        printf("Red orbs: multiplier unavailable (game version or gain signatures mismatch)\n");
+static void install_orb_multiplier(Segment *segments, uint64_t count, uint64_t size) {
+    uint64_t calls[3];
+    const uint64_t setter_at = gow3_orb_find(image, size, calls);
+    if (setter_at == UINT64_MAX) {
+        printf("Red orbs: multiplier unavailable (code not found in this eboot.bin)\n");
         return;
     }
     for (unsigned i = 0; i < 3; ++i) {
-        if (!mapped(segments, count, gow3_orb_calls[i], 5)) return;
+        if (!mapped(segments, count, calls[i], 5)) return;
     }
     /* SysV call sites: preserve the receiver across the helper, then tail-call the original
      * setter. Its cap and upgrade notifications remain in the game's own code. */
     unsigned char *stub = allocate(page_size);
-    uintptr_t helper = (uintptr_t)gow3_orbs_gain, setter = (uintptr_t)(image + 0x6a9f0);
+    uintptr_t helper = (uintptr_t)gow3_orbs_gain, setter = (uintptr_t)(image + setter_at);
     unsigned char code[26];
     gow3_orb_build_stub(code, helper, setter);
     int32_t displacements[3];
     for (unsigned i = 0; i < 3; ++i) {
-        int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + gow3_orb_calls[i] + 5);
+        int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + calls[i] + 5);
         if (delta < INT32_MIN || delta > INT32_MAX) {
             printf("Red orbs: multiplier unavailable (hook outside relative-call range)\n");
             return;
@@ -436,7 +427,7 @@ static void install_orb_multiplier(const char *app0, Segment *segments, uint64_t
     memcpy(stub, code, sizeof(code));
     protect(stub, page_size, 5);
     for (unsigned i = 0; i < 3; ++i)
-        memcpy(image + gow3_orb_calls[i] + 1, &displacements[i], 4);
+        memcpy(image + calls[i] + 1, &displacements[i], 4);
     gow3_orbs_status(1);
     printf("Red orbs: live multiplier ready (3 validated gain paths, 0.1x to 100x)\n");
 }
@@ -454,16 +445,12 @@ static int install_jump(uint64_t at, unsigned length, unsigned char *stub) {
 
 /* Damage dealt/taken and green/blue/gold orb multipliers (src/damage_hook.h, src/orb_hook.h):
  * the stubs read the menu's floats directly, so changes apply on the next hit or pickup. */
-static void install_stat_multipliers(const char *app0, Segment *segments, uint64_t count, uint64_t size) {
-    char path[4096], serial[32] = "", version[32] = "";
-    snprintf(path, sizeof(path), "%s/sce_sys/param.sfo", app0 ? app0 : ".");
-    sfo_value(path, "TITLE_ID", serial, sizeof(serial), NULL);
-    sfo_value(path, "APP_VER", version, sizeof(version), NULL);
-    const int game = !strcmp(serial, "CUSA01623") && !strcmp(version, "01.02");
-    const uint64_t damage_at = GOW3_DAMAGE_HOOK_OFFSET, pickup_at = GOW3_ORB_PICKUP_OFFSET;
-    int damage = game && damage_at < size && mapped(segments, count, damage_at, GOW3_DAMAGE_HOOK_LENGTH) &&
+static void install_stat_multipliers(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t damage_at = gow3_signature_find(image, size, &gow3_damage_site);
+    const uint64_t pickup_at = gow3_signature_find(image, size, &gow3_orb_pickup_site);
+    int damage = damage_at != UINT64_MAX && mapped(segments, count, damage_at, GOW3_DAMAGE_HOOK_LENGTH) &&
                  gow3_damage_signature_match(image + damage_at, size - damage_at);
-    int pickup = game && pickup_at < size && mapped(segments, count, pickup_at, GOW3_ORB_PICKUP_LENGTH) &&
+    int pickup = pickup_at != UINT64_MAX && mapped(segments, count, pickup_at, GOW3_ORB_PICKUP_LENGTH) &&
                  gow3_orb_pickup_signature_match(image + pickup_at, size - pickup_at);
     unsigned char *stubs = damage || pickup ? allocate(page_size) : NULL;
     if (damage) {
@@ -587,6 +574,16 @@ int main(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s boot.bin [--cpu-only] [--strict-imports] [--check-imports] [--content-profile file] [--app0 dir] [--user dir] [--patches file] [--timeout seconds] | --vulkan-only\n", argv[0]);
         return 1;
+    }
+    /* The guest code needs the PS4's instruction sets (#33, #66); GOW3_CPU_CHECK=0 skips this. */
+    const char *cpu_check = getenv("GOW3_CPU_CHECK");
+    if (!cpu_check || strcmp(cpu_check, "0")) {
+        char missing[128];
+        if (cpu_missing_features(cpu_feature_words(), missing, sizeof missing)) {
+            printf("STOP: this CPU lacks instruction sets the game's code uses: %s "
+                   "(Intel Haswell 2013 or newer, or AMD Ryzen or newer, is needed)\n", missing);
+            return 20;
+        }
     }
     if (content_profile) {
         FILE *profile=fopen(content_profile,"rb");
@@ -796,10 +793,10 @@ int main(int argc, char **argv) {
         _exit(missing ? 1 : 0); /* no destructors: GPU threads are running */
     }
     if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
-    if (gpu_enabled) install_orb_multiplier(app0, segments, ns, size);
-    if (gpu_enabled) install_cheats(app0, segments, ns, size);
-    if (gpu_enabled) install_actor_watch(app0, segments, ns, size);
-    if (gpu_enabled) install_stat_multipliers(app0, segments, ns, size);
+    if (gpu_enabled) install_orb_multiplier(segments, ns, size);
+    if (gpu_enabled) install_cheats(segments, ns, size);
+    if (gpu_enabled) install_actor_watch(segments, ns, size);
+    if (gpu_enabled) install_stat_multipliers(segments, ns, size);
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
 #endif

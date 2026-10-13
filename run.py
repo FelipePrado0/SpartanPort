@@ -155,9 +155,8 @@ def main():
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('GOW3_CONTENT_SKU', 'full'))
 
         import patches
-        from patches import game_patchable, game_profile, game_title_id, patch_requirements, selected_patches
-        profile = game_profile(game_title_id(game), game)
-        patched = bool(profile) and (game_patchable(game) or bool(env.get('GOW3_FORCE_PATCHES')))
+        from patches import game_profile_for, patch_requirements, patch_status, selected_patches
+        profile = game_profile_for(game)
         engine_fps = 60
         # The window shows the game's icon (BMP: the format SDL loads without extra libraries); on
         # Linux the launcher's own icon (the AppImage ships the one chosen when it was built) and
@@ -180,23 +179,27 @@ def main():
         if env.get('GOW3_EXPERIMENTAL_UPSCALER') != '1':
             env.setdefault('GOW3_UPSCALER', 'none')
         env.setdefault('GOW3_READBACK_LINEAR', '1')
-        if patched:
-            # The patch notes give the direct memory and VBlank rate the selected patches need.
+        if profile:
             names = selected_patches(profile[1], profile[2], env.get('GOW3_PATCHES', ''), env.get('GOW3_PATCHES_ONLY') == '1')
             # gow3.ini decides the resolution and frame rate patches (in-game menu, launcher).
             names = graphics_options.patch_names(names, graphics)
             names = graphics_options.restrict_to_available(names, patches.available_patches(profile[1], profile[2]))
             env['GOW3_PATCHES'] = ';'.join(names)
             env['GOW3_PATCHES_ONLY'] = '1'
-            engine_fps = graphics_options.applied_engine_fps(names)
-            dmem, vblank = patch_requirements(profile[1], names, profile[2])
+        (out / 'patch_status.json').unlink(missing_ok=True)
+        run_script('patches.py', '--out', out, '--extra', env.get('GOW3_PATCHES', ''), '--game-dir', game,
+                   '--patches-dir', env.get('GOW3_PATCHES_DIR', data / 'patches'),
+                   '--patches-config', env.get('GOW3_PATCHES_CONFIG', data / 'patches.json'))
+        if profile:
+            # Only the patches found in this eboot.bin count: a frame rate patch that was skipped
+            # leaves the engine at 60 FPS, and the notes' memory and VBlank needs follow the same list.
+            applied = (patch_status(out) or {}).get('applied', [])
+            engine_fps = graphics_options.applied_engine_fps(applied)
+            dmem, vblank = patch_requirements(profile[1], applied, profile[2])
             for key, value in (('GOW3_DMEM_MB', dmem), ('GOW3_VBLANK_HZ', vblank)):
                 if value and key not in env:
                     env[key] = str(value)
                     derived.append(key)
-        run_script('patches.py', '--out', out, '--extra', env.get('GOW3_PATCHES', ''), '--game-dir', game,
-                   '--patches-dir', env.get('GOW3_PATCHES_DIR', data / 'patches'),
-                   '--patches-config', env.get('GOW3_PATCHES_CONFIG', data / 'patches.json'))
         if 'GOW3_VBLANK_HZ' not in env:
             env['GOW3_VBLANK_HZ'] = '60'
             derived.append('GOW3_VBLANK_HZ')
@@ -206,7 +209,7 @@ def main():
         derived.append('GOW3_ENGINE_FPS')
         print(f'Engine frame rate: {engine_fps} FPS'
               + ('' if engine_fps > 60 or graphics['engine_fps'] == '60' else
-                 ' (the frame rate patch is not available for this game build)'), flush=True)
+                 ' (the frame rate patch was not found in this eboot.bin)'), flush=True)
         env['GOW3_DERIVED'] = ','.join(derived)
 
         # The in-game restart starts this script again once this process is gone.
