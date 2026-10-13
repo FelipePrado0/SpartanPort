@@ -77,7 +77,12 @@ unpack() {
     find "$dir" -mindepth 1 -maxdepth 1 -type d | head -1
 }
 done_already() { [[ -f $stamps/$1-$(field "$1" 4) ]]; }
-mark_done() { rm -f "$stamps/$1"-*; touch "$stamps/$1-$(field "$1" 4)"; echo "macOS deps: $1 ready"; }
+# A built package's sources and build tree are not needed again (the archive stays in src/).
+mark_done() {
+    rm -f "$stamps/$1"-*; touch "$stamps/$1-$(field "$1" 4)"
+    rm -rf "${work:?}/$1" "$work/$1"-*
+    echo "macOS deps: $1 ready"
+}
 
 ninja_path=$(command -v ninja)
 pkg_config=$(command -v pkg-config)
