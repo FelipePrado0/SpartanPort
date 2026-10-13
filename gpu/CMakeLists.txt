@@ -40,6 +40,23 @@ elseif (GOW3_PGO STREQUAL "use")
                         -fprofile-correction -Wno-missing-profile -Wno-coverage-mismatch)
 endif()
 
+# The video core follows recent Vulkan-Hpp (newer driver ids, features and return types): the headers of an older
+# distribution (Debian 13 has 1.4.309) do not compile it. Below the minimum, Vulkan-Headers are fetched; the
+# system still provides the loader (FindVulkan only creates Vulkan::Headers when no such target exists).
+set(GOW3_VULKAN_HEADERS_MIN 363)
+find_path(GOW3_VULKAN_CORE_DIR vulkan/vulkan_core.h)
+set(GOW3_VULKAN_HEADERS_FOUND 0)
+if (GOW3_VULKAN_CORE_DIR)
+    file(STRINGS "${GOW3_VULKAN_CORE_DIR}/vulkan/vulkan_core.h" GOW3_VK_VERSION_LINE REGEX "^#define VK_HEADER_VERSION [0-9]+")
+    string(REGEX REPLACE ".* ([0-9]+)$" "\\1" GOW3_VULKAN_HEADERS_FOUND "${GOW3_VK_VERSION_LINE}")
+endif()
+if (GOW3_VULKAN_HEADERS_FOUND LESS GOW3_VULKAN_HEADERS_MIN)
+    message(STATUS "System Vulkan headers 1.x.${GOW3_VULKAN_HEADERS_FOUND} are older than 1.x.${GOW3_VULKAN_HEADERS_MIN}: fetching Vulkan-Headers")
+    include(FetchContent)
+    FetchContent_Declare(vulkan_headers GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
+                         GIT_TAG v1.4.${GOW3_VULKAN_HEADERS_MIN} GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(vulkan_headers)
+endif()
 find_package(Vulkan REQUIRED)
 find_package(fmt REQUIRED)
 find_package(Boost REQUIRED)
@@ -51,7 +68,13 @@ if (NOT magic_enum_FOUND)
     target_include_directories(magic_enum INTERFACE third_party/magic_enum/include
                                                     third_party/magic_enum/include/magic_enum)
 endif()
-find_package(tsl-robin-map REQUIRED)
+# robin-map is header-only and not packaged everywhere (Debian 13 lacks it): fetched when the system has none.
+find_package(tsl-robin-map QUIET)
+if (NOT tsl-robin-map_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(robin_map GIT_REPOSITORY https://github.com/Tessil/robin-map.git GIT_TAG v1.4.0 GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(robin_map)
+endif()
 find_package(VulkanMemoryAllocator CONFIG QUIET)
 if (NOT VulkanMemoryAllocator_FOUND)
     # MSYS2 ships the header (include/vma/vk_mem_alloc.h) without a CMake package.
