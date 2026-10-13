@@ -114,7 +114,7 @@ Radeon RX 7800 XT (RADV) numa sessão Wayland.
 **Compilar e rodar**
 ```
 bash build.sh
-bash packaging/linux/build.sh   # precisa de PyInstaller, Tk e Pillow para Python, mais patchelf e curl
+bash packaging/linux/build.sh   # precisa de Tk e Pillow para Python (o PyInstaller vem do pip se o sistema não tiver), curl e file
 ./dist/gow3-x86_64.AppImage
 ```
 Escolha a pasta do jogo no launcher. `--play` inicia o jogo com as opções salvas e sem janela. A
@@ -134,13 +134,20 @@ partir do código: `GOW3_GAME_DIR=/caminho/para/CUSA01623 python3 run.py` depois
   launcher e a janela do jogo mostrarem o ícone no dock; **Avançado → Linux** desliga e remove a entrada.
   Quando outra ferramenta (Gear Lever, AppImageLauncher…) já criou uma entrada que inicia o mesmo
   arquivo, ele não cria a dele e remove a que tiver criado, sem duplicar.
-- **Outras distribuições:** um AppImage leva as bibliotecas do sistema em que foi compilado e exige, no
-  mínimo, a glibc dele (um build no Arch exige a 2.44). `bash packaging/linux/container.sh` compila num
-  container Debian 13 (glibc 2.39; docker ou podman), e `packaging/linux/deps.sh` informa, e com
-  `--install` instala, os pacotes para Arch, Debian/Ubuntu, Fedora ou openSUSE (o `build.sh` o chama e,
-  quando o build falha, lê os logs e diz que pacote falta). Debian 13 e Ubuntu 24.04 foram testados;
-  Debian 12 e Ubuntu 22.04 são antigos demais. O CMake baixa os Vulkan-Headers e o robin-map quando os
-  do sistema são mais antigos ou não existem.
+- **Outras distribuições:** um AppImage leva as bibliotecas do sistema em que foi compilado e exige a
+  glibc que os binários desse sistema pedem (um build no Arch exige a 2.44; o do Debian 13 exige a 2.39, a
+  maior versão de símbolo que ele referencia, e o `container.sh` imprime o valor de cada build).
+  `bash packaging/linux/container.sh` compila num container Debian 13 (docker, senão podman;
+  `GOW3_CONTAINER_ENGINE` escolhe; só `debian:13` e docker foram testados), e o resultado é
+  `dist/gow3-x86_64-debian-13.AppImage`. O `packaging/linux/deps.sh` informa, e com `--install` instala, os
+  pacotes para Arch, Debian/Ubuntu, Fedora ou openSUSE (o `build.sh` o chama e, quando o build falha, lê os
+  logs e diz que pacote falta). `GOW3_INSTALL_DEPS=1` instala e `GOW3_SKIP_DEPS=1` pula a checagem quando as
+  ferramentas vêm de um lugar que ela não enxerga (um prefixo próprio, Nix); `GOW3_FAMILY` troca a detecção
+  da distribuição. O AppImage compilado no Debian 13 rodou no Debian 13 e no Ubuntu 24.04 (containers,
+  Wayland); compilar a partir do código foi feito só no Arch e no Debian 13 (o Ubuntu 24.04 não tem pacote
+  do SDL3). Debian 12 e Ubuntu 22.04 são antigos demais. O CMake baixa Vulkan-Headers, robin-map e Vulkan
+  Memory Allocator (versões fixas, conferidas por hash) quando os do sistema são mais antigos ou não
+  existem, o que exige acesso à rede. O AppImage rodou numa sessão Wayland, em X11 pelo XWayland e numa sessão Xorg nativa (AMD, Mesa).
 - **Ícone:** o AppImage, o launcher e a janela do jogo usam `packaging/linux/gow3.png` quando esse
   arquivo existe na hora da compilação, e `launcher/gow3.png` caso contrário.
 - **Patches:** a atualização 01.02 completa (`eboot.bin` com sha256 `6e72330e…`) usa o arquivo de
