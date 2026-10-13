@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstdio>
 #include <cstdlib>
+#include <string_view>
 #include <boost/container/static_vector.hpp>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -114,6 +116,12 @@ Instance::Instance(const Frontend::WindowSystemInfo& window_info, s32 physical_d
     LOG_INFO(Render_Vulkan, "Found {} physical devices", num_physical_devices);
 
     if (physical_device_index < 0) {
+        // gow3: GOW3_GPU_TYPE=integrated|discrete puts that kind of GPU first (hybrid laptops);
+        // without one, or when it is missing, the discrete GPU is preferred as before.
+        const char* gpu_type = std::getenv("GOW3_GPU_TYPE");
+        const auto preferred = gpu_type && std::string_view{gpu_type} == "integrated"
+                                   ? vk::PhysicalDeviceType::eIntegratedGpu
+                                   : vk::PhysicalDeviceType::eDiscreteGpu;
         std::vector<
             std::tuple<size_t, vk::PhysicalDeviceProperties2, vk::PhysicalDeviceMemoryProperties>>
             properties2{};
@@ -121,7 +129,7 @@ Instance::Instance(const Frontend::WindowSystemInfo& window_info, s32 physical_d
             properties2.emplace_back(properties2.size(), physical.getProperties2(),
                                      physical.getMemoryProperties());
         }
-        std::sort(properties2.begin(), properties2.end(), [](const auto& left, const auto& right) {
+        std::sort(properties2.begin(), properties2.end(), [preferred](const auto& left, const auto& right) {
             const vk::PhysicalDeviceProperties& left_prop = std::get<1>(left).properties;
             const vk::PhysicalDeviceProperties& right_prop = std::get<1>(right).properties;
             const bool left_supports_api = left_prop.apiVersion >= TargetVulkanApiVersion;
@@ -130,6 +138,11 @@ Instance::Instance(const Frontend::WindowSystemInfo& window_info, s32 physical_d
                 return left_supports_api;
             }
 
+            const bool left_is_preferred = left_prop.deviceType == preferred;
+            const bool right_is_preferred = right_prop.deviceType == preferred;
+            if (left_is_preferred != right_is_preferred) {
+                return left_is_preferred;
+            }
             const bool left_is_discrete =
                 left_prop.deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
             const bool right_is_discrete =
@@ -173,6 +186,7 @@ Instance::Instance(const Frontend::WindowSystemInfo& window_info, s32 physical_d
     format_properties = GetFormatProperties(physical_device);
     properties = physical_device.getProperties();
     memory_properties = physical_device.getMemoryProperties();
+    std::printf("GPU: %s (%zu Vulkan devices found)\n", properties.deviceName.data(), num_physical_devices);
     CollectDeviceParameters();
     ASSERT_MSG(properties.apiVersion >= TargetVulkanApiVersion,
                "Vulkan {}.{} is required, but only {}.{} is supported by device!",
