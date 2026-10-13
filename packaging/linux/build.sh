@@ -2,10 +2,22 @@
 # Builds dist/gow3-x86_64.AppImage from the Linux build (run `bash build.sh` in the repo root first).
 # Libraries are bundled with their dependencies, except the ones that must come from the host
 # (glibc, Vulkan loader and drivers, X11/Wayland, GL). The Tk launcher is frozen with PyInstaller, so
-# players need no Python. Needs: ldd, patchelf, curl (appimagetool), python-pyinstaller, tk, pillow.
+# players need no Python. Needs: ldd, patchelf, curl (appimagetool), and Python with Tk and Pillow; PyInstaller
+# comes from the distribution or, failing that, from pip in out/pyenv. packaging/linux/deps.sh checks them.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
 [[ -f out/gow3-probe && -f out/gpu/libgow3gpu.so ]] || { echo 'Build first: bash build.sh' >&2; exit 1; }
+bash packaging/linux/deps.sh --packaging ${GOW3_INSTALL_DEPS:+--install} || exit 1
+
+# PyInstaller: the distribution's, else one from pip in a private environment (system packages stay visible
+# there, so Tk and Pillow are the distribution's).
+if python3 -c 'import PyInstaller' 2>/dev/null; then
+    pyinstaller=(python3 -m PyInstaller)
+else
+    [[ -x out/pyenv/bin/python ]] || python3 -m venv --system-site-packages out/pyenv
+    out/pyenv/bin/python -m pip install --quiet pyinstaller
+    pyinstaller=(out/pyenv/bin/python -m PyInstaller)
+fi
 
 appdir=out/AppDir
 rm -rf "$appdir"
@@ -30,7 +42,7 @@ for module in argparse base64 collections hashlib json re shutil struct tempfile
               urllib.request; do
     hidden+=(--hidden-import "$module")
 done
-python3 -m PyInstaller --noconfirm --clean --log-level WARN --windowed --name gow3-launcher \
+"${pyinstaller[@]}" --noconfirm --clean --log-level WARN --windowed --name gow3-launcher \
     --distpath out/pyi-dist --workpath out/pyi-work --specpath out/pyi-work \
     --paths "$PWD/scripts" "${hidden[@]}" "$PWD/launcher/gow3_launcher_win.py"
 cp -r out/pyi-dist/gow3-launcher/. "$share/"
@@ -39,8 +51,9 @@ install -m755 packaging/linux/AppRun "$appdir/AppRun"
 install -m644 packaging/linux/gow3.desktop "$appdir/gow3.desktop"
 install -m644 "$icon" "$appdir/gow3.png"
 
-# Host-provided libraries: bundling any of these breaks drivers or the display connection.
-excluded='^(ld-linux.*|libc|libm|libdl|librt|libpthread|libresolv|libutil|libnsl|libanl|libvulkan|libGL|libGLX|libGLdispatch|libEGL|libOpenGL|libgbm|libdrm.*|libX11|libX11-xcb|libxcb.*|libXau|libXdmcp|libXext|libXfixes|libXrender|libXi|libXcursor|libXrandr|libwayland-.*|libasound|libudev|libpulse.*|libfontconfig|libfreetype|libOpenCL|libva.*|libvdpau|libvpl|libnvidia-.*|libcuda|libz|libstdc\+\+|libgcc_s)\.so'
+# Host-provided libraries: bundling any of these breaks drivers or the display connection. FFmpeg's hardware
+# helpers (libva, libvdpau, libvpl, libOpenCL) are only loaders, and many systems lack them, so they travel.
+excluded='^(ld-linux.*|libc|libm|libdl|librt|libpthread|libresolv|libutil|libnsl|libanl|libvulkan|libGL|libGLX|libGLdispatch|libEGL|libOpenGL|libgbm|libdrm.*|libX11|libX11-xcb|libxcb|libxcb-dri.*|libxcb-glx|libxcb-present|libxcb-sync|libxshmfence|libXau|libXdmcp|libXext|libXfixes|libXrender|libXi|libXcursor|libXrandr|libwayland-.*|libasound|libudev|libpulse.*|libfontconfig|libfreetype|libnvidia-.*|libcuda|libz|libstdc\+\+|libgcc_s)\.so'
 declare -A seen
 bundle() {
     local elf=$1 line lib name
