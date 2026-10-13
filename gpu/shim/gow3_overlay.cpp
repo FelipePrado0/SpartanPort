@@ -544,7 +544,11 @@ void Menu() {
     // gow3: the game's own title (param.sfo), not a fixed one.
     static const std::string heading = [] {
         const std::string_view title = Common::ElfInfo::Instance().Title();
+#ifdef __APPLE__
+        return std::string(title.empty() ? "God of War III" : title) + "  (` / R3+L2)";
+#else
         return std::string(title.empty() ? "God of War III" : title) + "  (Insert / R3+L2)";
+#endif
     }();
     if (!ImGui::Begin(heading.c_str(), &keep_open, ImGuiWindowFlags_NoCollapse)) {
         ImGui::End();
@@ -874,7 +878,11 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
     }
     overlay_instance = &instance;
     initialized = true;
+#ifdef __APPLE__
+    std::printf("Overlay: menu ready (` or Insert, or R3+L2)\n");
+#else
     std::printf("Overlay: menu ready (Insert or R3+L2)\n");
+#endif
 }
 
 void UpdateTextInput(SDL_Window* window) {
@@ -984,9 +992,14 @@ bool HandleEvent(const SDL_Event& event) {
             Vulkan::FrameCapture::Request();
             return true;
         }
-        if (down && !event.key.repeat &&
-            (event.key.key == SDLK_INSERT || (is_open && event.key.key == SDLK_ESCAPE))) {
-            SetOpen(event.key.key == SDLK_INSERT ? !is_open : false);
+#ifdef __APPLE__
+        // gow3 (macOS): Mac laptop keyboards have no Insert key; ` (left of 1) opens the menu too.
+        const bool toggle = event.key.key == SDLK_INSERT || event.key.scancode == SDL_SCANCODE_GRAVE;
+#else
+        const bool toggle = event.key.key == SDLK_INSERT;
+#endif
+        if (down && !event.key.repeat && (toggle || (is_open && event.key.key == SDLK_ESCAPE))) {
+            SetOpen(toggle ? !is_open : false);
             return true;
         }
         if (!is_open) {

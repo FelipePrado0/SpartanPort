@@ -4,8 +4,8 @@
  * Windows: a pagefile-backed section plays the memfd's part, and the PS4 user range is
  * reserved as one placeholder that views of the section replace (VirtualAlloc2/MapViewOfFile3,
  * as shadPS4 does); see the "host mappings" section below.
- * macOS: a POSIX shared memory object plays the memfd's part. Apple Silicon keeps
- * [63 GiB, 448 GiB) from every process (commpage and GPU carveout), so the user range starts
+ * macOS: a POSIX shared memory object plays the memfd's part. On Apple Silicon,
+ * [63 GiB, 448 GiB) cannot be mapped (commpage and GPU carveout), so the user range starts
  * at 448 GiB there, as in shadPS4's macOS build.
  * Guest addresses are placed below 1 TiB (PS4 user range): GPU descriptors
  * encode 40-bit addresses, so host-default 0x7f... addresses would not fit. */

@@ -47,7 +47,8 @@ GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py       # or without the launcher
 bash run.sh                                           # build.sh, then run.py
 ```
 
-The first start takes longer: Rosetta translates the game's code and the shaders are compiled.
+On a Mac keyboard the port's menu opens with **`** (the key left of 1); Insert and R3+L2 work
+too. The first start takes longer: Rosetta translates the game's code and the shaders are compiled.
 Saves, `gow3.ini`, the shader cache and `user/last_run.log` are in the repository folder, as on
 Linux; the launcher keeps its own settings in `~/.config/gow3-launcher/settings.json`.
 **Advanced → Desktop shortcut** puts `God of War III.app` on the desktop, which opens the launcher.
@@ -58,7 +59,7 @@ Linux; the launcher keeps its own settings in `~/.config/gow3-launcher/settings.
 |---|---|
 | `mov rax, fs:[0]` rewritten to `gs:[0]`, GS base set with `arch_prctl` | GS is the thread's pthread TSD array (Rosetta keeps it so) and cannot move. As on Windows, the loader rewrites the displacement: `gs:[8*key]`, the slot of a pthread key whose value is the thread's guest TCB. |
 | One memfd for direct and flexible memory | A POSIX shared memory object; the host's own view of it lies above 1 TiB. |
-| PS4 user range 64 GiB–1 TiB | Apple Silicon keeps [63 GiB, 448 GiB) from every process (commpage, GPU carveout), so the user range is 448 GiB–1008 GiB, as in shadPS4's macOS build. It and the low range for the image and stacks (48–63 GiB) are reserved first thing in `main`; unmapping returns a range to the reservation. |
+| PS4 user range 64 GiB–1 TiB | On Apple Silicon, [63 GiB, 448 GiB) cannot be mapped (commpage, GPU carveout), so the user range is 448 GiB–1008 GiB, as in shadPS4's macOS build. It and the low range for the image and stacks (48–63 GiB) are reserved first thing in `main`; unmapping returns a range to the reservation. |
 | `-no-pie`, glibc's brk heap keeps host objects below 1 TiB | macOS's allocator places heaps above 1 TiB. The loader links mimalloc as the process's malloc zone (`MI_NO_ALIGNED_HINT`): it takes memory with plain `mmap`, which macOS places bottom-up from 4 GiB, so every heap object (thread handles, mutexes, TLS, C++ objects) stays below 1 TiB. |
 | The window on a thread of its own, the loader on the main thread | Cocoa windows and their events belong to the main thread: the loader runs on a second thread and the main thread hosts the window (`gow3gpu_main_loop`). |
 | SIGSEGV for GPU page tracking | Protection faults arrive as SIGBUS; both go to the GPU's handler. Write faults are told apart by `__es.__err` bit 1, which Rosetta fills in. |

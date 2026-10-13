@@ -28,6 +28,9 @@ export PATH="$host/bin:/usr/bin:/bin:/usr/sbin:/sbin:$(dirname -- "$(command -v 
 if ! clang -arch x86_64 -x c -o /dev/null - <<< 'int main(void){return 0;}' 2>/dev/null; then
     echo 'macOS deps: clang cannot link x86_64 programs (install the Xcode command line tools).' >&2; exit 1
 fi
+if [[ $(uname -m) == arm64 ]] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+    echo 'macOS deps: Rosetta 2 is needed (softwareupdate --install-rosetta --agree-to-license).' >&2; exit 1
+fi
 
 # name|file|url|sha256
 packages=(
@@ -56,7 +59,7 @@ fetch() {
     path=$sources/$file
     if [[ ! -f $path ]] || [[ $(shasum -a 256 "$path" | cut -d' ' -f1) != "$sum" ]]; then
         echo "macOS deps: downloading $file" >&2
-        curl -fL --retry 3 -o "$path.part" "$url"
+        curl -fsSL --retry 3 -o "$path.part" "$url"
         mv "$path.part" "$path"
     fi
     if [[ $(shasum -a 256 "$path" | cut -d' ' -f1) != "$sum" ]]; then

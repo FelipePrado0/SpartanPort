@@ -105,6 +105,7 @@ Darwin)
         out/services-test
         # Window, Vulkan device and presenter without the game (needs the desktop session).
         "${cc[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${includes[@]}" -I. -Isrc tests/test_gpu_start.c "${runtime[@]}" out/libatrac9.a "${allocator[@]}" -lm "${gpu[@]}" "${libraries[@]}" "${vulkan[@]}" -o out/gpu-start-test
+        mkdir -p out/gpu-start-test-user
         GOW3_GPU_USER_DIR="$PWD/out/gpu-start-test-user" out/gpu-start-test 2
     fi
     exit 0

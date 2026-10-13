@@ -1,4 +1,5 @@
 // gow3: SDL3 window for the Vulkan swapchain (X11 or Wayland; Windows; a Metal layer on macOS).
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -17,6 +18,18 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         UNREACHABLE_MSG("Failed to initialize SDL video: {}", SDL_GetError());
     }
+#ifdef __APPLE__
+    // macOS: laptop desktops are smaller than 1920x1080 points; the window starts inside the
+    // usable area (below the menu bar, with its title bar), at the same aspect ratio.
+    if (SDL_Rect usable; SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &usable)) {
+        constexpr s32 TitleBar = 32;
+        if (width_ > usable.w || height_ > usable.h - TitleBar) {
+            const float scale = std::min(float(usable.w) / float(width_), float(usable.h - TitleBar) / float(height_));
+            width_ = s32(float(width_) * scale);
+            height_ = s32(float(height_) * scale);
+        }
+    }
+#endif
     SDL_PropertiesID props = SDL_CreateProperties();
     SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, SDL_WINDOWPOS_CENTERED);
