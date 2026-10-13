@@ -132,6 +132,13 @@ window. From a source tree: `GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py` af
 - **Menu entry:** the AppImage writes `~/.local/share/applications/gow3.desktop` when it starts, so
   the launcher and the game window show their icon in the dock; **Advanced → Linux** turns it off and
   removes the entry.
+- **Other distributions:** an AppImage carries the libraries of the system it is built on and needs at
+  least that system's glibc (an Arch build needs 2.44). `bash packaging/linux/container.sh` builds it
+  in a Debian 13 container instead (glibc 2.39; docker or podman), and `packaging/linux/deps.sh` names,
+  and with `--install` installs, the packages for Arch, Debian/Ubuntu, Fedora or openSUSE (`build.sh`
+  calls it, and when a build fails it reads the logs and says which package is missing). Debian 13 and
+  Ubuntu 24.04 were tested; Debian 12 and Ubuntu 22.04 are too old. Vulkan-Headers and robin-map are
+  fetched by CMake when the system's are older or missing.
 - **Icon:** the AppImage, the launcher and the game window use `packaging/linux/gow3.png` when that
   file exists at build time, and `launcher/gow3.png` otherwise.
 - **Patches:** the full 01.02 update (`eboot.bin` sha256 `6e72330e…`) uses the patch file from
