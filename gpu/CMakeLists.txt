@@ -40,22 +40,33 @@ elseif (GOW3_PGO STREQUAL "use")
                         -fprofile-correction -Wno-missing-profile -Wno-coverage-mismatch)
 endif()
 
+# Header-only dependencies that distributions do not all package are downloaded as tarballs with a fixed hash
+# (a tag can be moved, a hash cannot).
+include(FetchContent)
+set(GOW3_FETCH_SYSTEM "")
+if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.25)
+    set(GOW3_FETCH_SYSTEM SYSTEM)  # warnings of third-party headers stay quiet
+endif()
+
 # The video core follows recent Vulkan-Hpp (newer driver ids, features and return types): the headers of an older
-# distribution (Debian 13 has 1.4.309) do not compile it. Below the minimum, Vulkan-Headers are fetched; the
-# system still provides the loader (FindVulkan only creates Vulkan::Headers when no such target exists).
+# distribution do not compile it (Debian 13 has 1.4.309 and fails; 363 is what the port was developed against, the
+# lowest version that works was not measured). Below the minimum, Vulkan-Headers are fetched; the system still
+# provides the loader (FindVulkan only creates Vulkan::Headers when no such target exists). Without any system
+# header nothing is fetched: find_package(Vulkan) below then says so. VULKAN_SDK is looked at first, as FindVulkan does.
 set(GOW3_VULKAN_HEADERS_MIN 363)
-find_path(GOW3_VULKAN_CORE_DIR vulkan/vulkan_core.h)
-set(GOW3_VULKAN_HEADERS_FOUND 0)
+find_path(GOW3_VULKAN_CORE_DIR vulkan/vulkan_core.h HINTS "$ENV{VULKAN_SDK}/include")
 if (GOW3_VULKAN_CORE_DIR)
     file(STRINGS "${GOW3_VULKAN_CORE_DIR}/vulkan/vulkan_core.h" GOW3_VK_VERSION_LINE REGEX "^#define VK_HEADER_VERSION [0-9]+")
     string(REGEX REPLACE ".* ([0-9]+)$" "\\1" GOW3_VULKAN_HEADERS_FOUND "${GOW3_VK_VERSION_LINE}")
-endif()
-if (GOW3_VULKAN_HEADERS_FOUND LESS GOW3_VULKAN_HEADERS_MIN)
-    message(STATUS "System Vulkan headers 1.x.${GOW3_VULKAN_HEADERS_FOUND} are older than 1.x.${GOW3_VULKAN_HEADERS_MIN}: fetching Vulkan-Headers")
-    include(FetchContent)
-    FetchContent_Declare(vulkan_headers GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
-                         GIT_TAG v1.4.${GOW3_VULKAN_HEADERS_MIN} GIT_SHALLOW TRUE)
-    FetchContent_MakeAvailable(vulkan_headers)
+    if (NOT GOW3_VULKAN_HEADERS_FOUND MATCHES "^[0-9]+$")
+        message(WARNING "Could not read VK_HEADER_VERSION from ${GOW3_VULKAN_CORE_DIR}/vulkan/vulkan_core.h: the system Vulkan headers are used as they are")
+    elseif (GOW3_VULKAN_HEADERS_FOUND LESS GOW3_VULKAN_HEADERS_MIN)
+        message(STATUS "System Vulkan headers 1.x.${GOW3_VULKAN_HEADERS_FOUND} are older than 1.x.${GOW3_VULKAN_HEADERS_MIN}: fetching Vulkan-Headers")
+        FetchContent_Declare(vulkan_headers ${GOW3_FETCH_SYSTEM}
+            URL https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.4.363.tar.gz
+            URL_HASH SHA256=cbaf687d3c59b9666fe080e7f8396b6b4f4d344a768ee6b337c59852f4526b68)
+        FetchContent_MakeAvailable(vulkan_headers)
+    endif()
 endif()
 find_package(Vulkan REQUIRED)
 find_package(fmt REQUIRED)
@@ -68,20 +79,31 @@ if (NOT magic_enum_FOUND)
     target_include_directories(magic_enum INTERFACE third_party/magic_enum/include
                                                     third_party/magic_enum/include/magic_enum)
 endif()
-# robin-map is header-only and not packaged everywhere (Debian 13 lacks it): fetched when the system has none.
+# robin-map is packaged by most distributions (Debian 13: robin-map-dev) and fetched when the system has none.
 find_package(tsl-robin-map QUIET)
 if (NOT tsl-robin-map_FOUND)
-    include(FetchContent)
-    FetchContent_Declare(robin_map GIT_REPOSITORY https://github.com/Tessil/robin-map.git GIT_TAG v1.4.0 GIT_SHALLOW TRUE)
+    FetchContent_Declare(robin_map ${GOW3_FETCH_SYSTEM}
+        URL https://github.com/Tessil/robin-map/archive/refs/tags/v1.4.0.tar.gz
+        URL_HASH SHA256=7930dbf9634acfc02686d87f615c0f4f33135948130b8922331c16d90a03250c)
     FetchContent_MakeAvailable(robin_map)
 endif()
+# Vulkan Memory Allocator is only in the AUR on Arch and not in openSUSE: found in the system, else fetched.
 find_package(VulkanMemoryAllocator CONFIG QUIET)
 if (NOT VulkanMemoryAllocator_FOUND)
     # MSYS2 ships the header (include/vma/vk_mem_alloc.h) without a CMake package.
-    find_path(VMA_INCLUDE_DIR vk_mem_alloc.h PATH_SUFFIXES vma REQUIRED)
+    find_path(VMA_INCLUDE_DIR vk_mem_alloc.h PATH_SUFFIXES vma)
+    if (NOT VMA_INCLUDE_DIR)
+        message(STATUS "Vulkan Memory Allocator not found: fetching v3.3.0")
+        # SOURCE_SUBDIR without a CMakeLists.txt: only the header is wanted, not the project's own build.
+        FetchContent_Declare(vma ${GOW3_FETCH_SYSTEM} SOURCE_SUBDIR include
+            URL https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/archive/refs/tags/v3.3.0.tar.gz
+            URL_HASH SHA256=c4f6bbe6b5a45c2eb610ca9d231158e313086d5b1a40c9922cb42b597419b14e)
+        FetchContent_MakeAvailable(vma)
+        set(VMA_INCLUDE_DIR "${vma_SOURCE_DIR}/include")
+    endif()
     add_library(VulkanMemoryAllocator INTERFACE)
     add_library(GPUOpen::VulkanMemoryAllocator ALIAS VulkanMemoryAllocator)
-    target_include_directories(VulkanMemoryAllocator INTERFACE ${VMA_INCLUDE_DIR})
+    target_include_directories(VulkanMemoryAllocator SYSTEM INTERFACE ${VMA_INCLUDE_DIR})
 endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(XXHASH REQUIRED IMPORTED_TARGET libxxhash)
