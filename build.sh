@@ -32,6 +32,23 @@ MINGW*|MSYS*)
     exit 0
     ;;
 esac
+# packaging/linux/deps.sh names what is missing for this distribution (GOW3_INSTALL_DEPS=1 installs it,
+# GOW3_SKIP_DEPS=1 skips the check); on NixOS it does nothing and shell.nix provides the tools.
+if [[ -z ${GOW3_IN_NIX_SHELL:-} && -f packaging/linux/deps.sh ]]; then
+    bash packaging/linux/deps.sh --build ${GOW3_INSTALL_DEPS:+--install} || exit 1
+    # A failed build says why: what the tools print on stderr is kept in out/build-errors.log and, when the
+    # build ends in error, deps.sh reads it and the CMake and ninja logs and names the missing package.
+    : > out/build-errors.log
+    exec 2> >(tee -a out/build-errors.log >&2)
+    diagnose_failure() {
+        local status=$?
+        if ((status)); then
+            sleep 0.3  # lets tee write the last lines
+            bash packaging/linux/deps.sh --diagnose out/build-errors.log out/gpu-configure.log out/gpu-build.log
+        fi
+    }
+    trap diagnose_failure EXIT
+fi
 if [[ -z ${CC:-} ]]; then
     CC=$(command -v cc || command -v gcc || true)
     if [[ -z $CC ]]; then
@@ -47,7 +64,6 @@ if ! { command -v pkg-config >/dev/null && pkg-config --exists vulkan sdl3 && co
     if [[ -z ${GOW3_IN_NIX_SHELL:-} ]] && command -v nix-shell >/dev/null; then
         exec env GOW3_IN_NIX_SHELL=1 nix-shell shell.nix --run "bash build.sh $*"
     fi
-    echo 'Need pkg-config with vulkan and sdl3, cmake and ninja (see shell.nix).' >&2; exit 1
 fi
 read -r -a includes <<< "$(pkg-config --cflags vulkan sdl3 libavcodec libavutil libswscale)"
 read -r -a libraries <<< "$(pkg-config --libs vulkan sdl3 libavcodec libavutil libswscale)"
@@ -69,8 +85,11 @@ for patch in gpu/patches/fsr-vulkan/*.patch; do
         git -C gpu/third_party/fsr-vulkan apply "$PWD/$patch"
     fi
 done
-cmake -S gpu -B out/gpu -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DGOW3_PGO="$pgo" \
-    -DGOW3_LTO="${GOW3_LTO:-ON}" -DGOW3_PGO_DIR="$PWD/pgo" >/dev/null
+if ! cmake -S gpu -B out/gpu -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DGOW3_PGO="$pgo" \
+    -DGOW3_LTO="${GOW3_LTO:-ON}" -DGOW3_PGO_DIR="$PWD/pgo" > out/gpu-configure.log 2>&1; then
+    tail -30 out/gpu-configure.log >&2
+    echo 'GPU library configuration failed (full log: out/gpu-configure.log)' >&2; exit 1
+fi
 echo "GPU library: PGO $pgo, LTO ${GOW3_LTO:-ON}"
 # A failed GPU build must stop here: an older libgow3gpu.so would otherwise be used silently.
 if ! ninja -C out/gpu gow3gpu > out/gpu-build.log 2>&1; then
