@@ -12,7 +12,10 @@
 #include "common/types.h"
 #include "imgui/renderer/imgui_core.h"
 #include "sdl_window.h"
+#include "video_core/amdgpu/gow3_msaa.h"
+#include "video_core/amdgpu/gow3_msaa_default.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
+#include "video_core/renderer_vulkan/vk_amd_paths.h"
 #include "video_core/renderer_vulkan/vk_dlss.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
@@ -271,7 +274,8 @@ bool Instance::CreateDevice() {
         vk::PhysicalDeviceComputeShaderDerivativesFeaturesKHR,
         vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE,
         vk::PhysicalDevicePipelineBinaryFeaturesKHR,
-        vk::PhysicalDeviceMaintenance5FeaturesKHR>();
+        vk::PhysicalDeviceMaintenance5FeaturesKHR,
+        vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR>();
     features = feature_chain.get().features;
 
     const vk::StructureChain properties_chain = physical_device.getProperties2<
@@ -361,19 +365,29 @@ bool Instance::CreateDevice() {
         LOG_INFO(Render_Vulkan, "- primitiveTopologyPatchListRestart: {}",
                  list_restart_features.primitiveTopologyPatchListRestart);
     }
+    // gow3: GOW3_AMD_PATHS_OFF=shaderext leaves the AMD shader extensions out (vk_amd_paths.h).
+    const auto amd_paths_off = AmdPathsOff::Current();
     amd_shader_explicit_vertex_parameter =
+        !amd_paths_off.shaderext &&
         add_extension(VK_AMD_SHADER_EXPLICIT_VERTEX_PARAMETER_EXTENSION_NAME);
     if (!amd_shader_explicit_vertex_parameter) {
         fragment_shader_barycentric =
             add_extension(VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
     }
+    if (amd_paths_off.shaderext) {
+        std::printf("GPU: fragment barycentrics: %s\n",
+                    fragment_shader_barycentric ? "VK_KHR_fragment_shader_barycentric" : "none");
+    }
     provoking_vertex = add_extension(VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME);
     shader_stencil_export = add_extension(VK_EXT_SHADER_STENCIL_EXPORT_EXTENSION_NAME);
     image_load_store_lod = add_extension(VK_AMD_SHADER_IMAGE_LOAD_STORE_LOD_EXTENSION_NAME);
-    amd_gcn_shader = add_extension(VK_AMD_GCN_SHADER_EXTENSION_NAME);
-    amd_shader_trinary_minmax = add_extension(VK_AMD_SHADER_TRINARY_MINMAX_EXTENSION_NAME);
+    amd_gcn_shader = !amd_paths_off.shaderext && add_extension(VK_AMD_GCN_SHADER_EXTENSION_NAME);
+    amd_shader_trinary_minmax =
+        !amd_paths_off.shaderext && add_extension(VK_AMD_SHADER_TRINARY_MINMAX_EXTENSION_NAME);
     nv_framebuffer_mixed_samples = add_extension(VK_NV_FRAMEBUFFER_MIXED_SAMPLES_EXTENSION_NAME);
-    amd_mixed_attachment_samples = add_extension(VK_AMD_MIXED_ATTACHMENT_SAMPLES_EXTENSION_NAME);
+    // gow3: GOW3_AMD_PATHS_OFF=mixed forces equal colour and depth samples, as on Intel.
+    amd_mixed_attachment_samples =
+        !amd_paths_off.mixed && add_extension(VK_AMD_MIXED_ATTACHMENT_SAMPLES_EXTENSION_NAME);
     shader_atomic_float = add_extension(VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
     shader_atomic_float2 = add_extension(VK_EXT_SHADER_ATOMIC_FLOAT_2_EXTENSION_NAME);
     if (shader_atomic_float2) {
@@ -425,6 +439,20 @@ bool Instance::CreateDevice() {
         shader_clock_features = feature_chain.get<vk::PhysicalDeviceShaderClockFeaturesKHR>();
         LOG_INFO(Render_Vulkan, "- shaderSubgroupClock: {}",
                  shader_clock_features.shaderSubgroupClock);
+    }
+    // gow3: GOW3_WAVE_STATS=1 logs the subgroup width the driver compiled each pipeline stage
+    // at (vk_wave_stats.h). Off by default: the feature may change how the driver caches
+    // pipelines.
+    pipeline_executable_properties = [&] {
+        const char* env = std::getenv("GOW3_WAVE_STATS");
+        return env && env[0] == '1' &&
+               add_extension(VK_KHR_PIPELINE_EXECUTABLE_PROPERTIES_EXTENSION_NAME);
+    }();
+    if (pipeline_executable_properties) {
+        pipeline_executable_features =
+            feature_chain.get<vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR>();
+        // AMD reports no width for graphics executables; its own extension has the ISA.
+        amd_shader_info = add_extension(VK_AMD_SHADER_INFO_EXTENSION_NAME);
     }
     const bool calibrated_timestamps =
         TRACY_GPU_ENABLED ? add_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME) : false;
@@ -627,7 +655,13 @@ bool Instance::CreateDevice() {
         vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE{
             .shaderMixedFloatDotProductFloat16AccFloat32 = true,
         },
+        vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR{
+            .pipelineExecutableInfo = pipeline_executable_features.pipelineExecutableInfo,
+        },
     };
+    if (!pipeline_executable_properties) {
+        device_chain.unlink<vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR>();
+    }
 
     if (!custom_border_color) {
         device_chain.unlink<vk::PhysicalDeviceCustomBorderColorFeaturesEXT>();
@@ -771,6 +805,15 @@ void Instance::CollectDeviceParameters() {
 
     driver_id = driver.driverID;
     vendor_name = driver.driverName.data();
+
+    // gow3: see video_core/amdgpu/gow3_msaa.h; the default per driver is gow3_msaa_default.h.
+    const char* no_msaa_env = std::getenv("GOW3_NO_MSAA");
+    const bool no_msaa = no_msaa_env && *no_msaa_env
+                             ? *no_msaa_env == '1'
+                             : gow3_no_msaa_default(static_cast<VkDriverId>(driver_id)) != 0;
+    AmdGpu::no_msaa.store(no_msaa, std::memory_order_relaxed);
+    std::printf("GPU: guest multisampling %s\n",
+                no_msaa ? "off (single-sampled images; GOW3_NO_MSAA=0 keeps it)" : "on");
 
     const std::string model_name{GetModelName()};
     const std::string driver_version = GetDriverVersionName();

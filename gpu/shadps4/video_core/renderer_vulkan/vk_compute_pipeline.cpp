@@ -112,6 +112,7 @@ ComputePipeline::ComputePipeline(const Instance& instance, Scheduler& scheduler,
                vk::to_string(pipeline_result));
     pipeline = std::move(pipe);
     SetObjectName(device, *pipeline, "Compute Pipeline {}", debug_str);
+    RecordWaveSizes();
 }
 
 ComputePipeline::~ComputePipeline() = default;

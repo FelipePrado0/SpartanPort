@@ -5,6 +5,8 @@
 #include "video_core/renderer_vulkan/ui_composition.h"
 #include "gow3_toggles.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
+#include "video_core/renderer_vulkan/vk_lighting_test.h"
+#include "video_core/renderer_vulkan/vk_pass_census.h"
 #include "common/debug.h"
 #include "core/debug_state.h"
 #include "core/emulator_settings.h"
@@ -947,12 +949,43 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
     DrawRecord(pipeline, used_prepared, is_indexed, index_offset);
 }
 
+void Rasterizer::DiagPassBoundary(bool force) {
+    static const bool enabled = [] {
+        const char* env = std::getenv("GOW3_DIAG_IMAGES");
+        return env && *env == '1';
+    }();
+    if (!enabled) {
+        return;
+    }
+    const auto& regs = Regs();
+    std::array<VAddr, 8> addresses{};
+    for (u32 cb = 0; cb < addresses.size(); ++cb) {
+        if (regs.color_buffers[cb]) {
+            addresses[cb] = regs.color_buffers[cb].Address();
+        }
+    }
+    if (!force && addresses == diag_addresses) {
+        return;
+    }
+    if (FrameCapture::IsRecording() && !diag_targets.empty()) {
+        char tag[16];
+        std::snprintf(tag, sizeof(tag), "p%03u", diag_pass++);
+        const auto targets = diag_targets;
+        for (const auto image_id : targets) {
+            texture_cache.DiagDumpImage(image_id, tag);
+        }
+    }
+    diag_targets.clear();
+    diag_addresses = force ? std::array<VAddr, 8>{} : addresses;
+}
+
 void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw* used_prepared,
                             bool is_indexed, u32 index_offset) {
     if (DrawPipe::OnStageB()) {
         FrameCapture::Poll();
         scheduler.PopPendingOperations();
     }
+    DiagPassBoundary(false);
     const auto& regs = Regs();
     // gow3: the pass copying a finished frame to a display buffer; the previous draw's
     // target is that frame.
@@ -1303,6 +1336,7 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
     gbuffer_draw = false;
 
     scheduler.PopPendingOperations();
+    DiagPassBoundary(true);
 
     const auto& cs_program = CsRegs();
 
@@ -1341,10 +1375,31 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
         FrameCapture::Dispatch(cs.pgm_hash, dim_x, dim_y, dim_z);
     }
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
+        if (Scheduler::FullBarriers()) {
+            Scheduler::RecordFullBarrier(cmdbuf);
+        }
         cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, handle);
         cmdbuf.dispatch(dim_x, dim_y, dim_z);
+        if (Scheduler::FullBarriers()) {
+            Scheduler::RecordFullBarrier(cmdbuf);
+        }
     });
     DebugState.IncDispatch();
+
+    // gow3 diagnostics: GOW3_DIAG_IMAGES=1 writes the images a dispatch read and wrote, after
+    // it, while a frame capture records (GOW3_CAPTURE_TRIGGER).
+    static const bool diag_images = [] {
+        const char* env = std::getenv("GOW3_DIAG_IMAGES");
+        return env && *env == '1';
+    }();
+    if (diag_images && FrameCapture::IsRecording()) {
+        char tag[32];
+        std::snprintf(tag, sizeof(tag), "cs%08x", static_cast<u32>(cs.pgm_hash));
+        const auto images = bound_images;
+        for (const auto image_id : images) {
+            texture_cache.DiagDumpImage(image_id, tag);
+        }
+    }
 
     ResetBindings(true);
     scheduler.KickRecording();
@@ -1392,8 +1447,14 @@ void Rasterizer::DispatchIndirectRecord(const ComputePipeline* pipeline, VAddr a
     const vk::Buffer args = buffer->Handle();
     const u64 args_offset = base;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
+        if (Scheduler::FullBarriers()) {
+            Scheduler::RecordFullBarrier(cmdbuf);
+        }
         cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, handle);
         cmdbuf.dispatchIndirect(args, args_offset);
+        if (Scheduler::FullBarriers()) {
+            Scheduler::RecordFullBarrier(cmdbuf);
+        }
     });
     DebugState.IncDispatch();
 
@@ -2693,6 +2754,9 @@ RenderState Rasterizer::BeginRendering(const GraphicsPipeline* pipeline) {
 
 RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
     attachment_feedback_loop = false;
+    // gow3: frame analyzer census of this pass (sample counts and path, stencil, clears).
+    const bool census_on = FrameCapture::Active();
+    PassCensus::State census;
     using VulkanUpscalerTarget = TemporalUpscaler::Target;
     VulkanUpscalerTarget redirect{};
     bool color_redirected = false, depth_redirected = false;
@@ -2872,6 +2936,18 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
                                     ? vk::ImageLayout::eDepthReadOnlyStencilAttachmentOptimal
                                 : has_stencil ? vk::ImageLayout::eDepthStencilReadOnlyOptimal
                                               : vk::ImageLayout::eDepthReadOnlyOptimal;
+        if (census_on) {
+            census.depth_samples = u8(regs.depth_buffer.NumSamples());
+            census.stencil_test = regs.depth_control.stencil_enable;
+            census.stencil_write = stencil_write;
+            census.stencil_clear = is_stencil_clear;
+            census.depth_clear = !is_depth_clear ? PassCensus::DepthClear::None
+                                 : texture_cache.IsMetaCleared(htile_address, slice)
+                                     ? PassCensus::DepthClear::Htile
+                                     : PassCensus::DepthClear::Register;
+            census.depth_layout = vk::to_string(new_layout);
+            census.depth_size = {image.info.size.width, image.info.size.height};
+        }
         if (!reduced) needs_barrier |= runtime.Transit(&image, new_layout,
                                          vk::PipelineStageFlagBits2::eEarlyFragmentTests |
                                              vk::PipelineStageFlagBits2::eLateFragmentTests,
@@ -2987,16 +3063,32 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
         state.height = proxy.height;
         target_scale = {float(size.width) / 1920.0f, float(size.height) / 1080.0f};
     }
-    if (FrameCapture::Active()) {
+    if (census_on) {
         std::array<const VideoCore::ImageInfo*, AmdGpu::NUM_COLOR_BUFFERS> colors{};
         for (u32 cb = 0; cb < state.num_color_attachments; ++cb) {
             if (cb_descs[cb].first) {
                 colors[cb] = &texture_cache.GetImage(cb_descs[cb].first).info;
+                census.color_samples.push_back(u8(regs.color_buffers[cb].NumSamples()));
             }
         }
         const auto* depth =
             db_desc.first ? &texture_cache.GetImage(db_desc.first).info : nullptr;
-        FrameCapture::BeginPass(colors.data(), state.num_color_attachments, depth);
+        census.raster_samples = u8(key.num_samples);
+        census.path = PassCensus::ResolveSamplePath(
+            census.color_samples, census.depth_samples, depth != nullptr,
+            instance.IsMixedAnySamplesSupported(), instance.IsMixedDepthSamplesSupported());
+        census.sample_shading =
+            regs.ps_input_addr.persp_sample_ena || regs.ps_input_addr.linear_sample_ena;
+        census.feedback_loop = attachment_feedback_loop;
+        census.area = {state.width, state.height};
+        FrameCapture::BeginPass(colors.data(), state.num_color_attachments, depth,
+                                PassCensus::Format(census));
+        diag_targets.clear();
+        for (u32 cb = 0; cb < state.num_color_attachments; ++cb) {
+            if (cb_descs[cb].first) {
+                diag_targets.push_back(cb_descs[cb].first);
+            }
+        }
     }
     // gow3: object motion vector attachment of G-buffer pipelines.
     if (key.motion_vectors) {
@@ -3392,10 +3484,11 @@ void Rasterizer::UpdateDepthStencilState() const {
     dynamic_state.SetDepthBiasEnabled(depth_bias_enabled);
     if (depth_bias_enabled) {
         const bool front = regs.polygon_control.enable_polygon_offset_front;
+        // gow3: GOW3_LIGHTING_TEST=bias passes the slope scale as the guest gives it.
+        const float slope = front ? regs.poly_offset.front_scale : regs.poly_offset.back_scale;
         dynamic_state.SetDepthBias(
             front ? regs.poly_offset.front_offset : regs.poly_offset.back_offset,
-            regs.poly_offset.depth_bias,
-            (front ? regs.poly_offset.front_scale : regs.poly_offset.back_scale) / 16.f);
+            regs.poly_offset.depth_bias, LightingTest::Current().bias ? slope : slope / 16.f);
     }
 
     const bool stencil_test_enabled = depth_stencil.stencil_test_enable;

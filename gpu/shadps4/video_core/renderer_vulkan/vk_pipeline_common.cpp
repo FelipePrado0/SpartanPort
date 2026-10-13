@@ -11,6 +11,13 @@
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_pipeline_common.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
+#include "common/path_util.h"
+#include "video_core/renderer_vulkan/vk_wave_stats.h"
+#include <cstdio>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <mutex>
 
 namespace Vulkan {
 
@@ -100,6 +107,78 @@ std::string Pipeline::GetDebugString() const {
         }
     }
     return stage_desc;
+}
+
+// gow3: one histogram for every pipeline of the process, reported to last_run.log on news and
+// every 256 pipelines (vk_wave_stats.h). AMD reports width 0 for graphics executables, so on
+// AMD the key also carries the physical VGPR count from VK_AMD_shader_info (it differs between
+// wave32 and wave64), and the ISA of the first executables of each stage goes to
+// <shaders>/wave_dumps/ (wave32 code manipulates EXEC with the _b32 forms).
+void Pipeline::RecordWaveSizes() const {
+    if (!instance.IsPipelineExecutableInfoEnabled() || !pipeline) {
+        return;
+    }
+    const auto [result, executables] = instance.GetDevice().getPipelineExecutablePropertiesKHR(
+        vk::PipelineInfoKHR{.pipeline = *pipeline});
+    if (result != vk::Result::eSuccess) {
+        return;
+    }
+    static std::mutex mutex;
+    static WaveSizeHistogram histogram;
+    std::scoped_lock lock{mutex};
+    bool news = false;
+    for (const vk::PipelineExecutablePropertiesKHR& executable : executables) {
+        const std::string stages = vk::to_string(executable.stages);
+        std::string key = stages;
+        // One stage bit per query: the last stage of the executable (vk_wave_stats.h).
+        const std::uint32_t stage_bit = AmdShaderInfoStageBit(
+            is_compute ? static_cast<std::uint32_t>(vk::ShaderStageFlagBits::eCompute)
+                       : static_cast<std::uint32_t>(executable.stages));
+        if (instance.IsAmdShaderInfoEnabled() && stage_bit != 0) {
+            const auto stage = static_cast<vk::ShaderStageFlagBits>(stage_bit);
+            const auto [stats_result, stats] = instance.GetDevice().getShaderInfoAMD(
+                *pipeline, stage, vk::ShaderInfoTypeAMD::eStatistics);
+            std::string stats_line = "stats unavailable";
+            std::optional<std::uint32_t> vgprs;
+            if (stats_result == vk::Result::eSuccess &&
+                stats.size() >= sizeof(vk::ShaderStatisticsInfoAMD)) {
+                vk::ShaderStatisticsInfoAMD info{};
+                std::memcpy(&info, stats.data(), sizeof(info));
+                vgprs = info.numPhysicalVgprs;
+                key += "/vgpr" + std::to_string(info.numPhysicalVgprs);
+                stats_line = "physical vgprs " + std::to_string(info.numPhysicalVgprs) +
+                             ", available " + std::to_string(info.numAvailableVgprs) +
+                             ", used " + std::to_string(info.resourceUsage.numUsedVgprs) +
+                             "; physical sgprs " + std::to_string(info.numPhysicalSgprs) +
+                             ", used " + std::to_string(info.resourceUsage.numUsedSgprs) +
+                             "; lds " + std::to_string(info.resourceUsage.ldsUsageSizeInBytes) +
+                             "; workgroup " + std::to_string(info.computeWorkGroupSize[0]) +
+                             "x" + std::to_string(info.computeWorkGroupSize[1]) + "x" +
+                             std::to_string(info.computeWorkGroupSize[2]);
+            }
+            if (histogram.ShouldDump(key, 3)) {
+                const auto [isa_result, isa] = instance.GetDevice().getShaderInfoAMD(
+                    *pipeline, stage, vk::ShaderInfoTypeAMD::eDisassembly);
+                if (isa_result == vk::Result::eSuccess && !isa.empty()) {
+                    const auto dir =
+                        Common::FS::GetUserPath(Common::FS::PathType::ShaderDir) / "wave_dumps";
+                    std::error_code ec;
+                    std::filesystem::create_directories(dir, ec);
+                    const std::string name = WaveDumpFileName(
+                        stages, vgprs, histogram.DumpsOf(key), executable.subgroupSize);
+                    std::ofstream out(dir / name, std::ios::binary);
+                    out << "key " << key << "\n" << stats_line << "\n";
+                    out.write(reinterpret_cast<const char*>(isa.data()),
+                              static_cast<std::streamsize>(isa.size()));
+                }
+            }
+        }
+        news |= histogram.Add(std::move(key), executable.subgroupSize);
+    }
+    if (histogram.EndPipeline(news)) {
+        std::printf("GPU: wave sizes after %u pipelines: %s\n", histogram.Pipelines(),
+                    histogram.Summary().c_str());
+    }
 }
 
 } // namespace Vulkan

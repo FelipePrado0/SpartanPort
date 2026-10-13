@@ -346,6 +346,12 @@ private:
     boost::container::static_vector<vk::DescriptorImageInfo, Shader::NUM_IMAGES> image_infos;
     boost::container::static_vector<vk::DescriptorBufferInfo, Shader::NUM_BUFFERS> buffer_infos;
     boost::container::static_vector<VideoCore::ImageId, Shader::NUM_IMAGES> bound_images;
+    /// gow3 diagnostics (GOW3_DIAG_IMAGES=1, draw pipe off): while a frame capture records, the
+    /// color targets of a pass are written to files when the next pass or dispatch begins.
+    void DiagPassBoundary(bool force);
+    std::array<VAddr, 8> diag_addresses{};
+    boost::container::static_vector<VideoCore::ImageId, 8> diag_targets;
+    u32 diag_pass{};
     struct BoundBuffer {
         const VideoCore::Buffer* buffer;
         u64 offset;

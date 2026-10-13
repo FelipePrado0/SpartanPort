@@ -484,6 +484,11 @@ class GpuChoiceTest(unittest.TestCase):
         self.assertEqual(launcher.parse_gpu_list(text),
                          [('0', 'AMD Radeon(TM) Graphics', 'integrated'),
                           ('1', 'NVIDIA GeForce RTX 2070 SUPER', 'discrete')])
+        # Newer tools add the game's multisampling default on that driver and its default GPU.
+        text = '0\tIntel(R) Arc(TM) A750 Graphics\tdiscrete\toff\t1\n1\tllvmpipe\tother\ton\t0\n'
+        self.assertEqual(launcher.parse_gpu_list(text),
+                         [('0', 'Intel(R) Arc(TM) A750 Graphics', 'discrete', 'off', '1'),
+                          ('1', 'llvmpipe', 'other', 'on', '0')])
         self.assertEqual(launcher.parse_gpu_list(''), [])
 
     def test_list_gpus_failures_leave_only_automatic(self):

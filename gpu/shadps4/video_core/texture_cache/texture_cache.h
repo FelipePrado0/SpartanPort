@@ -225,6 +225,11 @@ public:
         auto& image = slot_images[id];
         return !uid || image.image_uid == uid ? &image : nullptr;
     }
+    /// gow3 diagnostics: writes level 0 of a color image to GOW3_DIAG_DIR as raw pixels
+    /// (<seq>_<tag>_<address>_<w>x<h>_p<pitch>_b<bytes per pixel>_f<vk format>.raw). Waits for
+    /// the GPU.
+    void DiagDumpImage(ImageId image_id, const char* tag);
+
     [[nodiscard]] Image& GetImage(ImageId id) {
         auto& image = slot_images[id];
         TouchImage(image);

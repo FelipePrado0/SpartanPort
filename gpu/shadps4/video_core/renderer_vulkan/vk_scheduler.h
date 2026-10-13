@@ -701,6 +701,11 @@ public:
     /// Ends current rendering scope.
     void EndRendering();
 
+    /// gow3: GOW3_FULL_BARRIERS=1 records a full memory barrier around every render pass and
+    /// every compute dispatch, to tell a missing barrier from everything else.
+    static bool FullBarriers();
+    static void RecordFullBarrier(vk::CommandBuffer cmdbuf);
+
     /// Sets a function to be called on every scheduler submission.
     void SetSubmitCallback(SubmitFunc&& on_submit) {
         this->on_submit = std::move(on_submit);

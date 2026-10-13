@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "video_core/renderer_vulkan/vk_instance.h"
+#include "video_core/renderer_vulkan/vk_lighting_test.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
 #include "video_core/texture_cache/blit_helper.h"
 #include "video_core/texture_cache/image.h"
 
+#include "video_core/host_shaders/color_to_ms_depth_fallback_frag.h"
 #include "video_core/host_shaders/color_to_ms_depth_frag.h"
 #include "video_core/host_shaders/fs_tri_vert.h"
 #include "video_core/host_shaders/ms_image_blit_frag.h"
@@ -251,7 +253,10 @@ void BlitHelper::CopyBetweenMsImages(u32 width, u32 height, u32 num_samples,
 void BlitHelper::CreateShaders() {
     const auto device = instance.GetDevice();
     fs_tri_vertex = Vulkan::CompileSPV(FS_TRI_VERT, device);
-    color_to_ms_depth_frag = Vulkan::CompileSPV(COLOR_TO_MS_DEPTH_FRAG, device);
+    // gow3: GOW3_LIGHTING_TEST=msdepth selects the sample-fallback variant.
+    color_to_ms_depth_frag = Vulkan::LightingTest::Current().msdepth
+                                 ? Vulkan::CompileSPV(COLOR_TO_MS_DEPTH_FALLBACK_FRAG, device)
+                                 : Vulkan::CompileSPV(COLOR_TO_MS_DEPTH_FRAG, device);
     src_msaa_copy_frag = Vulkan::CompileSPV(MS_IMAGE_BLIT_MSAA_FRAG, device);
     src_non_msaa_copy_frag = Vulkan::CompileSPV(MS_IMAGE_BLIT_FRAG, device);
 }

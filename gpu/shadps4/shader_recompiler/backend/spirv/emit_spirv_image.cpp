@@ -123,8 +123,9 @@ Id EmitImageSampleDrefImplicitLod(EmitContext& ctx, IR::Inst* inst, u32 handle, 
     const Id sample = ctx.OpImageSampleDrefImplicitLod(result_type, sampled_image, coords, dref,
                                                        operands.mask, operands.operands);
     const Id sample_typed = texture.is_integer ? ctx.OpBitcast(ctx.F32[1], sample) : sample;
-    return ctx.OpCompositeConstruct(ctx.F32[4], sample_typed, ctx.f32_zero_value,
-                                    ctx.f32_zero_value, ctx.f32_zero_value);
+    // gow3: GOW3_LIGHTING_TEST=dref broadcasts the comparison result to every channel.
+    const Id other = ctx.profile.dref_broadcast ? sample_typed : ctx.f32_zero_value;
+    return ctx.OpCompositeConstruct(ctx.F32[4], sample_typed, other, other, other);
 }
 
 Id EmitImageSampleDrefExplicitLod(EmitContext& ctx, IR::Inst* inst, u32 handle, Id coords, Id dref,
@@ -140,8 +141,9 @@ Id EmitImageSampleDrefExplicitLod(EmitContext& ctx, IR::Inst* inst, u32 handle, 
     const Id sample = ctx.OpImageSampleDrefExplicitLod(result_type, sampled_image, coords, dref,
                                                        operands.mask, operands.operands);
     const Id sample_typed = texture.is_integer ? ctx.OpBitcast(ctx.F32[1], sample) : sample;
-    return ctx.OpCompositeConstruct(ctx.F32[4], sample_typed, ctx.f32_zero_value,
-                                    ctx.f32_zero_value, ctx.f32_zero_value);
+    // gow3: GOW3_LIGHTING_TEST=dref broadcasts the comparison result to every channel.
+    const Id other = ctx.profile.dref_broadcast ? sample_typed : ctx.f32_zero_value;
+    return ctx.OpCompositeConstruct(ctx.F32[4], sample_typed, other, other, other);
 }
 
 Id EmitImageGather(EmitContext& ctx, IR::Inst* inst, u32 handle, Id coords,

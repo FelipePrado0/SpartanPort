@@ -59,6 +59,7 @@ ImageInfo::ImageInfo(const AmdGpu::ColorBuffer& buffer, AmdGpu::CbDbExtent hint)
     array_mode = AmdGpu::GetArrayMode(tile_mode);
     pixel_format = LiverpoolToVK::SurfaceFormat(buffer.GetDataFmt(), buffer.GetNumberFmt());
     num_samples = buffer.NumSamples();
+    guest_samples = buffer.GuestNumSamples();
     num_bits = NumBitsPerBlock(buffer.GetDataFmt());
     type = AmdGpu::ImageType::Color2D;
     size.width = hint.Valid() ? hint.width : buffer.Pitch();
@@ -75,7 +76,7 @@ ImageInfo::ImageInfo(const AmdGpu::ColorBuffer& buffer, AmdGpu::CbDbExtent hint)
         mips_layout[0] = MipInfo(guest_size, pitch, buffer.Height(), 0);
     } else {
         std::tie(std::ignore, std::ignore, guest_size) =
-            ImageSizeLinearAligned(pitch, size.height, num_bits, num_samples);
+            ImageSizeLinearAligned(pitch, size.height, num_bits, guest_samples);
         guest_size *= resources.layers;
         mips_layout[0] = MipInfo(guest_size, pitch, size.height, 0);
     }
@@ -92,6 +93,7 @@ ImageInfo::ImageInfo(const AmdGpu::DepthBuffer& buffer, u32 num_slices, VAddr ht
     props.is_depth = true;
     props.has_stencil = buffer.stencil_info.format != AmdGpu::DepthBuffer::StencilFormat::Invalid;
     num_samples = buffer.NumSamples();
+    guest_samples = buffer.GuestNumSamples();
     num_bits = buffer.NumBits();
     size.width = hint.Valid() ? hint.width : buffer.Pitch();
     size.height = hint.Valid() ? hint.height : buffer.Height();
@@ -109,7 +111,7 @@ ImageInfo::ImageInfo(const AmdGpu::DepthBuffer& buffer, u32 num_slices, VAddr ht
         mips_layout[0] = MipInfo(guest_size, pitch, buffer.Height(), 0);
     } else {
         std::tie(std::ignore, std::ignore, guest_size) =
-            ImageSizeLinearAligned(pitch, size.height, num_bits, num_samples);
+            ImageSizeLinearAligned(pitch, size.height, num_bits, guest_samples);
         guest_size *= resources.layers;
         mips_layout[0] = MipInfo(guest_size, pitch, size.height, 0);
     }
@@ -135,6 +137,7 @@ ImageInfo::ImageInfo(const AmdGpu::Image& image, const Shader::ImageResource& de
     resources.levels = image.NumLevels();
     resources.layers = image.NumLayers();
     num_samples = image.NumSamples();
+    guest_samples = image.GuestNumSamples();
     num_bits = NumBitsPerBlock(image.GetDataFmt());
     bank_swizzle = image.GetBankSwizzle();
 
@@ -172,7 +175,7 @@ void ImageInfo::UpdateSize() {
         auto& mip_info = mips_layout[mip];
         if (array_mode == AmdGpu::ArrayMode::ArrayLinearAligned) {
             std::tie(mip_info.pitch, mip_info.height, mip_info.size) =
-                ImageSizeLinearAligned(mip_w, mip_h, num_bits, num_samples);
+                ImageSizeLinearAligned(mip_w, mip_h, num_bits, guest_samples);
         } else if (array_mode == AmdGpu::ArrayMode::ArrayLinearGeneral) {
             UNREACHABLE_MSG("Unhandled array mode: ArrayLinearGeneral");
         } else {
@@ -184,10 +187,10 @@ void ImageInfo::UpdateSize() {
             if (AmdGpu::IsMacroTiled(array_mode)) {
                 ASSERT(!props.is_block);
                 std::tie(mip_info.pitch, mip_info.height, mip_info.size) = ImageSizeMacroTiled(
-                    mip_w, mip_h, thickness, num_bits, num_samples, tile_mode, mip, alt_tile);
+                    mip_w, mip_h, thickness, num_bits, guest_samples, tile_mode, mip, alt_tile);
             } else {
                 std::tie(mip_info.pitch, mip_info.height, mip_info.size) =
-                    ImageSizeMicroTiled(mip_w, mip_h, thickness, num_bits, num_samples);
+                    ImageSizeMicroTiled(mip_w, mip_h, thickness, num_bits, guest_samples);
             }
         }
         if (props.is_block) {

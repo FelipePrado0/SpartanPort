@@ -118,9 +118,27 @@ def find_tool(name):
 
 
 def parse_gpu_list(text):
-    """(index, name, type) per line of `gow3-gpu-capabilities --list`; other lines are skipped."""
+    """One tuple per line of `gow3-gpu-capabilities --list`: index, name, type and, from the tools
+    that print them, the game's multisampling default on that driver ('off' or 'on') and '1' on
+    the GPU the game picks without GOW3_GPU_ID. Other lines are skipped."""
     rows = [line.split('\t') for line in text.splitlines()]
-    return [tuple(row) for row in rows if len(row) == 3 and row[0].isdigit()]
+    return [tuple(row) for row in rows if len(row) >= 3 and row[0].isdigit()]
+
+
+def chosen_gpu(gpus, gpu_id):
+    """The row of parse_gpu_list the game will run on: the Graphics card setting when it is in the
+    list, else the GPU the tool marks as the game's pick; None when neither is known."""
+    chosen = [row for row in gpus if row[0] == str(gpu_id)]
+    return (chosen or [row for row in gpus if len(row) > 4 and row[4] == '1'] or [None])[0]
+
+
+def no_msaa_options(gpus, gpu_id):
+    """NO_MSAA with Automatic naming the chosen card and the game's decision for it."""
+    row = chosen_gpu(gpus, gpu_id)
+    if row is None or len(row) < 4 or row[3] not in ('off', 'on'):
+        return list(NO_MSAA)
+    label = _('Automatic ({}: off)' if row[3] == 'off' else 'Automatic ({}: on)').format(row[1])
+    return [('', (label,))] + NO_MSAA[1:]
 
 
 def list_gpus():
@@ -257,7 +275,7 @@ FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240
 APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
-                'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'stream_memory': 'cached',
+                'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
                 'gpu_id': '', 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False,
@@ -336,6 +354,13 @@ DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', 
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
              ('2', ('Precise',))]
+# GOW3_NO_MSAA: '' leaves the game's own default, off on AMD's and Intel's Windows drivers
+# (video_core/amdgpu/gow3_msaa_default.h); no_msaa_options names the chosen card in Automatic.
+NO_MSAA = [('', ('Automatic',)), ('1', ('Off (fixes black lines)',)), ('0', ('On',))]
+NO_MSAA_HINT = ("The game's 2-sample depth buffer, read as a texture by its lighting. AMD's and Intel's Windows "
+                'drivers read it wrong and the lighting shows black lines, so Automatic turns multisampling off '
+                'on those cards (Radeon, Arc) and keeps it on elsewhere (NVIDIA). Off and On force the choice on '
+                'any card.')
 STREAM_MEMORY = [('cached', ('System RAM (cached, default)',)),
                  ('host', ('System RAM (uncached)',)),
                  ('device', ('GPU memory (previous behavior)',))]
@@ -718,8 +743,8 @@ def game_environment(s):
         env['GOW3_USER_NAME'] = str(s['player_name']).strip()
     if s['hdr']:
         env['GOW3_HDR'] = '1'
-    for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS')):
-        if s[key]:
+    for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS'), ('no_msaa', 'GOW3_NO_MSAA')):
+        if s.get(key):
             env[name] = s[key]
     # The saved UI choice wins over inherited diagnostic overrides, including when reverting.
     stream_memory = s.get('stream_memory', APP_DEFAULTS['stream_memory'])
@@ -1297,8 +1322,9 @@ class Launcher:
         self.check(f, 'parallel_warmup', 'app', _('Fast shader cache loading (parallel)'),
                    _('Loading screen only: builds the cached pipelines on several CPU threads.'))
         self.section(f, _('GPU data'))
-        gpus = [('', ('Automatic',))] + [(index, (name,)) for index, name, _kind in list_gpus()]
-        self.row(f, _('Graphics card'), self.choice(f, 'gpu_id', 'app', gpus),
+        gpus = list_gpus()
+        cards = [('', ('Automatic',))] + [(row[0], (row[1],)) for row in gpus]
+        self.row(f, _('Graphics card'), self.choice(f, 'gpu_id', 'app', cards),
                  _('The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.'),
                  restart=True)
         self.row(f, _('Stream buffer memory'), self.choice(f, 'stream_memory', 'app', STREAM_MEMORY),
@@ -1314,6 +1340,15 @@ class Launcher:
         self.row(f, _('GPU readbacks', 'Чтение данных GPU'), self.choice(f, 'readbacks', 'app', READBACKS),
                  _('How exactly data the GPU writes is copied back for the game.',
                    'Насколько точно данные, записанные GPU, возвращаются игре.'))
+        card = self.var('gpu_id', 'app')
+        box = self.choice(f, 'no_msaa', 'app', no_msaa_options(gpus, card.get()))
+        self.row(f, _('Game multisampling'), box, _(NO_MSAA_HINT), restart=True)
+
+        def relabel(*_args):  # Automatic names the card the game will run on
+            index = max(box.current(), 0)
+            box['values'] = [_(*text) for _value, text in no_msaa_options(gpus, card.get())]
+            box.current(index)
+        card.trace_add('write', relabel)
 
     def build_game(self):
         f = self.scrolled_page('game', _('Game', 'Игра'), _('Your game dump, saves and language.'))
@@ -1932,26 +1967,42 @@ class Launcher:
             self.show('game')
             return
         self.set_log('')
+        # The same last_run.log as --play, so a report from the PLAY button has the file too.
+        run_log = open_play_log(self.app)
         try:
             self.process = subprocess.Popen(run_command(), cwd=PORT_DIR, env=game_environment(self.app),
                                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                             stderr=subprocess.STDOUT, creationflags=NO_WINDOW, **NEW_GROUP)
         except OSError as error:
+            run_log.close()
             self.append(_('Could not start: {}', 'Не удалось запустить: {}').format(error) + '\n')
             self.process = None
             return
         self.job = GameJob(self.process)
-        threading.Thread(target=self.read_output, args=(self.process,), daemon=True).start()
+        threading.Thread(target=self.read_output, args=(self.process, run_log), daemon=True).start()
         self.play_button.configure(text=_('RUNNING'), state='disabled')
         self.status.configure(text=_('Preparing the game; it opens in its own window…',
                                      'Подготовка игры; она откроется в своём окне…'), fg=TEXT)
         if self.app.get('close_on_play'):
             self.root.after(5000, self.root.destroy)  # the game keeps running
 
-    def read_output(self, process):
-        for raw in iter(process.stdout.readline, b''):
-            self.output.put(raw.decode('utf-8', errors='replace'))
-        self.output.put((process.wait(),))
+    def read_output(self, process, run_log=None):
+        try:
+            for raw in iter(process.stdout.readline, b''):
+                text = raw.decode('utf-8', errors='replace')
+                if run_log:
+                    try:
+                        run_log.write(text)
+                    except (OSError, ValueError):
+                        # Disk full or folder gone: keep draining the pipe, or the game blocks
+                        # on its next print and the button stays at RUNNING.
+                        _close_quietly(run_log)
+                        run_log = None
+                self.output.put(text)
+        finally:
+            if run_log:
+                _close_quietly(run_log)
+            self.output.put((process.wait(),))
 
     def drain_output(self):
         while not self.ui_calls.empty():
@@ -2242,13 +2293,57 @@ class GameJob:
             self.handle = None
 
 
+def run_log_path(settings):
+    """<saves folder>/last_run.log: the game's output, written by both launch paths."""
+    return Path(settings.get('user_dir') or DATA_DIR / 'user') / 'last_run.log'
+
+
+class _NullLog:
+    """Stands in for the run log when its folder cannot be written: the game still starts."""
+    def write(self, text):
+        pass
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def open_run_log(settings):
+    """The run log, truncated, line-buffered; a null log when the folder is unusable."""
+    path = run_log_path(settings)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return open(path, 'w', encoding='utf-8', buffering=1)
+    except (OSError, ValueError):
+        return _NullLog()
+
+
+def open_play_log(settings):
+    """The run log for the PLAY button. With 'close_on_play' the launcher exits 5 s after the
+    start and the reader thread dies with it: a truncated file would replace the previous full
+    log, so that mode leaves the file alone."""
+    if settings.get('close_on_play'):
+        return _NullLog()
+    return open_run_log(settings)
+
+
+def _close_quietly(log):
+    try:
+        log.close()
+    except (OSError, ValueError):
+        pass
+
+
 def play_without_window(settings):
     """--play: the game with the saved settings (shortcuts, Steam). Output goes to the console
     when there is one and to <saves folder>/last_run.log."""
     attach_stdio()
-    log_dir = Path(settings.get('user_dir') or DATA_DIR / 'user')
-    log_dir.mkdir(parents=True, exist_ok=True)
-    with open(log_dir / 'last_run.log', 'w', encoding='utf-8', buffering=1) as log:
+    with open_run_log(settings) as log:
         process = subprocess.Popen(run_command(), cwd=PORT_DIR, env=game_environment(settings),
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT, creationflags=NO_WINDOW)

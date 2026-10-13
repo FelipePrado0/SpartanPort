@@ -14,6 +14,7 @@
 #include "video_core/renderer_vulkan/vk_blend_rewrite.h"
 #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
+#include "video_core/renderer_vulkan/vk_lighting_test.h"
 #include "video_core/renderer_vulkan/vk_pipeline_serialization.h"
 #include "common/elf_info.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -139,8 +140,10 @@ GraphicsPipeline::GraphicsPipeline(
         sdata.multisampling = {
             .rasterizationSamples = LiverpoolToVK::NumSamples(
                 key.num_samples, instance.GetColorSampleCounts() & instance.GetDepthSampleCounts()),
-            .sampleShadingEnable =
-                fs_info.addr_flags.persp_sample_ena || fs_info.addr_flags.linear_sample_ena,
+            // gow3: GOW3_LIGHTING_TEST=shading keeps sample shading off (vk_lighting_test.h).
+            .sampleShadingEnable = !LightingTest::Current().shading &&
+                                   (fs_info.addr_flags.persp_sample_ena ||
+                                    fs_info.addr_flags.linear_sample_ena),
         };
     }
 
@@ -437,6 +440,7 @@ GraphicsPipeline::GraphicsPipeline(
                vk::to_string(pipeline_result));
     pipeline = std::move(pipe);
     SetObjectName(device, *pipeline, "Graphics Pipeline {}", debug_str);
+    RecordWaveSizes();
 
     if (needs_square_pass) {
         auto square_blending = color_blending;
