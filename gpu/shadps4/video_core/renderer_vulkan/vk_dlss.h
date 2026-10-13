@@ -35,6 +35,9 @@ public:
     [[nodiscard]] bool Available() const;
     /// Why DLSS cannot run on this system (empty when it can, or before device creation).
     [[nodiscard]] std::string Problem() const;
+    /// What runs, for the overlay and the log: "DLSS 310.9.1 DLAA · M" (library version from its
+    /// file name, mode of the current feature, the forced model preset); empty without a feature.
+    [[nodiscard]] std::string Description() const;
 
     struct Resource {
         vk::Image image;

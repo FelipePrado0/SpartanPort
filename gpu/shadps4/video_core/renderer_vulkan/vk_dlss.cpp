@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -17,8 +18,10 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-#include "../../../dlss_bridge/gow3_dlss_bridge.h"
+#else
+#include <dlfcn.h>
 #endif
+#include "../../../dlss_bridge/gow3_dlss_bridge.h"
 
 namespace Vulkan {
 
@@ -27,17 +30,87 @@ int Dlss::QualityForScale(float scale) {
     return scale >= 2.9f ? 4 : scale >= 1.95f ? 3 : scale >= 1.65f ? 2 : scale > 1.01f ? 1 : 0;
 }
 
-#ifdef _WIN32
-
 namespace {
-constexpr wchar_t BridgeName[] = L"gow3_dlss.dll";
-constexpr wchar_t NgxName[] = L"nvngx_dlss.dll";
+// The bridge (gpu/dlss_bridge) and NVIDIA's DLSS library, next to gow3-probe.
+#ifdef _WIN32
+using Module = HMODULE;
+constexpr char BridgeName[] = "gow3_dlss.dll";
 
 std::filesystem::path ExecutableDirectory() {
     std::wstring path(MAX_PATH, L'\0');
     const DWORD length = GetModuleFileNameW(nullptr, path.data(), DWORD(path.size()));
     path.resize(length);
     return std::filesystem::path{path}.parent_path();
+}
+
+bool HasNgxLibrary(const std::filesystem::path& directory) {
+    return std::filesystem::is_regular_file(directory / "nvngx_dlss.dll");
+}
+
+std::string NgxVersion(const std::filesystem::path&) {
+    return {}; // the version is in the DLL's resources, not its name
+}
+
+Module OpenModule(const std::filesystem::path& path) {
+    return LoadLibraryW(path.c_str());
+}
+
+void* Symbol(Module module, const char* name) {
+    return reinterpret_cast<void*>(GetProcAddress(module, name));
+}
+#else
+using Module = void*;
+constexpr char BridgeName[] = "libgow3_dlss.so";
+
+std::filesystem::path ExecutableDirectory() {
+    std::error_code error;
+    return std::filesystem::read_symlink("/proc/self/exe", error).parent_path();
+}
+
+// libnvidia-ngx-dlss.so.<version> (the SDK's lib/Linux_x86_64/rel; not dlssd/dlssg): the
+// version, or empty without one.
+std::string NgxVersion(const std::filesystem::path& directory) {
+    constexpr std::string_view prefix = "libnvidia-ngx-dlss.so.";
+    std::error_code error;
+    for (const auto& entry : std::filesystem::directory_iterator(directory, error)) {
+        const auto name = entry.path().filename().string();
+        if (name.starts_with(prefix)) {
+            return name.substr(prefix.size());
+        }
+    }
+    return {};
+}
+
+bool HasNgxLibrary(const std::filesystem::path& directory) {
+    return !NgxVersion(directory).empty();
+}
+
+Module OpenModule(const std::filesystem::path& path) {
+    return dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
+}
+
+void* Symbol(Module module, const char* name) {
+    return dlsym(module, name);
+}
+#endif
+
+// GOW3_DLSS_PRESET: the DLSS model. NVIDIA's "default" may change with driver updates; by
+// default the newest model of the SDK is forced (M; K is the DLSS 4 transformer that NVIDIA
+// recommends for DLAA/Quality, J a variant of it).
+u32 PresetFromEnvironment() {
+    const char* value = std::getenv("GOW3_DLSS_PRESET");
+    const char letter = value && value[0] ? char(std::toupper(u8(value[0]))) : 'M';
+    switch (letter) {
+    case 'J': return 10;
+    case 'K': return 11;
+    case 'L': return 12;
+    case 'M': return 13;
+    default: return 0; // "default"/"0": the driver's choice
+    }
+}
+
+char PresetLetter(u32 preset) {
+    return preset >= 10 && preset <= 13 ? char('J' + (preset - 10)) : '\0';
 }
 
 void BridgeLog(int warning, const char* message) {
@@ -70,7 +143,9 @@ bool CollectExtensions(const VkExtensionProperties* required, u32 count,
 } // namespace
 
 struct Dlss::Impl {
-    HMODULE module{};
+    Module module{};
+    std::string version; ///< NVIDIA's library, e.g. 310.9.1
+    u32 preset = PresetFromEnvironment();
     const Gow3DlssApi* api{};
     std::vector<std::string> instance_extensions, device_extensions;
     std::optional<FeatureDesc> feature;
@@ -91,8 +166,7 @@ Dlss* Dlss::Get() {
             return nullptr;
         }
         const auto directory = ExecutableDirectory();
-        if (!std::filesystem::is_regular_file(directory / BridgeName) ||
-            !std::filesystem::is_regular_file(directory / NgxName)) {
+        if (!std::filesystem::is_regular_file(directory / BridgeName) || !HasNgxLibrary(directory)) {
             return nullptr;
         }
         auto* created = new Dlss;
@@ -109,13 +183,14 @@ Dlss* Dlss::Get() {
 
 Dlss::Dlss() : impl{std::make_unique<Impl>()} {
     const auto directory = ExecutableDirectory();
-    impl->module = LoadLibraryW((directory / BridgeName).c_str());
-    const auto get_api =
-        impl->module ? reinterpret_cast<Gow3DlssGetApiFn>(GetProcAddress(impl->module, "Gow3DlssGetApi"))
-                     : nullptr;
+    impl->version = NgxVersion(directory);
+    impl->module = OpenModule(directory / BridgeName);
+    const auto get_api = impl->module
+        ? reinterpret_cast<Gow3DlssGetApiFn>(Symbol(impl->module, "Gow3DlssGetApi"))
+        : nullptr;
     impl->api = get_api ? get_api() : nullptr;
     if (!impl->api || impl->api->abi != GOW3_DLSS_BRIDGE_ABI) {
-        impl->Disable("gow3_dlss.dll is missing or from another version");
+        impl->Disable(std::string{BridgeName} + " is missing or from another version");
         return;
     }
     // NGX writes its logs and model updates here: beside the saves and shader caches.
@@ -125,7 +200,8 @@ Dlss::Dlss() : impl{std::make_unique<Impl>()} {
     }
     std::error_code error;
     std::filesystem::create_directories(data, error);
-    if (!impl->api->Configure(directory.c_str(), data.c_str(), BridgeLog)) {
+    // NGX takes wide-character paths on every platform.
+    if (!impl->api->Configure(directory.wstring().c_str(), data.wstring().c_str(), BridgeLog)) {
         impl->Disable("bridge configuration failed");
     }
 }
@@ -184,7 +260,11 @@ void Dlss::Initialize(vk::Instance instance, vk::PhysicalDevice physical, vk::De
         return impl->Disable("NVIDIA NGX initialization failed (update the GPU driver)");
     }
     impl->available = true;
-    std::printf("DLSS: ready\n");
+    const char letter = PresetLetter(impl->preset);
+    std::printf("DLSS: ready (NVIDIA DLSS library %s, model preset %s%s)\n",
+                impl->version.empty() ? "?" : impl->version.c_str(),
+                letter ? std::string(1, letter).c_str() : "driver default",
+                letter >= 'L' ? ", DLSS 4.5" : letter ? ", DLSS 4" : "");
 }
 
 bool Dlss::Available() const {
@@ -193,6 +273,26 @@ bool Dlss::Available() const {
 
 std::string Dlss::Problem() const {
     return impl->problem;
+}
+
+std::string Dlss::Description() const {
+    if (!impl->available || !impl->feature) {
+        return {};
+    }
+    static constexpr const char* modes[] = {"DLAA", "Quality", "Balanced", "Performance",
+                                            "Ultra Performance"};
+    // Presets J and K are DLSS 4's transformer, L and M DLSS 4.5's second generation (SDK
+    // 310.5.0 and later); the driver's default has no fixed generation.
+    const char letter = PresetLetter(impl->preset);
+    std::string text = letter >= 'L' ? "DLSS 4.5" : letter ? "DLSS 4" : "DLSS";
+    if (!impl->version.empty()) {
+        text += " (" + impl->version + ")";
+    }
+    text += std::string(" ") + modes[std::clamp(impl->feature->quality, 0, 4)];
+    if (letter) {
+        text += std::string(" \xc2\xb7 ") + letter;
+    }
+    return text;
 }
 
 bool Dlss::HasFeature(const FeatureDesc& desc) const {
@@ -206,11 +306,12 @@ bool Dlss::CreateFeature(vk::CommandBuffer command, const FeatureDesc& desc) {
     impl->feature.reset();
     const Gow3DlssFeature feature{desc.input_width,  desc.input_height, desc.output_width,
                                 desc.output_height, desc.quality,      0,
-                                0,                  desc.hdr ? 1 : 0};
+                                impl->preset,       desc.hdr ? 1 : 0};
     if (!impl->api->CreateFeature(command, &feature)) {
         return false;
     }
     impl->feature = desc;
+    std::printf("DLSS: running %s\n", Description().c_str());
     return true;
 }
 
@@ -249,35 +350,6 @@ void Dlss::Shutdown() {
     }
 }
 
-#else
 
-struct Dlss::Impl {};
-Dlss::Dlss() = default;
-Dlss::~Dlss() = default;
-Dlss* Dlss::Get() {
-    return nullptr;
-}
-void Dlss::AppendInstanceExtensions(std::vector<const char*>&) {}
-void Dlss::AppendDeviceExtensions(vk::Instance, vk::PhysicalDevice, std::vector<const char*>&) {}
-void Dlss::Initialize(vk::Instance, vk::PhysicalDevice, vk::Device) {}
-void Dlss::Shutdown() {}
-bool Dlss::Available() const {
-    return false;
-}
-std::string Dlss::Problem() const {
-    return {};
-}
-bool Dlss::HasFeature(const FeatureDesc&) const {
-    return false;
-}
-bool Dlss::CreateFeature(vk::CommandBuffer, const FeatureDesc&) {
-    return false;
-}
-bool Dlss::Evaluate(vk::CommandBuffer, const Frame&) {
-    return false;
-}
-void Dlss::ReleaseFeature() {}
-
-#endif
 
 } // namespace Vulkan
