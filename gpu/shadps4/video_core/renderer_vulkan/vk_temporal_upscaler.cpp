@@ -226,6 +226,50 @@ TemporalUpscaler::~TemporalUpscaler() {
     }
 }
 
+namespace {
+// gow3: a summary every 10 s while a temporal upscaler is chosen (GOW3_UPSCALER_STATS=0 switches
+// it off): how many frames it upscaled and why the others were not, to judge it while playing.
+// GPU command thread only.
+struct UpscalerStats {
+    u64 frames = 0, upscaled = 0, no_scene = 0, no_camera = 0, off = 0, bad_input = 0, failed = 0,
+        resets = 0; // frames: 3D frames, those running the scene's post-processing pass
+    u32 w = 0, h = 0, ow = 0, oh = 0;
+    bool jitter = false;
+    std::chrono::steady_clock::time_point since = std::chrono::steady_clock::now();
+    bool done_this_frame = false;
+} stats;
+
+void PrintUpscalerStats() {
+    static const bool on = [] {
+        const char* env = std::getenv("GOW3_UPSCALER_STATS");
+        return !env || env[0] != '0';
+    }();
+    const auto now = std::chrono::steady_clock::now();
+    if (!on || now - stats.since < std::chrono::seconds(10)) {
+        return;
+    }
+    const int upscaler = Gow3Settings::Get().upscaler.load();
+    const double seconds = std::chrono::duration<double>(now - stats.since).count();
+    if (upscaler != Gow3Settings::UpscalerOff && !stats.frames) {
+        std::printf("Upscaler stats (%.0f s, %s): no 3D frames (menus, videos, loading)\n", seconds,
+                    Gow3Settings::UpscalerName(upscaler));
+    } else if (upscaler != Gow3Settings::UpscalerOff) {
+        std::printf("Upscaler stats (%.0f s, %s): %llu 3D frames (%.1f/s), upscaled %llu (%.0f%%); "
+                    "not upscaled: %llu no scene color, %llu camera not ready, "
+                    "%llu switched off, %llu wrong input, %llu failed; %llu history resets; "
+                    "%ux%u -> %ux%u, jitter %s\n",
+                    seconds, Gow3Settings::UpscalerName(upscaler), (unsigned long long)stats.frames,
+                    stats.frames / seconds, (unsigned long long)stats.upscaled,
+                    100.0 * stats.upscaled / stats.frames, (unsigned long long)stats.no_scene,
+                    (unsigned long long)stats.no_camera, (unsigned long long)stats.off,
+                    (unsigned long long)stats.bad_input, (unsigned long long)stats.failed,
+                    (unsigned long long)stats.resets, stats.w, stats.h, stats.ow, stats.oh,
+                    stats.jitter ? "on" : "off");
+    }
+    stats = {.jitter = stats.jitter};
+}
+} // namespace
+
 bool TemporalUpscaler::Active() const {
     // Toggle 1 << 24 switches it off at run time (A/B); history restarts after.
     return enabled && !failed &&
@@ -266,6 +310,8 @@ bool TemporalUpscaler::RasterScaling() const {
 }
 
 bool TemporalUpscaler::OnFrameStart() {
+    PrintUpscalerStats();
+    stats.done_this_frame = false;
     // gow3: GOW3_PRESET_FILE=<file> holding a preset number, read about once a second: switches
     // the preset like the menu does (scripted tests of live preset changes).
     static const char* preset_file = std::getenv("GOW3_PRESET_FILE");
@@ -291,7 +337,9 @@ bool TemporalUpscaler::OnFrameStart() {
     const auto& settings = Gow3Settings::Get();
     // The guest's startup resolution patch remains in effect until restart. Keep the FSR
     // model at the applied preset while the menu saves the requested one for run.sh.
-    const int preset = Gow3Settings::RenderPreset();
+    // gow3: 1:1 until the scene targets of God of War III are mapped for a reduced render size
+    // (Bloodborne's scaled presets redirect targets this game does not have).
+    const int preset = 0;
     if (applied_preset != preset || settings.upscaler == Gow3Settings::UpscalerOff) failed = false;
     const bool active = Active();
     const bool jitter_on = active && settings.jitter && !Gow3Toggle::Disabled(1u << 25);
@@ -331,38 +379,95 @@ bool TemporalUpscaler::OnFrameStart() {
     applied_upscaler = upscaler;
     last_active = active;
     last_jitter = jitter_on;
+    stats.jitter = jitter_on;
+    if (!active) {
+        Gow3Settings::Get().upscale_output_width = 0; // menu: no temporal upscaler runs
+    }
     dispatched_last_frame = false;
 
     // The display pass of an upscaled frame reads the upscaled UI image.
-    display_redirect = ui_phase;
+    // gow3 (resolution patch): the game's copy into the display buffer reads its render-size
+    // image in render-size pixels; the upscaled ui_image is copied for the presenter instead.
+    presented_address = 0;
+    present_ui = ui_phase && hud_offscreen;
+    display_redirect = ui_phase && !present_ui;
     ui_phase = false;
     ui_read_barrier = false;
+    hud_redirect = false;
+    hud_phase = false;
+    hud_depth = {};
     done_this_frame = false;
     ldr_target = {};
     scene_color = {};
     snapshot_taken = false;
     opaque_valid = false;
     mask_ready = false;
-    // Halton(2, 3); the menu or toggle 1 << 25 disables it.
+    // Halton(2, 3); the menu or toggle 1 << 25 disables it. gow3: the phase advances at each
+    // composite (OnPostComposite): the scene of a frame is drawn between two composites, before
+    // or after the frame starts depending on the resolution patch.
+    jitter_enabled = jitter_on;
+    jitter_phases = Scaled() ? Motion::JitterPhases(render_width, target_width)
+                             : Motion::JitterPhases(scene_targets.Size().width, 1920);
     if (!jitter_on) {
         jitter = {};
-        return changed;
     }
-    // CameraMotion::OnDisplayPass has already cleared Depth(). Use the context's render
-    // size, which survives the frame boundary (Performance 960 -> 1920 needs 32 phases).
-    const u32 phases = Scaled() ? Motion::JitterPhases(render_width, target_width)
-        : Motion::JitterPhases(scene_targets.Size().width, 1920);
-    jitter_index = jitter_index % phases + 1;
-    jitter = {Halton(jitter_index, 2) - 0.5f, Halton(jitter_index, 3) - 0.5f};
     return changed;
 }
 
+void TemporalUpscaler::AdvanceJitter() {
+    if (!jitter_enabled) {
+        jitter = {};
+        return;
+    }
+    jitter_index = jitter_index % jitter_phases + 1;
+    jitter = {Halton(jitter_index, 2) - 0.5f, Halton(jitter_index, 3) - 0.5f};
+}
+
+void TemporalUpscaler::OnPostComposite(VideoCore::ImageId image) {
+    if (done_this_frame || Scaled()) {
+        return;
+    }
+    // Rendered below the output resolution (a resolution patch): rebuild the output size.
+    const auto& size = texture_cache.GetImage(image).info.size;
+    const bool up = target_width > size.width && target_height > size.height;
+    upscale_width = up ? target_width : 0;
+    upscale_height = up ? target_height : 0;
+    done_this_frame = true;
+    stats.done_this_frame = true;
+    ++stats.frames;
+    hud_phase = true;
+    composite_image = image;
+    // This frame's camera and the jitter its scene was drawn with; the next scene gets a new phase.
+    camera_motion.OnComposite();
+    camera_motion.SetJitter(jitter);
+    if (failed) {
+        ++stats.failed;
+    } else if (!camera_motion.Ready() || !Active()) {
+        ++(!Active() ? stats.off : stats.no_camera);
+        reset = true;
+    } else {
+        scene_color = image;
+        Run();
+    }
+    AdvanceJitter();
+}
+
 void TemporalUpscaler::OnDispatch(u64 cs_hash) {
+    if (cs_hash == trigger_hash && !stats.done_this_frame) {
+        stats.done_this_frame = true;
+        ++stats.frames;
+        if (failed) {
+            ++stats.failed;
+        } else if (Scaled()) {
+            ++stats.upscaled; // RunScaled upscales this frame
+        }
+    }
     if (cs_hash != trigger_hash || done_this_frame || failed || Scaled()) {
         return;
     }
     done_this_frame = true;
     if (!scene_color || !camera_motion.Ready() || !Active()) {
+        ++(!Active() ? stats.off : !scene_color ? stats.no_scene : stats.no_camera);
         reset = true;
         return;
     }
@@ -1003,24 +1108,41 @@ void TemporalUpscaler::Run() {
     }
     auto& color = texture_cache.GetImage(scene_color);
     auto& depth = texture_cache.GetImage(camera_motion.Depth());
-    const u32 ow = color.info.size.width, oh = color.info.size.height;
-    const bool reduced = ReducedScene(color) && scene_targets.EligibleScene(depth);
-    const u32 w = reduced ? scene_targets.Size().width : ow;
-    const u32 h = reduced ? scene_targets.Size().height : oh;
-    if (color.info.pixel_format != vk::Format::eR16G16B16A16Sfloat ||
-        depth.info.size.width != ow || depth.info.size.height != oh ||
-        !(color.usage_flags & vk::ImageUsageFlagBits::eStorage)) {
+    const u32 iw = color.info.size.width, ih = color.info.size.height;
+    const u32 ow = upscale_width ? upscale_width : iw, oh = upscale_height ? upscale_height : ih;
+    const bool reduced = !upscale_width && ReducedScene(color) && scene_targets.EligibleScene(depth);
+    const u32 w = reduced ? scene_targets.Size().width : iw;
+    const u32 h = reduced ? scene_targets.Size().height : ih;
+    // Bloodborne: HDR scene color, merged back by a compute pass. God of War III: the tone mapped
+    // display buffer (RGBA8 sRGB), copied back with a blit (it converts the format).
+    const bool hdr = color.info.pixel_format == vk::Format::eR16G16B16A16Sfloat;
+    const bool ldr = color.info.pixel_format == vk::Format::eR8G8B8A8Srgb ||
+                     color.info.pixel_format == vk::Format::eR8G8B8A8Unorm;
+    if (!(hdr || ldr) || depth.info.size.width != iw || depth.info.size.height != ih ||
+        !(color.usage_flags & (hdr ? vk::ImageUsageFlagBits::eStorage
+                                   : vk::ImageUsageFlagBits::eTransferDst)) ||
+        !(color.usage_flags & vk::ImageUsageFlagBits::eSampled)) {
+        static bool printed = false;
+        if (!printed) {
+            printed = true;
+            std::printf("Upscaler: scene color %s %ux%u, depth %ux%u: not upscaled\n",
+                        vk::to_string(color.info.pixel_format).c_str(), iw, ih,
+                        depth.info.size.width, depth.info.size.height);
+        }
+        ++stats.bad_input;
         return;
     }
-    if (!EnsureResources(w, h, ow, oh, true)) {
+    if (!EnsureResources(w, h, ow, oh, hdr)) {
+        ++stats.failed;
         failed = true;
         return;
     }
+    stats.w = w, stats.h = h, stats.ow = ow, stats.oh = oh;
     const auto depth_format = depth.info.pixel_format;
     const auto depth_view =
         CachedView(depth, depth_format, vk::ImageAspectFlagBits::eDepth);
     const auto color_view =
-        CachedView(color, vk::Format::eR16G16B16A16Sfloat, vk::ImageAspectFlagBits::eColor);
+        CachedView(color, color.info.pixel_format, vk::ImageAspectFlagBits::eColor);
 
     scheduler.EndRendering();
     runtime.Transit(&depth, vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits2::eComputeShader,
@@ -1094,7 +1216,7 @@ void TemporalUpscaler::Run() {
             cmdbuf,
             {input_color, input_color_view, color.info.pixel_format, vk::ImageAspectFlagBits::eColor, w, h},
             {input_depth, input_depth_view, depth_format, vk::ImageAspectFlagBits::eDepth, w, h}, w, h,
-            ow, oh, frame_ms, true);
+            ow, oh, frame_ms, hdr);
     } else {
         FfxVkPortableUpscaleDispatchInfo info{};
         info.structSize = sizeof(info);
@@ -1146,7 +1268,8 @@ void TemporalUpscaler::Run() {
     
         FfxVkPortableUpscaleCreateInfo create_info{};
         create_info.structSize = sizeof(create_info);
-        create_info.flags = FFX_VK_PORTABLE_CONTEXT_HDR_COLOR_INPUT | FFX_VK_PORTABLE_CONTEXT_AUTO_EXPOSURE;
+        create_info.flags = (hdr ? FFX_VK_PORTABLE_CONTEXT_HDR_COLOR_INPUT : 0u) |
+                            FFX_VK_PORTABLE_CONTEXT_AUTO_EXPOSURE;
         create_info.maxRenderSize = {w, h};
         create_info.maxOutputSize = {ow, oh};
         if (const u64 issues = ffxVkPortableValidateUpscaleDispatchInfo(&create_info, &info)) {
@@ -1165,10 +1288,100 @@ void TemporalUpscaler::Run() {
         }
     }
     if (dispatched) {
+        ++stats.upscaled;
+        stats.resets += reset;
         reset = false;
         dispatched_last_frame = true;
         if (Gow3Settings::Get().upscaler != Gow3Settings::UpscalerTaa) {
             ExtraSharpen(cmdbuf, vk::Image(output_image), false, ow, oh);
+        }
+        Gow3Settings::Get().upscale_render_width = int(w);
+        Gow3Settings::Get().upscale_render_height = int(h);
+        Gow3Settings::Get().upscale_output_width = int(ow);
+        Gow3Settings::Get().upscale_output_height = int(oh);
+        if (ldr && upscale_width) {
+            // God of War III above its render size: the result goes to the display buffer's host
+            // image, where the HUD follows (RedirectColor) and which the presenter shows.
+            own_barrier(vk::Image(output_image), vk::ImageLayout::eGeneral, all, rw,
+                        vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits2::eTransfer,
+                        vk::AccessFlagBits2::eTransferRead);
+            const VAddr address = color.info.guest_address;
+            // At native size the composite is the display buffer: its host image is presented.
+            // With a resolution patch it is an image of its own, copied to the display buffer at
+            // the next frame start: the result goes to ui_image, which that copy then reads
+            // (RedirectSampled) into the display buffer's host image (RedirectColor).
+            hud_offscreen = !FrameCapture::IsDisplayBuffer(address);
+            vk::Image host;
+            if (hud_offscreen) {
+                EnsureUiResources(ow, oh, color.info.pixel_format,
+                                  ui_depth_image ? ui_depth_format : vk::Format::eD32SfloatS8Uint);
+                host = vk::Image(ui_image);
+                ui_phase = true;
+                ui_color = scene_color;
+                ui_depth = {};
+            } else {
+                std::scoped_lock lock{display_mutex};
+                auto& display = displays[address];
+                EnsureDisplayImage(display, color.info.pixel_format, ow, oh);
+                display.valid = true;
+                host = vk::Image(display.image);
+            }
+            const vk::ImageSubresourceRange range{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
+            vk::ImageMemoryBarrier2 to_dst{
+                .srcStageMask = all,
+                .srcAccessMask = vk::AccessFlagBits2::eNone,
+                .dstStageMask = vk::PipelineStageFlagBits2::eTransfer,
+                .dstAccessMask = vk::AccessFlagBits2::eTransferWrite,
+                .oldLayout = vk::ImageLayout::eUndefined,
+                .newLayout = vk::ImageLayout::eTransferDstOptimal,
+                .image = host,
+                .subresourceRange = range,
+            };
+            cmdbuf.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &to_dst});
+            const vk::ImageBlit region{
+                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcOffsets = std::array{vk::Offset3D{0, 0, 0}, vk::Offset3D{s32(ow), s32(oh), 1}},
+                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .dstOffsets = std::array{vk::Offset3D{0, 0, 0}, vk::Offset3D{s32(ow), s32(oh), 1}},
+            };
+            cmdbuf.blitImage(vk::Image(output_image), vk::ImageLayout::eGeneral, host,
+                             vk::ImageLayout::eTransferDstOptimal, region, vk::Filter::eNearest);
+            const vk::ImageMemoryBarrier2 to_general{
+                .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+                .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+                .dstStageMask = all,
+                .dstAccessMask = vk::AccessFlagBits2::eMemoryRead | vk::AccessFlagBits2::eMemoryWrite,
+                .oldLayout = vk::ImageLayout::eTransferDstOptimal,
+                .newLayout = vk::ImageLayout::eGeneral,
+                .image = host,
+                .subresourceRange = range,
+            };
+            cmdbuf.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &to_general});
+            hud_redirect = true;
+            hud_address = address;
+            hud_width = ow;
+            hud_height = oh;
+            hud_source_width = iw;
+            hud_source_height = ih;
+            return;
+        }
+        if (ldr) {
+            own_barrier(vk::Image(output_image), vk::ImageLayout::eGeneral, all, rw,
+                        vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits2::eTransfer,
+                        vk::AccessFlagBits2::eTransferRead);
+            runtime.Transit(&color, vk::ImageLayout::eTransferDstOptimal,
+                            vk::PipelineStageFlagBits2::eTransfer,
+                            vk::AccessFlagBits2::eTransferWrite);
+            runtime.FlushBarriers();
+            const vk::ImageBlit region{
+                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcOffsets = std::array{vk::Offset3D{0, 0, 0}, vk::Offset3D{s32(ow), s32(oh), 1}},
+                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .dstOffsets = std::array{vk::Offset3D{0, 0, 0}, vk::Offset3D{s32(ow), s32(oh), 1}},
+            };
+            cmdbuf.blitImage(vk::Image(output_image), vk::ImageLayout::eGeneral, color.GetImage(),
+                             vk::ImageLayout::eTransferDstOptimal, region, vk::Filter::eNearest);
+            return;
         }
         // The result replaces the scene color's RGB (its alpha carries data for the post).
         own_barrier(vk::Image(output_image), vk::ImageLayout::eGeneral, all, rw,
@@ -1285,7 +1498,10 @@ float TemporalUpscaler::SceneMipBias() const {
 }
 
 bool TemporalUpscaler::Scaled() const {
-    return scaled_session || target_width != 1920 || target_height != 1080;
+    // gow3: Bloodborne's scaled presets (reduced scene targets, UI composition) only with
+    // GOW3_RENDER_RES. God of War III renders at its resolution patch's size and the output
+    // resolution is reached in OnPostComposite.
+    return scaled_session;
 }
 
 void TemporalUpscaler::OnColorTarget(VideoCore::ImageId color) {
@@ -1789,8 +2005,47 @@ vk::ImageView TemporalUpscaler::Mirror(vk::Image image, std::vector<MirrorView>&
     return handle;
 }
 
+void TemporalUpscaler::EnsureDisplayImage(DisplayImage& display, vk::Format format, u32 w, u32 h) {
+    if (display.image && display.format == format && display.width == w && display.height == h) {
+        return;
+    }
+    scheduler.Finish(); // the previous image may still be in use
+    display.views.clear();
+    std::printf("Display: host buffer %ux%u (live)\n", w, h);
+    display.format = format;
+    display.width = w;
+    display.height = h;
+    display.image = VideoCore::UniqueImage(instance.GetDevice(), instance.GetAllocator());
+    display.image.Create(vk::ImageCreateInfo{
+        .flags = vk::ImageCreateFlagBits::eMutableFormat,
+        .imageType = vk::ImageType::e2D,
+        .format = format,
+        .extent = {w, h, 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = vk::SampleCountFlagBits::e1,
+        .tiling = vk::ImageTiling::eOptimal,
+        .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled |
+                 vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
+        .initialLayout = vk::ImageLayout::eUndefined,
+    });
+}
+
 bool TemporalUpscaler::RedirectColor(VideoCore::ImageId color,
                                      const VideoCore::ImageViewInfo& view_info, Target& target) {
+    // God of War III: the HUD of an upscaled frame, drawn over the upscaled scene.
+    if (hud_redirect && texture_cache.GetImage(color).info.guest_address == hud_address) {
+        if (hud_offscreen) {
+            target = {Mirror(vk::Image(ui_image), ui_views, view_info.format, {}),
+                      vk::ImageLayout::eGeneral, ui_width, ui_height};
+            return true;
+        }
+        std::scoped_lock lock{display_mutex};
+        auto& display = displays[hud_address];
+        target = {Mirror(vk::Image(display.image), display.views, view_info.format, {}),
+                  vk::ImageLayout::eGeneral, hud_width, hud_height};
+        return true;
+    }
     if (ui_phase && color == ui_color) {
         target = {Mirror(vk::Image(ui_image), ui_views, view_info.format, {}),
                   vk::ImageLayout::eGeneral, ui_width, ui_height, true};
@@ -1804,35 +2059,68 @@ bool TemporalUpscaler::RedirectColor(VideoCore::ImageId color,
     }
     std::scoped_lock lock{display_mutex};
     auto& display = displays[address];
+    if (present_ui) {
+        // God of War III with a resolution patch: this frame's copy into the display buffer.
+        // The guest copy still runs at render size; the presenter shows the upscaled frame.
+        present_ui = false;
+        presented_address = address;
+        EnsureDisplayImage(display, ui_format, ui_width, ui_height);
+        scheduler.EndRendering();
+        const vk::Image source = vk::Image(ui_image), host = vk::Image(display.image);
+        const u32 w = ui_width, h = ui_height;
+        scheduler.Record([source, host, w, h](vk::CommandBuffer cmd) {
+            const vk::ImageSubresourceRange range{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
+            const std::array barriers{
+                vk::ImageMemoryBarrier2{
+                    .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+                    .srcAccessMask = vk::AccessFlagBits2::eMemoryWrite,
+                    .dstStageMask = vk::PipelineStageFlagBits2::eTransfer,
+                    .dstAccessMask = vk::AccessFlagBits2::eTransferRead,
+                    .oldLayout = vk::ImageLayout::eGeneral,
+                    .newLayout = vk::ImageLayout::eGeneral,
+                    .image = source,
+                    .subresourceRange = range},
+                vk::ImageMemoryBarrier2{
+                    .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+                    .srcAccessMask = vk::AccessFlagBits2::eNone,
+                    .dstStageMask = vk::PipelineStageFlagBits2::eTransfer,
+                    .dstAccessMask = vk::AccessFlagBits2::eTransferWrite,
+                    .oldLayout = vk::ImageLayout::eUndefined,
+                    .newLayout = vk::ImageLayout::eTransferDstOptimal,
+                    .image = host,
+                    .subresourceRange = range},
+            };
+            cmd.pipelineBarrier2({.imageMemoryBarrierCount = u32(barriers.size()),
+                                  .pImageMemoryBarriers = barriers.data()});
+            const vk::ImageCopy region{
+                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .extent = {w, h, 1},
+            };
+            cmd.copyImage(source, vk::ImageLayout::eGeneral, host,
+                          vk::ImageLayout::eTransferDstOptimal, region);
+            const vk::ImageMemoryBarrier2 to_present{
+                .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+                .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+                .dstStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+                .dstAccessMask = vk::AccessFlagBits2::eMemoryRead,
+                .oldLayout = vk::ImageLayout::eTransferDstOptimal,
+                .newLayout = vk::ImageLayout::eGeneral,
+                .image = host,
+                .subresourceRange = range};
+            cmd.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &to_present});
+        });
+        display.valid = true;
+        return false;
+    }
+    if (address == presented_address) {
+        return false; // the rest of that copy: its host image stays presented
+    }
     if (!display_redirect) {
         display.valid = false; // not upscaled: the presenter shows the guest buffer
         return false;
     }
-    if (!display.image || display.format != image.info.pixel_format ||
-        display.width != ui_width || display.height != ui_height) {
-        const auto device = instance.GetDevice();
-        scheduler.Finish();
-        display.views.clear();
-        std::printf("Display: host buffer %ux%u (live)\n", ui_width, ui_height);
-        display.format = image.info.pixel_format;
-        display.width = ui_width;
-        display.height = ui_height;
-        display.image = VideoCore::UniqueImage(device, instance.GetAllocator());
-        display.image.Create(vk::ImageCreateInfo{
-            .flags = vk::ImageCreateFlagBits::eMutableFormat,
-            .imageType = vk::ImageType::e2D,
-            .format = display.format,
-            .extent = {ui_width, ui_height, 1},
-            .mipLevels = 1,
-            .arrayLayers = 1,
-            .samples = vk::SampleCountFlagBits::e1,
-            .tiling = vk::ImageTiling::eOptimal,
-            .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled |
-                     vk::ImageUsageFlagBits::eTransferSrc,
-            .initialLayout = vk::ImageLayout::eUndefined,
-        });
-        display.views.clear();
-    }
+    EnsureDisplayImage(display, image.info.pixel_format, ui_width, ui_height);
     scheduler.EndRendering();
     const vk::ImageMemoryBarrier2 b{
         .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
@@ -1854,6 +2142,22 @@ bool TemporalUpscaler::RedirectColor(VideoCore::ImageId color,
 }
 
 bool TemporalUpscaler::RedirectDepth(VideoCore::ImageId depth, Target& target) {
+    if (hud_redirect && depth) {
+        // God of War III's HUD depth (the render size): an output-size copy, made once a frame.
+        const auto& info = texture_cache.GetImage(depth).info;
+        if (info.size.width == hud_source_width && info.size.height == hud_source_height) {
+            if (hud_depth != depth) {
+                // The color format of the existing ui_image: recreating it would lose the scene.
+                EnsureUiResources(hud_width, hud_height,
+                                  ui_image ? ui_format : vk::Format::eR8G8B8A8Unorm,
+                                  info.pixel_format);
+                PrepareUiDepth(depth);
+                hud_depth = depth;
+            }
+            target = {*ui_depth_view, vk::ImageLayout::eGeneral, hud_width, hud_height};
+            return true;
+        }
+    }
     if (!ui_phase || depth != ui_depth) {
         return false;
     }

@@ -8,6 +8,47 @@
 > The God of War III frame map remains useful for research. For current player instructions,
 > see the [README](../README.md) and [release notes](https://github.com/FelipePrado0/gow3_pc/releases/latest).
 
+## God of War III at 1080p: FSR 3.1 wired to this game (2026-10-12)
+
+The "Status" section further down describes the hooks inherited from the Bloodborne port (an
+864-byte constant block, a 5-target G-buffer, compute shader 9a9cf8a9): none of them exists in
+God of War III, so until now FSR never ran here (0 of all 3D frames, while the menu showed
+"FSR 3.1"). Mapped on CUSA01715 01.00/01.02 at native 1080p with frame captures:
+
+| Order in the command stream | What |
+|---|---|
+| depth pre-pass, ~715 draws, vertex shader `aed40011eb5259f3` | **scene depth** (D32S8, 1920x1080) and the **camera**: its 144-byte constants, floats 0–15 a column-major view-projection (D3D depth, near 0.5, vertical FOV 31.9°) |
+| shadows (2048x2048), light buffer, half-size effects (960x540, own depth) | |
+| material pass, ~717 draws, into its own RGBA8 sRGB image | opaque scene |
+| **first pass into the other display buffer: the frame starts** | the frames alternate two display buffers |
+| copy of the opaque scene, transparents and effects | straight into the display buffer (RGBA8 sRGB), depth: a copy of the scene depth |
+| luminance, bloom chain, **composite** (pixel shaders `0c20ededc9e7c40c`, `a8c2265fd27a6203`) | tone mapped scene |
+| HUD | into the display buffer |
+
+So the opaque scene of a frame is drawn *before* that frame starts, after the previous frame's
+composite. The port therefore:
+
+- starts a frame at the first pass into the other display buffer (`Rasterizer::DrawRecord`,
+  also the frame capture's boundary: Bloodborne's "single-target pass into a display buffer"
+  cut God of War III's frames in the middle);
+- takes the camera at the pre-pass (`CameraMotion::OnSceneCamera`) and makes it current at the
+  next frame start;
+- upscales the display buffer after the composite, before the HUD
+  (`TemporalUpscaler::OnPostComposite`): LDR input, the result blitted back;
+- jitters each frame with one phase: its opaque scene and reduced-size effects with
+  `NextJitter()` (drawn before the frame starts), its transparents with `Jitter()`, the FSR
+  dispatch and the motion vectors with the same value; shadow maps (other aspect), full-screen
+  quads and the HUD are never jittered (`Rasterizer::SceneDrawJitter`). Effects left unjittered
+  over a jittered scene vibrate.
+
+Result (RTX 5070 laptop, 1080p): every 3D frame upscaled, 55–60 FPS as without it, no trails seen
+while playing; sharp with the default FSR sharpening (0.5). Render presets are forced to 1:1 (the
+reduced-size scene targets are Bloodborne's). `Upscaler stats` lines (every 10 s) count the
+frames upscaled and why others were not.
+
+Still missing: render-resolution scaling (FPS), reactive/transparency masks, a check of object
+motion on characters, FSR 4 assets, DLSS on Linux.
+
 ## Native TAA and missing FSR 4 assets (2026-10-01)
 
 `upscaler=taa` / `GOW3_UPSCALER=taa` is a separate native-resolution temporal AA
@@ -131,7 +172,7 @@ The previous frame's matrices are not in the frame; the port has to keep them.
    also frame generation), then DLSS (native on Linux), XeSS/XeFG and OptiScaler through a
    loader for their Windows DLLs.
 
-## Status
+## Status (Bloodborne hooks; see the God of War III section at the top)
 
 - Camera motion vectors: verified by reprojecting the previous frame (`GOW3_DEBUG_MOTION=1`,
   toggles 1<<22 reprojected frame, 1<<23 error map): static geometry matches.

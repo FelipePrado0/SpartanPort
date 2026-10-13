@@ -63,6 +63,9 @@ public:
 
     /// Before a compute dispatch: the post-processing combine shader triggers the upscale.
     void OnDispatch(u64 cs_hash);
+    /// God of War III: its post-processing composite into `image` (the display buffer, RGBA8
+    /// sRGB) is complete and the HUD comes next: upscale it in place.
+    void OnPostComposite(VideoCore::ImageId image);
 
     /// Start of a frame in the command stream (display pass).
     bool OnFrameStart();
@@ -74,7 +77,7 @@ public:
     /// draw's render state (Rasterizer::BeginRendering).
     [[nodiscard]] u64 RedirectState() const noexcept {
         return u64(ui_phase) | u64(display_redirect) << 1 | u64(done_this_frame) << 2 |
-               u64(ui_color.index) << 8 | u64(ui_depth.index) << 36;
+               u64(hud_redirect) << 3 | u64(ui_color.index) << 8 | u64(ui_depth.index) << 36;
     }
 
 
@@ -82,6 +85,27 @@ public:
     /// the upscale (post and UI are not jittered).
     [[nodiscard]] std::array<float, 2> Jitter() const noexcept {
         return done_this_frame ? std::array<float, 2>{} : jitter;
+    }
+    /// God of War III: the jitter of the scene being drawn, from one composite to the next (the
+    /// phase advances at each composite, after its upscale).
+    [[nodiscard]] std::array<float, 2> SceneJitter() const noexcept {
+        return jitter;
+    }
+    /// God of War III: from the composite to the next frame start, draws into the composite's
+    /// image are the HUD (never jittered, redirected to the output size when upscaling).
+    [[nodiscard]] bool HudPhase() const noexcept {
+        return hud_phase;
+    }
+    [[nodiscard]] VideoCore::ImageId CompositeImage() const noexcept {
+        return composite_image;
+    }
+    /// God of War III: the HUD of an upscaled frame is being drawn at the output size.
+    [[nodiscard]] bool HudRedirect() const noexcept {
+        return hud_redirect;
+    }
+    /// Whether this frame's scene was upscaled (or skipped): later draws are HUD or next frame.
+    [[nodiscard]] bool Composited() const noexcept {
+        return done_this_frame;
     }
 
     // Scaled presets.
@@ -203,6 +227,10 @@ private:
     bool opaque_valid = false;
     bool mask_ready = false;
     std::array<float, 2> jitter{};
+    bool jitter_enabled = false;
+    u32 jitter_phases = 8;
+    bool hud_phase = false;
+    VideoCore::ImageId composite_image{};
     u32 jitter_index = 0;
     bool reset = true;
     u64 frame_id = 0;
@@ -244,8 +272,22 @@ private:
         u32 width = 0, height = 0;
         bool valid = false;
     };
+    void EnsureDisplayImage(DisplayImage& display, vk::Format format, u32 w, u32 h);
+    void AdvanceJitter();
     std::mutex display_mutex;
     std::unordered_map<VAddr, DisplayImage> displays;
+    // God of War III upscaling: the game draws at its render size (a resolution patch) into the
+    // display buffer; DLSS/FSR write the output size into the buffer's host image (displays),
+    // the HUD drawn after the composite is redirected there and the presenter shows it.
+    u32 upscale_width = 0, upscale_height = 0; ///< this frame's output size, 0: upscale in place
+    bool hud_redirect = false;
+    bool hud_offscreen = false; ///< the composite was drawn into an image of its own (ui_image)
+    bool present_ui = false;    ///< the next copy into a display buffer presents ui_image
+    VAddr presented_address = 0;
+    VAddr hud_address = 0;
+    u32 hud_width = 0, hud_height = 0;               ///< output size
+    u32 hud_source_width = 0, hud_source_height = 0; ///< the game's render size
+    VideoCore::ImageId hud_depth{};
     FfxVkPortableUpscaleContext* context = nullptr;
     bool resources_ready = false; ///< images below match width/height/out size
     bool resources_fsr4 = false;  ///< made for FSR 4 (no FSR 3 context)

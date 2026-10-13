@@ -75,6 +75,14 @@ public:
     /// The G-buffer pass (5+ color targets): its depth is the scene depth.
     void OnGBufferPass(VideoCore::ImageId depth);
 
+    /// God of War III: the depth pre-pass's view-projection (16 floats, column-major, D3D depth)
+    /// and its depth target; it becomes the current camera at the frame's composite (OnComposite).
+    void OnSceneCamera(const float* view_projection, VideoCore::ImageId depth);
+    /// God of War III: the frame's post-processing composite. Its scene was drawn since the
+    /// previous one: at native size after that composite (before the frame starts), with a
+    /// resolution patch after the frame starts; either way the pending camera is this frame's.
+    void OnComposite();
+
     /// The pass copying the finished frame (`frame`, the last target drawn) to the display: the
     /// frame's depth and camera are complete. Records the debug overlay, starts a new frame.
     void OnDisplayPass(VideoCore::ImageId frame);
@@ -101,6 +109,9 @@ private:
 
     ObjectMotion* object_motion = nullptr;
     Camera current, previous;
+    Camera pending;                    ///< OnSceneCamera's, for the next frame
+    VideoCore::ImageId pending_depth{};
+    bool scene_cameras = false; ///< God of War III's pre-pass cameras (not OnConstants)
     bool frame_has_camera = false;
     std::array<float, 2> jitter{}, previous_jitter{};
     std::array<u32, 2> render_size{};

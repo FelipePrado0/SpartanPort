@@ -95,6 +95,10 @@ struct Values {
     std::atomic<bool> fsr4_invert_jitter{false};
     std::atomic<int> active_render_width{1920}, active_render_height{1080};
     std::atomic<int> output_res{OutputDefault}; ///< index into OutputWidths
+    /// What the temporal upscaler did last (menu information): the game's render size and the
+    /// size it was rebuilt to; zero while none runs.
+    std::atomic<int> upscale_render_width{0}, upscale_render_height{0};
+    std::atomic<int> upscale_output_width{0}, upscale_output_height{0};
     /// Live resolution and preset changes (run.sh): 0 off by default (startup patch, fastest
     /// on the Steam Deck and older GPUs), -1 auto (strong discrete GPUs), 1 on. On restart.
     std::atomic<int> live_resolution{0};
