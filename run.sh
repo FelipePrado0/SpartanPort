@@ -42,7 +42,8 @@ if [[ ! -f $game/eboot.bin ]]; then echo "No eboot.bin in $game (set GOW3_GAME_D
 original_game=$game
 game=$("$PYTHON" scripts/mods.py "$game" --out "$out" \
     --mods-dir "${GOW3_MODS_DIR:-$data/mods}" --config "${GOW3_MODS_CONFIG:-$data/mods.json}" \
-    --enabled "${GOW3_MODS_ENABLED:-1}")
+    --enabled "${GOW3_MODS_ENABLED:-1}" --update "${GOW3_UPDATE_DIR:-}")
+# GOW3_UPDATE_DIR: a game update folder (eboot.bin, sce_sys, ...) merged over the game like a mod.
 # A private merged view lasts for this launch, including restarts. Cleanup only our own view.
 if [[ $game != "$(realpath "$original_game")" ]]; then
     mod_game=$game
@@ -54,7 +55,16 @@ fi
 "$PYTHON" scripts/content_profile.py "$game" --out "$out" --sku "${GOW3_CONTENT_SKU:-full}"
 # GOW3_PATCHES adds patch names ("a;b") to the game's built-in patch file.
 "$PYTHON" scripts/patches.py --out "$out" --extra "${GOW3_PATCHES:-}" --game-dir "$game"     --patches-dir "${GOW3_PATCHES_DIR:-$data/patches}" --patches-config "${GOW3_PATCHES_CONFIG:-$data/patches.json}"
+# What the applied patches need (direct memory, VBlank), unless set already.
+if [[ -f $out/patch-requirements.env ]]; then
+    while IFS='=' read -r key value; do
+        if [[ -n $key && -z ${!key:-} ]]; then export "$key=$value"; fi
+    done < "$out/patch-requirements.env"
+fi
 export GOW3_VBLANK_HZ=${GOW3_VBLANK_HZ:-60}
+# As run.py: the temporal upscalers and motion vectors are not calibrated for this game yet;
+# linear image readbacks fix its corrupted textures.
+export GOW3_UPSCALER=${GOW3_UPSCALER:-none} GOW3_READBACK_LINEAR=${GOW3_READBACK_LINEAR:-1}
 # FSR 4: faster post passes next to the downloaded ones (incremental; tools/fsr4_optimize.sh).
 if [[ -z ${GOW3_PREBUILT:-} && -d fsr4_shaders ]] && command -v spirv-cross >/dev/null; then
     bash tools/fsr4_optimize.sh || echo 'FSR 4: optimized post passes not built' >&2

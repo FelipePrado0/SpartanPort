@@ -104,7 +104,8 @@ def main():
     game = Path(run_script('mods.py', game, '--out', out,
                            '--mods-dir', env.get('GOW3_MODS_DIR', data / 'mods'),
                            '--config', env.get('GOW3_MODS_CONFIG', data / 'mods.json'),
-                           '--enabled', env.get('GOW3_MODS_ENABLED', '1'), capture=True).strip())
+                           '--enabled', env.get('GOW3_MODS_ENABLED', '1'),
+                           '--update', env.get('GOW3_UPDATE_DIR', ''), capture=True).strip())
     mod_view = game if game.resolve() != original_game else None
     try:
         run_script('prepare.py', game, '--out', out)
@@ -112,8 +113,9 @@ def main():
         run_script('link_modules.py', game, '--out', out)
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('GOW3_CONTENT_SKU', 'full'))
 
-        from patches import game_patchable, game_profile, game_title_id, patch_requirements, selected_patches
-        profile = game_profile(game_title_id(game))
+        from patches import (game_app_version, game_patchable, game_profile, game_title_id,
+                             patch_requirements, selected_patches)
+        profile = game_profile(game_title_id(game), game_app_version(game))
         patched = bool(profile) and (game_patchable(game) or bool(env.get('GOW3_FORCE_PATCHES')))
         engine_fps = 60
         # The window shows the game's icon (BMP: the format SDL loads without extra libraries).

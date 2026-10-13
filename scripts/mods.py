@@ -92,6 +92,21 @@ def mod_files(folder):
             yield relative, source
 
 
+def update_files(folder):
+    """(game path, source) of every file of a game update (CUSAxxxxx-UPDATE, as shadPS4 reads it):
+    eboot.bin, sce_sys/ and the rest replace the base game's files."""
+    root = Path(folder).resolve()
+    for directory, folders, files in os.walk(root):
+        for name in sorted(files):
+            source = Path(directory) / name
+            yield source.relative_to(root), source
+
+
+def title_id(folder):
+    from prepare import sfo
+    return sfo((Path(folder) / 'sce_sys/param.sfo').read_bytes()).get('TITLE_ID')
+
+
 def conflicts(root, names):
     """Files more than one of `names` (in load order) replaces: [(game path, [mods])], the last
     mod of each list wins. Paths match case-insensitively, as in build_overlay; unreadable mods
@@ -183,10 +198,19 @@ def expand(directory):
         directory.mkdir(exist_ok=True)
 
 
-def build_overlay(game, out, mods):
+def build_overlay(game, out, mods, update=None):
     game = Path(game).resolve(strict=True)
     replacements = []
     owners = {}
+    if update:
+        if not (Path(update) / 'eboot.bin').is_file():
+            raise ValueError(f'{update}: not a game update (no eboot.bin)')
+        if title_id(update) != title_id(game):
+            raise ValueError(f'{update}: update for {title_id(update)}, the game is {title_id(game)}')
+        files = list(update_files(update))
+        replacements += files
+        owners.update((relative.as_posix().casefold(), 'update') for relative, _ in files)
+        print(f'Update: {Path(update).name}: {len(files)} files', file=sys.stderr)
     for name, root in mods:
         count = 0
         for relative, source in mod_files(root):
@@ -238,6 +262,7 @@ def main():
     parser.add_argument('--mods-dir', required=True, type=Path)
     parser.add_argument('--config', type=Path)
     parser.add_argument('--enabled', choices=('0', '1'), default='1')
+    parser.add_argument('--update', default='', help='game update folder, applied before the mods')
     args = parser.parse_args()
     layers = []
     if args.enabled == '1':
@@ -251,7 +276,7 @@ def main():
         else:
             for name in selected(args.mods_dir, args.config):
                 layers.append((name, args.mods_dir / name))
-    print(build_overlay(args.game, args.out, layers))
+    print(build_overlay(args.game, args.out, layers, args.update or None))
 
 
 if __name__ == '__main__':

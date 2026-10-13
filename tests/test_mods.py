@@ -2,6 +2,7 @@ from paths import ROOT
 import importlib.util
 import json
 import os
+import struct
 from pathlib import Path
 import subprocess
 import sys
@@ -58,6 +59,51 @@ class ModTests(unittest.TestCase):
         config = self.root / 'mods.json'
         config.write_text(json.dumps({'order': ['B', 'A', 'deleted'], 'disabled': ['A']}))
         self.assertEqual(mods.selected(self.moddir, config), ['B', 'C'])
+
+    def sfo(self, folder, title_id, version):
+        """A param.sfo with TITLE_ID and APP_VER (prepare.sfo's format)."""
+        keys, values, entries = b'', b'', b''
+        for key, value in (('APP_VER', version), ('TITLE_ID', title_id)):
+            data = value.encode() + b'\0'
+            entries += struct.pack('<HHIII', len(keys), 0x204, len(data), len(data), len(values))
+            keys += key.encode() + b'\0'
+            values += data
+        (folder / 'sce_sys').mkdir(parents=True, exist_ok=True)
+        (folder / 'sce_sys/param.sfo').write_bytes(struct.pack('<4sIIII', b'\0PSF', 0x101, 20 + len(entries),
+                                                               20 + len(entries) + len(keys), 2)
+                                                   + entries + keys + values)
+
+    def test_update_replaces_executable_and_system_files_before_mods(self):
+        self.sfo(self.game, 'CUSA01623', '01.00')
+        update = self.root / 'CUSA01623-UPDATE'
+        update.mkdir()
+        (update / 'eboot.bin').write_bytes(b'updated executable')
+        self.sfo(update, 'CUSA01623', '01.02')
+        (update / 'dvdroot_ps4/data').mkdir(parents=True)
+        (update / 'dvdroot_ps4/data/a.wad').write_bytes(b'update')
+        (update / 'dvdroot_ps4/data/b.wad').write_bytes(b'update')
+        a = self.mod('A', b'mod')
+        result = mods.build_overlay(self.game, self.root / 'out', [('A', a)], update)
+        self.assertEqual((result / 'eboot.bin').read_bytes(), b'updated executable')
+        self.assertEqual(mods.title_id(result), 'CUSA01623')
+        self.assertIn(b'01.02', (result / 'sce_sys/param.sfo').read_bytes())
+        self.assertEqual((result / 'dvdroot_ps4/data/a.wad').read_bytes(), b'mod')  # a mod wins
+        self.assertEqual((result / 'dvdroot_ps4/data/b.wad').read_bytes(), b'update')
+        # The game and update folders are not changed.
+        self.assertEqual((self.game / 'eboot.bin').read_bytes(), b'original executable')
+        self.assertIn(b'01.00', (self.game / 'sce_sys/param.sfo').read_bytes())
+        self.assertEqual((self.assets / 'b.wad').read_bytes(), b'untouched')
+
+    def test_update_for_another_game_rejected(self):
+        self.sfo(self.game, 'CUSA01623', '01.00')
+        update = self.root / 'other'
+        update.mkdir()
+        (update / 'eboot.bin').write_bytes(b'x')
+        self.sfo(update, 'CUSA01715', '01.02')
+        with self.assertRaises(ValueError):
+            mods.build_overlay(self.game, self.root / 'out', [], update)
+        with self.assertRaises(ValueError):  # no eboot.bin: not an update
+            mods.build_overlay(self.game, self.root / 'out', [], self.root / 'mods-missing')
 
     def test_no_mod_returns_original_game(self):
         self.assertEqual(mods.build_overlay(self.game, self.root / 'out', []), self.game)

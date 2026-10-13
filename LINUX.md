@@ -20,7 +20,23 @@ Solo 4 archivos modificados (12 líneas) para compilar con GCC 16 + Vulkan 1.4:
 
 - **Linux x86-64** (probado en CachyOS/Arch, compatible con cualquier distro moderna)
 - **GPU con Vulkan 1.3+** y driver actualizado
-- **Tu dump propio** de God of War III Remastered: **CUSA01623 v01.02**
+- **Tu dump propio** de God of War III Remastered: **CUSA01623 v01.02** (EE. UU.). La versión
+  europea **CUSA01715** también arranca, en v01.00 o con el update 01.02; los patches de
+  resolución y FPS son solo para CUSA01623.
+
+### Updates
+
+Si el update está en una carpeta aparte (`CUSAxxxxx-UPDATE`, como en shadPS4), elígela en el
+launcher en **Game → Update folder**, debajo de la carpeta del juego. En cada inicio se aplica
+encima del juego base mediante enlaces, sin modificar ninguna de las dos carpetas. Desde la
+terminal:
+
+```bash
+GOW3_GAME_DIR=/ruta/CUSA01715 GOW3_UPDATE_DIR=/ruta/CUSA01715-UPDATE bash run.sh
+```
+
+También sirve una carpeta con el update ya copiado encima del juego base. El log dice qué
+versión se detectó (`Patches: ...`).
 
 ### Dependencias (Arch/CachyOS)
 
