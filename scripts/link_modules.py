@@ -15,7 +15,7 @@ import hashlib
 import json
 from pathlib import Path
 import struct
-from prepare import parse_self, span, unpack
+from prepare import parse_self, read_self, span, unpack
 from link_libc import encode_id
 
 DEFAULT_MODULES = ('libc.prx', 'libSceFios2.prx')
@@ -28,8 +28,7 @@ def canonical(identity, fallback=None):
 
 
 def module(path):
-    source = path.read_bytes()
-    elf, header, ph, _, missing = parse_self(source)
+    elf, header, ph, _, missing = parse_self(read_self(path))
     dp = next(p for p in ph if p['type'] == 2)
     dynamic = []
     for pos in range(dp['offset'], dp['offset'] + dp['filesz'], 16):

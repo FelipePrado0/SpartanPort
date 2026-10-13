@@ -6,9 +6,9 @@ the 01.02 update, as a folder that contains eboot.bin, sce_module and sce_sys.
 
 Requirements
 - Windows 10 (1903 or newer) or Windows 11, 64-bit.
-- A 64-bit processor with the PS4's instruction sets (AVX, F16C, BMI1, MOVBE, LZCNT): Intel
-  Haswell (2013) or newer, AMD Ryzen or newer. An older processor stops at start with a
-  "STOP: this CPU lacks" line in the log.
+- A 64-bit processor with AVX: Intel Sandy Bridge (2011) or newer, AMD FX or newer. Sandy/Ivy
+  Bridge and AMD FX run with emulated instructions (an "ISA:" log line; speed not measured yet).
+  Older processors stop at start with a "STOP: this CPU lacks" line in the log.
 - A graphics card with Vulkan 1.3 and an up-to-date driver.
   Nothing else: Python and the libraries are inside this folder.
 
@@ -45,6 +45,15 @@ Data
 - Generated files (prepared game image, patches): out\.
 
 Problems
+- Importing shadPS4 saves: see "Importing shadPS4 saves" in the project's README:
+  https://github.com/FelipePrado0/gow3_pc#importing-shadps4-saves
+  Destination: user\savedata\1\CUSA01623\ next to God of War III.exe, or
+  <custom Saves folder>\savedata\1\CUSA01623\. RPCS3 saves are not compatible.
+  Do not rename shadPS4's param.sfo to param.bin; the formats differ.
+  The save dialog displays at most 32 entries. If the imported slot is missing, test
+  with a separate Saves folder containing only that slot; keep the original saves.
+- RTSS/Afterburner and ReShade must target bin\gow3-probe.exe, not the launcher.
+  Select Vulkan in the ReShade installer. Report the overlay versions if it still fails.
 - Black screen at start: Advanced -> Clear shader cache, then start again.
 - The game does not open: check the Log page, and send user\last_run.log with your report.
 

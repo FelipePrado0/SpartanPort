@@ -101,8 +101,8 @@ have_lib() {
     done
     return 1
 }
-# PyInstaller is the distribution's, or comes from pip in a venv; either way it needs libpython as a shared library.
-have_pyinstaller_env() { have_py PyInstaller || { have_py venv && have_py ensurepip && have_lib libpython3; }; }
+# PyInstaller and iced-x86 are the distribution's, or come from pip in a venv; PyInstaller needs libpython as a shared library.
+have_pyinstaller_env() { { have_py PyInstaller && have_py iced_x86; } || { have_py venv && have_py ensurepip && have_lib libpython3; }; }
 
 # group ; name ; check ; arch ; debian ; fedora ; suse ; fetched
 # An empty package list: the distribution has none. A last field "fetch": CMake downloads the item when the
@@ -131,7 +131,7 @@ requirements=(
 'packaging;ldd;command -v ldd;glibc;libc-bin;glibc-common;glibc'
 'packaging;Python Tk;have_py tkinter;tk;python3-tk;python3-tkinter;python3-tk'
 'packaging;Python Pillow;have_py PIL.Image;python-pillow;python3-pil;python3-pillow;python3-Pillow'
-'packaging;PyInstaller (or Python venv with a shared libpython);have_pyinstaller_env;python-pip;python3-venv python3-pip python3-dev;python3-pip python3-libs;python3-pip python3-devel'
+'packaging;PyInstaller and iced-x86 (or Python venv with a shared libpython);have_pyinstaller_env;python-pip;python3-venv python3-pip python3-dev;python3-pip python3-libs;python3-pip python3-devel'
 )
 
 column=$(case $family in arch) echo 4 ;; debian) echo 5 ;; fedora) echo 6 ;; suse) echo 7 ;; *) echo 0 ;; esac)

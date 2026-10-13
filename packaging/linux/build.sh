@@ -3,8 +3,8 @@
 # Libraries are bundled with their dependencies, except the ones that must come from the host
 # (glibc, Vulkan loader and drivers, X11/Wayland, GL). The Tk launcher is frozen with PyInstaller, so
 # players need no Python. Needs: ldd, file and curl (appimagetool), and Python with Tk and Pillow; PyInstaller
-# comes from the distribution or, failing that, from pip in out/pyenv (GOW3_PYINSTALLER_SPEC changes the pip
-# requirement). packaging/linux/deps.sh checks them.
+# and iced-x86 (scripts/isa_rewrite.py) come from the distribution or, failing that, from pip in out/pyenv
+# (GOW3_PYINSTALLER_SPEC and GOW3_ICED_SPEC change the pip requirements). packaging/linux/deps.sh checks them.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
 [[ -f out/gow3-probe && -f out/gpu/libgow3gpu.so ]] || { echo 'Build first: bash build.sh' >&2; exit 1; }
@@ -12,19 +12,20 @@ install_deps=()
 if [[ -n ${GOW3_INSTALL_DEPS:-} && ${GOW3_INSTALL_DEPS} != 0 ]]; then install_deps=(--install); fi
 bash packaging/linux/deps.sh --packaging "${install_deps[@]}" || exit 1
 
-# PyInstaller: the distribution's, else one from pip in a private environment (system packages stay visible
+# PyInstaller and iced-x86: the distribution's, else pip in a private environment (system packages stay visible
 # there, so Tk and Pillow are the distribution's).
-if python3 -c 'import PyInstaller' 2>/dev/null; then
-    pyinstaller=(python3 -m PyInstaller)
+if python3 -c 'import PyInstaller, iced_x86' 2>/dev/null; then
+    python=(python3)
 else
     # A venv whose creation was interrupted has no working pip: start it over.
     if ! out/pyenv/bin/python -m pip --version >/dev/null 2>&1; then
         rm -rf out/pyenv
         python3 -m venv --system-site-packages out/pyenv
     fi
-    out/pyenv/bin/python -m pip install --quiet "${GOW3_PYINSTALLER_SPEC:-pyinstaller==6.22.3}"
-    pyinstaller=(out/pyenv/bin/python -m PyInstaller)
+    out/pyenv/bin/python -m pip install --quiet "${GOW3_PYINSTALLER_SPEC:-pyinstaller==6.22.3}" "${GOW3_ICED_SPEC:-iced-x86==1.21.0}"
+    python=(out/pyenv/bin/python)
 fi
+pyinstaller=("${python[@]}" -m PyInstaller)
 
 appdir=out/AppDir
 rm -rf "$appdir"
@@ -44,9 +45,10 @@ install -m644 "$icon" "$share/launcher/gow3.png"
 
 # The launcher also runs run.py (--run) and the preparation scripts (--script) itself, as on
 # Windows: the standard modules those scripts import come along as hidden imports.
+# iced-x86 (pip install iced-x86==1.21.0): scripts/isa_rewrite.py, CPUs without MOVBE/BMI1/LZCNT.
 hidden=()
 for module in argparse base64 collections hashlib json re shutil struct tempfile xml.etree.ElementTree \
-              urllib.request; do
+              urllib.request iced_x86; do
     hidden+=(--hidden-import "$module")
 done
 "${pyinstaller[@]}" --noconfirm --clean --log-level WARN --windowed --name gow3-launcher \

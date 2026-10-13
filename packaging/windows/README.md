@@ -32,6 +32,8 @@ bash packaging/windows/package.sh  # dist/gow3-windows/ and .zip: God of War III
 The package freezes the launcher with PyInstaller (a private venv in `out/pyenv`, from a
 python.org Python) into `God of War III.exe`, which also runs `run.py` (`--run`), the preparation
 scripts (`--script`) and the game without the window (`--play`): players need no Python.
+The venv also receives `iced-x86`, which `scripts/isa_rewrite.py` uses for CPUs without MOVBE,
+BMI1 or LZCNT.
 `Play God of War III.exe` (`packaging/windows/play.c`) is a small native program that runs
 `God of War III.exe --play` from its folder and waits for it, for players who want to start the
 game directly with the saved settings.

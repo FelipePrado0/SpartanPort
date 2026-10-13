@@ -119,7 +119,7 @@ with a Radeon RX 7800 XT (RADV) in a Wayland session.
 **Build and run**
 ```
 bash build.sh
-bash packaging/linux/build.sh   # needs Tk and Pillow for Python (PyInstaller comes from pip if the system has none), curl and file
+bash packaging/linux/build.sh   # needs Tk and Pillow for Python (PyInstaller and iced-x86 come from pip if the system has none), curl and file
 ./dist/gow3-x86_64.AppImage
 ```
 Choose the game folder in the launcher. `--play` starts the game with the saved options and no
@@ -163,9 +163,10 @@ window. From a source tree: `GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py` af
 ## Requirements
 
 - Windows 10 (1903 or newer) or Windows 11, 64-bit.
-- A 64-bit processor with the PS4's instruction sets (AVX, F16C, BMI1, MOVBE, LZCNT): Intel
-  Haswell (2013) or newer, AMD Ryzen or newer. The game's own code runs on the CPU as it is, so
-  an older processor stops at start with a `STOP: this CPU lacks` line in the log.
+- A 64-bit processor with AVX: Intel Sandy Bridge (2011) or newer, AMD FX or newer. On CPUs without
+  MOVBE, BMI1 or LZCNT (Sandy/Ivy Bridge, AMD FX) the loader rewrites the game's instructions that
+  use them to emulated stubs and logs an `ISA:` line; performance on those CPUs has not been
+  measured yet. Older CPUs stop at start with a `STOP: this CPU lacks` line in the log.
 - A graphics card with Vulkan 1.3 and a current driver.
 - Your copy of the game (the folder with `eboot.bin`, `sce_module` and `sce_sys`). Tested:
   CUSA01623 and CUSA01715, versions 01.00 and 01.02.
@@ -174,7 +175,8 @@ window. From a source tree: `GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py` af
   (`tools/make_signatures.py`). A site that is not found leaves only that patch or hook off; the
   game starts without it, and the log and the menu say why.
 - To build from source: [MSYS2](https://www.msys2.org) and [Python 3](https://www.python.org) with Pillow
-  (`pip install pillow`, used for the game's icon and cover art).
+  (`pip install pillow`, used for the game's icon and cover art); on a CPU without MOVBE, BMI1 or LZCNT
+  also iced-x86 (`pip install iced-x86`, used for the instruction rewrite).
 
 ## Building from source
 
@@ -223,6 +225,41 @@ rates on NVIDIA laptops. The choice is saved and applies on the next game launch
 when using `Play God of War III.exe` or `--play`. Choose GPU memory to restore the previous
 allocation behavior. For direct launches without the launcher, `GOW3_STREAM_MEMORY` accepts
 `cached`, `host` or `device`; the launcher's saved choice takes precedence when using it.
+
+### Importing shadPS4 saves
+
+Only **shadPS4 saves for God of War III Remastered** are compatible. RPCS3 saves are
+from the PS3 game and will not work. Use the same title ID (this example uses `CUSA01623`).
+
+1. Close the game and shadPS4. Back up both save folders.
+2. Find the source in shadPS4's data folder: `user\savedata\1\CUSA01623\` in older
+   versions, or `home\<user-id>\savedata\CUSA01623\` in newer versions.
+3. The destination is **`user\savedata\1\CUSA01623\` next to `God of War III.exe`**.
+   Example: `C:\Games\gow3-windows\user\savedata\1\CUSA01623\`. With a custom
+   **Saves folder** in the launcher, use `<custom folder>\savedata\1\CUSA01623\`.
+4. Copy each slot folder there, keeping its name and game files. Do not nest another
+   `CUSA01623` folder. Exclude the slot's internal `sce_sys` folder from the game data.
+5. Beside each slot, create `<slot name>.sce_sys` if it does not exist. You can copy
+   shadPS4's `sce_sys\icon0.png` there. **Do not rename `param.sfo` to `param.bin`**:
+   the formats differ. Preserve any existing port `param.bin`. Without one, the slot
+   appears by folder name; saving again in the port writes its metadata and refreshes
+   the displayed information.
+6. Start the port and select **Load Game**. Completed saves can be imported too.
+
+The port's save dialog displays at most **32 entries**. If the imported slot is missing
+from a long list, test it with a separate **Saves folder** containing just that slot
+under `savedata\1\CUSA01623\`, with its sibling metadata folder. Keep the original saves
+and restore the previous Saves folder setting after testing.
+
+### Third-party overlays (Windows)
+
+The game process is **`bin\gow3-probe.exe`**, not `God of War III.exe` (source builds
+use `out\gow3-probe.exe`). Add that executable to RTSS and enable Afterburner's on-screen
+display. In the ReShade installer, select that same executable and the **Vulkan** API.
+
+If the overlay still does not appear, report the port and overlay versions, the last
+working port version, and attach `user\last_run.log`. These checks do not confirm a fix
+for every overlay configuration.
 
 ### Keyboard controls
 
