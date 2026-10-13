@@ -334,6 +334,10 @@ private:
     bool motion_draw = false;
     u64 motion_geometry{};    ///< vertex-stream identity of the current direct draw
     bool gbuffer_draw = false;
+    VAddr last_display_target{};          ///< gow3: frames alternate the two display buffers
+    VideoCore::ImageId composite_target{}; ///< gow3: post-processing composite drawn, FSR pending
+    /// gow3: the viewport jitter of a scene draw (the bound depth is known), or zero.
+    std::array<float, 2> SceneDrawJitter();
     std::unique_ptr<TemporalUpscaler> upscaler; // gow3: FSR (docs/upscaler.md)
     std::array<float, 2> draw_jitter{};         ///< viewport offset of the current draw, pixels
     std::array<float, 2> target_scale{1.0f, 1.0f}; ///< pass drawn into the upscaler's output-size images

@@ -947,6 +947,45 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
     DrawRecord(pipeline, used_prepared, is_indexed, index_offset);
 }
 
+std::array<float, 2> Rasterizer::SceneDrawJitter() {
+    if (!upscaler->Enabled() || !db_desc.first || !camera_motion->Depth()) {
+        return {};
+    }
+    // gow3: the HUD, drawn into the composite's image after it until the next frame starts.
+    if (upscaler->HudPhase() && cb_descs[0].first && upscaler->CompositeImage()) {
+        const VAddr target = texture_cache.GetImage(cb_descs[0].first).info.guest_address;
+        if (target == texture_cache.GetImage(upscaler->CompositeImage()).info.guest_address) {
+            return {};
+        }
+    }
+    // Scene draws have a depth of the scene's shape: its own, a copy for the transparents, or
+    // a reduced one (half-size effects). Shadow maps (square) keep still.
+    const auto& depth = texture_cache.GetImage(db_desc.first).info.size;
+    const auto& scene = texture_cache.GetImage(camera_motion->Depth()).info.size;
+    if (depth.width > scene.width || depth.width * scene.height != depth.height * scene.width) {
+        return {};
+    }
+    const auto jitter = upscaler->SceneJitter();
+    const float scale = float(depth.width) / float(scene.width);
+    return {jitter[0] * scale, jitter[1] * scale};
+}
+
+namespace {
+// gow3: God of War III's depth pre-pass vertex shader; its 144-byte constants start with the
+// camera's view-projection (docs/upscaler.md).
+constexpr u64 Gow3PrepassVs = 0xaed40011eb5259f3ull;
+
+// gow3: the two draws of God of War III's post-processing composite (tone mapping, bloom), into
+// the display buffer; the HUD is drawn after them.
+bool IsGow3Composite(const GraphicsPipeline* pipeline) {
+    if (!pipeline->GetGraphicsKey().mrt_mask) {
+        return false;
+    }
+    const u64 ps = pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash;
+    return ps == 0x0c20ededc9e7c40cull || ps == 0xa8c2265fd27a6203ull;
+}
+} // namespace
+
 void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw* used_prepared,
                             bool is_indexed, u32 index_offset) {
     if (DrawPipe::OnStageB()) {
@@ -954,17 +993,33 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         scheduler.PopPendingOperations();
     }
     const auto& regs = Regs();
-    // gow3: the pass copying a finished frame to a display buffer; the previous draw's
-    // target is that frame.
-    if (camera_motion->Enabled() && regs.color_buffers[0] &&
-        FrameCapture::IsDisplayBuffer(regs.color_buffers[0].Address())) {
+    // gow3: the composite is complete once anything else is drawn: upscale it before the HUD.
+    const bool composite = upscaler->Enabled() && IsGow3Composite(pipeline);
+    if (composite_target && !composite) {
+        upscaler->OnPostComposite(composite_target);
+        composite_target = {};
+    }
+    // gow3: a frame starts at the first pass into the other display buffer (the game alternates
+    // two). Bloodborne copied its finished frame there; at 1080p God of War III draws its scene
+    // effects, post-processing and HUD straight into it, after the frame's opaque scene.
+    const VAddr display_target =
+        regs.color_buffers[0] && FrameCapture::IsDisplayBuffer(regs.color_buffers[0].Address())
+            ? regs.color_buffers[0].Address()
+            : 0;
+    const bool frame_start = display_target && display_target != last_display_target;
+    if (display_target) {
+        last_display_target = display_target;
+    }
+    if (composite) {
+        composite_target = cb_descs[0].first; // the display buffer, or its own image when patched
+    }
+    if (camera_motion->Enabled() && frame_start) {
         scene_started = false;
         camera_motion->OnDisplayPass(cb_descs[0].first);
         if (upscaler->OnFrameStart()) {
             object_motion->InvalidateHistory();
             camera_motion->InvalidateHistory();
         }
-        camera_motion->SetJitter(upscaler->Jitter());
         object_motion->OnFrameStart();
         NoteFrameStart();
         static const char* scene_debug = std::getenv("GOW3_SCENE_DEBUG");
@@ -1101,9 +1156,8 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     // gow3: jitter geometry drawn with the scene depth, not full-screen passes (a shifted
     // full-screen quad leaves an edge column unwritten).
     draw_jitter = {};
-    if (upscaler->Enabled() && db_desc.first && db_desc.first == camera_motion->Depth() &&
-        (regs.num_indices > 6 || regs.num_instances.NumInstances() > 1)) {
-        draw_jitter = upscaler->Jitter();
+    if (regs.num_indices > 6 || regs.num_instances.NumInstances() > 1) {
+        draw_jitter = SceneDrawJitter();
     }
     UpdateDynamicState(pipeline, is_indexed);
     MarkPass(pipeline, state);
@@ -1237,10 +1291,7 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
     push_data.yscale *= target_scale[1];
     push_data.yoffset *= target_scale[1];
     pipeline->BindResources(set_writes, push_data);
-    draw_jitter = {};
-    if (upscaler->Enabled() && db_desc.first && db_desc.first == camera_motion->Depth()) {
-        draw_jitter = upscaler->Jitter();
-    }
+    draw_jitter = SceneDrawJitter();
     UpdateDynamicState(pipeline, is_indexed);
     MarkPass(pipeline, state);
     scheduler.BeginRendering(state);
@@ -1301,6 +1352,10 @@ void Rasterizer::DispatchDirect() {
 void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
     FrameCapture::Poll();
     gbuffer_draw = false;
+    if (composite_target) {
+        upscaler->OnPostComposite(composite_target);
+        composite_target = {};
+    }
 
     scheduler.PopPendingOperations();
 
@@ -2057,6 +2112,11 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                     memory->IsValidGpuMapping(ring->address, 0)) {
                     camera_motion->OnConstants(reinterpret_cast<const float*>(ring->address));
                 }
+                if (ring->size == 144 && stage.pgm_hash == Gow3PrepassVs &&
+                    camera_motion->Enabled() && memory->IsValidGpuMapping(ring->address, 0)) {
+                    camera_motion->OnSceneCamera(reinterpret_cast<const float*>(ring->address),
+                                                 db_desc.first);
+                }
                 push_data.AddOffset(binding.buffer, 0);
             }
             buffer_infos.emplace_back(constant_ring->Handle(), ring->offset, ring->size);
@@ -2117,6 +2177,11 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
             if (vsharp.GetSize() == 864 && gbuffer_draw &&
                 memory->IsValidGpuMapping(vsharp.base_address, 0)) {
                 camera_motion->OnConstants(reinterpret_cast<const float*>(vsharp.base_address));
+            }
+            if (vsharp.GetSize() == 144 && stage.pgm_hash == Gow3PrepassVs &&
+                camera_motion->Enabled() && memory->IsValidGpuMapping(vsharp.base_address, 0)) {
+                camera_motion->OnSceneCamera(reinterpret_cast<const float*>(vsharp.base_address),
+                                             db_desc.first);
             }
             // Object motion research: the vertex shader buffers of G-buffer draws.
             if (FrameCapture::Active() && gbuffer_draw && stage.sw_stage == Shader::SwStage::Vertex &&
@@ -2906,7 +2971,8 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
             attachment.image_layout = target.layout;
         }
         image.usage.depth_target = true;
-        if (upscaler->Enabled()) {
+        // gow3: an upscaled frame's HUD depth only goes with its redirected display buffer.
+        if (upscaler->Enabled() && (!upscaler->HudRedirect() || color_redirected)) {
             VulkanUpscalerTarget depth_redirect;
             depth_redirected = upscaler->RedirectDepth(image_id, depth_redirect);
             if (depth_redirected) {
@@ -2923,6 +2989,13 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
     // gow3: a pass drawn into the upscaler's output-size images (UI, display pass): every
     // attachment must be redirected, viewports and scissors are scaled.
     target_scale = {1.0f, 1.0f};
+    if (color_redirected && upscaler->HudRedirect()) {
+        // gow3: a HUD pass of an upscaled frame also writing the game's second target (render
+        // size, rewritten by the next frame): only the display buffer is drawn, at output size.
+        for (u32 cb = 1; cb < state.num_color_attachments; ++cb) {
+            state.color_attachments[cb].image_view = VK_NULL_HANDLE;
+        }
+    }
     if (color_redirected || depth_redirected) {
         u32 color_targets = 0;
         for (u32 cb = 0; cb < state.num_color_attachments; ++cb) {

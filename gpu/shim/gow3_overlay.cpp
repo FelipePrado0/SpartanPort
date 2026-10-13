@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+#include "video_core/renderer_vulkan/vk_dlss.h"
 #include "gow3_overlay.h"
 
 #include <algorithm>
@@ -269,7 +270,13 @@ const char* UpscalerLabel(int upscaler) {
     case Gow3Settings::UpscalerFsr4: return "FSR 4";
     case Gow3Settings::UpscalerFsr411: return "FSR 4.1.1";
     case Gow3Settings::UpscalerTaa: return "TAA";
-    case Gow3Settings::UpscalerDlss: return "DLSS";
+    case Gow3Settings::UpscalerDlss: {
+        // The library version, mode and model (Vulkan::Dlss::Description), once it runs.
+        static std::string label;
+        const Vulkan::Dlss* dlss = Vulkan::Dlss::Get();
+        label = dlss ? dlss->Description() : std::string{};
+        return label.empty() ? "DLSS" : label.c_str();
+    }
     default: return "";
     }
 }
@@ -391,11 +398,34 @@ void ImageTab() {
     ImGui::SeparatorText("Information");
     if (BeginRows("##image_info")) {
         char text[96];
+        // Each stage: the game's render size, the temporal upscaler's output, the window.
+        const int rw = s.upscale_render_width, rh = s.upscale_render_height;
+        const int uw = s.upscale_output_width, uh = s.upscale_output_height;
+        const bool temporal = s.upscaler != Gow3Settings::UpscalerOff && uw > 0;
+        // The whole chain on one line: render, temporal upscale, fit to the window.
+        char chain[160];
+        int n = std::snprintf(chain, sizeof(chain), "%dx%d", temporal ? rw : iw, temporal ? rh : ih);
+        if (temporal) {
+            n += std::snprintf(chain + n, sizeof(chain) - n, " > %s > %dx%d",
+                               s.upscaler == Gow3Settings::UpscalerDlss ? "DLSS" : "FSR 3.1", uw, uh);
+        }
+        if (upscaling) {
+            std::snprintf(chain + n, sizeof(chain) - n, " > %s > %dx%d", s.fsr1 ? "FSR 1" : "stretch", ww, wh);
+        }
+        InfoRow("Resolution chain", chain);
+        std::snprintf(text, sizeof(text), "%d x %d", temporal ? rw : iw, temporal ? rh : ih);
+        InfoRow("Game renders at", text);
+        InfoRow("Temporal upscaler", temporal ? UpscalerLabel(s.upscaler) : "off");
         std::snprintf(text, sizeof(text), "%d x %d", iw, ih);
-        InfoRow("Game image", text);
+        InfoRow("Image to the window", text);
         std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
         InfoRow("Window", text);
-        InfoRow("FSR 1", !s.fsr1 ? "off" : upscaling ? "active" : "no effect (image not smaller than window)");
+        std::snprintf(text, sizeof(text), "active: %d x %d -> %d x %d", iw, ih, ww, wh);
+        InfoRow("FSR 1", !s.fsr1 ? (upscaling ? "off (stretched without FSR 1)" : "off")
+                         : upscaling ? text : "no effect (image not smaller than window)");
+        if (temporal && upscaling) {
+            InfoRow("Tip", "Output resolution = window size (launcher): DLSS/FSR 3.1 fill it, no FSR 1");
+        }
         InfoRow("Sharpening", s.rcas_applied ? "applied" : "not applied");
         ImGui::EndTable();
     }

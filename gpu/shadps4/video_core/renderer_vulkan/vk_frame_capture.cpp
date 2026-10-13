@@ -212,18 +212,25 @@ void FrameCapture::AddDisplayBuffer(VAddr address) {
 void FrameCapture::BeginPass(const VideoCore::ImageInfo* const* colors, u32 num_colors,
                              const VideoCore::ImageInfo* depth) {
     std::vector<Target> targets;
-    bool display = false;
+    VAddr display_address = 0;
     {
         std::scoped_lock lk{display_mutex};
         for (u32 i = 0; i < num_colors; ++i) {
             targets.push_back(colors[i] ? ToTarget(*colors[i]) : Target{});
-            display |= colors[i] && std::ranges::find(display_buffers, colors[i]->guest_address) !=
-                                        display_buffers.end();
+            if (colors[i] && !display_address &&
+                std::ranges::find(display_buffers, colors[i]->guest_address) != display_buffers.end()) {
+                display_address = colors[i]->guest_address;
+            }
         }
     }
-    // Frame boundaries in the command stream: the pass that writes a display buffer as its only
-    // target. gow3: God of War III also draws scene passes (two targets) into display buffers.
-    display = display && targets.size() == 1;
+    // Frame boundaries in the command stream: the first pass into the other display buffer (the
+    // game alternates them). gow3: at 1080p God of War III draws its whole scene, post-processing
+    // and HUD straight into the display buffer, with one or two targets.
+    static VAddr last_display = 0;
+    const bool display = display_address && display_address != last_display;
+    if (display_address) {
+        last_display = display_address;
+    }
     const bool new_pass = !(pass_open && !entries.empty() && !entries.back().compute &&
                             entries.back().colors == targets);
     if (display && new_pass) {
@@ -288,7 +295,8 @@ void FrameCapture::Dispatch(u64 cs_hash, u32 x, u32 y, u32 z) {
 }
 
 void FrameCapture::Buffer(u64 stage_hash, u32 slot, VAddr address, const void* data, u64 size) {
-    const u64 bytes = std::min<u64>(size, 1024) & ~u64(3);
+    // An empty buffer (a compute stage without user data) has no contents to read.
+    const u64 bytes = data ? std::min<u64>(size, 1024) & ~u64(3) : 0;
     std::string out = std::format("  buffer stage {:016x} slot {} at {:#x} size {}:", stage_hash,
                                   slot, address, size);
     const auto* words = static_cast<const float*>(data);

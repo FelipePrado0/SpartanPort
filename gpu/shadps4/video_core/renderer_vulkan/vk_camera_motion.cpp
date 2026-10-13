@@ -244,9 +244,88 @@ void CameraMotion::OnGBufferPass(VideoCore::ImageId depth) {
     depth_id = depth;
 }
 
+void CameraMotion::OnSceneCamera(const float* m, VideoCore::ImageId depth) {
+    if (pending.valid) {
+        return; // the first one of a frame is the main camera (shadow passes use other shaders)
+    }
+    std::array<std::array<float, 4>, 4> row{};
+    for (int r = 0; r < 4; ++r) {
+        for (int c = 0; c < 4; ++c) {
+            row[r][c] = m[c * 4 + r];
+        }
+    }
+    const auto length = [](const std::array<float, 4>& v) {
+        return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    };
+    // A perspective camera: clip w is the view depth (a unit direction), clip x and y are the
+    // view's right and up scaled by the projection; clip z = zs * w + zo (D3D depth).
+    const float sx = length(row[0]), sy = length(row[1]), sw = length(row[3]);
+    if (sx < 1e-3f || sy < 1e-3f || std::abs(sw - 1.0f) > 0.01f) {
+        return;
+    }
+    int k = 0;
+    for (int i = 1; i < 3; ++i) {
+        if (std::abs(row[3][i]) > std::abs(row[3][k])) k = i;
+    }
+    const float zs = row[2][k] / row[3][k];
+    const float zo = row[2][3] - zs * row[3][3];
+    Camera camera;
+    for (int c = 0; c < 4; ++c) {
+        camera.view[c] = row[0][c] / sx;
+        camera.view[4 + c] = row[1][c] / sy;
+        camera.view[8 + c] = row[3][c];
+    }
+    // Inverse of the affine view [R | t]: [R^-1 | -R^-1 t].
+    const auto& v = camera.view;
+    const float a00 = v[5] * v[10] - v[6] * v[9], a01 = v[2] * v[9] - v[1] * v[10],
+                a02 = v[1] * v[6] - v[2] * v[5], a10 = v[6] * v[8] - v[4] * v[10],
+                a11 = v[0] * v[10] - v[2] * v[8], a12 = v[2] * v[4] - v[0] * v[6],
+                a20 = v[4] * v[9] - v[5] * v[8], a21 = v[1] * v[8] - v[0] * v[9],
+                a22 = v[0] * v[5] - v[1] * v[4];
+    const float det = v[0] * a00 + v[1] * a10 + v[2] * a20;
+    if (std::abs(det) < 1e-6f) {
+        return;
+    }
+    const float inv[9] = {a00 / det, a01 / det, a02 / det, a10 / det, a11 / det,
+                          a12 / det, a20 / det, a21 / det, a22 / det};
+    for (int r = 0; r < 3; ++r) {
+        camera.inv_view[r * 4 + 0] = inv[r * 3 + 0];
+        camera.inv_view[r * 4 + 1] = inv[r * 3 + 1];
+        camera.inv_view[r * 4 + 2] = inv[r * 3 + 2];
+        camera.inv_view[r * 4 + 3] =
+            -(inv[r * 3 + 0] * v[3] + inv[r * 3 + 1] * v[7] + inv[r * 3 + 2] * v[11]);
+    }
+    camera.proj = {sx, sy, zs, zo};
+    camera.valid = true;
+    static bool printed = false;
+    if (!printed) {
+        printed = true;
+        std::printf("Camera motion: scene camera found (vertical FOV %.1f deg, near %.3f)\n",
+                    2.0f * std::atan(1.0f / sy) * 57.29578f, -zo / zs);
+    }
+    pending = camera;
+    pending_depth = depth;
+    scene_cameras = true;
+}
+
+void CameraMotion::OnComposite() {
+    if (!pending.valid) {
+        InvalidateHistory(); // no scene since the last composite: nothing to reproject
+        return;
+    }
+    previous = current;
+    current = pending;
+    depth_id = pending_depth;
+    pending = {};
+    pending_depth = {};
+}
+
 void CameraMotion::OnDisplayPass(VideoCore::ImageId frame) {
     if (debug_overlay && frame && depth_id && current.valid && previous.valid) {
         Overlay(frame);
+    }
+    if (scene_cameras) {
+        return; // God of War III: OnComposite makes the frame's camera current
     }
     if (!frame_has_camera) InvalidateHistory();
     frame_has_camera = false;
