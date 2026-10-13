@@ -8,6 +8,7 @@ from patches import (compile_patches, external_patches, external_selection, comp
                      game_profile, selected_patches, patch_requirements)
 
 GOW3 = ROOT / 'patches/God_of_War_III_Remastered.xml'
+GOW3_EU = ROOT / 'patches/God_of_War_III_Remastered_EU.xml'
 GOW3_IDS = {'CUSA01623'}
 SEGMENTS = [(0, 0x6000000)]
 
@@ -50,11 +51,15 @@ class ExternalPatchTests(unittest.TestCase):
 
     def test_built_in_file_is_not_external(self):
         self.assertEqual(external_patches(GOW3.parent, '01.02', GOW3, GOW3_IDS), [])
+        # Nor another build's: the US file also names CUSA01715, for its own 01.02 addresses.
+        self.assertEqual(external_patches(GOW3.parent, '01.02', GOW3_EU, {'CUSA01715'}), [])
 
 
 class GameProfileTests(unittest.TestCase):
     def test_profiles_by_title_id(self):
         self.assertEqual(game_profile('CUSA01623')[1:3], (GOW3, '01.02'))
+        self.assertEqual(game_profile('CUSA01623', '01.00')[1:3], (GOW3, '01.02'))  # its only profile
+        self.assertEqual(game_profile('CUSA01715', '01.00')[1:3], (GOW3_EU, '01.00'))
         self.assertIsNone(game_profile('CUSA99999'))
         self.assertIsNone(game_profile(None))
 
@@ -90,8 +95,41 @@ class GameProfileTests(unittest.TestCase):
             self.assertFalse(game_patchable(None))
 
     def test_gow3_patches_compile(self):
-        names = [m.get('Name') for m in ET.parse(GOW3).getroot().iter('Metadata')]
-        self.assertTrue(compile_patches(GOW3, names, '01.02', SEGMENTS))
+        for xml, version in ((GOW3, '01.02'), (GOW3_EU, '01.00'), (GOW3_EU, '01.02')):
+            names = [m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata')
+                     if m.get('AppVer') == version]
+            self.assertTrue(compile_patches(xml, names, version, SEGMENTS))
+
+    def test_eu_intro_hang_fix(self):
+        # The second frame's display buffer index (.bss, image offset 0x14ba600) starts at 1.
+        self.assertEqual(selected_patches(GOW3_EU, '01.00', ''),
+                         ['Bug Fix - Intro Hang', 'Bug Fix - Texture Corruption Fix'])
+        self.assertEqual(compile_patches(GOW3_EU, ['Bug Fix - Intro Hang'], '01.00', SEGMENTS),
+                         [(0x14ba600, (1).to_bytes(4, 'little'))])
+        self.assertEqual(game_profile('CUSA01715', '01.00')[3],
+                         '4e399baa5362f47be0066aaed208d7352f1fb43e590b74be3a639a392120f396')
+        # Update 01.02 fixes the hang itself; a selection made for 01.00 drops the fix there.
+        self.assertEqual(selected_patches(GOW3_EU, '01.02', ''), ['Bug Fix - Texture Corruption Fix'])
+        self.assertEqual(selected_patches(GOW3_EU, '01.02', 'Bug Fix - Intro Hang', only=True), [])
+        self.assertEqual(game_profile('CUSA01715', '01.02')[3],
+                         '6e72330e9092e5164049b865e5568f2d450904001a73fe0a2f4b39194c195b3c')
+        # The texture fix needs the direct memory its note asks for.
+        self.assertEqual(patch_requirements(GOW3_EU, ['Bug Fix - Texture Corruption Fix'], '01.02'),
+                         (5056 + 2048, None))
+
+    def test_eu_0102_resolution_patches(self):
+        # Ported from CUSA01623: code +0x120 (0x5f0000-0x609fff) / -0x10 (0x564000-0x56bfff).
+        writes = dict(compile_patches(GOW3_EU, ['Resolution Patch - 720p'], '01.02', SEGMENTS))
+        self.assertEqual(writes[0x5f0c5b - 0x400000], (1280).to_bytes(4, 'little'))
+        self.assertEqual(writes[0x5643e3 - 0x400000], (720).to_bytes(4, 'little'))
+        self.assertEqual(selected_patches(GOW3_EU, '01.02', 'Resolution Patch - 720p'),
+                         ['Resolution Patch - 720p'])  # it replaces the texture fix
+
+    def test_patch_selection_key(self):
+        from patches import patch_key
+        self.assertEqual(patch_key('CUSA01623', game_profile('CUSA01623')), 'CUSA01623')
+        self.assertEqual(patch_key('CUSA01715', game_profile('CUSA01715', '01.02')), 'CUSA01715 01.02')
+        self.assertEqual(patch_key('CUSA99999', None), 'CUSA99999')
 
     def test_requirements_from_patch_notes(self):
         # Notes ask for extra direct memory (shadPS4 "DMEM") and a VBlank rate.

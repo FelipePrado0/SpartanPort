@@ -70,7 +70,11 @@ PATCHES_DIR=Path(__file__).resolve().parent.parent/'patches'
 # sha256 of the only eboot.bin they were checked against (another build of the same version has
 # its code elsewhere: byte writes there corrupt it).
 GAMES=[({'CUSA01623'},PATCHES_DIR/'God_of_War_III_Remastered.xml','01.02',
-        'd85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299')]
+        'd85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299'),
+       ({'CUSA01715'},PATCHES_DIR/'God_of_War_III_Remastered_EU.xml','01.02',
+        '6e72330e9092e5164049b865e5568f2d450904001a73fe0a2f4b39194c195b3c'),
+       ({'CUSA01715'},PATCHES_DIR/'God_of_War_III_Remastered_EU.xml','01.00',
+        '4e399baa5362f47be0066aaed208d7352f1fb43e590b74be3a639a392120f396')]
 DMEM_RETAIL_MB=5056  # runtime_memory.c POOL_SIZE default
 
 
@@ -82,9 +86,18 @@ def game_title_id(game):
         return None
 
 
-def game_profile(title_id):
-    """(title IDs, built-in XML, app version, eboot sha256 or None) for a known game, else None."""
-    return next((g for g in GAMES if title_id in g[0]),None)
+def game_profile(title_id, app_version=None):
+    """(title IDs, built-in XML, app version, eboot sha256 or None) for a known game, else None.
+    A game with profiles for several versions gets the one for app_version, else its first."""
+    profiles=[g for g in GAMES if title_id in g[0]]
+    return next((g for g in profiles if g[2]==app_version),profiles[0] if profiles else None)
+
+
+def patch_key(title_id, profile):
+    """Where the launcher keeps a game's patch selection: per version when the game has several
+    profiles (their patches differ)."""
+    several=sum(title_id in g[0] for g in GAMES)>1
+    return f'{title_id} {profile[2]}' if profile and several else title_id
 
 
 def eboot_matches(game, profile):
@@ -102,8 +115,9 @@ def game_patchable(game):
     """Whether the built-in patches apply to this game folder: a known game, version and build."""
     if not game:
         return False
-    profile=game_profile(game_title_id(game))
-    return bool(profile) and game_app_version(game)==profile[2] and eboot_matches(game,profile)
+    version=game_app_version(game)
+    profile=game_profile(game_title_id(game),version)
+    return bool(profile) and version==profile[2] and eboot_matches(game,profile)
 
 
 # God of War III notes: the texture fix and the resolution patches both resize the video arena;
@@ -117,7 +131,11 @@ def selected_patches(xml, app_version, extra, only=False):
     only: extra is the whole selection (the launcher's), without the file's defaults."""
     names=[] if only else [m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata')
                            if m.get('AppVer')==app_version and m.get('isEnabled','false').lower()=='true']
-    names+=[n for n in (n.strip() for n in extra.split(';')) if n and n not in names]
+    available={m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata') if m.get('AppVer')==app_version}
+    for n in (n.strip() for n in extra.split(';')):
+        if n and n not in names:
+            if n in available: names.append(n)
+            else: print(f'Patches: {n!r} is not available for version {app_version}',file=sys.stderr)
     exclusive=[n for n in names if n.startswith(EXCLUSIVE_PREFIX)]
     if len(exclusive)>1:
         raise ValueError(f'choose one resolution patch, not {exclusive}')
@@ -142,8 +160,11 @@ def external_patches(directory, app_version, exclude, ids):
     key is "<file name>/<patch name>" (the launcher's selection, patches.json)."""
     found=[]
     directory=Path(directory)
+    # The built-in files (patches/ in a checkout), this game's and every other build's: another
+    # build's addresses would corrupt this one's code.
+    built_in={Path(exclude).resolve()}|{g[1].resolve() for g in GAMES}
     for path in sorted(directory.glob('*.xml')) if directory.is_dir() else []:
-        if path.resolve()==Path(exclude).resolve(): continue  # the built-in file (patches/ in a checkout)
+        if path.resolve() in built_in: continue
         try:
             root=ET.parse(path).getroot()
         except ET.ParseError as error:
@@ -204,8 +225,10 @@ def main():
     p.add_argument('--out',type=Path,default=Path(__file__).resolve().parent.parent/'out')
     p.add_argument('--game-dir',type=Path,default=Path(os.environ.get('GOW3_GAME_DIR','../CUSA01623')))
     a=p.parse_args()
+    (a.out/'patch-requirements.env').write_text('')  # filled when the applied patches need more
     title=game_title_id(a.game_dir)
-    profile=game_profile(title)
+    version=game_app_version(a.game_dir)
+    profile=game_profile(title,version)
     if not profile:
         write_patches(a.out,[])
         print(f'Patches: no patch profile for {title}: none applied')
@@ -213,7 +236,6 @@ def main():
     ids,xml,needed,_sha=profile
     # The patches are byte writes at the addresses of one game build: on another they would
     # corrupt code, so such a game runs unpatched.
-    version=game_app_version(a.game_dir)
     if version!=needed and not os.environ.get('GOW3_FORCE_PATCHES'):
         write_patches(a.out,[])
         print(f'Patches: game version {version}, {xml.name} is for {needed}: none applied')
@@ -223,6 +245,21 @@ def main():
         print(f'Patches: eboot.bin is not the build {xml.name} was checked against: none applied')
         return
     names=selected_patches(xml,needed,a.extra,os.environ.get('GOW3_PATCHES_ONLY')=='1')
+    # gow3.ini's render resolution and engine frame rate (in-game menu, launcher) choose those
+    # patches; run.py does the same before (run.sh relies on this). Patches this build lacks
+    # (another version's frame rate patch) are left out.
+    if os.environ.get('GOW3_CONFIG'):
+        import graphics_options
+        available=[m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata') if m.get('AppVer')==needed]
+        options=graphics_options.startup_options(graphics_options.read_ini(os.environ['GOW3_CONFIG']))
+        names=graphics_options.patch_names(names,options,graphics_options.TEXTURE_FIX in available)
+        for name in [n for n in names if n not in available]:
+            print(f'Patches: {name!r} is not available for this game build',file=sys.stderr)
+        names=[n for n in names if n in available]
+    # run.sh reads what the patches need (run.py computes it itself before this script).
+    dmem,vblank=patch_requirements(xml,names,needed)
+    (a.out/'patch-requirements.env').write_text(''.join(
+        f'{key}={value}\n' for key,value in (('GOW3_DMEM_MB',dmem),('GOW3_VBLANK_HZ',vblank)) if value))
     segments=eboot_segments((a.out/'eboot.elf').read_bytes())
     writes=compile_patches(xml,names,needed,segments)
     if a.patches_dir:
