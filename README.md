@@ -119,7 +119,7 @@ with a Radeon RX 7800 XT (RADV) in a Wayland session.
 **Build and run**
 ```
 bash build.sh
-bash packaging/linux/build.sh   # needs PyInstaller, Tk and Pillow for Python, plus patchelf and curl
+bash packaging/linux/build.sh   # needs PyInstaller, Tk, Pillow and iced-x86 for Python, plus patchelf and curl
 ./dist/gow3-x86_64.AppImage
 ```
 Choose the game folder in the launcher. `--play` starts the game with the saved options and no
@@ -148,9 +148,10 @@ window. From a source tree: `GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py` af
 ## Requirements
 
 - Windows 10 (1903 or newer) or Windows 11, 64-bit.
-- A 64-bit processor with the PS4's instruction sets (AVX, F16C, BMI1, MOVBE, LZCNT): Intel
-  Haswell (2013) or newer, AMD Ryzen or newer. The game's own code runs on the CPU as it is, so
-  an older processor stops at start with a `STOP: this CPU lacks` line in the log.
+- A 64-bit processor with AVX: Intel Sandy Bridge (2011) or newer, AMD FX or newer. On CPUs without
+  MOVBE, BMI1 or LZCNT (Sandy/Ivy Bridge, AMD FX) the loader rewrites the game's instructions that
+  use them to emulated stubs and logs an `ISA:` line; performance on those CPUs has not been
+  measured yet. Older CPUs stop at start with a `STOP: this CPU lacks` line in the log.
 - A graphics card with Vulkan 1.3 and a current driver.
 - Your copy of the game (the folder with `eboot.bin`, `sce_module` and `sce_sys`). Tested:
   CUSA01623 and CUSA01715, versions 01.00 and 01.02.
@@ -159,7 +160,8 @@ window. From a source tree: `GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py` af
   (`tools/make_signatures.py`). A site that is not found leaves only that patch or hook off; the
   game starts without it, and the log and the menu say why.
 - To build from source: [MSYS2](https://www.msys2.org) and [Python 3](https://www.python.org) with Pillow
-  (`pip install pillow`, used for the game's icon and cover art).
+  (`pip install pillow`, used for the game's icon and cover art); on a CPU without MOVBE, BMI1 or LZCNT
+  also iced-x86 (`pip install iced-x86`, used for the instruction rewrite).
 
 ## Building from source
 

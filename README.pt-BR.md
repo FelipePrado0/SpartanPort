@@ -120,7 +120,7 @@ Radeon RX 7800 XT (RADV) numa sessão Wayland.
 **Compilar e rodar**
 ```
 bash build.sh
-bash packaging/linux/build.sh   # precisa de PyInstaller, Tk e Pillow para Python, mais patchelf e curl
+bash packaging/linux/build.sh   # precisa de PyInstaller, Tk, Pillow e iced-x86 para Python, mais patchelf e curl
 ./dist/gow3-x86_64.AppImage
 ```
 Escolha a pasta do jogo no launcher. `--play` inicia o jogo com as opções salvas e sem janela. A
@@ -148,9 +148,10 @@ partir do código: `GOW3_GAME_DIR=/caminho/para/CUSA01623 python3 run.py` depois
 ## Requisitos
 
 - Windows 10 (1903 ou mais novo) ou Windows 11, 64 bits.
-- Processador de 64 bits com os conjuntos de instruções do PS4 (AVX, F16C, BMI1, MOVBE, LZCNT):
-  Intel Haswell (2013) ou mais novo, AMD Ryzen ou mais novo. O código do jogo roda na CPU como
-  está, então um processador mais antigo para na abertura com uma linha `STOP: this CPU lacks`
+- Processador de 64 bits com AVX: Intel Sandy Bridge (2011) ou mais novo, AMD FX ou mais novo. Em
+  CPUs sem MOVBE, BMI1 ou LZCNT (Sandy/Ivy Bridge, AMD FX) o carregador reescreve as instruções do
+  jogo que os usam para stubs emulados e registra uma linha `ISA:` no log; o desempenho nessas CPUs
+  ainda não foi medido. CPUs mais antigas param na abertura com uma linha `STOP: this CPU lacks`
   no log.
 - Placa de vídeo com Vulkan 1.3 e driver atualizado.
 - Sua cópia do jogo (a pasta com `eboot.bin`, `sce_module` e `sce_sys`). Testados: CUSA01623 e
@@ -160,7 +161,8 @@ partir do código: `GOW3_GAME_DIR=/caminho/para/CUSA01623 python3 run.py` depois
   colocado esse código (`tools/make_signatures.py`). Um ponto que não é achado deixa só aquele
   patch ou gancho desligado; o jogo abre sem ele, e o log e o menu dizem o motivo.
 - Para compilar a partir do código: [MSYS2](https://www.msys2.org) e [Python 3](https://www.python.org) com Pillow
-  (`pip install pillow`, usado no ícone e na capa do jogo).
+  (`pip install pillow`, usado no ícone e na capa do jogo); em CPU sem MOVBE, BMI1 ou LZCNT, também
+  iced-x86 (`pip install iced-x86`, usado na reescrita de instruções).
 
 ## Compilar a partir do código
 

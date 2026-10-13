@@ -6,9 +6,9 @@ the 01.02 update, as a folder that contains eboot.bin, sce_module and sce_sys.
 
 Requirements
 - Windows 10 (1903 or newer) or Windows 11, 64-bit.
-- A 64-bit processor with the PS4's instruction sets (AVX, F16C, BMI1, MOVBE, LZCNT): Intel
-  Haswell (2013) or newer, AMD Ryzen or newer. An older processor stops at start with a
-  "STOP: this CPU lacks" line in the log.
+- A 64-bit processor with AVX: Intel Sandy Bridge (2011) or newer, AMD FX or newer. Sandy/Ivy
+  Bridge and AMD FX run with emulated instructions (an "ISA:" log line; speed not measured yet).
+  Older processors stop at start with a "STOP: this CPU lacks" line in the log.
 - A graphics card with Vulkan 1.3 and an up-to-date driver.
   Nothing else: Python and the libraries are inside this folder.
 

@@ -3,7 +3,7 @@ import struct
 import unittest
 import tempfile
 from pathlib import Path
-from prepare import parse_self, inspect_libc, nid, write_report
+from prepare import parse_self, inspect_libc, load_sfo, nid, prepare, read_self, read_sfo, sfo, write_report
 
 
 def fixture():
@@ -82,6 +82,35 @@ class SelfTests(unittest.TestCase):
         struct.pack_into('<Q', data, 32, 0x100800)
         with self.assertRaisesRegex(ValueError, 'segment index'):
             parse_self(data)
+
+    def test_empty_game_files_are_named(self):
+        # An empty eboot.bin (a broken copy, or a placeholder made by hand) failed as
+        # "out of bounds: 0x0+0x4 / 0x0", which names neither the file nor the cause.
+        with tempfile.TemporaryDirectory() as tmp:
+            game = Path(tmp)
+            (game / 'eboot.bin').write_bytes(b'')
+            with self.assertRaisesRegex(ValueError, 'eboot.bin is empty'):
+                prepare(game, game / 'out')
+            # Every SELF the port loads goes through read_self, so a prx is named the same way.
+            (game / 'libc.prx').write_bytes(b'')
+            with self.assertRaisesRegex(ValueError, 'libc.prx is empty'):
+                inspect_libc(game / 'libc.prx')
+            with self.assertRaisesRegex(ValueError, 'libc.prx is empty'):
+                read_self(game / 'libc.prx')
+            # load_sfo tells a file that cannot be read (OSError) from one that is not a param.sfo
+            # (ValueError); read_sfo answers None for both instead of raising.
+            (game / 'param.sfo').write_bytes(b'x')
+            with self.assertRaises(ValueError):
+                load_sfo(game / 'param.sfo')
+            with self.assertRaises(OSError):
+                load_sfo(game / 'none.sfo')
+            self.assertIsNone(read_sfo(game / 'param.sfo'))
+            self.assertIsNone(read_sfo(game / 'none.sfo'))
+            self.assertIsNone(read_sfo(game))
+        with self.assertRaisesRegex(ValueError, 'param.sfo is empty'):
+            sfo(b'')
+        with self.assertRaisesRegex(ValueError, 'empty SELF'):
+            parse_self(b'')
 
 
 if __name__ == '__main__':

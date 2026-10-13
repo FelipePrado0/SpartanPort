@@ -20,11 +20,7 @@ EBOOT_BASE=0x400000
 
 def game_app_version(game):
     """APP_VER of the game folder's param.sfo ("01.02"), or None when it cannot be read."""
-    try:
-        from prepare import sfo
-        return sfo((Path(game) / 'sce_sys/param.sfo').read_bytes()).get('APP_VER')
-    except (OSError, ValueError, ImportError):
-        return None
+    return game_sfo(game).get('APP_VER')
 
 
 def eboot_segments(elf):
@@ -169,11 +165,14 @@ DMEM_RETAIL_MB=5056  # runtime_memory.c POOL_SIZE default
 
 
 def game_sfo(game):
-    try:
-        from prepare import sfo
-        return sfo((Path(game) / 'sce_sys/param.sfo').read_bytes())
-    except (OSError, ValueError, ImportError, TypeError):
+    """The values of the game folder's param.sfo, or {} when it cannot be read (prepare.read_sfo)."""
+    if not game:
         return {}
+    try:
+        from prepare import read_sfo
+    except ImportError:
+        return {}
+    return read_sfo(Path(game) / 'sce_sys/param.sfo') or {}
 
 
 def game_title_id(game):

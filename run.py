@@ -55,7 +55,23 @@ def no_console():
     return 0 if ctypes.windll.kernel32.GetConsoleWindow() else subprocess.CREATE_NO_WINDOW
 
 
-def run_script(name, *args, capture=False):
+def parse_cpu_features(output):
+    """Instruction sets `gow3-probe --cpu-features` reports missing ([] when complete)."""
+    for line in output.splitlines():
+        if line.startswith('CPU: missing '):
+            return [name.strip() for name in line[len('CPU: missing '):].split(',') if name.strip()]
+    return []
+
+
+def isa_rewrite_wanted(missing, env):
+    """GOW3_ISA_REWRITE=1 forces the ISA rewrite table, 0 disables it; otherwise the CPU decides."""
+    policy = env.get('GOW3_ISA_REWRITE')
+    if policy in ('0', '1'):
+        return policy == '1'
+    return bool(missing)
+
+
+def run_script(name, *args, capture=False, check=True):
     # Inside the packaged launcher executable (PyInstaller) the executable runs scripts itself.
     script = ['--script'] if getattr(sys, 'frozen', False) else []
     command = [sys.executable, *script, str(PORT / 'scripts' / name), *map(str, args)]
@@ -63,6 +79,8 @@ def run_script(name, *args, capture=False):
     if capture:
         result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, text=True,
                                 encoding='utf-8', env=env, creationflags=no_console())
+        if not check:
+            return result.returncode, result.stdout
         if result.returncode:
             sys.exit(result.returncode)
         return result.stdout
@@ -130,6 +148,14 @@ def main():
         clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
         if clang64.is_dir():
             env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
+    # Instruction sets this CPU lacks (MOVBE, BMI1, LZCNT): the ISA rewrite covers them; exit 20
+    # is a set nothing covers.
+    features = subprocess.run([str(probe), '--cpu-features'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                              text=True, creationflags=no_console())
+    if features.returncode == 20:
+        print(features.stdout, end='', flush=True)
+        sys.exit(20)
+    missing = parse_cpu_features(features.stdout)
 
     game = Path(env.get('GOW3_GAME_DIR', PORT.parent / 'CUSA01623'))
     if not (game / 'eboot.bin').is_file():
@@ -153,6 +179,14 @@ def main():
         run_script('prepare.py', game, '--out', out)
         run_script('link_libc.py', game, '--out', out)
         run_script('link_modules.py', game, '--out', out)
+        # A failed rewrite prints its reason and the game starts without the table.
+        isa_args = []
+        if isa_rewrite_wanted(missing, env):
+            code, output = run_script('isa_rewrite.py', out / 'boot-linked.bin', '--out', out,
+                                      capture=True, check=False)
+            print(output, end='', flush=True)
+            if code == 0:
+                isa_args = ['--isa-rewrite', str(out / 'isa-rewrite.bin')]
         run_script('content_profile.py', game, '--out', out, '--sku', env.get('GOW3_CONTENT_SKU', 'full'))
 
         import patches
@@ -233,7 +267,7 @@ def main():
         command = [*launch_prefix(env), str(probe), str(out / 'boot-linked.bin'), '--content-profile', str(out / 'content.bin'),
                    '--patches', str(out / 'patches.bin'), '--app0', str(game),
                    '--user', str(user_dir),
-                   '--timeout', env.get('GOW3_TIMEOUT', '0'), *args]
+                   '--timeout', env.get('GOW3_TIMEOUT', '0'), *isa_args, *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
         return subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console()).returncode
     finally:

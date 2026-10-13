@@ -10,7 +10,10 @@
 typedef struct { uint32_t leaf1_ecx, leaf7_ebx, ext1_ecx; } CpuFeatureWords;
 
 CpuFeatureWords cpu_feature_words(void);
-/* Names of the Jaguar instruction sets the host lacks, comma separated in out; returns how many. */
-int cpu_missing_features(CpuFeatureWords words, char *out, size_t size);
+enum { CPU_SET_MOVBE = 1u << 0, CPU_SET_BMI1 = 1u << 1, CPU_SET_LZCNT = 1u << 2, CPU_SET_F16C = 1u << 3 };
+/* Fatal sets the host lacks (SSE4.2, POPCNT, AVX), comma separated in out; returns how many. */
+int cpu_missing_fatal(CpuFeatureWords words, char *out, size_t size);
+/* Rewritable sets the host lacks (MOVBE, F16C, BMI1, LZCNT): CPU_SET_* mask; names in out. */
+unsigned cpu_missing_rewritable(CpuFeatureWords words, char *out, size_t size);
 
 #endif
