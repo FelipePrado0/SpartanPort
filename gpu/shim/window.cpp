@@ -1,4 +1,4 @@
-// gow3: SDL3 window for the Vulkan swapchain (X11 or Wayland).
+// gow3: SDL3 window for the Vulkan swapchain (X11 or Wayland; Windows; a Metal layer on macOS).
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -24,7 +24,13 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, width_);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height_);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
+#ifdef __APPLE__
+    // macOS: the Vulkan driver presents to the view's CAMetalLayer (VK_EXT_metal_surface); SDL
+    // loads no Vulkan library for a Metal window.
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_METAL_BOOLEAN, true);
+#else
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
+#endif
     base_title = title;
     window = SDL_CreateWindowWithProperties(props);
     SDL_DestroyProperties(props);
@@ -43,6 +49,12 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     if (driver && !std::strcmp(driver, "windows")) {
         window_info.type = WindowSystemType::Windows;
         window_info.render_surface = SDL_GetPointerProperty(wp, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+    } else
+#elif defined(__APPLE__)
+    if (driver && !std::strcmp(driver, "cocoa")) {
+        window_info.type = WindowSystemType::Metal;
+        window_info.render_surface = SDL_Metal_GetLayer(SDL_Metal_CreateView(window));
+        ASSERT_MSG(window_info.render_surface, "Failed to create the Metal view: {}", SDL_GetError());
     } else
 #endif
     if (driver && !std::strcmp(driver, "x11")) {

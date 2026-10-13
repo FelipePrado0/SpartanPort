@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Prepares the game image and starts gow3-probe (Windows and Linux; run.sh wraps it on Linux).
+"""Prepares the game image and starts gow3-probe (Windows, Linux and macOS; run.sh wraps it on
+Linux and macOS).
 
 Environment variables (GOW3_GAME_DIR, GOW3_DATA_DIR, GOW3_PATCHES, GOW3_MODS_*,
 GOW3_USER_DIR, ...). Extra arguments go to gow3-probe.

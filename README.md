@@ -145,6 +145,18 @@ window. From a source tree: `GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py` af
 - **Graphics (experimental):** the temporal upscalers (FSR 3.1, FSR 4, TAA, DLSS) are off by default;
   the switch is at the top of that page.
 
+## macOS (Apple Silicon, experimental)
+
+The macOS build runs the same native runtime under Rosetta 2, with the graphics on Mesa's
+KosmicKrisp Vulkan driver. It needs a Mac with Apple Silicon and macOS 26 (Tahoe) or newer, and
+has not been played through yet. Build and run from the repository (details, requirements and
+what differs from Linux: [packaging/macos/README.md](packaging/macos/README.md)):
+
+```
+bash build.sh                          # first run also builds the x86-64 libraries
+python3 launcher/gow3_launcher_win.py  # choose the game folder, then PLAY
+```
+
 ## Requirements
 
 - Windows 10 (1903 or newer) or Windows 11, 64-bit.

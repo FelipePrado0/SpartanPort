@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vulkan/vulkan.h>
+#ifdef __APPLE__
+#include "src/compat_mac.h"
+#endif
 
 static VkDeviceSize largest_local_heap(VkPhysicalDevice device) {
     VkPhysicalDeviceMemoryProperties memory;
@@ -65,6 +68,9 @@ static int live_resolution_suits(VkPhysicalDevice device) {
 }
 
 int main(int argc, char **argv) {
+#ifdef __APPLE__
+    compat_vulkan_driver(); /* KosmicKrisp next to the binary */
+#endif
     const int live_mode = argc > 1 && !strcmp(argv[1], "--live-resolution");
     const VkApplicationInfo app = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,

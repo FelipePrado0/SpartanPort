@@ -145,6 +145,18 @@ partir do código: `GOW3_GAME_DIR=/caminho/para/CUSA01623 python3 run.py` depois
 - **Gráficos (experimental):** os upscalers temporais (FSR 3.1, FSR 4, TAA, DLSS) ficam desligados por
   padrão; o interruptor está no topo dessa página.
 
+## macOS (Apple Silicon, experimental)
+
+A versão para macOS roda o mesmo runtime nativo sob o Rosetta 2, com os gráficos no driver Vulkan
+KosmicKrisp, do Mesa. Ela precisa de um Mac com Apple Silicon e do macOS 26 (Tahoe) ou mais novo,
+e ainda não foi jogada do começo ao fim. Compile e rode a partir do repositório (detalhes,
+requisitos e o que muda em relação ao Linux: [packaging/macos/README.md](packaging/macos/README.md)):
+
+```
+bash build.sh                          # a primeira vez também compila as bibliotecas x86-64
+python3 launcher/gow3_launcher_win.py  # escolha a pasta do jogo e clique em JOGAR
+```
+
 ## Requisitos
 
 - Windows 10 (1903 ou mais novo) ou Windows 11, 64 bits.

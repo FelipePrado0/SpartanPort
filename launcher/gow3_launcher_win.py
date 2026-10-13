@@ -18,6 +18,7 @@ from pathlib import Path
 import queue
 import re
 import runpy
+import shlex
 import shutil
 import signal
 import subprocess
@@ -30,6 +31,8 @@ import webbrowser
 import zipfile
 
 WINDOWS = sys.platform == 'win32'
+MACOS = sys.platform == 'darwin'
+LINUX = not WINDOWS and not MACOS
 if WINDOWS:
     import ctypes
 FROZEN = getattr(sys, 'frozen', False)
@@ -164,12 +167,12 @@ def monitor_under_pointer(root):
 
 
 def pick_fonts(families):
-    """Windows fonts first, then the DejaVu family that most Linux desktops ship."""
+    """Windows fonts first, then macOS's, then the DejaVu family that most Linux desktops ship."""
     global UI_FONT, MONO_FONT, SERIF_FONT
     available = set(families)
     pick = lambda names: next((name for name in names if name in available), names[-1])
-    UI_FONT = pick(('Segoe UI', 'Noto Sans', 'DejaVu Sans'))
-    MONO_FONT = pick(('Consolas', 'Noto Sans Mono', 'DejaVu Sans Mono'))
+    UI_FONT = pick(('Segoe UI', 'Noto Sans', 'Helvetica Neue', 'DejaVu Sans'))
+    MONO_FONT = pick(('Consolas', 'Noto Sans Mono', 'Menlo', 'DejaVu Sans Mono'))
     SERIF_FONT = pick(('Georgia', 'Noto Serif', 'DejaVu Serif'))
 
 
@@ -182,7 +185,7 @@ def host_environment():
 
 
 def open_url(url):
-    if WINDOWS:
+    if WINDOWS or MACOS:
         webbrowser.open(url)
     else:
         subprocess.Popen(['xdg-open', url], env=host_environment(), stdin=subprocess.DEVNULL,
@@ -512,7 +515,7 @@ def game_environment(s):
     env['GOW3_EXPERIMENTAL_UPSCALER'] = '1' if s.get('experimental_upscaler') else '0'
     if s.get('update_dir'):
         env['GOW3_PATCH_DIR'] = s['update_dir']
-    if not WINDOWS:
+    if LINUX:
         backend = s.get('video_backend', 'auto')
         if backend in ('wayland', 'x11'):
             env['SDL_VIDEO_DRIVER'] = env['SDL_VIDEODRIVER'] = backend
@@ -1397,9 +1400,10 @@ class Launcher:
                        command=lambda: threading.Thread(target=self.check_update, args=(True,), daemon=True).start()
                        ).pack(side='left')
         ttk.Button(holder, text=_('Desktop shortcut', 'Ярлык на рабочем столе'), command=self.shortcut).pack(side='left', padx=6)
-        ttk.Button(holder, text=_('Add to Steam'), command=self.add_to_steam).pack(side='left')
+        if not MACOS:  # steam_shortcut.py knows the Windows and Linux Steam folders
+            ttk.Button(holder, text=_('Add to Steam'), command=self.add_to_steam).pack(side='left')
         ttk.Label(holder, text=f'v{VERSION}', style='Muted.TLabel').pack(side='left', padx=10)
-        if not WINDOWS:
+        if LINUX:
             self.build_linux_options(f)
         self.section(f, _('Files'))
         holder = ttk.Frame(f)
@@ -1765,8 +1769,8 @@ class Launcher:
         if WINDOWS:
             os.startfile(str(path))
         else:
-            subprocess.Popen(['xdg-open', str(path)], env=host_environment(), stdin=subprocess.DEVNULL,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(['open' if MACOS else 'xdg-open', str(path)], env=host_environment(),
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # ---- updates -------------------------------------------------------------------------------
     def check_update(self, manual=False):
@@ -1871,7 +1875,11 @@ class Launcher:
                                                  'минут будет подтормаживать, пока кэш собирается заново.'))
 
     def shortcut(self):
-        """God of War III.lnk on the desktop (a .desktop entry in the menu and on the desktop on Linux)."""
+        """God of War III.lnk on the desktop (a .desktop entry in the menu and on the desktop on Linux,
+        an application bundle on the macOS desktop)."""
+        if MACOS:
+            self.macos_shortcut()
+            return
         if not WINDOWS:
             self.linux_shortcut()
             return
@@ -1891,6 +1899,36 @@ class Launcher:
             self.messagebox.showinfo(APP_NAME, _('Shortcut created on the desktop.', 'Ярлык создан на рабочем столе.'))
         else:
             self.messagebox.showerror(APP_NAME, result.stderr.decode(errors='replace')[:400])
+
+    def macos_shortcut(self):
+        """God of War III.app on the desktop: a bundle whose program starts this launcher."""
+        app = Path.home() / 'Desktop' / 'God of War III.app'
+        launcher = [sys.executable] if FROZEN else [sys.executable, str(Path(__file__).resolve())]
+        try:
+            (app / 'Contents' / 'MacOS').mkdir(parents=True, exist_ok=True)
+            (app / 'Contents' / 'Resources').mkdir(parents=True, exist_ok=True)
+            program = app / 'Contents' / 'MacOS' / 'gow3'
+            program.write_text(f'#!/bin/sh\ncd {shlex.quote(str(PORT_DIR))}\nexec {shlex.join(launcher)} "$@"\n',
+                               encoding='utf-8')
+            program.chmod(0o755)
+            # sips writes the icon (a missing icon only leaves the generic one).
+            subprocess.run(['sips', '-s', 'format', 'icns', str(PORT_DIR / 'launcher' / 'gow3.png'),
+                            '--out', str(app / 'Contents' / 'Resources' / 'gow3.icns')], capture_output=True)
+            (app / 'Contents' / 'Info.plist').write_text(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+                '<plist version="1.0"><dict>\n'
+                '<key>CFBundleName</key><string>God of War III</string>\n'
+                '<key>CFBundleIdentifier</key><string>pc.gow3.launcher</string>\n'
+                '<key>CFBundleExecutable</key><string>gow3</string>\n'
+                '<key>CFBundleIconFile</key><string>gow3</string>\n'
+                '<key>CFBundlePackageType</key><string>APPL</string>\n'
+                '<key>LSMinimumSystemVersion</key><string>26.0</string>\n'
+                '</dict></plist>\n', encoding='utf-8')
+        except OSError as error:
+            self.messagebox.showerror(APP_NAME, str(error))
+            return
+        self.messagebox.showinfo(APP_NAME, _('Shortcut created:', 'Ярлык создан:') + '\n' + str(app))
 
     def linux_shortcut(self):
         launcher = os.environ.get('APPIMAGE') or (sys.executable if FROZEN else '')
@@ -2068,7 +2106,7 @@ def main():
         sys.exit(run_role(args))
     settings = {**APP_DEFAULTS, **load_json(CONFIG_FILE, {})}
     LANG = settings.get('ui_language') or windows_language()
-    if not WINDOWS:
+    if LINUX:
         integrate_desktop(settings.get('desktop_integration', True), os.environ.get('APPIMAGE'),
                           PORT_DIR / 'launcher' / 'gow3.png', DATA_DIR)
     if WINDOWS and args[:1] == ['--install-update'] and len(args) == 3:
