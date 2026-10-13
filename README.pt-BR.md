@@ -132,6 +132,8 @@ partir do código: `GOW3_GAME_DIR=/caminho/para/CUSA01623 python3 run.py` depois
   também está no launcher do Windows (ainda sem teste lá).
 - **Entrada no menu:** o AppImage grava `~/.local/share/applications/gow3.desktop` ao iniciar, para o
   launcher e a janela do jogo mostrarem o ícone no dock; **Avançado → Linux** desliga e remove a entrada.
+  Quando outra ferramenta (Gear Lever, AppImageLauncher…) já criou uma entrada que inicia o mesmo
+  arquivo, ele não cria a dele e remove a que tiver criado, sem duplicar.
 - **Outras distribuições:** um AppImage leva as bibliotecas do sistema em que foi compilado e exige, no
   mínimo, a glibc dele (um build no Arch exige a 2.44). `bash packaging/linux/container.sh` compila num
   container Debian 13 (glibc 2.39; docker ou podman), e `packaging/linux/deps.sh` informa, e com

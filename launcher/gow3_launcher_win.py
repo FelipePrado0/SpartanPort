@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import queue
 import re
+import shlex
 import runpy
 import shutil
 import signal
@@ -457,11 +458,43 @@ def desktop_entry(command, icon, marker=False):
             + (DESKTOP_MARKER + '\n' if marker else ''))
 
 
-def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None):
+def other_desktop_entries(applications, appimage):
+    """Menu entries, other than ours, that start this very AppImage: another tool (Gear Lever,
+    AppImageLauncher, appimaged) has integrated it. The program is the first word of Exec or
+    TryExec, after any `env NAME=value` prefix and the quotes."""
+    here = os.path.realpath(appimage)
+    found = []
+    for entry in sorted(Path(applications).glob('*.desktop')):
+        if entry.name == 'gow3.desktop':
+            continue
+        try:
+            lines = entry.read_text(encoding='utf-8', errors='replace').splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            key, _, value = line.partition('=')
+            if key not in ('Exec', 'TryExec'):
+                continue
+            try:
+                words = shlex.split(value)
+            except ValueError:
+                continue
+            while words and (words[0] == 'env' or re.match(r'[A-Za-z_][A-Za-z0-9_]*=', words[0])):
+                words.pop(0)
+            if words and os.path.realpath(words[0]) == here:
+                found.append(entry)
+                break
+    return found
+
+
+def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None, environment=None):
     """AppImage on Linux: the menu entry the desktop matches the windows (application id gow3) to,
     which is what shows their icon in the dock. The entry is ours while it carries the marker; one
-    without it was written by hand (the Desktop shortcut button) and is left alone."""
-    entry = Path(home or Path.home()) / '.local' / 'share' / 'applications' / 'gow3.desktop'
+    without it was written by hand (the Desktop shortcut button) and is left alone. When another
+    tool already integrated this AppImage (an entry that starts it, or DESKTOPINTEGRATION in the
+    environment, which Gear Lever sets), ours would be a duplicate: it is not made, and removed."""
+    applications = Path(home or Path.home()) / '.local' / 'share' / 'applications'
+    entry = applications / 'gow3.desktop'
     try:
         ours = entry.is_file() and DESKTOP_MARKER in entry.read_text(encoding='utf-8', errors='replace')
         if not enabled:
@@ -469,6 +502,11 @@ def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None):
                 entry.unlink()
             return None
         if not appimage or (entry.is_file() and not ours):
+            return None
+        if (environment if environment is not None else os.environ).get('DESKTOPINTEGRATION') or \
+                other_desktop_entries(applications, appimage):
+            if ours:
+                entry.unlink()
             return None
         icon = Path(data_dir) / 'gow3.png'
         icon.parent.mkdir(parents=True, exist_ok=True)
