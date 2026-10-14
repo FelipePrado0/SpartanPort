@@ -31,8 +31,6 @@ average (55 to 240) at 1080p with the 240 FPS engine frame rate.
 **Tested and playable from start to finish** at native 1080p with the 240 FPS engine frame
 rate. At other render resolutions some textures look broken; a fix is in progress.
 
-Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
-
 ## What works
 
 - Opening, menus, video cutscenes (H.264) and gameplay.
@@ -326,7 +324,7 @@ out/gow3-probe.exe out/boot-linked.bin --app0 <game folder> --check-imports
 | Launcher | `launcher/gow3_launcher_win.py` | Settings, patches, mods, controls and the play button |
 
 More documentation: [mods](docs/MODS.md), [frame map and upscaler](docs/upscaler.md),
-[parallel GPU work](docs/parallel_gpu.md) and the [roadmap](docs/gow3/ROADMAP.md).
+and [parallel GPU work](docs/parallel_gpu.md).
 
 ## Credits
 

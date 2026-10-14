@@ -32,8 +32,6 @@ promedio (55 a 240) en 1080p con la tasa de cuadros del motor en 240 FPS.
 **Probado y jugable de principio a fin** en 1080p nativo con la tasa de cuadros del motor en 240
 FPS. En otras resoluciones de render algunas texturas se ven rotas; hay una corrección en curso.
 
-El progreso se registra (en portugués) en [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
-
 ## Qué funciona
 
 - Intro, menús, cinemáticas en video (H.264) y gameplay.
@@ -338,7 +336,7 @@ out/gow3-probe.exe out/boot-linked.bin --app0 <carpeta del juego> --check-import
 | Launcher | `launcher/gow3_launcher_win.py` | Ajustes, parches, mods, controles y el botón de jugar |
 
 Más documentación: [mods](docs/MODS.md), [mapa de cuadros y escalador](docs/upscaler.md),
-[trabajo paralelo de GPU](docs/parallel_gpu.md) y el [roadmap](docs/gow3/ROADMAP.md).
+y [trabajo paralelo de GPU](docs/parallel_gpu.md).
 
 ## Créditos
 
