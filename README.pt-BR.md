@@ -118,6 +118,8 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
   também está no launcher do Windows (ainda sem teste lá).
 - **Entrada no menu:** o AppImage grava `~/.local/share/applications/gow3.desktop` ao iniciar, para o
   launcher e a janela do jogo mostrarem o ícone no dock; **Avançado → Linux** desliga e remove a entrada.
+  Quando outra ferramenta (Gear Lever, AppImageLauncher…) já criou uma entrada que inicia o mesmo
+  arquivo, ele não cria a dele e remove a que tiver criado, sem duplicar.
 
 ## O que funciona
 

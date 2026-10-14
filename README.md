@@ -116,7 +116,8 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   the Windows launcher (not tested there yet).
 - **Menu entry:** the AppImage writes `~/.local/share/applications/gow3.desktop` when it starts, so
   the launcher and the game window show their icon in the dock; **Advanced → Linux** turns it off and
-  removes the entry.
+  removes the entry. When another tool (Gear Lever, AppImageLauncher…) already made an entry that
+  starts the same file, it makes none and removes its own, so there are no duplicates.
 
 ## What works
 

@@ -51,6 +51,37 @@ class DesktopIntegrationTest(unittest.TestCase):
         self.assertIsNone(self.integrate())
         self.assertEqual(self.entry.read_text(), '[Desktop Entry]\nName=made by hand\n')
 
+    def other_entry(self, text, name='gearlever.desktop'):
+        path = self.home / '.local' / 'share' / 'applications' / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('[Desktop Entry]\nName=God of War III Remastered\n' + text)
+        return path
+
+    def test_an_entry_of_another_tool_for_the_same_file_means_none_of_ours(self):
+        for exec_line in ('Exec=env DESKTOPINTEGRATION=1 /games/gow3.AppImage',
+                          'Exec="/games/gow3.AppImage" %U', 'TryExec=/games/gow3.AppImage'):
+            with self.subTest(exec_line):
+                other = self.other_entry(exec_line)
+                self.assertIsNone(self.integrate())
+                self.assertFalse(self.entry.exists())
+                other.unlink()
+
+    def test_our_entry_is_removed_once_another_tool_integrates_the_file(self):
+        self.integrate()
+        self.assertTrue(self.entry.exists())
+        self.other_entry('Exec=env DESKTOPINTEGRATION=1 /games/gow3.AppImage')
+        self.assertIsNone(self.integrate())
+        self.assertFalse(self.entry.exists())
+
+    def test_an_entry_for_another_file_does_not_count(self):
+        self.other_entry('Exec=/games/elsewhere.AppImage')
+        self.assertEqual(self.integrate(), self.entry)
+
+    def test_the_variable_gear_lever_sets_skips_it_too(self):
+        self.assertIsNone(launcher.integrate_desktop(True, '/games/gow3.AppImage', self.icon, self.data,
+                                                     home=self.home, environment={'DESKTOPINTEGRATION': '1'}))
+        self.assertFalse(self.entry.exists())
+
     def test_without_an_appimage_nothing_is_written(self):
         self.assertIsNone(self.integrate(appimage=None))
         self.assertFalse(self.entry.exists())
