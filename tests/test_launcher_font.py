@@ -1,7 +1,9 @@
 """The God of War title font: an optional launcher asset, never a reason the launcher cannot start."""
+import ctypes
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
@@ -21,6 +23,13 @@ class FontFileTest(unittest.TestCase):
         self.assertTrue(copies, 'package.sh must copy launcher/gowfont.ttf into $dest/launcher/')
 
 
+    def test_linux_package_ships_the_font(self):
+        script = (ROOT / 'packaging' / 'linux' / 'build.sh').read_text(encoding='utf-8')
+        copies = [line for line in script.splitlines()
+                  if 'launcher/gowfont.ttf' in line and '$share/launcher/' in line]
+        self.assertTrue(copies, 'build.sh must copy launcher/gowfont.ttf into $share/launcher/')
+
+
 class RegisterFontTest(unittest.TestCase):
     def test_missing_file_is_not_fatal(self):
         self.assertFalse(launcher.register_font(Path('no-such-font.ttf')))
@@ -32,6 +41,19 @@ class RegisterFontTest(unittest.TestCase):
     @unittest.skipUnless(sys.platform == 'win32', 'GDI font registration')
     def test_font_file_registers(self):
         self.assertTrue(launcher.register_font(launcher.FONT_FILE))
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'fontconfig font registration')
+    def test_font_file_registers_through_fontconfig(self):
+        try:
+            ctypes.CDLL('libfontconfig.so.1')
+        except OSError:
+            self.skipTest('no fontconfig')
+        self.assertTrue(launcher.register_font(launcher.FONT_FILE))
+
+    def test_a_missing_fontconfig_is_not_fatal(self):
+        with mock.patch.object(launcher, 'WINDOWS', False), \
+                mock.patch.object(launcher.ctypes, 'CDLL', side_effect=OSError('no fontconfig')):
+            self.assertFalse(launcher.register_font(launcher.FONT_FILE))
 
 
 class HeadingFontTest(unittest.TestCase):

@@ -34,10 +34,10 @@ import webbrowser
 import zipfile
 
 WINDOWS = sys.platform == 'win32'
+import ctypes  # GDI on Windows, fontconfig elsewhere
 # Windows without a cursor of their own show the X root window's, which XWayland leaves blank.
 ARROW = '' if WINDOWS else 'left_ptr'
 if WINDOWS:
-    import ctypes
     # AMD hybrid laptops: this layer hides the NVIDIA GPU from Vulkan and the game stays black (#263).
     os.environ.setdefault('VK_LOADER_LAYERS_DISABLE', 'VK_LAYER_AMD_switchable_graphics')
 FROZEN = getattr(sys, 'frozen', False)
@@ -244,12 +244,18 @@ def windows_language():
 
 
 def register_font(path):
-    """Makes a font file available to this process (nothing else sees it). False when the file is missing or
-    GDI refuses it: the launcher then keeps its standard fonts."""
-    if not WINDOWS:
+    """Makes a font file available to this process (nothing else sees it): GDI on Windows, fontconfig (which Tk
+    uses) elsewhere. False when the file is missing or the system refuses it: the launcher then keeps its
+    standard fonts."""
+    if not path.is_file():
         return False
     try:
-        return path.is_file() and bool(ctypes.windll.gdi32.AddFontResourceExW(str(path), FR_PRIVATE, 0))
+        if WINDOWS:
+            return bool(ctypes.windll.gdi32.AddFontResourceExW(str(path), FR_PRIVATE, 0))
+        fontconfig = ctypes.CDLL('libfontconfig.so.1')
+        fontconfig.FcConfigAppFontAddFile.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        fontconfig.FcConfigAppFontAddFile.restype = ctypes.c_int
+        return bool(fontconfig.FcConfigAppFontAddFile(None, os.fsencode(path)))
     except (AttributeError, OSError):
         return False
 
