@@ -433,7 +433,9 @@ static ABI int32_t pad_vibration(int32_t handle, const uint8_t *param) {
     if (!param) return ERR_INVALID_ARG;
     pthread_mutex_lock(&lock);
     SDL_Gamepad *g=current_gamepad();
-    if (g) SDL_RumbleGamepad(g,(uint16_t)(param[0]*257),(uint16_t)(param[1]*257),1000);
+    /* The menu's vibration strength scales the game's motors (0: off). */
+    const unsigned percent=(unsigned)gow3gpu_vibration_percent();
+    if (g) SDL_RumbleGamepad(g,(uint16_t)(param[0]*257u*percent/100u),(uint16_t)(param[1]*257u*percent/100u),1000);
     pthread_mutex_unlock(&lock);
     return 0;
 }

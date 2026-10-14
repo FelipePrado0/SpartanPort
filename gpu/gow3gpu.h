@@ -35,6 +35,8 @@ int gow3gpu_choice_begin(const char *title, const char *const *items, const char
 int gow3gpu_choice_poll(void);
 /* 1 while the in-game settings menu is open: the game's pad input is held neutral. */
 int gow3gpu_overlay_captures_input(void);
+/* Controller vibration strength set in the menu, 0 (off) to 100 (the game's own). */
+int gow3gpu_vibration_percent(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */
 unsigned gow3gpu_symbol_count(void);
 #ifdef __cplusplus
