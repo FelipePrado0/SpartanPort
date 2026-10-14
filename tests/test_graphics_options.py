@@ -24,10 +24,7 @@ class GraphicsOptionsTest(unittest.TestCase):
                                    'stale_readback': '1', 'async_shaders': '1'})
 
     def test_corrupt_state_file_preserves_current_settings(self):
-        self.ini.write_text(
-            'render_resolution=1440p\\nengine_fps=240\\n',
-            encoding='utf-8',
-        )
+        self.ini.write_text('render_resolution=1440p\nengine_fps=240\n', encoding='utf-8')
         self.state.write_text('{invalid json', encoding='utf-8')
 
         options, reverted = g.prepare(self.ini, self.state)
