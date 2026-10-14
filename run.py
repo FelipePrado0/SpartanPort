@@ -223,6 +223,12 @@ def main():
                 print(f'Saves backed up to {made}', flush=True)
         except OSError as error:
             print(f'Save backup failed, starting anyway: {error}', flush=True)
+        # Pre-flight: check that the system has enough virtual memory for the guest
+        # direct memory pool. A clear diagnostic beats a cryptic error 1450 crash.
+        from preflight import check_or_warn
+        if not check_or_warn(env):
+            return 1
+
         this = ['--run'] if getattr(sys, 'frozen', False) else [str(Path(__file__).resolve())]
         # Windows: the probe starts the new launch and ends, so it waits for this process. Linux:
         # the probe replaces itself with the new launch while this process still waits for it.

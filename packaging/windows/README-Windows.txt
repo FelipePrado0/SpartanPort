@@ -43,6 +43,7 @@ Data
 
 Problems
 - Black screen at start: Advanced -> Clear shader cache, then start again.
+- Memory allocation error (error 1450): right-click scripts\fix_pagefile.ps1 -> Run with PowerShell (Admin), then restart PC.
 - The game does not open: check the Log page, and send user\last_run.log with your report.
 
 This project is not affiliated with Sony Interactive Entertainment or Santa Monica Studio.
