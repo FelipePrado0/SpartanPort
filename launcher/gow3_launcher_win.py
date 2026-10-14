@@ -1098,9 +1098,9 @@ class Launcher:
         self.build_game()
         self.build_advanced()
         self.root.bind_all('<MouseWheel>', self.wheel)
-        # X11 (Tk 8.6): the wheel arrives as buttons 4 and 5, never as <MouseWheel>.
-        self.root.bind_all('<Button-4>', self.wheel)
-        self.root.bind_all('<Button-5>', self.wheel)
+        if not WINDOWS:  # X11 (Tk 8.6): the wheel arrives as buttons 4 and 5; on Windows those are side buttons
+            self.root.bind_all('<Button-4>', self.wheel)
+            self.root.bind_all('<Button-5>', self.wheel)
         self.game_changed()
 
     def wheel(self, event):
