@@ -897,6 +897,16 @@ EXTRA = {
         'Original (default)': 'Original (padrão)',
         'Match my controller': 'Igual ao meu controle',
         "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of two game files in the port's data folder (about 70 MB); your game folder is never changed. Applied when the game starts.": 'Troca os ícones de botões PlayStation dentro do jogo pelos do seu controle. Funciona com uma cópia de dois arquivos do jogo na pasta de dados do port (cerca de 70 MB); a pasta do jogo nunca é alterada. Aplicado quando o jogo inicia.',
+        'Textures': 'Texturas',
+        'Anisotropic filtering': 'Filtro anisotrópico',
+        'Game default': 'Padrão do jogo',
+        'Sharper floors and walls seen at an angle, at little cost on most graphics cards.': 'Chão e paredes vistos de lado ficam mais nítidos, com pouco custo na maioria das placas de vídeo.',
+        'Screenshots': 'Capturas de tela',
+        'Open the screenshots folder': 'Abrir a pasta das capturas',
+        'F12 in the game': 'F12 no jogo',
+        "Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves.": 'Salva a imagem do jogo, sem o overlay, em PNG na pasta screenshots dos saves.',
+        'Vibration': 'Vibração',
+        "Strength of the gamepad's vibration; 0% turns it off.": 'Força da vibração do controle; 0% desliga.',
     },
 }
 

@@ -296,8 +296,10 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'live_resolution': 'auto', 'display_mode': 'windowed', 'vsync': '1', 'fps_limit': '0',
                 'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
                 'render_resolution': 'native', 'engine_fps': '120',
-                'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0'}
+                'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
+                'anisotropy': '0', 'vibration': '100'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
+ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
 # The sidebar's pages, top to bottom, and the methods that refresh a page's lists when it is shown.
 PAGES = ('home', 'graphics', 'performance', 'game', 'advanced')
@@ -1218,9 +1220,19 @@ class Launcher:
         self.check(f, 'hdr', 'app', _('Allow HDR output', 'Разрешить HDR'),
                    _('When HDR is on in Windows and the display supports it.',
                      'Если HDR включён в Windows и монитор его поддерживает.'))
+        self.section(f, _('Textures'))
+        self.row(f, _('Anisotropic filtering'), self.choice(f, 'anisotropy', 'ini', ANISOTROPY),
+                 _('Sharper floors and walls seen at an angle, at little cost on most graphics cards.'),
+                 restart=True)
         self.section(f, _('Overlay'))
         self.check(f, 'show_fps', 'ini', _('Show performance overlay'),
                    _('Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.'))
+        self.section(f, _('Screenshots'))
+        shots = self.ttk.Button(f, text=_('Open the screenshots folder'),
+                           command=lambda: self.open_path(
+                               Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user') / 'screenshots'))
+        self.row(f, _('F12 in the game'), shots,
+                 _("Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves."))
 
     def build_performance(self):
         f = self.scrolled_page('performance', _('Performance'), _('Frame rate and speed options.'))
@@ -1435,6 +1447,17 @@ class Launcher:
                  hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
                         'Works on a copy of two game files in the port\'s data folder (about 70 MB); your game folder '
                         'is never changed. Applied when the game starts.'))
+        holder = ttk.Frame(f)
+        strength = self.var('vibration', 'ini')
+        tk.Scale(holder, from_=0, to=100, orient='horizontal', variable=strength, showvalue=False, length=self.px(260),
+                 width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD, activebackground=ACCENT_HI,
+                 highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
+        value = ttk.Label(holder, width=5)
+        value.pack(side='left', padx=10)
+        show = lambda *_a: value.configure(text=f'{strength.get()}%')
+        strength.trace_add('write', show)
+        show()
+        self.row(f, _('Vibration'), holder, _("Strength of the gamepad's vibration; 0% turns it off."))
         table = ttk.Frame(f)
         table.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(16, 0))
         for column, span, title in ((0, 2, _('GAME BUTTON')), (2, 1, _('KEYBOARD')), (3, 2, _('GAMEPAD'))):
