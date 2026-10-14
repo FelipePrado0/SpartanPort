@@ -309,7 +309,7 @@ PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_lists', 'refresh_
 APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
-                'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
+                'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
                 'gpu_id': '', 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
@@ -737,8 +737,6 @@ def game_environment(s):
     env['GOW3_PATCHES_CONFIG'] = str(DATA_DIR / 'patches.json')
     env['GOW3_LANGUAGE'] = s['language']
     env['GOW3_DISCORD'] = '1' if s.get('discord_rpc') else '0'
-    if str(s['player_name']).strip():
-        env['GOW3_USER_NAME'] = str(s['player_name']).strip()
     if s['hdr']:
         env['GOW3_HDR'] = '1'
     for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS'), ('no_msaa', 'GOW3_NO_MSAA')):
