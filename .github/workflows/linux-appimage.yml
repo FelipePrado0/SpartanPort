@@ -1,39 +1,23 @@
 # Linux AppImage: built on Ubuntu 24.04 so it starts on glibc 2.39 or newer (SteamOS, Bazzite/Fedora,
-# Debian 13, Ubuntu 24.04+; #291), then opened on those distros before it is published.
-#   - pull request: build and test only (the AppImage is kept as a workflow artifact).
-#   - release published (windows-v*, test builds included): the AppImage is attached to it, so no
-#     release gets a Linux build made on a developer's machine.
-#   - tag linux-v*: Linux-only test build, published as a pre-release with that tag.
-#   - manual run: attaches the AppImage to an existing release (e.g. windows-v2.2.0).
+# Debian 13, Ubuntu 24.04+; #291), then opened on those distros before it is published. Run by hand
+# (Actions > Linux AppImage > Run workflow), on the branch to build:
+#   - no tag: build and test only (the AppImage is kept as a workflow artifact).
+#   - tag of an existing release (e.g. windows-v2.2.0): the AppImage replaces the one attached to it.
+#   - new tag (e.g. linux-v2.2.1-test1): test build, published as a pre-release on that commit.
 name: Linux AppImage
 
 on:
-  pull_request:
-    paths:
-      - build.sh
-      - run.py
-      - src/**
-      - gpu/**
-      - scripts/**
-      - patches/**
-      - launcher/**
-      - packaging/linux/**
-      - .github/workflows/linux-appimage.yml
-  release:
-    types: [published]
-  push:
-    tags: ['linux-v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release to attach the AppImage to (replaces the files already there)
-        required: true
+        description: Release to attach the AppImage to; a new tag makes a test pre-release. Empty builds only.
+        required: false
 
 permissions:
   contents: write
 
 concurrency:
-  group: linux-appimage-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  group: linux-appimage-${{ inputs.tag || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -80,7 +64,7 @@ jobs:
 
   publish:
     needs: smoke
-    if: github.event_name != 'pull_request'
+    if: inputs.tag != ''
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
@@ -91,10 +75,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+          TAG: ${{ inputs.tag }}
         run: |
-          if [[ $GITHUB_EVENT_NAME == push ]] && ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --prerelease --verify-tag --title "Linux test build $TAG" \
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Linux test build $TAG" \
               --notes "Linux test build from \`${GITHUB_SHA::7}\`. Download \`gow3-x86_64.AppImage\`, then \`chmod +x gow3-x86_64.AppImage\` and run it. Not a final release: please report in the linked issue whether it opens and runs."
           fi
           gh release upload "$TAG" dist/gow3-x86_64.AppImage dist/gow3-x86_64.AppImage.sha256 --clobber
