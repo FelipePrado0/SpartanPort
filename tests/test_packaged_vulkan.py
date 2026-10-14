@@ -3,6 +3,7 @@ from paths import ROOT
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 
@@ -11,6 +12,8 @@ vulkan = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(vulkan)
 
 
+@unittest.skipUnless(sys.platform.startswith("linux"),
+                     "gow3_vulkan is the Linux AppImage entry point")
 class PackagedVulkanTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

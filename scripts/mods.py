@@ -76,8 +76,11 @@ def mod_files(folder):
     for directory, folders, files in os.walk(root, followlinks=False):
         directory = Path(directory)
         for name in [*folders, *files]:
-            if (directory / name).is_symlink():
-                raise ValueError(f'Mod symlinks are unsupported: {directory / name}')
+            entry = directory / name
+            # os.walk(followlinks=False) still descends into Windows junctions (they are not
+            # symlinks), which would let a mod reach outside its folder; reject them too.
+            if entry.is_symlink() or (hasattr(entry, 'is_junction') and entry.is_junction()):
+                raise ValueError(f'Mod links are unsupported: {entry}')
         for name in sorted(files):
             source = directory / name
             relative = Path(prefix) / source.relative_to(root) if prefix else source.relative_to(root)

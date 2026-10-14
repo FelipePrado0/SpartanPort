@@ -77,7 +77,16 @@ class ModTests(unittest.TestCase):
 
     def test_mod_symlinks_rejected(self):
         a = self.mod('A')
-        (a / 'dvdroot_ps4/escape').symlink_to(self.assets, target_is_directory=True)
+        link = a / 'dvdroot_ps4/escape'
+        try:
+            link.symlink_to(self.assets, target_is_directory=True)
+        except OSError:
+            if os.name != 'nt':
+                raise
+            # Without the symlink privilege a junction is the fallback, so it must be
+            # rejected just like a symlink (os.walk follows junctions too).
+            import _winapi
+            _winapi.CreateJunction(str(self.assets), str(link))
         with self.assertRaises(ValueError):
             mods.build_overlay(self.game, self.root / 'out', [('A', a)])
 
