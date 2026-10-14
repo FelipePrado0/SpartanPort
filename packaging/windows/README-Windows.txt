@@ -43,6 +43,9 @@ Data
 
 Problems
 - Black screen at start: Advanced -> Clear shader cache, then start again.
+- Memory error (error 1450): increase the Windows page file. Win+R ->
+  SystemPropertiesAdvanced -> Performance Settings -> Advanced -> Virtual memory Change ->
+  set C: to 16384 MB initial, 24576 MB maximum -> Set -> OK, then restart your PC.
 - The game does not open: check the Log page, and send user\last_run.log with your report.
 
 This project is not affiliated with Sony Interactive Entertainment or Santa Monica Studio.

@@ -103,6 +103,7 @@ Patches and fixes are included and applied automatically: texture fix, skip vide
 
 **If something goes wrong**
 - Black screen at start: **Advanced → Clear shader cache**, then start again.
+- The game closes with "cannot create ... guest memory (error 1450)": Windows ran out of virtual memory to allocate the guest pool. Increase the page file: press **Win + R**, type `SystemPropertiesAdvanced`, go to **Performance** Settings → **Advanced** → **Virtual memory** Change, uncheck automatic management, select drive **C:**, set a custom size (e.g. 16384 MB initial, 24576 MB maximum), click **Set**, **OK**, and restart your PC.
 - The game does not open: check the **Log** page, or send `user\last_run.log` with your report.
 
 ## Linux (AppImage, experimental)

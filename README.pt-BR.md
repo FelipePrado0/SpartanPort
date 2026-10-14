@@ -104,6 +104,7 @@ com X e 120 FPS vêm ligados. Mude resolução e FPS na **Home** ou em **Perform
 
 **Se algo der errado**
 - Tela preta ao abrir: **Advanced → Clear shader cache** e abra de novo.
+- O jogo fecha com "cannot create ... guest memory (error 1450)": o Windows ficou sem memória virtual para alocar o pool de memória do jogo. Aumente o arquivo de paginação: pressione **Win + R**, digite `SystemPropertiesAdvanced`, vá em Configurações de **Desempenho** → guia **Avançado** → **Memória virtual** Alterar, desmarque o gerenciamento automático, selecione a unidade **C:**, defina um tamanho personalizado (ex.: 16384 MB inicial, 24576 MB máximo), clique em **Definir**, **OK** e reinicie o PC.
 - O jogo não abre: veja a tela **Log**, ou envie o `user\last_run.log` junto com o relato.
 
 ## Linux (AppImage, experimental)
