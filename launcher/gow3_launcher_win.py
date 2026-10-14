@@ -33,6 +33,8 @@ import webbrowser
 import zipfile
 
 WINDOWS = sys.platform == 'win32'
+# Windows without a cursor of their own show the X root window's, which XWayland leaves blank.
+ARROW = '' if WINDOWS else 'left_ptr'
 if WINDOWS:
     import ctypes
 FROZEN = getattr(sys, 'frozen', False)
@@ -1096,13 +1098,16 @@ class Launcher:
         self.build_game()
         self.build_advanced()
         self.root.bind_all('<MouseWheel>', self.wheel)
+        # X11 (Tk 8.6): the wheel arrives as buttons 4 and 5, never as <MouseWheel>.
+        self.root.bind_all('<Button-4>', self.wheel)
+        self.root.bind_all('<Button-5>', self.wheel)
         self.game_changed()
 
     def wheel(self, event):
         page = self.pages.get(self.current_page)
         if hasattr(page, 'scroll') and not isinstance(event.widget, (self.tk.Text, self.ttk.Combobox)) \
                 and 'popdown' not in str(event.widget):
-            page.scroll(int(-event.delta / 120))
+            page.scroll({4: -1, 5: 1}.get(event.num) or int(-event.delta / 120))
 
     def show(self, name):
         for page in self.pages.values():
@@ -2222,7 +2227,7 @@ class Launcher:
                       'and logo. Open Steam to see it in the library.'))
             self.messagebox.showinfo(APP_NAME, text.format(steam_shortcut.APP_NAME, result['accounts']))
         finally:
-            self.root.configure(cursor='')
+            self.root.configure(cursor=ARROW)
 
     def close(self):
         if not self.collect():
@@ -2398,6 +2403,10 @@ def main():
     import tkinter as tk
     from tkinter import filedialog, font, messagebox, ttk
     root = tk.Tk() if WINDOWS else tk.Tk(className='gow3')
+    if not WINDOWS:
+        root.configure(cursor=ARROW)
+        for window in ('Toplevel', 'Dialog', 'TkFDialog', 'TkChooseDir'):  # dialogs: tk_messageBox, file pickers
+            root.option_add(f'*{window}.cursor', ARROW)
     pick_fonts(font.families(root))
     Launcher(root, tk, ttk, filedialog, messagebox)
     root.mainloop()
