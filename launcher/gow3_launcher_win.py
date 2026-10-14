@@ -37,6 +37,8 @@ WINDOWS = sys.platform == 'win32'
 ARROW = '' if WINDOWS else 'left_ptr'
 if WINDOWS:
     import ctypes
+    # AMD hybrid laptops: this layer hides the NVIDIA GPU from Vulkan and the game stays black (#263).
+    os.environ.setdefault('VK_LOADER_LAYERS_DISABLE', 'VK_LAYER_AMD_switchable_graphics')
 FROZEN = getattr(sys, 'frozen', False)
 PORT_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PORT_DIR / 'scripts'))

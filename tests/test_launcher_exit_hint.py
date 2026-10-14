@@ -43,6 +43,20 @@ class ExitHintTest(unittest.TestCase):
         self.assertIn('page file', shown[-1])
 
 
+class HybridGpuTest(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == 'win32', 'the AMD switchable graphics layer is Windows only')
+    def test_windows_hides_the_amd_switchable_layer(self):
+        self.assertEqual(os.environ['VK_LOADER_LAYERS_DISABLE'], 'VK_LAYER_AMD_switchable_graphics')
+
+    @unittest.skipUnless(sys.platform == 'win32', 'the AMD switchable graphics layer is Windows only')
+    def test_a_value_set_by_the_player_is_kept(self):
+        env = {**os.environ, 'VK_LOADER_LAYERS_DISABLE': 'VK_LAYER_custom'}
+        code = (f'import sys; sys.path.insert(0, {str(ROOT / "launcher")!r})\n'
+                'import os, gow3_launcher_win\n'
+                'print(os.environ["VK_LOADER_LAYERS_DISABLE"])')
+        done = subprocess.run([sys.executable, '-c', code], env=env, capture_output=True, text=True)
+        self.assertEqual(done.stdout.strip().splitlines()[-1], 'VK_LAYER_custom')
+
 
 if __name__ == '__main__':
     unittest.main()
