@@ -162,6 +162,10 @@ def main():
     derived = []
     sys.path.insert(0, str(PORT / 'scripts'))
     import graphics_options
+    try:
+        import discord_presence
+    except Exception:
+        discord_presence = None
     graphics, reverted = graphics_options.prepare(env['GOW3_CONFIG'], out / 'graphics_state.json')
     if reverted:
         print('Graphics: the last restart never reached the game; previous options restored', flush=True)
@@ -302,7 +306,12 @@ def main():
                    '--user', str(user_dir),
                    '--timeout', env.get('GOW3_TIMEOUT', '0'), *isa_args, *glyph_args, *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
-        return subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console()).returncode
+        presence = discord_presence.Presence() if discord_presence else None
+        try:
+            return subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console()).returncode
+        finally:
+            if presence:
+                presence.close()
     finally:
         if mod_view:
             shutil.rmtree(mod_view, ignore_errors=True)

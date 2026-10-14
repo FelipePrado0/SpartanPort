@@ -308,7 +308,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR',
                 'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
                 'gpu_id': '', 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
-                'vk_validation': False, 'close_on_play': False,
+                'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
                 'glyph_style': 'off'}
 
@@ -730,6 +730,7 @@ def game_environment(s):
     env['GOW3_PATCHES_DIR'] = s['patches_dir'] or str(DATA_DIR / 'patches')
     env['GOW3_PATCHES_CONFIG'] = str(DATA_DIR / 'patches.json')
     env['GOW3_LANGUAGE'] = s['language']
+    env['GOW3_DISCORD'] = '1' if s.get('discord_rpc') else '0'
     if str(s['player_name']).strip():
         env['GOW3_USER_NAME'] = str(s['player_name']).strip()
     if s['hdr']:
@@ -1531,6 +1532,9 @@ class Launcher:
         self.section(f, _('Launcher', 'Лаунчер'), top=4)
         self.row(f, _('Launcher language', 'Язык лаунчера'), self.choice(f, 'ui_language', 'app', UI_LANGUAGES),
                  _('Applies when the launcher opens again.', 'Применится при следующем открытии лаунчера.'))
+        self.check(f, 'discord_rpc', 'app', _('Show Discord Rich Presence', 'Показывать Discord Rich Presence'),
+                   _('Shows only the game name and the time played on your Discord profile.',
+                     'Показывает в профиле Discord только название игры и время в игре.'))
         self.check(f, 'close_on_play', 'app', _('Close the launcher when the game starts', 'Закрывать лаунчер при запуске игры'))
         if WINDOWS:
             self.check(f, 'check_updates', 'app', _('Check for updates when the launcher opens',

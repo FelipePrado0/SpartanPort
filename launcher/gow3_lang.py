@@ -744,7 +744,13 @@ WINDOWS_LANGUAGES = {0x19: 'ru', 0x01: 'ar', 0x0a: 'es', 0x16: 'pt', 0x0c: 'fr',
 # need every language updated at once). Portuguese only, the port's own language: the other
 # languages fall back to English for them until someone who speaks them contributes.
 EXTRA = {
+    'es': {
+        'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
+        'Shows only the game name and the time played on your Discord profile.': 'Muestra en tu perfil de Discord solo el nombre del juego y el tiempo jugado.',
+    },
     'pt': {
+        'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
+        'Shows only the game name and the time played on your Discord profile.': 'Mostra no seu perfil do Discord apenas o nome do jogo e o tempo jogado.',
         'Game multisampling': 'Multisampling do jogo',
         'Automatic ({}: off)': 'Automático ({}: desligado)',
         'Automatic ({}: on)': 'Automático ({}: ligado)',
