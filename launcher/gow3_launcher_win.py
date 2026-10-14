@@ -695,6 +695,13 @@ def other_desktop_entries(applications, appimage):
     return found
 
 
+def integrated_by_other_tool(applications, appimage, environment=None):
+    """True when another tool (Gear Lever sets DESKTOPINTEGRATION, AppImageLauncher and appimaged leave an
+    entry) already put this AppImage in the menu: an entry of ours would be a duplicate."""
+    return bool((environment if environment is not None else os.environ).get('DESKTOPINTEGRATION')
+                or (appimage and other_desktop_entries(applications, appimage)))
+
+
 def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None, environment=None):
     """AppImage on Linux: the menu entry the desktop matches the windows (application id gow3) to,
     which is what shows their icon in the dock. The entry is ours while it carries the marker; one
@@ -711,8 +718,7 @@ def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None, envir
             return None
         if not appimage or (entry.is_file() and not ours):
             return None
-        if (environment if environment is not None else os.environ).get('DESKTOPINTEGRATION') or \
-                other_desktop_entries(applications, appimage):
+        if integrated_by_other_tool(applications, appimage, environment):
             if ours:
                 entry.unlink()
             return None
@@ -727,6 +733,35 @@ def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None, envir
         return entry
     except OSError:
         return None
+
+
+def write_linux_shortcut(command, appimage, icon_source, desktop, home=None, environment=None):
+    """The shortcut button: the desktop entry on the desktop folder (when it exists) and in the applications
+    menu, except in the menu when another tool already integrated this AppImage (a second entry would
+    show the game twice). Returns the files written."""
+    home = Path(home or Path.home())
+    icon_dir = home / '.local' / 'share' / 'icons'
+    icon = icon_dir / 'gow3.png'
+    try:
+        icon_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(icon_source, icon)
+    except OSError:
+        icon = 'gow3'
+    entry = desktop_entry(command, icon)
+    applications = home / '.local' / 'share' / 'applications'
+    folders = [] if integrated_by_other_tool(applications, appimage, environment) else [applications]
+    folders.append(Path(desktop))
+    created = []
+    for folder in folders:
+        if not folder.is_dir() and folder != folders[0]:  # the first one is the point of the click
+            continue
+        folder.mkdir(parents=True, exist_ok=True)
+        # In the applications menu the file is named after the window's application id.
+        target = folder / ('gow3.desktop' if folder == applications else 'God of War III.desktop')
+        target.write_text(entry, encoding='utf-8')
+        target.chmod(0o755)
+        created.append(str(target))
+    return created
 
 
 def steam_icon(game):
@@ -2244,32 +2279,14 @@ class Launcher:
     def linux_shortcut(self):
         launcher = os.environ.get('APPIMAGE') or (sys.executable if FROZEN else '')
         command = f'"{launcher}"' if launcher else f'python3 "{Path(__file__).resolve()}"'
-        icon_dir = Path.home() / '.local' / 'share' / 'icons'
-        icon = icon_dir / 'gow3.png'
-        try:
-            icon_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(PORT_DIR / 'launcher' / 'gow3.png', icon)
-        except OSError:
-            icon = 'gow3'
-        entry = desktop_entry(command, icon)
-        folders = [Path.home() / '.local' / 'share' / 'applications']
         try:
             desktop = subprocess.run(['xdg-user-dir', 'DESKTOP'], capture_output=True, text=True,
                                      env=host_environment()).stdout.strip()
         except OSError:
             desktop = ''
-        folders.append(Path(desktop) if desktop else Path.home() / 'Desktop')
-        created = []
         try:
-            for folder in folders:
-                if not folder.is_dir() and folder != folders[0]:
-                    continue
-                folder.mkdir(parents=True, exist_ok=True)
-                # In the applications menu the file is named after the window's application id.
-                target = folder / ('gow3.desktop' if folder == folders[0] else 'God of War III.desktop')
-                target.write_text(entry, encoding='utf-8')
-                target.chmod(0o755)
-                created.append(str(target))
+            created = write_linux_shortcut(command, launcher, PORT_DIR / 'launcher' / 'gow3.png',
+                                           Path(desktop) if desktop else Path.home() / 'Desktop')
         except OSError as error:
             self.messagebox.showerror(APP_NAME, str(error))
             return
