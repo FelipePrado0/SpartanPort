@@ -114,6 +114,11 @@ public:
     /// Invalidates any image in the logical page range.
     void InvalidateMemory(VAddr addr, size_t size);
 
+    /// gow3 (#138): guest memory written through the backing view (readbacks, buffer
+    /// downloads), which bypasses page tracking. Any lock may be held: images over the range
+    /// are marked CPU-dirty at the next UpdateImage or GC tick (ApplyBackingWrites).
+    void NoteBackingWrite(VAddr address, u64 size);
+
     /// Marks an image as dirty if it exists at the provided address.
     void InvalidateMemoryFromGPU(VAddr address, size_t max_size);
 
@@ -160,6 +165,7 @@ public:
         constexpr u32 Registered = static_cast<u32>(ImageFlagBits::Registered);
         constexpr u32 Aliased = static_cast<u32>(ImageFlagBits::Aliased);
         return (flags & (Dirty | Registered | Aliased)) == Registered &&
+               !has_backing_writes.load(std::memory_order_acquire) &&
                image.track_addr == image.guest_begin && image.track_addr_end == image.guest_end &&
                image.lru_touched_tick == gc_tick;
     }
@@ -179,12 +185,14 @@ public:
             // Images sharing memory with another take the locked path: SynchronizeAlias.
             constexpr u32 Aliased = static_cast<u32>(ImageFlagBits::Aliased);
             if ((flags & (Dirty | Registered | Aliased)) == Registered &&
+                !has_backing_writes.load(std::memory_order_acquire) &&
                 image.track_addr == image.guest_begin && image.track_addr_end == image.guest_end &&
                 image.lru_touched_tick == gc_tick) {
                 return;
             }
         }
         std::scoped_lock lock{mutex};
+        ApplyBackingWrites();
         Image& image = slot_images[image_id];
         TrackImage(image_id);
         TouchImage(image);
@@ -479,6 +487,11 @@ private:
     void RetireReadbacks();
     PageTable page_table;
     std::mutex mutex;
+    /// gow3 (#138): under `mutex`. GPU-modified images hold the written data themselves.
+    void ApplyBackingWrites();
+    std::mutex backing_writes_mutex;
+    std::vector<std::pair<VAddr, u64>> backing_writes;
+    std::atomic<bool> has_backing_writes{false};
     /// gow3: images with the same guest address (guarded by `mutex`). `backing` holds the
     /// complete contents; `writer` is a newer write not yet copied into it.
     struct AliasState {

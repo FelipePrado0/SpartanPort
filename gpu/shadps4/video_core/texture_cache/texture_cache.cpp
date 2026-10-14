@@ -543,6 +543,37 @@ void TextureCache::InvalidateMemory(VAddr addr, size_t size) {
     });
 }
 
+void TextureCache::NoteBackingWrite(VAddr address, u64 size) {
+    std::scoped_lock lock{backing_writes_mutex};
+    backing_writes.emplace_back(address, size);
+    has_backing_writes.store(true, std::memory_order_release);
+}
+
+void TextureCache::ApplyBackingWrites() {
+    if (!has_backing_writes.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::vector<std::pair<VAddr, u64>> writes;
+    {
+        std::scoped_lock lock{backing_writes_mutex};
+        writes.swap(backing_writes);
+        has_backing_writes.store(false, std::memory_order_release);
+    }
+    // God of War III streams textures with GPU copies through large storage images over the
+    // texture pool; their readbacks put the new texels in memory without a fault. Textures
+    // there kept the old contents (yellow ground #138, missing textures #194) until a restart.
+    for (const auto& [address, size] : writes) {
+        ForEachImageInRegion(address, size, [&](ImageId image_id, Image& image) {
+            // Images sharing memory with a GPU writer are synchronized by SynchronizeAlias.
+            if (True(image.flags & (ImageFlagBits::GpuModified | ImageFlagBits::Aliased))) {
+                return;
+            }
+            image.flags |= ImageFlagBits::CpuDirty;
+            UntrackImage(image_id);
+        });
+    }
+}
+
 void TextureCache::InvalidateMemoryFromGPU(VAddr address, size_t max_size) {
     // Partial buffer writes still need the image's untouched bytes in guest memory.
     ResolveReadbacks(address, max_size, true, ReadbackSource::GpuPartialWrite);
@@ -1581,6 +1612,10 @@ void TextureCache::RunGarbageCollector() {
     SCOPE_EXIT {
         ++gc_tick;
     };
+    {
+        std::scoped_lock lock{mutex};
+        ApplyBackingWrites();
+    }
 
     GarbageCollectImages();
     GarbageCollectSamplers();
