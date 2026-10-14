@@ -1,7 +1,9 @@
 # Linux AppImage: built on Ubuntu 24.04 so it starts on glibc 2.39 or newer (SteamOS, Bazzite/Fedora,
 # Debian 13, Ubuntu 24.04+; #291), then opened on those distros before it is published.
 #   - pull request: build and test only (the AppImage is kept as a workflow artifact).
-#   - tag linux-v*: test build, published as a pre-release with that tag.
+#   - release published (windows-v*, test builds included): the AppImage is attached to it, so no
+#     release gets a Linux build made on a developer's machine.
+#   - tag linux-v*: Linux-only test build, published as a pre-release with that tag.
 #   - manual run: attaches the AppImage to an existing release (e.g. windows-v2.2.0).
 name: Linux AppImage
 
@@ -17,6 +19,8 @@ on:
       - launcher/**
       - packaging/linux/**
       - .github/workflows/linux-appimage.yml
+  release:
+    types: [published]
   push:
     tags: ['linux-v*']
   workflow_dispatch:
@@ -27,6 +31,10 @@ on:
 
 permissions:
   contents: write
+
+concurrency:
+  group: linux-appimage-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -57,7 +65,8 @@ jobs:
       fail-fast: false
       matrix:
         # debian:13 has SteamOS 3.7's glibc (2.41), fedora:42 is Bazzite's base.
-        image: ['debian:13', 'fedora:42', 'ubuntu:24.04', 'archlinux:latest']
+        image: ['debian:13', 'fedora:42', 'ubuntu:24.04', 'archlinux:latest',
+                'opensuse/tumbleweed:latest']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -82,7 +91,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
         run: |
           if [[ $GITHUB_EVENT_NAME == push ]] && ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --prerelease --verify-tag --title "Linux test build $TAG" \

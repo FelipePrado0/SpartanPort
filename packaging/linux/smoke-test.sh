@@ -10,6 +10,8 @@ if command -v apt-get >/dev/null; then
     apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb fonts-dejavu-core >/dev/null
 elif command -v dnf >/dev/null; then
     dnf install -y -q xorg-x11-server-Xvfb dejavu-sans-fonts >/dev/null
+elif command -v zypper >/dev/null; then
+    zypper -nq install xorg-x11-server-Xvfb dejavu-fonts >/dev/null
 elif command -v pacman >/dev/null; then
     pacman -Sy --noconfirm --needed xorg-server-xvfb ttf-dejavu >/dev/null
 fi
