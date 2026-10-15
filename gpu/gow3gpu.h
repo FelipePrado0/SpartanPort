@@ -16,6 +16,8 @@ typedef struct {
 } Gow3GpuConfig;
 /* Registers kernel event queues (needed with or without graphics). */
 void gow3gpu_register_kernel(void);
+/* Register GNM/VideoOut NIDs without creating a window or Vulkan device. */
+void gow3gpu_register_graphics_symbols(void);
 /* Creates window, Vulkan device, presenter and GPU command processor. */
 int gow3gpu_init(const Gow3GpuConfig *config);
 /* Function for an imported NID ("NID#lib#mod"), or 0 when the GPU library does not provide it. */
