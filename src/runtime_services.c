@@ -75,7 +75,7 @@ static int language(void) { const char *v=getenv("GOW3_LANGUAGE"); return v ? at
 static ABI int32_t system_param(int32_t id,int32_t *value) {
     if (!value) return SYSTEM_PARAMETER;
     switch (id) {
-    case 1: *value=language(); break;           /* language (1 = English US, 8 = Russian) */
+    case 1: *value=language(); break;           /* language */
     case 2: *value=1; break;                    /* date format DD/MM/YYYY */
     case 3: *value=1; break;                    /* 24-hour clock */
 #ifdef _WIN32
@@ -86,7 +86,11 @@ static ABI int32_t system_param(int32_t id,int32_t *value) {
     case 5: *value=0; break;                    /* summer time */
     case 7: *value=0; break;                    /* parental level off */
     case 1000: *value=1; break;                 /* enter button = cross */
-    default:\n        fprintf(stderr,"Runtime: unsupported SystemService integer parameter %d\\n",id);\n        return SYSTEM_PARAMETER;\n    }\n    return 0;
+    default:
+        fprintf(stderr,"Runtime: unsupported SystemService integer parameter %d\n",id);
+        return SYSTEM_PARAMETER;
+    }
+    return 0;
 }
 /* shadPS4 currently exposes ParamGetString as a stub with no verified ABI. Keep it
  * side-effect free until CUSA00575 provides a runtime trace for the arguments. */
@@ -97,12 +101,20 @@ static ABI int32_t system_show_safe_area_settings(void) {
 }
 static ABI int32_t system_status(unsigned char *status) {
     if (!status) return SYSTEM_PARAMETER;
-    memset(status,0,12); /* event_num=0, no overlay, foreground, normal CPU mode */
+    /* OrbisSystemServiceStatus: s32 event_num, then bool flags. */
+    memset(status,0,12);
+    status[6]=1; /* is_cpu_mode7_cpu_normal */
     return 0;
 }
 static ABI int32_t system_event(void *event) { (void)event; return SYSTEM_NO_EVENT; }
 static ABI int32_t hide_splash(void) { note("SystemService: splash screen hidden"); return 0; }
-static ABI int32_t safe_area(float *info) {\n    if (!info) return SYSTEM_PARAMETER;\n    /* OrbisSystemServiceDisplaySafeAreaInfo: ratio + 128 reserved bytes. */\n    memset(info,0,132);\n    *info=1.0f;\n    return 0;\n}
+static ABI int32_t safe_area(float *info) {
+    if (!info) return SYSTEM_PARAMETER;
+    /* OrbisSystemServiceDisplaySafeAreaInfo: ratio + 128 reserved bytes. */
+    memset(info,0,132);
+    *info=1.0f;
+    return 0;
+}
 static ABI int32_t disable_music_player(void) { return 0; }
 static ABI int32_t launch_browser(void) { note("SystemService: web browser request ignored (offline)"); return 0; }
 
