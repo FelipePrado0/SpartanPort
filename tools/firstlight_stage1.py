@@ -36,6 +36,7 @@ def main()->int:
     OUT.mkdir(parents=True,exist_ok=True)
     run([sys.executable,str(ROOT/"scripts"/"prepare.py"),str(game),"--out",str(OUT)])
     run([sys.executable,str(ROOT/"scripts"/"link_modules.py"),str(game),"--out",str(OUT)])
+    run([sys.executable,str(ROOT/"scripts"/"content_profile.py"),str(game),"--out",str(OUT),"--sku","full"])
     run([sys.executable,str(ROOT/"tools"/"check_firstlight_link.py"),str(OUT/"link.json")])
 
     if a.check_runtime:
@@ -44,7 +45,7 @@ def main()->int:
             print("Runtime checker is not built. Run build.ps1 or bash build.sh first.",file=sys.stderr)
             return 2
         return run([str(probe),str(OUT/"boot-linked.bin"),"--cpu-only","--check-imports",
-                    "--app0",str(game)],check=False)
+                    "--content-profile",str(OUT/"content.bin"),"--app0",str(game)],check=False)
     return 0
 
 if __name__=="__main__":
