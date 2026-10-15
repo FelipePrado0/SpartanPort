@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "title": "inFAMOUS First Light",
+  "title_id": "CUSA00575",
+  "app_ver": "01.00",
+  "content_id": "UP9000-CUSA00575_00-FIRSTLIGHTSHIP00",
+  "executable": {
+    "path": "eboot.bin",
+    "sha256": "155bd094caa24d2581de0c01d961e5847718d4caf120fa1ec8841e5522ae899b",
+    "size": 17966233,
+    "format": "SELF_plaintext",
+    "machine": "x86_64",
+    "entry_point": "0xa19c30",
+    "referenced_imports": 468,
+    "tls_relocations": 0
+  },
+  "modules": [
+    {
+      "path": "sce_module/libSceFios2.prx",
+      "sha256": "809348c72e4a3a52511a55a7ebef7bcde925c20b0a02ba906831f66722fbe794",
+      "referenced_imports": 81,
+      "tls_relocations": 2
+    },
+    {
+      "path": "sce_module/libc.prx",
+      "sha256": "4a79a8c369faa3a510b3510128afa33b3e676a1f0812a598f8386a1835093553",
+      "referenced_imports": 73,
+      "tls_relocations": 14
+    }
+  ],
+  "notes": [
+    "Inventory values come from the supplied static CUSA00575 report.",
+    "APP_VER from param.sfo does not prove every file came from the same update.",
+    "A passing static validator does not prove runtime compatibility."
+  ]
+}
