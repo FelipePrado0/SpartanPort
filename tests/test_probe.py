@@ -155,17 +155,38 @@ class LoaderTests(unittest.TestCase):
         self.assertIn('unknown runtime capabilities',r.stderr)
 
 
+def host_env():
+    env = dict(os.environ)
+    # Development builds run from the MSYS2 tree: its CLANG64 DLLs (SDL3, ...), as in run.py.
+    if sys.platform == 'win32' and not (HOST_EXE.parent / 'SDL3.dll').is_file():
+        clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
+        env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
+    return env
+
+
 @unittest.skipUnless(HOST_EXE.exists(), 'build native probe first')
 class CpuFeaturesTests(unittest.TestCase):
     def test_cpu_features_mode_reports_this_machine(self):
-        env = dict(os.environ)
-        # Development builds run from the MSYS2 tree: its CLANG64 DLLs (SDL3, ...), as in run.py.
-        if sys.platform == 'win32' and not (HOST_EXE.parent / 'SDL3.dll').is_file():
-            clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
-            env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
-        result = subprocess.run([str(HOST_EXE.resolve()), '--cpu-features'], capture_output=True, text=True, env=env)
+        result = subprocess.run([str(HOST_EXE.resolve()), '--cpu-features'], capture_output=True, text=True, env=host_env())
         self.assertEqual(result.returncode, 0)
         self.assertRegex(result.stdout, r'^CPU: (complete|missing [A-Z0-9., ]+)\n$')
+
+
+@unittest.skipUnless(HOST_EXE.exists(), 'build native probe first')
+class GamepadAndMountTests(unittest.TestCase):
+    def test_gamepad_mode_prints_exactly_one_line(self):
+        # With or without a controller attached: "Gamepad: none" or the described pad.
+        result = subprocess.run([str(HOST_EXE.resolve()), '--gamepad'], capture_output=True, text=True, env=host_env())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.count('\n'), 1, result.stdout)
+        self.assertTrue(result.stdout.startswith('Gamepad: '), result.stdout)
+
+    def test_malformed_mount_is_rejected(self):
+        # Without '=' the option is refused before the boot file is read.
+        result = subprocess.run([str(HOST_EXE.resolve()), 'missing.bin', '--mount', 'no-equals-sign'],
+                                capture_output=True, text=True, env=host_env())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('--mount', result.stderr)
 
 
 if __name__ == '__main__':

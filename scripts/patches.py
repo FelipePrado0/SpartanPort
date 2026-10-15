@@ -125,8 +125,10 @@ def encode(line):
 
 def compile_patches(xml, names, app_version, segments, image=None, skipped=None):
     """Writes of the named patches. With the game's image, each site is found by its signature
-    (any build); without it, at the reference build's Address. A patch whose sites are not all
-    found is left out whole, with the reason in skipped[name]. app_version None: any version."""
+    (any build); without it, at the reference build's Address. A Line with a Target writes at that
+    Target instead: data the code points to, such as a .bss variable (no bytes of its own to find).
+    A patch whose sites are not all found is left out whole, with the reason in skipped[name].
+    app_version None: any version."""
     found={}
     for meta in ET.parse(xml).getroot().iter('Metadata'):
         if meta.get('Name') in names and app_version in (None,meta.get('AppVer')) and meta.get('AppElf','eboot.bin')=='eboot.bin':
@@ -141,6 +143,7 @@ def compile_patches(xml, names, app_version, segments, image=None, skipped=None)
                    for line in lines]
             targets=(resolve_targets(image,found[name],sites) if image is not None else
                      {t.get('Name'):int(t.get('Address'),0)-EBOOT_BASE for t in found[name].iter('Target')})
+            sites=[targets[line.get('Target')] if line.get('Target') else site for line,site in zip(lines,sites)]
         except LookupError as error:
             if skipped is None: raise ValueError(f'{name}: {error}')
             skipped[name]=str(error)
@@ -226,14 +229,19 @@ def available_patches(xml, app_version):
 # enable one, never both. A chosen resolution patch replaces the default texture fix.
 EXCLUSIVE_PREFIX='Resolution Patch'
 REPLACED_BY_EXCLUSIVE={'Bug Fix - Texture Corruption Fix'}
+# Fixes with nothing to choose: not offered in the launcher and applied even with its saved list,
+# which predates them (the startup black screen fix sets a value the game overwrites at once).
+ALWAYS_ON={'Bug Fix - Startup Black Screen'}
 
 
 def selected_patches(xml, app_version, extra, only=False):
     """The file's isEnabled patches for this version, then the names in extra (";"-separated).
-    only: extra is the whole selection (the launcher's), without the file's defaults."""
-    names=[] if only else [m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata')
-                           if m.get('AppVer')==app_version and m.get('isEnabled','false').lower()=='true']
+    only: extra is the whole selection (the launcher's), without the file's defaults but with
+    the ALWAYS_ON ones."""
+    metas=[m for m in ET.parse(xml).getroot().iter('Metadata') if m.get('AppVer')==app_version]
+    names=[] if only else [m.get('Name') for m in metas if m.get('isEnabled','false').lower()=='true']
     names+=[n for n in (n.strip() for n in extra.split(';')) if n and n not in names]
+    names+=[m.get('Name') for m in metas if m.get('Name') in ALWAYS_ON and m.get('Name') not in names]
     exclusive=[n for n in names if n.startswith(EXCLUSIVE_PREFIX)]
     if len(exclusive)>1:
         raise ValueError(f'choose one resolution patch, not {exclusive}')

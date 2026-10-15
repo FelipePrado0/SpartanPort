@@ -133,4 +133,19 @@
             <Line Type="bytes" Address="0x0041b2e7" Value="b901000000909090" Pattern="8b 00 eb 05 e8 ?? ?? ?? ?? 85 c0 0f 95 c0 0f b6 c8" At="9"/>
         </PatchList>
     </Metadata>
+    <!-- Each frame ends with WAIT_REG_MEM(label 5 != index of the frame two before) and an EOP
+         writing label 2 = frame index; the EOP thread flips label 2's buffer and, once flipped,
+         writes label 5 = label 2. The index of the frame two before comes from the frame index
+         variable (0x18ba600, .bss): it starts at 0, the first frame's own index, so the second
+         frame waits for label 5 != 0, which only holds until the first flip is done. When that
+         flip finishes first, only the second frame's EOP could change label 5: GPU and game wait
+         for each other (black screen, FPS counter running; issue #111). Starting the variable at
+         2, the index before 0 in the 0-1-2 rotation, removes the deadlock; the game overwrites it
+         from the first frame on. The variable is found through the store in the frame end code. -->
+    <Metadata Title="God of War III Remastered" Name="Bug Fix - Startup Black Screen" Note="Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger." Author="gow3_pc" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
+        <PatchList>
+            <Line Type="bytes32" Address="0x018ba600" Target="frame_index" Value="0x00000002"/>
+        </PatchList>
+        <Target Name="frame_index" Address="0x018ba600" Pattern="8b 05 ?? ?? ?? ?? 89 05 ?? ?? ?? ?? 44 89 35 ?? ?? ?? ?? c6 05 ?? ?? ?? ?? 01" At="15" Ref="1" Tail="0"/>
+    </Metadata>
 </Patch>

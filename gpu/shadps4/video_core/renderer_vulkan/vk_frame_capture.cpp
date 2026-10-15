@@ -30,6 +30,7 @@ struct Entry {
     u64 indices{};
     std::vector<u64> shaders; ///< vs/ps pairs (graphics) or cs (compute), first few
     std::vector<std::pair<Target, bool>> sampled; ///< textures (false) and storage images (true)
+    std::string state; ///< census line of the first pipeline (vk_pass_census.h)
     std::string note;
     std::vector<std::string> buffers; ///< dumped constants, per draw
 };
@@ -135,6 +136,9 @@ void Write(VAddr presented) {
         if (!e.compute) {
             std::fprintf(f, "  depth  %s\n", Describe(e.depth).c_str());
         }
+        if (!e.state.empty()) {
+            std::fprintf(f, "  %s\n", e.state.c_str());
+        }
         for (const auto& [t, storage] : e.sampled) {
             std::fprintf(f, "  %s %s\n", storage ? "writes " : "samples", Describe(t).c_str());
         }
@@ -210,7 +214,7 @@ void FrameCapture::AddDisplayBuffer(VAddr address) {
 }
 
 void FrameCapture::BeginPass(const VideoCore::ImageInfo* const* colors, u32 num_colors,
-                             const VideoCore::ImageInfo* depth) {
+                             const VideoCore::ImageInfo* depth, std::string census) {
     std::vector<Target> targets;
     bool display = false;
     {
@@ -251,7 +255,8 @@ void FrameCapture::BeginPass(const VideoCore::ImageInfo* const* colors, u32 num_
         entries.back().colors == targets && entries.back().depth == d) {
         return;
     }
-    entries.push_back({.compute = false, .colors = std::move(targets), .depth = d});
+    entries.push_back(
+        {.compute = false, .colors = std::move(targets), .depth = d, .state = std::move(census)});
     pass_open = true;
 }
 
@@ -288,6 +293,9 @@ void FrameCapture::Dispatch(u64 cs_hash, u32 x, u32 y, u32 z) {
 }
 
 void FrameCapture::Buffer(u64 stage_hash, u32 slot, VAddr address, const void* data, u64 size) {
+    if (!data) {
+        return;
+    }
     const u64 bytes = std::min<u64>(size, 1024) & ~u64(3);
     std::string out = std::format("  buffer stage {:016x} slot {} at {:#x} size {}:", stage_hash,
                                   slot, address, size);

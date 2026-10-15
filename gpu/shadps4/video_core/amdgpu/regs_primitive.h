@@ -4,6 +4,7 @@
 #pragma once
 
 #include "common/types.h"
+#include "video_core/amdgpu/gow3_msaa.h"
 
 namespace AmdGpu {
 
@@ -230,7 +231,7 @@ struct AaConfig {
     u32 detail_to_exposed_mode : 2;
 
     u32 NumSamples() const {
-        return 1 << msaa_num_samples;
+        return NoMsaa() ? 1 : 1 << msaa_num_samples;
     }
 };
 

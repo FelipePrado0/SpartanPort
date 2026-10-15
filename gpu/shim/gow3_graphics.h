@@ -48,6 +48,13 @@ inline int ParseEngineFps(int value) {
     return IndexOf(EngineFps, value, -1) >= 0 ? value : 120;
 }
 
+/// Anisotropic filtering forced on the game's mipmapped textures; 0 = the game's own. Samplers
+/// are cached, so it applies on restart.
+inline constexpr std::array<int, 5> Anisotropies = {0, 2, 4, 8, 16};
+inline int ParseAnisotropy(int value) {
+    return IndexOf(Anisotropies, value, -1) >= 0 ? value : 0;
+}
+
 /// Frames the GPU command thread may queue ahead of the GPU; 0 = unbounded.
 inline constexpr std::array<int, 3> FramesQueued = {1, 2, 0};
 inline int ParseFramesQueued(int value) {

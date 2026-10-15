@@ -1,8 +1,9 @@
 God of War III Remastered for PC (gow3_pc)
 ==========================================
 
-No game files are included. You need your own copy of God of War III Remastered: CUSA01623 with
-the 01.02 update, as a folder that contains eboot.bin, sce_module and sce_sys.
+No game files are included. You need your own copy of God of War III Remastered as a folder
+containing eboot.bin, sce_module and sce_sys. Tested title IDs: CUSA01623 and CUSA01715;
+versions 01.00 and 01.02. Other builds may work, but are not guaranteed.
 
 Requirements
 - Windows 10 (1903 or newer) or Windows 11, 64-bit.
@@ -23,14 +24,22 @@ Starting
 
 Patches and fixes are included and applied automatically: texture fix, skip videos with X and
 120 FPS are on by default. Change the resolution and frame rate on Home or Performance.
+The startup black-screen fix is always requested, even with older saved patch lists. Each
+patch applies only where its signature matches; a resolution patch replaces the texture fix.
+The launcher has Home, Graphics, Performance, Game and Advanced pages. Click Save to keep
+pending changes before playing. FSR 1 and temporal upscalers are disabled; RCAS remains available.
 
 While playing
 - Insert on the keyboard, or R3 + L2 on the controller, opens the port's menu: cheats,
   multipliers, image, performance and the performance overlay.
-- Saved shaders load in the background; a small note in the corner shows the progress.
+- Saved pipelines load and compile in the background; a small note shows the progress.
+  Stutters, missing effects during compilation and temporary FPS drops can still occur.
 - Keyboard: WASD move, arrows camera, Space Cross, Left Shift Circle, E Square, Q Triangle,
-  1/3 L1/R1, R/F L2/R2, Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab touchpad. Change them on
-  the launcher's Controls page.
+  1/3 L1/R1, R/F L2/R2, Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab photo mode and Backspace
+  pause menu. Change them under Game -> Controls. On controllers without a touchpad, View opens
+  pause and L1 + View opens photo mode.
+- Game -> Controls -> In-game button icons: Original (default), Match my controller, Xbox or
+  Nintendo. Generated copies do not change the game folder. Changing controllers needs a restart.
 
 Next time
 - "Play God of War III.exe" starts the game straight away with the saved settings. Make a
@@ -54,8 +63,29 @@ Problems
   with a separate Saves folder containing only that slot; keep the original saves.
 - RTSS/Afterburner and ReShade must target bin\gow3-probe.exe, not the launcher.
   Select Vulkan in the ReShade installer. Report the overlay versions if it still fails.
-- Black screen at start: Advanced -> Clear shader cache, then start again.
-- The game does not open: check the Log page, and send user\last_run.log with your report.
+- Black screen at start: use the latest release, which includes the startup deadlock patch.
+  If it persists, report the GPU, driver, game build and Advanced -> Log output. Clearing the
+  shader cache is not a general fix and requires rebuilding it on the next launch.
+- Yellow/orange/white textures or wrong lighting: try disabling Performance -> GPU data ->
+  Deferred GPU readbacks and restart. This workaround can cause stutters.
+- Memory error (error 1450): increase the Windows page file. Win+R ->
+  SystemPropertiesAdvanced -> Performance Settings -> Advanced -> Virtual memory Change ->
+  set C: to 16384 MB initial, 24576 MB maximum -> Set -> OK, then restart your PC.
+- The game does not open: check Advanced -> Log, and send user\last_run.log with your report.
+  With a custom Saves folder, last_run.log is in that folder instead.
+- Other known GPU, audio, crash and progress issues are tracked in the release notes and issues:
+  https://github.com/FelipePrado0/gow3_pc/releases/latest
+  https://github.com/FelipePrado0/gow3_pc/issues
+
+Documentation and other platforms
+- This text is maintained with the source; changes reach packaged copies in the next build.
+- The main README's Contents links work inside this package. Links to other documentation and
+  translated READMEs open the online repository and need an internet connection.
+- For differences between published packages and current source builds, including Discord
+  Rich Presence, see the feature availability table:
+  https://github.com/FelipePrado0/gow3_pc#feature-availability
+- An experimental Linux AppImage is also available on the Releases page. It requires Linux
+  x86-64, glibc 2.39 or newer, AVX and Vulkan 1.3; see the project's README for instructions.
 
 This project is not affiliated with Sony Interactive Entertainment or Santa Monica Studio.
 God of War is a trademark of Sony Interactive Entertainment.

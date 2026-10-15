@@ -5,6 +5,7 @@
 
 #include "common/assert.h"
 #include "common/types.h"
+#include "video_core/amdgpu/gow3_msaa.h"
 #include "video_core/amdgpu/tiling.h"
 
 namespace AmdGpu {
@@ -264,8 +265,12 @@ struct DepthBuffer {
         return u64(stencil_write_base) << 8;
     }
 
-    u32 NumSamples() const {
+    u32 GuestNumSamples() const {
         return 1u << z_info.num_samples; // spec doesn't say it is a log2
+    }
+
+    u32 NumSamples() const {
+        return NoMsaa() ? 1 : GuestNumSamples();
     }
 
     u32 NumBits() const {
@@ -275,7 +280,7 @@ struct DepthBuffer {
     u32 GetDepthSliceSize() const {
         ASSERT(z_info.format != ZFormat::Invalid);
         const auto bpe = NumBits() >> 3; // in bytes
-        return (depth_slice.tile_max + 1) * 64 * bpe * NumSamples();
+        return (depth_slice.tile_max + 1) * 64 * bpe * GuestNumSamples();
     }
 
     TileMode GetTileMode() const {

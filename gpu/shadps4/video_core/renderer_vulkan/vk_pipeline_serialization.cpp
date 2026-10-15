@@ -25,7 +25,9 @@
 #include "shader_recompiler/frontend/fetch_shader.h"
 #include "shader_recompiler/info.h"
 #include "video_core/cache_storage.h"
+#include "video_core/renderer_vulkan/vk_amd_paths.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
+#include "video_core/renderer_vulkan/vk_lighting_test.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
 #include "video_core/renderer_vulkan/vk_warmup_inbox.h"
@@ -38,6 +40,17 @@ static constexpr u32 PipelineKeyVersion = 5u; // gow3: Info layout (ImageResourc
 } // namespace Serialization
 
 namespace Vulkan {
+
+namespace {
+// gow3: the test knobs that change recompiled SPIR-V (GOW3_LIGHTING_TEST=dref,
+// GOW3_AMD_PATHS_OFF=shaderext) get their own shader binary cache version.
+u32 CurrentShaderBinaryVersion() {
+    return LightingTest::ShaderBinaryVersion(
+        Serialization::ShaderBinaryVersion,
+        LightingTest::ShaderBinarySalt(LightingTest::Current().dref,
+                                       AmdPathsOff::Current().shaderext));
+}
+} // namespace
 
 namespace PipelineBinaryCache {
 bool ValidKey(const Key& key) {
@@ -596,7 +609,7 @@ void RegisterShaderMeta(const Shader::Info& info,
     Serialization::Writer meta{ar};
 
     meta.Write(Serialization::ShaderMetaVersion);
-    meta.Write(Serialization::ShaderBinaryVersion);
+    meta.Write(CurrentShaderBinaryVersion());
 
     meta.Write(perm_hash);
     meta.Write(perm_idx);
@@ -631,7 +644,7 @@ bool LoadShaderMeta(Serialization::Archive& ar, Shader::Info& info,
 
     u32 binary_version{};
     meta.Read(binary_version);
-    if (binary_version != Serialization::ShaderBinaryVersion) {
+    if (binary_version != CurrentShaderBinaryVersion()) {
         return false;
     }
 

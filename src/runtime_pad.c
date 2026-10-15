@@ -433,7 +433,9 @@ static ABI int32_t pad_vibration(int32_t handle, const uint8_t *param) {
     if (!param) return ERR_INVALID_ARG;
     pthread_mutex_lock(&lock);
     SDL_Gamepad *g=current_gamepad();
-    if (g) SDL_RumbleGamepad(g,(uint16_t)(param[0]*257),(uint16_t)(param[1]*257),1000);
+    /* The menu's vibration strength scales the game's motors (0: off). */
+    const unsigned percent=(unsigned)gow3gpu_vibration_percent();
+    if (g) SDL_RumbleGamepad(g,(uint16_t)(param[0]*257u*percent/100u),(uint16_t)(param[1]*257u*percent/100u),1000);
     pthread_mutex_unlock(&lock);
     return 0;
 }
@@ -455,3 +457,47 @@ static const RuntimeExport exports[]={
 };
 uintptr_t runtime_pad_resolve(const char *name) { return RUNTIME_LOOKUP(exports,name); }
 void runtime_pad_report(void) { printf("Runtime: pad reads=%zu, gamepad=%s\n",reads,gamepad ? SDL_GetGamepadName(gamepad) : "none"); }
+
+/* probe --gamepad: runs before any game state exists, so it uses its own SDL gamepad and leaves
+ * the lock and statics above alone. run.py parses this line; keep the format. */
+static const char *label_name(SDL_GamepadButtonLabel label) {
+    switch (label) {
+    case SDL_GAMEPAD_BUTTON_LABEL_A: return "a";
+    case SDL_GAMEPAD_BUTTON_LABEL_B: return "b";
+    case SDL_GAMEPAD_BUTTON_LABEL_X: return "x";
+    case SDL_GAMEPAD_BUTTON_LABEL_Y: return "y";
+    case SDL_GAMEPAD_BUTTON_LABEL_CROSS: return "cross";
+    case SDL_GAMEPAD_BUTTON_LABEL_CIRCLE: return "circle";
+    case SDL_GAMEPAD_BUTTON_LABEL_SQUARE: return "square";
+    case SDL_GAMEPAD_BUTTON_LABEL_TRIANGLE: return "triangle";
+    default: return "unknown";
+    }
+}
+int runtime_pad_describe(void) {
+    SDL_Gamepad *g=NULL;
+    const bool ready=SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+    /* No event loop yet, so pads show up only after a pump: poll for about 300 ms. */
+    for (int waited=0; ready && !g && waited<30; ++waited) {
+        SDL_PumpEvents();
+        int count=0;
+        SDL_JoystickID *ids=SDL_GetGamepads(&count);
+        if (ids && count>0) g=SDL_OpenGamepad(ids[0]);
+        SDL_free(ids);
+        if (!g) SDL_Delay(10);
+    }
+    if (!g) puts("Gamepad: none");
+    else {
+        const char *type=SDL_GetGamepadStringForType(SDL_GetGamepadType(g));
+        const char *name=SDL_GetGamepadName(g);
+        printf("Gamepad: type=%s south=%s east=%s west=%s north=%s name=%s\n",
+               type ? type : "unknown",
+               label_name(SDL_GetGamepadButtonLabel(g,SDL_GAMEPAD_BUTTON_SOUTH)),
+               label_name(SDL_GetGamepadButtonLabel(g,SDL_GAMEPAD_BUTTON_EAST)),
+               label_name(SDL_GetGamepadButtonLabel(g,SDL_GAMEPAD_BUTTON_WEST)),
+               label_name(SDL_GetGamepadButtonLabel(g,SDL_GAMEPAD_BUTTON_NORTH)),
+               name ? name : "unknown");
+        SDL_CloseGamepad(g);
+    }
+    if (ready) SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+    return g!=NULL;
+}

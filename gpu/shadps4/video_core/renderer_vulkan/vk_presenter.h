@@ -37,7 +37,7 @@ struct Frame {
     u64 ready_tick;
     bool is_hdr{false};
     u8 id{};
-
+    vk::Format format{}; ///< gow3: of `image` (screenshots)
 };
 
 enum SchedulerType {

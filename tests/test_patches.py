@@ -69,17 +69,21 @@ class GameProfileTests(unittest.TestCase):
 
     def test_gow3_defaults_and_extras(self):
         self.assertEqual(selected_patches(GOW3, '01.02', ''),
-                         ['Bug Fix - Texture Corruption Fix', 'Skip Any Video With X Button'])
+                         ['Bug Fix - Texture Corruption Fix', 'Skip Any Video With X Button',
+                          'Bug Fix - Startup Black Screen'])
         self.assertEqual(selected_patches(GOW3, '01.02', 'Resolution Patch - 720p; Skip Any Video With X Button'),
-                         ['Skip Any Video With X Button', 'Resolution Patch - 720p'])
+                         ['Skip Any Video With X Button', 'Bug Fix - Startup Black Screen', 'Resolution Patch - 720p'])
         self.assertEqual(selected_patches(GOW3, '01.00', ''), [])
-        # The launcher's selection is exact: unchecked defaults stay off.
-        self.assertEqual(selected_patches(GOW3, '01.02', 'Skip Any Video With X Button', only=True), ['Skip Any Video With X Button'])
-        self.assertEqual(selected_patches(GOW3, '01.02', '', only=True), [])
+        # The launcher's selection is exact: unchecked defaults stay off, except the fixes that are
+        # always on (a list saved before they existed must still get them).
+        self.assertEqual(selected_patches(GOW3, '01.02', 'Skip Any Video With X Button', only=True),
+                         ['Skip Any Video With X Button', 'Bug Fix - Startup Black Screen'])
+        self.assertEqual(selected_patches(GOW3, '01.02', '', only=True), ['Bug Fix - Startup Black Screen'])
+        self.assertEqual(selected_patches(GOW3, '01.00', '', only=True), [])
 
     def test_gow3_resolution_patch_replaces_texture_fix(self):
         self.assertEqual(selected_patches(GOW3, '01.02', 'Resolution Patch - 4K'),
-                         ['Skip Any Video With X Button', 'Resolution Patch - 4K'])
+                         ['Skip Any Video With X Button', 'Bug Fix - Startup Black Screen', 'Resolution Patch - 4K'])
         with self.assertRaises(ValueError):
             selected_patches(GOW3, '01.02', 'Resolution Patch - 4K;Resolution Patch - 720p')
 
@@ -112,6 +116,10 @@ class SignatureTests(unittest.TestCase):
       <Line Type="bytes" Address="0x401020" Value="90" Pattern="de ad be ef" At="0"/>
     </PatchList>
   </Metadata>
+  <Metadata Name="Data" AppVer="01.02">
+    <PatchList><Line Type="bytes32" Address="0x402000" Target="variable" Value="0x2"/></PatchList>
+    <Target Name="variable" Address="0x402000" Pattern="44 89 35 ?? ?? ?? ?? c6" At="3" Ref="1"/>
+  </Metadata>
 </Patch>"""
 
     def setUp(self):
@@ -123,6 +131,8 @@ class SignatureTests(unittest.TestCase):
         image[0x40:0x46] = bytes.fromhex('112233445566')
         image[0x80:0x85] = bytes.fromhex('aabbccddee')
         image[0x200:0x207] = bytes.fromhex('e9') + (0x300 - 0x205).to_bytes(4, 'little', signed=True) + bytes.fromhex('7788')
+        # mov [rip+disp], r14d storing to 0x3f0, then the c6 of the next instruction.
+        image[0x280:0x288] = bytes.fromhex('448935') + (0x3f0 - 0x287).to_bytes(4, 'little', signed=True) + b'\xc6'
         self.image = bytes(image)
 
     def test_sites_found_anywhere_and_rel32_recomputed(self):
@@ -144,6 +154,18 @@ class SignatureTests(unittest.TestCase):
         writes = compile_patches(self.xml, ['Found', 'Call'], '01.02', [(0, 0x10000)])
         self.assertEqual(writes[0], (0x1004, b'\x90\x90'))
         self.assertEqual(writes[1][0], 0x1010)
+
+    def test_data_line_writes_at_its_target(self):
+        # The variable has no bytes of its own to find: the code that stores to it points at it.
+        self.assertEqual(compile_patches(self.xml, ['Data'], None, [(0, 0x400)], self.image, {}),
+                         [(0x3f0, (2).to_bytes(4, 'little'))])
+        self.assertEqual(compile_patches(self.xml, ['Data'], '01.02', [(0, 0x10000)]),
+                         [(0x2000, (2).to_bytes(4, 'little'))])
+        image = bytearray(self.image)
+        image[0x280:0x288] = bytes(8)  # store not found: the whole patch is left out
+        skipped = {}
+        self.assertEqual(compile_patches(self.xml, ['Data'], None, [(0, 0x400)], bytes(image), skipped), [])
+        self.assertEqual(skipped, {'Data': 'signature not found'})
 
     def test_signatures_match_the_full_update_eboot(self):
         # Without that eboot.bin here: the original bytes others published for it must be the
@@ -177,11 +199,11 @@ class SignatureTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('GOW3_GAME'), 'GOW3_GAME (game folder) not set')
     def test_gow3_signatures_in_the_reference_and_a_moved_build(self):
         from prepare import parse_self
-        from patches import eboot_image
+        from patches import eboot_image, eboot_segments
         elf, *_ = parse_self((Path(os.environ['GOW3_GAME']) / 'eboot.bin').read_bytes())
         image = eboot_image(bytes(elf))
         names = [m.get('Name') for m in ET.parse(GOW3).getroot().iter('Metadata')]
-        segments = [(0, len(image))]
+        segments = eboot_segments(bytes(elf))  # as patches.py: .bss included (memsz)
         # The reference build: the signatures give exactly the Address writes.
         for name in names:
             self.assertEqual(compile_patches(GOW3, [name], None, segments, image, {}),
@@ -205,6 +227,11 @@ class SignatureTests(unittest.TestCase):
     def test_gow3_patches_compile(self):
         names = [m.get('Name') for m in ET.parse(GOW3).getroot().iter('Metadata')]
         self.assertTrue(compile_patches(GOW3, names, '01.02', SEGMENTS))
+
+    def test_gow3_startup_black_screen(self):
+        # The frame index variable (.bss) starts at 2, the index before the first frame's 0.
+        self.assertEqual(compile_patches(GOW3, ['Bug Fix - Startup Black Screen'], '01.02', SEGMENTS),
+                         [(0x14ba600, (2).to_bytes(4, 'little'))])
 
     def test_gow3_skip_intro_targets(self):
         # Ported from the other 01.02 build: every jump must land where this eboot has the code.
