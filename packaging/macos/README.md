@@ -42,10 +42,16 @@ again when its stamp in `out/macos-deps/stamps` is deleted; `GOW3_MACOS_DEPS` mo
 ## Play
 
 ```bash
-python3 launcher/gow3_launcher_win.py                 # choose the game folder, then PLAY
-GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py       # or without the launcher
-bash run.sh                                           # build.sh, then run.py
+./play-mac.sh                                         # finds the dump and starts the game
+./play-mac.sh /path/to/CUSA01623 [/path/to/update]    # that folder (and an update dumped apart)
+./play-mac.sh --launcher                              # the launcher: choose the game folder, then PLAY
+GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py       # without the script (after build.sh)
 ```
+
+`play-mac.sh` builds what changed (quietly once built; `out/play-build.log`), then looks for the
+dump, a folder with `eboot.bin`, `sce_module` and `sce_sys`, in `~/Downloads`, `~/Desktop`,
+`~/Documents`, `~/Games` and next to the repository, and for an update dumped apart from it next
+to the game. It cannot read `.pkg` files and says so when it finds only those.
 
 On a Mac keyboard the port's menu opens with **`** (the key left of 1); Insert and R3+L2 work
 too. The first start takes longer: Rosetta translates the game's code and the shaders are compiled.

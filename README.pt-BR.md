@@ -153,8 +153,9 @@ e ainda não foi jogada do começo ao fim. Compile e rode a partir do repositór
 requisitos e o que muda em relação ao Linux: [packaging/macos/README.md](packaging/macos/README.md)):
 
 ```
-bash build.sh                          # a primeira vez também compila as bibliotecas x86-64
-python3 launcher/gow3_launcher_win.py  # escolha a pasta do jogo e clique em JOGAR
+./play-mac.sh                      # compila, acha o dump em ~/Downloads, ~/Desktop ou ~/Documents e joga
+./play-mac.sh /caminho/CUSA01623   # essa pasta (eboot.bin, sce_module, sce_sys)
+./play-mac.sh --launcher           # o launcher: configurações, saves, mods
 ```
 
 ## Requisitos

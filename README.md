@@ -153,8 +153,9 @@ has not been played through yet. Build and run from the repository (details, req
 what differs from Linux: [packaging/macos/README.md](packaging/macos/README.md)):
 
 ```
-bash build.sh                          # first run also builds the x86-64 libraries
-python3 launcher/gow3_launcher_win.py  # choose the game folder, then PLAY
+./play-mac.sh                      # builds, finds the dump in ~/Downloads, ~/Desktop or ~/Documents, plays
+./play-mac.sh /path/to/CUSA01623   # that folder (eboot.bin, sce_module, sce_sys)
+./play-mac.sh --launcher           # the launcher: settings, saves, mods
 ```
 
 ## Requirements
