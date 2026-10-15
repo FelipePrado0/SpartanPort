@@ -151,7 +151,9 @@ def patch(base, messages):
         glyph_box = font_use.getbbox(target)
         bearing = int(round(glyph_box[0] * 16))
         width = max(1, int(round((glyph_box[2] - glyph_box[0]) * 16)))
-        advance = max(1, int(round(font_use.getlength(target) * 16)))
+        # Keep the original slot advance: the renderer lays out this font on
+        # the CJK grid, while Arial's narrower advance causes Persian overlap.
+        advance = struct.unpack_from('<I', smf, pos + 16)[0]
         struct.pack_into('<I', smf, pos + 12,
                          ((width & 0xffff) << 16) | (bearing & 0xffff))
         struct.pack_into('<I', smf, pos + 16, advance)
