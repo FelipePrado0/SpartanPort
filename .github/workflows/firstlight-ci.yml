@@ -58,6 +58,10 @@ jobs:
           python -m unittest tests.test_firstlight_port -v
       - name: Build Windows runtime
         run: bash build.sh
+      - name: First Light runtime tests
+        run: |
+          ninja -C out/gpu eventflag-test
+          out/gpu/eventflag-test.exe
       - name: Verify artifact
         run: |
           test -f out/firstlight-probe.exe
