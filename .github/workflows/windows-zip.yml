@@ -7,8 +7,6 @@
 name: Windows zip
 
 on:
-  push:
-    branches: [worktree-ci-windows-zip]
   workflow_dispatch:
     inputs:
       tag:
