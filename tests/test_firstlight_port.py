@@ -72,6 +72,18 @@ class FirstLightPortTests(unittest.TestCase):
             self.assertNotIn(call,text)
         self.assertIn("if (check_imports && cpu_only) gow3gpu_register_graphics_symbols();",text)
 
+    def test_cusa00575_recent_gnm_paths_are_implemented(self):
+        cpp=(ROOT/"gpu"/"shadps4"/"core"/"libraries"/"gnmdriver"/"gnmdriver.cpp").read_text(encoding="utf-8")
+        header=(ROOT/"gpu"/"shadps4"/"core"/"libraries"/"gnmdriver"/"gnmdriver.h").read_text(encoding="utf-8")
+        self.assertIn("sceGnmRequestFlipAndSubmitDone(u32* gpu_addr",cpp)
+        self.assertIn("PatchFlipRequest(gpu_addr, 0x40",cpp)
+        self.assertIn("liverpool->SubmitGfx(dcb_span, {})",cpp)
+        self.assertIn("sceGnmSetGsRingSizes(u32 esgs_ring_size, u32 gsvs_ring_size)",cpp)
+        self.assertIn("vgt_esgs_ring_size = esgs_ring_size >> 8",cpp)
+        self.assertIn("sceGnmSetupMipStatsReport(void* output_buffer",cpp)
+        self.assertIn("*static_cast<u32*>(output_buffer) = 0x40u",cpp)
+        self.assertIn("sceGnmRequestFlipAndSubmitDone(u32* gpu_addr",header)
+
     def test_headless_gpu_registration(self):
         gnm=(ROOT/"gpu"/"shadps4"/"core"/"libraries"/"gnmdriver"/"gnmdriver.cpp").read_text(encoding="utf-8")
         video=(ROOT/"gpu"/"shadps4"/"core"/"libraries"/"videoout"/"video_out.cpp").read_text(encoding="utf-8")
