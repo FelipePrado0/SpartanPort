@@ -137,5 +137,55 @@ int main(void) {
     p.buttons=0; p.right_x=p.right_y=128; p.timestamp+=1000;
     apply_dodge(&p);
     assert(p.right_x==128 && p.right_y==128);
+    /* Keyboard rotation minigame: a prompt is up while the update hook counts frames. */
+    _putenv("GOW3_STICK_PROMPTS=keyboard");
+    _putenv("GOW3_QTE_SEQUENCES=360ccw=Q>E, up180cw = D > S > A ,bogus=W,down180cw=D>Mouse Left");
+    static uint8_t prompt[0x20];
+    gow3_qte.block=(uint64_t)(uintptr_t)prompt;
+    static bool keyboard[SDL_SCANCODE_COUNT];
+    uint64_t now=10000000;
+    prompt[GOW3_QTE_TYPE_OFFSET]=4;                            /* Up180CW: D S A */
+    assert(!qte_keys(keyboard,now));                           /* no frames: no prompt */
+    assert(qte_sequences[2].length==3 && qte_sequences[2].keys[1]==SDL_SCANCODE_S); /* kept */
+    assert(qte_sequences[5].length==2 && qte_sequences[5].keys[0]==SDL_SCANCODE_Q);
+    keyboard[SDL_SCANCODE_D]=true;                             /* held while walking in */
+    ++gow3_qte.heartbeat;
+    assert(qte_keys(keyboard,now) && qte.step==0);
+    keyboard[SDL_SCANCODE_D]=false;
+    now+=16000; ++gow3_qte.heartbeat;
+    assert(qte_keys(keyboard,now) && qte.step==0);
+    const int wrong[]={SDL_SCANCODE_D,SDL_SCANCODE_S,SDL_SCANCODE_D,SDL_SCANCODE_S,SDL_SCANCODE_A};
+    const unsigned steps[]={1,2,1,2,3};                        /* D out of turn: back to step 1 */
+    for (unsigned i=0;i<5;++i) {
+        keyboard[wrong[i]]=true; now+=16000; ++gow3_qte.heartbeat;
+        assert(qte_keys(keyboard,now) && qte.step==steps[i]);
+        keyboard[wrong[i]]=false; now+=16000; ++gow3_qte.heartbeat;
+        assert(qte_keys(keyboard,now));
+    }
+    assert(qte.passed && gow3_qte.pass==1);
+    gow3_qte.pass=0;                                           /* the rotation stub answered */
+    keyboard[SDL_SCANCODE_D]=true; now+=16000; ++gow3_qte.heartbeat;
+    assert(qte_keys(keyboard,now) && gow3_qte.pass==0);         /* once per prompt */
+    keyboard[SDL_SCANCODE_D]=false;
+    now+=QTE_ACTIVE_US+1;                                      /* the prompt went away */
+    assert(!qte_keys(keyboard,now) && !qte.passed && qte.step==0);
+    prompt[GOW3_QTE_TYPE_OFFSET]=1;                            /* a circle prompt: WASD stay */
+    ++gow3_qte.heartbeat;
+    assert(!qte_keys(keyboard,now));
+    prompt[GOW3_QTE_TYPE_OFFSET]=9;                            /* 360CCW, custom Q E */
+    now+=QTE_ACTIVE_US+1; ++gow3_qte.heartbeat;
+    assert(qte_keys(keyboard,now));
+    const int custom[]={SDL_SCANCODE_Q,SDL_SCANCODE_E};
+    for (unsigned i=0;i<2;++i) {
+        keyboard[custom[i]]=true; now+=16000; ++gow3_qte.heartbeat;
+        assert(qte_keys(keyboard,now));
+        keyboard[custom[i]]=false;
+    }
+    assert(gow3_qte.pass==1);
+    int parsed[QTE_KEYS_MAX];
+    assert(qte_parse_sequence("Left Shift > Space",parsed)==2 && parsed[0]==SDL_SCANCODE_LSHIFT);
+    assert(!qte_parse_sequence("D>Mouse Left",parsed) && !qte_parse_sequence("A>B>C>D>E>F>G>H>I",parsed));
+    gow3_qte.block=0;
+
     puts("PASS: pad and key maps");
 }

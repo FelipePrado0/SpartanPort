@@ -3,6 +3,7 @@ import queue
 import struct
 import sys
 import unittest
+from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
@@ -167,6 +168,16 @@ class ControlMapTest(unittest.TestCase):
         env = launcher.game_environment({**launcher.APP_DEFAULTS, 'controls': controls,
                                          'native_input': True, 'native_rage': True})
         self.assertIn('l3=None,r3=None,rage=Mouse Middle', env['GOW3_KEY_MAP'])
+
+    def test_stick_prompts_follow_native_translation(self):
+        with mock.patch.dict(os.environ, {'GOW3_STICK_PROMPTS': 'keyboard'}):  # left over from a shell
+            self.assertNotIn('GOW3_STICK_PROMPTS', launcher.game_environment(dict(launcher.APP_DEFAULTS)))
+        on = launcher.game_environment({**launcher.APP_DEFAULTS, 'native_input': True})
+        self.assertEqual(on['GOW3_STICK_PROMPTS'], 'keyboard')
+        mouse = launcher.game_environment({**launcher.APP_DEFAULTS, 'native_input': True, 'stick_prompts': 'mouse'})
+        self.assertEqual(mouse['GOW3_STICK_PROMPTS'], 'mouse')
+        odd = launcher.game_environment({**launcher.APP_DEFAULTS, 'native_input': True, 'stick_prompts': 'joystick'})
+        self.assertNotIn('GOW3_STICK_PROMPTS', odd)
 
     def test_native_switch_chooses_the_keyboard_map(self):
         controls = {'key': {'cross': 'Q'}, 'native': {'circle': 'Mouse Middle'}}

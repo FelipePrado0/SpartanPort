@@ -324,7 +324,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR',
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
-                'native_input': False, 'native_rage': True,
+                'native_input': False, 'native_rage': True, 'stick_prompts': 'keyboard',
                 'glyph_style': 'off'}
 
 # PS4 button, default key, default gamepad button (SDL names; src/runtime_pad.c). L2/R2 come
@@ -354,6 +354,8 @@ PAD_STYLES = {
 }
 
 
+# Native Translation: how the game's stick-rotation prompts (QTEs) are answered (runtime_pad.c).
+STICK_PROMPTS = [('keyboard', ('Keyboard (native)',)), ('mouse', ('Adaptive mouse (experimental)',))]
 GLYPH_STYLES = [('off', ('Original (default)',)), ('auto', ('Match my controller',)), ('xbox', ('Xbox',)),
                 ('nintendo', ('Nintendo',))]
 
@@ -978,6 +980,9 @@ def game_environment(s):
         env['GOW3_KEY_MAP'] = value
     if value := control_map(controls, 'pad'):
         env['GOW3_PAD_MAP'] = value
+    env.pop('GOW3_STICK_PROMPTS', None)
+    if s.get('native_input') and s.get('stick_prompts') in dict(STICK_PROMPTS):
+        env['GOW3_STICK_PROMPTS'] = s['stick_prompts']
     glyph_style = s.get('glyph_style')
     env.pop('GOW3_GLYPH_STYLE', None)
     if glyph_style in ('auto', 'xbox', 'nintendo'):
@@ -1845,6 +1850,10 @@ class Launcher:
                        'or back when standing still. Applied when the game starts.').format(CAPTURE_SECONDS))
         ttk.Button(f, text=_('Reset native to defaults'), command=lambda: self.reset_controls('native')).grid(
             row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
+        self.row(f, _('Joystick prompts'), self.choice(f, 'stick_prompts', 'app', STICK_PROMPTS),
+                 hint=_('How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns '
+                        'from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W '
+                        'or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.'))
 
     def key_binder(self, parent, kind, button, var):
         """An input box of the 'key' or 'native' table: click it, then press a key; on 'native' a

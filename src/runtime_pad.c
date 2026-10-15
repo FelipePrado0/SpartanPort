@@ -11,6 +11,7 @@
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "gpu/gow3gpu.h"
+#include "qte_hook.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -293,6 +294,123 @@ static void load_button_maps(void) {
 static void key_axis(uint8_t *axis, bool negative, bool positive) {
     if (negative || positive) *axis=(uint8_t)(128-(negative ? 128 : 0)+(positive ? 127 : 0));
 }
+/* Stick prompts (GOW3_STICK_PROMPTS; the launcher sets it with Native Translation). keyboard: while
+ * the game shows a stick-rotation prompt (src/qte_hook.h), W/A/S/D stop moving the left stick and
+ * the player types the prompt's keys instead; a finished sequence makes the game's own rotation
+ * check pass. A key of the sequence pressed out of turn starts it again; the prompt's timer still
+ * decides when the QTE is lost. GOW3_QTE_SEQUENCES replaces sequences, e.g.
+ * down180cw=D>S>A,360ccw=A>S>D>W (SDL key names joined by >). */
+enum { QTE_ACTIVE_US=150000, QTE_FIRST_ROTATION=4, QTE_ROTATIONS=6, QTE_KEYS_MAX=8 };
+enum { STICK_PROMPTS_OFF, STICK_PROMPTS_KEYBOARD, STICK_PROMPTS_MOUSE };
+static const char *const qte_names[QTE_ROTATIONS]={"up180cw","up180ccw","down180cw","down180ccw","360cw","360ccw"};
+/* As the prompts read in play (the game's Down180CW is typed D S A). */
+static const char *const qte_defaults[QTE_ROTATIONS]={"A>W>D","D>W>A","D>S>A","A>S>D","D>S>A>W","A>S>D>W"};
+static struct { int keys[QTE_KEYS_MAX]; unsigned length; } qte_sequences[QTE_ROTATIONS];
+static struct {
+    int loaded, mode, rotation;
+    uint32_t heartbeat;
+    uint64_t seen;       /* the last read that saw the prompt's frame count move */
+    unsigned step;
+    bool fresh, passed;  /* fresh: keys already held when the prompt appeared do not count */
+    bool held[SDL_SCANCODE_COUNT];
+} qte;
+static Gow3QteState gow3_qte;
+uintptr_t gow3_qte_state_address(void) { return (uintptr_t)&gow3_qte; }
+
+/* "D>S>A" into scancodes: the length, or 0 when a key is unknown or the sequence too long. */
+static unsigned qte_parse_sequence(const char *text, int *keys) {
+    unsigned n=0;
+    char copy[160];
+    if (strlen(text)>=sizeof(copy)) return 0;
+    strcpy(copy,text);
+    for (char *name=copy,*next;name;name=next) {
+        next=strchr(name,'>');
+        if (next) *next++=0;
+        const int key=key_source(trim(name));
+        if (n==QTE_KEYS_MAX || key<=SDL_SCANCODE_UNKNOWN || key>=SDL_SCANCODE_COUNT) return 0;
+        keys[n++]=key;
+    }
+    return n;
+}
+
+static void qte_load(void) {
+    if (qte.loaded) return;
+    qte.loaded=1;
+    const char *mode=getenv("GOW3_STICK_PROMPTS");
+    qte.mode=!mode ? STICK_PROMPTS_OFF : !strcmp(mode,"keyboard") ? STICK_PROMPTS_KEYBOARD
+             : !strcmp(mode,"mouse") ? STICK_PROMPTS_MOUSE : STICK_PROMPTS_OFF;
+    for (unsigned i=0;i<QTE_ROTATIONS;++i) qte_sequences[i].length=qte_parse_sequence(qte_defaults[i],qte_sequences[i].keys);
+    const char *value=getenv("GOW3_QTE_SEQUENCES");
+    char entries[512];
+    if (value && strlen(value)<sizeof(entries)) {
+        strcpy(entries,value);
+        for (char *entry=entries,*next;entry;entry=next) {
+            next=strchr(entry,',');
+            if (next) *next++=0;
+            char *keys=strchr(entry,'=');
+            unsigned i=0;
+            if (keys) {
+                *keys++=0;
+                while (i<QTE_ROTATIONS && SDL_strcasecmp(trim(entry),qte_names[i])) ++i;
+            }
+            int parsed[QTE_KEYS_MAX];
+            const unsigned n=keys && i<QTE_ROTATIONS ? qte_parse_sequence(keys,parsed) : 0;
+            if (n) {
+                memcpy(qte_sequences[i].keys,parsed,sizeof(parsed));
+                qte_sequences[i].length=n;
+            } else if (*trim(entry)) {
+                printf("Runtime: stick prompts: ignored '%s'\n",trim(entry));
+            }
+        }
+    }
+    if (qte.mode!=STICK_PROMPTS_OFF)
+        printf("Runtime: stick prompts: %s%s\n",qte.mode==STICK_PROMPTS_KEYBOARD ? "keyboard" : "adaptive mouse",
+               gow3_qte.block ? "" : " unavailable (prompt hooks not installed)");
+}
+
+static void qte_reset(void) {
+    qte.step=0; qte.passed=false; qte.fresh=true; qte.rotation=-1;
+    __atomic_store_n(&gow3_qte.pass,0,__ATOMIC_RELAXED);
+}
+
+/* The rotation (0..5) the prompt on screen asks for, else -1. A prompt is up while its update
+ * keeps counting frames; QTE_ACTIVE_US without a frame ends it (and resets the minigame). */
+static int qte_rotation(uint64_t now) {
+    if (!gow3_qte.block) return -1;
+    const uint32_t beat=__atomic_load_n(&gow3_qte.heartbeat,__ATOMIC_RELAXED);
+    if (beat!=qte.heartbeat) { qte.heartbeat=beat; qte.seen=now; }
+    if (now-qte.seen>QTE_ACTIVE_US) { qte_reset(); return -1; }
+    const unsigned type=*(const volatile uint16_t *)(uintptr_t)(gow3_qte.block+GOW3_QTE_TYPE_OFFSET);
+    return type-QTE_FIRST_ROTATION<QTE_ROTATIONS ? (int)(type-QTE_FIRST_ROTATION) : -1;
+}
+
+/* One read of the keyboard minigame (keys: SDL's keyboard state); true while it owns W/A/S/D. */
+static bool qte_keys(const bool *keys, uint64_t now) {
+    qte_load();
+    if (qte.mode!=STICK_PROMPTS_KEYBOARD) return false;
+    const int rotation=qte_rotation(now);
+    if (rotation<0) return false;
+    if (rotation!=qte.rotation) { qte.rotation=rotation; qte.step=0; }
+    const int *sequence=qte_sequences[rotation].keys;
+    const unsigned length=qte_sequences[rotation].length;
+    for (unsigned i=0;i<length;++i) {
+        const int key=sequence[i];
+        unsigned first=0;
+        while (sequence[first]!=key) ++first;
+        if (first<i) continue;  /* a key listed twice is looked at once */
+        const bool pressed=keys[key] && !qte.held[key] && !qte.fresh;
+        qte.held[key]=keys[key];
+        if (!pressed || qte.passed) continue;
+        qte.step=key==sequence[qte.step] ? qte.step+1 : key==sequence[0];
+        if (qte.step==length) {
+            qte.passed=true;
+            __atomic_store_n(&gow3_qte.pass,1,__ATOMIC_RELEASE);
+        }
+    }
+    qte.fresh=false;
+    return true;
+}
+
 static void sample_host(PadData *d) {
     memset(d,0,sizeof(*d));
     d->left_x=d->left_y=d->right_x=d->right_y=128;
@@ -336,8 +454,10 @@ static void sample_host(PadData *d) {
         if (source_down(key_map.entries[i].source,k,mouse,wheel)) d->buttons|=key_map.entries[i].ps;
     if (d->buttons & BTN_L2) d->l2=255;
     if (d->buttons & BTN_R2) d->r2=255;
-    key_axis(&d->left_x,k[SDL_SCANCODE_A],k[SDL_SCANCODE_D]);
-    key_axis(&d->left_y,k[SDL_SCANCODE_W],k[SDL_SCANCODE_S]);
+    if (!qte_keys(k,d->timestamp)) {
+        key_axis(&d->left_x,k[SDL_SCANCODE_A],k[SDL_SCANCODE_D]);
+        key_axis(&d->left_y,k[SDL_SCANCODE_W],k[SDL_SCANCODE_S]);
+    }
     key_axis(&d->right_x,k[SDL_SCANCODE_LEFT],k[SDL_SCANCODE_RIGHT]);
     key_axis(&d->right_y,k[SDL_SCANCODE_UP],k[SDL_SCANCODE_DOWN]);
 }
