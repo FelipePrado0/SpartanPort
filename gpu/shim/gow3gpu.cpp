@@ -218,7 +218,33 @@ static void StartProfileWriter() {
 }
 #endif
 
+static void SetDefaultEnv(const char* key, const char* value) {
+    if (std::getenv(key)) return;
+#ifdef _WIN32
+    _putenv_s(key, value);
+#else
+    setenv(key, value, 0);
+#endif
+}
+
+/* CUSA00575 starts from generic renderer behavior.  These only fill unset values,
+ * so an explicit developer override still wins during later experiments. */
+static void ApplyFirstLightSafeDefaults(const Gow3GpuConfig* config) {
+    if (!config || !config->serial || std::strcmp(config->serial, "CUSA00575") != 0) return;
+    SetDefaultEnv("GOW3_NO_MSAA", "0");
+    SetDefaultEnv("GOW3_UPSCALER", "none");
+    SetDefaultEnv("GOW3_FSR1", "0");
+    SetDefaultEnv("GOW3_RCAS", "0");
+    SetDefaultEnv("GOW3_JITTER", "0");
+    SetDefaultEnv("GOW3_REACTIVE", "0");
+    SetDefaultEnv("GOW3_OBJECT_MOTION", "0");
+    SetDefaultEnv("GOW3_DEFERRED_READBACK", "0");
+    SetDefaultEnv("GOW3_STALE_READBACK", "0");
+    SetDefaultEnv("GOW3_ASYNC_SHADERS", "0");
+}
+
 extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
+    ApplyFirstLightSafeDefaults(config);
     Gow3Settings::Load();
 #ifdef GOW3_PGO_GENERATE
     StartProfileWriter();
