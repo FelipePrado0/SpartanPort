@@ -42,3 +42,22 @@ The launcher runs a clean import check first and blocks GPU mode if anything is 
 - First Light profile starts with no hardcoded guest addresses or shader hashes.
 
 Each next change should be driven by the first reproducible blocker in the log.
+
+
+## Diagnostic bundle
+
+For a reproducible first test, run:
+
+```powershell
+python .\tools\firstlight_triage.py "D:\Games\FirstLight\CUSA00575"
+```
+
+The sequence is deliberately conservative:
+
+1. validate and prepare CUSA00575;
+2. require a clean import check;
+3. run the original entry path CPU-only;
+4. write `user/diagnostic.json`.
+
+The report contains the port commit, target identity, host summary, import count and first blocker.
+It does not contain game binaries. Vulkan remains opt-in with `--gpu`.
