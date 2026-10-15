@@ -174,6 +174,28 @@ class FirstLightPortTests(unittest.TestCase):
         ):
             self.assertIn(f'"{symbol}"',services)
 
+    def test_posix_aliases_present(self):
+        text=(ROOT/"src"/"import_names.inc").read_text(encoding="utf-8")
+        expected={
+            "n88vx3C5nW8":"gettimeofday",
+            "K-jXhbt2gn4":"pthread_mutex_trylock",
+            "7H0iTOciTLo":"pthread_mutex_lock",
+            "2Z+PpY6CaJg":"pthread_mutex_unlock",
+            "ltCfaGr2JGE":"pthread_mutex_destroy",
+            "dQHWEsJtoE4":"pthread_mutexattr_init",
+            "mDmgMOGVUqg":"pthread_mutexattr_settype",
+            "ttHNfU+qDBU":"pthread_mutex_init",
+            "HF7lK46xzjY":"pthread_mutexattr_destroy",
+            "h9CcP3J0oVM":"pthread_join",
+            "wtkt-teR1so":"pthread_attr_init",
+            "E+tyo3lp5Lw":"pthread_attr_setdetachstate",
+            "Jmi+9w9u0E4":"pthread_create_name_np",
+            "EotR8a3ASf4":"pthread_self",
+            "lLMT9vJAck0":"clock_gettime",
+        }
+        for nid,name in expected.items():
+            self.assertIn(f'{{"{nid}#libScePosix","{name}"}}',text)
+
     def test_safe_launcher_defaults(self):
         launcher=(ROOT/"run_firstlight.py").read_text(encoding="utf-8")
         for setting in (
