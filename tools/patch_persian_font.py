@@ -114,7 +114,8 @@ def patch(base, messages):
     for pos in range(SMF_RECORD_OFFSET, len(smf) - SMF_RECORD_SIZE + 1, SMF_RECORD_SIZE):
         cp = struct.unpack_from('<I', smf, pos)[0]
         if cp: records.append((pos, cp))
-    needed = sorted(set(form for forms in JOIN_FORMS.values() for form in forms if form))
+    form_set = {form for forms in JOIN_FORMS.values() for form in forms if form}
+    needed = sorted(set(ch for ch in messages if ch in form_set))
     available = [(pos, cp) for pos, cp in records if cp >= 0x4e00 and cp not in needed]
     if len(available) < len(needed): raise ValueError('not enough CJK slots')
     slot_map = {form: cp for form, (_, cp) in zip(needed, available)}
