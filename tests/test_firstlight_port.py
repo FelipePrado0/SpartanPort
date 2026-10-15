@@ -79,6 +79,35 @@ class FirstLightPortTests(unittest.TestCase):
         self.assertIn(".buffer_copy_shader = 0",profile)
         self.assertIn("FIRSTLIGHT_GAME_PROFILES",cmake)
 
+    def test_shadps4_confirmed_service_and_gpu_names(self):
+        names=(ROOT/"src"/"import_names.inc").read_text(encoding="utf-8")
+        services=(ROOT/"src"/"runtime_services.c").read_text(encoding="utf-8")
+        confirmed={
+            "I88KChlynSs#libSceErrorDialog":"sceErrorDialogInitialize",
+            "9XAxK2PMwk8#libSceErrorDialog":"sceErrorDialogTerminate",
+            "WWiGuh9XfgQ#libSceErrorDialog":"sceErrorDialogUpdateStatus",
+            "M2ZF-ClLhgY#libSceErrorDialog":"sceErrorDialogOpen",
+            "Z4wwCFiBELQ#libSceNetCtl":"sceNetCtlTerm",
+            "gky0+oaNM4k#libSceNetCtl":"sceNetCtlInit",
+            "SsC-m-S9JTA#libSceSystemService":"sceSystemServiceParamGetString",
+            "tPfQU2pD4-M#libSceSystemService":"sceSystemServiceShowDisplaySafeAreaSettings",
+            "Idffwf3yh8s#libSceGnmDriver":"sceGnmDrawInitDefaultHardwareState",
+            "lN7Gk-p9u78#libSceGnmDriver":"sceGnmSetSpiEnableSqCountersForUnitInstance",
+            "0O3xxFaiObw#libSceGnmDriver":"sceGnmSetSpiEnableSqCounters",
+            "N5KDtkIjjJ4#libSceVideoOut":"sceVideoOutUnregisterBuffers",
+            "DYhhWbJSeRg#libSceVideoOut":"sceVideoOutColorSettingsSetGamma",
+            "pv9CI5VC+R0#libSceVideoOut":"sceVideoOutAdjustColor",
+            "zgXifHT9ErY#libSceVideoOut":"sceVideoOutIsFlipPending",
+        }
+        for nid,symbol in confirmed.items():
+            self.assertIn(f'{{"{nid}","{symbol}"}}',names)
+        for symbol in (
+            "sceErrorDialogInitialize","sceErrorDialogOpen","sceErrorDialogUpdateStatus",
+            "sceErrorDialogTerminate","sceNetCtlInit","sceNetCtlTerm",
+            "sceSystemServiceParamGetString","sceSystemServiceShowDisplaySafeAreaSettings"
+        ):
+            self.assertIn(f'"{symbol}"',services)
+
     def test_confirmed_firstlight_service_imports(self):
         names=(ROOT/"src"/"import_names.inc").read_text(encoding="utf-8")
         content=(ROOT/"src"/"runtime_content.c").read_text(encoding="utf-8")
