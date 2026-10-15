@@ -44,6 +44,13 @@ class FirstLightPortTests(unittest.TestCase):
             self.assertIn(f'"{symbol}"',text)
         self.assertIn("np_webapi_error_code",text)
 
+    def test_system_service_bringup_contracts(self):
+        text=(ROOT/"src"/"runtime_services.c").read_text(encoding="utf-8")
+        self.assertNotIn("STOP: unsupported system parameter",text)
+        self.assertIn("Runtime: unsupported SystemService integer parameter",text)
+        self.assertIn("status[6]=1;",text)
+        self.assertIn("memset(info,0,132);",text)
+
     def test_webapi_get_error_code_abi(self):
         text=(ROOT/"src"/"runtime_services.c").read_text(encoding="utf-8")
         self.assertIn("static ABI int32_t np_webapi_error_code(void)",text)
@@ -202,6 +209,17 @@ class FirstLightPortTests(unittest.TestCase):
         for nid,name in expected.items():
             self.assertIn(f'{{"{nid}#libScePosix","{name}"}}',text)
 
+    def test_firstlight_profile_disables_gow3_bringup_optimizations(self):
+        profile=(ROOT/"gpu"/"games"/"firstlight.cpp").read_text(encoding="utf-8")
+        registry=(ROOT/"gpu"/"games"/"game_profile.cpp").read_text(encoding="utf-8")
+        for token in (
+            "DrawPipeline","PipelinedDispatch","PipelinedMemoryWrites",
+            "SampleSceneProxies","SceneAttachmentsOnly","SceneMipBias",
+        ):
+            self.assertIn(token,profile)
+        self.assertIn("disabled_optimizations = FirstLightBringupDisabled",profile)
+        self.assertIn("runtime_disabled_optimizations",registry)
+
     def test_renderer_enforces_firstlight_safe_defaults(self):
         text=(ROOT/"gpu"/"shim"/"gow3gpu.cpp").read_text(encoding="utf-8")
         self.assertIn("ApplyFirstLightSafeDefaults(config);",text)
@@ -211,6 +229,7 @@ class FirstLightPortTests(unittest.TestCase):
             "GOW3_NO_MSAA","GOW3_UPSCALER","GOW3_FSR1","GOW3_RCAS",
             "GOW3_JITTER","GOW3_REACTIVE","GOW3_OBJECT_MOTION",
             "GOW3_DEFERRED_READBACK","GOW3_STALE_READBACK","GOW3_ASYNC_SHADERS",
+            "GOW3_ENGINE_FPS","GOW3_CONFIG",
         ):
             self.assertIn(key,text)
 
@@ -234,6 +253,25 @@ class FirstLightPortTests(unittest.TestCase):
         self.assertIn('"--content-profile"',stage)
         self.assertIn('def content_args()',launcher)
         self.assertIn('"content.bin"',launcher)
+
+    def test_native_link_checker_rejects_leaked_native_imports(self):
+        import json, subprocess, sys, tempfile
+        with tempfile.TemporaryDirectory() as td:
+            report=Path(td)/"link.json"
+            report.write_text(json.dumps({
+                "bindings":1,
+                "unresolved_imports":["Q3VBxCXhUHs#libc"],
+                "modules":[
+                    {"file":"libc.prx","tls_relocations":14},
+                    {"file":"libSceFios2.prx","tls_relocations":2},
+                ],
+            }),encoding="utf-8")
+            p=subprocess.run(
+                [sys.executable,str(ROOT/"tools"/"check_firstlight_link.py"),str(report)],
+                text=True,capture_output=True
+            )
+            self.assertNotEqual(p.returncode,0)
+            self.assertIn("NATIVE-UNRESOLVED:",p.stdout)
 
     def test_build_emits_firstlight_probe(self):
         build=(ROOT/"build.sh").read_text(encoding="utf-8")
