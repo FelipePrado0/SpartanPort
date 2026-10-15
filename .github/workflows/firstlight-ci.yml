@@ -27,6 +27,8 @@ jobs:
           python -m py_compile run_firstlight.py tools/validate_firstlight.py tools/check_firstlight_link.py tools/firstlight_stage1.py tools/summarize_firstlight_log.py tools/audit_firstlight_report.py tools/audit_firstlight_inventory.py
       - name: First Light invariants
         run: python -m unittest discover -s tests -p "test_firstlight*.py" -v
+      - name: Static CUSA00575 import inventory
+        run: python tools/audit_firstlight_inventory.py targets/CUSA00575_imports.json --json /tmp/firstlight-import-audit.json
 
   windows-build:
     runs-on: windows-2025
