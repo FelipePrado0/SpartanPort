@@ -66,7 +66,7 @@ class FirstLightPortTests(unittest.TestCase):
         self.assertIn("bool initialize",gnm)
         self.assertIn("if (initialize)",gnm)
         self.assertIn("bool initialize",video)
-        self.assertIn("if (initialize)",video)
+        self.assertIn("if (initialize) {\n        driver = std::make_unique<VideoOutDriver>",video)
         self.assertIn("gow3gpu_register_graphics_symbols",shim)
         self.assertIn("RegisterLib(&resolver, false)",shim)
 
