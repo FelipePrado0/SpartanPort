@@ -265,6 +265,12 @@ class ControlMapTest(unittest.TestCase):
         self.assertEqual(env['SPARTAN_PERF_DIAG'], '0')
         self.assertEqual(env['SPARTAN_PARTIAL_HEIGHT_VIEWS'], '1')
         self.assertEqual(launcher.game_environment({**settings, 'partial_height_views': False})['SPARTAN_PARTIAL_HEIGHT_VIEWS'], '0')
+        self.assertEqual((env['SPARTAN_DISK_SHADERS'], env['SPARTAN_SHADER_PREFETCH'], env['SPARTAN_SHADER_NOTES']),
+                         ('1', '1', '1'))
+        off = launcher.game_environment({**settings, 'disk_shaders': False, 'shader_prefetch': False,
+                                         'shader_notes': False})
+        self.assertEqual((off['SPARTAN_DISK_SHADERS'], off['SPARTAN_SHADER_PREFETCH'], off['SPARTAN_SHADER_NOTES']),
+                         ('0', '0', '0'))
         self.assertNotIn('SPARTAN_FRAME_CAPTURE_KEY', {k for k in env if k not in __import__('os').environ})
         self.assertEqual(launcher.game_environment({**settings, 'frame_capture_key': True})['SPARTAN_FRAME_CAPTURE_KEY'], '1')
         # Graphics options live in spartanport.ini (run.py and the in-game menu), not in the environment.
