@@ -79,6 +79,28 @@ class FirstLightPortTests(unittest.TestCase):
         self.assertIn(".buffer_copy_shader = 0",profile)
         self.assertIn("FIRSTLIGHT_GAME_PROFILES",cmake)
 
+    def test_firstlight_event_flags(self):
+        source=(ROOT/"src"/"runtime_eventflag.c").read_text(encoding="utf-8")
+        runtime=(ROOT/"src"/"runtime.c").read_text(encoding="utf-8")
+        names=(ROOT/"src"/"import_names.inc").read_text(encoding="utf-8")
+        for nid,symbol in {
+            "BpFoboUJoZU#libkernel":"sceKernelCreateEventFlag",
+            "8mql9OcQnd4#libkernel":"sceKernelDeleteEventFlag",
+            "IOnSvHzqu6A#libkernel":"sceKernelSetEventFlag",
+            "JTvBflhYazQ#libkernel":"sceKernelWaitEventFlag",
+            "4R6-OvI2cEA#libkernel":"sceKernelAddUserEvent",
+            "F6e0kwo4cnk#libkernel":"sceKernelTriggerUserEvent",
+            "LJDwdSNTnDg#libkernel":"sceKernelDeleteUserEvent",
+            "FXPWHNk8Of0#libkernel":"scePthreadAttrGetschedparam",
+        }.items():
+            self.assertIn(f'{{"{nid}","{symbol}"}}',names)
+        self.assertIn("EVF_WAIT_AND",source)
+        self.assertIn("EVF_WAIT_OR",source)
+        self.assertIn("EVF_CLEAR_ALL",source)
+        self.assertIn("EVF_CLEAR_BITS",source)
+        self.assertIn("pthread_cond_timedwait",source)
+        self.assertIn("runtime_eventflag_resolve(name)",runtime)
+
     def test_shadps4_confirmed_service_and_gpu_names(self):
         names=(ROOT/"src"/"import_names.inc").read_text(encoding="utf-8")
         services=(ROOT/"src"/"runtime_services.c").read_text(encoding="utf-8")
