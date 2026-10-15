@@ -708,7 +708,7 @@ int main(int argc, char **argv) {
     }
     gow3gpu_register_kernel();
     /* CUSA00575 import checks need GNM/VideoOut symbol tables, not Vulkan initialization. */
-    if (check_imports) gow3gpu_register_graphics_symbols();
+    if (check_imports && cpu_only) gow3gpu_register_graphics_symbols();
 #ifdef _WIN32
     SYSTEM_INFO system_info; GetSystemInfo(&system_info); page_size = system_info.dwPageSize;
     AddVectoredExceptionHandler(1, vectored_fault);
