@@ -39,3 +39,26 @@ success.
 ## Gate
 
 Do not proceed to gameplay/GPU execution until the import checker is clean.
+
+
+## Audit the static inventory
+
+The repository can compare the diagnostic JSON directly against the current runtime and GPU
+tables without reading any game binary:
+
+```powershell
+python .\tools\audit_firstlight_inventory.py ".\relatorio.json" --json ".\user\inventory_audit.json"
+```
+
+Categories:
+
+- `native-module`: expected to bind through the game's bundled libc/Fios2 modules;
+- `gpu`: resolved directly by the GNM/VideoOut NID tables;
+- `runtime-direct`: implemented by an exact NID contract in `src/runtime_*.c`;
+- `runtime-symbol`: NID has a name and that named runtime contract exists;
+- `posix-alias-unresolved`: canonicalized to libkernel but still needs a matching host contract;
+- `named-unresolved`: the function is identified but not implemented;
+- `unknown-nid`: still needs identification.
+
+The goal before native entry is **0 host-resolution blockers** after `link_modules.py` has bound
+the native modules.
