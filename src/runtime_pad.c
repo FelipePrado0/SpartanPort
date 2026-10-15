@@ -5,7 +5,9 @@
  *   WASD left stick, arrow keys right stick, Space Cross, LShift Circle,
  *   E Square, Q Triangle, 1 L1, 3 R1, R L2, F R2, Z L3, C R3,
  *   Enter Options, Tab left touchpad (photo mode), Backspace right touchpad (pause menu),
- *   IJKL d-pad (I up, K down, J left, L right). */
+ *   IJKL d-pad (I up, K down, J left, L right).
+ * GOW3_KEY_MAP also takes the mouse: Mouse Left, Mouse Right, Mouse Middle, Mouse Back,
+ * Mouse Forward, Wheel Up and Wheel Down (see mouse_names). */
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "gpu/gow3gpu.h"
@@ -30,6 +32,9 @@ enum {
     /* Host-only sources, never shown to the game: a click on one side of the touchpad from a
      * button or key without a touch surface (play_click turns them into a touch and a click). */
     CLICK_LEFT=0x40000000, CLICK_RIGHT=0x80000000,
+    /* Host-only actions of the keyboard map: dodge tilts the right stick (apply_dodge) and rage
+     * presses L3 and R3 together (apply_rage). */
+    DODGE=0x20000000, RAGE=0x10000000,
 };
 typedef struct { uint16_t x, y; uint8_t id, reserve[3]; } PadTouch;
 typedef struct {
@@ -122,7 +127,8 @@ static SDL_Gamepad *current_gamepad(void) {
 /* Button sources: a host button or key and the PS4 button it presses. The defaults below can be
  * changed per PS4 button with GOW3_PAD_MAP (gamepad) and GOW3_KEY_MAP (keyboard), e.g.
  * GOW3_KEY_MAP="cross=Q,square=Left Shift" or GOW3_PAD_MAP="cross=b,circle=a": comma-separated
- * <ps4 button>=<SDL key or gamepad button name>. A mapped PS4 button loses its default sources.
+ * <ps4 button>=<SDL key or gamepad button name>. A mapped PS4 button loses its default sources;
+ * <ps4 button>=None leaves it without any.
  * touchpad_left (alias touchpad) and touchpad_right are the two sides of the touchpad click:
  * photo mode and the pause menu. Back/View (Share on a DualSense) is the right click, and with
  * L1 held the left one. Sticks, triggers, the real touchpad click and the overlay shortcuts are
@@ -132,6 +138,7 @@ static const struct { const char *name; uint32_t ps; } ps_names[]={
     {"l1",BTN_L1}, {"r1",BTN_R1}, {"l2",BTN_L2}, {"r2",BTN_R2}, {"l3",BTN_L3}, {"r3",BTN_R3},
     {"options",BTN_OPTIONS}, {"touchpad",CLICK_LEFT}, {"touchpad_left",CLICK_LEFT}, {"touchpad_right",CLICK_RIGHT},
     {"up",BTN_UP}, {"down",BTN_DOWN}, {"left",BTN_LEFT}, {"right",BTN_RIGHT},
+    {"dodge",DODGE}, {"rage",RAGE},
 };
 typedef struct { int source; uint32_t ps; } ButtonSource;
 typedef struct { ButtonSource entries[48]; size_t count; } ButtonMap;
@@ -160,6 +167,75 @@ static char *trim(char *text) {
     return text;
 }
 
+/* Mouse sources of the keyboard map, numbered above every SDL scancode. Buttons are sampled like
+ * keys; the wheel has no held state, so each notch becomes a short press (WHEEL_PRESS_US down,
+ * then WHEEL_GAP_US up) that the game sees across several reads. */
+enum { MOUSE_LEFT=0x10000, MOUSE_RIGHT, MOUSE_MIDDLE, MOUSE_BACK, MOUSE_FORWARD, WHEEL_UP, WHEEL_DOWN };
+enum { WHEEL_PRESS_US=60000, WHEEL_GAP_US=40000, WHEEL_MAX_PENDING=4 };
+static const struct { const char *name; int source; } mouse_names[]={
+    {"Mouse Left",MOUSE_LEFT}, {"Mouse Right",MOUSE_RIGHT}, {"Mouse Middle",MOUSE_MIDDLE},
+    {"Mouse Back",MOUSE_BACK}, {"Mouse Forward",MOUSE_FORWARD}, {"Wheel Up",WHEEL_UP}, {"Wheel Down",WHEEL_DOWN},
+};
+static int mouse_source(const char *name) {
+    for (size_t i=0;i<sizeof(mouse_names)/sizeof(*mouse_names);++i)
+        if (!SDL_strcasecmp(name,mouse_names[i].name)) return mouse_names[i].source;
+    return 0;
+}
+
+static SDL_AtomicInt wheel_ticks[2]; /* notches not yet played: 0 up, 1 down */
+static struct { int phase; uint64_t until; } wheel_pulse[2]; /* phase 0 idle, 1 pressed, 2 gap */
+/* Runs on the window thread for every queued event (SDL_AddEventWatch). */
+static bool SDLCALL wheel_watch(void *userdata, SDL_Event *event) {
+    (void)userdata;
+    if (event->type!=SDL_EVENT_MOUSE_WHEEL) return true;
+    int steps=event->wheel.integer_y;
+    if (event->wheel.direction==SDL_MOUSEWHEEL_FLIPPED) steps=-steps;
+    SDL_AtomicInt *ticks=&wheel_ticks[steps<0];
+    for (int n=steps<0 ? -steps : steps; n>0 && SDL_GetAtomicInt(ticks)<WHEEL_MAX_PENDING; --n) SDL_AddAtomicInt(ticks,1);
+    return true;
+}
+static void watch_wheel(void) {
+    static bool watching;
+    if (watching || !SDL_WasInit(SDL_INIT_VIDEO)) return;
+    watching=SDL_AddEventWatch(wheel_watch,NULL);
+}
+static void drop_wheel(void) {
+    for (int dir=0;dir<2;++dir) { SDL_SetAtomicInt(&wheel_ticks[dir],0); wheel_pulse[dir].phase=0; }
+}
+/* Whether the wheel's direction `dir` is held at `now`; call once per read for each direction. */
+static bool wheel_held(int dir, uint64_t now) {
+    if (wheel_pulse[dir].phase==1 && now>=wheel_pulse[dir].until) {
+        wheel_pulse[dir].phase=2; wheel_pulse[dir].until=now+WHEEL_GAP_US;
+    }
+    if (wheel_pulse[dir].phase==2 && now>=wheel_pulse[dir].until) wheel_pulse[dir].phase=0;
+    if (wheel_pulse[dir].phase==0 && SDL_GetAtomicInt(&wheel_ticks[dir])>0) {
+        SDL_AddAtomicInt(&wheel_ticks[dir],-1);
+        wheel_pulse[dir].phase=1; wheel_pulse[dir].until=now+WHEEL_PRESS_US;
+    }
+    return wheel_pulse[dir].phase==1;
+}
+/* Whether a keyboard-map source (a scancode or a mouse source) is down. */
+static bool source_down(int source, const bool *keys, SDL_MouseButtonFlags mouse, const bool wheel[2]) {
+    switch (source) {
+    case MOUSE_LEFT: return mouse & SDL_BUTTON_LMASK;
+    case MOUSE_RIGHT: return mouse & SDL_BUTTON_RMASK;
+    case MOUSE_MIDDLE: return mouse & SDL_BUTTON_MMASK;
+    case MOUSE_BACK: return mouse & SDL_BUTTON_X1MASK;
+    case MOUSE_FORWARD: return mouse & SDL_BUTTON_X2MASK;
+    case WHEEL_UP: return wheel[0];
+    case WHEEL_DOWN: return wheel[1];
+    default: return source>0 && source<SDL_SCANCODE_COUNT && keys[source];
+    }
+}
+
+/* Scancode of a key name: SDL's names, plus Comma and Equals for the two keys whose own names
+ * (',' and '=') are separators of GOW3_KEY_MAP. */
+static int key_source(const char *name) {
+    if (!SDL_strcasecmp(name,"Comma")) return SDL_SCANCODE_COMMA;
+    if (!SDL_strcasecmp(name,"Equals")) return SDL_SCANCODE_EQUALS;
+    return (int)SDL_GetScancodeFromName(name);
+}
+
 /* Applies a GOW3_PAD_MAP/GOW3_KEY_MAP value; returns how many entries were used. Bad entries are
  * logged and skipped, so their PS4 button keeps its default. */
 static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
@@ -182,7 +258,16 @@ static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
         entry=next;
         uint32_t ps=0;
         for (size_t i=0;i<sizeof(ps_names)/sizeof(*ps_names);++i) if (!SDL_strcasecmp(button,ps_names[i].name)) ps=ps_names[i].ps;
-        const int source=!*name ? -1 : keyboard ? (int)SDL_GetScancodeFromName(name) : (int)SDL_GetGamepadButtonFromString(name);
+        if (ps && !SDL_strcasecmp(name,"None")) { /* the button gets no source at all */
+            size_t kept=0;
+            for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
+            map->count=kept;
+            ++used;
+            continue;
+        }
+        const int mouse=keyboard && *name ? mouse_source(name) : 0;
+        const int source=!*name ? -1 : mouse ? mouse : keyboard ? key_source(name)
+                                                         : (int)SDL_GetGamepadButtonFromString(name);
         if (!ps || source<=(keyboard ? (int)SDL_SCANCODE_UNKNOWN : (int)SDL_GAMEPAD_BUTTON_INVALID)) {
             printf("Runtime: pad map: ignored '%s=%s'\n",button,name);
             continue;
@@ -215,7 +300,8 @@ static void sample_host(PadData *d) {
     d->connected=1; d->connected_count=connected_count ? connected_count : 1;
     d->timestamp=now_us();
     SDL_Gamepad *g=current_gamepad();
-    if (gow3gpu_overlay_captures_input()) return; /* settings menu open: neutral input */
+    watch_wheel();
+    if (gow3gpu_overlay_captures_input()) { drop_wheel(); return; } /* settings menu open: neutral input */
     const bool *k=SDL_WasInit(SDL_INIT_VIDEO) ? SDL_GetKeyboardState(NULL) : NULL;
     load_button_maps();
     if (g) {
@@ -244,7 +330,10 @@ static void sample_host(PadData *d) {
     /* The keyboard works with or without a gamepad: its buttons add to the pad's, and a stick
      * follows the keys only while one of them is held. */
     if (!k) return;
-    for (size_t i=0;i<key_map.count;++i) if (k[key_map.entries[i].source]) d->buttons|=key_map.entries[i].ps;
+    const SDL_MouseButtonFlags mouse=SDL_GetMouseState(NULL,NULL);
+    const bool wheel[2]={wheel_held(0,d->timestamp),wheel_held(1,d->timestamp)};
+    for (size_t i=0;i<key_map.count;++i)
+        if (source_down(key_map.entries[i].source,k,mouse,wheel)) d->buttons|=key_map.entries[i].ps;
     if (d->buttons & BTN_L2) d->l2=255;
     if (d->buttons & BTN_R2) d->r2=255;
     key_axis(&d->left_x,k[SDL_SCANCODE_A],k[SDL_SCANCODE_D]);
@@ -361,12 +450,41 @@ static void replay_sample(PadData *d) {
     d->left_x=s->axes[0]; d->left_y=s->axes[1]; d->right_x=s->axes[2]; d->right_y=s->axes[3];
     d->l2=s->l2; d->r2=s->r2;
 }
+/* Rage (GOW3_KEY_MAP "rage=<key>"): presses L3 and R3 in the same read, as the game wants for
+ * Rage of Sparta. */
+static void apply_rage(PadData *d) {
+    if (d->buttons & RAGE) d->buttons=(d->buttons & ~RAGE) | BTN_L3 | BTN_R3;
+}
+
+/* Dodge (GOW3_KEY_MAP "dodge=<key>"): God of War III evades toward where the right stick is pushed.
+ * While the dodge source is held the right stick points where the left stick does (WASD), at full
+ * tilt, or straight back (toward the camera) when standing still; a tap holds it DODGE_MIN_US so
+ * the game sees it. */
+enum { DODGE_MIN_US=80000, DODGE_DEADZONE=40 };
+static struct { bool held; uint64_t until; uint8_t x, y; } dodge={false,0,128,255};
+static void reset_dodge(void) { dodge.held=false; dodge.until=0; }
+static void apply_dodge(PadData *d) {
+    const bool held=(d->buttons & DODGE)!=0;
+    d->buttons&=~DODGE;
+    if (held) {
+        int dx=d->left_x-128, dy=d->left_y-128;
+        if (abs(dx)<DODGE_DEADZONE && abs(dy)<DODGE_DEADZONE) { dx=0; dy=127; }
+        const int reach=abs(dx)>abs(dy) ? abs(dx) : abs(dy);
+        const int x=128+dx*128/reach, y=128+dy*128/reach;
+        dodge.x=(uint8_t)(x<0 ? 0 : x>255 ? 255 : x);
+        dodge.y=(uint8_t)(y<0 ? 0 : y>255 ? 255 : y);
+        if (!dodge.held) dodge.until=d->timestamp+DODGE_MIN_US;
+    }
+    dodge.held=held;
+    if (held || d->timestamp<dodge.until) { d->right_x=dodge.x; d->right_y=dodge.y; }
+}
+
 /* After the menu or the text dialog closes, buttons still held (the Cross that accepted a
  * name) stay hidden until released: the game would take them as a new press. */
 static int hold_after_capture;
 static void sample(PadData *d) {
     sample_host(d);
-    if (gow3gpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; return; }
+    if (gow3gpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */
     read_inject();
     replay_sample(d);
@@ -375,6 +493,8 @@ static void sample(PadData *d) {
     if (injected.buttons & BTN_R2) d->r2=255;
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
+    apply_rage(d);
+    apply_dodge(d);
     play_click(d);
     if (hold_after_capture) {
         if (d->buttons) d->buttons=0;
