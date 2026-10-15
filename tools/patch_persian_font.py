@@ -145,7 +145,15 @@ def patch(base, messages):
         draw.text(((crop.width-(bbox[2]-bbox[0]))//2-bbox[0], (crop.height-(bbox[3]-bbox[1]))//2-bbox[1]), target, font=font_use, fill=255)
         page.paste(crop, (x0, y0))
         struct.pack_into('<I', smf, pos, ord(target))
-        smf[pos + 8:pos + SMF_RECORD_SIZE] = latin_metrics
+        # Preserve baseline metrics from Latin, but use the actual advance and
+        # horizontal bearing of this presentation-form glyph.
+        advance = max(1, int(round(font_use.getlength(target) * 16)))
+        struct.pack_into('<I', smf, pos + 8, advance)
+        glyph_box = font_use.getbbox(target)
+        bearing = int(round(glyph_box[0] * 16)) & 0xffff
+        old_word3 = struct.unpack_from('<I', latin_metrics, 4)[0]
+        struct.pack_into('<I', smf, pos + 12, (old_word3 & 0xffff0000) | bearing)
+        smf[pos + 16:pos + SMF_RECORD_SIZE] = latin_metrics[8:]
         changed += 1
     data[smf_off + HEADER:smf_off + HEADER + smf_size] = smf
     for (off, size), page in zip(tx_entries[:2], pages):
