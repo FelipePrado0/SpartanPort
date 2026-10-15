@@ -193,6 +193,11 @@ def build_overlay(game, out, mods):
     for name, root in mods:
         count = 0
         for relative, source in mod_files(root):
+            # shadPS4-style mods carry a dvdroot_ps4 prefix. Some extracted PC
+            # game trees expose EXEC directly at the game root instead.
+            if relative.parts and relative.parts[0].casefold() == 'dvdroot_ps4':
+                if not (game / 'dvdroot_ps4').is_dir() and (game / 'EXEC').is_dir():
+                    relative = Path(*relative.parts[1:])
             key = relative.as_posix().casefold()
             if key in owners:
                 print(f'Mods: {relative}: {owners[key]} -> {name}', file=sys.stderr)
