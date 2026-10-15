@@ -28,7 +28,8 @@ MINGW*|MSYS*)
         echo 'Build failed (full log: out/gpu-build.log)' >&2; exit 1
     fi
     cp out/gpu/gow3-probe.exe out/gpu/gow3-gpu-capabilities.exe out/gpu/gow3-play.exe out/
-    echo "Built $PWD/out/gow3-probe.exe"
+    cp out/gow3-probe.exe out/firstlight-probe.exe
+    echo "Built $PWD/out/firstlight-probe.exe"
     exit 0
     ;;
 esac
@@ -90,7 +91,8 @@ fi
 # isa_emulate runs inside guest code: no XMM/YMM.
 "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -mgeneral-regs-only -c src/isa_emulate.c -o out/isa_emulate.o
 "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -no-pie "${includes[@]}" -I. -Isrc src/probe.c "${runtime[@]}" src/cpu_check.c src/vulkan_smoke.c out/isa_emulate.o src/isa_rewrite.c out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/gow3-probe
-echo "Built $PWD/out/gow3-probe"
+cp out/gow3-probe out/firstlight-probe
+echo "Built $PWD/out/firstlight-probe"
 # GPU check for run.sh (live_resolution=auto): links only the Vulkan loader.
 "$CC" -std=c11 -O2 -Wall -Wextra -Werror -Igpu/shadps4 tools/gpu_capabilities.c "${libraries[@]}" -o out/gow3-gpu-capabilities
 if [[ ${1:-} == --test ]]; then
