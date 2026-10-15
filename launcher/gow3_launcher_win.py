@@ -672,7 +672,11 @@ def other_desktop_entries(applications, appimage):
     TryExec, after any `env NAME=value` prefix and the quotes."""
     here = os.path.realpath(appimage)
     found = []
-    for entry in sorted(Path(applications).glob('*.desktop')):
+    try:
+        entries = sorted(Path(applications).glob('*.desktop'))
+    except OSError:
+        return found
+    for entry in entries:
         if entry.name == 'gow3.desktop':
             continue
         try:
@@ -685,11 +689,13 @@ def other_desktop_entries(applications, appimage):
                 continue
             try:
                 words = shlex.split(value)
-            except ValueError:
+                while words and (words[0] == 'env' or re.match(r'[A-Za-z_][A-Za-z0-9_]*=', words[0])):
+                    words.pop(0)
+                # A file that another program left broken (a NUL byte in a path) is ignored, not fatal.
+                matches = bool(words) and os.path.realpath(words[0]) == here
+            except (OSError, ValueError):
                 continue
-            while words and (words[0] == 'env' or re.match(r'[A-Za-z_][A-Za-z0-9_]*=', words[0])):
-                words.pop(0)
-            if words and os.path.realpath(words[0]) == here:
+            if matches:
                 found.append(entry)
                 break
     return found
@@ -731,7 +737,7 @@ def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None, envir
         if not entry.is_file() or entry.read_text(encoding='utf-8') != text:
             entry.write_text(text, encoding='utf-8')
         return entry
-    except OSError:
+    except (OSError, ValueError):  # runs before the window opens: it must never stop the launcher
         return None
 
 
