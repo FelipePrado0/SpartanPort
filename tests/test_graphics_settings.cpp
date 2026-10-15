@@ -28,6 +28,9 @@ int main() {
     assert(G::FsrPassRuns(true, false, 1280, 720, 2560, 1440) && !G::FsrPassRuns(false, false, 1280, 720, 2560, 1440));
     assert(G::FsrPassRuns(false, true, 1920, 1080, 1920, 1080) && !G::FsrPassRuns(true, false, 1920, 1080, 1920, 1080));
     assert(!G::FsrPassRuns(true, true, 2560, 1440, 1920, 1080));  // larger image: regular scaling
+    // The screen upscaler: MetalFX on macOS, FSR 1 otherwise and for anything unknown.
+    assert(G::ParseScreenUpscaler("metalfx") == G::ScreenMetalFx && G::ParseScreenUpscaler("fsr1") == G::ScreenFsr1);
+    assert(G::ParseScreenUpscaler("dlss") == G::ScreenFsr1 && G::ParseScreenUpscaler("") == G::ScreenFsr1);
     assert(G::EffectiveFps(0, 120) == 120 && G::EffectiveFps(240, 120) == 120 && G::EffectiveFps(60, 240) == 60);
     // An unpatched engine steps 1/60 s per frame: presenting faster speeds the game up.
     assert(G::PresentLimit(120, 60) == 60 && G::PresentLimit(240, 120) == 120 && G::PresentLimit(240, 240) == 240);
@@ -38,15 +41,17 @@ int main() {
         std::ofstream out(path);
         out << "display_mode=borderless\nvsync=0\nfps_limit=240\nasync_shaders=0\n"
                "render_resolution=1440p\nengine_fps=240\ndeferred_readback=0\nstale_readback=1\n"
-               "fsr1=1\nrcas=0\nrcas_strength=40\nframes_queued=2\n";
+               "fsr1=1\nscreen_upscaler=metalfx\nrcas=0\nrcas_strength=40\nframes_queued=2\n";
     }
     _putenv_s("GOW3_CONFIG", path);
     _putenv_s("GOW3_ASYNC_SHADERS", "");
     auto& v = Gow3Settings::Get();
+    assert(v.screen_upscaler == G::ScreenFsr1);  // the default
     Gow3Settings::Load();
     assert(v.display_mode == G::Borderless && !v.vsync && v.fps_limit == 240 && !v.async_shaders);
     assert(v.render_resolution == 3 && v.engine_fps == 240 && !v.deferred_readback && v.stale_readback);
     assert(v.fsr1 && !v.rcas && v.rcas_strength == 40 && v.frames_queued == 2);
+    assert(v.screen_upscaler == G::ScreenMetalFx);
     assert(!Gow3Settings::GraphicsNeedRestart());
     assert(v.applied_engine_fps == 240);  // no GOW3_ENGINE_FPS: the configured rate
     _putenv_s("GOW3_ENGINE_FPS", "60");    // run.py: the frame rate patch did not apply
@@ -63,22 +68,26 @@ int main() {
     const std::string saved = Read(path);
     for (const char* line : {"display_mode=borderless\n", "vsync=0\n", "fps_limit=60\n", "async_shaders=0\n",
                              "render_resolution=1440p\n", "engine_fps=240\n", "deferred_readback=0\n",
-                             "stale_readback=1\n", "fsr1=1\n", "rcas=0\n", "rcas_strength=40\n",
-                             "frames_queued=2\n"}) {
+                             "stale_readback=1\n", "fsr1=1\n", "screen_upscaler=metalfx\n", "rcas=0\n",
+                             "rcas_strength=40\n", "frames_queued=2\n"}) {
         assert(saved.find(line) != std::string::npos);
     }
 
     {
         std::ofstream out(path);
         out << "display_mode=huge\nfps_limit=7\nrender_resolution=8K\nengine_fps=1\n"
-               "rcas_strength=250\nframes_queued=9\n";
+               "rcas_strength=250\nframes_queued=9\nscreen_upscaler=bogus\n";
     }
     _putenv_s("GOW3_ASYNC_SHADERS", "1");  // the environment still wins at start
     v.async_shaders = false;
     Gow3Settings::Load();
     assert(v.display_mode == G::Windowed && v.fps_limit == 0 && v.render_resolution == 0 && v.engine_fps == 120);
-    assert(v.rcas_strength == 75 && v.frames_queued == 1);
+    assert(v.rcas_strength == 75 && v.frames_queued == 1 && v.screen_upscaler == G::ScreenFsr1);
     assert(v.async_shaders);
+    _putenv_s("GOW3_SCREEN_UPSCALER", "metalfx");
+    Gow3Settings::Load();
+    assert(v.screen_upscaler == G::ScreenMetalFx);
+    _putenv_s("GOW3_SCREEN_UPSCALER", "");
     {
         std::ofstream out(path);
         out << "cheat_double_jumps=1\ncheat_very_hard=1\n";

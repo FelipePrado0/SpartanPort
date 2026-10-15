@@ -64,6 +64,11 @@ struct Values {
     std::atomic<int> fps_limit{0};
     std::atomic<bool> async_shaders{true};
     std::atomic<bool> fsr1{false};
+    /// Gow3Graphics::ScreenUpscaler: FSR 1, or MetalFX on macOS, when fsr1 (upscaling) is on.
+    std::atomic<int> screen_upscaler{0};
+    /// Set by the presenter: MetalFX enlarged the last frame, or why it cannot (FSR 1 does then).
+    std::atomic<bool> screen_metalfx_applied{false};
+    std::atomic<const char*> screen_metalfx_problem{nullptr};
     std::atomic<bool> rcas{true};
     std::atomic<int> rcas_strength{75};
     /// Set by the presenter: sharpening ran on the last frame (it needs FSR 1 when the game's

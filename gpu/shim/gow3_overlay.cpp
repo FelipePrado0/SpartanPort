@@ -260,7 +260,9 @@ void MultiplierRow(const char* label, std::atomic<float>& value, const char* hel
 
 void InfoRow(const char* label, const char* text) {
     Row(label);
+    ImGui::PushTextWrapPos(0.0f); // long texts (why MetalFX cannot run) wrap in the column
     ImGui::TextDisabled("%s", text);
+    ImGui::PopTextWrapPos();
     ImGui::PopID();
 }
 
@@ -387,13 +389,27 @@ void ImageTab() {
     const bool rcas_blocked = s.rcas && !s.rcas_applied;
     ImGui::SeparatorText("Scaling and sharpening");
     if (BeginRows("##scaling")) {
+#ifdef __APPLE__
+        // gow3 (macOS): Apple's MetalFX can enlarge the image in FSR 1's place.
+        CheckRow("Upscale to the window", s.fsr1,
+                 "Enlarges a smaller game image to the window. For more FPS: Render resolution 720p + upscaling.");
+        ImGui::BeginDisabled(!s.fsr1);
+        ChoiceRow("Upscaler", s.screen_upscaler, G::ScreenUpscalerNames.data(), nullptr, G::ScreenUpscalerCount,
+                  "FSR 1 (AMD) or MetalFX (Apple, on the GPU through Metal): both enlarge the finished image. "
+                  "MetalFX also sharpens it, so RCAS sharpening applies to FSR 1.");
+        ImGui::EndDisabled();
+        constexpr const char* rcas_needs = "Needs upscaling: the game's image is smaller than the window.";
+#else
         CheckRow("Upscale with FSR 1", s.fsr1,
                  "Enlarges a smaller game image to the window. For more FPS: Render resolution 720p + FSR 1.");
+        constexpr const char* rcas_needs = "Needs FSR 1: the game's image is smaller than the window.";
+#endif
         ImGui::BeginDisabled(rcas_blocked);
         CheckRow("Sharpening (RCAS)", s.rcas,
-                 rcas_blocked && downscaling ? "No effect: the game's image is larger than the window."
-                 : rcas_blocked              ? "Needs FSR 1: the game's image is smaller than the window."
-                                             : "Sharpens the final image.");
+                 rcas_blocked && s.screen_metalfx_applied ? "No effect with MetalFX: it sharpens the image itself."
+                 : rcas_blocked && downscaling            ? "No effect: the game's image is larger than the window."
+                 : rcas_blocked                           ? rcas_needs
+                                                          : "Sharpens the final image.");
         ImGui::EndDisabled();
         ImGui::BeginDisabled(!s.rcas || rcas_blocked);
         SliderRow("Sharpening strength", s.rcas_strength, 0, 100, "%d%%", "How strong the sharpening is.");
@@ -402,13 +418,23 @@ void ImageTab() {
     }
     ImGui::SeparatorText("Information");
     if (BeginRows("##image_info")) {
-        char text[96];
+        char text[160];
         std::snprintf(text, sizeof(text), "%d x %d", iw, ih);
         InfoRow("Game image", text);
         std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
         InfoRow("Window", text);
+#ifdef __APPLE__
+        const char* metalfx_problem = s.screen_metalfx_problem;
+        std::snprintf(text, sizeof(text), "FSR 1 (MetalFX unavailable: %s)",
+                      metalfx_problem ? metalfx_problem : "");
+        InfoRow("Upscaling", !s.fsr1 ? "off"
+                             : !upscaling ? "no effect (image not smaller than window)"
+                             : s.screen_metalfx_applied ? "MetalFX"
+                             : metalfx_problem ? text : "FSR 1");
+#else
         InfoRow("FSR 1", !s.fsr1 ? "off" : upscaling ? "active" : "no effect (image not smaller than window)");
-        InfoRow("Sharpening", s.rcas_applied ? "applied" : "not applied");
+#endif
+        InfoRow("Sharpening", s.rcas_applied ? "applied" : s.screen_metalfx_applied ? "MetalFX's own" : "not applied");
         ImGui::EndTable();
     }
 }

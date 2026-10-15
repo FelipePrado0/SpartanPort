@@ -81,7 +81,53 @@ Not available on macOS: Add to Steam, the Linux options (Wayland/X11, GameMode, 
 DLSS, userfaultfd tracking (`GOW3_UFFD`), PGO, and a packaged build (the port runs from the
 repository). The performance overlay shows the GPU name only, as on Linux.
 
-## MetalFX upscaling (experimental)
+## MetalFX upscaling
+
+### Screen upscaling (MetalFX in FSR 1's place)
+
+On a Mac, Apple's MetalFX (its spatial scaler) can enlarge the game's image to the window where
+FSR 1 does it otherwise. With a render resolution below the window's it raises the frame rate:
+
+- Launcher: **Display → Upscale to the window** on, **Upscaler → MetalFX (Apple)**, and
+  **Performance → Render resolution → 720p** (applied at the next start).
+- In the game's menu (**`**): **Image → Upscale to the window** and **Upscaler**.
+- `gow3.ini`: `fsr1=1`, `screen_upscaler=metalfx`, `render_resolution=720p`
+  (`GOW3_SCREEN_UPSCALER=metalfx` overrides the file at start).
+
+Nothing changes by default: upscaling stays off (`fsr1=0`) and its upscaler is FSR 1
+(`screen_upscaler=fsr1`). MetalFX sharpens the image by itself, more than FSR 1 with RCAS at 75%,
+so the sharpening setting (RCAS) applies to FSR 1 and to images the size of the window, not on top
+of MetalFX. The log says `Screen upscaler: MetalFX spatial 1280x720 -> 1920x1080 (...)` when it
+starts. When MetalFX or the Vulkan/Metal interop below cannot run, the log says once
+`Screen upscaler: MetalFX unavailable (<why>); using FSR 1` and FSR 1 enlarges the image; the
+menu's Information rows show which one ran and why. On Windows and Linux a `screen_upscaler=metalfx`
+in `gow3.ini` falls back the same way, and the launcher and the menu do not offer it.
+
+How it works: the presenter copies the game's finished image (the display buffer, in the format the
+game gave it: 8-bit sRGB or 10-bit) into an image whose memory Metal shares (as for the temporal
+scaler below), submits the frame's commands so far, and MetalFX enlarges the copy on a Metal queue
+of its own, in the same format and in its perceptual color mode, into a private texture that a
+blit moves into the shared output. The frame's last submission (post processing, then the window)
+waits for it through the same host relay (`host_passes/metalfx_pass.h`, `vk_metalfx.mm`).
+
+Tested in the game on an M4 Pro (macOS 27), borderless 1920x1080, VSync off, the 120 FPS engine
+patch, in the first fight on Gaia after New Game; GPU time per frame from the Metal performance
+HUD's log (`MTL_HUD_ENABLED=1 MTL_HUD_LOG_ENABLED=1`), averaged over 15-second windows (a test
+build switched between FSR 1 and MetalFX every 15 seconds in one run; native 1080p ran apart):
+
+| Render resolution, upscaling | GPU time per frame | FPS |
+|---|---|---|
+| Native 1080p (RCAS at the window's size) | 30.9 ms | 32 |
+| 720p, FSR 1 (with RCAS at 75%) | 18.9 ms | 52.7 |
+| 720p, MetalFX | 18.9 ms | 52.0 |
+
+MetalFX itself takes 0.30 ms of GPU time per frame for 1280x720 to 1920x1080 in that fight (about
+1.4 ms in the menus, where the GPU's clock stays low); `GOW3_FRAME_STATS=1` prints it with the
+relay's gaps, 0.09 ms before the upscale and 0.06 ms after it. With the relay a frame takes about
+0.25 ms longer than with FSR 1. The image it presents matched, bit for bit, the same 720p frames
+upscaled by MetalFX outside the game. HDR output with MetalFX was not tested.
+
+### Temporal upscaling (experimental; waits for this game's frame mapping)
 
 On a Mac the temporal upscaler can also be Apple's MetalFX (its temporal scaler). Like FSR 3.1,
 FSR 4 and TAA it stays off unless the experimental switch is on: in the launcher, **Graphics
@@ -96,10 +142,12 @@ says why and the game uses FSR 3.1 (`Upscaler: MetalFX unavailable (...)` or `..
 **Status:** in God of War III the temporal upscalers do not run yet on any system: the scene,
 depth and camera detection they rely on is still the one of the Bloodborne port this one comes
 from (`docs/gow3/ROADMAP.md`: kept in the code, off, until this game's frame is mapped), so
-MetalFX, like FSR 3.1, changes nothing in the game for now. Its whole path was checked inside the
-game on the game's own frames (a 1280x720 crop upscaled to 1920x1080, inputs and output read
-back), and with tests outside it. FSR 3.1 does not start on KosmicKrisp (its backend cannot
-create the context), so on a Mac falling back to FSR 3.1 means no temporal upscaling.
+MetalFX, like FSR 3.1, changes nothing in the game for now: the temporal path waits for that
+mapping, and until then MetalFX helps through the screen upscaling above. Its whole path was
+checked inside the game on the game's own frames (a 1280x720 crop upscaled to 1920x1080, inputs
+and output read back), and with tests outside it. FSR 3.1 does not start on KosmicKrisp (its
+backend cannot create the context), so on a Mac falling back to FSR 3.1 means no temporal
+upscaling.
 
 How it works: MetalFX gets FSR 3.1's inputs (scene color, depth, the port's motion vectors and
 jitter) and its output replaces the scene color the same way (`vk_metalfx.mm`). KosmicKrisp backs

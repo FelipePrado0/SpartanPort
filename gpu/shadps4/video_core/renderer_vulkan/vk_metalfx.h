@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// gow3: Apple MetalFX temporal upscaling (macOS, vk_metalfx.mm; GOW3_UPSCALER=metalfx).
+// gow3: Apple MetalFX upscaling (macOS, vk_metalfx.mm): the temporal scaler for the experimental
+// upscaler (GOW3_UPSCALER=metalfx), the spatial one in the presenter's FSR 1 place
+// (screen_upscaler=metalfx, host_passes/metalfx_pass.h).
 //
 // MetalFX works on Metal textures. Under KosmicKrisp (Vulkan on Metal) every VkDeviceMemory is
 // an MTLHeap, which VK_EXT_external_memory_metal exports: the images below get memory of their
@@ -28,11 +30,15 @@ class Instance;
 
 class MetalFxUpscaler {
 public:
-    /// Null when MetalFX or the Vulkan/Metal interop is unavailable; `problem` says why.
-    static std::unique_ptr<MetalFxUpscaler> Create(const Instance& instance, std::string& problem);
+    /// The scaler an instance configures: Configure() (temporal) or ConfigureSpatial().
+    enum Kind { Temporal, Spatial };
+    /// Null when MetalFX's scaler of that kind or the Vulkan/Metal interop is unavailable;
+    /// `problem` says why.
+    static std::unique_ptr<MetalFxUpscaler> Create(const Instance& instance, std::string& problem,
+                                                   Kind kind = Temporal);
     virtual ~MetalFxUpscaler() = default;
 
-    /// Shared images, kept in the General layout.
+    /// Shared images, in the General layout while Metal uses them.
     struct Image {
         vk::Image image;
         vk::ImageView view;
@@ -45,8 +51,17 @@ public:
                            vk::Format depth) = 0;
     [[nodiscard]] virtual bool Matches(u32 width, u32 height, u32 out_width, u32 out_height,
                                        vk::Format color, vk::Format depth) const = 0;
+    /// Spatial instead: the finished `width` x `height` image in `format` (the display's view
+    /// format: RGBA8 or BGRA8 sRGB, or A2R10G10B10) enlarged to `out_width` x `out_height` in the
+    /// same format. Color() is the input, Output() the result (its view reads alpha as 1); Submit
+    /// ignores the Frame.
+    virtual bool ConfigureSpatial(u32 width, u32 height, u32 out_width, u32 out_height,
+                                  vk::Format format) = 0;
+    [[nodiscard]] virtual bool MatchesSpatial(u32 width, u32 height, u32 out_width,
+                                              u32 out_height, vk::Format format) const = 0;
     /// Inputs, written by Vulkan before Submit: color, depth (D32 or D32S8) and motion vectors
-    /// (RG16F, render pixels, current to previous). Output: RGBA16F, read after the wait.
+    /// (RG16F, render pixels, current to previous). Output: RGBA16F (temporal), read after
+    /// the wait.
     [[nodiscard]] virtual Image Color() const = 0;
     [[nodiscard]] virtual Image Depth() const = 0;
     [[nodiscard]] virtual Image Motion() const = 0;
@@ -71,7 +86,7 @@ public:
 
 #ifndef __APPLE__
 inline std::unique_ptr<MetalFxUpscaler> MetalFxUpscaler::Create(const Instance&,
-                                                                std::string& problem) {
+                                                                std::string& problem, Kind) {
     problem = "MetalFX needs macOS";
     return nullptr;
 }

@@ -251,6 +251,11 @@ INI_DEFAULTS = {'upscaler': 'fsr4', 'preset': '1', 'sharpen': '1', 'sharpness': 
                 'render_resolution': 'native', 'engine_fps': '120', 'fsr1': '0', 'rcas': '1',
                 'rcas_strength': '75', 'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
+# What enlarges a smaller game image to the window (gpu/shim/gow3_graphics.h ScreenUpscaler): on a
+# Mac, Apple's MetalFX can take FSR 1's place (host_passes/metalfx_pass.h).
+SCREEN_UPSCALERS = [('fsr1', ('FSR 1',)), ('metalfx', ('MetalFX (Apple)',))]
+if MACOS:
+    INI_DEFAULTS['screen_upscaler'] = 'fsr1'
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
 APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
@@ -1077,9 +1082,14 @@ class Launcher:
                    _('When HDR is on in Windows and the display supports it.',
                      'Если HDR включён в Windows и монитор его поддерживает.'))
         self.section(f, _('Scaling and sharpening'))
-        self.check(f, 'fsr1', 'ini', _('Upscale with FSR 1'),
+        self.check(f, 'fsr1', 'ini', _('Upscale to the window') if MACOS else _('Upscale with FSR 1'),
                    _('Enlarges a smaller game image to the window. With Render resolution 720p (Performance) '
                      'it raises the FPS; at the size of the window it does nothing.'))
+        if MACOS:
+            self.row(f, _('Upscaler'), self.choice(f, 'screen_upscaler', 'ini', SCREEN_UPSCALERS),
+                     _('FSR 1 (AMD) or MetalFX (Apple, on the GPU through Metal): both enlarge the finished '
+                       'image. MetalFX also sharpens it, so the sharpening below applies to FSR 1. Where '
+                       'MetalFX cannot run, the game uses FSR 1.'))
         self.check(f, 'rcas', 'ini', _('Screen sharpening (RCAS)'),
                    _('Sharpens the final image when it is the size of the window. With the upscaler on, '
                      'turn on its own sharpening (Graphics page) instead: they switch each other off.'))

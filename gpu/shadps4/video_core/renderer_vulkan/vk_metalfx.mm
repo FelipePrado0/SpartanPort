@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// gow3: MetalFX temporal upscaling over KosmicKrisp's exported MTLHeaps (macOS, vk_metalfx.h).
+// gow3: MetalFX upscaling (temporal and spatial) over KosmicKrisp's exported MTLHeaps (macOS,
+// vk_metalfx.h).
 // Objective-C++ with ARC; the Vulkan side uses the port's Vulkan-Hpp dispatcher.
 
 #include "video_core/renderer_vulkan/vk_metalfx.h"
@@ -50,6 +51,13 @@ MTLPixelFormat MetalFormat(vk::Format format) {
         return MTLPixelFormatDepth32Float;
     case vk::Format::eD32SfloatS8Uint:
         return MTLPixelFormatDepth32Float_Stencil8;
+    // The display image's view formats (the spatial scaler; KosmicKrisp maps them natively).
+    case vk::Format::eR8G8B8A8Srgb:
+        return MTLPixelFormatRGBA8Unorm_sRGB;
+    case vk::Format::eB8G8R8A8Srgb:
+        return MTLPixelFormatBGRA8Unorm_sRGB;
+    case vk::Format::eA2R10G10B10UnormPack32:
+        return MTLPixelFormatBGR10A2Unorm;
     default:
         return MTLPixelFormatInvalid;
     }
@@ -193,6 +201,78 @@ public:
                config.color == color_format && config.depth == depth_format;
     }
 
+    bool ConfigureSpatial(u32 w, u32 h, u32 ow, u32 oh, vk::Format format) override {
+        WaitIdle();
+        Release();
+        failed = false;
+        problem.clear();
+        const MTLPixelFormat pixel_format = MetalFormat(format);
+        if (pixel_format == MTLPixelFormatInvalid) {
+            return Fail("unsupported image format");
+        }
+        if (ow < w || oh < h) {
+            return Fail("the window is smaller than the image");
+        }
+        using Usage = vk::ImageUsageFlagBits;
+        // Read by the presenter's passes as the display image is: alpha as 1.
+        const vk::ComponentMapping opaque{.a = vk::ComponentSwizzle::eOne};
+        if (!CreateShared(color, "image", format, w, h, Usage::eTransferDst | Usage::eSampled) ||
+            !CreateShared(output, "enlarged image", format, ow, oh, Usage::eSampled, opaque)) {
+            Release();
+            return false;
+        }
+        @autoreleasepool {
+            id<MTLDevice> gpu = color.texture.device;
+            if (!queue || queue.device != gpu) {
+                queue = [gpu newCommandQueue];
+                queue.label = @"gow3 MetalFX";
+                start = [gpu newSharedEvent];
+                start.signaledValue = queued;
+            }
+            MTLFXSpatialScalerDescriptor* descriptor = [MTLFXSpatialScalerDescriptor new];
+            descriptor.colorTextureFormat = pixel_format;
+            descriptor.outputTextureFormat = pixel_format; // MetalFX keeps sRGB in and out alike
+            descriptor.inputWidth = w;
+            descriptor.inputHeight = h;
+            descriptor.outputWidth = ow;
+            descriptor.outputHeight = oh;
+            // The game's finished image, gamma encoded. On an sRGB texture MetalFX accepts only
+            // this mode, and its result matches the same bytes upscaled as UNORM (checked).
+            descriptor.colorProcessingMode = MTLFXSpatialScalerColorProcessingModePerceptual;
+            spatial = [descriptor newSpatialScalerWithDevice:gpu];
+            if (!spatial) {
+                Release();
+                return Fail("could not create the spatial scaler");
+            }
+            if ((color.texture.usage & spatial.colorTextureUsage) != spatial.colorTextureUsage) {
+                Release();
+                return Fail("the shared texture lacks the usage MetalFX needs");
+            }
+            // As for the temporal scaler: a private target, blitted into the shared output.
+            MTLTextureDescriptor* target =
+                [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixel_format
+                                                                   width:ow
+                                                                  height:oh
+                                                               mipmapped:NO];
+            target.storageMode = MTLStorageModePrivate;
+            target.usage = spatial.outputTextureUsage;
+            private_output = [gpu newTextureWithDescriptor:target];
+            spatial.colorTexture = color.texture;
+            spatial.outputTexture = private_output;
+            spatial.inputContentWidth = w;
+            spatial.inputContentHeight = h;
+            std::printf("Screen upscaler: MetalFX spatial %ux%u -> %ux%u (%s) on %s\n", w, h, ow,
+                        oh, vk::to_string(format).c_str(), gpu.name.UTF8String);
+        }
+        config = {w, h, ow, oh, format, vk::Format::eUndefined};
+        return true;
+    }
+
+    bool MatchesSpatial(u32 w, u32 h, u32 ow, u32 oh, vk::Format format) const override {
+        return spatial && config.w == w && config.h == h && config.ow == ow && config.oh == oh &&
+               config.color == format;
+    }
+
     Image Color() const override {
         return {color.image, color.view};
     }
@@ -227,6 +307,11 @@ public:
                 scaler.jitterOffsetY = frame.jitter_y;
                 scaler.reset = frame.reset;
                 [scaler encodeToCommandBuffer:command];
+                id<MTLBlitCommandEncoder> blit = [command blitCommandEncoder];
+                [blit copyFromTexture:private_output toTexture:output.texture];
+                [blit endEncoding];
+            } else if (spatial) {
+                [spatial encodeToCommandBuffer:command];
                 id<MTLBlitCommandEncoder> blit = [command blitCommandEncoder];
                 [blit copyFromTexture:private_output toTexture:output.texture];
                 [blit endEncoding];
@@ -302,7 +387,7 @@ private:
     /// A Vulkan image with memory of its own, exported as an MTLHeap, and the texture at the
     /// start of that heap with the image's descriptor.
     bool CreateShared(Shared& out, const char* name, vk::Format format, u32 w, u32 h,
-                      vk::ImageUsageFlags usage) {
+                      vk::ImageUsageFlags usage, vk::ComponentMapping components = {}) {
         const bool is_depth =
             format == vk::Format::eD32Sfloat || format == vk::Format::eD32SfloatS8Uint;
         const vk::ExternalMemoryImageCreateInfo external{
@@ -389,6 +474,7 @@ private:
             .image = out.image,
             .viewType = vk::ImageViewType::e2D,
             .format = format,
+            .components = components,
             .subresourceRange = {is_depth ? vk::ImageAspectFlagBits::eDepth
                                           : vk::ImageAspectFlagBits::eColor,
                                  0, 1, 0, 1},
@@ -402,6 +488,7 @@ private:
 
     void Release() {
         scaler = nil;
+        spatial = nil;
         private_output = nil;
         for (Shared* shared : {&color, &depth, &motion, &output}) {
             shared->texture = nil; // before the memory that holds its heap
@@ -496,6 +583,7 @@ private:
     id<MTLSharedEvent> start; ///< upscale n may start at value n (inputs written)
     std::array<std::atomic<double>, 8> released{}; ///< when upscale n was started (stats)
     id<MTLFXTemporalScaler> scaler;
+    id<MTLFXSpatialScaler> spatial; ///< instead of `scaler` (ConfigureSpatial)
     id<MTLTexture> private_output;
     Shared color{}, depth{}, motion{}, output{};
     struct {
@@ -525,7 +613,7 @@ private:
 } // namespace
 
 std::unique_ptr<MetalFxUpscaler> MetalFxUpscaler::Create(const Instance& instance,
-                                                         std::string& problem) {
+                                                         std::string& problem, Kind kind) {
     if (!instance.IsExternalMemoryMetalSupported()) {
         problem = "the Vulkan driver lacks VK_EXT_external_memory_metal";
         return nullptr;
@@ -541,6 +629,15 @@ std::unique_ptr<MetalFxUpscaler> MetalFxUpscaler::Create(const Instance& instanc
         if (!metal) {
             problem = "no Metal device";
             return nullptr;
+        }
+        if (kind == Spatial) {
+            if (![MTLFXSpatialScalerDescriptor supportsDevice:metal]) {
+                problem = std::string{"MetalFX spatial scaling does not support "} +
+                          metal.name.UTF8String;
+                return nullptr;
+            }
+            std::printf("Screen upscaler: MetalFX available on %s\n", metal.name.UTF8String);
+            return std::make_unique<MetalFx>(instance, get_heap);
         }
         if (![MTLFXTemporalScalerDescriptor supportsDevice:metal]) {
             problem = std::string{"MetalFX temporal scaling does not support "} +
