@@ -9,9 +9,18 @@ import sys
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"out"
 
-def run(cmd:list[str],check:bool=True)->int:
+def runtime_env()->dict[str,str]:
+    import os
+    env=dict(os.environ)
+    if os.name=="nt":
+        for extra in (Path(r"C:\msys64\clang64\bin"),Path(r"C:\msys64\usr\bin")):
+            if extra.is_dir() and str(extra).lower() not in env.get("PATH","").lower():
+                env["PATH"]=str(extra)+os.pathsep+env.get("PATH","")
+    return env
+
+def run(cmd:list[str],check:bool=True,env=None)->int:
     print("+"," ".join(map(str,cmd)),flush=True)
-    return subprocess.run(cmd,check=check).returncode
+    return subprocess.run(cmd,check=check,env=env).returncode
 
 def probe_path()->Path|None:
     for name in ("firstlight-probe.exe","gow3-probe.exe","firstlight-probe","gow3-probe"):
@@ -45,7 +54,8 @@ def main()->int:
             print("Runtime checker is not built. Run build.ps1 or bash build.sh first.",file=sys.stderr)
             return 2
         return run([str(probe),str(OUT/"boot-linked.bin"),"--cpu-only","--check-imports",
-                    "--content-profile",str(OUT/"content.bin"),"--app0",str(game)],check=False)
+                    "--content-profile",str(OUT/"content.bin"),"--app0",str(game)],
+                   check=False,env=runtime_env())
     return 0
 
 if __name__=="__main__":
