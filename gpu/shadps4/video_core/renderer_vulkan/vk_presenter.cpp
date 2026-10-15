@@ -284,10 +284,10 @@ void CaptureScreenshot(const Instance& instance, Scheduler& scheduler, vk::Comma
             mz_free(png);
         }
         if (saved) {
-            std::printf("Screenshot: %s (%ux%u)\n", path.string().c_str(), width, height);
-            Gow3Overlay::ShowNotice("Screenshot saved: " + path.filename().string());
+            std::printf("Screenshot: %s (%ux%u)\n", Common::FS::PathToUTF8String(path).c_str(), width, height);
+            Gow3Overlay::ShowNotice("Screenshot saved: " + Common::FS::PathToUTF8String(path.filename()));
         } else {
-            LOG_ERROR(Render_Vulkan, "Screenshot: cannot write {}", path.string());
+            LOG_ERROR(Render_Vulkan, "Screenshot: cannot write {}", Common::FS::PathToUTF8String(path));
             Gow3Overlay::ShowNotice("Screenshot failed: cannot write the file");
         }
     });
