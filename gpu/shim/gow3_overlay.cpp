@@ -281,6 +281,7 @@ const char* UpscalerLabel(int upscaler) {
     case Gow3Settings::UpscalerFsr411: return "FSR 4.1.1";
     case Gow3Settings::UpscalerTaa: return "TAA";
     case Gow3Settings::UpscalerDlss: return "DLSS";
+    case Gow3Settings::UpscalerMetalFx: return "MetalFX";
     default: return "";
     }
 }

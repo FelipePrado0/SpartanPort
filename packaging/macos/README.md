@@ -80,3 +80,44 @@ loader or library), `GOW3_LTO=OFF bash build.sh` (faster builds of the GPU libra
 Not available on macOS: Add to Steam, the Linux options (Wayland/X11, GameMode, MangoHud),
 DLSS, userfaultfd tracking (`GOW3_UFFD`), PGO, and a packaged build (the port runs from the
 repository). The performance overlay shows the GPU name only, as on Linux.
+
+## MetalFX upscaling (experimental)
+
+On a Mac the temporal upscaler can also be Apple's MetalFX (its temporal scaler). Like FSR 3.1,
+FSR 4 and TAA it stays off unless the experimental switch is on: in the launcher, **Graphics
+(experimental) → Enable the upscaler**, then **Upscaler → MetalFX (Apple)**; without the
+launcher, `GOW3_EXPERIMENTAL_UPSCALER=1 GOW3_UPSCALER=metalfx ./play-mac.sh` (or `upscaler=metalfx`
+in `gow3.ini`). The preset and output resolution work as with FSR: Native AA is anti-aliasing at
+1:1, Ultra Performance (3x) is MetalFX's largest scale on Apple GPUs. MetalFX has no sharpening
+of its own; the upscaler sharpening setting runs the port's RCAS pass on its output, as for TAA.
+The log says `Upscaler: MetalFX temporal <input> -> <output>` when it runs; when it cannot, it
+says why and the game uses FSR 3.1 (`Upscaler: MetalFX unavailable (...)` or `... failed (...)`).
+
+**Status:** in God of War III the temporal upscalers do not run yet on any system: the scene,
+depth and camera detection they rely on is still the one of the Bloodborne port this one comes
+from (`docs/gow3/ROADMAP.md`: kept in the code, off, until this game's frame is mapped), so
+MetalFX, like FSR 3.1, changes nothing in the game for now. Its whole path was checked inside the
+game on the game's own frames (a 1280x720 crop upscaled to 1920x1080, inputs and output read
+back), and with tests outside it. FSR 3.1 does not start on KosmicKrisp (its backend cannot
+create the context), so on a Mac falling back to FSR 3.1 means no temporal upscaling.
+
+How it works: MetalFX gets FSR 3.1's inputs (scene color, depth, the port's motion vectors and
+jitter) and its output replaces the scene color the same way (`vk_metalfx.mm`). KosmicKrisp backs
+every `VkDeviceMemory` with an `MTLHeap` and exports it (`VK_EXT_external_memory_metal`), so the
+upscaler's images get memory of their own and a Metal texture is placed at the start of each
+heap with the descriptor KosmicKrisp gives the image: Vulkan and Metal see the same pixels, with
+no copy through the CPU. MetalFX writes only private textures, so a blit in the same Metal command
+buffer moves its result into the shared output image. KosmicKrisp exports no `MTLSharedEvent`
+(no `VK_EXT_metal_objects`), so the host relays the synchronization: the upscale is committed at
+once behind a wait for an event of its own, a thread releases it when the Vulkan submission that
+copied the inputs has completed, and its completion handler signals a Vulkan timeline semaphore
+that the next submission waits for. `GOW3_FRAME_STATS=1` adds a line every 5 s with MetalFX's GPU
+time and the relay's gaps.
+
+Cost on an M4 Pro: outside the game, MetalFX takes 2.1 ms of GPU time at Native AA for a 1080p
+output, 1.5 ms at Quality, 1.1 ms at Performance and 0.7 ms at Ultra Performance (4K output: 6.9,
+5.7, 4.6 and 2.8 ms). In the game, upscaling 1280x720 to 1920x1080 took 1.7 ms on the GPU, the
+relay about 0.4 ms before it and 0.06 ms after it; with the copies and the sharpening pass the
+frame took about 2.5 to 3 ms longer. Under Rosetta, MetalFX logs an `appleneuralengine ... Bad
+argument error` when it creates a scaler (an arm64 build does not); its output matched the arm64
+output in a test outside the game (64 to 74 dB PSNR).

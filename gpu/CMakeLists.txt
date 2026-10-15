@@ -2,6 +2,9 @@
 # drivers, adapted to the native_probe runtime through shims in shim/.
 cmake_minimum_required(VERSION 3.24)
 project(gow3gpu LANGUAGES C CXX)
+if (APPLE)
+    enable_language(OBJCXX) # gow3 (macOS): MetalFX, vk_metalfx.mm
+endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -119,6 +122,7 @@ add_host_shader(upscale_reactive.comp upscale_reactive_comp)
 add_host_shader(taa.comp taa_comp)
 add_host_shader(taa_sharpen.comp taa_sharpen_comp)
 add_host_shader(taa_sharpen.comp taa_sharpen_ldr_comp LDR_OUTPUT=1)
+add_host_shader(taa_sharpen.comp taa_sharpen_half_comp HALF_INPUT=1)
 add_host_shader(buffer_multi_copy.comp buffer_multi_copy_comp)
 add_host_shader(depth_resample.frag depth_resample_frag)
 add_host_shader(depth_resample.frag depth_stencil_resample_frag HAS_STENCIL=1)
@@ -189,6 +193,11 @@ elseif (APPLE)
     # and Metal.
     target_compile_options(gow3gpu PUBLIC -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/gow3_mac_compat.h)
     target_link_libraries(gow3gpu PUBLIC "-framework CoreFoundation")
+    # MetalFX upscaling on the Vulkan images' MTLHeaps (Objective-C++, ARC).
+    target_sources(gow3gpu PRIVATE shadps4/video_core/renderer_vulkan/vk_metalfx.mm)
+    set_source_files_properties(shadps4/video_core/renderer_vulkan/vk_metalfx.mm PROPERTIES
+        COMPILE_OPTIONS "-fobjc-arc")
+    target_link_libraries(gow3gpu PRIVATE "-framework Foundation" "-framework Metal" "-framework MetalFX")
 else()
     target_link_libraries(gow3gpu PUBLIC PkgConfig::X11)
 endif()
