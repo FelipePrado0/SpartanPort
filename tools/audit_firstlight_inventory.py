@@ -89,9 +89,9 @@ def main()->int:
     if data.get("target_title_id")!="CUSA00575":
         print(f"ERROR: expected CUSA00575, got {data.get('target_title_id')!r}",file=sys.stderr)
         return 2
-    eboot=next((f for f in data.get("files",[]) if f.get("path")=="eboot.bin"),None)
-    if not eboot:
-        print("ERROR: report has no eboot.bin entry",file=sys.stderr)
+    files=[f for f in data.get("files",[]) if f.get("undefined_symbols") is not None]
+    if not files:
+        print("ERROR: report has no import-bearing files",file=sys.stderr)
         return 2
 
     names=import_names()
@@ -101,25 +101,33 @@ def main()->int:
     counts=Counter()
     libs=defaultdict(Counter)
 
-    for symbol in eboot.get("undefined_symbols",[]):
-        category,name=classify(symbol,names,direct,exports,gpu)
-        library=symbol["library"]["name"]
-        key=f"{symbol['nid']}#{library}"
-        row={
-            "nid":symbol["nid"],
-            "library":library,
-            "key":key,
-            "name":name,
-            "category":category,
-            "relocation_references":symbol.get("relocation_references",0),
-        }
-        rows.append(row)
-        counts[category]+=1
-        libs[library][category]+=1
+    file_counts={}
+    for file in files:
+        before=len(rows)
+        for symbol in file.get("undefined_symbols",[]):
+            category,name=classify(symbol,names,direct,exports,gpu)
+            library=symbol["library"]["name"]
+            key=f"{symbol['nid']}#{library}"
+            row={
+                "file":file.get("path"),
+                "nid":symbol["nid"],
+                "library":library,
+                "key":key,
+                "name":name,
+                "category":category,
+                "relocation_references":symbol.get("relocation_references",0),
+            }
+            rows.append(row)
+            counts[category]+=1
+            libs[library][category]+=1
+        file_counts[file.get("path")]=len(rows)-before
 
-    expected=eboot.get("referenced_import_count")
-    print(f"Target: {data.get('target_title_id')}  eboot imports: {len(rows)}"
-          +(f" (report says {expected})" if expected is not None else ""))
+    print(f"Target: {data.get('target_title_id')}  audited imports: {len(rows)}")
+    for file in files:
+        expected=file.get("referenced_import_count")
+        observed=file_counts[file.get("path")]
+        print(f"  {file.get('path')}: {observed}"
+              +(f" (report says {expected})" if expected is not None else ""))
     for category,count in sorted(counts.items()):
         print(f"{category:24s} {count:4d}")
 
@@ -138,8 +146,9 @@ def main()->int:
 
     result={
         "title_id":data.get("target_title_id"),
-        "eboot_sha256":eboot.get("sha256"),
+        "file_sha256":{f.get("path"):f.get("sha256") for f in files},
         "imports":len(rows),
+        "file_imports":file_counts,
         "counts":dict(sorted(counts.items())),
         "blockers":unresolved,
         "by_library":{lib:dict(sorted(c.items())) for lib,c in sorted(libs.items())},
