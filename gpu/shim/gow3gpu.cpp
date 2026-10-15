@@ -1,4 +1,5 @@
 #include "gow3_write_log.h"
+#include "game_profile.h"
 // gow3: glue between the C loader and the vendored shadPS4 video core.
 #include "gow3_overlay.h"
 #include "gow3_png.h"
@@ -52,9 +53,9 @@ void runtime_report(void);
 
 Frontend::WindowSDL* g_window = nullptr;
 
-namespace Libraries::GnmDriver { void RegisterLib(Core::Loader::SymbolsResolver* sym); }
+namespace Libraries::GnmDriver { void RegisterLib(Core::Loader::SymbolsResolver* sym, bool initialize); }
 namespace Libraries::AvPlayer { void RegisterLib(Core::Loader::SymbolsResolver* sym); }
-namespace Libraries::VideoOut { void RegisterLib(Core::Loader::SymbolsResolver* sym); }
+namespace Libraries::VideoOut { void RegisterLib(Core::Loader::SymbolsResolver* sym, bool initialize); }
 namespace Libraries::Kernel { void RegisterEventQueue(Core::Loader::SymbolsResolver* sym); }
 
 namespace {
@@ -223,6 +224,7 @@ extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
     StartProfileWriter();
 #endif
     g_sdk_version = config->sdk_version;
+    Game::Select(config->serial);
 #ifdef _WIN32
     if (config->user_dir && !std::getenv("GOW3_GPU_USER_DIR")) _putenv_s("GOW3_GPU_USER_DIR", config->user_dir);
 #else
@@ -255,8 +257,8 @@ extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
     }
     Core::Loader::SymbolsResolver resolver;
     // GnmDriver creates the presenter that the VideoOut present thread uses.
-    Libraries::GnmDriver::RegisterLib(&resolver);
-    Libraries::VideoOut::RegisterLib(&resolver);
+    Libraries::GnmDriver::RegisterLib(&resolver, true);
+    Libraries::VideoOut::RegisterLib(&resolver, true);
     return 0;
 }
 
@@ -266,6 +268,12 @@ extern "C" void gow3gpu_register_kernel(void) {
     Core::Loader::SymbolsResolver resolver;
     Libraries::Kernel::RegisterEventQueue(&resolver);
     Libraries::AvPlayer::RegisterLib(&resolver);
+}
+
+extern "C" void gow3gpu_register_graphics_symbols(void) {
+    Core::Loader::SymbolsResolver resolver;
+    Libraries::GnmDriver::RegisterLib(&resolver, false);
+    Libraries::VideoOut::RegisterLib(&resolver, false);
 }
 
 extern "C" uintptr_t gow3gpu_resolve(const char* scoped_nid) {
