@@ -86,7 +86,9 @@ def main()->int:
     print(f"Log: {LOG}")
 
     if a.mode=="check" and not a.skip_prepare:
-        return prepare(game,True)
+        code=prepare(game,False)
+        if code:
+            return code
 
     probe=probe_path()
     if not probe:
