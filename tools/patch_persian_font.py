@@ -128,7 +128,7 @@ def patch(base, messages):
         word1, word2, word3 = struct.unpack_from('<III', smf, pos + 4)
         x0 = int((word1 & 0xffff) / 16.0)
         y0 = int(((word1 >> 16) & 0xffff) / 16.0)
-        width_px = max(1, (word3 >> 16) & 0xffff)
+        width_px = max(1, round(((word3 >> 16) & 0xffff) / 16.0))
         height_px = max(1, (word2 >> 16) & 0xffff)
         x1, y1 = min(page.width, x0 + width_px), min(page.height, y0 + height_px)
         if x1 <= x0 or y1 <= y0: raise ValueError(f'invalid glyph rectangle for U+{oldcp:04X}')
