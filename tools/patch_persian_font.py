@@ -110,16 +110,11 @@ def patch(base, messages):
         dds = payload.find(b'DDS ')
         pixels = payload[dds + 128:dds + 128 + 1024 * 1024] if dds >= 0 else payload[:1024 * 1024]
         pages.append(Image.frombytes('L', (1024, 1024), bytes(pixels)))
-    comps = [components(page) for page in pages]
     records = []
     for pos in range(SMF_RECORD_OFFSET, len(smf) - SMF_RECORD_SIZE + 1, SMF_RECORD_SIZE):
         cp = struct.unpack_from('<I', smf, pos)[0]
         if cp: records.append((pos, cp))
-    metric_template = next((pos for pos, cp in records if cp == ord('A')), None)
-    if metric_template is None: raise ValueError('ASCII A metrics not found')
-    latin_metrics = bytes(smf[metric_template + 8:metric_template + SMF_RECORD_SIZE])
     needed = sorted(set(form for forms in JOIN_FORMS.values() for form in forms if form))
-    used = {cp for _, cp in records}
     available = [(pos, cp) for pos, cp in records if cp >= 0x4e00 and cp not in needed]
     if len(available) < len(needed): raise ValueError('not enough CJK slots')
     slot_map = {form: cp for form, (_, cp) in zip(needed, available)}
@@ -129,10 +124,13 @@ def patch(base, messages):
         index = (pos - SMF_RECORD_OFFSET) // SMF_RECORD_SIZE
         page_no = index // 1024
         page = pages[page_no]
-        word1 = struct.unpack_from('<I', smf, pos + 4)[0]
-        x = (word1 & 0xffff) / 16.0; y = ((word1 >> 16) & 0xffff) / 16.0
-        box = min(comps[page_no], key=lambda b: abs(b[0]-x) + abs(b[1]-y))
-        x0, y0, x1, y1 = box
+        word1, word2, word3 = struct.unpack_from('<III', smf, pos + 4)
+        x0 = int((word1 & 0xffff) / 16.0)
+        y0 = int(((word1 >> 16) & 0xffff) / 16.0)
+        width_px = max(1, (word3 >> 16) & 0xffff)
+        height_px = max(1, (word2 >> 16) & 0xffff)
+        x1, y1 = min(page.width, x0 + width_px), min(page.height, y0 + height_px)
+        if x1 <= x0 or y1 <= y0: raise ValueError(f'invalid glyph rectangle for U+{oldcp:04X}')
         crop = Image.new('L', (x1-x0, y1-y0), 0)
         draw = ImageDraw.Draw(crop)
         bbox = draw.textbbox((0, 0), target, font=font)
