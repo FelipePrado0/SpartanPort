@@ -23,3 +23,19 @@ perf.data
 mods.json
 patches.json
 !launcher/gow3.png
+
+# inFAMOUS First Light local data
+user/
+CUSA00575/
+game/
+app0/
+sce_module/
+sce_sys/
+eboot.bin
+*.prx
+*.self
+*.pkg
+out/boot.bin
+out/boot-linked.bin
+out/analysis.json
+out/link.json
