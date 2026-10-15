@@ -76,6 +76,7 @@ void runtime_report(void) {
     runtime_mutex_report();
     runtime_rwlock_report();
     runtime_sema_report();
+    runtime_eventflag_report();
     runtime_content_report();
     runtime_memory_report();
     runtime_ajm_report();
@@ -231,6 +232,8 @@ uintptr_t runtime_resolve(const char *name, int is_data) {
     if (timer) return timer;
     uintptr_t sema = runtime_sema_resolve(name);
     if (sema) return sema;
+    uintptr_t eventflag = runtime_eventflag_resolve(name);
+    if (eventflag) return eventflag;
     uintptr_t rwlock = runtime_rwlock_resolve(name);
     if (rwlock) return rwlock;
     uintptr_t memory = runtime_memory_resolve(name);
