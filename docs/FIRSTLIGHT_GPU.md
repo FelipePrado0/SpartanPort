@@ -41,3 +41,17 @@ Liverpool command processor, VideoOut driver, SDL window or Vulkan Presenter. Th
 
 Do not add First-Light-specific GPU workarounds before a reproducible trace shows why they are
 needed.
+
+
+## shadPS4 0.20 backports used by CUSA00575
+
+The CUSA00575 inventory imports three GNM entry points that were stubs in the older renderer
+snapshot inherited from `gow3_pc`. They are backported from the official shadPS4 implementation:
+
+- `sceGnmRequestFlipAndSubmitDone`: shadPS4 commit
+  `443f022450f6857256e780daa3d5a14029a748f7`;
+- `sceGnmSetGsRingSizes` and `sceGnmSetupMipStatsReport`: shadPS4 commit
+  `30d82c9003480b991092279f7a10c2a3d2fe03b8`.
+
+Only functions actually imported by CUSA00575 are backported at this stage. This keeps the
+vendored renderer delta narrow while bringing First Light onto the newer, tested GNM behavior.
