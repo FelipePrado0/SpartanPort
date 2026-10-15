@@ -90,6 +90,13 @@ static ABI int32_t system_param(int32_t id,int32_t *value) {
     }
     return 0;
 }
+/* shadPS4 currently exposes ParamGetString as a stub with no verified ABI. Keep it
+ * side-effect free until CUSA00575 provides a runtime trace for the arguments. */
+static ABI int32_t system_param_string(void) { return 0; }
+static ABI int32_t system_show_safe_area_settings(void) {
+    note("SystemService: display-safe-area settings request ignored");
+    return 0;
+}
 static ABI int32_t system_status(unsigned char *status) {
     if (!status) return SYSTEM_PARAMETER;
     memset(status,0,12); /* event_num=0, no overlay, foreground, normal CPU mode */
@@ -199,7 +206,8 @@ static ABI int32_t voice_info(uint32_t port,uint32_t *info) {
 /* ---- Common dialogs: nothing is displayed; an opened dialog finishes. ---- */
 typedef struct { const char *name; int initialized, status; uint32_t button; } Dialog;
 static Dialog dialogs[]={{"CommonDialog",0,0,0},{"MsgDialog",0,0,0},{"SaveDataDialog",0,0,0},
-                         {"NpProfileDialog",0,0,0},{"NpCommerceDialog",0,0,0},{"ImeDialog",0,0,0}};
+                         {"NpProfileDialog",0,0,0},{"NpCommerceDialog",0,0,0},{"ImeDialog",0,0,0},
+                         {"ErrorDialog",0,0,0}};
 #define DIALOG_RUNNING 2
 #define DIALOG_FINISHED 3
 #define DIALOG_NOT_FINISHED ((int32_t)0x80B80005)
@@ -250,6 +258,17 @@ static int32_t dialog_term(int i) {
     static ABI int32_t tag##_status(void) { return dialog_status(i); } \
     static ABI int32_t tag##_term(void) { return dialog_term(i); }
 DIALOG(profile,3) DIALOG(commerce,4)
+static ABI int32_t error_dialog_init(void) { return dialog_init(6); }
+static ABI int32_t error_dialog_open(const void *param) {
+    if (!param) return DIALOG_ARG_NULL;
+    if (!dialogs[6].initialized) return DIALOG_NOT_INITIALIZED;
+    /* No host UI during bring-up: acknowledge the error and finish immediately. */
+    note("ErrorDialog opened; completed immediately (headless)");
+    dialogs[6].status=DIALOG_FINISHED;
+    return 0;
+}
+static ABI int32_t error_dialog_status(void) { return dialog_status(6); }
+static ABI int32_t error_dialog_term(void) { return dialog_term(6); }
 /* OrbisMsgDialogParam: BaseParam (48 bytes), size, mode (2 = progress bar).
  * OrbisSaveDataDialogParam: BaseParam, int32 size, mode (5 = progress bar). */
 static int32_t dialog_open_mode(int i, const unsigned char *param, size_t mode_offset, uint32_t progress_mode) {
@@ -582,7 +601,10 @@ static const RuntimeExport exports[]={
     {"sceUserServiceInitialize",user_initialize}, {"sceUserServiceTerminate",user_terminate},
     {"sceUserServiceGetInitialUser",user_initial}, {"sceUserServiceGetLoginUserIdList",user_list},
     {"sceUserServiceGetUserName",user_name}, {"sceUserServiceGetEvent",user_event},
-    {"sceSystemServiceParamGetInt",system_param}, {"sceSystemServiceGetStatus",system_status},
+    {"sceSystemServiceParamGetInt",system_param},
+    {"sceSystemServiceParamGetString",system_param_string},
+    {"sceSystemServiceShowDisplaySafeAreaSettings",system_show_safe_area_settings},
+    {"sceSystemServiceGetStatus",system_status},
     {"sceSystemServiceReceiveEvent",system_event}, {"sceSystemServiceHideSplashScreen",hide_splash},
     {"sceSystemServiceLaunchWebBrowser",launch_browser},
     {"sceSystemServiceGetDisplaySafeAreaInfo",safe_area}, {"sceSystemServiceDisableMusicPlayer",disable_music_player},
@@ -600,6 +622,7 @@ static const RuntimeExport exports[]={
     {"sceNetSocketClose",net_unreachable}, {"sceNetSocketAbort",net_unreachable},
     {"sceNetEpollControl",net_unreachable}, {"sceNetEpollWait",net_unreachable}, {"sceNetEpollAbort",net_unreachable},
     {"sceNetResolverStartNtoa",net_unreachable}, {"sceNetResolverStartAton",net_unreachable},
+    {"sceNetCtlInit",ok_void}, {"sceNetCtlTerm",ok_void},
     {"sceNetCtlGetState",netctl_state}, {"sceNetCtlGetInfo",netctl_info},
     {"sceNetCtlRegisterCallback",netctl_register}, {"sceNetCtlCheckCallback",netctl_check},
     {"sceNetCtlUnregisterCallback",netctl_unregister}, {"sceNetCtlGetNatInfo",netctl_nat},
@@ -690,6 +713,8 @@ static const RuntimeExport exports[]={
     {"sceNpSignalingInitialize",ok_void}, {"sceNpSignalingTerminate",ok_void},
     {"sceNpSignalingCreateContext",np_signed_out},
     {"sceCommonDialogInitialize",common_init},
+    {"sceErrorDialogInitialize",error_dialog_init}, {"sceErrorDialogOpen",error_dialog_open},
+    {"sceErrorDialogUpdateStatus",error_dialog_status}, {"sceErrorDialogTerminate",error_dialog_term},
     {"sceMsgDialogInitialize",msg_init}, {"sceMsgDialogOpen",msg_open},
     {"sceMsgDialogUpdateStatus",msg_status}, {"sceMsgDialogTerminate",msg_term},
     {"sceMsgDialogClose",msg_close}, {"sceMsgDialogProgressBarSetValue",msg_progress},
