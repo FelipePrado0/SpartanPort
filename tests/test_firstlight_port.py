@@ -57,7 +57,7 @@ class FirstLightPortTests(unittest.TestCase):
             "if (gpu_enabled) install_stat_multipliers(",
         ):
             self.assertNotIn(call,text)
-        self.assertIn("if (check_imports) gow3gpu_register_graphics_symbols();",text)
+        self.assertIn("if (check_imports && cpu_only) gow3gpu_register_graphics_symbols();",text)
 
     def test_headless_gpu_registration(self):
         gnm=(ROOT/"gpu"/"shadps4"/"core"/"libraries"/"gnmdriver"/"gnmdriver.cpp").read_text(encoding="utf-8")
