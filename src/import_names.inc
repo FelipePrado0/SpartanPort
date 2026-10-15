@@ -822,3 +822,12 @@
 {"DYhhWbJSeRg#libSceVideoOut","sceVideoOutColorSettingsSetGamma"},
 {"pv9CI5VC+R0#libSceVideoOut","sceVideoOutAdjustColor"},
 {"zgXifHT9ErY#libSceVideoOut","sceVideoOutIsFlipPending"},
+/* First Light kernel names confirmed from shadPS4. */
+{"4R6-OvI2cEA#libkernel","sceKernelAddUserEvent"},
+{"F6e0kwo4cnk#libkernel","sceKernelTriggerUserEvent"},
+{"LJDwdSNTnDg#libkernel","sceKernelDeleteUserEvent"},
+{"BpFoboUJoZU#libkernel","sceKernelCreateEventFlag"},
+{"8mql9OcQnd4#libkernel","sceKernelDeleteEventFlag"},
+{"IOnSvHzqu6A#libkernel","sceKernelSetEventFlag"},
+{"JTvBflhYazQ#libkernel","sceKernelWaitEventFlag"},
+{"FXPWHNk8Of0#libkernel","scePthreadAttrGetschedparam"},
