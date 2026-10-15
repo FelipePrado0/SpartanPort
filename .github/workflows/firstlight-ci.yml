@@ -24,9 +24,9 @@ jobs:
           python-version: "3.12"
       - name: Python syntax
         run: |
-          python -m py_compile run_firstlight.py tools/validate_firstlight.py tools/check_firstlight_link.py tools/firstlight_stage1.py tools/summarize_firstlight_log.py tools/audit_firstlight_inventory.py
+          python -m py_compile run_firstlight.py tools/validate_firstlight.py tools/check_firstlight_link.py tools/firstlight_stage1.py tools/summarize_firstlight_log.py tools/audit_firstlight_report.py tools/audit_firstlight_inventory.py
       - name: First Light invariants
-        run: python -m unittest discover -s tests -p "test_firstlight_port.py" -v
+        run: python -m unittest discover -s tests -p "test_firstlight*.py" -v
 
   windows-build:
     runs-on: windows-2025
