@@ -385,7 +385,7 @@ OUTPUTS = [('1280x720', ('1280 × 720 (Steam Deck)',)), ('1920x1080', ('1920 × 
            ('2560x1440', ('2560 × 1440',)), ('3840x2160', ('3840 × 2160 (4K)',))]
 LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарте)')), ('0', ('Off (faster)', 'Выключена (быстрее)')),
         ('1', ('On (change without restarting)', 'Включена (без перезапуска)'))]
-LANGUAGES = [('1', ('English', 'Английский')), ('8', ('Russian', 'Русский')), ('0', ('Japanese', 'Японский')),
+LANGUAGES = [('1', ('English', 'Английский')), ('fa', ('Persian', 'فارسی')), ('8', ('Russian', 'Русский')), ('0', ('Japanese', 'Японский')),
              ('2', ('French', 'Французский')), ('3', ('Spanish', 'Испанский')), ('4', ('German', 'Немецкий')),
              ('5', ('Italian', 'Итальянский'))]
 DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', ('On', 'Включён')),
@@ -737,7 +737,7 @@ def game_environment(s):
     env['GOW3_MODS_ENABLED'] = '1' if s['mods_enabled'] else '0'
     env['GOW3_PATCHES_DIR'] = s['patches_dir'] or str(DATA_DIR / 'patches')
     env['GOW3_PATCHES_CONFIG'] = str(DATA_DIR / 'patches.json')
-    env['GOW3_LANGUAGE'] = s['language']
+    env['GOW3_LANGUAGE'] = '1' if s['language'] == 'fa' else s['language']
     env['GOW3_DISCORD'] = '1' if s.get('discord_rpc') else '0'
     if s['hdr']:
         env['GOW3_HDR'] = '1'
