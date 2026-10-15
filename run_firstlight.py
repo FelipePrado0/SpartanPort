@@ -91,6 +91,7 @@ def main()->int:
 
     if a.mode=="check":
         return run([str(probe),str(OUT/"boot-linked.bin"),"--cpu-only","--check-imports",
+                    "--content-profile",str(OUT/"content.bin"),
                     "--app0",str(game),"--user",str(USER)],env=safe_env())
 
     if not a.skip_prepare:
@@ -108,6 +109,7 @@ def main()->int:
 
     print("Checking imports before experimental Vulkan boot...")
     code=run([str(probe),str(OUT/"boot-linked.bin"),"--cpu-only","--check-imports",
+              "--content-profile",str(OUT/"content.bin"),
               "--app0",str(game),"--user",str(USER)],env=env)
     if code:
         print("GPU boot blocked until Imports: 0 missing.",file=sys.stderr)
