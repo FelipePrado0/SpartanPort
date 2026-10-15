@@ -42,6 +42,7 @@ def gpu_nids()->set[str]:
     for path in (
         ROOT/"gpu"/"shadps4"/"core"/"libraries"/"gnmdriver"/"gnmdriver.cpp",
         ROOT/"gpu"/"shadps4"/"core"/"libraries"/"videoout"/"video_out.cpp",
+        ROOT/"gpu"/"shadps4"/"core"/"libraries"/"kernel"/"equeue.cpp",
     ):
         if path.is_file():
             nids.update(GPU_RE.findall(path.read_text(encoding="utf-8",errors="replace")))
