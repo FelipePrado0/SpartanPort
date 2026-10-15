@@ -309,7 +309,7 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
                 'render_resolution': 'native', 'engine_fps': '120',
                 'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
-                'anisotropy': '0', 'vibration': '100'}
+                'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
@@ -426,15 +426,15 @@ def bind_key(bindings, button, name):
 # while 'native_input' is on. Its defaults put the attacks and magic on the mouse, the shoulder
 # buttons next to WASD and the weapons on 1-4 (clockwise from up, the order they are acquired).
 NATIVE_DEFAULTS = {'cross': 'Space', 'circle': 'Left Shift', 'square': 'Mouse Left', 'triangle': 'Mouse Right',
-                   'l1': 'Q', 'r1': 'E', 'l2': 'R', 'r2': 'Mouse Forward', 'l3': 'Z', 'r3': 'C',
+                   'l1': 'Q', 'r1': 'E', 'l2': 'R', 'r2': 'Mouse Forward', 'l3': 'Z', 'r3': 'X',
                    'options': 'Tab', 'touchpad_left': 'P', 'touchpad_right': 'Escape',
                    'up': '1', 'right': '2', 'down': '3', 'left': '4'}
 # Actions of the native table only (runtime_pad.c's host-only sources), as CONTROLS rows.
 # Rage of Sparta (L3 + R3 on one input) follows R3; it is used instead of L3 and R3 while
 # 'native_rage' is on.
-RAGE_ROW, DODGE_ROW = ('rage', 'Mouse Middle', None), ('dodge', 'Mouse Back', None)
-NATIVE_ACTIONS = [RAGE_ROW, DODGE_ROW]
-ACTION_NAMES = {'rage': 'Rage of Sparta', 'dodge': 'Dodge'}
+RAGE_ROW, GRAB_ROW, DODGE_ROW = ('rage', 'Mouse Middle', None), ('grab', 'C', None), ('dodge', 'Mouse Back', None)
+NATIVE_ACTIONS = [RAGE_ROW, GRAB_ROW, DODGE_ROW]
+ACTION_NAMES = {'rage': 'Rage of Sparta', 'grab': 'Grab', 'dodge': 'Dodge'}
 RAGE_BUTTONS = ('l3', 'r3')
 
 
@@ -447,7 +447,7 @@ def table_rows(kind):
         rows.append(row)
         if row[0] == 'r3':
             rows.append(RAGE_ROW)
-    return rows + [DODGE_ROW]
+    return rows + [GRAB_ROW, DODGE_ROW]
 MOUSE_NAMES = {name.casefold() for name in (*TK_TO_MOUSE.values(), 'Wheel Up', 'Wheel Down')}
 
 
@@ -1737,8 +1737,8 @@ class Launcher:
             game_icon.grid(row=r, column=0, sticky='w', pady=3)
             if button in button_icons.GAME_BUTTONS:
                 button_icons.draw(game_icon, button_icons.GAME_BUTTONS[button], 'playstation', size)
-            elif button == 'rage':
-                button_icons.draw(game_icon, 'label:L3+R3', 'playstation', size)
+            elif button in ('rage', 'grab'):  # two buttons together
+                button_icons.draw(game_icon, 'label:L3+R3' if button == 'rage' else 'label:L1+O', 'playstation', size)
             else:  # an action of the right stick (dodge): the stick icon labelled RS
                 button_icons.draw(game_icon, 'rightstick', 'xbox', size)
             title = PS_BUTTON_NAMES.get(button) or _(ACTION_NAMES[button])
@@ -1846,7 +1846,8 @@ class Launcher:
         self.note(f, _('Click a box, then press a key, click a mouse button or turn the wheel (it gives up '
                        'after {} seconds). An input already used by another button swaps with it; the arrow '
                        'puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the '
-                       'box above it to use one input instead of two. Dodge evades the way you are moving (WASD), '
+                       'box above it to use one input instead of two. Grab presses L1 and Circle together. '
+                       'Dodge evades the way you are moving (WASD), '
                        'or back when standing still. Applied when the game starts.').format(CAPTURE_SECONDS))
         ttk.Button(f, text=_('Reset native to defaults'), command=lambda: self.reset_controls('native')).grid(
             row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
@@ -1854,6 +1855,18 @@ class Launcher:
                  hint=_('How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns '
                         'from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W '
                         'or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.'))
+        holder = ttk.Frame(f)
+        distance = self.var('mouse_prompt_distance', 'ini')
+        tk.Scale(holder, from_=16, to=200, orient='horizontal', variable=distance, showvalue=False, length=self.px(260),
+                 width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD, activebackground=ACCENT_HI,
+                 highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
+        value = ttk.Label(holder, width=7)
+        value.pack(side='left', padx=10)
+        show = lambda *_a: value.configure(text=f'{distance.get()} px')
+        distance.trace_add('write', show)
+        show()
+        self.row(f, _('Mouse prompt distance'), holder,
+                 _('Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.'))
 
     def key_binder(self, parent, kind, button, var):
         """An input box of the 'key' or 'native' table: click it, then press a key; on 'native' a

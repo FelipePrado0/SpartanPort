@@ -454,8 +454,8 @@ static void install_actor_watch(Segment *segments, uint64_t count, uint64_t size
 }
 
 /* QTE prompts (src/qte_hook.h): a frame count in the prompt's update and an answer in its
- * rotation check, for the keyboard rotation minigame in runtime_pad.c. Both or neither; they do
- * nothing until the player finishes a rotation on the keyboard. */
+ * rotation check, for the stick prompts in runtime_pad.c (typed or drawn rotations). Both or
+ * neither; they do nothing until the player finishes a rotation that way. */
 static void install_qte_hooks(Segment *segments, uint64_t count, uint64_t size) {
     const uint64_t sites[2] = {gow3_signature_find(image, size, &gow3_qte_update_site),
                                gow3_signature_find(image, size, &gow3_qte_rotation_site)};
@@ -463,13 +463,13 @@ static void install_qte_hooks(Segment *segments, uint64_t count, uint64_t size) 
     for (unsigned i = 0; i < 2; ++i) {
         if (sites[i] == UINT64_MAX || !mapped(segments, count, sites[i], GOW3_QTE_BLOCK_NEXT) ||
             memcmp(image + sites[i], originals[i], GOW3_QTE_HOOK_LENGTH)) {
-            printf("QTE keys: unavailable (code not found in this eboot.bin)\n");
+            printf("Stick prompts: unavailable (code not found in this eboot.bin)\n");
             return;
         }
     }
     const uint64_t block = gow3_qte_block(image + sites[1], sites[1]);
     if (!mapped(segments, count, block, GOW3_QTE_TYPE_OFFSET + 2)) {
-        printf("QTE keys: unavailable (prompt state outside the image)\n");
+        printf("Stick prompts: unavailable (prompt state outside the image)\n");
         return;
     }
     unsigned char *stubs = allocate(page_size);
@@ -477,7 +477,7 @@ static void install_qte_hooks(Segment *segments, uint64_t count, uint64_t size) 
     for (unsigned i = 0; i < 2; ++i) {
         const int64_t delta = (int64_t)(uintptr_t)(stubs + i * 128) - (int64_t)(uintptr_t)(image + sites[i] + 5);
         if (delta < INT32_MIN || delta > INT32_MAX) {
-            printf("QTE keys: unavailable (hook outside relative-jump range)\n");
+            printf("Stick prompts: unavailable (hook outside relative-jump range)\n");
             return;
         }
         relative[i] = (int32_t)delta;
@@ -494,7 +494,7 @@ static void install_qte_hooks(Segment *segments, uint64_t count, uint64_t size) 
         memset(image + sites[i] + 5, 0x90, GOW3_QTE_HOOK_LENGTH - 5);
     }
     state->block = (uint64_t)(uintptr_t)(image + block);
-    printf("QTE keys: prompt hooks ready (keyboard rotation minigame)\n");
+    printf("Stick prompts: rotation prompt hooks ready\n");
 }
 
 static void install_orb_multiplier(Segment *segments, uint64_t count, uint64_t size) {

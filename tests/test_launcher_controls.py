@@ -132,7 +132,7 @@ class ControlMapTest(unittest.TestCase):
             native = launcher.NATIVE_DEFAULTS.get(button, key)
             if native.casefold() != key.casefold():
                 self.assertEqual(pairs.pop(button), native)
-        self.assertEqual(pairs, {'dodge': 'Mouse Back'})
+        self.assertEqual(pairs, {'grab': 'C', 'dodge': 'Mouse Back'})
         together = launcher.native_key_map({}, rage=True)
         self.assertIn('l3=None,r3=None,rage=Mouse Middle', together)
         controls = {'native': {'square': 'Wheel Up', 'cross': 'Q', 'triangle': 'E'}}
@@ -153,7 +153,7 @@ class ControlMapTest(unittest.TestCase):
     def test_rage_of_sparta_follows_r3_in_the_native_table(self):
         names = [row[0] for row in launcher.table_rows('native')]
         self.assertEqual(names[names.index('r3') + 1], 'rage')
-        self.assertEqual(names[-1], 'dodge')
+        self.assertEqual(names[-2:], ['grab', 'dodge'])
         self.assertNotIn('rage', [row[0] for row in launcher.table_rows('key')])
         self.assertTrue(launcher.APP_DEFAULTS['native_rage'])
 

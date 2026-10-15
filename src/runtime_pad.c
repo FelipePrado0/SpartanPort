@@ -33,9 +33,9 @@ enum {
     /* Host-only sources, never shown to the game: a click on one side of the touchpad from a
      * button or key without a touch surface (play_click turns them into a touch and a click). */
     CLICK_LEFT=0x40000000, CLICK_RIGHT=0x80000000,
-    /* Host-only actions of the keyboard map: dodge tilts the right stick (apply_dodge) and rage
-     * presses L3 and R3 together (apply_rage). */
-    DODGE=0x20000000, RAGE=0x10000000,
+    /* Host-only actions of the keyboard map: dodge tilts the right stick (apply_dodge); rage and
+     * grab press two buttons together (apply_combos). */
+    DODGE=0x20000000, RAGE=0x10000000, GRAB=0x08000000,
 };
 typedef struct { uint16_t x, y; uint8_t id, reserve[3]; } PadTouch;
 typedef struct {
@@ -139,7 +139,7 @@ static const struct { const char *name; uint32_t ps; } ps_names[]={
     {"l1",BTN_L1}, {"r1",BTN_R1}, {"l2",BTN_L2}, {"r2",BTN_R2}, {"l3",BTN_L3}, {"r3",BTN_R3},
     {"options",BTN_OPTIONS}, {"touchpad",CLICK_LEFT}, {"touchpad_left",CLICK_LEFT}, {"touchpad_right",CLICK_RIGHT},
     {"up",BTN_UP}, {"down",BTN_DOWN}, {"left",BTN_LEFT}, {"right",BTN_RIGHT},
-    {"dodge",DODGE}, {"rage",RAGE},
+    {"dodge",DODGE}, {"rage",RAGE}, {"grab",GRAB},
 };
 typedef struct { int source; uint32_t ps; } ButtonSource;
 typedef struct { ButtonSource entries[48]; size_t count; } ButtonMap;
@@ -185,9 +185,15 @@ static int mouse_source(const char *name) {
 
 static SDL_AtomicInt wheel_ticks[2]; /* notches not yet played: 0 up, 1 down */
 static struct { int phase; uint64_t until; } wheel_pulse[2]; /* phase 0 idle, 1 pressed, 2 gap */
+static SDL_AtomicInt mouse_motion[2]; /* x, y moved since the last read, in 1/16 px (stick prompts) */
 /* Runs on the window thread for every queued event (SDL_AddEventWatch). */
-static bool SDLCALL wheel_watch(void *userdata, SDL_Event *event) {
+static bool SDLCALL mouse_watch(void *userdata, SDL_Event *event) {
     (void)userdata;
+    if (event->type==SDL_EVENT_MOUSE_MOTION) {
+        SDL_AddAtomicInt(&mouse_motion[0],(int)(event->motion.xrel*16.0f));
+        SDL_AddAtomicInt(&mouse_motion[1],(int)(event->motion.yrel*16.0f));
+        return true;
+    }
     if (event->type!=SDL_EVENT_MOUSE_WHEEL) return true;
     int steps=event->wheel.integer_y;
     if (event->wheel.direction==SDL_MOUSEWHEEL_FLIPPED) steps=-steps;
@@ -198,10 +204,13 @@ static bool SDLCALL wheel_watch(void *userdata, SDL_Event *event) {
 static void watch_wheel(void) {
     static bool watching;
     if (watching || !SDL_WasInit(SDL_INIT_VIDEO)) return;
-    watching=SDL_AddEventWatch(wheel_watch,NULL);
+    watching=SDL_AddEventWatch(mouse_watch,NULL);
 }
 static void drop_wheel(void) {
-    for (int dir=0;dir<2;++dir) { SDL_SetAtomicInt(&wheel_ticks[dir],0); wheel_pulse[dir].phase=0; }
+    for (int dir=0;dir<2;++dir) {
+        SDL_SetAtomicInt(&wheel_ticks[dir],0); wheel_pulse[dir].phase=0;
+        SDL_SetAtomicInt(&mouse_motion[dir],0);
+    }
 }
 /* Whether the wheel's direction `dir` is held at `now`; call once per read for each direction. */
 static bool wheel_held(int dir, uint64_t now) {
@@ -299,7 +308,9 @@ static void key_axis(uint8_t *axis, bool negative, bool positive) {
  * the player types the prompt's keys instead; a finished sequence makes the game's own rotation
  * check pass. A key of the sequence pressed out of turn starts it again; the prompt's timer still
  * decides when the QTE is lost. GOW3_QTE_SEQUENCES replaces sequences, e.g.
- * down180cw=D>S>A,360ccw=A>S>D>W (SDL key names joined by >). */
+ * down180cw=D>S>A,360ccw=A>S>D>W (SDL key names joined by >). mouse: the same sequences drawn with
+ * the mouse, each move of the menu's mouse prompt distance in a new direction standing for a key
+ * (right D, down S, left A, up W). */
 enum { QTE_ACTIVE_US=150000, QTE_FIRST_ROTATION=4, QTE_ROTATIONS=6, QTE_KEYS_MAX=8 };
 enum { STICK_PROMPTS_OFF, STICK_PROMPTS_KEYBOARD, STICK_PROMPTS_MOUSE };
 static const char *const qte_names[QTE_ROTATIONS]={"up180cw","up180ccw","down180cw","down180ccw","360cw","360ccw"};
@@ -313,6 +324,8 @@ static struct {
     unsigned step;
     bool fresh, passed;  /* fresh: keys already held when the prompt appeared do not count */
     bool held[SDL_SCANCODE_COUNT];
+    float mouse_x, mouse_y;
+    int mouse_key;       /* the direction key the gesture last stood for */
 } qte;
 static Gow3QteState gow3_qte;
 uintptr_t gow3_qte_state_address(void) { return (uintptr_t)&gow3_qte; }
@@ -384,27 +397,54 @@ static int qte_rotation(uint64_t now) {
     return type-QTE_FIRST_ROTATION<QTE_ROTATIONS ? (int)(type-QTE_FIRST_ROTATION) : -1;
 }
 
-/* One read of the keyboard minigame (keys: SDL's keyboard state); true while it owns W/A/S/D. */
-static bool qte_keys(const bool *keys, uint64_t now) {
+/* A direction key (pressed or drawn) in the minigame: the next step, or back to the start. */
+static void qte_advance(int key, const int *sequence, unsigned length) {
+    if (qte.passed) return;
+    qte.step=key==sequence[qte.step] ? qte.step+1 : key==sequence[0];
+    if (qte.step==length) {
+        qte.passed=true;
+        __atomic_store_n(&gow3_qte.pass,1,__ATOMIC_RELEASE);
+    }
+}
+
+/* The key the mouse gesture stands for (right D, down S, left A, up W) once it has moved the mouse
+ * prompt distance since its last step and turned a new way, else 0. fresh: forget older motion. */
+static int qte_mouse_key(bool fresh) {
+    const float dx=SDL_SetAtomicInt(&mouse_motion[0],0)/16.0f, dy=SDL_SetAtomicInt(&mouse_motion[1],0)/16.0f;
+    if (fresh) { qte.mouse_x=qte.mouse_y=0; qte.mouse_key=0; return 0; }
+    qte.mouse_x+=dx; qte.mouse_y+=dy;
+    const float step=(float)gow3gpu_mouse_prompt_distance();
+    if (qte.mouse_x*qte.mouse_x+qte.mouse_y*qte.mouse_y<step*step) return 0;
+    const float ax=qte.mouse_x<0 ? -qte.mouse_x : qte.mouse_x, ay=qte.mouse_y<0 ? -qte.mouse_y : qte.mouse_y;
+    const int key=ax>=ay ? (qte.mouse_x>0 ? SDL_SCANCODE_D : SDL_SCANCODE_A)
+                         : (qte.mouse_y>0 ? SDL_SCANCODE_S : SDL_SCANCODE_W);
+    qte.mouse_x=qte.mouse_y=0;
+    if (key==qte.mouse_key) return 0;
+    qte.mouse_key=key;
+    return key;
+}
+
+/* One read of the stick prompts (keys: SDL's keyboard state); true while they own W/A/S/D. */
+static bool qte_play(const bool *keys, uint64_t now) {
     qte_load();
-    if (qte.mode!=STICK_PROMPTS_KEYBOARD) return false;
+    if (qte.mode==STICK_PROMPTS_OFF) return false;
     const int rotation=qte_rotation(now);
     if (rotation<0) return false;
     if (rotation!=qte.rotation) { qte.rotation=rotation; qte.step=0; }
     const int *sequence=qte_sequences[rotation].keys;
     const unsigned length=qte_sequences[rotation].length;
-    for (unsigned i=0;i<length;++i) {
-        const int key=sequence[i];
-        unsigned first=0;
-        while (sequence[first]!=key) ++first;
-        if (first<i) continue;  /* a key listed twice is looked at once */
-        const bool pressed=keys[key] && !qte.held[key] && !qte.fresh;
-        qte.held[key]=keys[key];
-        if (!pressed || qte.passed) continue;
-        qte.step=key==sequence[qte.step] ? qte.step+1 : key==sequence[0];
-        if (qte.step==length) {
-            qte.passed=true;
-            __atomic_store_n(&gow3_qte.pass,1,__ATOMIC_RELEASE);
+    if (qte.mode==STICK_PROMPTS_MOUSE) {
+        const int key=qte_mouse_key(qte.fresh);
+        if (key) qte_advance(key,sequence,length);
+    } else {
+        for (unsigned i=0;i<length;++i) {
+            const int key=sequence[i];
+            unsigned first=0;
+            while (sequence[first]!=key) ++first;
+            if (first<i) continue;  /* a key listed twice is looked at once */
+            const bool pressed=keys[key] && !qte.held[key] && !qte.fresh;
+            qte.held[key]=keys[key];
+            if (pressed) qte_advance(key,sequence,length);
         }
     }
     qte.fresh=false;
@@ -454,7 +494,7 @@ static void sample_host(PadData *d) {
         if (source_down(key_map.entries[i].source,k,mouse,wheel)) d->buttons|=key_map.entries[i].ps;
     if (d->buttons & BTN_L2) d->l2=255;
     if (d->buttons & BTN_R2) d->r2=255;
-    if (!qte_keys(k,d->timestamp)) {
+    if (!qte_play(k,d->timestamp)) {
         key_axis(&d->left_x,k[SDL_SCANCODE_A],k[SDL_SCANCODE_D]);
         key_axis(&d->left_y,k[SDL_SCANCODE_W],k[SDL_SCANCODE_S]);
     }
@@ -570,10 +610,12 @@ static void replay_sample(PadData *d) {
     d->left_x=s->axes[0]; d->left_y=s->axes[1]; d->right_x=s->axes[2]; d->right_y=s->axes[3];
     d->l2=s->l2; d->r2=s->r2;
 }
-/* Rage (GOW3_KEY_MAP "rage=<key>"): presses L3 and R3 in the same read, as the game wants for
- * Rage of Sparta. */
-static void apply_rage(PadData *d) {
-    if (d->buttons & RAGE) d->buttons=(d->buttons & ~RAGE) | BTN_L3 | BTN_R3;
+/* One source for two buttons pressed in the same read (GOW3_KEY_MAP "rage=<key>", "grab=<key>"):
+ * L3 + R3 for Rage of Sparta, L1 + Circle for the grab. */
+static void apply_combos(PadData *d) {
+    static const struct { uint32_t action, buttons; } combos[]={{RAGE,BTN_L3|BTN_R3},{GRAB,BTN_L1|BTN_CIRCLE}};
+    for (size_t i=0;i<sizeof(combos)/sizeof(*combos);++i)
+        if (d->buttons & combos[i].action) d->buttons=(d->buttons & ~combos[i].action) | combos[i].buttons;
 }
 
 /* Dodge (GOW3_KEY_MAP "dodge=<key>"): God of War III evades toward where the right stick is pushed.
@@ -613,7 +655,7 @@ static void sample(PadData *d) {
     if (injected.buttons & BTN_R2) d->r2=255;
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
-    apply_rage(d);
+    apply_combos(d);
     apply_dodge(d);
     play_click(d);
     if (hold_after_capture) {
