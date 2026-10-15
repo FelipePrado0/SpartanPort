@@ -58,7 +58,7 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 NEW_GROUP = {} if WINDOWS else {'start_new_session': True}
 UI_FONT, MONO_FONT, SERIF_FONT = 'Segoe UI', 'Consolas', 'Georgia'
 # This build; GitHub release tags are windows-v<VERSION>.
-VERSION = '2.2.0'
+VERSION = '2.3.0'
 RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
@@ -1076,7 +1076,8 @@ class Launcher:
         self.side_note = tk.Label(side, text=_('In the game: Insert or R3+L2\nopens the port\'s menu.',
                                                'В игре: Insert или R3+L2\nоткрывает меню порта.'),
                                   bg=BG, fg=MUTED, font=(UI_FONT, 9), justify='left', wraplength=self.px(210))
-        self.side_note.pack(anchor='w', padx=22, pady=(0, 18))
+        self.side_note.pack(anchor='w', padx=22, pady=(0, 4))
+        tk.Label(side, text=f'v{VERSION}', bg=BG, fg=MUTED, font=(UI_FONT, 9)).pack(anchor='w', padx=22, pady=(0, 18))
 
         right = tk.Frame(self.root, bg=PANEL)
         right.pack(side='left', fill='both', expand=True)
