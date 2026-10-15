@@ -167,6 +167,13 @@ static ABI void np_register_void(void *cb,void *arg) { (void)cb; (void)arg; }
 static ABI int32_t np_request(const void *param) { (void)param; return new_id(); }
 static ABI int32_t np_request_ctx(int32_t ctx,const void *param) { (void)ctx; (void)param; return new_id(); }
 static ABI int32_t np_poll(int32_t request,int32_t *result) { (void)request; if (result) *result=NP_SIGNED_OUT; return 0; }
+/* First Light asks WebApi for the request error after a failed operation. */
+static ABI int32_t np_webapi_error_code(int32_t request,int32_t *error) {
+    (void)request;
+    if (!error) return NP_INVALID_ARGUMENT;
+    *error=NP_SIGNED_OUT;
+    return 0;
+}
 static ABI int32_t np_compare(const void *a,const void *b) {
     if (!a || !b) return NP_INVALID_ARGUMENT;
     return memcmp(a,b,16) ? (int32_t)0x80550609 : 0; /* NP_UTIL NOT_MATCH */
@@ -629,6 +636,21 @@ static const RuntimeExport exports[]={
     {"sceNpScoreGetRankingByNpIdPcId",np_signed_out}, {"sceNpScoreGetRankingByRange",np_signed_out},
     {"sceNpScoreRecordGameData",np_signed_out}, {"sceNpScoreRecordScore",np_signed_out},
     {"sceNpScoreSetPlayerCharacterId",ok_void},
+    /* inFAMOUS First Light (CUSA00575): explicit offline PSN contracts. */
+    {"sceNpGetAccountCountry",np_signed_out},
+    {"sceNpScoreGetRankingByRangeAsync",np_signed_out},
+    {"sceNpScoreGetRankingByNpIdAsync",np_signed_out},
+    {"sceNpScorePollAsync",np_poll},
+    {"sceNpScoreRecordScoreAsync",np_signed_out},
+    {"sceNpTusCreateRequest",np_request},
+    {"sceNpTusDeleteRequest",ok_void},
+    {"sceNpTusGetMultiSlotVariableAsync",np_signed_out},
+    {"sceNpTusGetMultiUserVariableAsync",np_signed_out},
+    {"sceNpTusPollAsync",np_poll},
+    {"sceNpTusSetMultiSlotVariableAsync",np_signed_out},
+    {"sceNpTusCreateNpTitleCtx",np_request},
+    {"sceNpTusDeleteNpTitleCtx",ok_void},
+    {"sceNpWebApiGetErrorCode",np_webapi_error_code},
     {"sceVoiceCreatePort",voice_port}, {"sceVoiceDeletePort",ok_void},
     {"sceVoiceConnectIPortToOPort",ok_void}, {"sceVoiceDisconnectIPortFromOPort",ok_void},
     {"sceVoiceStart",ok_void}, {"sceVoiceStop",ok_void}, {"sceVoiceGetPortInfo",voice_info},
