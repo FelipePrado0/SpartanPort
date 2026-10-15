@@ -19,6 +19,7 @@
 #include "core/debug_state.h"
 #include "core/emulator_settings.h"
 #include "shader_recompiler/backend/spirv/emit_spirv.h"
+#include "shader_recompiler/backend/spirv/emit_spirv_quad_rect.h"
 #include "shader_recompiler/info.h"
 #include "shader_recompiler/recompiler.h"
 #include "shader_recompiler/runtime_info.h"
@@ -26,6 +27,7 @@
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/cache_storage.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
+#include "video_core/renderer_vulkan/vk_compile_log.h"
 #include "video_core/renderer_vulkan/vk_depth_stencil_state.h"
 #include "video_core/renderer_vulkan/motion_history.h"
 #include "video_core/renderer_vulkan/vk_draw_prep.h"
@@ -34,6 +36,7 @@
 #include "video_core/renderer_vulkan/vk_pipeline_serialization.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
+#include "video_core/renderer_vulkan/vk_vertex_format.h"
 
 namespace Vulkan {
 
@@ -388,6 +391,7 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
         .needs_unorm_fixup = instance.GetDriverID() == vk::DriverId::eMesaKosmickrisp,
         .needs_clip_distance_emulation = instance.GetDriverID() == vk::DriverId::eNvidiaProprietary,
         .supports_shader_stencil_export = instance_.IsShaderStencilExportSupported(),
+        .vertex_input = instance_.IsVertexInputDynamicState() ? 1u : 2u,
         .dref_broadcast = LightingTest::Current().dref,
     };
 
@@ -415,6 +419,12 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
         });
         LOG_INFO(Render_Vulkan, "gow3: async graphics compilation ready ({} capture, {} compile workers)",
                  capture_count, count);
+        // gow3: at any log level, so a tester's log says whether new shaders compile on the GPU
+        // thread and which setting chose it.
+        const auto& settings = Gow3Settings::Get();
+        const bool async_on = settings.async_shaders.load(std::memory_order_relaxed);
+        async_shaders_logged.store(async_on, std::memory_order_relaxed);
+        std::printf("%s\n", Gow3Settings::AsyncShadersLine(async_on, settings.async_shaders_source).c_str());
     }
 }
 
@@ -455,6 +465,72 @@ struct CompileTimer {
     }
 };
 } // namespace
+
+namespace {
+std::vector<CompileLogStage> CompileLogStages(
+    const std::array<const Shader::Info*, MaxShaderStages>& infos) {
+    std::vector<CompileLogStage> stages;
+    for (const auto stage : {SwStage::Vertex, SwStage::TessellationControl,
+                             SwStage::TessellationEval, SwStage::Geometry, SwStage::Fragment}) {
+        if (const auto* info = infos[u32(stage)]) {
+            stages.push_back({fmt::format("{}", info->hw_stage), info->pgm_hash});
+        }
+    }
+    return stages;
+}
+
+// gow3: the primitive GraphicsPipeline's constructor adds auxiliary TCS/TES for, or empty.
+std::string_view AuxTessPrimitive(const GraphicsPipelineKey& key,
+                                  const std::array<const Shader::Info*, MaxShaderStages>& infos) {
+    if (!GraphicsPipeline::UsesAuxTessShaders(key.prim_type) ||
+        (infos[u32(SwStage::TessellationControl)] && infos[u32(SwStage::TessellationEval)])) {
+        return {};
+    }
+    return key.prim_type == AmdGpu::PrimitiveType::QuadList ? "QuadList" : "RectList";
+}
+} // namespace
+
+// gow3: "0x<pipeline> (vs 0x..., fs 0x...)" for the line logged right before the driver compiles
+// a graphics pipeline, so a crash in its shader compiler (igc64.dll, #35) names the shaders.
+// Without a fragment shader the pipeline still takes sample shading and the auxiliary RectList /
+// QuadList tessellation shaders from `fs_info`, which the constructor reads the same way.
+std::string PipelineCache::DescribeGraphicsPipeline(
+    const GraphicsPipelineKey& key, const std::array<const Shader::Info*, MaxShaderStages>& infos,
+    std::string_view mode, const Shader::HwFragmentRuntimeInfo& fs_info) {
+    std::optional<NoFragmentShaderState> no_fs;
+    if (!infos[u32(SwStage::Fragment)]) {
+        no_fs = NoFragmentShaderState{
+            .sample_shading = GraphicsPipeline::SampleShadingEnable(fs_info),
+            .aux_tess = AuxTessPrimitive(key, infos),
+        };
+        if (!no_fs->aux_tess.empty()) {
+            no_fs->aux_tess_inputs = Shader::Backend::SPIRV::NumAuxTessInputs(fs_info);
+        }
+    }
+    return FormatPipelineCompile(std::hash<GraphicsPipelineKey>{}(key), CompileLogStages(infos),
+                                 mode, no_fs);
+}
+
+std::string PipelineCache::DescribeGraphicsPipeline(
+    const GraphicsPipelineKey& key, const std::array<const Shader::Info*, MaxShaderStages>& infos,
+    std::string_view mode, const GraphicsPipeline::SerializationSupport& sdata) {
+    std::optional<NoFragmentShaderState> no_fs;
+    if (!infos[u32(SwStage::Fragment)]) {
+        // gow3: a disk cache rebuild uses the stored state. The auxiliary TCS/TES are stored as
+        // SPIR-V only, so their input count is not known here and not logged.
+        no_fs = NoFragmentShaderState{
+            .sample_shading = bool(sdata.multisampling.sampleShadingEnable),
+            .aux_tess = AuxTessPrimitive(key, infos),
+        };
+    }
+    return FormatPipelineCompile(std::hash<GraphicsPipelineKey>{}(key), CompileLogStages(infos),
+                                 mode, no_fs);
+}
+
+Common::Log::Level PipelineCache::ShaderModuleLogLevel(std::string_view mode) {
+    return LogsShaderModuleCompileAtInfo(mode) ? Common::Log::Level::info
+                                               : Common::Log::Level::debug;
+}
 
 bool PipelineCache::QueueShader(Program& program, HwStage stage, SwStage l_stage,
                                  const Shader::ShaderParams& params,
@@ -520,6 +596,9 @@ bool PipelineCache::QueueShader(Program& program, HwStage stage, SwStage l_stage
     const bool queued = build->job.Start(*compiler, [this, build] {
         PhaseTimer compile{g_gow3_async_ns};
         Shader::Gcn::ScopedFetchShaderSnapshot snapshot{build->fetch};
+        LOG_GENERIC(Common::Log::Class::Render_Vulkan, ShaderModuleLogLevel("async"),
+                    "Compiling {} shader {:#x} (async; permutation {})", build->info.hw_stage,
+                    build->info.pgm_hash, build->permutation);
         auto spv = Shader::Backend::SPIRV::EmitSPIRV(profile, build->runtime, *build->ir,
                                                     build->binding);
         DumpShader(build->code, build->info.pgm_hash, build->info.hw_stage, build->permutation, "bin");
@@ -636,7 +715,12 @@ void PipelineCache::FinishCompilations() {
 }
 
 bool PipelineCache::AsyncCompilation() const {
-    return compiler && Gow3Settings::Get().async_shaders.load(std::memory_order_relaxed);
+    const bool on = Gow3Settings::Get().async_shaders.load(std::memory_order_relaxed);
+    // gow3: the GPU thread calls this today; the switch is still logged once from any thread.
+    if (Gow3Settings::AsyncShadersSwitched(async_shaders_logged, on)) {
+        std::printf("%s\n", Gow3Settings::AsyncShadersSwitchLine(on).c_str());
+    }
+    return compiler && on;
 }
 
 void PipelineCache::SeedWorkerCaches() {
@@ -746,6 +830,9 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
                 Shader::Gcn::ScopedFetchShaderSnapshot snapshot{build->fetch[u32(SwStage::Vertex)]};
                 PhaseTimer compile{g_gow3_async_ns};
                 auto& s = build->selection;
+                LOG_INFO(Render_Vulkan, "Compiling graphics pipeline {}",
+                         DescribeGraphicsPipeline(s.graphics_key, s.infos, "async",
+                                                  s.runtime_infos[u32(SwStage::Fragment)].hw.fs));
                 build->pipeline = std::make_unique<GraphicsPipeline>(
                     instance, scheduler, desc_heap, profile, s.graphics_key,
                     *worker_pipeline_caches[AsyncCompiler::WorkerIndex()],
@@ -762,7 +849,9 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
     const auto [it, is_new] = graphics_pipelines.try_emplace(sel.graphics_key);
     if (is_new) {
         const auto pipeline_hash = std::hash<GraphicsPipelineKey>{}(sel.graphics_key);
-        LOG_INFO(Render_Vulkan, "Compiling graphics pipeline {:#x}", pipeline_hash);
+        LOG_INFO(Render_Vulkan, "Compiling graphics pipeline {}",
+                 DescribeGraphicsPipeline(sel.graphics_key, sel.infos, "",
+                                          sel.runtime_infos[u32(SwStage::Fragment)].hw.fs));
         CompileTimer timer;
 
         GraphicsPipeline::SerializationSupport sdata{};
@@ -1118,8 +1207,22 @@ bool PipelineCache::RefreshGraphicsStages(PipelineSelection& sel) {
             ASSERT_MSG(vertex_binding < MaxVertexBufferCount,
                        "Vertex attribute binding count exceeded limit: {} >= {}", vertex_binding,
                        MaxVertexBufferCount);
-            key.vertex_buffer_formats[vertex_binding++] =
-                Vulkan::LiverpoolToVK::SurfaceFormat(buffer.GetDataFmt(), buffer.GetNumberFmt());
+            // gow3: a worker reads user data the guest may still be writing (see
+            // vk_draw_prep.cpp): an unknown format fails the worker's key, and the GPU thread
+            // builds it again once the draw is submitted. There the V# is final, so the
+            // asserting SurfaceFormat keeps its message for a format the table really lacks.
+            const auto format = LiverpoolToVK::VertexAttributeFormat(buffer.GetDataFmt(),
+                                                                     buffer.GetNumberFmt());
+            if (!format) {
+                if (sel.worker) {
+                    sel.worker->failed = true;
+                    return false;
+                }
+                key.vertex_buffer_formats[vertex_binding++] =
+                    LiverpoolToVK::SurfaceFormat(buffer.GetDataFmt(), buffer.GetNumberFmt());
+                continue;
+            }
+            key.vertex_buffer_formats[vertex_binding++] = *format;
         }
     }
 
@@ -1138,8 +1241,9 @@ bool PipelineCache::RefreshComputeKey() {
 vk::ShaderModule PipelineCache::CompileModule(Shader::Info& info, Shader::RuntimeInfo& runtime_info,
                                               const std::span<const u32>& code, size_t perm_idx,
                                               Shader::Backend::Bindings& binding) {
-    LOG_INFO(Render_Vulkan, "Compiling {} shader {:#x} {}", info.hw_stage, info.pgm_hash,
-             perm_idx != 0 ? "(permutation)" : "");
+    LOG_GENERIC(Common::Log::Class::Render_Vulkan, ShaderModuleLogLevel(""),
+                "Compiling {} shader {:#x} {}", info.hw_stage, info.pgm_hash,
+                perm_idx != 0 ? "(permutation)" : "");
     DumpShader(code, info.pgm_hash, info.hw_stage, perm_idx, "bin");
     CompileTimer timer;
 

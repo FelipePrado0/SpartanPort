@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <string>
 
 namespace Gow3Settings {
 
@@ -63,6 +64,9 @@ struct Values {
     std::atomic<bool> vsync{true};
     std::atomic<int> fps_limit{0};
     std::atomic<bool> async_shaders{true};
+    /// Where Load() took async_shaders from: "GOW3_ASYNC_SHADERS=<value>", "gow3.ini" or
+    /// "default" (AsyncShadersLine).
+    std::string async_shaders_source{"default"};
     std::atomic<bool> fsr1{false};
     std::atomic<bool> rcas{true};
     std::atomic<int> rcas_strength{75};
@@ -129,6 +133,22 @@ bool ResolutionNeedsRestart();
 bool GraphicsNeedRestart();
 /// Writes the file (menu changes).
 void Save();
+
+/// gow3: whether new shaders compile off the GPU thread, and why; printed with the pipeline
+/// cache: "GPU: background shader compilation off (GOW3_ASYNC_SHADERS=0)".
+inline std::string AsyncShadersLine(bool on, const std::string& source) {
+    return std::string("GPU: background shader compilation ") + (on ? "on" : "off") + " (" + source + ")";
+}
+/// gow3: printed once per change of async_shaders after start (the in-game menu).
+inline std::string AsyncShadersSwitchLine(bool on) {
+    return std::string("GPU: background shader compilation switched ") + (on ? "on" : "off") +
+           " (in-game menu)";
+}
+/// gow3: true for the one call, on any thread, that sees `on` differ from `last` (stored).
+inline bool AsyncShadersSwitched(std::atomic<bool>& last, bool on) {
+    return last.load(std::memory_order_relaxed) != on &&
+           last.exchange(on, std::memory_order_relaxed) != on;
+}
 
 /// Render resolution divisor of a preset (1.0 native, 1.5 quality, ...).
 float PresetScale(int preset);

@@ -6,6 +6,7 @@
 #include <vulkan/vulkan.h>
 
 #include "video_core/amdgpu/gow3_msaa_default.h"
+#include "video_core/renderer_vulkan/gow3_vertex_input_default.h"
 
 static VkDeviceSize largest_local_heap(VkPhysicalDevice device) {
     VkPhysicalDeviceMemoryProperties memory;
@@ -97,8 +98,9 @@ int main(int argc, char **argv) {
     }
     if (argc > 1 && !strcmp(argv[1], "--list")) {
         /* The launcher's GPU choice: index (as GOW3_GPU_ID), name, type, the game's default for
-         * its multisampling on that driver ("off" or "on", gow3_msaa_default.h) and 1 on the GPU
-         * the game picks without GOW3_GPU_ID. */
+         * its multisampling on that driver ("off" or "on", gow3_msaa_default.h), 1 on the GPU
+         * the game picks without GOW3_GPU_ID and the game's default for dynamic vertex input on
+         * that driver ("off" or "on", gow3_vertex_input_default.h). */
         VkPhysicalDevice preferred = devices[0];
         for (uint32_t i = 1; i < count; ++i)
             if (better_device(devices[i], preferred)) preferred = devices[i];
@@ -116,11 +118,12 @@ int main(int argc, char **argv) {
                     .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &driver};
                 get_properties2(devices[i], &chain);
             }
-            printf("%u\t%s\t%s\t%s\t%d\n", i, props.deviceName,
+            printf("%u\t%s\t%s\t%s\t%d\t%s\n", i, props.deviceName,
                    props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU     ? "discrete"
                    : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "integrated"
                                                                                  : "other",
-                   gow3_no_msaa_default(driver.driverID) ? "off" : "on", devices[i] == preferred);
+                   gow3_no_msaa_default(driver.driverID) ? "off" : "on", devices[i] == preferred,
+                   gow3_vertex_input_dynamic_default(driver.driverID) ? "on" : "off");
         }
         free(devices);
         vkDestroyInstance(instance, NULL);

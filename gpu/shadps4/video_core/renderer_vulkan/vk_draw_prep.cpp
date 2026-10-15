@@ -13,7 +13,7 @@
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/amdgpu/pm4_cmds.h"
 #include "video_core/renderer_vulkan/vk_draw_prep.h"
-#include "video_core/renderer_vulkan/liverpool_to_vk.h"
+#include "video_core/renderer_vulkan/vk_vertex_format.h"
 #include <xxhash.h>
 
 namespace Vulkan {
@@ -138,17 +138,16 @@ void PrepareVertexInputs(const Shader::Info& vs, const Shader::Gcn::FetchShaderD
         // The V# may come from user data the guest is still writing: an unknown format leaves
         // the inputs to the GPU thread, which reads them once the draw is submitted (the
         // assertion in SurfaceFormat stopped the process here).
-        const vk::Format format =
-            LiverpoolToVK::TrySurfaceFormat(buffer.GetDataFmt(), buffer.GetNumberFmt());
-        if (format == vk::Format::eUndefined &&
-            buffer.GetDataFmt() != AmdGpu::DataFormat::FormatInvalid) {
+        const auto format =
+            LiverpoolToVK::VertexAttributeFormat(buffer.GetDataFmt(), buffer.GetNumberFmt());
+        if (!format) {
             out.valid = false;
             return;
         }
         attributes.push_back({
             .location = attrib.semantic,
             .binding = attrib.semantic,
-            .format = format,
+            .format = *format,
             .offset = 0,
         });
         bindings.push_back({

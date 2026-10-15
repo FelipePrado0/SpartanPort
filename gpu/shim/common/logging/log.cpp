@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <mutex>
 #include "common/logging/log.h"
 
 namespace Common::Log {
@@ -20,11 +19,27 @@ static Level threshold() {
 bool ShouldLog(Level level) { return level >= threshold(); }
 void Write(std::string_view log_class, Level level, const char* file, int line, const char* function,
            std::string&& message) {
-    static std::mutex mutex;
     static const char* names[] = {"Trace", "Debug", "Info", "Warning", "Error", "Critical"};
     const char* base = std::strrchr(file, '/');
-    std::scoped_lock lock{mutex};
-    std::fprintf(stderr, "GPU [%.*s] <%s> %s:%d %s: %s\n", int(log_class.size()), log_class.data(),
-                 names[int(level)], base ? base + 1 : file, line, function, message.c_str());
+    const std::string text = fmt::format("GPU [{}] <{}> {}:{} {}: {}\n", log_class, names[int(level)],
+                                         base ? base + 1 : file, line, function, message.c_str());
+    // gow3: the launcher sends stdout and stderr down one pipe into last_run.log, and the
+    // unbuffered streams write a character at a time, so a GPU line and a runtime printf line
+    // from another thread came out cut into each other (#35). The runtime's printf holds the
+    // stdout lock for the whole line; holding it here too puts the two streams in turn. It also
+    // keeps GPU lines from cutting each other. No deadlock: the CRT/glibc FILE locks are
+    // recursive for their owning thread, and nothing below calls back into printf or the log.
+    // The fault and STOP paths (probe.c, assert.cpp) stay lock-free on purpose.
+#ifdef _WIN32
+    _lock_file(stdout);
+#else
+    flockfile(stdout);
+#endif
+    std::fwrite(text.data(), 1, text.size(), stderr);
+#ifdef _WIN32
+    _unlock_file(stdout);
+#else
+    funlockfile(stdout);
+#endif
 }
 } // namespace Common::Log

@@ -164,6 +164,20 @@ def host_env():
     return env
 
 
+@unittest.skipUnless(sys.platform == 'win32' and HOST_EXE.exists(), 'Windows fault report')
+class WindowsFaultTests(unittest.TestCase):
+    def test_fault_line_names_the_thread(self):
+        # The guest entry runs on the host main thread, named gow3:main for the report.
+        for code, fault in ((b'\x0f\x0b', 'exception 0xc000001d'), (b'\x8b\x04\x25\0\0\0\0', 'read access to')):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / 'boot.bin'
+                path.write_bytes(package(code))
+                r = subprocess.run([str(HOST_EXE.resolve()), str(path), '--cpu-only'],
+                                   capture_output=True, text=True, timeout=5, env=host_env())
+                self.assertEqual(r.returncode, 3, r.stdout + r.stderr)
+                self.assertRegex(r.stderr, r'Fault: ' + fault + r'.* at guest offset 0x0 \(thread \d+ gow3:main\)\n')
+
+
 @unittest.skipUnless(HOST_EXE.exists(), 'build native probe first')
 class CpuFeaturesTests(unittest.TestCase):
     def test_cpu_features_mode_reports_this_machine(self):

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <unordered_map>
 #include <shared_mutex>
@@ -205,6 +206,22 @@ private:
                                    Shader::Backend::Bindings& binding);
     const Shader::RuntimeInfo& BuildRuntimeInfo(PipelineSelection& sel, Shader::HwStage stage,
                                                 Shader::SwStage l_stage);
+    /// gow3: "0x<pipeline> (<mode>; vs 0x..., fs 0x...)" for the line logged right before the
+    /// driver compiles a graphics pipeline (vk_compile_log.h). Without a fragment shader it adds
+    /// the fragment state the pipeline is built with: from `fs_info` (runtime_infos[Fragment],
+    /// the last pixel shader bound) on a live compile...
+    static std::string DescribeGraphicsPipeline(
+        const GraphicsPipelineKey& key,
+        const std::array<const Shader::Info*, MaxShaderStages>& infos, std::string_view mode,
+        const Shader::HwFragmentRuntimeInfo& fs_info);
+    /// ...and from the stored `sdata` when the disk cache rebuilds it.
+    static std::string DescribeGraphicsPipeline(
+        const GraphicsPipelineKey& key,
+        const std::array<const Shader::Info*, MaxShaderStages>& infos, std::string_view mode,
+        const GraphicsPipeline::SerializationSupport& sdata);
+    /// gow3: level of the "Compiling <stage> shader" line logged before a shader module is
+    /// created in `mode` (vk_compile_log.h): Debug for the disk cache, Info otherwise.
+    static Common::Log::Level ShaderModuleLogLevel(std::string_view mode);
 
     [[nodiscard]] bool IsPipelineCacheDirty() const {
         return num_new_pipelines > 0;
@@ -223,6 +240,8 @@ private:
     std::unique_ptr<AsyncCompiler> compiler, capture_compiler;
     std::vector<vk::UniquePipelineCache> worker_pipeline_caches;
     bool worker_caches_seeded = false;
+    /// gow3: the async_shaders value last logged; AsyncCompilation logs each menu change.
+    mutable std::atomic<bool> async_shaders_logged{true};
     /// gow3: GOW3_PARALLEL_WARMUP: WarmUp builds the cached pipelines on these threads.
     struct WarmupPool;
     WarmupPool* warmup_pool = nullptr;

@@ -161,6 +161,7 @@ Values& Get() {
 
 void Load() {
     auto& v = Get();
+    v.async_shaders_source = "default";
     if (FILE* file = std::fopen(Path(), "r")) {
         char line[256];
         while (std::fgets(line, sizeof(line), file)) {
@@ -171,6 +172,9 @@ void Load() {
                 continue;
             }
             Set(v, text.substr(0, eq), text.substr(eq + 1));
+            if (text.compare(0, eq, "async_shaders") == 0) {
+                v.async_shaders_source = "gow3.ini";
+            }
         }
         std::fclose(file);
         std::printf("Settings: %s\n", Path());
@@ -195,6 +199,9 @@ void Load() {
     for (const auto& [env, key] : env_keys) {
         if (const char* value = std::getenv(env); value && value[0]) {
             Set(v, key, value);
+            if (std::strcmp(key, "async_shaders") == 0) {
+                v.async_shaders_source = std::string(env) + "=" + value;
+            }
         }
     }
     v.startup_preset = v.preset;

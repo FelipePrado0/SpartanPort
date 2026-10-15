@@ -199,6 +199,15 @@ multisampling off` u `on` indica lo que se aplicó. Elegí **Off** si las línea
 y **On** para mantener el multimuestreo de todas formas. Off y On establecen `GOW3_NO_MSAA=1` o `0`;
 Automatic deja pasar un `GOW3_NO_MSAA` heredado. Se aplica en el próximo inicio del juego.
 
+En **Performance → GPU data → Dynamic vertex input**, **Automatic** deja que el juego decida según
+la placa de video en la que corre: desactiva la entrada dinámica de vértices de Vulkan
+(`VK_EXT_vertex_input_dynamic_state`) en el driver de Windows de Intel, que con ella dibuja la escena
+3D negra o azul (HD 630, #35), y la mantiene activada en el resto. Como con el multimuestreo, la
+etiqueta nombra la placa y la decisión y sigue la elección de **Graphics card**; la línea del log del
+juego `GPU: vertex input dynamic state off` u `on` indica lo que se aplicó. **On** y **Off** fuerzan
+la elección en cualquier placa y establecen `GOW3_VERTEX_INPUT_DYNAMIC=1` o `0`; Automatic deja pasar
+un `GOW3_VERTEX_INPUT_DYNAMIC` heredado. Se aplica en el próximo inicio del juego.
+
 ## Controles de teclado
 
 Valores por defecto; cambialos en la página **Game** del launcher, sección **Controls**.

@@ -96,6 +96,17 @@ public:
                      bool preloading);
     ~GraphicsPipeline();
 
+    /// gow3: sampleShadingEnable of a pipeline built with the fragment runtime info `fs_info`;
+    /// also logged for a pipeline without a fragment shader (vk_compile_log.h).
+    static bool SampleShadingEnable(const Shader::HwFragmentRuntimeInfo& fs_info);
+
+    /// gow3: RectList and QuadList draws get auxiliary TCS/TES in place of the missing ones,
+    /// built from the fragment inputs (EmitAuxilaryTessShader).
+    static bool UsesAuxTessShaders(AmdGpu::PrimitiveType prim_type) noexcept {
+        return prim_type == AmdGpu::PrimitiveType::RectList ||
+               prim_type == AmdGpu::PrimitiveType::QuadList;
+    }
+
     // gow3: switch from compiler-owned snapshots to live stage data on publication.
     void PublishStages(std::span<const Shader::Info*, MaxShaderStages> infos) {
         std::ranges::copy(infos, stages.begin());

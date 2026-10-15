@@ -194,6 +194,16 @@ se aparecerem linhas em outra placa, ou **On** para manter a multiamostragem. A 
 na próxima abertura. Sem o launcher, `GOW3_NO_MSAA=1` desliga e `0` liga; **Automatic** preserva
 essa variável caso ela já exista no ambiente.
 
+Em **Performance → GPU data → Dynamic vertex input**, **Automatic** decide conforme a placa de
+vídeo selecionada: desliga a entrada dinâmica de vértices do Vulkan
+(`VK_EXT_vertex_input_dynamic_state`) no driver de Windows da Intel, que com ela desenha a cena
+3D preta ou azul (HD 630, #35), e a mantém ligada nas demais placas. Como na multiamostragem, a
+opção automática mostra o nome da placa e a decisão, acompanhando **Graphics card**. A linha
+`GPU: vertex input dynamic state off` ou `on` no registro informa o que foi aplicado. **On** e
+**Off** forçam a escolha em qualquer placa e definem `GOW3_VERTEX_INPUT_DYNAMIC=1` ou `0`;
+**Automatic** preserva essa variável caso ela já exista no ambiente. A alteração vale na próxima
+abertura.
+
 ## Teclado
 
 Padrão; mude na tela **Game** do launcher, seção **Controls**.

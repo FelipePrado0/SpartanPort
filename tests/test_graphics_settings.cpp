@@ -45,6 +45,7 @@ int main() {
     auto& v = Gow3Settings::Get();
     Gow3Settings::Load();
     assert(v.display_mode == G::Borderless && !v.vsync && v.fps_limit == 240 && !v.async_shaders);
+    assert(v.async_shaders_source == "gow3.ini");
     assert(v.render_resolution == 3 && v.engine_fps == 240 && !v.deferred_readback && v.stale_readback);
     // FSR 1 left the menus in 2.2.0: a saved fsr1=1 (or GOW3_FSR1) no longer turns it on.
     assert(!v.fsr1 && !v.rcas && v.rcas_strength == 40 && v.frames_queued == 2);
@@ -76,23 +77,41 @@ int main() {
     {
         std::ofstream out(path);
         out << "display_mode=huge\nfps_limit=7\nrender_resolution=8K\nengine_fps=1\n"
-               "rcas_strength=250\nframes_queued=9\n";
+               "rcas_strength=250\nframes_queued=9\nasync_shaders=0\n";
     }
     _putenv_s("GOW3_ASYNC_SHADERS", "1");  // the environment still wins at start
     v.async_shaders = false;
     Gow3Settings::Load();
     assert(v.display_mode == G::Windowed && v.fps_limit == 0 && v.render_resolution == 0 && v.engine_fps == 120);
     assert(v.rcas_strength == 75 && v.frames_queued == 1);
-    assert(v.async_shaders);
+    assert(v.async_shaders && v.async_shaders_source == "GOW3_ASYNC_SHADERS=1");
+    _putenv_s("GOW3_ASYNC_SHADERS", "");
     {
         std::ofstream out(path);
         out << "cheat_double_jumps=1\ncheat_very_hard=1\n";
     }
     Gow3Settings::Load();
+    assert(v.async_shaders_source == "default");  // neither gow3.ini nor the environment
     Gow3Settings::Save();
     const std::string cheats = Read(path);
     assert(cheats.find("cheat_double_jumps=1\n") != std::string::npos);
     assert(cheats.find("cheat_very_hard=1\n") != std::string::npos);
     std::remove(path);
+
+    // The log lines that say whether new shaders compile off the GPU thread, and why.
+    assert(Gow3Settings::AsyncShadersLine(false, "GOW3_ASYNC_SHADERS=0") ==
+           "GPU: background shader compilation off (GOW3_ASYNC_SHADERS=0)");
+    assert(Gow3Settings::AsyncShadersLine(true, "gow3.ini") == "GPU: background shader compilation on (gow3.ini)");
+    assert(Gow3Settings::AsyncShadersLine(true, "default") == "GPU: background shader compilation on (default)");
+    assert(Gow3Settings::AsyncShadersSwitchLine(false) ==
+           "GPU: background shader compilation switched off (in-game menu)");
+    assert(Gow3Settings::AsyncShadersSwitchLine(true) ==
+           "GPU: background shader compilation switched on (in-game menu)");
+    // One report per change, however many calls see it.
+    std::atomic<bool> last{true};
+    assert(!Gow3Settings::AsyncShadersSwitched(last, true));
+    assert(Gow3Settings::AsyncShadersSwitched(last, false) && !last);
+    assert(!Gow3Settings::AsyncShadersSwitched(last, false));
+    assert(Gow3Settings::AsyncShadersSwitched(last, true) && !Gow3Settings::AsyncShadersSwitched(last, true));
     std::puts("PASS: graphics settings");
 }

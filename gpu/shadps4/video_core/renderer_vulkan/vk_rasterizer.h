@@ -17,6 +17,7 @@
 #include "video_core/renderer_vulkan/vk_temporal_upscaler.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
+#include "video_core/renderer_vulkan/vk_vertex_format.h"
 #include "video_core/texture_cache/texture_cache.h"
 
 namespace AmdGpu {
@@ -437,6 +438,8 @@ private:
         VertexInputs<vk::DeviceSize> host_strides;
         u32 num_buffers = 0;
     } vertex_binds;
+    // gow3: formats already warned about (#35); touched only by the GPU thread.
+    LiverpoolToVK::VertexFormatSeen vertex_formats_seen;
     struct IndexBind {
         vk::Buffer handle;
         u64 offset;

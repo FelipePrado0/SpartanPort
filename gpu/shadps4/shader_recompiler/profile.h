@@ -54,6 +54,9 @@ struct Profile {
     bool needs_unorm_fixup{};
     bool needs_clip_distance_emulation{};
     bool supports_shader_stencil_export{};
+    /// gow3: 1 with VK_EXT_vertex_input_dynamic_state, 2 with the static vertex input path (#35); keys and
+    /// pipelines of one mode are invalid in the other, so the disk cache is rebuilt when it flips.
+    u32 vertex_input{};
     /// gow3: GOW3_LIGHTING_TEST=dref (vk_lighting_test.h): depth comparisons return the result
     /// in all four channels instead of (v, 0, 0, 0).
     bool dref_broadcast{};

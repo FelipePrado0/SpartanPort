@@ -353,6 +353,12 @@ public:
         return available_extensions;
     }
 
+    /// gow3: optional extensions turned off by GOW3_VK_DISABLE_EXT, in request order; empty when
+    /// the variable disabled nothing.
+    const std::vector<std::string>& GetDisabledExtensions() const {
+        return disabled_extensions;
+    }
+
     /// Returns the device name.
     std::string_view GetModelName() const {
         return properties.deviceName;
@@ -560,6 +566,8 @@ private:
     vk::Queue sparse_queue;
     std::vector<vk::PhysicalDevice> physical_devices;
     std::vector<std::string> available_extensions;
+    std::vector<std::string> disabled_extensions; // gow3: applied by GOW3_VK_DISABLE_EXT
+    std::string disable_ext_env;                  // gow3: raw GOW3_VK_DISABLE_EXT, or empty
     std::unordered_map<vk::Format, vk::FormatProperties3> format_properties;
     TracyVkCtx profiler_context{};
     u32 queue_family_index{0};

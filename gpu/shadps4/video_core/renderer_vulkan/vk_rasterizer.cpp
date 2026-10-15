@@ -1808,6 +1808,17 @@ void Rasterizer::ResolveVertexBuffers(const GraphicsPipeline* pipeline,
         // If there are no bindings, there is nothing further to do.
         return;
     }
+    // gow3: log once per format the GPU cannot fetch as a vertex buffer, to tell a driver bug
+    // from a port bug (#35, Intel HD 630 lacks it for B10G11R11UfloatPack32).
+    for (const auto& attribute : attributes) {
+        if (vertex_formats_seen.Add(attribute.format) &&
+            !instance.IsFormatSupported(attribute.format,
+                                        vk::FormatFeatureFlagBits2::eVertexBuffer)) {
+            LOG_WARNING(Render_Vulkan,
+                        "Vertex attribute format {} lacks VertexBuffer support on this GPU (#35)",
+                        vk::to_string(attribute.format));
+        }
+    }
     if (motion_draw && !guest_buffers.empty()) {
         // Include every stream: identical position buffers can be paired with different
         // skinning/instance data. Index topology and base offsets are matched separately.

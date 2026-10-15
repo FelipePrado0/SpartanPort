@@ -191,6 +191,15 @@ multisampling off` or `on` is what was applied. Choose **Off** if the lines appe
 card and **On** to keep multisampling anyway. Off and On set `GOW3_NO_MSAA=1` or `0`; Automatic
 passes an inherited `GOW3_NO_MSAA` through. Applies on the next game launch.
 
+On **Performance → GPU data → Dynamic vertex input**, **Automatic** lets the game decide by the
+graphics card it runs on: it turns Vulkan's dynamic vertex input
+(`VK_EXT_vertex_input_dynamic_state`) off on Intel's Windows driver, which draws the 3D scene
+black or blue with it (HD 630, #35), and keeps it on elsewhere. As with multisampling, the label
+names the card and the decision and follows the **Graphics card** choice; the game's log line
+`GPU: vertex input dynamic state off` or `on` is what was applied. **On** and **Off** force the
+choice on any card and set `GOW3_VERTEX_INPUT_DYNAMIC=1` or `0`; Automatic passes an inherited
+`GOW3_VERTEX_INPUT_DYNAMIC` through. Applies on the next game launch.
+
 ## Keyboard controls
 
 Defaults; change them in the launcher's **Game** page, **Controls** section.

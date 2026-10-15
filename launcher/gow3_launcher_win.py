@@ -123,8 +123,9 @@ def find_tool(name):
 
 def parse_gpu_list(text):
     """One tuple per line of `gow3-gpu-capabilities --list`: index, name, type and, from the tools
-    that print them, the game's multisampling default on that driver ('off' or 'on') and '1' on
-    the GPU the game picks without GOW3_GPU_ID. Other lines are skipped."""
+    that print them, the game's multisampling default on that driver ('off' or 'on'), '1' on
+    the GPU the game picks without GOW3_GPU_ID and the game's dynamic vertex input default on that
+    driver ('off' or 'on'). Other lines are skipped."""
     rows = [line.split('\t') for line in text.splitlines()]
     return [tuple(row) for row in rows if len(row) >= 3 and row[0].isdigit()]
 
@@ -143,6 +144,15 @@ def no_msaa_options(gpus, gpu_id):
         return list(NO_MSAA)
     label = _('Automatic ({}: off)' if row[3] == 'off' else 'Automatic ({}: on)').format(row[1])
     return [('', (label,))] + NO_MSAA[1:]
+
+
+def vertex_input_options(gpus, gpu_id):
+    """VERTEX_INPUT with Automatic naming the chosen card and the game's decision for it."""
+    row = chosen_gpu(gpus, gpu_id)
+    if row is None or len(row) < 6 or row[5] not in ('off', 'on'):
+        return list(VERTEX_INPUT)
+    label = _('Automatic ({}: off)' if row[5] == 'off' else 'Automatic ({}: on)').format(row[1])
+    return [('', (label,))] + VERTEX_INPUT[1:]
 
 
 def list_gpus():
@@ -311,7 +321,7 @@ PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_lists', 'refresh_
 APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
-                'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
+                'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'vertex_input': '', 'stream_memory': 'cached',
                 'gpu_id': '', 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
@@ -399,6 +409,12 @@ NO_MSAA_HINT = ("The game's 2-sample depth buffer, read as a texture by its ligh
                 'drivers read it wrong and the lighting shows black lines, so Automatic turns multisampling off '
                 'on those cards (Radeon, Arc) and keeps it on elsewhere (NVIDIA). Off and On force the choice on '
                 'any card.')
+# GOW3_VERTEX_INPUT_DYNAMIC: '' leaves the game's own default, off on Intel's Windows driver
+# (video_core/renderer_vulkan/gow3_vertex_input_default.h); vertex_input_options names the chosen card.
+VERTEX_INPUT = [('', ('Automatic',)), ('1', ('On',)), ('0', ('Off',))]
+VERTEX_INPUT_HINT = ("Vulkan's dynamic vertex input. Intel's Windows driver draws the 3D scene black or blue with it "
+                     '(HD 630, #35), so Automatic turns it off on Intel cards and keeps it on elsewhere. On and Off '
+                     'force the choice on any card; a wrong choice only changes how vertex formats reach the driver.')
 STREAM_MEMORY = [('cached', ('System RAM (cached, default)',)),
                  ('host', ('System RAM (uncached)',)),
                  ('device', ('GPU memory (previous behavior)',))]
@@ -741,7 +757,8 @@ def game_environment(s):
     env['GOW3_DISCORD'] = '1' if s.get('discord_rpc') else '0'
     if s['hdr']:
         env['GOW3_HDR'] = '1'
-    for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS'), ('no_msaa', 'GOW3_NO_MSAA')):
+    for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS'), ('no_msaa', 'GOW3_NO_MSAA'),
+                      ('vertex_input', 'GOW3_VERTEX_INPUT_DYNAMIC')):
         if s.get(key):
             env[name] = s[key]
     # The saved UI choice wins over inherited diagnostic overrides, including when reverting.
@@ -1287,11 +1304,14 @@ class Launcher:
         card = self.var('gpu_id', 'app')
         box = self.choice(f, 'no_msaa', 'app', no_msaa_options(gpus, card.get()), width=46)
         self.row(f, _('Game multisampling'), box, _(NO_MSAA_HINT), restart=True)
+        vertex_box = self.choice(f, 'vertex_input', 'app', vertex_input_options(gpus, card.get()), width=46)
+        self.row(f, _('Dynamic vertex input'), vertex_box, _(VERTEX_INPUT_HINT), restart=True)
 
         def relabel(*_args):  # Automatic names the card the game will run on
-            index = max(box.current(), 0)
-            box['values'] = [_(*text) for _value, text in no_msaa_options(gpus, card.get())]
-            box.current(index)
+            for combo, options in ((box, no_msaa_options), (vertex_box, vertex_input_options)):
+                index = max(combo.current(), 0)
+                combo['values'] = [_(*text) for _value, text in options(gpus, card.get())]
+                combo.current(index)
         card.trace_add('write', relabel)
 
     def build_game(self):

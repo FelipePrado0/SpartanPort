@@ -43,6 +43,12 @@ static constexpr std::array LogicalStageToStageBit = {
     vk::ShaderStageFlagBits::eCompute,
 };
 
+bool GraphicsPipeline::SampleShadingEnable(const Shader::HwFragmentRuntimeInfo& fs_info) {
+    // gow3: GOW3_LIGHTING_TEST=shading keeps sample shading off (vk_lighting_test.h).
+    return !LightingTest::Current().shading &&
+           (fs_info.addr_flags.persp_sample_ena || fs_info.addr_flags.linear_sample_ena);
+}
+
 GraphicsPipeline::GraphicsPipeline(
     const Instance& instance, Scheduler& scheduler, DescriptorHeap& desc_heap,
     const Shader::Profile& profile, const GraphicsPipelineKey& key_,
@@ -140,10 +146,7 @@ GraphicsPipeline::GraphicsPipeline(
         sdata.multisampling = {
             .rasterizationSamples = LiverpoolToVK::NumSamples(
                 key.num_samples, instance.GetColorSampleCounts() & instance.GetDepthSampleCounts()),
-            // gow3: GOW3_LIGHTING_TEST=shading keeps sample shading off (vk_lighting_test.h).
-            .sampleShadingEnable = !LightingTest::Current().shading &&
-                                   (fs_info.addr_flags.persp_sample_ena ||
-                                    fs_info.addr_flags.linear_sample_ena),
+            .sampleShadingEnable = SampleShadingEnable(fs_info),
         };
     }
 
@@ -210,7 +213,7 @@ GraphicsPipeline::GraphicsPipeline(
             .module = modules[stage],
             .pName = "main",
         });
-    } else if (is_rect_list || is_quad_list) {
+    } else if (UsesAuxTessShaders(key.prim_type)) {
         const auto type = is_quad_list ? AuxShaderType::QuadListTCS : AuxShaderType::RectListTCS;
         if (!preloading) {
             const auto& fs_info = runtime_infos[u32(Shader::SwStage::Fragment)].hw.fs;
@@ -229,7 +232,7 @@ GraphicsPipeline::GraphicsPipeline(
             .module = modules[stage],
             .pName = "main",
         });
-    } else if (is_rect_list || is_quad_list) {
+    } else if (UsesAuxTessShaders(key.prim_type)) {
         if (!preloading) {
             const auto& fs_info = runtime_infos[u32(Shader::SwStage::Fragment)].hw.fs;
             sdata.tes = Shader::Backend::SPIRV::EmitAuxilaryTessShader(
