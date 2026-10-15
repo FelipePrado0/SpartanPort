@@ -208,6 +208,15 @@ class FirstLightPortTests(unittest.TestCase):
             self.assertIn(setting,launcher)
         self.assertNotIn('"--patches"',launcher)
 
+    def test_content_profile_is_generated_and_passed(self):
+        stage=(ROOT/"tools"/"firstlight_stage1.py").read_text(encoding="utf-8")
+        launcher=(ROOT/"run_firstlight.py").read_text(encoding="utf-8")
+        self.assertIn('"content_profile.py"',stage)
+        self.assertIn('"--sku","full"',stage)
+        self.assertIn('"--content-profile"',stage)
+        self.assertIn('def content_args()',launcher)
+        self.assertIn('"content.bin"',launcher)
+
     def test_build_emits_firstlight_probe(self):
         build=(ROOT/"build.sh").read_text(encoding="utf-8")
         self.assertIn("firstlight-probe.exe",build)
