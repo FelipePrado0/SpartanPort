@@ -21,15 +21,53 @@ SMF_RECORD_OFFSET = 100
 SMF_RECORD_SIZE = 20
 FONT_PATH = Path("C:/Windows/Fonts/arial.ttf")
 
-# Persian/Arabic characters used by the draft and their isolated presentation forms.
-FORMS = {
-    'ا':'ﺍ','آ':'ﺁ','ب':'ﺏ','پ':'ﭖ','ت':'ﺕ','ث':'ﺙ','ج':'ﺝ','چ':'ﭺ','ح':'ﺡ','خ':'ﺥ',
-    'د':'ﺩ','ذ':'ﺫ','ر':'ﺭ','ز':'ﺯ','ژ':'ﮊ','س':'ﺱ','ش':'ﺵ','ص':'ﺹ','ض':'ﺽ','ط':'ﻁ',
-    'ظ':'ﻅ','ع':'ﻉ','غ':'ﻍ','ف':'ﻑ','ق':'ﻕ','ک':'ﮎ','گ':'ﮒ','ل':'ﻝ','م':'ﻡ','ن':'ﻥ',
-    'و':'ﻭ','ه':'ﻩ','ی':'ﻱ','ء':'ﺀ','ئ':'ﺉ','ؤ':'ﺅ','ة':'ﺓ','ۀ':'ﮦ','ـ':'ـ',
-    'أ':'ﺃ','،':',','؛':';','؟':'?','ً':'','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9',
+# Base character -> (isolated, final, initial, medial) presentation forms.
+# None means the character cannot join on that side.
+JOIN_FORMS = {
+    'ا': ('ﺍ','ﺎ',None,None), 'آ': ('ﺁ','ﺂ',None,None), 'أ': ('ﺃ','ﺄ',None,None),
+    'ب': ('ﺏ','ﺐ','ﺑ','ﺒ'), 'پ': ('ﭖ','ﭗ','ﭘ','ﭙ'), 'ت': ('ﺕ','ﺖ','ﺗ','ﺘ'),
+    'ث': ('ﺙ','ﺚ','ﺛ','ﺜ'), 'ج': ('ﺝ','ﺞ','ﺟ','ﺠ'), 'چ': ('ﭺ','ﭻ','ﭼ','ﭽ'),
+    'ح': ('ﺡ','ﺢ','ﺣ','ﺤ'), 'خ': ('ﺥ','ﺦ','ﺧ','ﺨ'), 'د': ('ﺩ','ﺪ',None,None),
+    'ذ': ('ﺫ','ﺬ',None,None), 'ر': ('ﺭ','ﺮ',None,None), 'ز': ('ﺯ','ﺰ',None,None),
+    'ژ': ('ﮊ','ﮋ',None,None), 'س': ('ﺱ','ﺲ','ﺳ','ﺴ'), 'ش': ('ﺵ','ﺶ','ﺷ','ﺸ'),
+    'ص': ('ﺹ','ﺺ','ﺻ','ﺼ'), 'ض': ('ﺽ','ﺾ','ﺿ','ﻀ'), 'ط': ('ﻁ','ﻂ','ﻃ','ﻄ'),
+    'ظ': ('ﻅ','ﻆ','ﻇ','ﻈ'), 'ع': ('ﻉ','ﻊ','ﻋ','ﻌ'), 'غ': ('ﻍ','ﻎ','ﻏ','ﻐ'),
+    'ف': ('ﻑ','ﻒ','ﻓ','ﻔ'), 'ق': ('ﻕ','ﻖ','ﻗ','ﻘ'), 'ک': ('ﮎ','ﮏ','ﮐ','ﮑ'),
+    'گ': ('ﮒ','ﮓ','ﮔ','ﮕ'), 'ل': ('ﻝ','ﻞ','ﻟ','ﻠ'), 'م': ('ﻡ','ﻢ','ﻣ','ﻤ'),
+    'ن': ('ﻥ','ﻦ','ﻧ','ﻨ'), 'و': ('ﻭ','ﻮ',None,None), 'ه': ('ﻩ','ﻪ','ﻫ','ﻬ'),
+    'ی': ('ﻱ','ﻲ','ﻳ','ﻴ'), 'ء': ('ﺀ',None,None,None), 'ئ': ('ﺉ','ﺊ','ﺋ','ﺌ'),
+    'ؤ': ('ﺅ','ﺆ',None,None), 'ة': ('ﺓ','ﺔ',None,None), 'ۀ': ('ﮦ','ﮧ',None,None),
+    'ـ': ('ـ','ـ','ـ','ـ'),
 }
+FORMS = {base: forms[0] for base, forms in JOIN_FORMS.items()}
+FORMS.update({'،':',','؛':';','؟':'?','ً':'','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'})
 
+
+def _can_join_right(ch):
+    return ch in JOIN_FORMS and JOIN_FORMS[ch][2] is not None
+
+
+def _can_join_left(ch):
+    return ch in JOIN_FORMS and JOIN_FORMS[ch][1] is not None
+
+
+def shape_isolated(text):
+    """Shape logical Persian runs, then reverse them for the game's LTR renderer."""
+    pattern = re.compile(r'[\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff]+')
+    def shape(match):
+        run = match.group(0)
+        shaped = []
+        for i, ch in enumerate(run):
+            if ch not in JOIN_FORMS:
+                shaped.append(FORMS.get(ch, ch)); continue
+            prev = run[i - 1] if i else ''
+            nxt = run[i + 1] if i + 1 < len(run) else ''
+            join_prev = _can_join_left(ch) and _can_join_right(prev)
+            join_next = _can_join_right(ch) and _can_join_left(nxt)
+            forms = JOIN_FORMS[ch]
+            shaped.append(forms[3] if join_prev and join_next else forms[1] if join_prev else forms[2] if join_next else forms[0])
+        return ''.join(reversed(shaped))
+    return pattern.sub(shape, text)
 
 def entries(data):
     off = 0
@@ -40,12 +78,6 @@ def entries(data):
         yield off, size, name
         off += HEADER + ((size + 15) & ~15)
     if off != len(data): raise ValueError('WAD trailing data')
-
-
-def shape_isolated(text):
-    # Preserve controls and reverse only contiguous Persian/Arabic runs.
-    pattern = re.compile(r'[\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff]+')
-    return pattern.sub(lambda m: ''.join(FORMS.get(c, c) for c in reversed(m.group(0))), text)
 
 
 def components(image):
@@ -83,7 +115,7 @@ def patch(base, messages):
     for pos in range(SMF_RECORD_OFFSET, len(smf) - SMF_RECORD_SIZE + 1, SMF_RECORD_SIZE):
         cp = struct.unpack_from('<I', smf, pos)[0]
         if cp: records.append((pos, cp))
-    needed = sorted(set(v for v in FORMS.values() if v))
+    needed = sorted(set(form for forms in JOIN_FORMS.values() for form in forms if form))
     used = {cp for _, cp in records}
     available = [(pos, cp) for pos, cp in records if cp >= 0x4e00 and cp not in needed]
     if len(available) < len(needed): raise ValueError('not enough CJK slots')
