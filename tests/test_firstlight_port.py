@@ -79,6 +79,15 @@ class FirstLightPortTests(unittest.TestCase):
         self.assertIn(".buffer_copy_shader = 0",profile)
         self.assertIn("FIRSTLIGHT_GAME_PROFILES",cmake)
 
+    def test_firstlight_content_profile_is_always_prepared(self):
+        stage=(ROOT/"tools"/"firstlight_stage1.py").read_text(encoding="utf-8")
+        launcher=(ROOT/"run_firstlight.py").read_text(encoding="utf-8")
+        self.assertIn('"content_profile.py"',stage)
+        self.assertIn('"--sku","full"',stage)
+        self.assertIn('"--content-profile"',stage)
+        self.assertGreaterEqual(launcher.count('"--content-profile"'),3)
+        self.assertIn('OUT/"content.bin"',launcher)
+
     def test_inventory_auditor_structure(self):
         audit=(ROOT/"tools"/"audit_firstlight_inventory.py").read_text(encoding="utf-8")
         self.assertIn('"native-module"',audit)
