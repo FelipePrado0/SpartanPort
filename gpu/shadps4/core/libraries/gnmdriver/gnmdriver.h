@@ -138,8 +138,13 @@ void PS4_SYSV_ABI sceGnmRegisterGnmLiveCallbackConfig();
 s32 PS4_SYSV_ABI sceGnmRegisterOwner(void* handle, const char* name);
 s32 PS4_SYSV_ABI sceGnmRegisterResource(void* res_handle, void* owner_handle, const void* addr,
                                         size_t size, const char* name, int res_type, u64 user_data);
-int PS4_SYSV_ABI sceGnmRequestFlipAndSubmitDone();
-int PS4_SYSV_ABI sceGnmRequestFlipAndSubmitDoneForWorkload();
+s32 PS4_SYSV_ABI sceGnmRequestFlipAndSubmitDone(u32* gpu_addr, u32 gpu_addr_size_in_bytes,
+                                                u32 video_out_handle, u32 display_buffer_index,
+                                                u32 flip_mode, s64 flip_arg);
+s32 PS4_SYSV_ABI sceGnmRequestFlipAndSubmitDoneForWorkload(u64 workload, u32* gpu_addr,
+                                                           u32 gpu_addr_size_in_bytes,
+                                                           u32 vo_handle, u32 buf_idx,
+                                                           u32 flip_mode, s64 flip_arg);
 int PS4_SYSV_ABI sceGnmRequestMipStatsReportAndReset();
 s32 PS4_SYSV_ABI sceGnmResetVgtControl(u32* cmdbuf, u32 size);
 int PS4_SYSV_ABI sceGnmSdmaClose();
@@ -157,7 +162,7 @@ s32 PS4_SYSV_ABI sceGnmSetEmbeddedPsShader(u32* cmdbuf, u32 size, u32 shader_id,
                                            u32 shader_modifier);
 s32 PS4_SYSV_ABI sceGnmSetEmbeddedVsShader(u32* cmdbuf, u32 size, u32 shader_id, u32 modifier);
 s32 PS4_SYSV_ABI sceGnmSetEsShader(u32* cmdbuf, u32 size, const u32* es_regs, u32 shader_modifier);
-int PS4_SYSV_ABI sceGnmSetGsRingSizes();
+s32 PS4_SYSV_ABI sceGnmSetGsRingSizes(u32 esgs_ring_size, u32 gsvs_ring_size);
 s32 PS4_SYSV_ABI sceGnmSetGsShader(u32* cmdbuf, u32 size, const u32* gs_regs);
 s32 PS4_SYSV_ABI sceGnmSetHsShader(u32* cmdbuf, u32 size, const u32* hs_regs, u32 param4);
 s32 PS4_SYSV_ABI sceGnmSetLsShader(u32* cmdbuf, u32 size, const u32* ls_regs, u32 shader_modifier);
@@ -167,7 +172,9 @@ int PS4_SYSV_ABI sceGnmSetResourceRegistrationUserMemory();
 int PS4_SYSV_ABI sceGnmSetResourceUserData();
 int PS4_SYSV_ABI sceGnmSetSpiEnableSqCounters();
 int PS4_SYSV_ABI sceGnmSetSpiEnableSqCountersForUnitInstance();
-int PS4_SYSV_ABI sceGnmSetupMipStatsReport();
+s32 PS4_SYSV_ABI sceGnmSetupMipStatsReport(void* output_buffer, u32 size_in_bytes,
+                                           u8 intervals_between_reports,
+                                           u8 num_reports_before_reset, u32 mip_stats_reset_force);
 s32 PS4_SYSV_ABI sceGnmSetVgtControl(u32* cmdbuf, u32 size, u32 prim_group_sz_minus_one,
                                      u32 partial_vs_wave_mode, u32 wd_switch_only_on_eop_mode);
 s32 PS4_SYSV_ABI sceGnmSetVsShader(u32* cmdbuf, u32 size, const u32* vs_regs, u32 shader_modifier);
