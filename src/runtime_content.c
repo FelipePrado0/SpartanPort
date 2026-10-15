@@ -8,6 +8,7 @@
 #define NOT_LOADED ((int32_t)0x805a1001)
 #define PARAMETER ((int32_t)0x80d90002)
 #define BUSY ((int32_t)0x80d90003)
+#define DRM_NO_ENTITLEMENT ((int32_t)0x80d90007)
 static unsigned refs, initialized, configured;
 static uint32_t parameters[5];
 static unsigned queries, lists;
@@ -69,6 +70,13 @@ static ABI int32_t param_int(uint32_t id,int32_t *out) {
     printf("Runtime: AppContent parameter %u = %d\n",id,*out);
     return 0;
 }
+static ABI int32_t addon_info(uint32_t service,const void *entitlement,void *info) {
+    require_initialized();
+    (void)service;
+    if (!entitlement || !info) return PARAMETER;
+    /* Offline base-game profile: no additional-content entitlement is installed. */
+    return DRM_NO_ENTITLEMENT;
+}
 static ABI int32_t addon_list(uint32_t service,void *list,uint32_t capacity,uint32_t *hits) {
     require_initialized();
     if (service) { fputs("STOP: nonzero AppContent service label unsupported\n",stderr); exit(21); }
@@ -83,6 +91,7 @@ uintptr_t runtime_content_resolve(const char *name) {
     if (!strcmp(name,"eR2bZFAAU0Q#libSceSysmodule")) return (uintptr_t)module_unload;
     if (!strcmp(name,"R9lA82OraNs#libSceAppContent")) return (uintptr_t)content_init;
     if (!strcmp(name,"99b82IKXpH4#libSceAppContent")) return (uintptr_t)param_int;
+    if (!strcmp(name,"m47juOmH0VE#libSceAppContent")) return (uintptr_t)addon_info;
     if (!strcmp(name,"xnd8BJzAxmk#libSceAppContent")) return (uintptr_t)addon_list;
     return 0;
 }
