@@ -21,13 +21,30 @@ def main()->int:
     table=import_names()
     unresolved=report.get("unresolved_imports",[])
     unknown=[name for name in unresolved if name not in table]
+    native_libraries=("libc","libSceFios2","libSceLibcInternal")
+    native_leaks=[
+        name for name in unresolved
+        if any(name.endswith("#"+library) for library in native_libraries)
+    ]
+    expected_tls={"libc.prx":14,"libSceFios2.prx":2}
+    tls_mismatch=[]
+    for module in report.get("modules",[]):
+        filename=module.get("file")
+        if filename in expected_tls and module.get("tls_relocations")!=expected_tls[filename]:
+            tls_mismatch.append((filename,module.get("tls_relocations"),expected_tls[filename]))
+
     print(f"Native module bindings: {report.get('bindings',0)}")
     print(f"Host-runtime imports after linking: {len(unresolved)}")
     print(f"Named host imports: {len(unresolved)-len(unknown)}")
     print(f"Unknown names: {len(unknown)}")
+    print(f"Native imports left unresolved: {len(native_leaks)}")
     for name in unknown:
         print("UNKNOWN:",name)
-    return 1 if unknown else 0
+    for name in native_leaks:
+        print("NATIVE-UNRESOLVED:",name)
+    for filename,actual,expected in tls_mismatch:
+        print(f"TLS-MISMATCH: {filename}: {actual}, expected {expected}")
+    return 1 if unknown or native_leaks or tls_mismatch else 0
 
 if __name__=="__main__":
     raise SystemExit(main())
