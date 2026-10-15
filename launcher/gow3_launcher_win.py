@@ -33,6 +33,10 @@ import zipfile
 WINDOWS = sys.platform == 'win32'
 MACOS = sys.platform == 'darwin'
 LINUX = not WINDOWS and not MACOS
+PLATFORM = 'Mac' if MACOS else 'PC'
+# The key that opens the port's in-game menu: Mac keyboards have no Insert key, so the game takes `
+# there (gpu/shim/gow3_overlay.cpp).
+MENU_KEY = '`' if MACOS else 'Insert'
 if WINDOWS:
     import ctypes
 FROZEN = getattr(sys, 'frozen', False)
@@ -123,7 +127,7 @@ def parse_gpu_list(text):
 
 def list_gpus():
     """The Vulkan GPUs in the order the game numbers them, or [] when the tool cannot tell."""
-    tool = find_tool('gow3-gpu-capabilities.exe')
+    tool = find_tool('gow3-gpu-capabilities' + ('.exe' if WINDOWS else ''))
     if not tool:
         return []
     try:
@@ -198,6 +202,11 @@ def _(en, ru=None):
     if LANG == 'ru':
         return ru or en
     return gow3_lang.table(LANG).get(en) or en
+
+
+def menu_key(text):
+    """A text that names the Insert key, with the key that opens the port's menu on this platform."""
+    return text.replace('Insert', MENU_KEY)
 
 
 def environment_language():
@@ -599,7 +608,7 @@ class Launcher:
         self.banner_source = self.banner_image = None
         self.ui_calls = queue.Queue()  # work for the Tk thread from helper threads
         self.mod_order, self.mod_vars, self.patch_vars = [], {}, {}
-        root.title(f'{APP_NAME} (PC)')
+        root.title(f'{APP_NAME} ({PLATFORM})')
         if sys.platform == 'win32':
             try:  # the taskbar shows this window's icon, not Python's
                 import ctypes
@@ -893,8 +902,8 @@ class Launcher:
             self.nav[name] = item
         tk.Frame(side, bg=BG).pack(fill='both', expand=True)
         self.update_box = None
-        self.side_note = tk.Label(side, text=_('In the game: Insert or R3+L2\nopens the port\'s menu.',
-                                               'В игре: Insert или R3+L2\nоткрывает меню порта.'),
+        self.side_note = tk.Label(side, text=menu_key(_('In the game: Insert or R3+L2\nopens the port\'s menu.',
+                                                        'В игре: Insert или R3+L2\nоткрывает меню порта.')),
                                   bg=BG, fg=MUTED, font=(UI_FONT, 9), justify='left', wraplength=self.px(210))
         self.side_note.pack(anchor='w', padx=22, pady=(0, 18))
 
@@ -1017,8 +1026,8 @@ class Launcher:
         switch at the top of this page is on."""
         ttk = self.ttk
         f = self.scrolled_page('graphics', _('Graphics (experimental)', 'Графика (эксп.)'),
-                               _('Stored in gow3.ini; the in-game menu (Insert or R3+L2) changes the same values.',
-                                 'Хранится в gow3.ini; в игре меняется через меню (Insert или R3+L2).'))
+                               menu_key(_('Stored in gow3.ini; the in-game menu (Insert or R3+L2) changes the same values.',
+                                          'Хранится в gow3.ini; в игре меняется через меню (Insert или R3+L2).')))
         self.section(f, _('Experimental'), top=4)
         self.check(f, 'experimental_upscaler', 'app', _('Enable the upscaler (experimental)'),
                    _('Off (default): the game runs without temporal upscaling. These upscalers are not calibrated '
@@ -1080,7 +1089,8 @@ class Launcher:
         self.check(f, 'vsync', 'ini', _('VSync'), _('Off allows tearing for the lowest latency.'))
         self.check(f, 'hdr', 'app', _('Allow HDR output', 'Разрешить HDR'),
                    _('When HDR is on in Windows and the display supports it.',
-                     'Если HDR включён в Windows и монитор его поддерживает.'))
+                     'Если HDR включён в Windows и монитор его поддерживает.') if WINDOWS
+                   else _('When the display supports HDR.', 'Если монитор поддерживает HDR.'))
         self.section(f, _('Scaling and sharpening'))
         self.check(f, 'fsr1', 'ini', _('Upscale to the window') if MACOS else _('Upscale with FSR 1'),
                    _('Enlarges a smaller game image to the window. With Render resolution 720p (Performance) '
@@ -1106,7 +1116,7 @@ class Launcher:
         self.row(f, _('Sharpening strength'), holder)
         self.section(f, _('Overlay'))
         self.check(f, 'show_fps', 'ini', _('Show performance overlay'),
-                   _('Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.'))
+                   menu_key(_('Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.')))
 
     def build_performance(self):
         f = self.scrolled_page('performance', _('Performance'), _('Frame rate and speed options.'))
@@ -1133,13 +1143,15 @@ class Launcher:
         self.check(f, 'parallel_warmup', 'app', _('Fast shader cache loading (parallel)'),
                    _('Loading screen only: builds the cached pipelines on several CPU threads.'))
         self.section(f, _('GPU data'))
-        gpus = [('', ('Automatic',))] + [(index, (name,)) for index, name, _kind in list_gpus()]
-        self.row(f, _('Graphics card'), self.choice(f, 'gpu_id', 'app', gpus),
-                 _('The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.'),
-                 restart=True)
-        self.row(f, _('Stream buffer memory'), self.choice(f, 'stream_memory', 'app', STREAM_MEMORY),
-                 _('System RAM can improve FPS on NVIDIA laptops. Choose GPU memory to restore the previous '
-                   'behavior. Applies on the next game launch.'), restart=True)
+        # A Mac has one GPU, sharing the system's memory: no card to choose, no memory to place data in.
+        if not MACOS:
+            gpus = [('', ('Automatic',))] + [(index, (name,)) for index, name, _kind in list_gpus()]
+            self.row(f, _('Graphics card'), self.choice(f, 'gpu_id', 'app', gpus),
+                     _('The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.'),
+                     restart=True)
+            self.row(f, _('Stream buffer memory'), self.choice(f, 'stream_memory', 'app', STREAM_MEMORY),
+                     _('System RAM can improve FPS on NVIDIA laptops. Choose GPU memory to restore the previous '
+                       'behavior. Applies on the next game launch.'), restart=True)
         self.check(f, 'stale_readback', 'ini', _('Game reads GPU data without waiting (big FPS gain)'),
                    _('About 40 to 66 FPS in a heavy scene. Needs deferred GPU readbacks. Switch it off if lighting '
                      'or objects look wrong.'), restart=True)
@@ -1344,11 +1356,11 @@ class Launcher:
                 box = ttk.Label(table, text=fixed, style='Muted.TLabel')
             box.grid(row=r, column=4, sticky='w')
             self.draw_pad_icon(button)
-        self.note(f, _('Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, '
+        self.note(f, menu_key(_('Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, '
                        'Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default '
                        '(the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the '
                        'game\'s pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert '
-                       'and R3+L2 always open the port\'s menu. Applied when the game starts.'))
+                       'and R3+L2 always open the port\'s menu. Applied when the game starts.')))
         self.ttk.Button(f, text=_('Reset to defaults'), command=self.reset_controls).grid(
             row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
 
@@ -1477,7 +1489,7 @@ class Launcher:
         folder = self.meta_dir()
         info = game_info(folder)
         title = info[0] if info else APP_NAME
-        self.root.title(f'{title} (PC)')
+        self.root.title(f'{title} ({PLATFORM})')
         self.side_title.configure(text=title.upper())
         if self.current_page == 'patches':
             self.refresh_game_patches()
