@@ -762,7 +762,12 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
             const std::string_view numeric = vk::componentNumericFormat(format, 0);
             return numeric == "UINT" || numeric == "SINT";
         };
-        if (!Gow3Toggle::Disabled(Gow3Toggle::PartialHeightViews) &&
+        // Launcher: Performance, "Fast screen effects" (GOW3_PARTIAL_HEIGHT_VIEWS=0 turns it off).
+        static const bool partial_views = [] {
+            const char* value = std::getenv("GOW3_PARTIAL_HEIGHT_VIEWS");
+            return !value || value[0] != '0';
+        }();
+        if (partial_views && !Gow3Toggle::Disabled(Gow3Toggle::PartialHeightViews) &&
             (binding == BindingType::Texture || binding == BindingType::Storage) &&
             a.pixel_format != b.pixel_format && is_integer(a.pixel_format) &&
             lhs_block_size == rhs_block_size && a.pitch == b.pitch && a.tile_mode == b.tile_mode &&
