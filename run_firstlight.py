@@ -55,6 +55,10 @@ def run(cmd:list[str],env=None)->int:
         log.write(f"[exit {code}]\n")
     return code
 
+def content_args()->list[str]:
+    profile=OUT/"content.bin"
+    return ["--content-profile",str(profile)] if profile.is_file() else []
+
 def probe_path()->Path|None:
     for name in ("firstlight-probe.exe","gow3-probe.exe","firstlight-probe","gow3-probe"):
         p=OUT/name
