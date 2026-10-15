@@ -100,7 +100,9 @@ void Set(Values& v, const std::string& key, const std::string& value) {
     } else if (key == "async_shaders") {
         v.async_shaders = i != 0;
     } else if (key == "fsr1") {
-        v.fsr1 = i != 0;
+        // FSR 1 left the launcher and the in-game menu: a value saved by an older version has no
+        // control left to turn it off, so it stays off.
+        v.fsr1 = false;
     } else if (key == "rcas") {
         v.rcas = i != 0;
     } else if (key == "rcas_strength") {

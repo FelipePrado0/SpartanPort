@@ -390,17 +390,14 @@ void ImageTab() {
         ImGui::EndTable();
     }
     const int iw = s.image_width, ih = s.image_height, ww = s.window_width, wh = s.window_height;
-    const bool upscaling = iw < ww && ih < wh;
     const bool downscaling = iw > ww || ih > wh;
     const bool rcas_blocked = s.rcas && !s.rcas_applied;
-    ImGui::SeparatorText("Scaling and sharpening");
+    ImGui::SeparatorText("Sharpening");
     if (BeginRows("##scaling")) {
-        CheckRow("Upscale with FSR 1", s.fsr1,
-                 "Enlarges a smaller game image to the window. For more FPS: Render resolution 720p + FSR 1.");
         ImGui::BeginDisabled(rcas_blocked);
         CheckRow("Sharpening (RCAS)", s.rcas,
                  rcas_blocked && downscaling ? "No effect: the game's image is larger than the window."
-                 : rcas_blocked              ? "Needs FSR 1: the game's image is smaller than the window."
+                 : rcas_blocked              ? "No effect: the game's image is smaller than the window."
                                              : "Sharpens the final image.");
         ImGui::EndDisabled();
         ImGui::BeginDisabled(!s.rcas || rcas_blocked);
@@ -424,7 +421,6 @@ void ImageTab() {
         InfoRow("Game image", text);
         std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
         InfoRow("Window", text);
-        InfoRow("FSR 1", !s.fsr1 ? "off" : upscaling ? "active" : "no effect (image not smaller than window)");
         InfoRow("Sharpening", s.rcas_applied ? "applied" : "not applied");
         ImGui::EndTable();
     }

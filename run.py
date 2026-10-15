@@ -162,6 +162,10 @@ def main():
     derived = []
     sys.path.insert(0, str(PORT / 'scripts'))
     import graphics_options
+    try:
+        import discord_presence
+    except Exception:
+        discord_presence = None
     graphics, reverted = graphics_options.prepare(env['GOW3_CONFIG'], out / 'graphics_state.json')
     if reverted:
         print('Graphics: the last restart never reached the game; previous options restored', flush=True)
@@ -279,6 +283,12 @@ def main():
             env['GOW3_GLYPHS'] = glyph_style
             derived.append('GOW3_GLYPHS')
         env['GOW3_DERIVED'] = ','.join(derived)
+        # The guest memory pool is committed in full at start: a resolution patch above 1080p
+        # can need more than 16 GB of RAM, and the game then closes when the page file cannot grow.
+        import guest_memory
+        if warning := guest_memory.memory_warning(env.get('GOW3_DMEM_MB'), guest_memory.physical_memory_mb(),
+                                                  env.get('GOW3_STREAM_MEMORY', 'cached')):
+            print(warning, flush=True)
 
         # The in-game restart starts this script again once this process is gone.
         # GPU caches (shaders, pipelines) beside the saves; read before main(), so set here.
@@ -302,7 +312,17 @@ def main():
                    '--user', str(user_dir),
                    '--timeout', env.get('GOW3_TIMEOUT', '0'), *isa_args, *glyph_args, *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
-        return subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console()).returncode
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, creationflags=no_console())
+        presence = None
+        try:
+            try:
+                presence = discord_presence.Presence(pid=process.pid) if discord_presence else None
+            except (OSError, RuntimeError):
+                print('Discord presence unavailable; the game will continue', flush=True)
+            return process.wait()
+        finally:
+            if presence:
+                presence.close()
     finally:
         if mod_view:
             shutil.rmtree(mod_view, ignore_errors=True)

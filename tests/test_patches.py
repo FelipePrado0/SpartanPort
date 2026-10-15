@@ -74,9 +74,12 @@ class GameProfileTests(unittest.TestCase):
         self.assertEqual(selected_patches(GOW3, '01.02', 'Resolution Patch - 720p; Skip Any Video With X Button'),
                          ['Skip Any Video With X Button', 'Bug Fix - Startup Black Screen', 'Resolution Patch - 720p'])
         self.assertEqual(selected_patches(GOW3, '01.00', ''), [])
-        # The launcher's selection is exact: unchecked defaults stay off.
-        self.assertEqual(selected_patches(GOW3, '01.02', 'Skip Any Video With X Button', only=True), ['Skip Any Video With X Button'])
-        self.assertEqual(selected_patches(GOW3, '01.02', '', only=True), [])
+        # The launcher's selection is exact: unchecked defaults stay off, except the fixes that are
+        # always on (a list saved before they existed must still get them).
+        self.assertEqual(selected_patches(GOW3, '01.02', 'Skip Any Video With X Button', only=True),
+                         ['Skip Any Video With X Button', 'Bug Fix - Startup Black Screen'])
+        self.assertEqual(selected_patches(GOW3, '01.02', '', only=True), ['Bug Fix - Startup Black Screen'])
+        self.assertEqual(selected_patches(GOW3, '01.00', '', only=True), [])
 
     def test_gow3_resolution_patch_replaces_texture_fix(self):
         self.assertEqual(selected_patches(GOW3, '01.02', 'Resolution Patch - 4K'),

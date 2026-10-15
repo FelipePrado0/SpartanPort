@@ -26,13 +26,10 @@ It is a fork of [Supermedo's Windows port](https://github.com/Supermedo/bloodbor
 > God of War is a trademark of Sony Interactive Entertainment.
 
 On the test machine (AMD Radeon RX 6700 XT, Ryzen 5 5600X, 32 GB) the game runs at 144 FPS on
-average (55 to 240) at 1080p with the 240 FPS engine frame rate, and at 108 FPS on average at 4K
-with FSR 1.
+average (55 to 240) at 1080p with the 240 FPS engine frame rate.
 
 **Tested and playable from start to finish** at native 1080p with the 240 FPS engine frame
 rate. At other render resolutions some textures look broken; a fix is in progress.
-
-Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
 
 ## What works
 
@@ -41,7 +38,7 @@ Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.
 - Controller (DualSense, Xbox and others, through SDL3) and keyboard at the same time, both
   remappable.
 - **In-game button icons** (opt-in, off by default): the PlayStation button icons in the game can
-  show your controller's, Xbox or Nintendo ones (Controls page).
+  show your controller's, Xbox or Nintendo ones (Game page, Controls).
 - Saving and loading: the save list is shown on screen, as on the PS4. Autosave works too. The
   launcher backs the saves up before every start.
 - Patches: render resolution of 480p, 720p, 1440p, 1800p or 4K, corrupted texture fix and skip
@@ -56,8 +53,7 @@ Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.
   - **Game:** cheats (infinite health, magic, item meter, Rage of Sparta, max red orbs);
     multipliers from 0.1x to 100x for red, green (health), blue (magic) and gold (Rage of
     Sparta) orbs and for damage dealt and taken; an enemy health bar.
-  - **Image:** display mode (windowed, borderless, fullscreen), VSync, FSR 1 upscaling and
-    RCAS sharpening.
+  - **Image:** display mode (windowed, borderless, fullscreen), VSync and RCAS sharpening.
   - **Performance:** frame rate limit (30 to unlimited), frames queued, background shader
     compiling; render resolution, engine frame rate and GPU readback options apply with one
     "Apply and restart" button.
@@ -109,7 +105,8 @@ Patches and fixes are included and applied automatically: texture fix, skip vide
 
 **If something goes wrong**
 - Black screen at start: **Advanced → Clear shader cache**, then start again.
-- The game does not open: check the **Log** page, or send `user\last_run.log` with your report.
+- The game closes with "cannot create ... guest memory (error 1450)": Windows ran out of virtual memory to allocate the guest pool. Increase the page file: press **Win + R**, type `SystemPropertiesAdvanced`, go to **Performance** Settings → **Advanced** → **Virtual memory** Change, uncheck automatic management, select drive **C:**, set a custom size (e.g. 16384 MB initial, 24576 MB maximum), click **Set**, **OK**, and restart your PC.
+- The game does not open: check **Advanced → Log**, or send `user\last_run.log` with your report.
 
 ## Linux (AppImage, experimental)
 
@@ -144,8 +141,8 @@ window. From a source tree: `GOW3_GAME_DIR=/path/to/CUSA01623 python3 run.py` af
   file exists at build time, and `launcher/gow3.png` otherwise.
 - **Patches:** the same patch file serves the full 01.02 update (`eboot.bin` sha256 `6e72330e…`) and
   the European title (CUSA01715): the patches and cheats find their sites by signature.
-- **Graphics (experimental):** the temporal upscalers (FSR 3.1, FSR 4, TAA, DLSS) are off by default;
-  the switch is at the top of that page.
+- **Graphics:** the temporal upscalers (FSR 3.1, FSR 4, TAA, DLSS) are temporarily removed while a
+  better implementation is worked on.
 
 ## Requirements
 
@@ -261,7 +258,7 @@ for every overlay configuration.
 
 ### Keyboard controls
 
-Defaults; change them on the launcher's **Controls** page.
+Defaults; change them in the launcher's **Game** page, **Controls** section.
 
 | Key | Button |
 |---|---|
@@ -284,8 +281,8 @@ On a controller without a touchpad (Xbox and others), View opens the pause menu 
 touchpad click) and L1 + View opens photo mode (the left click). On a DualSense the touchpad
 works as on the PS4, and Share/Create works like View.
 
-**In-game button icons** (off by default) are chosen on the Controls page, under *In-game button
-icons*: *Match my controller*, *Xbox* or *Nintendo*. They replace the PlayStation icons in the
+**In-game button icons** (off by default) are chosen in the launcher's Game page, Controls section, under
+*In-game button icons*: *Match my controller*, *Xbox* or *Nintendo*. They replace the PlayStation icons in the
 tutorial, move-list and quick-time prompts; the pause-menu controller drawing stays a DualShock 4.
 The launcher writes a patched copy of two game files into the port's data folder and never changes
 your game folder. A new controller is picked up after a restart. Without the launcher, set
@@ -328,7 +325,7 @@ out/gow3-probe.exe out/boot-linked.bin --app0 <game folder> --check-imports
 | Launcher | `launcher/gow3_launcher_win.py` | Settings, patches, mods, controls and the play button |
 
 More documentation: [mods](docs/MODS.md), [frame map and upscaler](docs/upscaler.md),
-[parallel GPU work](docs/parallel_gpu.md) and the [roadmap](docs/gow3/ROADMAP.md).
+and [parallel GPU work](docs/parallel_gpu.md).
 
 ## Credits
 

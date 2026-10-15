@@ -229,14 +229,19 @@ def available_patches(xml, app_version):
 # enable one, never both. A chosen resolution patch replaces the default texture fix.
 EXCLUSIVE_PREFIX='Resolution Patch'
 REPLACED_BY_EXCLUSIVE={'Bug Fix - Texture Corruption Fix'}
+# Fixes with nothing to choose: not offered in the launcher and applied even with its saved list,
+# which predates them (the startup black screen fix sets a value the game overwrites at once).
+ALWAYS_ON={'Bug Fix - Startup Black Screen'}
 
 
 def selected_patches(xml, app_version, extra, only=False):
     """The file's isEnabled patches for this version, then the names in extra (";"-separated).
-    only: extra is the whole selection (the launcher's), without the file's defaults."""
-    names=[] if only else [m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata')
-                           if m.get('AppVer')==app_version and m.get('isEnabled','false').lower()=='true']
+    only: extra is the whole selection (the launcher's), without the file's defaults but with
+    the ALWAYS_ON ones."""
+    metas=[m for m in ET.parse(xml).getroot().iter('Metadata') if m.get('AppVer')==app_version]
+    names=[] if only else [m.get('Name') for m in metas if m.get('isEnabled','false').lower()=='true']
     names+=[n for n in (n.strip() for n in extra.split(';')) if n and n not in names]
+    names+=[m.get('Name') for m in metas if m.get('Name') in ALWAYS_ON and m.get('Name') not in names]
     exclusive=[n for n in names if n.startswith(EXCLUSIVE_PREFIX)]
     if len(exclusive)>1:
         raise ValueError(f'choose one resolution patch, not {exclusive}')

@@ -27,13 +27,10 @@ Es un fork del [port para Windows de Supermedo](https://github.com/Supermedo/blo
 > God of War es una marca registrada de Sony Interactive Entertainment.
 
 En la máquina de pruebas (AMD Radeon RX 6700 XT, Ryzen 5 5600X, 32 GB) el juego corre a 144 FPS de
-promedio (55 a 240) en 1080p con la tasa de cuadros del motor en 240 FPS, y a 108 FPS de promedio
-en 4K con FSR 1.
+promedio (55 a 240) en 1080p con la tasa de cuadros del motor en 240 FPS.
 
 **Probado y jugable de principio a fin** en 1080p nativo con la tasa de cuadros del motor en 240
 FPS. En otras resoluciones de render algunas texturas se ven rotas; hay una corrección en curso.
-
-El progreso se registra (en portugués) en [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
 
 ## Qué funciona
 
@@ -41,7 +38,7 @@ El progreso se registra (en portugués) en [docs/gow3/ROADMAP.md](docs/gow3/ROAD
 - Audio: música, voces y efectos (ATRAC9 y MP3).
 - Control (DualSense, Xbox y otros, mediante SDL3) y teclado al mismo tiempo, ambos remapeables.
 - **Íconos de botones en el juego** (opcional, desactivado por defecto): los íconos de botones de
-  PlayStation dentro del juego pueden mostrar los de tu control, Xbox o Nintendo (página Controles).
+  PlayStation dentro del juego pueden mostrar los de tu control, Xbox o Nintendo (página Game, sección Controls).
 - Guardado y carga: la lista de partidas guardadas se muestra en pantalla, como en la PS4. El
   autoguardado también funciona. El launcher hace una copia de seguridad de las partidas antes de
   cada inicio.
@@ -59,8 +56,7 @@ El progreso se registra (en portugués) en [docs/gow3/ROADMAP.md](docs/gow3/ROAD
   - **Juego:** trucos (vida infinita, magia, medidor de objeto, Furia de Esparta, máximo de orbes
     rojos); multiplicadores de 0,1x a 100x para los orbes rojos, verdes (vida), azules (magia) y
     dorados (Furia de Esparta) y para el daño causado y recibido; una barra de vida de enemigos.
-  - **Imagen:** modo de pantalla (ventana, sin bordes, pantalla completa), VSync, escalado FSR 1 y
-    nitidez RCAS.
+  - **Imagen:** modo de pantalla (ventana, sin bordes, pantalla completa), VSync y nitidez RCAS.
   - **Rendimiento:** límite de cuadros por segundo (30 a ilimitado), cuadros en cola, compilación de
     shaders en segundo plano; la resolución de render, la tasa de cuadros del motor y las opciones
     de lectura de la GPU se aplican con un solo botón "Aplicar y reiniciar".
@@ -114,7 +110,7 @@ de cuadros en **Home** o **Performance**.
 
 **Si algo sale mal**
 - Pantalla negra al iniciar: **Advanced → Clear shader cache** y volvé a iniciar.
-- El juego no abre: revisá la página **Log**, o enviá `user\last_run.log` junto con tu reporte.
+- El juego no abre: revisá **Advanced → Log**, o enviá `user\last_run.log` junto con tu reporte.
 
 ## Linux (AppImage, experimental)
 
@@ -151,8 +147,8 @@ de `bash build.sh`.
 - **Parches:** el mismo archivo de parches sirve para la actualización completa 01.02 (`eboot.bin`
   sha256 `6e72330e…`) y para el título europeo (CUSA01715): los parches y trucos encuentran sus
   sitios por firma.
-- **Gráficos (experimental):** los escaladores temporales (FSR 3.1, FSR 4, TAA, DLSS) están
-  desactivados por defecto; el interruptor está en la parte superior de esa página.
+- **Gráficos:** los escaladores temporales (FSR 3.1, FSR 4, TAA, DLSS) se quitaron temporalmente
+  mientras se prepara una implementación mejor.
 
 ## Requisitos
 
@@ -272,7 +268,7 @@ para todas las configuraciones de overlay.
 
 ### Controles de teclado
 
-Valores por defecto; cambialos en la página **Controls** del launcher.
+Valores por defecto; cambialos en la página **Game** del launcher, sección **Controls**.
 
 | Tecla | Botón |
 |---|---|
@@ -295,7 +291,7 @@ En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic 
 y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad funciona como en la
 PS4, y Share/Create funciona como View.
 
-Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls, en
+Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Game del launcher, sección Controls, en
 *In-game button icons*: *Match my controller*, *Xbox* o *Nintendo*. Reemplazan los íconos de
 PlayStation en los tutoriales, la lista de movimientos y las indicaciones de quick-time events; el
 dibujo del control en el menú de pausa sigue siendo un DualShock 4. El launcher escribe una copia
@@ -340,7 +336,7 @@ out/gow3-probe.exe out/boot-linked.bin --app0 <carpeta del juego> --check-import
 | Launcher | `launcher/gow3_launcher_win.py` | Ajustes, parches, mods, controles y el botón de jugar |
 
 Más documentación: [mods](docs/MODS.md), [mapa de cuadros y escalador](docs/upscaler.md),
-[trabajo paralelo de GPU](docs/parallel_gpu.md) y el [roadmap](docs/gow3/ROADMAP.md).
+y [trabajo paralelo de GPU](docs/parallel_gpu.md).
 
 ## Créditos
 

@@ -67,6 +67,19 @@ done
 # $ORIGIN/gpu is already the probe's RUNPATH; the libraries it needs sit in usr/lib via AppRun.
 find "$appdir/usr/lib" -name '*.so*' -exec strip --strip-unneeded {} + 2>/dev/null || true
 
+# The newest glibc symbol in the bundle is the oldest glibc players can have. Built on a rolling
+# distro it follows the host's and the AppImage stops starting on SteamOS, Debian and Fedora (#291):
+# release builds come from .github/workflows/linux-appimage.yml (Ubuntu 24.04). GOW3_MAX_GLIBC
+# raises the limit for local builds.
+max_glibc=${GOW3_MAX_GLIBC:-2.39}
+need=$(find "$appdir" -type f \( -name '*.so*' -o -perm -u+x \) -exec objdump -T {} + 2>/dev/null |
+       grep -o 'GLIBC_2\.[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1 || true)  # objdump fails on scripts
+if [[ $(printf '%s\n' "$need" "$max_glibc" | sort -V | tail -1) != "$max_glibc" ]]; then
+    echo "The bundle needs glibc $need, newer than $max_glibc: build on Ubuntu 24.04 (packaging/linux/ci-deps.sh) or set GOW3_MAX_GLIBC" >&2
+    exit 1
+fi
+echo "Minimum glibc: $need"
+
 tool=${APPIMAGETOOL:-$(command -v appimagetool || true)}
 if [[ -z $tool ]]; then
     tool=out/appimagetool-x86_64.AppImage

@@ -26,13 +26,10 @@ menu no jogo).
 > Santa Monica Studio. God of War é marca registrada da Sony Interactive Entertainment.
 
 Na máquina de teste (AMD Radeon RX 6700 XT, Ryzen 5 5600X, 32 GB), o jogo roda a 144 FPS de
-média (55 a 240) em 1080p com o motor a 240 FPS, e a 108 FPS de média em 4K com FSR 1.
+média (55 a 240) em 1080p com o motor a 240 FPS.
 
 **Testado e jogável do início ao fim** em 1080p nativo, com o motor a 240 FPS. Em outras
 resoluções de renderização algumas texturas aparecem quebradas; a correção está em andamento.
-
-O andamento está em
-[docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.md).
 
 ## O que funciona
 
@@ -51,13 +48,12 @@ O andamento está em
   desempenho, pasta do jogo e backups de save, patches, mods (ordem, presets e conflitos),
   controles com ícones de botões PlayStation ou Xbox, atualizações e diagnóstico.
 - **Ícones de botões no jogo** (opt-in, desligado por padrão): os ícones PlayStation do jogo podem
-  ser os do seu controle, Xbox ou Nintendo (tela Controls).
+  ser os do seu controle, Xbox ou Nintendo (tela Game, seção Controls).
 - **Menu dentro do jogo** (Insert no teclado, R3+L2 no controle), com quatro abas:
   - **Game:** trapaças (vida, magia, item e Fúria de Esparta infinitos, orbes vermelhos no
     máximo); multiplicadores de 0,1x a 100x para orbes vermelhos, verdes (vida), azuis (magia)
     e dourados (Fúria de Esparta) e para dano causado e recebido; barra de vida do inimigo.
-  - **Image:** modo de tela (janela, sem borda, tela cheia), VSync, ampliação FSR 1 e nitidez
-    RCAS.
+  - **Image:** modo de tela (janela, sem borda, tela cheia), VSync e nitidez RCAS.
   - **Performance:** limite de FPS (de 30 a ilimitado), quadros na fila, compilação de shaders
     em segundo plano; resolução, FPS do motor e as opções de leitura da GPU valem com um único
     botão "Apply and restart".
@@ -110,7 +106,8 @@ com X e 120 FPS vêm ligados. Mude resolução e FPS na **Home** ou em **Perform
 
 **Se algo der errado**
 - Tela preta ao abrir: **Advanced → Clear shader cache** e abra de novo.
-- O jogo não abre: veja a tela **Log**, ou envie o `user\last_run.log` junto com o relato.
+- O jogo fecha com "cannot create ... guest memory (error 1450)": o Windows ficou sem memória virtual para alocar o pool de memória do jogo. Aumente o arquivo de paginação: pressione **Win + R**, digite `SystemPropertiesAdvanced`, vá em Configurações de **Desempenho** → guia **Avançado** → **Memória virtual** Alterar, desmarque o gerenciamento automático, selecione a unidade **C:**, defina um tamanho personalizado (ex.: 16384 MB inicial, 24576 MB máximo), clique em **Definir**, **OK** e reinicie o PC.
+- O jogo não abre: veja **Advanced → Log**, ou envie o `user\last_run.log` junto com o relato.
 
 ## Linux (AppImage, experimental)
 
@@ -144,8 +141,8 @@ partir do código: `GOW3_GAME_DIR=/caminho/para/CUSA01623 python3 run.py` depois
   arquivo existe na hora da compilação, e `launcher/gow3.png` caso contrário.
 - **Patches:** o mesmo arquivo de patches serve a atualização 01.02 completa (`eboot.bin` com sha256
   `6e72330e…`) e o título europeu (CUSA01715): os patches e as trapaças acham seus pontos por assinatura.
-- **Gráficos (experimental):** os upscalers temporais (FSR 3.1, FSR 4, TAA, DLSS) ficam desligados por
-  padrão; o interruptor está no topo dessa página.
+- **Gráficos:** os upscalers temporais (FSR 3.1, FSR 4, TAA, DLSS) foram removidos temporariamente
+  enquanto uma implementação melhor é preparada.
 
 ## Requisitos
 
@@ -253,7 +250,7 @@ uma correção para todas as configurações de overlay.
 
 ### Teclado
 
-Padrão; mude na tela **Controls** do launcher.
+Padrão; mude na tela **Game** do launcher, seção **Controls**.
 
 | Tecla | Botão |
 |---|---|
@@ -276,7 +273,7 @@ Em um controle sem touchpad (Xbox e outros), View abre o menu de pausa (o clique
 touchpad) e L1 + View abre o modo foto (o clique esquerdo). No DualSense o touchpad funciona
 como no PS4, e Share/Create funciona como View.
 
-Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Controls, em
+Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Game do launcher, seção Controls, em
 *Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox* ou *Nintendo*. Eles trocam os ícones
 PlayStation dos tutoriais, da lista de golpes e dos eventos rápidos; o desenho do controle no menu
 de pausa continua sendo um DualShock 4. O launcher grava uma cópia com patch de dois arquivos do
@@ -322,7 +319,7 @@ out/gow3-probe.exe out/boot-linked.bin --app0 <pasta do jogo> --check-imports
 | Launcher | `launcher/gow3_launcher_win.py` | Configurações, patches, mods, controles e o botão de jogar |
 
 Mais documentação: [mods](docs/MODS.md), [mapa do quadro e upscaler](docs/upscaler.md),
-[trabalho paralelo da GPU](docs/parallel_gpu.md) e o [roadmap](docs/gow3/ROADMAP.md).
+e [trabalho paralelo da GPU](docs/parallel_gpu.md).
 
 ## Créditos
 

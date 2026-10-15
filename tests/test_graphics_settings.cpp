@@ -46,7 +46,12 @@ int main() {
     Gow3Settings::Load();
     assert(v.display_mode == G::Borderless && !v.vsync && v.fps_limit == 240 && !v.async_shaders);
     assert(v.render_resolution == 3 && v.engine_fps == 240 && !v.deferred_readback && v.stale_readback);
-    assert(v.fsr1 && !v.rcas && v.rcas_strength == 40 && v.frames_queued == 2);
+    // FSR 1 left the menus in 2.2.0: a saved fsr1=1 (or GOW3_FSR1) no longer turns it on.
+    assert(!v.fsr1 && !v.rcas && v.rcas_strength == 40 && v.frames_queued == 2);
+    _putenv_s("GOW3_FSR1", "1");
+    Gow3Settings::Load();
+    assert(!v.fsr1);
+    _putenv_s("GOW3_FSR1", "");
     assert(!Gow3Settings::GraphicsNeedRestart());
     assert(v.applied_engine_fps == 240);  // no GOW3_ENGINE_FPS: the configured rate
     _putenv_s("GOW3_ENGINE_FPS", "60");    // run.py: the frame rate patch did not apply
@@ -63,7 +68,7 @@ int main() {
     const std::string saved = Read(path);
     for (const char* line : {"display_mode=borderless\n", "vsync=0\n", "fps_limit=60\n", "async_shaders=0\n",
                              "render_resolution=1440p\n", "engine_fps=240\n", "deferred_readback=0\n",
-                             "stale_readback=1\n", "fsr1=1\n", "rcas=0\n", "rcas_strength=40\n",
+                             "stale_readback=1\n", "fsr1=0\n", "rcas=0\n", "rcas_strength=40\n",
                              "frames_queued=2\n"}) {
         assert(saved.find(line) != std::string::npos);
     }

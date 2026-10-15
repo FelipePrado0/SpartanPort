@@ -33,8 +33,12 @@ import webbrowser
 import zipfile
 
 WINDOWS = sys.platform == 'win32'
+# Windows without a cursor of their own show the X root window's, which XWayland leaves blank.
+ARROW = '' if WINDOWS else 'left_ptr'
 if WINDOWS:
     import ctypes
+    # AMD hybrid laptops: this layer hides the NVIDIA GPU from Vulkan and the game stays black (#263).
+    os.environ.setdefault('VK_LOADER_LAYERS_DISABLE', 'VK_LAYER_AMD_switchable_graphics')
 FROZEN = getattr(sys, 'frozen', False)
 PORT_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PORT_DIR / 'scripts'))
@@ -54,7 +58,7 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 NEW_GROUP = {} if WINDOWS else {'start_new_session': True}
 UI_FONT, MONO_FONT, SERIF_FONT = 'Segoe UI', 'Consolas', 'Georgia'
 # This build; GitHub release tags are windows-v<VERSION>.
-VERSION = '2.1.8'
+VERSION = '2.2.0'
 RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
@@ -143,7 +147,7 @@ def no_msaa_options(gpus, gpu_id):
 
 def list_gpus():
     """The Vulkan GPUs in the order the game numbers them, or [] when the tool cannot tell."""
-    tool = find_tool('gow3-gpu-capabilities.exe')
+    tool = find_tool('gow3-gpu-capabilities' + ('.exe' if WINDOWS else ''))
     if not tool:
         return []
     try:
@@ -307,10 +311,10 @@ PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_lists', 'refresh_
 APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
-                'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
+                'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
                 'gpu_id': '', 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
-                'vk_validation': False, 'close_on_play': False,
+                'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
                 'glyph_style': 'off'}
 
@@ -734,8 +738,7 @@ def game_environment(s):
     env['GOW3_PATCHES_DIR'] = s['patches_dir'] or str(DATA_DIR / 'patches')
     env['GOW3_PATCHES_CONFIG'] = str(DATA_DIR / 'patches.json')
     env['GOW3_LANGUAGE'] = s['language']
-    if str(s['player_name']).strip():
-        env['GOW3_USER_NAME'] = str(s['player_name']).strip()
+    env['GOW3_DISCORD'] = '1' if s.get('discord_rpc') else '0'
     if s['hdr']:
         env['GOW3_HDR'] = '1'
     for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS'), ('no_msaa', 'GOW3_NO_MSAA')):
@@ -1098,13 +1101,16 @@ class Launcher:
         self.build_game()
         self.build_advanced()
         self.root.bind_all('<MouseWheel>', self.wheel)
+        if not WINDOWS:  # X11 (Tk 8.6): the wheel arrives as buttons 4 and 5; on Windows those are side buttons
+            self.root.bind_all('<Button-4>', self.wheel)
+            self.root.bind_all('<Button-5>', self.wheel)
         self.game_changed()
 
     def wheel(self, event):
         page = self.pages.get(self.current_page)
         if hasattr(page, 'scroll') and not isinstance(event.widget, (self.tk.Text, self.ttk.Combobox)) \
                 and 'popdown' not in str(event.widget):
-            page.scroll(int(-event.delta / 120))
+            page.scroll({4: -1, 5: 1}.get(event.num) or int(-event.delta / 120))
 
     def show(self, name):
         for page in self.pages.values():
@@ -1379,7 +1385,7 @@ class Launcher:
 
     def refresh_game_patches(self):
         import xml.etree.ElementTree as ET
-        from patches import EXCLUSIVE_PREFIX
+        from patches import ALWAYS_ON, EXCLUSIVE_PREFIX
         tk, f = self.tk, self.game_patch_frame
         self.store_game_patches()
         for widget in f.winfo_children():
@@ -1400,7 +1406,7 @@ class Launcher:
                        '{} · версия {} · {}.').format(title_id, version, xml.name), top=0)
         for meta in metas:
             name = meta.get('Name')
-            if name.startswith(EXCLUSIVE_PREFIX) or name.startswith('Frame Rate Patch'):
+            if name.startswith(EXCLUSIVE_PREFIX) or name.startswith('Frame Rate Patch') or name in ALWAYS_ON:
                 continue
             var = tk.BooleanVar(value=name in on)
             self.game_patch_vars[name] = var
@@ -1555,6 +1561,9 @@ class Launcher:
         self.section(f, _('Launcher', 'Лаунчер'), top=4)
         self.row(f, _('Launcher language', 'Язык лаунчера'), self.choice(f, 'ui_language', 'app', UI_LANGUAGES),
                  _('Applies when the launcher opens again.', 'Применится при следующем открытии лаунчера.'))
+        self.check(f, 'discord_rpc', 'app', _('Show Discord Rich Presence', 'Показывать Discord Rich Presence'),
+                   _('Shows only the game name and the time played on your Discord profile.',
+                     'Показывает в профиле Discord только название игры и время в игре.'))
         self.check(f, 'close_on_play', 'app', _('Close the launcher when the game starts', 'Закрывать лаунчер при запуске игры'))
         if WINDOWS:
             self.check(f, 'check_updates', 'app', _('Check for updates when the launcher opens',
@@ -1961,6 +1970,7 @@ class Launcher:
             self.show('game')
             return
         self.set_log('')
+        self.exit_hint = None
         # The same last_run.log as --play, so a report from the PLAY button has the file too.
         run_log = open_play_log(self.app)
         try:
@@ -2006,11 +2016,14 @@ class Launcher:
                 item = self.output.get_nowait()
                 if isinstance(item, tuple):
                     self.append(_('\nThe game exited (code {}).\n', '\nИгра завершилась (код {}).\n').format(item[0]))
+                    if getattr(self, 'exit_hint', None):
+                        self.append(self.exit_hint + '\n')
                     self.process = None
                     if self.job:
                         self.job.close()
                     self.refresh_status()
                 else:
+                    self.exit_hint = exit_hint(item) or getattr(self, 'exit_hint', None)
                     if 'Entering original x86-64 code' in item:
                         self.status.configure(text=_('The game is running.', 'Игра запущена.'), fg=TEXT)
                     elif 'restarting through run.py' in item:
@@ -2245,7 +2258,7 @@ class Launcher:
                       'and logo. Open Steam to see it in the library.'))
             self.messagebox.showinfo(APP_NAME, text.format(steam_shortcut.APP_NAME, result['accounts']))
         finally:
-            self.root.configure(cursor='')
+            self.root.configure(cursor=ARROW)
 
     def close(self):
         if not self.collect():
@@ -2325,6 +2338,21 @@ def open_play_log(settings):
     if settings.get('close_on_play'):
         return _NullLog()
     return open_run_log(settings)
+
+
+def exit_hint(line):
+    """Advice for an output line that explains why the game closed, or None."""
+    if 'of guest memory (error ' in line:
+        return _('Windows could not reserve the memory the game needs. Close other programs, or let the '
+                 'Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.',
+                 'Windows не смог выделить память для игры. Закройте другие программы или дайте файлу '
+                 'подкачки Windows расти (например, 16384 МБ исходный, 32768 МБ максимальный) и запустите снова.')
+    if 'guest raised debug exception code=0xa0020001' in line:
+        return _('The game stopped while reading its files: the game dump may be incomplete. Extract the pkg '
+                 'again and check that the game folder is about 40 GB.',
+                 'Игра остановилась при чтении своих файлов: дамп игры может быть неполным. Распакуйте pkg '
+                 'заново и проверьте, что папка игры занимает около 40 ГБ.')
+    return None
 
 
 def _close_quietly(log):
@@ -2421,6 +2449,10 @@ def main():
     import tkinter as tk
     from tkinter import filedialog, font, messagebox, ttk
     root = tk.Tk() if WINDOWS else tk.Tk(className='gow3')
+    if not WINDOWS:
+        root.configure(cursor=ARROW)
+        for window in ('Toplevel', 'Dialog', 'TkFDialog', 'TkChooseDir'):  # dialogs: tk_messageBox, file pickers
+            root.option_add(f'*{window}.cursor', ARROW)
     pick_fonts(font.families(root))
     Launcher(root, tk, ttk, filedialog, messagebox)
     root.mainloop()

@@ -23,6 +23,16 @@ class GraphicsOptionsTest(unittest.TestCase):
         self.assertEqual(options, {'render_resolution': 'native', 'engine_fps': '120', 'deferred_readback': '1',
                                    'stale_readback': '1', 'async_shaders': '1'})
 
+    def test_corrupt_state_file_preserves_current_settings(self):
+        self.ini.write_text('render_resolution=1440p\nengine_fps=240\n', encoding='utf-8')
+        self.state.write_text('{invalid json', encoding='utf-8')
+
+        options, reverted = g.prepare(self.ini, self.state)
+
+        self.assertFalse(reverted)
+        self.assertEqual(options['render_resolution'], '1440p')
+        self.assertEqual(options['engine_fps'], '240')
+
     def test_write_keys_keeps_other_lines(self):
         self.ini.write_text('# comment\nshow_fps=1\nengine_fps=60\n', encoding='utf-8')
         g.write_keys(self.ini, {'engine_fps': '240', 'vsync': '0'})
