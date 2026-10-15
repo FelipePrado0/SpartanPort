@@ -79,6 +79,30 @@ class FirstLightPortTests(unittest.TestCase):
         self.assertIn(".buffer_copy_shader = 0",profile)
         self.assertIn("FIRSTLIGHT_GAME_PROFILES",cmake)
 
+    def test_confirmed_firstlight_service_imports(self):
+        names=(ROOT/"src"/"import_names.inc").read_text(encoding="utf-8")
+        content=(ROOT/"src"/"runtime_content.c").read_text(encoding="utf-8")
+        services=(ROOT/"src"/"runtime_services.c").read_text(encoding="utf-8")
+        expected={
+            "m47juOmH0VE#libSceAppContent":"sceAppContentGetAddcontInfo",
+            "aCYPMSUIaP8#libSceHttp":"sceHttpGetAllResponseHeaders",
+            "yigr4V0-HTM#libSceHttp":"sceHttpSetRecvTimeOut",
+            "xegFfZKBVlw#libSceHttp":"sceHttpSetSendTimeOut",
+            "DK+GoXCNT04#libSceHttp":"sceHttpsLoadCert",
+            "v6EZ-YWRdMs#libScePlayGo":"scePlayGoGetEta",
+            "LosLlHOpNqQ#libScePlayGo":"scePlayGoSetLanguageMask",
+            "Nn7zKwnA5q0#libScePlayGo":"scePlayGoGetToDoList",
+        }
+        for nid,symbol in expected.items():
+            self.assertIn(f'{{"{nid}","{symbol}"}}',names)
+        self.assertIn("DRM_NO_ENTITLEMENT",content)
+        self.assertIn("addon_info",content)
+        for symbol in (
+            "sceHttpGetAllResponseHeaders","sceHttpSetRecvTimeOut","sceHttpSetSendTimeOut",
+            "sceHttpsLoadCert","scePlayGoGetEta","scePlayGoSetLanguageMask","scePlayGoGetToDoList"
+        ):
+            self.assertIn(f'"{symbol}"',services)
+
     def test_safe_launcher_defaults(self):
         launcher=(ROOT/"run_firstlight.py").read_text(encoding="utf-8")
         for setting in (
