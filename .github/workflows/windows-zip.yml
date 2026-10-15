@@ -30,6 +30,10 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
+      # The runner's Git turns LF into CRLF, and the FSR-Vulkan patches then no longer apply.
+      - name: Keep LF line endings
+        shell: pwsh
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -45,13 +49,14 @@ jobs:
             vulkan-headers:p vulkan-loader:p vulkan-memory-allocator:p glslang:p
             sdl3:p fmt:p boost:p robin-map:p xxhash:p ffmpeg:p zydis:p
             spirv-tools:p spirv-headers:p spirv-cross:p
-      # Freezes the launcher; this Python ships Tk, as the python.org one does.
+      - name: Build
+        run: bash build.sh
+      # Freezes the launcher; this Python ships Tk, as the python.org one does. Set up after the
+      # build so its Python_ROOT_DIR and PKG_CONFIG_PATH do not reach CMake.
       - uses: actions/setup-python@v5
         id: python
         with:
           python-version: '3.13'
-      - name: Build
-        run: bash build.sh
       - name: Package
         env:
           PYTHON_EXE: ${{ steps.python.outputs.python-path }}
