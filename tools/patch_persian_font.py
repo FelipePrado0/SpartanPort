@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Experimental GoW III Persian font patcher.
 
-Uses isolated Arabic/Persian presentation forms and reverses Persian runs. This
-is deliberately marked experimental: full contextual joining still needs to be
-validated in-game.
+Uses contextual Arabic/Persian presentation forms, reverses Persian runs, and
+copies Latin glyph metrics into the replacement records. Full in-game validation
+is still required.
 """
 from __future__ import annotations
 import argparse
@@ -115,6 +115,9 @@ def patch(base, messages):
     for pos in range(SMF_RECORD_OFFSET, len(smf) - SMF_RECORD_SIZE + 1, SMF_RECORD_SIZE):
         cp = struct.unpack_from('<I', smf, pos)[0]
         if cp: records.append((pos, cp))
+    metric_template = next((pos for pos, cp in records if cp == ord('A')), None)
+    if metric_template is None: raise ValueError('ASCII A metrics not found')
+    latin_metrics = bytes(smf[metric_template + 8:metric_template + SMF_RECORD_SIZE])
     needed = sorted(set(form for forms in JOIN_FORMS.values() for form in forms if form))
     used = {cp for _, cp in records}
     available = [(pos, cp) for pos, cp in records if cp >= 0x4e00 and cp not in needed]
@@ -142,6 +145,7 @@ def patch(base, messages):
         draw.text(((crop.width-(bbox[2]-bbox[0]))//2-bbox[0], (crop.height-(bbox[3]-bbox[1]))//2-bbox[1]), target, font=font_use, fill=255)
         page.paste(crop, (x0, y0))
         struct.pack_into('<I', smf, pos, ord(target))
+        smf[pos + 8:pos + SMF_RECORD_SIZE] = latin_metrics
         changed += 1
     data[smf_off + HEADER:smf_off + HEADER + smf_size] = smf
     for (off, size), page in zip(tx_entries[:2], pages):
@@ -159,6 +163,6 @@ def main():
     result, count = patch(base, shaped)
     result = replace_messages(result, shaped)
     a.output.parent.mkdir(parents=True, exist_ok=True); a.output.write_bytes(result)
-    print(f'wrote {a.output} ({len(result)} bytes; patched {count} glyphs; isolated experimental shaping)')
+    print(f'wrote {a.output} ({len(result)} bytes; patched {count} contextual glyphs; Latin metrics; experimental shaping)')
 
 if __name__ == '__main__': main()
