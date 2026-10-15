@@ -44,6 +44,12 @@ class FirstLightPortTests(unittest.TestCase):
             self.assertIn(f'"{symbol}"',text)
         self.assertIn("np_webapi_error_code",text)
 
+    def test_webapi_get_error_code_abi(self):
+        text=(ROOT/"src"/"runtime_services.c").read_text(encoding="utf-8")
+        self.assertIn("static ABI int32_t np_webapi_error_code(void)",text)
+        self.assertNotIn("np_webapi_error_code(int32_t request",text)
+        self.assertIn('{"sceNpWebApiGetErrorCode",np_webapi_error_code}',text)
+
     def test_rtc_contract_exists(self):
         text=(ROOT/"src"/"runtime_rtc.c").read_text(encoding="utf-8")
         self.assertIn('"sceRtcGetTime_t"',text)
