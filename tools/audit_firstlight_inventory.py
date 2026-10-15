@@ -65,6 +65,8 @@ def classify(symbol:dict,names:dict[str,str],direct:set[str],exports:set[str],gp
         return "native-module",name
     if nid in gpu and library in {"libSceGnmDriver","libSceVideoOut"}:
         return "gpu",name
+    if nid in gpu and library=="libkernel":
+        return "gpu-kernel",name
     if key in direct:
         return "runtime-direct",name
     if name and name in exports:
