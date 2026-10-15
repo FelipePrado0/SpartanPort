@@ -86,9 +86,7 @@ static ABI int32_t system_param(int32_t id,int32_t *value) {
     case 5: *value=0; break;                    /* summer time */
     case 7: *value=0; break;                    /* parental level off */
     case 1000: *value=1; break;                 /* enter button = cross */
-    default: fprintf(stderr,"STOP: unsupported system parameter %d\n",id); exit(21);
-    }
-    return 0;
+    default:\n        fprintf(stderr,"Runtime: unsupported SystemService integer parameter %d\\n",id);\n        return SYSTEM_PARAMETER;\n    }\n    return 0;
 }
 /* shadPS4 currently exposes ParamGetString as a stub with no verified ABI. Keep it
  * side-effect free until CUSA00575 provides a runtime trace for the arguments. */
@@ -104,7 +102,7 @@ static ABI int32_t system_status(unsigned char *status) {
 }
 static ABI int32_t system_event(void *event) { (void)event; return SYSTEM_NO_EVENT; }
 static ABI int32_t hide_splash(void) { note("SystemService: splash screen hidden"); return 0; }
-static ABI int32_t safe_area(float *info) { if (!info) return SYSTEM_PARAMETER; *info=1.0f; return 0; } /* full screen */
+static ABI int32_t safe_area(float *info) {\n    if (!info) return SYSTEM_PARAMETER;\n    /* OrbisSystemServiceDisplaySafeAreaInfo: ratio + 128 reserved bytes. */\n    memset(info,0,132);\n    *info=1.0f;\n    return 0;\n}
 static ABI int32_t disable_music_player(void) { return 0; }
 static ABI int32_t launch_browser(void) { note("SystemService: web browser request ignored (offline)"); return 0; }
 
