@@ -202,6 +202,18 @@ class FirstLightPortTests(unittest.TestCase):
         for nid,name in expected.items():
             self.assertIn(f'{{"{nid}#libScePosix","{name}"}}',text)
 
+    def test_renderer_enforces_firstlight_safe_defaults(self):
+        text=(ROOT/"gpu"/"shim"/"gow3gpu.cpp").read_text(encoding="utf-8")
+        self.assertIn("ApplyFirstLightSafeDefaults(config);",text)
+        self.assertLess(text.index("ApplyFirstLightSafeDefaults(config);"),text.index("Gow3Settings::Load();"))
+        self.assertIn('"CUSA00575"',text)
+        for key in (
+            "GOW3_NO_MSAA","GOW3_UPSCALER","GOW3_FSR1","GOW3_RCAS",
+            "GOW3_JITTER","GOW3_REACTIVE","GOW3_OBJECT_MOTION",
+            "GOW3_DEFERRED_READBACK","GOW3_STALE_READBACK","GOW3_ASYNC_SHADERS",
+        ):
+            self.assertIn(key,text)
+
     def test_safe_launcher_defaults(self):
         launcher=(ROOT/"run_firstlight.py").read_text(encoding="utf-8")
         for setting in (
