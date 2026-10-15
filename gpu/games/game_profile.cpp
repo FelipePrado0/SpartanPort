@@ -35,7 +35,9 @@ void Select(const char* serial) {
         if (match) {
             active.store(profile, std::memory_order_release);
             __atomic_store_n(&runtime_disabled_optimizations,profile->disabled_optimizations,__ATOMIC_RELEASE);
-            std::printf("Game profile: %s (%s); disabled GPU optimizations=0x%llx\n",\n                        profile->name, serial,\n                        static_cast<unsigned long long>(profile->disabled_optimizations));
+            std::printf("Game profile: %s (%s); disabled GPU optimizations=0x%llx\n",
+                        profile->name, serial,
+                        static_cast<unsigned long long>(profile->disabled_optimizations));
             return;
         }
     }
