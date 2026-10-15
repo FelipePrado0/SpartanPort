@@ -2917,22 +2917,27 @@ int PS4_SYSV_ABI Func_F916890425496553() {
     return ORBIS_OK;
 }
 
-void RegisterLib(Core::Loader::SymbolsResolver* sym) {
-    LOG_INFO(Lib_GnmDriver, "Initializing presenter");
-    liverpool = std::make_unique<AmdGpu::Liverpool>();
-    presenter = std::make_unique<Vulkan::Presenter>(*g_window, liverpool.get());
+void RegisterLib(Core::Loader::SymbolsResolver* sym, bool initialize) {
+    if (initialize) {
+        LOG_INFO(Lib_GnmDriver, "Initializing presenter");
+        liverpool = std::make_unique<AmdGpu::Liverpool>();
+        presenter = std::make_unique<Vulkan::Presenter>(*g_window, liverpool.get());
 
-    const s32 result = sceKernelGetCompiledSdkVersion(&sdk_version);
-    if (result != ORBIS_OK) {
+        const s32 result = sceKernelGetCompiledSdkVersion(&sdk_version);
+        if (result != ORBIS_OK) {
+            sdk_version = 0;
+        }
+
+        if (EmulatorSettings.IsCopyGpuBuffers()) {
+            liverpool->ReserveCopyBufferSpace();
+        }
+
+        Platform::IrqC::Instance()->Register(Platform::InterruptId::GpuIdle, ResetSubmissionLock,
+                                             nullptr);
+    } else {
         sdk_version = 0;
+        LOG_INFO(Lib_GnmDriver, "Registering symbols only (headless import check)");
     }
-
-    if (EmulatorSettings.IsCopyGpuBuffers()) {
-        liverpool->ReserveCopyBufferSpace();
-    }
-
-    Platform::IrqC::Instance()->Register(Platform::InterruptId::GpuIdle, ResetSubmissionLock,
-                                         nullptr);
 
     LIB_FUNCTION("b0xyllnVY-I", "libSceGnmDriver", 1, "libSceGnmDriver", sceGnmAddEqEvent);
     LIB_FUNCTION("b08AgtPlHPg", "libSceGnmDriver", 1, "libSceGnmDriver", sceGnmAreSubmitsAllowed);
