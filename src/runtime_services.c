@@ -180,13 +180,10 @@ static ABI void np_register_void(void *cb,void *arg) { (void)cb; (void)arg; }
 static ABI int32_t np_request(const void *param) { (void)param; return new_id(); }
 static ABI int32_t np_request_ctx(int32_t ctx,const void *param) { (void)ctx; (void)param; return new_id(); }
 static ABI int32_t np_poll(int32_t request,int32_t *result) { (void)request; if (result) *result=NP_SIGNED_OUT; return 0; }
-/* First Light asks WebApi for the request error after a failed operation. */
-static ABI int32_t np_webapi_error_code(int32_t request,int32_t *error) {
-    (void)request;
-    if (!error) return NP_INVALID_ARGUMENT;
-    *error=NP_SIGNED_OUT;
-    return 0;
-}
+/* SDK signature: sceNpWebApiGetErrorCode(void) -> s32.
+ * All WebApi requests in this offline provider fail as signed out, so expose that
+ * failure directly rather than dereferencing nonexistent arguments. */
+static ABI int32_t np_webapi_error_code(void) { return NP_SIGNED_OUT; }
 static ABI int32_t np_compare(const void *a,const void *b) {
     if (!a || !b) return NP_INVALID_ARGUMENT;
     return memcmp(a,b,16) ? (int32_t)0x80550609 : 0; /* NP_UTIL NOT_MATCH */
