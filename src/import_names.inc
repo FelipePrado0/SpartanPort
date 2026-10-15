@@ -797,3 +797,12 @@
 {"H3uq7x0sZOI#libSceNpTus","sceNpTusDeleteNpTitleCtx"},
 {"2qSZ0DgwTsc#libSceNpWebApi","sceNpWebApiGetErrorCode"},
 {"BtqmpTRXHgk#libSceRtc","sceRtcGetTime_t"},
+/* First Light CUSA00575 confirmed service additions. */
+{"m47juOmH0VE#libSceAppContent","sceAppContentGetAddcontInfo"},
+{"aCYPMSUIaP8#libSceHttp","sceHttpGetAllResponseHeaders"},
+{"yigr4V0-HTM#libSceHttp","sceHttpSetRecvTimeOut"},
+{"xegFfZKBVlw#libSceHttp","sceHttpSetSendTimeOut"},
+{"DK+GoXCNT04#libSceHttp","sceHttpsLoadCert"},
+{"v6EZ-YWRdMs#libScePlayGo","scePlayGoGetEta"},
+{"LosLlHOpNqQ#libScePlayGo","scePlayGoSetLanguageMask"},
+{"Nn7zKwnA5q0#libScePlayGo","scePlayGoGetToDoList"},
