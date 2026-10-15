@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "tool_version": "0.1.0",
   "target_title_id": "CUSA00575",
   "stage": "static_import_metadata",
@@ -4683,6 +4683,1530 @@
         },
         {
           "nid": "rcrVFJsQWRY",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "sce_module/libSceFios2.prx",
+      "sha256": "809348c72e4a3a52511a55a7ebef7bcde925c20b0a02ba906831f66722fbe794",
+      "referenced_import_count": 81,
+      "undefined_symbols": [
+        {
+          "nid": "ioKMruft1ek",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceDiscMap",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "lbQKqsERhtE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceDiscMap",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "H2e8t5ScQGc",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 2,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "ZT4ODD2Ts9o",
+          "binding": 1,
+          "type": 1,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "hcuQgD53UxM",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "Q2V+iqvjgC0",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "Q3VBxCXhUHs",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "8zTFvBIAIN8",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "GMpvxPFW924",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "2sWzhYqFH4E",
+          "binding": 1,
+          "type": 1,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "MUjC4lbHrK4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "n7AepwR0s34",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "wLlFkwG9UcQ",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "efhK-YSUYYQ",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "1mecP7RgI2A",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "5bBacGLyLOs",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "gQX+4GDQjpM",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "tIhsqj0qsFE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceLibcInternal",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "f7uOxY9mM1U",
+          "binding": 1,
+          "type": 1,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "Ou3iL1abvng",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "vNe1w4diLCs",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "QBi7HCK03hw",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "ejekcaNQNq0",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "9BcDykPmo1I",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "1G3lF1Gg1k8",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "oib76F-12fk",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "Cg4srZ6TKbU",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "4wSze92BhLI",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "+r3rMFwItV4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "nKWi-N2HBV4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "UK2Tl2DWUns",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "kBwCPsYX-m4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "fTx66l5iWIA",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "eV9wAD2riIA",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "taRWhTJFTgE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "1-LFLmRFxxM",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "naInUjYt3so",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "AUXVxWeJU-A",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "WlyEA-sLDf0",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "VW3TVZiM4-E",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "52NcYU9+lEo",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "2Tb92quprl0",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "g+PZd2hiacg",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "WKAXJ4XBPQ4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "BmMjYxmew1w",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "kDh-NfxgMtE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "JGgj7Uvrl+A",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "F8bUHwAG284",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "iMp8QpE+XO4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "1FGvU0i9saQ",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "cmo1RIYva9o",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "smWEktiyyG0",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "2Of0f+3mhhE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "9UK1vLZQft4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "upoVrzMHFeE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "tn3VlD0hG60",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "6ULAa0fq4jA",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "BB+kb08Tl9A",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "Ox9i0c7L5w0",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "XD3mDeybCnk",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "+L98PIbGttk",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "mqdNorrB+gI",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "bIHoZCTomsI",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "1jfXLRVzisc",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "nsYoNRywwNg",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "-Wreprtu0Qs",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "eXbUSpEaTsA",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "DzES9hQF4f4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "3qxgM4ezETA",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "UTXzJbWhhTE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "6UgtwV+0zb4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "62KCwEMmzcM",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "aI+OeCz8xrQ",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "onNY9Byn-W8",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "3PtV6p3QNX4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "W0Hpm2X0uPE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "1tKyG7RlMJo",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "bt3CTBKmGyI",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "rcrVFJsQWRY",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "sce_module/libc.prx",
+      "sha256": "4a79a8c369faa3a510b3510128afa33b3e676a1f0812a598f8386a1835093553",
+      "referenced_import_count": 73,
+      "undefined_symbols": [
+        {
+          "nid": "8IGjwtnvYwI",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceFios2",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "Bn2ZF4ZjeuQ",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceFios2",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "Kl-TbrDU9YM",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceFios2",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "w13Ojm7ON9o",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceFios2",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "AOujSGqU+ms",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceFios2",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "xReSebwKApA",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceFios2",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "G-39lsdSgXo",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceFios2",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "KsVTc04kN9k",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libSceFios2",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "959qrazPIrg",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "p5EcQeEeJAE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "f7uOxY9mM1U",
+          "binding": 1,
+          "type": 1,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "Ou3iL1abvng",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "F8bUHwAG284",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "cmo1RIYva9o",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "smWEktiyyG0",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "mL8NDH86iQI",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "3k6kx-zOOSQ",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "cQke9UuBQOk",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "2Of0f+3mhhE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "9UK1vLZQft4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "tn3VlD0hG60",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "zE-wXIZjLoM",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "Cg4srZ6TKbU",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "9BcDykPmo1I",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "4wSze92BhLI",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "vNe1w4diLCs",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "kOcnerypnQA",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "2Tb92quprl0",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "g+PZd2hiacg",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "WKAXJ4XBPQ4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "BmMjYxmew1w",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "kDh-NfxgMtE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "JGgj7Uvrl+A",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "6UgtwV+0zb4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "onNY9Byn-W8",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "4qGrR6eoP9Y",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "3kg7rT0NQIs",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "yS8U2TGCe1A",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "T72hz6ffq08",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "3PtV6p3QNX4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "aI+OeCz8xrQ",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "upoVrzMHFeE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "14bOACANTBo",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "geDaqgH9lTg",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "PrdHuuDekhY",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "+BzXYkqYeLE",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "eoht7mQOCmo",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "n88vx3C5nW8",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "iMp8QpE+XO4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "VADc3MNQ3cM",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "OMDRKKAZ8I4",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "hHlZQUnlxSM",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "djxxOmW6-aw",
+          "binding": 1,
+          "type": 1,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "lLMT9vJAck0",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "f7KBOafysXo",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "Fjc4-n1+y2g",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "kbw4UHHSYy0",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 2,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "6Z83sYWFlA8",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "6xVpy0Fdq+I",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "6XG4B33N09g",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "DFmMT80xcNI",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "BPE9s9vQQXo",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "mqQMh1zPPT8",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "UqDGjXA5yUM",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "VkTAsrZDcJ0",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "aPcyptbOiZs",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "tZY4+SZNFhA",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "HoLVWNanBBc",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "crb5j7mkk1c",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "mo0bFmWppIw",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "OjWstbIRPUo",
+          "binding": 1,
+          "type": 2,
+          "relocation_references": 1,
+          "library": {
+            "name": "libkernel",
+            "version_raw": 1
+          }
+        },
+        {
+          "nid": "k+AXqu2-eBc",
           "binding": 1,
           "type": 2,
           "relocation_references": 1,
