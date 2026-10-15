@@ -241,6 +241,12 @@ static void ApplyFirstLightSafeDefaults(const Gow3GpuConfig* config) {
     SetDefaultEnv("GOW3_DEFERRED_READBACK", "0");
     SetDefaultEnv("GOW3_STALE_READBACK", "0");
     SetDefaultEnv("GOW3_ASYNC_SHADERS", "0");
+    SetDefaultEnv("GOW3_ENGINE_FPS", "60");
+    if (config->user_dir && config->user_dir[0]) {
+        SetDefaultEnv("GOW3_GPU_USER_DIR", config->user_dir);
+        const std::string path = std::string(config->user_dir) + "/firstlight.ini";
+        SetDefaultEnv("GOW3_CONFIG", path.c_str());
+    }
 }
 
 extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
@@ -251,11 +257,6 @@ extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
 #endif
     g_sdk_version = config->sdk_version;
     Game::Select(config->serial);
-#ifdef _WIN32
-    if (config->user_dir && !std::getenv("GOW3_GPU_USER_DIR")) _putenv_s("GOW3_GPU_USER_DIR", config->user_dir);
-#else
-    if (config->user_dir) setenv("GOW3_GPU_USER_DIR", config->user_dir, 0);
-#endif
     Core::Emulator::FillElfInfo(*config);
     const std::string title = config->title ? config->title : "God of War III";
     const s32 width = config->width, height = config->height;
