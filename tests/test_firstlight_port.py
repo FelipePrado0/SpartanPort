@@ -92,6 +92,7 @@ class FirstLightPortTests(unittest.TestCase):
         audit=(ROOT/"tools"/"audit_firstlight_inventory.py").read_text(encoding="utf-8")
         self.assertIn('"native-module"',audit)
         self.assertIn('"gpu"',audit)
+        self.assertIn('kernel"/"equeue.cpp"',audit)
         self.assertIn('"runtime-direct"',audit)
         self.assertIn('"runtime-symbol"',audit)
         self.assertIn('"unknown-nid"',audit)
