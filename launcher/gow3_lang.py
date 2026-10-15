@@ -737,18 +737,56 @@ TRANSLATIONS = {
 }
 
 LANGUAGE_NAMES = [('', ('System', 'Как в системе')), ('en', ('English',)), ('ru', ('Русский',)),
-                  ('ar', ('العربية',)), ('es', ('Español',)), ('pt', ('Português (Brasil)',)),
+                  ('ar', ('العربية',)), ('fa', ('فارسی',)), ('es', ('Español',)), ('pt', ('Português (Brasil)',)),
                   ('fr', ('Français',)), ('de', ('Deutsch',)), ('it', ('Italiano',)),
                   ('pl', ('Polski',)), ('tr', ('Türkçe',)), ('zh', ('简体中文',)), ('ja', ('日本語',)),
                   ('ko', ('한국어',))]
 # Windows primary language ids (GetUserDefaultUILanguage() & 0x3ff) -> launcher language.
-WINDOWS_LANGUAGES = {0x19: 'ru', 0x01: 'ar', 0x0a: 'es', 0x16: 'pt', 0x0c: 'fr', 0x07: 'de', 0x10: 'it',
+WINDOWS_LANGUAGES = {0x19: 'ru', 0x01: 'ar', 0x29: 'fa', 0x0a: 'es', 0x16: 'pt', 0x0c: 'fr', 0x07: 'de', 0x10: 'it',
                      0x15: 'pl', 0x1f: 'tr', 0x04: 'zh', 0x11: 'ja', 0x12: 'ko'}
 
 # Texts added after the KEYS tables were written, looked up by English text (positional tables
 # need every language updated at once). Portuguese (the port's own language) and Spanish: the
 # other languages fall back to English for them until someone who speaks them contributes.
 EXTRA = {
+    'fa': {
+        'Play': 'بازی',
+        'Graphics': 'گرافیک',
+        'Display & FPS': 'نمایشگر و FPS',
+        'Game & effects': 'بازی و جلوه‌ها',
+        'Mods & patches': 'مودها و پچ‌ها',
+        'Advanced': 'پیشرفته',
+        'Log': 'گزارش',
+        'PLAY': 'بازی کردن',
+        'Stop': 'توقف',
+        'Quick settings': 'تنظیمات سریع',
+        'Frame rate': 'نرخ فریم',
+        'Fullscreen': 'تمام‌صفحه',
+        'Game folder not set': 'پوشه بازی انتخاب نشده است',
+        'Choose the game folder': 'انتخاب پوشه بازی',
+        'Game folder': 'پوشه بازی',
+        'Saves folder': 'پوشه ذخیره‌ها',
+        'Game language': 'زبان بازی',
+        'Launcher': 'لانچر',
+        'Launcher language': 'زبان لانچر',
+        'Performance': 'کارایی',
+        'System': 'سیستم',
+        'Copy': 'کپی',
+        'Clear': 'پاک کردن',
+        'Open': 'باز کردن',
+        'Update': 'به‌روزرسانی',
+        'Check for updates': 'بررسی به‌روزرسانی‌ها',
+        'Game patches': 'پچ‌های بازی',
+        'Resolution': 'وضوح تصویر',
+        'Patches': 'پچ‌ها',
+        'English': 'انگلیسی',
+        'Russian': 'روسی',
+        'Japanese': 'ژاپنی',
+        'French': 'فرانسوی',
+        'Spanish': 'اسپانیایی',
+        'German': 'آلمانی',
+        'Italian': 'ایتالیایی',
+    },
     'pt': {
         'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
         'Shows only the game name and the time played on your Discord profile.': 'Mostra no seu perfil do Discord apenas o nome do jogo e o tempo jogado.',
