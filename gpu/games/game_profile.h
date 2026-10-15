@@ -21,6 +21,8 @@ struct Profile {
     void (*install_hooks)(const CoreServices& services) = nullptr;
     std::span<const CodeRange> dynamic_writers;
     std::uint64_t buffer_copy_shader = 0;
+    /* Gow3Toggle bitmask disabled while bringing this game up. */
+    std::uint64_t disabled_optimizations = 0;
 };
 
 void Select(const char* serial);
