@@ -27,6 +27,7 @@ FORMS = {
     'د':'ﺩ','ذ':'ﺫ','ر':'ﺭ','ز':'ﺯ','ژ':'ﮊ','س':'ﺱ','ش':'ﺵ','ص':'ﺹ','ض':'ﺽ','ط':'ﻁ',
     'ظ':'ﻅ','ع':'ﻉ','غ':'ﻍ','ف':'ﻑ','ق':'ﻕ','ک':'ﮎ','گ':'ﮒ','ل':'ﻝ','م':'ﻡ','ن':'ﻥ',
     'و':'ﻭ','ه':'ﻩ','ی':'ﻱ','ء':'ﺀ','ئ':'ﺉ','ؤ':'ﺅ','ة':'ﺓ','ۀ':'ﮦ','ـ':'ـ',
+    'أ':'ﺃ','،':',','؛':';','؟':'?','ً':'','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9',
 }
 
 
@@ -82,7 +83,7 @@ def patch(base, messages):
     for pos in range(SMF_RECORD_OFFSET, len(smf) - SMF_RECORD_SIZE + 1, SMF_RECORD_SIZE):
         cp = struct.unpack_from('<I', smf, pos)[0]
         if cp: records.append((pos, cp))
-    needed = sorted(set(FORMS.values()))
+    needed = sorted(set(v for v in FORMS.values() if v))
     used = {cp for _, cp in records}
     available = [(pos, cp) for pos, cp in records if cp >= 0x4e00 and cp not in needed]
     if len(available) < len(needed): raise ValueError('not enough CJK slots')
