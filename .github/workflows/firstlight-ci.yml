@@ -3,7 +3,7 @@ name: First Light CI
 on:
   push:
     branches:
-      - port/cusa00575-stage1
+      - main
   pull_request:
   workflow_dispatch:
 
@@ -57,7 +57,7 @@ jobs:
       - name: First Light tests
         run: |
           python -m py_compile run_firstlight.py tools/validate_firstlight.py tools/check_firstlight_link.py tools/firstlight_stage1.py tools/summarize_firstlight_log.py tools/audit_firstlight_inventory.py
-          python -m unittest tests.test_firstlight_port -v
+          python -m unittest discover -s tests -p "test_firstlight*.py" -v
       - name: Build Windows runtime
         run: bash build.sh
       - name: First Light runtime tests
@@ -67,6 +67,7 @@ jobs:
       - name: Verify artifact
         run: |
           test -f out/firstlight-probe.exe
+          ./out/firstlight-probe.exe --cpu-features
           ls -lh out/firstlight-probe.exe
       - uses: actions/upload-artifact@v4
         with:
