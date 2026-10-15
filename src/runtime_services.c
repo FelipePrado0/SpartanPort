@@ -138,6 +138,12 @@ static ABI int32_t netctl_nat(uint32_t *info) {
 static ABI int32_t lib_init_id(void) { return new_id(); }
 static ABI int32_t ok_void(void) { return 0; }
 static ABI int32_t http_fail(void) { return HTTP_NETWORK; }
+static ABI int32_t http_setting(int32_t id,uint32_t value) { (void)id; (void)value; return 0; }
+static ABI int32_t https_load_cert(int32_t http_id,int32_t count,const void *list,const void *cert,const void *key) {
+    (void)http_id; (void)count; (void)list; (void)cert; (void)key;
+    /* Transfers never reach the network in the offline provider; accept certificate setup. */
+    return 0;
+}
 /* Objects are created so setup code proceeds; any transfer fails as unplugged. */
 static ABI int32_t http_object(void) { return new_id(); }
 static ABI int32_t http_epoll(int32_t ctx,void **handle) {
@@ -469,6 +475,7 @@ static ABI int32_t trophy_release(int32_t id) { return id>0 ? 0 : TROPHY_INVALID
 
 /* ---- PlayGo: fully installed package ---- */
 static int playgo_handle, playgo_chunks=-1;
+static uint64_t playgo_language_mask;
 static ABI int32_t playgo_init(const void *params) {
     (void)params;
     int fd=(int)runtime_file_open("/app0/sce_sys/playgo-chunk.dat",0,0);
@@ -518,6 +525,26 @@ static ABI int32_t playgo_progress(int32_t handle,const uint16_t *ids,uint32_t c
     if (!count) return PLAYGO_BAD_SIZE;
     for (uint32_t i=0;i<count;++i) if (ids[i]>=playgo_chunks) return PLAYGO_BAD_CHUNK;
     out[0]=out[1]=1; return 0;
+}
+static ABI int32_t playgo_get_todo(int32_t handle,void *list,uint32_t count,uint32_t *out) {
+    if (handle!=playgo_handle || !handle) return PLAYGO_BAD_HANDLE;
+    if (!out) return PLAYGO_BAD_POINTER;
+    if (count && !list) return PLAYGO_BAD_POINTER;
+    *out=0; /* fully installed: no pending chunks */
+    return 0;
+}
+static ABI int32_t playgo_eta(int32_t handle,const uint16_t *ids,uint32_t count,int64_t *eta) {
+    if (handle!=playgo_handle || !handle) return PLAYGO_BAD_HANDLE;
+    if (!eta) return PLAYGO_BAD_POINTER;
+    if (count && !ids) return PLAYGO_BAD_POINTER;
+    for (uint32_t i=0;i<count;++i) if (ids[i]>=playgo_chunks) return PLAYGO_BAD_CHUNK;
+    *eta=0; /* every known chunk is already local */
+    return 0;
+}
+static ABI int32_t playgo_language(int32_t handle,uint64_t mask) {
+    if (handle!=playgo_handle || !handle) return PLAYGO_BAD_HANDLE;
+    playgo_language_mask=mask;
+    return 0;
 }
 static ABI int32_t playgo_todo(int32_t handle,const void *list,uint32_t count) {
     if (handle!=playgo_handle || !handle) return PLAYGO_BAD_HANDLE;
@@ -588,7 +615,9 @@ static const RuntimeExport exports[]={
     {"sceHttpAbortWaitRequest",ok_void}, {"sceHttpDestroyEpoll",ok_void},
     {"sceHttpSetEpoll",ok_void}, {"sceHttpUnsetEpoll",ok_void}, {"sceHttpWaitRequest",http_wait},
     {"sceHttpGetStatusCode",http_fail}, {"sceHttpGetResponseContentLength",http_fail},
-    {"sceHttpReadData",http_fail},
+    {"sceHttpGetAllResponseHeaders",http_fail}, {"sceHttpReadData",http_fail},
+    {"sceHttpSetRecvTimeOut",http_setting}, {"sceHttpSetSendTimeOut",http_setting},
+    {"sceHttpsLoadCert",https_load_cert},
     {"sceNpGetState",np_state}, {"sceNpGetOnlineId",np_signed_out}, {"sceNpGetNpId",np_signed_out},
     {"sceNpRegisterStateCallback",np_register}, {"sceNpUnregisterStateCallback",ok_void},
     {"sceNpRegisterGamePresenceCallback",np_register_void}, {"sceNpRegisterPlusEventCallback",np_register},
@@ -685,7 +714,9 @@ static const RuntimeExport exports[]={
     {"scePlayGoInitialize",playgo_init}, {"scePlayGoOpen",playgo_open}, {"scePlayGoGetChunkId",playgo_chunk_ids},
     {"scePlayGoGetLocus",playgo_locus}, {"scePlayGoSetInstallSpeed",playgo_speed},
     {"scePlayGoGetInstallSpeed",playgo_get_speed}, {"scePlayGoGetProgress",playgo_progress},
-    {"scePlayGoSetToDoList",playgo_todo}, {"scePlayGoClose",playgo_close}, {"scePlayGoTerminate",playgo_terminate},
+    {"scePlayGoGetEta",playgo_eta}, {"scePlayGoSetLanguageMask",playgo_language},
+    {"scePlayGoGetToDoList",playgo_get_todo}, {"scePlayGoSetToDoList",playgo_todo},
+    {"scePlayGoClose",playgo_close}, {"scePlayGoTerminate",playgo_terminate},
     {"sceMouseInit",ok_void}, {"sceMouseOpen",mouse_open}, {"sceMouseRead",mouse_read}, {"sceMouseClose",mouse_close},
     {"sceAudioInOpen",audio_in_open},
     {"sceDiscMapIsRequestOnHDD",discmap_on_hdd}, {"sceDiscMap_8A828CAEE7EDD5E9",discmap_8a82},
