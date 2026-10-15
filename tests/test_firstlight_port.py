@@ -79,6 +79,16 @@ class FirstLightPortTests(unittest.TestCase):
         self.assertIn(".buffer_copy_shader = 0",profile)
         self.assertIn("FIRSTLIGHT_GAME_PROFILES",cmake)
 
+    def test_inventory_auditor_structure(self):
+        audit=(ROOT/"tools"/"audit_firstlight_inventory.py").read_text(encoding="utf-8")
+        self.assertIn('"native-module"',audit)
+        self.assertIn('"gpu"',audit)
+        self.assertIn('"runtime-direct"',audit)
+        self.assertIn('"runtime-symbol"',audit)
+        self.assertIn('"unknown-nid"',audit)
+        self.assertIn('library=="libScePosix"',audit)
+        self.assertIn('target_title_id',audit)
+
     def test_firstlight_event_flags(self):
         source=(ROOT/"src"/"runtime_eventflag.c").read_text(encoding="utf-8")
         runtime=(ROOT/"src"/"runtime.c").read_text(encoding="utf-8")
