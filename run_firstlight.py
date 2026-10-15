@@ -98,7 +98,7 @@ def main()->int:
         if code:
             return code
 
-    base=[str(probe),str(OUT/"boot-linked.bin"),"--app0",str(game),
+    base=[str(probe),str(OUT/"boot-linked.bin"),"--content-profile",str(OUT/"content.bin"),"--app0",str(game),
           "--user",str(USER),"--timeout",str(max(0,a.timeout))]
     env=safe_env()
 
