@@ -1299,13 +1299,65 @@ s32 PS4_SYSV_ABI sceGnmRegisterResource(void* res_handle, void* owner_handle, co
     return ORBIS_GNM_ERROR_FAILURE;
 }
 
-int PS4_SYSV_ABI sceGnmRequestFlipAndSubmitDone() {
-    LOG_ERROR(Lib_GnmDriver, "(STUBBED) called");
-    return ORBIS_OK;
+static inline s32 PatchFlipRequest(u32* cmdbuf, u32 size, u32 vo_handle, u32 buf_idx,
+                                   u32 flip_mode, s64 flip_arg, void* unk);
+
+s32 PS4_SYSV_ABI sceGnmRequestFlipAndSubmitDone(u32* gpu_addr, u32 gpu_addr_size_in_bytes,
+                                                u32 video_out_handle, u32 display_buffer_index,
+                                                u32 flip_mode, s64 flip_arg) {
+    return sceGnmRequestFlipAndSubmitDoneForWorkload(
+        reinterpret_cast<u64>(gpu_addr), gpu_addr, gpu_addr_size_in_bytes, video_out_handle,
+        display_buffer_index, flip_mode, flip_arg);
 }
 
-int PS4_SYSV_ABI sceGnmRequestFlipAndSubmitDoneForWorkload() {
-    LOG_ERROR(Lib_GnmDriver, "(STUBBED) called");
+s32 PS4_SYSV_ABI sceGnmRequestFlipAndSubmitDoneForWorkload(
+    u64 workload, u32* gpu_addr, u32 gpu_addr_size_in_bytes, u32 vo_handle, u32 buf_idx,
+    u32 flip_mode, s64 flip_arg) {
+    (void)workload;
+    LOG_DEBUG(Lib_GnmDriver, "called [buf = {}]", buf_idx);
+    if (gpu_addr_size_in_bytes < 0x100) {
+        return ORBIS_GNM_ERROR_SUBMISSION_NOT_ENOUGH_RESOURCES;
+    }
+
+    std::scoped_lock lk{m_submit_lock};
+    WaitGpuIdle();
+
+    auto* nop = reinterpret_cast<PM4CmdNop*>(gpu_addr);
+    nop->header = PM4Type3Header{PM4ItOpcode::Nop, 0x3e};
+    nop->data_block[0] = PM4CmdNop::PayloadType::PrepareFlip;
+    const s32 patch_result =
+        PatchFlipRequest(gpu_addr, 0x40, vo_handle, buf_idx, flip_mode, flip_arg, nullptr);
+    if (patch_result != ORBIS_OK) {
+        return patch_result;
+    }
+
+    const auto& dcb_span = std::span{gpu_addr, 0x40};
+    if (DebugState.DumpingCurrentFrame()) {
+        static auto last_frame_num = -1LL;
+        static u32 seq_num{};
+        if (last_frame_num == frames_submitted) {
+            ++seq_num;
+        } else {
+            last_frame_num = frames_submitted;
+            seq_num = 0u;
+        }
+
+        using DebugStateType::QueueType;
+        DebugState.PushQueueDump({
+            .type = QueueType::dcb,
+            .submit_num = seq_num,
+            .num2 = 0,
+            .data = {dcb_span.begin(), dcb_span.end()},
+            .base_addr = reinterpret_cast<uintptr_t>(gpu_addr),
+        });
+    }
+
+    liverpool->SubmitGfx(dcb_span, {});
+    if (!liverpool->IsGpuIdle()) {
+        submission_lock = true;
+    }
+    liverpool->SubmitDone();
+    send_init_packet = true;
     return ORBIS_OK;
 }
 
@@ -1591,8 +1643,21 @@ s32 PS4_SYSV_ABI sceGnmSetEsShader(u32* cmdbuf, u32 size, const u32* es_regs, u3
     return ORBIS_OK;
 }
 
-int PS4_SYSV_ABI sceGnmSetGsRingSizes() {
-    LOG_ERROR(Lib_GnmDriver, "(STUBBED) called");
+s32 PS4_SYSV_ABI sceGnmSetGsRingSizes(u32 esgs_ring_size, u32 gsvs_ring_size) {
+    LOG_TRACE(Lib_GnmDriver, "esgs_ring_size = {:#x}, gsvs_ring_size = {:#x}", esgs_ring_size,
+              gsvs_ring_size);
+    constexpr u32 MinRingSize = 0x400000;
+    constexpr u32 MaxRingSize = 0x800000;
+    constexpr u32 RingAlignment = 0x100000;
+    if (esgs_ring_size < MinRingSize || esgs_ring_size > MaxRingSize ||
+        ((esgs_ring_size & (RingAlignment - 1)) != 0) || gsvs_ring_size < MinRingSize ||
+        gsvs_ring_size > MaxRingSize || ((gsvs_ring_size & (RingAlignment - 1)) != 0)) {
+        return 0x08000000;
+    }
+    if (liverpool) {
+        liverpool->regs.vgt_esgs_ring_size = esgs_ring_size >> 8;
+        liverpool->regs.vgt_gsvs_ring_size = gsvs_ring_size >> 8;
+    }
     return ORBIS_OK;
 }
 
@@ -1786,8 +1851,24 @@ int PS4_SYSV_ABI sceGnmSetSpiEnableSqCountersForUnitInstance() {
     return ORBIS_GNM_ERROR_FAILURE;
 }
 
-int PS4_SYSV_ABI sceGnmSetupMipStatsReport() {
-    LOG_ERROR(Lib_GnmDriver, "(STUBBED) called");
+s32 PS4_SYSV_ABI sceGnmSetupMipStatsReport(void* output_buffer, u32 size_in_bytes,
+                                           u8 intervals_between_reports,
+                                           u8 num_reports_before_reset, u32 mip_stats_reset_force) {
+    LOG_DEBUG(
+        Lib_GnmDriver,
+        "(STUBBED) output_buffer = {}, size_in_bytes = {:#x}, intervals = {}, num_reports = {}, "
+        "force_reset = {}",
+        output_buffer, size_in_bytes, intervals_between_reports, num_reports_before_reset,
+        mip_stats_reset_force);
+    if (!output_buffer ||
+        (reinterpret_cast<uintptr_t>(output_buffer) & 0xffffff000000003fULL) != 0) {
+        return 0x80000001;
+    }
+    if (size_in_bytes < 0x1040 || (size_in_bytes & 0x7ff) != 0x40) {
+        return 0x80000002;
+    }
+    std::memset(output_buffer, 0, size_in_bytes);
+    *static_cast<u32*>(output_buffer) = 0x40u;
     return ORBIS_OK;
 }
 
