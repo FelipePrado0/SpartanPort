@@ -8,6 +8,8 @@
 #include <cstdlib>
 #include <cstring>
 
+extern "C" std::uint64_t runtime_disabled_optimizations;
+
 namespace Game {
 
 extern const Profile FirstLightProfile;
@@ -21,6 +23,7 @@ void Select(const char* serial) {
     const char* env = std::getenv("FIRSTLIGHT_GAME_PROFILE");
     if (env && std::strcmp(env, "none") == 0) {
         active.store(nullptr, std::memory_order_release);
+        __atomic_store_n(&runtime_disabled_optimizations,0,__ATOMIC_RELEASE);
         std::printf("Game profile: none (FIRSTLIGHT_GAME_PROFILE=none)\n");
         return;
     }
@@ -31,12 +34,14 @@ void Select(const char* serial) {
         });
         if (match) {
             active.store(profile, std::memory_order_release);
-            std::printf("Game profile: %s (%s)\n", profile->name, serial);
+            __atomic_store_n(&runtime_disabled_optimizations,profile->disabled_optimizations,__ATOMIC_RELEASE);
+            std::printf("Game profile: %s (%s); disabled GPU optimizations=0x%llx\n",\n                        profile->name, serial,\n                        static_cast<unsigned long long>(profile->disabled_optimizations));
             return;
         }
     }
 
     active.store(nullptr, std::memory_order_release);
+    __atomic_store_n(&runtime_disabled_optimizations,0,__ATOMIC_RELEASE);
     std::printf("Game profile: none for %s; generic GPU paths only\n", serial ? serial : "?");
 }
 
