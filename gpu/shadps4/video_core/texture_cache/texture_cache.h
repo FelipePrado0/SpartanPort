@@ -476,6 +476,33 @@ private:
         u64 Bytes() const { return u64{width} * height * bits / 8; }
     };
     std::array<ReadbackImageStat, 16> readback_images{};
+    /// gow3 (GOW3_PERF_DIAG): images FindImage had to create, by request, and the image that was
+    /// cached at that memory before (none: nothing overlapped). Printed with the readback report.
+    struct CreateStat {
+        VAddr address;
+        u32 width, height, count;
+        vk::Format format;
+        BindingType binding;
+        const char* reason;
+        VAddr prev_address;
+        u32 prev_width, prev_height, overlaps;
+        vk::Format prev_format;
+        u32 pitch, tile, prev_pitch, prev_tile;
+    };
+    std::array<CreateStat, 16> create_stats{};
+    u64 images_created = 0;
+    std::chrono::steady_clock::time_point create_report = std::chrono::steady_clock::now();
+    void ReportImageCreates();
+    /// gow3 (GOW3_PERF_DIAG): requests answered by Gow3Toggle::PartialHeightViews.
+    struct PartialViewStat {
+        VAddr address;
+        vk::Format format, used_format;
+        u32 used_width, used_height, min_height, max_height, count;
+        BindingType binding;
+    };
+    std::array<PartialViewStat, 16> partial_view_stats{};
+    u64 partial_views = 0;
+    void NotePartialView(const ImageInfo& request, const ImageInfo& used, BindingType binding);
     u64 readbacks_released = 0;
     ReadbackQueue<Vulkan::StagingBufferRef> pending_readbacks;
     std::mutex readback_mutex;

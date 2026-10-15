@@ -1003,6 +1003,14 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         static const char* scene_debug = std::getenv("GOW3_SCENE_DEBUG");
         scene_debug_frame = scene_debug && std::remove(scene_debug) == 0;
         scene_targets->debug = scene_debug_frame;
+    } else if (regs.color_buffers[0] &&
+               FrameCapture::IsDisplayBuffer(regs.color_buffers[0].Address()) &&
+               regs.color_buffers[0].Address() != last_display_buffer) {
+        // Without an upscaler: still count the frame (GOW3_GPU_PROFILE, GOW3_BUFFER_STATS),
+        // once per display buffer since the HUD draws into it as well.
+        // ponytail: assumes flips rotate display buffers; a single-buffer game counts one frame.
+        last_display_buffer = regs.color_buffers[0].Address();
+        NoteFrameStart();
     }
     bind_prepared = used_prepared;
     motion_draw = pipeline->GetGraphicsKey().motion_vectors;
