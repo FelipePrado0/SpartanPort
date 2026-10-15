@@ -101,3 +101,22 @@ evidência. Cada exceção específica do jogo deve nascer de um trace reproduz�
 
 Licença: **GPL-2.0**. Este projeto não é afiliado à Sony Interactive Entertainment nem à Sucker
 Punch Productions.
+
+
+## Triage automático
+
+Depois de compilar, o caminho recomendado para o primeiro teste real é:
+
+```powershell
+python .\tools\firstlight_triage.py "D:\Games\FirstLight\CUSA00575"
+```
+
+Ele executa a verificação de imports, tenta o boot CPU-only e cria
+`user\diagnostic.json`. Esse JSON não contém os binários do jogo nem deve incluir o caminho
+absoluto do seu dump; ele reúne commit, alvo, quantidade de imports faltantes e o primeiro blocker.
+
+O Vulkan continua opt-in durante o bring-up:
+
+```powershell
+python .\tools\firstlight_triage.py "D:\Games\FirstLight\CUSA00575" --gpu
+```
