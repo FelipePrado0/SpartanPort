@@ -27,8 +27,14 @@ def protect(text: str):
     return TOKEN.sub(repl, text), tokens
 
 
-def restore(text: str, tokens):
-    for key, value in tokens:
+def restore(text, tokens):
+    # Translation services may reorder opaque placeholders. Restore the
+    # original control-token sequence before writing game data.
+    found_keys = re.findall(r"ZXQ\d+QXZ", text)
+    original_values = [value for _, value in tokens]
+    for key, value in zip(found_keys, original_values):
+        text = text.replace(key, value, 1)
+    for key, value in tokens[len(found_keys):]:
         text = text.replace(key, value)
     return text
 
@@ -92,7 +98,11 @@ def main():
             args.output.write_text(''.join(output), encoding='utf-8', newline='')
             print(f'translated through line {index + 1}/{len(lines)}', flush=True)
     flush()
-    args.output.write_text(''.join(output), encoding='utf-8', newline='')
+    trailing_nul = args.source.read_bytes().endswith(b'\x00')
+    data = ''.join(output).encode('utf-8')
+    if trailing_nul:
+        data += b'\x00'
+    args.output.write_bytes(data)
     print(f'wrote {args.output} ({len(lines)} lines)', flush=True)
 
 
