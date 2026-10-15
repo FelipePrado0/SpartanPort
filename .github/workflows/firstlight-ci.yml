@@ -1,0 +1,71 @@
+name: First Light CI
+
+on:
+  push:
+    branches:
+      - port/cusa00575-stage1
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firstlight-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tooling:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python syntax
+        run: |
+          python -m py_compile run_firstlight.py tools/validate_firstlight.py tools/check_firstlight_link.py tools/firstlight_stage1.py tools/summarize_firstlight_log.py
+      - name: First Light invariants
+        run: python -m unittest tests.test_firstlight_port -v
+
+  windows-build:
+    runs-on: windows-2025
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Keep LF line endings
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          release: false
+          update: true
+          install: git patch
+          pacboy: >-
+            toolchain:p cmake:p ninja:p pkgconf:p python:p
+            vulkan-headers:p vulkan-loader:p vulkan-memory-allocator:p glslang:p
+            sdl3:p fmt:p boost:p robin-map:p xxhash:p ffmpeg:p zydis:p
+            spirv-tools:p spirv-headers:p spirv-cross:p
+      - name: First Light tests
+        run: |
+          python -m py_compile run_firstlight.py tools/validate_firstlight.py tools/check_firstlight_link.py tools/firstlight_stage1.py tools/summarize_firstlight_log.py
+          python -m unittest tests.test_firstlight_port -v
+      - name: Build Windows runtime
+        run: bash build.sh
+      - name: Verify artifact
+        run: |
+          test -f out/firstlight-probe.exe
+          ls -lh out/firstlight-probe.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firstlight-stage1-windows
+          path: |
+            out/firstlight-probe.exe
+            out/gpu-build.log
+          if-no-files-found: error
