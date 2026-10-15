@@ -122,6 +122,7 @@ def patch(base, messages):
     used = {cp for _, cp in records}
     available = [(pos, cp) for pos, cp in records if cp >= 0x4e00 and cp not in needed]
     if len(available) < len(needed): raise ValueError('not enough CJK slots')
+    slot_map = {form: cp for form, (_, cp) in zip(needed, available)}
     font = ImageFont.truetype(str(FONT_PATH), 32)
     changed = 0
     for target, (pos, oldcp) in zip(needed, available):
@@ -144,7 +145,8 @@ def patch(base, messages):
         bbox = draw.textbbox((0,0), target, font=font_use)
         draw.text(((crop.width-(bbox[2]-bbox[0]))//2-bbox[0], (crop.height-(bbox[3]-bbox[1]))//2-bbox[1]), target, font=font_use, fill=255)
         page.paste(crop, (x0, y0))
-        struct.pack_into('<I', smf, pos, ord(target))
+        # Keep the original supported CJK codepoint. The message text is
+        # remapped to this slot below, avoiding unsupported Arabic codepoints.
         # SMF2 stores horizontal bearing/width in word 3 and advance in word 4.
         # Keep word 2 and atlas coordinates from the original record.
         glyph_box = font_use.getbbox(target)
@@ -161,16 +163,17 @@ def patch(base, messages):
         start = dds + 128 if dds >= 0 else 0
         payload[start:start+1024*1024] = page.tobytes()
         data[off + HEADER:off + HEADER + size] = payload
-    return bytes(data), changed
+    return bytes(data), changed, slot_map
 
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('base_wad', type=Path); ap.add_argument('messages', type=Path); ap.add_argument('output', type=Path)
     a = ap.parse_args(); base = a.base_wad.read_bytes(); msg = a.messages.read_text('utf-8').splitlines(keepends=True)
-    shaped = ''.join(shape_isolated(x) for x in msg).encode('utf-8')
-    result, count = patch(base, shaped)
-    result = replace_messages(result, shaped)
+    shaped_text = ''.join(shape_isolated(x) for x in msg)
+    result, count, slot_map = patch(base, shaped_text)
+    encoded_text = ''.join(chr(slot_map[ch]) if ch in slot_map else ch for ch in shaped_text).encode('utf-8')
+    result = replace_messages(result, encoded_text)
     a.output.parent.mkdir(parents=True, exist_ok=True); a.output.write_bytes(result)
-    print(f'wrote {a.output} ({len(result)} bytes; patched {count} contextual glyphs; Latin metrics; experimental shaping)')
+    print(f'wrote {a.output} ({len(result)} bytes; patched {count} glyph slots; CJK slot remap; experimental shaping)')
 
 if __name__ == '__main__': main()
