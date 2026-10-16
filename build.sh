@@ -161,6 +161,16 @@ if ! ninja -C out/gpu gow3gpu > out/gpu-build.log 2>&1; then
 fi
 # $ORIGIN/gpu on Linux, @loader_path/gpu and @executable_path/gpu on Darwin
 if [[ $is_darwin -eq 1 ]]; then
+    if [[ -d bin/lib ]]; then
+        for f in bin/lib/lib*.*.dylib; do
+            base=$(basename "$f")
+            name=$(echo "$base" | sed -E 's/\.[0-9]+(\.[0-9]+)*\.dylib$/.dylib/')
+            if [[ "$name" != "$base" && ! -e "bin/lib/$name" ]]; then
+                ln -s "$base" "bin/lib/$name" 2>/dev/null || true
+            fi
+        done
+        libraries=(-L"$PWD/bin/lib" "${libraries[@]}")
+    fi
     gpu=(-Lout/gpu -lgow3gpu -Wl,-rpath,'@loader_path/gpu' -Wl,-rpath,'@executable_path/gpu' -Wl,-rpath,'@loader_path/lib' -Wl,-rpath,'@executable_path/lib' -Wl,-rpath,"$PWD/out/gpu" -Wl,-export_dynamic -framework Metal -framework Foundation -framework QuartzCore)
     probe_link_flags=(-Wl,-pie -Wl,-rpath,'@loader_path/lib' -Wl,-rpath,'@executable_path/lib')
     arch_flags=(-arch x86_64)
@@ -182,7 +192,13 @@ fi
 "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${probe_link_flags[@]}" "${includes[@]}" -I. -Isrc src/probe.c "${runtime[@]}" src/cpu_check.c src/vulkan_smoke.c out/isa_emulate.o src/isa_rewrite.c out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/gow3-probe
 echo "Built $PWD/out/gow3-probe"
 # GPU check for run.sh (live_resolution=auto): links only the Vulkan loader.
-"$CC" "${arch_flags[@]}" -std=c11 -O2 -Wall -Wextra -Werror "${probe_link_flags[@]}" -Igpu/shadps4 tools/gpu_capabilities.c "${libraries[@]}" -o out/gow3-gpu-capabilities
+"$CC" "${arch_flags[@]}" -std=c11 -O2 -Wall -Wextra -Werror "${probe_link_flags[@]}" "${includes[@]}" -Igpu/shadps4 tools/gpu_capabilities.c "${libraries[@]}" -o out/gow3-gpu-capabilities
+if [[ $is_darwin -eq 1 && -d bin ]]; then
+    cp out/gow3-probe out/gow3-gpu-capabilities bin/ 2>/dev/null || true
+    if [[ -f out/gpu/libgow3gpu.dylib && -d bin/gpu ]]; then
+        cp out/gpu/libgow3gpu.dylib bin/gpu/ 2>/dev/null || true
+    fi
+fi
 if [[ ${1:-} == --test ]]; then
     "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${includes[@]}" -I. -Isrc tests/test_pad.c "${libraries[@]}" -o out/pad-test
     out/pad-test

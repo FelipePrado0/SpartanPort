@@ -213,7 +213,50 @@ elseif (APPLE)
     find_library(METAL_LIB Metal REQUIRED)
     find_library(FOUNDATION_LIB Foundation REQUIRED)
     find_library(QUARTZCORE_LIB QuartzCore REQUIRED)
-    target_link_libraries(gow3gpu PUBLIC Vulkan::Vulkan ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZCORE_LIB})
+    set(BIN_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../bin/lib")
+    if (EXISTS "${BIN_LIB}/libfmt.dylib")
+        target_link_directories(gow3gpu BEFORE PUBLIC "${BIN_LIB}")
+        if (TARGET fmt::fmt)
+            set_target_properties(fmt::fmt PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libfmt.dylib")
+        endif()
+        if (TARGET Zydis::Zydis)
+            set_target_properties(Zydis::Zydis PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libZydis.dylib")
+        endif()
+        if (TARGET Vulkan::Vulkan)
+            set_target_properties(Vulkan::Vulkan PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libvulkan.dylib")
+        endif()
+        if (TARGET PkgConfig::SDL3)
+            set_target_properties(PkgConfig::SDL3 PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libSDL3.dylib")
+            set_property(TARGET PkgConfig::SDL3 PROPERTY INTERFACE_LINK_LIBRARIES "")
+        endif()
+        if (TARGET PkgConfig::XXHASH)
+            set_target_properties(PkgConfig::XXHASH PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libxxhash.dylib")
+            set_property(TARGET PkgConfig::XXHASH PROPERTY INTERFACE_LINK_LIBRARIES "")
+        endif()
+        if (TARGET Zycore::Zycore)
+            set_target_properties(Zycore::Zycore PROPERTIES IMPORTED_LOCATION "${BIN_LIB}/libZycore.dylib")
+            set_property(TARGET Zycore::Zycore PROPERTY INTERFACE_LINK_LIBRARIES "")
+        endif()
+        if (TARGET PkgConfig::FFMPEG)
+            set_property(TARGET PkgConfig::FFMPEG PROPERTY INTERFACE_LINK_LIBRARIES "")
+        endif()
+        target_link_libraries(gow3gpu PUBLIC
+            "${BIN_LIB}/libfmt.dylib"
+            "${BIN_LIB}/libZydis.dylib"
+            "${BIN_LIB}/libZycore.dylib"
+            "${BIN_LIB}/libvulkan.dylib"
+            "${BIN_LIB}/libSDL3.dylib"
+            "${BIN_LIB}/libxxhash.dylib"
+            "${BIN_LIB}/libavformat.dylib"
+            "${BIN_LIB}/libavcodec.dylib"
+            "${BIN_LIB}/libavutil.dylib"
+            "${BIN_LIB}/libswscale.dylib"
+            "${BIN_LIB}/libswresample.dylib"
+            ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZCORE_LIB}
+        )
+    else()
+        target_link_libraries(gow3gpu PUBLIC Vulkan::Vulkan ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZCORE_LIB})
+    endif()
 else()
     target_link_libraries(gow3gpu PUBLIC PkgConfig::X11)
 endif()
