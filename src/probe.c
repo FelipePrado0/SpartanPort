@@ -23,6 +23,7 @@
 #ifdef __APPLE__
 #include <malloc/malloc.h>
 #include <sys/ucontext.h>
+#include <pthread.h>
 #else
 #include <malloc.h>
 #include <ucontext.h>
@@ -119,6 +120,43 @@ __asm__(".text\n.globl enter_on_stack\nenter_on_stack:\n"
 #endif
 #endif
 static ABI void guest_exit(void) { puts("Runtime: process finalizer callback reached"); }
+#ifdef __APPLE__
+typedef struct {
+    int native_libc;
+    uint64_t module_count;
+    LinkedModule *modules;
+    unsigned char *image;
+    uint64_t nb;
+    uint64_t procparam;
+    uint64_t entry;
+    void *stack;
+} GuestStartArgs;
+
+static void *guest_main_thread(void *arg) {
+    GuestStartArgs *a = (GuestStartArgs *)arg;
+    pthread_setname_np("main");
+    if (a->native_libc) {
+        runtime_thread_attach_main();
+        runtime_set_procparam(a->image + a->procparam);
+        /* Dependencies start in link order (libc first), as the PS4 dynamic linker does. */
+        for (uint64_t m = 0; m < a->module_count; ++m) {
+            printf("Starting linked module %" PRIu64 " at image offset 0x%" PRIx64 "; native bindings=%" PRIu64 "\n",
+                   m, a->modules[m].init, a->nb);
+            typedef int (ABI *ModuleInit)(uint64_t, void *, void *);
+            int result = ((ModuleInit)(a->image + a->modules[m].init))(0, NULL, NULL);
+            printf("Module %" PRIu64 " initializer returned %d\n", m, result);
+            if (result) fail("module initializer failed");
+        }
+    }
+    printf("Entering original x86-64 code at guest offset 0x%" PRIx64 "\n", a->entry);
+    entered_game = 1;
+    struct { uint64_t argc; const char *argv[2]; } params = {1, {"/app0/eboot.bin", NULL}};
+    enum { MAIN_STACK = 8 * 1024 * 1024 };
+    enter_on_stack(a->image + a->entry, &params, (void *)guest_exit, (unsigned char *)a->stack + MAIN_STACK - 64);
+    fail("entry unexpectedly returned");
+    return NULL;
+}
+#endif
 #ifdef _WIN32
 static void describe_address(char *out, size_t size, uintptr_t address) {
     HMODULE module=NULL;
@@ -995,6 +1033,20 @@ int main(int argc, char **argv) {
                 runtime_set_module_tls(modules[m].tls_module,image+modules[m].tls_address,modules[m].tls_filesz,modules[m].tls_memsz);
         }
         runtime_set_main_tls(image+main_tls[0],main_tls[1],main_tls[2],main_tls[3]);
+#ifdef __APPLE__
+        if (!gpu_enabled) {
+            runtime_thread_attach_main();
+            runtime_set_procparam(image+procparam);
+            /* Dependencies start in link order (libc first), as the PS4 dynamic linker does. */
+            for (uint64_t m=0;m<module_count;++m) {
+                printf("Starting linked module %" PRIu64 " at image offset 0x%" PRIx64 "; native bindings=%" PRIu64 "\n",m,modules[m].init,nb);
+                typedef int (ABI *ModuleInit)(uint64_t,void *,void *);
+                int result=((ModuleInit)(image+modules[m].init))(0,NULL,NULL);
+                printf("Module %" PRIu64 " initializer returned %d\n",m,result);
+                if (result) fail("module initializer failed");
+            }
+        }
+#else
         runtime_thread_attach_main();
         runtime_set_procparam(image+procparam);
         /* Dependencies start in link order (libc first), as the PS4 dynamic linker does. */
@@ -1005,7 +1057,32 @@ int main(int argc, char **argv) {
             printf("Module %" PRIu64 " initializer returned %d\n",m,result);
             if (result) fail("module initializer failed");
         }
+#endif
     }
+#ifdef __APPLE__
+    if (gpu_enabled) {
+        /* On macOS, Cocoa AppKit requires thread 0 (process main thread) to pump
+         * window and user input events. Guest execution runs on a dedicated pthread. */
+        enum { MAIN_STACK=8*1024*1024 };
+        unsigned char *stack=runtime_low_map(MAIN_STACK,PROT_READ|PROT_WRITE);
+        if (!stack) fail("cannot allocate guest main stack");
+        static GuestStartArgs args;
+        args.native_libc = native_libc;
+        args.module_count = module_count;
+        args.modules = modules;
+        args.image = image;
+        args.nb = nb;
+        args.procparam = procparam;
+        args.entry = entry;
+        args.stack = stack;
+        pthread_t guest_thread;
+        if (pthread_create(&guest_thread, NULL, guest_main_thread, &args) != 0) {
+            fail("failed to spawn guest main thread");
+        }
+        gow3gpu_run_event_loop();
+        fail("window event loop unexpectedly returned");
+    }
+#endif
     printf("Entering original x86-64 code at guest offset 0x%" PRIx64 "\n", entry);
     entered_game=1;
     struct { uint64_t argc; const char *argv[2]; } params = {1, {"/app0/eboot.bin", NULL}};
