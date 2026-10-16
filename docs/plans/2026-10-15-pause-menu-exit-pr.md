@@ -38,18 +38,20 @@ select sound and controller navigation as the other rows.
 ### Limitations
 
 - The label is English in every game language.
-- It exits immediately, without Quit Game's confirmation dialog. A plan for confirming with the
-  engine's own dialog is in `docs/plans/2026-10-15-exit-confirmation.md`.
+- Confirming asks the engine's "Are you sure you want to Quit?" (the Quit Game dialog: there is no
+  text for exiting to the desktop, and adding one needs every language WAD). Notes in
+  `docs/plans/2026-10-15-exit-confirmation.md`.
 - Not a row of the main menu itself: it has exactly four rows built into its scene. The plan records
   what a fifth would need (row geometry, a clip and scene nodes).
 
-### To be published as a mod
+### As a mod
 
-This is a data change to `R_UI.WAD` plus one small hook. It is waiting for the loose-file mods fix
-(commit `7a69cab` on branch `claude/hungry-noyce-5a540a`, "mods laid out like the game folder
-(EXEC/...) now load"; no PR is open for it yet). Once that is merged, the WAD half is meant to be
-published as a mod that is turned on by default, instead of patching at run time. The hook would stay
-in the loader.
+The data half is a patched copy of the player's own `R_UI.WAD`, so it cannot be shipped in a mod;
+a mod would be built from the player's files (as `examples/controller-prompts` does in #234) and
+needs the loader to read mods laid out like this game's folders (`EXEC/...`), which is #234 (open).
+#202 (merged) lets mods carry code patches, but the hook here needs an address of the loader, so it
+stays in the loader. Until then this is built in: the patched copy is made at start and mounted only
+when the hook is installed.
 
 Format notes: `docs/plans/2026-10-15-native-menu-feasibility.md`.
 

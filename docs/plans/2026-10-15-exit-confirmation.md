@@ -26,26 +26,29 @@ The opcode length table (5 bytes: `00 01 47 4a`; 3: `02`–`18`; 1: the rest) de
 code blocks of SMI_R_UI and SMI_Shell exactly to their boundaries. The decoder is reliable, so
 relocating inserted records is now possible.
 
-## Option A: script-only, reusing the Quit dialog (recommended first try)
+## Implemented: option A, the Quit Game dialog with the answer handled by the row
 
-HLExit confirm sends the Quit Game dialog, `("", 75, 1, 1, 4)`, whose text (quit and lose
-unsaved progress) also fits Exit to Desktop. A new transition on trigger 0x4b reads the answer:
+What the files show (decoded 2026-10-16):
 
-```
-01 0  13 0047  01 0  3f  17 +X   ; answer == "no"?
-19  13 0069  43  49              ;   yes: input back on, stay
-13 0fff  43  49                  ; "yes": src/menu_hook.h ends the process
-```
+- The dialog text is message `4470 + action`: 4470 "Are you sure you want to Restart?", 4471 "...Quit?",
+  4472 Easy Mode, 4473 Challenge Select, 4474 Treasures, 4475 Arena Options, 4476 Easy Mode (no
+  way back). Yes/No are messages 4003/4004. There is no spare action or text.
+- `HLQuitGame`'s confirm block is the whole request: select sound, then
+  `16 "" 01 75 01 1 01 1 01 4 13 005e 43` (message 75 with the action 1), then input off.
+- The answer comes back to the active state as trigger 0x4b. `HLQuitGame`'s handler is
+  `01 0  13 0047  01 0  3f  17 +5  19 13 0069 43  49`: if the answer is 0 ("no") it turns the
+  input back on; any other answer ("yes") skips that, because the engine carries the action out.
 
-- Unknown 1: whether trigger 0x4b still reaches HLExit after "yes", or whether the engine
-  starts quitting to the shell first and resets the pause machine. Test it: if the player lands
-  on the main menu instead of the desktop, use option B.
-- Unknown 2: which value of `0x47(0)` means "yes". Read it from the existing handler (0 = the
-  input-on path, so presumably "no") and confirm in game.
-- Space: the WadChoose slot is 0x38 bytes. A 0x4b transition adds 8, giving 0x3c. Either drop the
-  duplicated confirm trigger and the update block (the highlight then does not pulse), or insert
-  4 more bytes into the state table with relocation (see "Inserting records").
-- No native work beyond the existing hook. Effort: small, about a day including tests.
+So each Exit row copies Quit Game's confirm block (the same question) and gets its own 0x4b handler
+whose "yes" path (jump +6, over the input-on and its return) ends with the builtin 0xfff, which
+`src/menu_hook.h` turns into the end of the process. Nothing native changes. The record grows to 0x3c
+bytes (one more transition), so the pause row is no longer written over WadChoose's record: both rows
+are new records, and `scripts/pause_menu.py` keeps a list of splices and corrects sizes, parents and
+gotos for each.
+
+Not yet checked in game: that the answer reaches the row on "yes" (the handler's shape says it does),
+and that the engine's own "quit" for action 1 has not started yet when the row ends the process. If
+"yes" does nothing, or the game returns to the main menu first, use option B.
 
 ## Option B: a native action code
 
