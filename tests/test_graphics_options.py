@@ -1,4 +1,5 @@
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -118,6 +119,14 @@ class GraphicsOptionsTest(unittest.TestCase):
     def test_environment(self):
         env = g.environment(g.startup_options({'stale_readback': '0'}))
         self.assertEqual(env, {'GOW3_DEFERRED_READBACK': '1', 'GOW3_STALE_READBACK': '0', 'GOW3_ASYNC_SHADERS': '1'})
+
+
+class WindowSizeTest(unittest.TestCase):
+    def test_the_game_knows_the_launcher_sizes(self):
+        """gpu/shim/gow3_graphics.h ResolutionSizes, which sizes the window, matches SIZES."""
+        header = (paths.ROOT / 'gpu' / 'shim' / 'gow3_graphics.h').read_text(encoding='utf-8')
+        found = {name: (int(w), int(h)) for name, w, h in re.findall(r'\{"(\w+)", \{(\d+), (\d+)\}\}', header)}
+        self.assertEqual(found, g.SIZES)
 
 
 if __name__ == '__main__':

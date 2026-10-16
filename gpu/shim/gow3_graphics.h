@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace Gow3Graphics {
@@ -39,6 +40,23 @@ inline std::vector<std::string> ResolutionNames() {
         rest = end == std::string_view::npos ? std::string_view() : rest.substr(end + 1);
     }
     return names;
+}
+/// The size in pixels of a resolution name: the built-in ones (as scripts/graphics_options.py SIZES)
+/// or a mod's "<width>x<height>"; anything else is native.
+inline constexpr std::array<std::pair<std::string_view, std::pair<int, int>>, 6> ResolutionSizes = {{
+    {"native", {1920, 1080}}, {"480p", {854, 480}}, {"720p", {1280, 720}},
+    {"1440p", {2560, 1440}}, {"1800p", {3200, 1800}}, {"4K", {3840, 2160}}}};
+inline std::pair<int, int> ResolutionSize(std::string_view name) {
+    for (const auto& [key, size] : ResolutionSizes) {
+        if (key == name) return size;
+    }
+    const std::size_t x = name.find('x');
+    if (x != std::string_view::npos) {
+        const int w = std::atoi(std::string(name.substr(0, x)).c_str());
+        const int h = std::atoi(std::string(name.substr(x + 1)).c_str());
+        if (w > 0 && h > 0) return {w, h};
+    }
+    return ResolutionSizes[0].second;
 }
 /// Engine frame rate ceilings: 60 is the game's own, 120 and 240 are frame rate patches.
 inline constexpr std::array<int, 3> EngineFps = {60, 120, 240};
