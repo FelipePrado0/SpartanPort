@@ -1,4 +1,12 @@
-# Temporal upscaling and frame generation — frame analysis and plan
+# Temporal upscaling and frame generation: historical research
+
+> **Status, October 14, 2026:** this document preserves experiments and plans from earlier
+> development. FSR 1 and temporal upscalers (FSR 3.1, FSR 4, TAA and DLSS) are disabled in the
+> current launcher and game settings path, including release 2.2.0. RCAS sharpening remains
+> available. Descriptions below of live selectors, experimental switches, assets and validation
+> runs are historical, not instructions for enabling these features in the current release.
+> The God of War III frame map remains useful for research. For current player instructions,
+> see the [README](../README.md) and [release notes](https://github.com/FelipePrado0/gow3_pc/releases/latest).
 
 ## Native TAA and missing FSR 4 assets (2026-10-01)
 

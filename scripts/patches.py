@@ -20,11 +20,7 @@ EBOOT_BASE=0x400000
 
 def game_app_version(game):
     """APP_VER of the game folder's param.sfo ("01.02"), or None when it cannot be read."""
-    try:
-        from prepare import sfo
-        return sfo((Path(game) / 'sce_sys/param.sfo').read_bytes()).get('APP_VER')
-    except (OSError, ValueError, ImportError):
-        return None
+    return game_sfo(game).get('APP_VER')
 
 
 def eboot_segments(elf):
@@ -129,8 +125,10 @@ def encode(line):
 
 def compile_patches(xml, names, app_version, segments, image=None, skipped=None):
     """Writes of the named patches. With the game's image, each site is found by its signature
-    (any build); without it, at the reference build's Address. A patch whose sites are not all
-    found is left out whole, with the reason in skipped[name]. app_version None: any version."""
+    (any build); without it, at the reference build's Address. A Line with a Target writes at that
+    Target instead: data the code points to, such as a .bss variable (no bytes of its own to find).
+    A patch whose sites are not all found is left out whole, with the reason in skipped[name].
+    app_version None: any version."""
     found={}
     for meta in ET.parse(xml).getroot().iter('Metadata'):
         if meta.get('Name') in names and app_version in (None,meta.get('AppVer')) and meta.get('AppElf','eboot.bin')=='eboot.bin':
@@ -145,6 +143,7 @@ def compile_patches(xml, names, app_version, segments, image=None, skipped=None)
                    for line in lines]
             targets=(resolve_targets(image,found[name],sites) if image is not None else
                      {t.get('Name'):int(t.get('Address'),0)-EBOOT_BASE for t in found[name].iter('Target')})
+            sites=[targets[line.get('Target')] if line.get('Target') else site for line,site in zip(lines,sites)]
         except LookupError as error:
             if skipped is None: raise ValueError(f'{name}: {error}')
             skipped[name]=str(error)
@@ -169,11 +168,14 @@ DMEM_RETAIL_MB=5056  # runtime_memory.c POOL_SIZE default
 
 
 def game_sfo(game):
-    try:
-        from prepare import sfo
-        return sfo((Path(game) / 'sce_sys/param.sfo').read_bytes())
-    except (OSError, ValueError, ImportError, TypeError):
+    """The values of the game folder's param.sfo, or {} when it cannot be read (prepare.read_sfo)."""
+    if not game:
         return {}
+    try:
+        from prepare import read_sfo
+    except ImportError:
+        return {}
+    return read_sfo(Path(game) / 'sce_sys/param.sfo') or {}
 
 
 def game_title_id(game):
@@ -227,18 +229,84 @@ def available_patches(xml, app_version):
 # enable one, never both. A chosen resolution patch replaces the default texture fix.
 EXCLUSIVE_PREFIX='Resolution Patch'
 REPLACED_BY_EXCLUSIVE={'Bug Fix - Texture Corruption Fix'}
+# Fixes with nothing to choose: not offered in the launcher and applied even with its saved list,
+# which predates them (the startup black screen fix sets a value the game overwrites at once).
+ALWAYS_ON={'Bug Fix - Startup Black Screen'}
 
 
 def selected_patches(xml, app_version, extra, only=False):
     """The file's isEnabled patches for this version, then the names in extra (";"-separated).
-    only: extra is the whole selection (the launcher's), without the file's defaults."""
-    names=[] if only else [m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata')
-                           if m.get('AppVer')==app_version and m.get('isEnabled','false').lower()=='true']
+    only: extra is the whole selection (the launcher's), without the file's defaults but with
+    the ALWAYS_ON ones."""
+    metas=[m for m in ET.parse(xml).getroot().iter('Metadata') if m.get('AppVer')==app_version]
+    names=[] if only else [m.get('Name') for m in metas if m.get('isEnabled','false').lower()=='true']
     names+=[n for n in (n.strip() for n in extra.split(';')) if n and n not in names]
+    names+=[m.get('Name') for m in metas if m.get('Name') in ALWAYS_ON and m.get('Name') not in names]
     exclusive=[n for n in names if n.startswith(EXCLUSIVE_PREFIX)]
     if len(exclusive)>1:
         raise ValueError(f'choose one resolution patch, not {exclusive}')
     return [n for n in names if not (exclusive and n in REPLACED_BY_EXCLUSIVE)]
+
+
+def resolution_names(xmls):
+    """Sizes ("3440x1440") of the "Resolution Patch - <size>" entries of these patch files, smallest first."""
+    found = []
+    for path in xmls:
+        try:
+            root = ET.parse(path).getroot()
+        except (OSError, ET.ParseError):
+            continue
+        for meta in root.iter('Metadata'):
+            name = meta.get('Name') or ''
+            if name.startswith(EXCLUSIVE_PREFIX) and name[len(EXCLUSIVE_PREFIX):].startswith(' - '):
+                size = name[len(EXCLUSIVE_PREFIX) + 3:].strip()
+                if size and size not in found:
+                    found.append(size)
+    def pixels(size):
+        width, _, height = size.partition('x')
+        return (int(width) * int(height), size) if width.isdigit() and height.isdigit() else (1 << 60, size)
+    return sorted(found, key=pixels)
+
+
+def merge_patch_files(base, extras, out):
+    """Writes `out`: the patches of `base` plus those of the mods' patch files (`extras`, in load order).
+    A patch with a name that is already there is replaced; a file for other titles or one that does not
+    parse is left out with a note. Returns `out`."""
+    tree = ET.parse(base)
+    root = tree.getroot()
+    ids = {e.text.strip() for e in root.iter('ID') if e.text}
+    for path in extras:
+        try:
+            extra = ET.parse(path).getroot()
+        except (OSError, ET.ParseError) as error:
+            print(f'Patches: {Path(path).name}: {error}', file=sys.stderr)
+            continue
+        extra_ids = {e.text.strip() for e in extra.iter('ID') if e.text}
+        if extra_ids and not extra_ids & ids:
+            continue
+        for meta in extra.iter('Metadata'):
+            name = meta.get('Name')
+            for old in [m for m in root.iter('Metadata') if m.get('Name') == name]:
+                root.remove(old)
+            root.append(meta)
+            print(f'Patches: {name} from the mod file {Path(path).parent.parent.name}/{Path(path).name}')
+    ET.indent(tree)
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    tree.write(out, encoding='utf-8', xml_declaration=True)
+    return Path(out)
+
+
+def default_enabled(xmls, app_version):
+    """Names of the patches of these files that are on by default (isEnabled), for this app version."""
+    names = []
+    for path in xmls:
+        try:
+            root = ET.parse(path).getroot()
+        except (OSError, ET.ParseError):
+            continue
+        names += [m.get('Name') for m in root.iter('Metadata')
+                  if m.get('AppVer') == app_version and m.get('isEnabled', 'false').lower() == 'true']
+    return names
 
 
 def patch_requirements(xml, names, app_version):
@@ -318,6 +386,8 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--patches-dir',type=Path,help='third-party patch XML files (shadPS4 format)')
     p.add_argument('--patches-config',type=Path,help='patches.json: enabled/disabled external patches')
+    p.add_argument('--mod-patches',type=Path,action='append',default=[],
+                   help='patch file of an enabled mod (repeat; in load order)')
     p.add_argument('--extra',default='',help='additional patch names, separated by ";"')
     p.add_argument('--out',type=Path,default=Path(__file__).resolve().parent.parent/'out')
     p.add_argument('--game-dir',type=Path,default=Path(os.environ.get('GOW3_GAME_DIR','../CUSA01623')))
@@ -329,6 +399,8 @@ def main():
         print(f'Patches: no patch profile for {title}: none applied')
         return
     ids,xml,tag,_name=profile
+    if a.mod_patches:
+        xml=merge_patch_files(xml,a.mod_patches,a.out/'patches-merged.xml')
     sha=eboot_sha256(a.game_dir)
     print(f'Patches: {title} {game_app_version(a.game_dir)}, eboot.bin sha256 {sha}')
     names=selected_patches(xml,tag,a.extra,os.environ.get('GOW3_PATCHES_ONLY')=='1')

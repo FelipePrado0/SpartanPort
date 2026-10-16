@@ -3,7 +3,8 @@
 # with PyInstaller so players need no Python), gow3-probe.exe with the MSYS2 CLANG64 DLLs it needs,
 # the preparation scripts and run.py. Run from an MSYS2 CLANG64 shell after `bash build.sh`.
 # Freezing uses a Windows Python 3.10+ (python.org; WINPYTHON overrides) and a private venv in
-# out/pyenv with PyInstaller. The temporal upscalers are off, so neither the FSR 4 assets nor the
+# out/pyenv with PyInstaller and Pillow (the game icon and the Steam pictures need it). The
+# temporal upscalers are off, so neither the FSR 4 assets nor the
 # DLSS runtime are packaged.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
@@ -23,14 +24,14 @@ export USERPROFILE=${USERPROFILE:-$(cygpath -w "/c/Users/$(id -un)")}
 if [[ ! -x out/pyenv/Scripts/python.exe ]]; then
     "$python" -m venv out/pyenv
 fi
-out/pyenv/Scripts/python.exe -m pip install -q --disable-pip-version-check pyinstaller
+out/pyenv/Scripts/python.exe -m pip install -q --disable-pip-version-check pyinstaller pillow iced-x86==1.21.0
 # The scripts run inside God of War III.exe (--script): the standard modules they import come along.
 hidden=()
-for module in argparse base64 collections hashlib json re shutil struct tempfile xml.etree.ElementTree \
-              urllib.request ctypes.wintypes; do
+for module in argparse base64 collections hashlib json re shutil socket struct tempfile threading uuid \
+              xml.etree.ElementTree urllib.request ctypes.wintypes iced_x86; do
     hidden+=(--hidden-import "$module")
 done
-out/pyenv/Scripts/python.exe -m PyInstaller --noconfirm --clean --log-level WARN --windowed \
+out/pyenv/Scripts/python.exe -m PyInstaller --noconfirm --clean --log-level WARN --windowed --copy-metadata pillow \
     --name "God of War III" --icon "$(cygpath -w "$PWD/launcher/gow3.ico")" --distpath out/pyi-dist \
     --workpath out/pyi-work --specpath out/pyi-work --paths "$(cygpath -w "$PWD/scripts")" "${hidden[@]}" \
     "$(cygpath -w "$PWD/launcher/gow3_launcher_win.py")"
@@ -55,6 +56,9 @@ ldd "$dest/bin/gow3-probe.exe" "$dest/bin/gow3-gpu-capabilities.exe" |
 cp -r scripts patches "$dest/"
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 find "$dest" -name __pycache__ -prune -exec rm -r {} +
+[[ -f $dest/scripts/discord_presence.py ]] || { echo 'scripts/discord_presence.py is missing from the package' >&2; exit 1; }
+grep -Eq "^CLIENT_ID = '[0-9]+'" "$dest/scripts/discord_presence.py" ||
+    echo 'Warning: CLIENT_ID is empty in discord_presence.py; Discord Rich Presence will not start.' >&2
 # No game files and nothing a player made (saves, shader caches built from the game's shaders,
 # settings, logs) may ship: stop when one is found.
 forbidden=$(find "$dest" \( -iname eboot.bin -o -iname sce_module -o -iname sce_sys -o -iname savedata \

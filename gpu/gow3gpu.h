@@ -41,6 +41,11 @@ int gow3gpu_choice_begin(const char *title, const char *const *items, const char
 int gow3gpu_choice_poll(void);
 /* 1 while the in-game settings menu is open: the game's pad input is held neutral. */
 int gow3gpu_overlay_captures_input(void);
+/* Controller vibration strength set in the menu, 0 (off) to 100 (the game's own). */
+int gow3gpu_vibration_percent(void);
+/* The video decoder handed the game a picture: a cutscene is on screen (the presenter draws
+ * black bars outside its 16:9 picture when the render resolution is not 16:9). */
+void gow3gpu_movie_picture(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */
 unsigned gow3gpu_symbol_count(void);
 #ifdef __cplusplus

@@ -23,6 +23,8 @@ typedef void (ABI *GuestCallback)(void);
 void runtime_start(uint64_t capabilities);
 uintptr_t runtime_resolve(const char *name, int is_data);
 void runtime_report(void);
+/* Called at the end of runtime_report (the loader adds its own counters). */
+void runtime_set_report_hook(void (*hook)(void));
 void runtime_finalize(void *dso);
 uintptr_t runtime_mutex_resolve(const char *name);
 void runtime_mutex_report(void);
@@ -94,6 +96,8 @@ uintptr_t runtime_audio_resolve(const char *name);
 void runtime_audio_report(void);
 uintptr_t runtime_pad_resolve(const char *name);
 void runtime_pad_report(void);
+/* probe --gamepad: prints one "Gamepad:" line for the first pad found (returns 1) or none (0). */
+int runtime_pad_describe(void);
 uintptr_t runtime_rtc_resolve(const char *name);
 const char *runtime_file_user_dir(void);
 void runtime_savedata_configure(const char *title);

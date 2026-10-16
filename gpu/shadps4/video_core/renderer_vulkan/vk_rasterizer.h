@@ -294,6 +294,8 @@ private:
 
     /// Display pass: counts the frame (Gow3Stats::gpu_frames) and, with GOW3_BUFFER_STATS, the lag.
     void NoteFrameStart();
+    /// Without an upscaler: the display buffer of the last NoteFrameStart (HUD draws go there too).
+    VAddr last_display_buffer = 0;
     /// GOW3_GPU_PROFILE: a timestamp where a render pass starts (vk_gpu_profiler.h).
     void MarkPass(const GraphicsPipeline* pipeline, const RenderState& state);
     void BindVertexBuffers(const GraphicsPipeline* pipeline,
@@ -346,6 +348,12 @@ private:
     boost::container::static_vector<vk::DescriptorImageInfo, Shader::NUM_IMAGES> image_infos;
     boost::container::static_vector<vk::DescriptorBufferInfo, Shader::NUM_BUFFERS> buffer_infos;
     boost::container::static_vector<VideoCore::ImageId, Shader::NUM_IMAGES> bound_images;
+    /// gow3 diagnostics (GOW3_DIAG_IMAGES=1, draw pipe off): while a frame capture records, the
+    /// color targets of a pass are written to files when the next pass or dispatch begins.
+    void DiagPassBoundary(bool force);
+    std::array<VAddr, 8> diag_addresses{};
+    boost::container::static_vector<VideoCore::ImageId, 8> diag_targets;
+    u32 diag_pass{};
     struct BoundBuffer {
         const VideoCore::Buffer* buffer;
         u64 offset;

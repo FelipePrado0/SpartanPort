@@ -94,6 +94,10 @@ public:
         return graphics_queue;
     }
 
+    vk::Queue GetSparseQueue() const {
+        return sparse_queue;
+    }
+
     vk::Queue GetPresentQueue() const {
         return present_queue;
     }
@@ -254,6 +258,17 @@ public:
     /// Returns true if the subgroup size can be set to match guest subgroup size
     bool IsSubgroupSize64Supported() const {
         return vk13_features.subgroupSizeControl && vk13_props.maxSubgroupSize >= 64;
+    }
+
+    /// gow3: VK_KHR_pipeline_executable_properties is on (GOW3_WAVE_STATS=1, vk_wave_stats.h).
+    bool IsPipelineExecutableInfoEnabled() const {
+        return pipeline_executable_properties &&
+               pipeline_executable_features.pipelineExecutableInfo;
+    }
+
+    /// gow3: VK_AMD_shader_info is on (statistics and ISA per stage, GOW3_WAVE_STATS=1).
+    bool IsAmdShaderInfoEnabled() const {
+        return amd_shader_info;
     }
 
     /// Returns true when VK_KHR_workgroup_memory_explicit_layout is supported.
@@ -540,12 +555,14 @@ private:
     vk::PhysicalDevicePrimitiveTopologyListRestartFeaturesEXT list_restart_features;
     vk::PhysicalDeviceShaderClockFeaturesKHR shader_clock_features;
     vk::PhysicalDeviceComputeShaderDerivativesFeaturesKHR compute_shader_derivatives_features;
+    vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR pipeline_executable_features;
     vk::DriverIdKHR driver_id;
     vk::UniqueDebugUtilsMessengerEXT debug_callback{};
     std::string vendor_name;
     VmaAllocator allocator{};
     vk::Queue present_queue;
     vk::Queue graphics_queue;
+    vk::Queue sparse_queue;
     std::vector<vk::PhysicalDevice> physical_devices;
     std::vector<std::string> available_extensions;
     std::unordered_map<vk::Format, vk::FormatProperties3> format_properties;
@@ -578,6 +595,8 @@ private:
     bool image_2d_view_of_3d{};
     bool image_view_min_lod{};
     bool shader_clock{};
+    bool pipeline_executable_properties{}; // gow3: GOW3_WAVE_STATS=1 (vk_wave_stats.h)
+    bool amd_shader_info{};                // gow3: with it, VK_AMD_shader_info when present
     bool compute_shader_derivatives{};
     bool mixed_float_dot_product{}; // gow3: VK_VALVE_shader_mixed_float_dot_product (FSR 4.1.1)
     bool external_memory_metal{};   // gow3: VK_EXT_external_memory_metal (MetalFX)

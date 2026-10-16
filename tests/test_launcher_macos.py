@@ -1,10 +1,9 @@
 """What the launcher offers on a Mac as on Windows and Linux: updates from the Mac port's releases
-(a disk image to download), Steam, Apple's Metal performance HUD in MangoHud's place."""
+(a disk image to download) and Apple's Metal performance HUD in MangoHud's place. The Mac's
+launcher pages: test_launcher_upscalers.MacLauncherTest."""
 import io
 import json
-from pathlib import Path
 import sys
-import tempfile
 import unittest
 import urllib.error
 from unittest import mock
@@ -63,36 +62,6 @@ class GameEnvironmentTest(unittest.TestCase):
     def test_metal_hud_follows_its_switch(self):
         self.assertEqual(self.environment()['MTL_HUD_ENABLED'], '0')
         self.assertEqual(self.environment(metal_hud=True)['MTL_HUD_ENABLED'], '1')
-
-
-@unittest.skipUnless(sys.platform == 'darwin', 'the Mac launcher')
-class AdvancedPageTest(unittest.TestCase):
-    def test_updates_steam_and_the_metal_hud_are_on_a_mac(self):
-        try:
-            import tkinter as tk
-            from tkinter import filedialog, messagebox, ttk
-            root = tk.Tk()
-        except (ImportError, RuntimeError) as error:
-            self.skipTest(f'Tk unavailable: {error}')
-        root.withdraw()
-        self.addCleanup(root.destroy)
-        folder = tempfile.TemporaryDirectory()
-        self.addCleanup(folder.cleanup)
-        with mock.patch.object(launcher, 'CONFIG_DIR', Path(folder.name)), \
-                mock.patch.object(launcher, 'CONFIG_FILE', Path(folder.name) / 'settings.json'), \
-                mock.patch.object(launcher.Launcher, 'check_update'):
-            app = launcher.Launcher(root, tk, ttk, filedialog, messagebox)
-
-        def texts(widget):
-            for child in widget.winfo_children():
-                try:
-                    yield str(child.cget('text'))
-                except tk.TclError:
-                    pass
-                yield from texts(child)
-        shown = set(texts(app.pages['advanced']))
-        for text in ('Check for updates', 'Add to Steam', 'MACOS', 'Metal performance HUD'):
-            self.assertIn(text, shown)
 
 
 if __name__ == '__main__':

@@ -21,7 +21,7 @@ from capstone import x86
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'scripts'))
 from patches import EBOOT_BASE, eboot_image, find_pattern  # noqa: E402
-from prepare import parse_self  # noqa: E402
+from prepare import parse_self, read_self  # noqa: E402
 
 BRANCHES = {x86.X86_GRP_JUMP, x86.X86_GRP_CALL}
 # Unique in one build is not proof for another: a longer window keeps a chance match unlikely.
@@ -29,7 +29,7 @@ MIN_LENGTH = 16
 
 
 def load(path):
-    elf, _, ph, _, _ = parse_self(Path(path).read_bytes())
+    elf, _, ph, _, _ = parse_self(read_self(path))
     text = next(p for p in ph if p['type'] == 1 and p['flags'] & 1)
     return eboot_image(bytes(elf)), (text['vaddr'], text['vaddr'] + text['filesz'])
 

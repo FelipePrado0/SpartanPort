@@ -532,7 +532,10 @@ void Runtime::CopyMip(VideoCore::Image* src, VideoCore::Image* dst, u32 mip, u32
 }
 
 void Runtime::CopyColorAndDepth(VideoCore::Image* src, VideoCore::Image* dst) {
-    if (src->info.num_samples == 1 && dst->info.num_samples == 1) {
+    // gow3: with GOW3_NO_MSAA a guest multisampled depth target is single-sampled on the host; a
+    // colour image aliasing it still holds the samples as channels, so sample 0 is channel 0.
+    const bool guest_ms_depth = dst->info.props.is_depth && dst->info.guest_samples > 1;
+    if (src->info.num_samples == 1 && dst->info.num_samples == 1 && !guest_ms_depth) {
         if (instance.IsMaintenance8Supported() ||
             src->info.props.is_depth == dst->info.props.is_depth) {
             CopyImage(src, dst);
@@ -543,7 +546,7 @@ void Runtime::CopyColorAndDepth(VideoCore::Image* src, VideoCore::Image* dst) {
                 staging_pool.Request(COPY_BUFFER_SIZE, VideoCore::MemoryType::DeviceLocal);
             CopyImageWithBuffer(src, dst, copy_ref.buffer, copy_ref.offset);
         }
-    } else if (src->info.num_samples == 1 && dst->info.num_samples > 1 &&
+    } else if (src->info.num_samples == 1 && (dst->info.num_samples > 1 || guest_ms_depth) &&
                dst->info.props.is_depth) {
         // Perform a rendering pass to transfer the channels of source as samples in dest.
         bool needs_flush =

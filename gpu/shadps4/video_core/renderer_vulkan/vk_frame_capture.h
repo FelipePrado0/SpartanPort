@@ -35,11 +35,17 @@ public:
     static bool Active() {
         return state.load(std::memory_order_relaxed) != Idle;
     }
+    /// GPU thread: whether a frame is being recorded right now.
+    static bool IsRecording() {
+        return state.load(std::memory_order_relaxed) == Recording;
+    }
     /// GPU thread, at every draw/dispatch: starts or ends a recording at frame boundaries.
     static void Poll();
 
+    /// `state`: the pass's census line (vk_pass_census.h), kept with the first pipeline that
+    /// opened the pass.
     static void BeginPass(const VideoCore::ImageInfo* const* colors, u32 num_colors,
-                          const VideoCore::ImageInfo* depth);
+                          const VideoCore::ImageInfo* depth, std::string census);
     /// The index of the pass the last BeginPass started in the recording, or -1 (no new pass).
     static int NewPassIndex() {
         return new_pass_index;

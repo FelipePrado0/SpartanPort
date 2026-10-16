@@ -1,14 +1,17 @@
 from paths import ROOT
 import os
+import struct
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from patches import (compile_patches, external_patches, external_selection, compile_external,
-                     game_profile, selected_patches, patch_requirements, GAMES)
+                     game_profile, selected_patches, patch_requirements, GAMES, merge_patch_files,
+                     resolution_names, default_enabled)
 
 GOW3 = ROOT / 'patches/God_of_War_III_Remastered.xml'
+ULTRAWIDE = ROOT / 'extras/mods/Ultrawide/patches/Ultrawide.xml'
 GOW3_IDS = {'CUSA01623'}
 SEGMENTS = [(0, 0x6000000)]
 
@@ -69,17 +72,21 @@ class GameProfileTests(unittest.TestCase):
 
     def test_gow3_defaults_and_extras(self):
         self.assertEqual(selected_patches(GOW3, '01.02', ''),
-                         ['Bug Fix - Texture Corruption Fix', 'Skip Any Video With X Button'])
+                         ['Bug Fix - Texture Corruption Fix', 'Skip Any Video With X Button',
+                          'Bug Fix - Startup Black Screen'])
         self.assertEqual(selected_patches(GOW3, '01.02', 'Resolution Patch - 720p; Skip Any Video With X Button'),
-                         ['Skip Any Video With X Button', 'Resolution Patch - 720p'])
+                         ['Skip Any Video With X Button', 'Bug Fix - Startup Black Screen', 'Resolution Patch - 720p'])
         self.assertEqual(selected_patches(GOW3, '01.00', ''), [])
-        # The launcher's selection is exact: unchecked defaults stay off.
-        self.assertEqual(selected_patches(GOW3, '01.02', 'Skip Any Video With X Button', only=True), ['Skip Any Video With X Button'])
-        self.assertEqual(selected_patches(GOW3, '01.02', '', only=True), [])
+        # The launcher's selection is exact: unchecked defaults stay off, except the fixes that are
+        # always on (a list saved before they existed must still get them).
+        self.assertEqual(selected_patches(GOW3, '01.02', 'Skip Any Video With X Button', only=True),
+                         ['Skip Any Video With X Button', 'Bug Fix - Startup Black Screen'])
+        self.assertEqual(selected_patches(GOW3, '01.02', '', only=True), ['Bug Fix - Startup Black Screen'])
+        self.assertEqual(selected_patches(GOW3, '01.00', '', only=True), [])
 
     def test_gow3_resolution_patch_replaces_texture_fix(self):
         self.assertEqual(selected_patches(GOW3, '01.02', 'Resolution Patch - 4K'),
-                         ['Skip Any Video With X Button', 'Resolution Patch - 4K'])
+                         ['Skip Any Video With X Button', 'Bug Fix - Startup Black Screen', 'Resolution Patch - 4K'])
         with self.assertRaises(ValueError):
             selected_patches(GOW3, '01.02', 'Resolution Patch - 4K;Resolution Patch - 720p')
 
@@ -112,6 +119,10 @@ class SignatureTests(unittest.TestCase):
       <Line Type="bytes" Address="0x401020" Value="90" Pattern="de ad be ef" At="0"/>
     </PatchList>
   </Metadata>
+  <Metadata Name="Data" AppVer="01.02">
+    <PatchList><Line Type="bytes32" Address="0x402000" Target="variable" Value="0x2"/></PatchList>
+    <Target Name="variable" Address="0x402000" Pattern="44 89 35 ?? ?? ?? ?? c6" At="3" Ref="1"/>
+  </Metadata>
 </Patch>"""
 
     def setUp(self):
@@ -123,6 +134,8 @@ class SignatureTests(unittest.TestCase):
         image[0x40:0x46] = bytes.fromhex('112233445566')
         image[0x80:0x85] = bytes.fromhex('aabbccddee')
         image[0x200:0x207] = bytes.fromhex('e9') + (0x300 - 0x205).to_bytes(4, 'little', signed=True) + bytes.fromhex('7788')
+        # mov [rip+disp], r14d storing to 0x3f0, then the c6 of the next instruction.
+        image[0x280:0x288] = bytes.fromhex('448935') + (0x3f0 - 0x287).to_bytes(4, 'little', signed=True) + b'\xc6'
         self.image = bytes(image)
 
     def test_sites_found_anywhere_and_rel32_recomputed(self):
@@ -144,6 +157,18 @@ class SignatureTests(unittest.TestCase):
         writes = compile_patches(self.xml, ['Found', 'Call'], '01.02', [(0, 0x10000)])
         self.assertEqual(writes[0], (0x1004, b'\x90\x90'))
         self.assertEqual(writes[1][0], 0x1010)
+
+    def test_data_line_writes_at_its_target(self):
+        # The variable has no bytes of its own to find: the code that stores to it points at it.
+        self.assertEqual(compile_patches(self.xml, ['Data'], None, [(0, 0x400)], self.image, {}),
+                         [(0x3f0, (2).to_bytes(4, 'little'))])
+        self.assertEqual(compile_patches(self.xml, ['Data'], '01.02', [(0, 0x10000)]),
+                         [(0x2000, (2).to_bytes(4, 'little'))])
+        image = bytearray(self.image)
+        image[0x280:0x288] = bytes(8)  # store not found: the whole patch is left out
+        skipped = {}
+        self.assertEqual(compile_patches(self.xml, ['Data'], None, [(0, 0x400)], bytes(image), skipped), [])
+        self.assertEqual(skipped, {'Data': 'signature not found'})
 
     def test_signatures_match_the_full_update_eboot(self):
         # Without that eboot.bin here: the original bytes others published for it must be the
@@ -177,11 +202,11 @@ class SignatureTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('GOW3_GAME'), 'GOW3_GAME (game folder) not set')
     def test_gow3_signatures_in_the_reference_and_a_moved_build(self):
         from prepare import parse_self
-        from patches import eboot_image
+        from patches import eboot_image, eboot_segments
         elf, *_ = parse_self((Path(os.environ['GOW3_GAME']) / 'eboot.bin').read_bytes())
         image = eboot_image(bytes(elf))
         names = [m.get('Name') for m in ET.parse(GOW3).getroot().iter('Metadata')]
-        segments = [(0, len(image))]
+        segments = eboot_segments(bytes(elf))  # as patches.py: .bss included (memsz)
         # The reference build: the signatures give exactly the Address writes.
         for name in names:
             self.assertEqual(compile_patches(GOW3, [name], None, segments, image, {}),
@@ -205,6 +230,11 @@ class SignatureTests(unittest.TestCase):
     def test_gow3_patches_compile(self):
         names = [m.get('Name') for m in ET.parse(GOW3).getroot().iter('Metadata')]
         self.assertTrue(compile_patches(GOW3, names, '01.02', SEGMENTS))
+
+    def test_gow3_startup_black_screen(self):
+        # The frame index variable (.bss) starts at 2, the index before the first frame's 0.
+        self.assertEqual(compile_patches(GOW3, ['Bug Fix - Startup Black Screen'], '01.02', SEGMENTS),
+                         [(0x14ba600, (2).to_bytes(4, 'little'))])
 
     def test_gow3_skip_intro_targets(self):
         # Ported from the other 01.02 build: every jump must land where this eboot has the code.
@@ -238,6 +268,124 @@ class SignatureTests(unittest.TestCase):
                          (5056 + 6144, None))
         self.assertEqual(patch_requirements(GOW3, ['Frame Rate Patch - 120 FPS'], '01.02'), (None, 120))
         self.assertEqual(patch_requirements(GOW3, [], '01.02'), (None, None))
+
+
+
+class ModPatchTests(unittest.TestCase):
+    MOD = """<?xml version="1.0"?>
+<Patch>
+  <TitleID><ID>CUSA01623</ID></TitleID>
+  <Metadata Name="Resolution Patch - 3440x1440" Note="Requires setting DMEM to 4608 MB or more." AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+    <PatchList><Line Type="bytes" Address="0x00401000" Value="9090"/></PatchList>
+  </Metadata>
+  <Metadata Name="Resolution Patch - 2560x1080" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+    <PatchList><Line Type="bytes" Address="0x00401000" Value="9090"/></PatchList>
+  </Metadata>
+  <Metadata Name="Skip Any Video With X Button" Note="replaced by the mod" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
+    <PatchList><Line Type="bytes" Address="0x00401002" Value="90"/></PatchList>
+  </Metadata>
+</Patch>"""
+    OTHER_GAME = '<Patch><TitleID><ID>CUSA99999</ID></TitleID><Metadata Name="Elsewhere" AppVer="01.02"><PatchList/></Metadata></Patch>'
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.dir = Path(directory.name)
+        self.mod = self.dir / 'mod.xml'
+        self.mod.write_text(self.MOD)
+
+    def test_resolution_names_of_patch_files_smallest_first(self):
+        self.assertEqual(resolution_names([self.mod]), ['2560x1080', '3440x1440'])
+        self.assertEqual(resolution_names([self.dir / 'missing.xml']), [])
+
+    def test_merge_adds_replaces_and_skips_other_titles(self):
+        other = self.dir / 'other.xml'
+        other.write_text(self.OTHER_GAME)
+        merged = merge_patch_files(GOW3, [self.mod, other], self.dir / 'out' / 'merged.xml')
+        names = [m.get('Name') for m in ET.parse(merged).getroot().iter('Metadata')]
+        self.assertIn('Resolution Patch - 3440x1440', names)
+        self.assertNotIn('Elsewhere', names)
+        self.assertEqual(names.count('Skip Any Video With X Button'), 1)  # replaced, not repeated
+        note = next(m.get('Note') for m in ET.parse(merged).getroot().iter('Metadata')
+                    if m.get('Name') == 'Skip Any Video With X Button')
+        self.assertEqual(note, 'replaced by the mod')
+        # The built-in patches are all still there, and the merged file is selectable like the original.
+        self.assertTrue(set(m.get('Name') for m in ET.parse(GOW3).getroot().iter('Metadata')) - {'Skip Any Video With X Button'} <= set(names))
+        chosen = selected_patches(merged, '01.02', 'Resolution Patch - 3440x1440', only=True)
+        self.assertIn('Resolution Patch - 3440x1440', chosen)  # (the startup fix is always added)
+        self.assertNotIn('Resolution Patch - 2560x1080', chosen)
+        self.assertEqual(patch_requirements(merged, ['Resolution Patch - 3440x1440'], '01.02'), (5056 + 4608, None))
+
+    def test_a_broken_mod_file_is_left_out(self):
+        broken = self.dir / 'broken.xml'
+        broken.write_text('<Patch><Metadata')
+        merged = merge_patch_files(GOW3, [broken, self.mod], self.dir / 'merged.xml')
+        self.assertIn('Resolution Patch - 2560x1080',
+                      [m.get('Name') for m in ET.parse(merged).getroot().iter('Metadata')])
+
+    def test_default_enabled_patches_of_a_mod(self):
+        self.assertEqual(default_enabled([self.mod], '01.02'), ['Skip Any Video With X Button'])
+        self.assertEqual(default_enabled([self.mod], '01.00'), [])
+
+    # --- the Ultrawide mod (extras/mods/Ultrawide): ULTRAWIDE sizes -> (extra direct memory MiB, k)
+    SIZES = {
+        (2560, 1080): (3072, (2560 / 1080) / (16 / 9)),
+        (3440, 1440): (4608, (3440 / 1440) / (16 / 9)),
+        (3840, 1600): (6144, (3840 / 1600) / (16 / 9)),
+        (5120, 1440): (6144, 2.0),
+    }
+
+    # 16:10, taller than 16:9: only the resolution and the aspect ratio (the camera's fixed horizontal view
+    # already shows more at the top and bottom), so no field of view change.
+    TALLER = {(1920, 1200): 3072, (2560, 1600): 4608}
+
+    def test_the_ultrawide_mod_lists_its_resolutions_and_memory_needs(self):
+        self.assertEqual(resolution_names([ULTRAWIDE]), ['1920x1200', '2560x1080', '2560x1600', '3440x1440',
+                                                         '3840x1600', '5120x1440'])
+        for (width, height), dmem in self.TALLER.items():
+            name = f'Resolution Patch - {width}x{height}'
+            self.assertEqual(patch_requirements(ULTRAWIDE, [name], '01.02'), (5056 + dmem, None), name)
+        for (width, height), (dmem, _k) in self.SIZES.items():
+            name = f'Resolution Patch - {width}x{height}'
+            self.assertEqual(patch_requirements(ULTRAWIDE, [name], '01.02'), (5056 + dmem, None), name)
+
+    def test_the_ultrawide_mod_camera_caves_form_closed_chains(self):
+        # Each entry (its Address values are the 6e72 build's): the four camera sites jump into two chained caves.
+        # The first runs the instruction the jump replaced, the second multiplies the field of view tangent by
+        # k = (width / height) / (16 / 9) and returns right after the site.
+        rel = lambda data, at, end: end + int.from_bytes(data[at:at + 4], 'little', signed=True)
+        for (width, height), (_dmem, k) in self.SIZES.items():
+            name = f'Resolution Patch - {width}x{height}'
+            writes = dict(compile_patches(ULTRAWIDE, [name], '01.02', SEGMENTS))
+            self.assertEqual(writes[0x1f0c77], struct.pack('<f', width / height) * 2, name)  # the aspect ratio
+            constant = [at for at, data in writes.items() if data == struct.pack('<f', k)]
+            self.assertEqual(len(constant), 1, name)
+            for site, original in ((0x1cc01f, 'c5fa1089d8000000'), (0x1cbd89, 'c5fa1080d8000000'),
+                                   (0x1ccaa9, 'c5fa1080d8000000'), (0x1cc20f, 'c5fa5e852cffffff')):
+                jump = writes[site]
+                self.assertEqual((jump[0], jump[5:]), (0xe9, bytes.fromhex('0f1f00')), name)  # jmp + 3-byte nop
+                first = rel(jump, 1, site + 5)
+                self.assertEqual(writes[first][:8], bytes.fromhex(original), name)
+                self.assertEqual(writes[first][8], 0xe9, name)
+                second = rel(writes[first], 9, first + 13)
+                cave = writes[second]
+                self.assertEqual((cave[0], cave[2], cave[8]), (0xc5, 0x59, 0xe9), name)  # vmulss ..., [rip+k]; jmp
+                self.assertEqual(rel(cave, 4, second + 8), constant[0], name)
+                self.assertEqual(rel(cave, 9, second + 13), site + 8, name)
+
+    def test_taller_than_16_9_changes_no_camera(self):
+        for (width, height) in self.TALLER:
+            writes = dict(compile_patches(ULTRAWIDE, [f'Resolution Patch - {width}x{height}'], '01.02', SEGMENTS))
+            self.assertEqual(writes[0x1f0c77], struct.pack('<f', width / height) * 2)  # the aspect ratio
+            # the resolution (these lines keep the built-in entries' Address values, the reference build's)
+            self.assertEqual(writes[0x1f0b3b], struct.pack('<I', width))
+            self.assertEqual(writes[0x1f0b43], struct.pack('<I', height))
+            for site in (0x1cc01f, 0x1cbd89, 0x1ccaa9, 0x1cc20f):  # no camera site, no cave
+                self.assertNotIn(site, writes)
+            self.assertEqual(len(writes), 15 + 1)  # the resolution lines (15) and the aspect ratio
+
+    def test_the_ultrawide_mod_is_off_until_a_resolution_is_chosen(self):
+        self.assertEqual(default_enabled([ULTRAWIDE], '01.02'), [])
 
 
 if __name__ == '__main__':

@@ -140,7 +140,8 @@ The rest of what the Windows and Linux launchers offer is there, the Mac's way:
 
 ## Fewer GPU waits (experimental)
 
-Launcher: **Display → Fewer GPU waits**; in the game's menu: **Performance → Applied on restart**;
+Launcher: **Graphics → Upscaling → Fewer GPU waits** (on Windows and Linux: **Performance → GPU
+data**); in the game's menu: **Performance → Applied on restart**;
 `gow3.ini`: `fewer_gpu_waits=1` (`GOW3_FEWER_GPU_WAITS=1` overrides it at start). Off by default,
 applied at the next start, and only with `stale_readback=1` (both controls are greyed out without
 it). At every end-of-pipe fence the texture cache queues the readbacks of small
@@ -165,8 +166,9 @@ and KosmicKrisp creating and releasing about 30 Metal heaps of 128 KiB a frame. 
 On a Mac, Apple's MetalFX (its spatial scaler) can enlarge the game's image to the window where
 FSR 1 does it otherwise. With a render resolution below the window's it raises the frame rate:
 
-- Launcher: **Display → Upscale to the window** on, **Upscaler → MetalFX (Apple)**, and
-  **Performance → Render resolution → 720p** or **480p** (applied at the next start).
+- Launcher: **Graphics → Upscaling → Upscale to the window** on, **Upscaler → MetalFX (Apple)**,
+  and **Render resolution → 720p** or **480p** on **Home** or **Performance** (applied at the next
+  start; **Save** or **PLAY** keeps the change).
 - In the game's menu (**`**): **Image → Upscale to the window** and **Upscaler**.
 - `gow3.ini`: `fsr1=1`, `screen_upscaler=metalfx`, `render_resolution=720p`
   (`GOW3_SCREEN_UPSCALER=metalfx` overrides the file at start).
@@ -180,7 +182,7 @@ the window's size, or the temporal upscaler's name when one runs. Every render r
 than the window is enlarged, 480p as well as 720p (480p blows out bright areas in this game:
 upstream issue #390, marked ⚠ in the launcher). With upscaling on and nothing to enlarge (Native on
 a 1080p screen), the menu's Image tab says so under the upscaler and offers **Render at: 720p /
-480p** (then **Apply and restart**), and the launcher's Display page shows the same note with
+480p** (then **Apply and restart**), and the launcher's Graphics page shows the same note with
 **720p** and **480p** buttons. The launcher's status line names the upscaler (`720p → MetalFX
 (Apple)`). The log says `Screen upscaler: MetalFX spatial 1280x720 -> 1920x1080
 (...)` when it starts. When MetalFX or the Vulkan/Metal interop below cannot run, the log says once

@@ -64,7 +64,17 @@ int main() {
     Gow3Settings::Load();
     assert(v.display_mode == G::Borderless && !v.vsync && v.fps_limit == 240 && !v.async_shaders);
     assert(v.render_resolution == 3 && v.engine_fps == 240 && !v.deferred_readback && v.stale_readback);
+#ifdef __APPLE__
+    // macOS keeps upscaling to the window (MetalFX or FSR 1).
     assert(v.fsr1 && !v.rcas && v.rcas_strength == 40 && v.frames_queued == 2);
+#else
+    // FSR 1 left the menus in 2.2.0: a saved fsr1=1 (or GOW3_FSR1) no longer turns it on.
+    assert(!v.fsr1 && !v.rcas && v.rcas_strength == 40 && v.frames_queued == 2);
+    SetEnv("GOW3_FSR1", "1");
+    Gow3Settings::Load();
+    assert(!v.fsr1);
+    SetEnv("GOW3_FSR1", "");
+#endif
     assert(v.screen_upscaler == G::ScreenMetalFx && v.fewer_gpu_waits);
     assert(!Gow3Settings::GraphicsNeedRestart());
     assert(v.applied_engine_fps == 240);  // no GOW3_ENGINE_FPS: the configured rate
@@ -85,9 +95,32 @@ int main() {
     const std::string saved = Read(path);
     for (const char* line : {"display_mode=borderless\n", "vsync=0\n", "fps_limit=60\n", "async_shaders=0\n",
                              "render_resolution=1440p\n", "engine_fps=240\n", "deferred_readback=0\n",
+#ifdef __APPLE__
                              "stale_readback=1\n", "fsr1=1\n", "screen_upscaler=metalfx\n", "rcas=0\n",
+#else
+                             "stale_readback=1\n", "fsr1=0\n", "screen_upscaler=metalfx\n", "rcas=0\n",
+#endif
                              "rcas_strength=40\n", "frames_queued=2\n", "fewer_gpu_waits=1\n"}) {
         assert(saved.find(line) != std::string::npos);
+    }
+
+    {
+        // The resolutions of the enabled mods' patch files (run.py: GOW3_EXTRA_RESOLUTIONS) follow the built-in
+        // ones and keep their names through a load and a save; repeated or built-in names are not added twice.
+        SetEnv("GOW3_EXTRA_RESOLUTIONS", "3840x1080;2880x1200;;2880x1200;4K;3440x1440");
+        const auto names = G::ResolutionNames();
+        assert(names.size() == 14 && names[12] == "3840x1080" && names[13] == "2880x1200");
+        {
+            std::ofstream out(path);
+            out << "render_resolution=2880x1200\n";
+        }
+        Gow3Settings::Load();
+        assert(v.render_resolution == 13);
+        Gow3Settings::Save();
+        assert(Read(path).find("render_resolution=2880x1200\n") != std::string::npos);
+        SetEnv("GOW3_EXTRA_RESOLUTIONS", "");  // the mod is off: its resolution is unknown, so native
+        Gow3Settings::Load();
+        assert(v.render_resolution == 0 && G::ResolutionNames().size() == 12);
     }
 
     {

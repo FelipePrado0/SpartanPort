@@ -9,6 +9,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace Gow3Settings {
 
@@ -105,7 +106,15 @@ void Set(Values& v, const std::string& key, const std::string& value) {
     } else if (key == "async_shaders") {
         v.async_shaders = i != 0;
     } else if (key == "fsr1") {
+#ifdef __APPLE__
+        // gow3 (macOS): upscaling to the window stays a choice on a Mac, where MetalFX does it
+        // (vk_presenter.cpp); the launcher and the menu show it there.
         v.fsr1 = i != 0;
+#else
+        // FSR 1 left the launcher and the in-game menu: a value saved by an older version has no
+        // control left to turn it off, so it stays off.
+        v.fsr1 = false;
+#endif
     } else if (key == "screen_upscaler") {
         v.screen_upscaler = Gow3Graphics::ParseScreenUpscaler(value);
     } else if (key == "rcas") {
@@ -124,6 +133,10 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.stale_readback = i != 0;
     } else if (key == "fewer_gpu_waits") {
         v.fewer_gpu_waits = i != 0;
+    } else if (key == "anisotropy") {
+        v.anisotropy = Gow3Graphics::ParseAnisotropy(i);
+    } else if (key == "vibration") {
+        v.vibration = value.empty() ? 100 : std::clamp(i, 0, 100);
     } else if (key == "restart_unconfirmed") {
         v.restart_unconfirmed = i != 0;
     } else if (key == "enemy_health_bar") {
@@ -196,6 +209,7 @@ void Load() {
         {"GOW3_STALE_READBACK", "stale_readback"},     {"GOW3_FSR1", "fsr1"},
         {"GOW3_RCAS", "rcas"},                        {"GOW3_FRAMES_AHEAD", "frames_queued"},
         {"GOW3_SCREEN_UPSCALER", "screen_upscaler"},  {"GOW3_FEWER_GPU_WAITS", "fewer_gpu_waits"},
+        {"GOW3_ANISOTROPY", "anisotropy"},            {"GOW3_VIBRATION", "vibration"},
     };
     for (const auto& [env, key] : env_keys) {
         if (const char* value = std::getenv(env); value && value[0]) {
@@ -215,6 +229,7 @@ void Load() {
     v.startup_deferred_readback = v.deferred_readback;
     v.startup_stale_readback = v.stale_readback;
     v.startup_fewer_gpu_waits = v.fewer_gpu_waits;
+    v.startup_anisotropy = v.anisotropy;
 }
 
 bool GraphicsNeedRestart() {
@@ -223,7 +238,8 @@ bool GraphicsNeedRestart() {
            v.engine_fps != v.startup_engine_fps ||
            v.deferred_readback != v.startup_deferred_readback ||
            v.stale_readback != v.startup_stale_readback ||
-           v.fewer_gpu_waits != v.startup_fewer_gpu_waits;
+           v.fewer_gpu_waits != v.startup_fewer_gpu_waits ||
+           v.anisotropy != v.startup_anisotropy;
 }
 
 void ConfigureUpscalerSupport(bool fsr4, bool fsr411) {
@@ -327,6 +343,7 @@ void Save() {
                  int(v.overlay_items >> 3 & 1), int(v.overlay_items >> 4 & 1), int(v.overlay_items >> 5 & 1),
                  int(v.overlay_items >> 6 & 1), v.overlay_scale.load(), v.overlay_corner.load(),
                  v.overlay_opacity.load(), v.overlay_layout.load(), v.menu_tab.load());
+    const std::vector<std::string> resolution_names = Gow3Graphics::ResolutionNames();
     std::fprintf(file,
                  "display_mode=%s\nvsync=%d\nfps_limit=%d\nasync_shaders=%d\n"
                  "fsr1=%d\nscreen_upscaler=%s\nrcas=%d\nrcas_strength=%d\nframes_queued=%d\n"
@@ -337,9 +354,10 @@ void Save() {
                  int(v.fsr1.load()),
                  Gow3Graphics::ScreenUpscalerKeys[std::clamp(v.screen_upscaler.load(), 0, 1)].data(),
                  int(v.rcas.load()), v.rcas_strength.load(), v.frames_queued.load(),
-                 Gow3Graphics::Resolutions[std::clamp(v.render_resolution.load(), 0, 5)].data(),
+                 resolution_names[std::clamp(v.render_resolution.load(), 0, int(resolution_names.size()) - 1)].c_str(),
                  v.engine_fps.load(), int(v.deferred_readback.load()), int(v.stale_readback.load()),
                  int(v.fewer_gpu_waits.load()), int(v.restart_unconfirmed.load()));
+    std::fprintf(file, "anisotropy=%d\nvibration=%d\n", v.anisotropy.load(), v.vibration.load());
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");

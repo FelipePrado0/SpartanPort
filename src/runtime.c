@@ -67,6 +67,7 @@ void runtime_start(uint64_t flags) {
 #endif
     stack_canary &= ~UINT64_C(255);
 }
+static void (*report_hook)(void); /* loader extras (ISA site counts) */
 void runtime_report(void) {
     printf("Runtime: _init_env=%zu, atexit=%zu, __cxa_atexit=%zu, registered handlers=%zu\n",
            calls_init, calls_atexit, calls_cxa, handler_count);
@@ -83,7 +84,9 @@ void runtime_report(void) {
     runtime_savedata_report();
     runtime_file_report();
     printf("Runtime: memory operations=%zu\n", (size_t)memory_calls);
+    if (report_hook) report_hook();
 }
+void runtime_set_report_hook(void (*hook)(void)) { report_hook = hook; }
 static ABI void init_env(void) {
     /* prepare.py verified the supplied libc export consists of exactly C3. */
     ++calls_init;

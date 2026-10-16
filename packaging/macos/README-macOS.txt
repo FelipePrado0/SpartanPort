@@ -24,13 +24,14 @@ Installing
    the shaders are compiled.
 
 Patches and fixes are included and applied automatically: texture fix, skip videos with X and
-120 FPS are on by default. Change the resolution and frame rate on Home or Performance.
+120 FPS are on by default. Change the resolution and frame rate on Home or Performance. Save (at
+the bottom) or PLAY keeps a change.
 
-Faster settings (1080p screen): Performance -> Render resolution 720p, and Display -> Upscale to
-the window with Upscaler MetalFX (Apple). Every render resolution smaller than the screen is
-enlarged; 480p is a little faster still, but bright areas blow out at 480p (a known bug). In the
-game, the performance overlay then shows "MetalFX 720p->1080p" ("Native 1080p": nothing is
-enlarged).
+Faster settings (1080p screen): Home -> Render resolution 720p, and Graphics -> Upscaling ->
+Upscale to the window with Upscaler MetalFX (Apple). Every render resolution smaller than the
+screen is enlarged; 480p is a little faster still, but bright areas blow out at 480p (a known
+bug). In the game, the performance overlay then shows "MetalFX 720p->1080p" ("Native 1080p":
+nothing is enlarged).
 
 While playing
 - ` (the key left of 1) on the keyboard, or R3 + L2 on the controller, opens the port's menu:
@@ -38,7 +39,8 @@ While playing
 - Saved shaders load in the background; a small note in the corner shows the progress.
 - Keyboard: WASD move, arrows camera, Space Cross, Left Shift Circle, E Square, Q Triangle,
   1/3 L1/R1, R/F L2/R2, Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab touchpad. Change them on
-  the launcher's Controls page.
+  the launcher's Game page (Controls).
+- F12 saves a screenshot (Graphics -> Screenshots opens the folder).
 
 Next time
 - Start "God of War III" from Applications, Launchpad or the Dock.

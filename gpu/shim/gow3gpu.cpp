@@ -30,6 +30,7 @@
 #include "core/memory.h"
 #include "core/signals.h"
 #include "sdl_window.h"
+#include "video_core/renderer_vulkan/movie_bars.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 
 extern "C" {
@@ -47,6 +48,8 @@ uint64_t runtime_tsc_frequency(void);
 uint64_t runtime_read_tsc(void);
 int32_t* runtime_errno(void);
 void runtime_memory_set_gpu_hooks(RuntimeGpuRange map, RuntimeGpuRange unmap, RuntimeGpuRange invalidate);
+// runtime.c: exit counters (and the ISA site report), as on the guest's own exit
+void runtime_report(void);
 }
 
 Frontend::WindowSDL* g_window = nullptr;
@@ -265,6 +268,7 @@ extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
             SDL_Delay(2);
         }
         LOG_INFO(Frontend, "Window closed by user");
+        runtime_report();
         std::fflush(stdout);
         std::_Exit(0);
     };
@@ -353,19 +357,39 @@ int* PS4_SYSV_ABI __Error() {
 }
 } // namespace Libraries::Kernel
 
-// RenderDoc capture hooks: not used by the port.
+// RenderDoc capture hooks: not used by the port. Screenshots (F12) are taken by the presenter:
+// the game's frame without the overlay.
 namespace VideoCore {
+namespace {
+std::atomic<u32> screenshot_requests{0};
+}
 void LoadRenderDoc() {}
 void StartCapture() {}
 void EndCapture() {}
 void TriggerCapture() {}
 void SetOutputDir(const std::filesystem::path&, const std::string&) {}
 bool IsRenderDocLoaded() { return false; }
-void RequestScreenshot(ScreenshotRequest) {}
-u32 ConsumeGameOnlyScreenshotRequests() { return 0; }
+void RequestScreenshot(ScreenshotRequest request) {
+    if (request != ScreenshotRequest::None) {
+        screenshot_requests.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+u32 ConsumeGameOnlyScreenshotRequests() {
+    return screenshot_requests.exchange(0, std::memory_order_acq_rel);
+}
 u32 ConsumeWithOverlaysScreenshotRequests() { return 0; }
-ScreenshotRequests ConsumeScreenshotRequests() { return {}; }
+ScreenshotRequests ConsumeScreenshotRequests() {
+    return {.game_only_count = ConsumeGameOnlyScreenshotRequests(), .with_overlays_count = 0};
+}
 } // namespace VideoCore
+
+extern "C" int gow3gpu_vibration_percent(void) {
+    return Gow3Settings::Get().vibration.load(std::memory_order_relaxed);
+}
+
+extern "C" void gow3gpu_movie_picture(void) {
+    Vulkan::MovieBars::Cutscenes().NotePicture(Vulkan::MovieBars::NowMs());
+}
 
 extern "C" int gow3gpu_overlay_captures_input(void) {
     return Gow3Overlay::CapturesInput() ? 1 : 0;

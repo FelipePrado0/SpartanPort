@@ -110,6 +110,9 @@ static bool MultiCopy(Rasterizer& rasterizer, const VideoCore::Buffer* src,
     scheduler.Record([src = src->Handle(), dst = dst->Handle(), table = stream.Handle(), src_min,
                       src_size, dst_min, dst_size, table_offset, table_size,
                       count](vk::CommandBuffer cmdbuf) {
+        if (Vulkan::Scheduler::FullBarriers()) { // gow3: GOW3_FULL_BARRIERS=1
+            Vulkan::Scheduler::RecordFullBarrier(cmdbuf);
+        }
         const std::array<vk::DescriptorBufferInfo, 3> infos{{
             {src, src_min, src_size},
             {dst, dst_min, dst_size},
@@ -127,6 +130,9 @@ static bool MultiCopy(Rasterizer& rasterizer, const VideoCore::Buffer* src,
         cmdbuf.pushConstants(*pipe.layout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(count),
                              &count);
         cmdbuf.dispatch(count, 1, 1);
+        if (Vulkan::Scheduler::FullBarriers()) {
+            Vulkan::Scheduler::RecordFullBarrier(cmdbuf);
+        }
     });
     runtime.AccessBuffer(src, src_min, src_size, vk::PipelineStageFlagBits2::eComputeShader,
                          vk::AccessFlagBits2::eShaderRead);

@@ -24,6 +24,16 @@ class GraphicsOptionsTest(unittest.TestCase):
         self.assertEqual(options, {'render_resolution': 'native', 'engine_fps': '120', 'deferred_readback': '1',
                                    'stale_readback': '1', 'async_shaders': '1', 'fewer_gpu_waits': '0'})
 
+    def test_corrupt_state_file_preserves_current_settings(self):
+        self.ini.write_text('render_resolution=1440p\nengine_fps=240\n', encoding='utf-8')
+        self.state.write_text('{invalid json', encoding='utf-8')
+
+        options, reverted = g.prepare(self.ini, self.state)
+
+        self.assertFalse(reverted)
+        self.assertEqual(options['render_resolution'], '1440p')
+        self.assertEqual(options['engine_fps'], '240')
+
     def test_write_keys_keeps_other_lines(self):
         self.ini.write_text('# comment\nshow_fps=1\nengine_fps=60\n', encoding='utf-8')
         g.write_keys(self.ini, {'engine_fps': '240', 'vsync': '0'})
@@ -58,6 +68,46 @@ class GraphicsOptionsTest(unittest.TestCase):
         native = g.startup_options({'engine_fps': '60'})
         self.assertEqual(g.patch_names(['Resolution Patch - 4K', 'Skip Any Video With X Button'], native),
                          ['Bug Fix - Texture Corruption Fix', 'Skip Any Video With X Button'])
+
+    def test_resolution_labels_show_the_size_and_aspect_ratio(self):
+        self.assertEqual(g.resolution_label('native'), 'Native · 1920 × 1080 · 16:9')
+        self.assertEqual(g.resolution_label('480p'), '480p · 854 × 480 · 16:9')
+        self.assertEqual(g.resolution_label('3440x1440'), '3440 × 1440 · 21:9 (beta)')
+        self.assertEqual(g.resolution_label('5120x1440'), '5120 × 1440 · 32:9 (beta)')
+        self.assertEqual(g.resolution_label('2560x1600'), '2560 × 1600 · 16:10 (beta)')
+        self.assertEqual(g.resolution_label('3840x1080'), '3840 × 1080 · 32:9')  # a mod's size, not beta
+        self.assertEqual(g.resolution_label('1600x1200'), '1600 × 1200 · 4:3')
+        self.assertEqual(g.resolution_label('custom'), 'custom')
+        # Every ultrawide and 16:10 size is beta; the 16:9 ones are not.
+        self.assertEqual([r for r in g.RESOLUTIONS if g.resolution_label(r).endswith('(beta)')],
+                         list(g.BETA_RESOLUTIONS))
+
+    def test_every_built_in_resolution_has_a_patch(self):
+        import patches
+        xml = Path(__file__).resolve().parent.parent / 'patches' / 'God_of_War_III_Remastered.xml'
+        self.assertEqual(sorted(r for r in g.RESOLUTIONS if r != 'native'), sorted(patches.resolution_names([xml])))
+
+    def test_resolutions_of_enabled_mods(self):
+        # A mod's "Resolution Patch - <size>" is a render resolution only while its mod is on.
+        self.assertEqual(g.resolutions(), g.RESOLUTIONS)
+        self.assertEqual(g.resolutions(['3840x1080', '4K']), g.RESOLUTIONS + ('3840x1080',))
+        ini = {'render_resolution': '3840x1080', 'engine_fps': '60'}
+        self.assertEqual(g.startup_options(ini)['render_resolution'], 'native')
+        options = g.startup_options(ini, ['3840x1080'])
+        self.assertEqual(options['render_resolution'], '3840x1080')
+        self.assertEqual(g.patch_names(['Bug Fix - Texture Corruption Fix'], options), ['Resolution Patch - 3840x1080'])
+
+    def test_a_confirmed_mod_resolution_is_restored_while_its_mod_is_on(self):
+        with tempfile.TemporaryDirectory() as folder:
+            ini, state = Path(folder) / 'gow3.ini', Path(folder) / 'state.json'
+            g.write_keys(ini, {'render_resolution': '3840x1080', 'engine_fps': '60'})
+            tried, _ = g.prepare(ini, state, ['3840x1080'])
+            self.assertEqual(tried['render_resolution'], '3840x1080')
+            g.write_keys(ini, {'render_resolution': '4K', 'restart_unconfirmed': '1'})
+            self.assertEqual(g.prepare(ini, state, ['3840x1080'])[0]['render_resolution'], '4K')  # attempt
+            options, reverted = g.prepare(ini, state, ['3840x1080'])  # the restart never confirmed
+            self.assertTrue(reverted)
+            self.assertEqual(options['render_resolution'], '3840x1080')
 
     def test_applied_engine_fps(self):
         # The engine runs above 60 only with a frame rate patch in the applied list.

@@ -7,6 +7,7 @@
 #include "common/assert.h"
 #include "common/bit_field.h"
 #include "video_core/amdgpu/pixel_format.h"
+#include "video_core/amdgpu/gow3_msaa.h"
 #include "video_core/amdgpu/tiling.h"
 
 namespace AmdGpu {
@@ -238,18 +239,25 @@ struct Image {
         return slices;
     }
 
+    /// The guest's multisampled types: their last_level holds the sample count.
+    bool IsGuestMsaa() const noexcept {
+        return static_cast<ImageType>(type) == ImageType::Color2DMsaa ||
+               static_cast<ImageType>(type) == ImageType::Color2DMsaaArray;
+    }
+
     u32 NumLevels() const {
-        if (GetType() == ImageType::Color2DMsaa || GetType() == ImageType::Color2DMsaaArray) {
+        if (IsGuestMsaa()) {
             return 1;
         }
         return last_level + 1;
     }
 
+    u32 GuestNumSamples() const {
+        return IsGuestMsaa() ? 1u << last_level : 1;
+    }
+
     u32 NumSamples() const {
-        if (GetType() == ImageType::Color2DMsaa || GetType() == ImageType::Color2DMsaaArray) {
-            return 1u << last_level;
-        }
-        return 1;
+        return NoMsaa() ? 1 : GuestNumSamples();
     }
 
     bool IsCube() const noexcept {
@@ -257,6 +265,11 @@ struct Image {
     }
 
     ImageType GetType() const noexcept {
+        if (NoMsaa() && IsGuestMsaa()) {
+            // gow3: see gow3_msaa.h; shaders then fetch it without a sample index.
+            return static_cast<ImageType>(type) == ImageType::Color2DMsaa ? ImageType::Color2D
+                                                                          : ImageType::Color2DArray;
+        }
         return IsCube() ? ImageType::Color2DArray : static_cast<ImageType>(type);
     }
 
@@ -289,7 +302,7 @@ struct Image {
             return 0;
         }
         const u32 bpp = NumBitsPerElement(dfmt);
-        const auto macro_tile_mode = CalculateMacrotileMode(tile_mode, bpp, NumSamples());
+        const auto macro_tile_mode = CalculateMacrotileMode(tile_mode, bpp, GuestNumSamples());
         const u32 banks = GetAltNumBanks(macro_tile_mode);
         return (((banks - 1) << 4) & base_address) >> 4;
     }

@@ -198,6 +198,9 @@ void TileManager::RecordTilingDispatch(vk::Pipeline pipeline, const vk::Descript
                                        const vk::DescriptorBufferInfo& params, u32 dim_x) {
     scheduler.Record([pipeline, layout = *pl_layout, tiled, linear, params,
                       dim_x](vk::CommandBuffer cmdbuf) {
+        if (Vulkan::Scheduler::FullBarriers()) { // gow3: GOW3_FULL_BARRIERS=1
+            Vulkan::Scheduler::RecordFullBarrier(cmdbuf);
+        }
         cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
         const std::array<vk::WriteDescriptorSet, 3> set_writes = {{
             {
@@ -221,6 +224,9 @@ void TileManager::RecordTilingDispatch(vk::Pipeline pipeline, const vk::Descript
         }};
         cmdbuf.pushDescriptorSetKHR(vk::PipelineBindPoint::eCompute, layout, 0, set_writes);
         cmdbuf.dispatch(dim_x, 1, 1);
+        if (Vulkan::Scheduler::FullBarriers()) {
+            Vulkan::Scheduler::RecordFullBarrier(cmdbuf);
+        }
     });
 }
 

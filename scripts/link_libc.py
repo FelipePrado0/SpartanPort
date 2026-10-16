@@ -8,7 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 import struct
-from prepare import parse_self, span, unpack
+from prepare import parse_self, read_self, span, unpack
 
 
 def encode_id(value):
@@ -22,7 +22,7 @@ def encode_id(value):
 
 
 def module(path):
-    source = path.read_bytes()
+    source = read_self(path)
     elf, header, ph, _, missing = parse_self(source)
     dp = next(p for p in ph if p['type'] == 2)
     dynamic = []

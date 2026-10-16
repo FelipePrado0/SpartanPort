@@ -5,12 +5,11 @@ neither dump is modified. Whatever the update does not touch is linked as a whol
 or a junction / hard link on Windows without the symlink privilege, see mods.make_link), so
 a 47 GB game costs a handful of links. Names are matched without regard to case.
 """
-import os
 from pathlib import Path
 import shutil
 import tempfile
 
-from mods import is_link, make_link
+from mods import is_link, make_link, remove_link
 
 
 def overlay(source, dest):
@@ -37,10 +36,9 @@ def remove(path):
     """Removes a file, link or folder of a view without following links into the dumps."""
     path = Path(path)
     if is_link(path):
-        if os.name == 'nt' and path.is_dir():  # a junction or a directory symlink
-            os.rmdir(path)
-        else:
-            path.unlink()
+        # remove_link also drops the entry the Windows junction/hard-link fallback recorded in
+        # mods.LINKED; without it is_link() keeps reporting a recreated real folder as a link.
+        remove_link(path)
     elif path.is_dir():
         for child in list(path.iterdir()):
             remove(child)
