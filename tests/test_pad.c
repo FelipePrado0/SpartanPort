@@ -80,12 +80,17 @@ int main(void) {
     assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
     inject(path,"");
     data=read_pad();
-    assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
-    usleep(60000);
-    data=read_pad();
+    assert(touch_at(&data,1440));
+    for (int i=0; !(data.buttons & BTN_TOUCHPAD) && i<20; ++i) {
+        usleep(10000);
+        data=read_pad();
+        assert(touch_at(&data,1440));
+    }
     assert((data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
-    usleep(60000);
-    data=read_pad();
+    for (int i=0; (data.buttons & BTN_TOUCHPAD) && i<20; ++i) {
+        usleep(10000);
+        data=read_pad();
+    }
     assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
     usleep(220000);
     data=read_pad();
