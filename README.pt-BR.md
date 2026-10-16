@@ -140,7 +140,7 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
   configuráveis.
 - Salvar e carregar: a lista de saves aparece na tela, como no PS4. O autosave também funciona.
   O launcher faz backup dos saves antes de cada partida.
-- Patches: resolução de renderização de 480p, 720p, 1440p, 1800p ou 4K, correção de texturas
+- Patches: resolução de renderização de 480p, 720p, 900p, 1440p, 1800p ou 4K, correção de texturas
   corrompidas e pular vídeos com o botão X (comunidade); FPS do motor de 120 (kvicken) ou 240
   (adaptado por Felipe Prado).
 - **Ultrawide (beta):** resoluções 21:9, 32:9 e 16:10 (3440x1440 testada) com campo de visão mais largo, em vez de

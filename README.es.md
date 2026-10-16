@@ -144,7 +144,7 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
 - Guardado y carga: la lista de partidas guardadas se muestra en pantalla, como en la PS4. El
   autoguardado también funciona. El launcher hace una copia de seguridad de las partidas antes de
   cada inicio.
-- Parches: resolución de render de 480p, 720p, 1440p, 1800p o 4K, corrección de texturas corruptas
+- Parches: resolución de render de 480p, 720p, 900p, 1440p, 1800p o 4K, corrección de texturas corruptas
   y saltar videos con el botón X (comunidad); tasa de cuadros del motor de 120 FPS (kvicken) o 240
   FPS (adaptado por Felipe Prado).
 - **Ultrawide (beta):** resoluciones 21:9, 32:9 y 16:10 (3440x1440 probada) con un campo de visión más ancho en
