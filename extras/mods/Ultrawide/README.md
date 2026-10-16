@@ -15,8 +15,9 @@ proportions and you see more to the sides.
 | 5120x1440 | 32:9 | **Tested in game** |
 | 1920x1200 | 16:10 | **Tested in game** (taller than 16:9: see Notes) |
 | 2560x1600 | 16:10 | **Tested in game** (taller than 16:9: see Notes) |
+| 1280x800 | 16:10 | Not tested (the Steam Deck's screen) |
 
-Every size was tested in game. Thanks to the players who tested them in issue #180. Since 2.4.0 these sizes are
+Every size but 1280x800 was tested in game. Thanks to the players who tested them in issue #180. Since 2.4.0 these sizes are
 built in (Render resolution); the mod is for older versions. If something looks wrong on your screen, please say
 how it looks (resolution, and whether anything is cropped, stretched or missing at the edges) in an issue.
 

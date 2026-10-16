@@ -337,11 +337,11 @@ class ModPatchTests(unittest.TestCase):
 
     # 16:10, taller than 16:9: only the resolution and the aspect ratio (the camera's fixed horizontal view
     # already shows more at the top and bottom), so no field of view change.
-    TALLER = {(1920, 1200): 3072, (2560, 1600): 4608}
+    TALLER = {(1920, 1200): 3072, (2560, 1600): 4608, (1280, 800): 3072}
 
     def test_the_ultrawide_mod_lists_its_resolutions_and_memory_needs(self):
-        self.assertEqual(resolution_names([ULTRAWIDE]), ['1920x1200', '2560x1080', '2560x1600', '3440x1440',
-                                                         '3840x1600', '5120x1440'])
+        self.assertEqual(resolution_names([ULTRAWIDE]), ['1280x800', '1920x1200', '2560x1080', '2560x1600',
+                                                         '3440x1440', '3840x1600', '5120x1440'])
         for (width, height), dmem in self.TALLER.items():
             name = f'Resolution Patch - {width}x{height}'
             self.assertEqual(patch_requirements(ULTRAWIDE, [name], '01.02'), (5056 + dmem, None), name)

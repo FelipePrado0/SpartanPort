@@ -460,7 +460,8 @@ void PerformanceTab() {
             "1800p · 3200 × 1800 · 16:9", "4K · 3840 × 2160 · 16:9",
             "2560 × 1080 · 21:9 (beta)", "3440 × 1440 · 21:9 (beta)",
             "3840 × 1600 · 21:9 (beta)", "5120 × 1440 · 32:9 (beta)",
-            "1920 × 1200 · 16:10 (beta)", "2560 × 1600 · 16:10 (beta)"};
+            "1920 × 1200 · 16:10 (beta)", "2560 × 1600 · 16:10 (beta)",
+            "1280 × 800 · 16:10 (beta)"};
         static_assert(std::size(builtin_labels) == G::Resolutions.size());
         const std::vector<std::string> resolution_names = G::ResolutionNames();
         std::vector<const char*> resolution_labels;
