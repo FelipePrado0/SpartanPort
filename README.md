@@ -137,7 +137,7 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
 - Controller (DualSense, Xbox and others, through SDL3) and keyboard at the same time, both
   remappable.
 - **In-game button icons** (opt-in, off by default): the PlayStation button icons in the game can
-  show your controller's, Xbox or Nintendo ones (Game page, Controls).
+  show your controller's, Xbox or Nintendo ones, or the keyboard keys you play with (Game page, Controls).
 - Saving and loading: the save list is shown on screen, as on the PS4. Autosave works too. The
   launcher backs the saves up before every start.
 - Patches: render resolution of 480p, 720p, 1440p, 1800p or 4K, corrupted texture fix and skip
@@ -236,11 +236,13 @@ touchpad click) and L1 + View opens photo mode (the left click). On a DualSense 
 works as on the PS4, and Share/Create works like View.
 
 **In-game button icons** (off by default) are chosen in the launcher's Game page, Controls section, under
-*In-game button icons*: *Match my controller*, *Xbox* or *Nintendo*. They replace the PlayStation icons in the
+*In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* or *Keyboard*. They replace the PlayStation icons in the
 tutorial, move-list and quick-time prompts; the pause-menu controller drawing stays a DualShock 4.
+*Keyboard* shows the key that presses each button, following your keyboard mapping (a changed key shows
+on the next start); *Match my controller* shows the keys too when no gamepad is connected.
 The launcher writes a patched copy of two game files into the port's data folder and never changes
 your game folder. A new controller is picked up after a restart. Without the launcher, set
-`GOW3_GLYPH_STYLE` to `auto`, `xbox` or `nintendo` before starting `run.py`.
+`GOW3_GLYPH_STYLE` to `auto`, `xbox`, `nintendo` or `keyboard` before starting `run.py`.
 
 In the menu: L1/R1 or Q/E switch tabs. In the save list: arrows or the d-pad choose, Enter or
 Cross confirm, Esc or Circle cancel.

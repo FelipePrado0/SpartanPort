@@ -117,10 +117,11 @@ def find_executable(name):
 def glyph_mounts(env, probe, game, out):
     """(probe arguments, style) of the controller glyphs: patched copies of the WADs that hold the
     game's button icons, mounted over them (scripts/glyphs.py). Opt-in: unless GOW3_GLYPH_STYLE is
-    auto, xbox or nintendo nothing is asked, drawn or mounted, and old copies are removed. The
-    game folder is never written."""
+    auto, xbox, nintendo or keyboard nothing is asked, drawn or mounted, and old copies are removed.
+    The keyboard keys follow GOW3_KEY_MAP; auto shows them when no gamepad is connected. The game
+    folder is never written."""
     choice = env.get('GOW3_GLYPH_STYLE', 'off')
-    if choice not in ('auto', 'xbox', 'nintendo'):
+    if choice not in ('auto', 'xbox', 'nintendo', 'keyboard'):
         shutil.rmtree(Path(out) / 'glyphs', ignore_errors=True)
         return [], None
     try:
@@ -130,12 +131,12 @@ def glyph_mounts(env, probe, game, out):
             pad = subprocess.run([str(probe), '--gamepad'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                  text=True, timeout=15, creationflags=no_console()).stdout
         style, faces, name = glyphs.resolve(choice, pad)
-        mounts = glyphs.build(game, out, style, faces, env.get('GOW3_PAD_MAP', ''))
+        mounts = glyphs.build(game, out, style, faces, env.get('GOW3_PAD_MAP', ''), env.get('GOW3_KEY_MAP', ''))
     except Exception as error:  # noqa: BLE001  (icons only: whatever fails, the game still starts)
         print(f'Glyphs: {error}; the game keeps its own button icons', flush=True)
         return [], None
     if not mounts:
-        print('Glyphs: no Xbox or Nintendo controller, the game keeps its own button icons' if style == 'playstation'
+        print('Glyphs: a PlayStation controller, the game keeps its own button icons' if style == 'playstation'
               else 'Glyphs: no button icons found in this game folder', flush=True)
         return [], None
     print(f'Glyphs: {style}{f" ({name})" if name else ""}, on copies in {Path(out) / "glyphs"}; game files untouched',

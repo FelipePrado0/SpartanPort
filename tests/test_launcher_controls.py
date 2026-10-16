@@ -110,7 +110,7 @@ class ControlMapTest(unittest.TestCase):
         self.assertNotIn('GOW3_GLYPH_STYLE', launcher.game_environment({**launcher.APP_DEFAULTS}))
 
     def test_glyph_style_choices_reach_the_game(self):
-        for style in ('auto', 'xbox', 'nintendo'):
+        for style in ('auto', 'xbox', 'nintendo', 'keyboard'):
             env = launcher.game_environment({**launcher.APP_DEFAULTS, 'glyph_style': style})
             self.assertEqual(env['GOW3_GLYPH_STYLE'], style)
 

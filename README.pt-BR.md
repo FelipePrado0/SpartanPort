@@ -159,7 +159,7 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
   desempenho, pasta do jogo e backups de save, patches, mods (ordem, presets e conflitos),
   controles com ícones de botões PlayStation ou Xbox, atualizações e diagnóstico.
 - **Ícones de botões no jogo** (opt-in, desligado por padrão): os ícones PlayStation do jogo podem
-  ser os do seu controle, Xbox ou Nintendo (tela Game, seção Controls).
+  ser os do seu controle, Xbox ou Nintendo, ou as teclas do teclado com que você joga (tela Game, seção Controls).
 - **Menu dentro do jogo** (Insert no teclado, R3+L2 no controle), com quatro abas:
   - **Game:** trapaças (vida, magia, item e Fúria de Esparta infinitos, orbes vermelhos no
     máximo); multiplicadores de 0,1x a 100x para orbes vermelhos, verdes (vida), azuis (magia)
@@ -240,11 +240,13 @@ touchpad) e L1 + View abre o modo foto (o clique esquerdo). No DualSense o touch
 como no PS4, e Share/Create funciona como View.
 
 Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Game do launcher, seção Controls, em
-*Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox* ou *Nintendo*. Eles trocam os ícones
+*Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox*, *Nintendo* ou *Teclado*. Eles trocam os ícones
 PlayStation dos tutoriais, da lista de golpes e dos eventos rápidos; o desenho do controle no menu
-de pausa continua sendo um DualShock 4. O launcher grava uma cópia com patch de dois arquivos do
+de pausa continua sendo um DualShock 4. *Teclado* mostra a tecla que aperta cada botão, seguindo o seu
+mapeamento do teclado (uma tecla trocada aparece no próximo início); *Igual ao meu controle* também mostra
+as teclas quando nenhum controle está conectado. O launcher grava uma cópia com patch de dois arquivos do
 jogo na pasta de dados do port e nunca altera a pasta do jogo. Um controle novo é reconhecido após
-reiniciar. Sem o launcher, defina `GOW3_GLYPH_STYLE` como `auto`, `xbox` ou `nintendo` antes de
+reiniciar. Sem o launcher, defina `GOW3_GLYPH_STYLE` como `auto`, `xbox`, `nintendo` ou `keyboard` antes de
 iniciar o `run.py`.
 
 No menu: L1/R1 ou Q/E trocam de aba. Na lista de saves: setas ou direcional escolhem, Enter ou

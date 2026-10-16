@@ -354,7 +354,7 @@ PAD_STYLES = {
 
 
 GLYPH_STYLES = [('off', ('Original (default)',)), ('auto', ('Match my controller',)), ('xbox', ('Xbox',)),
-                ('nintendo', ('Nintendo',))]
+                ('nintendo', ('Nintendo',)), ('keyboard', ('Keyboard',))]
 
 
 def control_changes(values, kind):
@@ -851,7 +851,7 @@ def game_environment(s):
             env[name] = value
     glyph_style = s.get('glyph_style')
     env.pop('GOW3_GLYPH_STYLE', None)
-    if glyph_style in ('auto', 'xbox', 'nintendo'):
+    if glyph_style in ('auto', 'xbox', 'nintendo', 'keyboard'):
         env['GOW3_GLYPH_STYLE'] = glyph_style
     env['PYTHONUNBUFFERED'] = '1'
     env['PYTHONIOENCODING'] = 'utf-8'

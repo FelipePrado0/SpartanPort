@@ -140,7 +140,7 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
 - Audio: música, voces y efectos (ATRAC9 y MP3).
 - Control (DualSense, Xbox y otros, mediante SDL3) y teclado al mismo tiempo, ambos remapeables.
 - **Íconos de botones en el juego** (opcional, desactivado por defecto): los íconos de botones de
-  PlayStation dentro del juego pueden mostrar los de tu control, Xbox o Nintendo (página Game, sección Controls).
+  PlayStation dentro del juego pueden mostrar los de tu control, Xbox o Nintendo, o las teclas con las que jugás (página Game, sección Controls).
 - Guardado y carga: la lista de partidas guardadas se muestra en pantalla, como en la PS4. El
   autoguardado también funciona. El launcher hace una copia de seguridad de las partidas antes de
   cada inicio.
@@ -244,12 +244,14 @@ y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad f
 PS4, y Share/Create funciona como View.
 
 Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Game del launcher, sección Controls, en
-*In-game button icons*: *Match my controller*, *Xbox* o *Nintendo*. Reemplazan los íconos de
+*In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* o *Keyboard*. Reemplazan los íconos de
 PlayStation en los tutoriales, la lista de movimientos y las indicaciones de quick-time events; el
-dibujo del control en el menú de pausa sigue siendo un DualShock 4. El launcher escribe una copia
+dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* muestra la tecla que
+presiona cada botón, según tu mapeo del teclado (una tecla cambiada aparece en el próximo inicio);
+*Match my controller* también muestra las teclas cuando no hay un control conectado. El launcher escribe una copia
 parcheada de dos archivos del juego en la carpeta de datos del port y nunca modifica tu carpeta del
 juego. Un control nuevo se detecta después de reiniciar. Sin el launcher, definí `GOW3_GLYPH_STYLE`
-como `auto`, `xbox` o `nintendo` antes de iniciar `run.py`.
+como `auto`, `xbox`, `nintendo` o `keyboard` antes de iniciar `run.py`.
 
 En el menú: L1/R1 o Q/E cambian de pestaña. En la lista de partidas: las flechas o la cruceta eligen,
 Enter o Cruz confirman, Esc o Círculo cancelan.
