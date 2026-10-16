@@ -309,7 +309,7 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
                 'render_resolution': 'native', 'engine_fps': '120',
                 'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
-                'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48'}
+                'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
@@ -324,7 +324,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR',
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
-                'native_input': False, 'native_rage': True, 'stick_prompts': 'keyboard',
+                'rage_one_input': True, 'stick_prompts': 'keyboard', 'controls_layout': 2,
                 'glyph_style': 'off'}
 
 # PS4 button, default key, default gamepad button (SDL names; src/runtime_pad.c). L2/R2 come
@@ -354,7 +354,7 @@ PAD_STYLES = {
 }
 
 
-# Native Translation: how the game's stick-rotation prompts (QTEs) are answered (runtime_pad.c).
+# Keyboard & mouse: how the game's stick-rotation prompts (QTEs) are answered (runtime_pad.c).
 STICK_PROMPTS = [('keyboard', ('Keyboard (native)',)), ('mouse', ('Adaptive mouse (experimental)',))]
 GLYPH_STYLES = [('off', ('Original (default)',)), ('auto', ('Match my controller',)), ('xbox', ('Xbox',)),
                 ('nintendo', ('Nintendo',))]
@@ -422,25 +422,27 @@ def bind_key(bindings, button, name):
     return other
 
 
-# Native Translation: its own table of keys and mouse inputs, used instead of Keyboard Mapping
-# while 'native_input' is on. Its defaults put the attacks and magic on the mouse, the shoulder
-# buttons next to WASD and the weapons on 1-4 (clockwise from up, the order they are acquired).
-NATIVE_DEFAULTS = {'cross': 'Space', 'circle': 'Left Shift', 'square': 'Mouse Left', 'triangle': 'Mouse Right',
-                   'l1': 'Q', 'r1': 'E', 'l2': 'R', 'r2': 'Mouse Forward', 'l3': 'Z', 'r3': 'X',
-                   'options': 'Tab', 'touchpad_left': 'P', 'touchpad_right': 'Escape',
-                   'up': '1', 'right': '2', 'down': '3', 'left': '4'}
-# Actions of the native table only (runtime_pad.c's host-only sources), as CONTROLS rows.
-# Rage of Sparta (L3 + R3 on one input) follows R3; it is used instead of L3 and R3 while
-# 'native_rage' is on.
+# The keyboard & mouse table: keys and mouse inputs for the PS4 buttons plus actions of their own.
+# Its defaults put the attacks and magic on the mouse, the shoulder buttons next to WASD and the
+# weapons on 1-4 (clockwise from up, the order they are acquired); CONTROLS keeps the game's own
+# keys (src/runtime_pad.c), so only what differs from them is sent.
+KEY_DEFAULTS = {'cross': 'Space', 'circle': 'Left Shift', 'square': 'Mouse Left', 'triangle': 'Mouse Right',
+                'l1': 'Q', 'r1': 'E', 'l2': 'R', 'r2': 'Mouse Forward', 'l3': 'Z', 'r3': 'X',
+                'options': 'Tab', 'touchpad_left': 'P', 'touchpad_right': 'Escape',
+                'up': '1', 'right': '2', 'down': '3', 'left': '4'}
+# Actions of the keyboard map only (runtime_pad.c's host-only sources), as CONTROLS rows. Rage of
+# Sparta (L3 + R3 on one input) follows R3; it is used instead of L3 and R3 while 'rage_one_input'
+# is on. "None" leaves a row without an input.
 RAGE_ROW, GRAB_ROW, DODGE_ROW = ('rage', 'Mouse Middle', None), ('grab', 'C', None), ('dodge', 'Mouse Back', None)
-NATIVE_ACTIONS = [RAGE_ROW, GRAB_ROW, DODGE_ROW]
+KEY_ACTIONS = [RAGE_ROW, GRAB_ROW, DODGE_ROW]
 ACTION_NAMES = {'rage': 'Rage of Sparta', 'grab': 'Grab', 'dodge': 'Dodge'}
 RAGE_BUTTONS = ('l3', 'r3')
+CONTROLS_LAYOUT = 2  # settings layout: 2 = one keyboard & mouse table (migrate_controls)
 
 
 def table_rows(kind):
-    """CONTROLS rows of a table, in display order; the native one adds its actions."""
-    if kind != 'native':
+    """CONTROLS rows of a table, in display order; the keyboard one adds its actions."""
+    if kind != 'key':
         return CONTROLS
     rows = []
     for row in CONTROLS:
@@ -456,29 +458,27 @@ def is_mouse_name(name):
 
 
 def default_input(row, kind):
-    """Default input of a CONTROLS row for 'key', 'native' or 'pad' ('' or None when it has none)."""
+    """Default input of a table row for 'key' or 'pad' ('' or None when it has none)."""
     button, key, pad = row
     if kind == 'pad':
         return pad
-    if kind == 'native' and key:
-        return NATIVE_DEFAULTS.get(button, key)
-    return key
+    return KEY_DEFAULTS.get(button, key) if key else key
 
 
-def native_key_map(controls, rage=False):
-    """GOW3_KEY_MAP of the Native Translation table: each button on its native input, written
-    where that differs from the game's own keyboard default. With `rage` (one input for Rage of
-    Sparta) L3 and R3 get none and the Rage row is used; otherwise the Rage row is left out."""
-    chosen = control_values(controls, 'native')
+def keyboard_map(controls, rage=True):
+    """GOW3_KEY_MAP of the keyboard & mouse table: each button on its chosen input, written where
+    that differs from the game's own key. With `rage` (one input for Rage of Sparta) L3 and R3 get
+    none and the Rage row is used; otherwise the Rage row is left out."""
+    chosen = control_values(controls, 'key')
     entries = []
-    for row in table_rows('native'):
+    for row in table_rows('key'):
         button, key, _pad = row
         if not key or (button == 'rage' and not rage):
             continue
         if rage and button in RAGE_BUTTONS:
             entries.append(f'{button}=None')
             continue
-        value = (chosen.get(button) or default_input(row, 'native')).strip()
+        value = (chosen.get(button) or default_input(row, 'key')).strip()
         game_default = key if row in CONTROLS else ''  # the game has no key of its own for an action
         if value.casefold() != game_default.casefold() and not set(value) & set(',='):
             entries.append(f'{button}={value}')
@@ -493,8 +493,8 @@ def control_changes(values, kind):
 
 
 def control_values(controls, kind):
-    """The saved keys ('key') or gamepad names ('pad') by game button, for the buttons that have
-    a box of that kind. 'touchpad', saved before the sides were split, is the left click."""
+    """The saved inputs ('key') or gamepad names ('pad') by game button, for the rows of that
+    table. 'touchpad', saved before the sides were split, is the left click."""
     chosen = controls.get(kind, {}) if isinstance(controls, dict) else {}
     if not isinstance(chosen, dict):
         return {}
@@ -502,15 +502,42 @@ def control_values(controls, kind):
     if 'touchpad' in chosen and 'touchpad_left' not in values:
         values['touchpad_left'] = chosen['touchpad']
     return {button: values[button] for button, key, pad in table_rows(kind)
-            if (pad if kind == 'pad' else key) and isinstance(values.get(button), str) and values[button].strip()
-            and not (kind == 'key' and is_mouse_name(values[button]))}  # the mouse is Native Translation's
+            if (pad if kind == 'pad' else key) and isinstance(values.get(button), str) and values[button].strip()}
 
 
 def control_map(controls, kind):
-    """GOW3_KEY_MAP/GOW3_PAD_MAP value: 'cross=Q,circle=Left Shift' for the changed buttons."""
+    """GOW3_PAD_MAP value: 'cross=a,circle=b' for the changed buttons."""
     chosen = control_values(controls, kind)
     return ','.join(f'{button}={chosen[button].strip()}' for button, _key, _pad in CONTROLS
                     if button in chosen and not set(chosen[button]) & set(',='))
+
+
+def migrate_controls(saved):
+    """Settings saved before the keyboard & mouse table (CONTROLS_LAYOUT). A player who saved keys
+    in Keyboard Mapping keeps the whole layout they had (the game's keys for the rest); one who
+    used Native Translation keeps that table. A new action whose default input is already taken
+    stays without one."""
+    if not isinstance(saved, dict) or not saved or saved.get('controls_layout') == CONTROLS_LAYOUT:
+        return saved
+    saved = dict(saved)
+    controls = dict(saved['controls']) if isinstance(saved.get('controls'), dict) else {}
+    native = controls.pop('native', None)
+    if saved.pop('native_input', False) and isinstance(native, dict):
+        controls['key'] = dict(native)  # its defaults are the new ones
+    elif controls.get('key'):
+        kept = control_values(controls, 'key')
+        layout = {button: kept.get(button) or key for button, key, _pad in CONTROLS if key}
+        rage = saved.get('native_rage', True)
+        taken = {value.strip().casefold() for button, value in layout.items()
+                 if not (rage and button in RAGE_BUTTONS)}
+        for button, default, _pad in KEY_ACTIONS:
+            layout[button] = 'None' if default.casefold() in taken else default
+        controls['key'] = layout
+    if 'native_rage' in saved:
+        saved['rage_one_input'] = saved.pop('native_rage')
+    saved['controls'] = controls
+    saved['controls_layout'] = CONTROLS_LAYOUT
+    return saved
 
 UPSCALERS = [('fsr3', ('FSR 3.1 (every GPU)', 'FSR 3.1 (любая видеокарта)')),
              ('taa', ('TAA (native resolution anti-aliasing)', 'TAA (нативное сглаживание)')),
@@ -975,13 +1002,12 @@ def game_environment(s):
         if s[key]:
             env[name] = '1'
     controls = s.get('controls', {})
-    if value := (native_key_map(controls, bool(s.get('native_rage'))) if s.get('native_input')
-                 else control_map(controls, 'key')):
+    if value := keyboard_map(controls, bool(s.get('rage_one_input', True))):
         env['GOW3_KEY_MAP'] = value
     if value := control_map(controls, 'pad'):
         env['GOW3_PAD_MAP'] = value
     env.pop('GOW3_STICK_PROMPTS', None)
-    if s.get('native_input') and s.get('stick_prompts') in dict(STICK_PROMPTS):
+    if s.get('stick_prompts') in dict(STICK_PROMPTS):
         env['GOW3_STICK_PROMPTS'] = s['stick_prompts']
     glyph_style = s.get('glyph_style')
     env.pop('GOW3_GLYPH_STYLE', None)
@@ -1041,7 +1067,7 @@ class Launcher:
     def __init__(self, root, tk, ttk, filedialog, messagebox):
         self.tk, self.ttk, self.filedialog, self.messagebox = tk, ttk, filedialog, messagebox
         self.root = root
-        self.app = {**APP_DEFAULTS, **load_json(CONFIG_FILE, {})}
+        self.app = {**APP_DEFAULTS, **migrate_controls(load_json(CONFIG_FILE, {}))}
         self.ini, self.ini_lines = load_ini()
         self.vars = {}
         self.process = self.job = None
@@ -1265,15 +1291,12 @@ class Launcher:
         self.ttk.Label(parent, text=text, style='Muted.TLabel', wraplength=self.px(680), justify='left').grid(
             row=self.next_row(parent), column=0, columnspan=2, sticky='w', pady=(top, 0))
 
-    def section(self, parent, title, top=20, tag=None):
-        """A section heading with a line under it; `tag` adds a small badge after the title (e.g. Beta)."""
+    def section(self, parent, title, top=20):
+        """A section heading with a line under it."""
         r = self.next_row(parent)
         head = self.ttk.Frame(parent)
         head.grid(row=r, column=0, columnspan=2, sticky='w', pady=(top, 0))
         self.ttk.Label(head, text=heading_text(title.upper()), style='Section.TLabel').pack(side='left')
-        if tag:
-            self.tk.Label(head, text=tag.upper(), bg=ACCENT, fg=TEXT, font=(UI_FONT, 7, 'bold'),
-                          padx=5, pady=0).pack(side='left', padx=(8, 0))
         self.tk.Frame(parent, bg=LINE, height=1).grid(row=r + 1, column=0, columnspan=2, sticky='we', pady=(2, 2))
 
     def folder(self, parent, key, title, prompt, hint=None, on_change=None):
@@ -1710,16 +1733,16 @@ class Launcher:
             row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
 
     def build_controls(self):
-        """The Controls page: general input options, keyboard and gamepad remapping of the PS4
-        buttons (run.py passes GOW3_KEY_MAP and GOW3_PAD_MAP to the game) and native keyboard & mouse."""
+        """The Controls page: the keyboard & mouse table, button icons and the gamepad remapping of
+        the PS4 buttons (run.py passes GOW3_KEY_MAP and GOW3_PAD_MAP to the game)."""
         tk, ttk = self.tk, self.ttk
         f = self.scrolled_page('controls', _('Controls', 'Управление'),
-                               _('Button icons, keyboard and gamepad mapping, and native keyboard & mouse.'))
-        saved = {kind: control_values(self.app.get('controls'), kind) for kind in ('key', 'native', 'pad')}
+                               _('Keyboard and mouse, button icons and gamepad mapping.'))
+        saved = {kind: control_values(self.app.get('controls'), kind) for kind in ('key', 'pad')}
         style = self.app.get('pad_style') if self.app.get('pad_style') in PAD_STYLES else 'playstation'
         self.pad_style = tk.StringVar(value=style)
-        self.control_vars, self.pad_boxes, self.pad_icons = {'key': {}, 'native': {}, 'pad': {}}, {}, {}
-        self.native_rows = {}  # native button: (input box, reset arrow)
+        self.control_vars, self.pad_boxes, self.pad_icons = {'key': {}, 'pad': {}}, {}, {}
+        self.key_rows = {}  # keyboard button: (input box, reset arrow)
         self.capturing_key = self.capture_wheel = None  # the key box waiting for an input
         size = self.px(28)
         labels = PAD_STYLES[style]
@@ -1744,49 +1767,68 @@ class Launcher:
             title = PS_BUTTON_NAMES.get(button) or _(ACTION_NAMES[button])
             ttk.Label(table, text=title, width=14).grid(row=r, column=1, sticky='w', padx=(0, 12))
 
-        self.section(f, _('General'), top=4)
+        def slider(key, low, high, unit):
+            holder = ttk.Frame(f)
+            amount = self.var(key, 'ini')
+            tk.Scale(holder, from_=low, to=high, orient='horizontal', variable=amount, showvalue=False,
+                     length=self.px(260), width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD,
+                     activebackground=ACCENT_HI, highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
+            value = ttk.Label(holder, width=7)
+            value.pack(side='left', padx=10)
+            show = lambda *_a: value.configure(text=f'{amount.get()}{unit}')
+            amount.trace_add('write', show)
+            show()
+            return holder
+
+        # Keyboard & mouse: one table for the keys and the mouse, with its own actions.
+        self.section(f, _('Keyboard & Mouse Mapping'), top=4)
+        self.note(f, _('Which key or mouse input presses each button of the game.'), top=4)
+        table = mapping_table()
+        r = 0
+        for row in table_rows('key'):
+            button = row[0]
+            r += 1
+            if button == 'rage':
+                ttk.Checkbutton(table, text=_('Rage of Sparta on one input (L3 + R3 together)'),
+                                variable=self.var('rage_one_input', 'app')).grid(
+                    row=r, column=0, columnspan=4, sticky='w', pady=(6, 6))
+                r += 1
+            default = default_input(row, 'key')
+            game_button(table, r, button)
+            var = tk.StringVar(value=saved['key'].get(button) or default)
+            self.control_vars['key'][button] = var
+            box = self.key_binder(table, 'key', button, var)
+            box.grid(row=r, column=2, sticky='w')
+            arrow = ttk.Button(table, text='\u21a9', width=3, takefocus=False,
+                               command=lambda b=button, d=default: self.assign_key('key', b, d))
+            arrow.grid(row=r, column=3, sticky='w', padx=(6, 0))
+            self.key_rows[button] = (box, arrow)
+        self.var('rage_one_input', 'app').trace_add('write', lambda *_a: self.grey_rage_rows())
+        self.grey_rage_rows()
+        self.note(f, _('Click a box, then press a key, click a mouse button or turn the wheel (it gives up after '
+                       '{} seconds). An input already used by another button swaps with it; the arrow puts one '
+                       'button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above '
+                       'it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the '
+                       'way you are moving (WASD), or back when standing still. Touchpad right opens the game\'s '
+                       'pause menu. Insert always opens the port\'s menu and cannot be bound. Applied when the '
+                       'game starts.').format(CAPTURE_SECONDS))
+        ttk.Button(f, text=_('Reset keyboard & mouse to defaults'), command=lambda: self.reset_controls('key')).grid(
+            row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
+        self.row(f, _('Joystick prompts'), self.choice(f, 'stick_prompts', 'app', STICK_PROMPTS),
+                 hint=_('How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns '
+                        'from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W '
+                        'or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.'))
+        self.row(f, _('Mouse prompt distance'), slider('mouse_prompt_distance', 16, 200, ' px'),
+                 _('Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.'))
+        self.check(f, 'mouse_lock', 'ini', _('Keep the mouse in the game window'),
+                   _('While you play, the mouse stays in the game window, so a click cannot land on another monitor '
+                     'or app. The in-game menu and switching windows get it back. Also in the in-game menu.'))
+
+        self.section(f, _('General'))
         self.row(f, _('In-game button icons'), self.choice(f, 'glyph_style', 'app', GLYPH_STYLES),
                  hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
                         'Works on a copy of two game files in the port\'s data folder (about 70 MB); your game folder '
                         'is never changed. Applied when the game starts.'))
-
-        def key_table(kind):
-            """Rows of game button, input box and reset arrow for 'key' or 'native'. Before Rage of
-            Sparta the native table has its switch: one input for L3 + R3, or the two apart."""
-            table = mapping_table()
-            r = 0
-            for row in table_rows(kind):
-                button = row[0]
-                r += 1
-                if button == 'rage':
-                    ttk.Checkbutton(table, text=_('Rage of Sparta on one input (L3 + R3 together)'),
-                                    variable=self.var('native_rage', 'app')).grid(
-                        row=r, column=0, columnspan=4, sticky='w', pady=(6, 6))
-                    r += 1
-                default = default_input(row, kind)
-                game_button(table, r, button)
-                var = tk.StringVar(value=saved.get(kind, {}).get(button) or default)
-                self.control_vars[kind][button] = var
-                box = self.key_binder(table, kind, button, var)
-                box.grid(row=r, column=2, sticky='w')
-                arrow = ttk.Button(table, text='\u21a9', width=3, takefocus=False,
-                                   command=lambda b=button, d=default, k=kind: self.assign_key(k, b, d))
-                arrow.grid(row=r, column=3, sticky='w', padx=(6, 0))
-                if kind == 'native':
-                    self.native_rows[button] = (box, arrow)
-            if kind == 'native':
-                self.var('native_rage', 'app').trace_add('write', lambda *_a: self.grey_rage_rows())
-                self.grey_rage_rows()
-
-        self.section(f, _('Keyboard Mapping'))
-        self.note(f, _('Which key presses each button of the game.'), top=4)
-        key_table('key')
-        self.note(f, _('Click a key box, then press the key to use (it gives up after {} seconds). A key '
-                       'already used by another button swaps with it; the arrow puts one button back on its '
-                       'default. Touchpad right opens the game\'s pause menu. Insert always opens the port\'s '
-                       'menu and cannot be bound. Applied when the game starts.').format(CAPTURE_SECONDS))
-        ttk.Button(f, text=_('Reset keyboard to defaults'), command=lambda: self.reset_controls('key')).grid(
-            row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
 
         self.section(f, _('Gamepad Mapping'))
         self.note(f, _('Which gamepad button presses each button of the game.'), top=4)
@@ -1795,21 +1837,11 @@ class Launcher:
             ttk.Radiobutton(names, text=label, value=value, variable=self.pad_style,
                             command=self.relabel_pad_controls).pack(side='left', padx=(0, 14))
         self.row(f, _('Gamepad names'), names)
-        holder = ttk.Frame(f)
-        strength = self.var('vibration', 'ini')
-        tk.Scale(holder, from_=0, to=100, orient='horizontal', variable=strength, showvalue=False, length=self.px(260),
-                 width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD, activebackground=ACCENT_HI,
-                 highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
-        value = ttk.Label(holder, width=5)
-        value.pack(side='left', padx=10)
-        show = lambda *_a: value.configure(text=f'{strength.get()}%')
-        strength.trace_add('write', show)
-        show()
-        self.row(f, _('Vibration'), holder, _("Strength of the gamepad's vibration; 0% turns it off."))
+        self.row(f, _('Vibration'), slider('vibration', 0, 100, '%'), _("Strength of the gamepad's vibration; 0% turns it off."))
         table = mapping_table()
         for r, (button, _key, pad) in enumerate(CONTROLS, start=1):
             game_button(table, r, button)
-            pad_name = saved.get('pad', {}).get(button) or pad
+            pad_name = saved['pad'].get(button) or pad
             pad_var = tk.StringVar(value=pad_name or '')
             self.control_vars['pad'][button] = pad_var
             pad_icon = icon_canvas(table)
@@ -1837,46 +1869,15 @@ class Launcher:
         ttk.Button(f, text=_('Reset gamepad to defaults'), command=lambda: self.reset_controls('pad')).grid(
             row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
 
-        self.section(f, _('Native Translation'), tag=_('Beta'))
-        self.check(f, 'native_input', 'app', _('Use native translation'),
-                   _('The game reads the keyboard and the mouse from this table instead of Keyboard Mapping. '
-                     'Gamepad Mapping is not affected.'))
-        self.note(f, _('Which key or mouse input presses each button of the game.'), top=8)
-        key_table('native')
-        self.note(f, _('Click a box, then press a key, click a mouse button or turn the wheel (it gives up '
-                       'after {} seconds). An input already used by another button swaps with it; the arrow '
-                       'puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the '
-                       'box above it to use one input instead of two. Grab presses L1 and Circle together. '
-                       'Dodge evades the way you are moving (WASD), '
-                       'or back when standing still. Applied when the game starts.').format(CAPTURE_SECONDS))
-        ttk.Button(f, text=_('Reset native to defaults'), command=lambda: self.reset_controls('native')).grid(
-            row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
-        self.row(f, _('Joystick prompts'), self.choice(f, 'stick_prompts', 'app', STICK_PROMPTS),
-                 hint=_('How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns '
-                        'from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W '
-                        'or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.'))
-        holder = ttk.Frame(f)
-        distance = self.var('mouse_prompt_distance', 'ini')
-        tk.Scale(holder, from_=16, to=200, orient='horizontal', variable=distance, showvalue=False, length=self.px(260),
-                 width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD, activebackground=ACCENT_HI,
-                 highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
-        value = ttk.Label(holder, width=7)
-        value.pack(side='left', padx=10)
-        show = lambda *_a: value.configure(text=f'{distance.get()} px')
-        distance.trace_add('write', show)
-        show()
-        self.row(f, _('Mouse prompt distance'), holder,
-                 _('Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.'))
-
     def key_binder(self, parent, kind, button, var):
-        """An input box of the 'key' or 'native' table: click it, then press a key; on 'native' a
-        mouse button or the wheel binds too, on 'key' a click cancels."""
+        """An input box of the keyboard & mouse table: click it, then press a key, click a mouse
+        button or turn the wheel."""
         box = self.ttk.Button(parent, width=16, takefocus=False)
-        mouse = kind == 'native'
+        mouse = kind == 'key'
         countdown = None
 
         def show(*_a):
-            box.configure(text=var.get() or _('(none)'))
+            box.configure(text=_('(none)') if var.get() in ('', 'None') else var.get())
         var.trace_add('write', show)
         show()
 
@@ -1935,16 +1936,15 @@ class Launcher:
         return box
 
     def grey_rage_rows(self):
-        """Native table: Rage of Sparta on one input greys L3 and R3; off, it greys the Rage row."""
-        combined = bool(self.var('native_rage', 'app').get())
+        """Rage of Sparta on one input greys L3 and R3; off, it greys the Rage row."""
+        combined = bool(self.var('rage_one_input', 'app').get())
         for button in (*RAGE_BUTTONS, 'rage'):
             enabled = combined if button == 'rage' else not combined
-            for widget in self.native_rows.get(button, ()):
+            for widget in self.key_rows.get(button, ()):
                 widget.state(['!disabled'] if enabled else ['disabled'])
 
     def assign_key(self, kind, button, name):
-        """Binds `name` to `button` in the 'key' or 'native' table; a button that had it takes the
-        old one (bind_key)."""
+        """Binds `name` to `button` in a table; a button that had it takes the old one (bind_key)."""
         table = self.control_vars[kind]
         bindings = {b: v.get() for b, v in table.items()}
         other = bind_key(bindings, button, name)
@@ -1971,8 +1971,8 @@ class Launcher:
             self.draw_pad_icon(button)
 
     def reset_controls(self, kind=None):
-        """Puts one table ('key', 'native' or 'pad') or all of them (None) back on the defaults."""
-        for table in ('key', 'native', 'pad'):
+        """Puts one table ('key' or 'pad') or both (None) back on the defaults."""
+        for table in ('key', 'pad'):
             for row in table_rows(table):
                 if kind in (None, table) and row[0] in self.control_vars.get(table, {}):
                     self.control_vars[table][row[0]].set(default_input(row, table) or '')
@@ -2854,7 +2854,7 @@ def main():
     args = sys.argv[1:]
     if args and args[0] in ('--run', '--script'):
         sys.exit(run_role(args))
-    settings = {**APP_DEFAULTS, **load_json(CONFIG_FILE, {})}
+    settings = {**APP_DEFAULTS, **migrate_controls(load_json(CONFIG_FILE, {}))}
     LANG = settings.get('ui_language') or windows_language()
     if not WINDOWS:
         integrate_desktop(settings.get('desktop_integration', True), os.environ.get('APPIMAGE'),
