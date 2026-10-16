@@ -57,7 +57,7 @@ def zip_members(archive):
         if info.is_dir() and not parts:
             continue
         if not parts or Path(info.filename).is_absolute() or info.filename.startswith(('/', '\\')) \
-                or '..' in parts or ':' in parts[0]:
+                or '..' in parts or any(':' in part or '\0' in part or part.rstrip(' .') != part for part in parts):
             raise ValueError(f'unsafe path in the zip: {info.filename}')
         if (info.external_attr >> 16) & 0o170000 == 0o120000:
             raise ValueError(f'links are not allowed in a mod zip: {info.filename}')
@@ -78,6 +78,14 @@ def unpack_zips(root):
         return done
     for archive_path in sorted(root.glob('*.zip'), key=lambda p: p.name.casefold()):
         target = root / archive_path.stem
+        try:
+            resolved_target = target.resolve()
+            if resolved_target.parent != root.resolve():
+                print(f'Mods: {archive_path.name}: unsafe extraction folder', file=sys.stderr)
+                continue
+        except (OSError, RuntimeError) as error:
+            print(f'Mods: {archive_path.name}: {error}', file=sys.stderr)
+            continue
         stat = archive_path.stat()
         stamp = f'{stat.st_size} {stat.st_mtime_ns}'
         marker = target / ZIP_STAMP
@@ -89,10 +97,13 @@ def unpack_zips(root):
         try:
             with zipfile.ZipFile(archive_path) as archive:
                 members = zip_members(archive)
+                destinations = [(info, target / relative) for info, relative in members]
+                if any(not destination.resolve().is_relative_to(resolved_target)
+                       for _, destination in destinations):
+                    raise ValueError('unsafe path in the zip: destination outside the mod folder')
                 if target.exists():
                     shutil.rmtree(target)
-                for info, relative in members:
-                    destination = target / relative
+                for info, destination in destinations:
                     if info.is_dir():
                         destination.mkdir(parents=True, exist_ok=True)
                         continue
@@ -104,7 +115,7 @@ def unpack_zips(root):
             done.append(archive_path.stem)
             kind = 'a mod' if (content_root(target) or patch_files(target)) else 'not a mod (no dvdroot_ps4 or patches)'
             print(f'Mods: {archive_path.name} unpacked: {kind}', file=sys.stderr)
-        except (OSError, ValueError, zipfile.BadZipFile) as error:
+        except (OSError, ValueError, RuntimeError, zipfile.BadZipFile) as error:
             shutil.rmtree(target, ignore_errors=True)
             print(f'Mods: {archive_path.name}: {error}', file=sys.stderr)
     return done

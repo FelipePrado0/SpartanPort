@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 
 spec = importlib.util.spec_from_file_location('bbmods', ROOT / 'scripts/mods.py')
@@ -160,6 +161,45 @@ class ModTests(unittest.TestCase):
         (self.moddir / 'Broken.zip').write_bytes(b'not a zip')
         self.assertEqual(mods.discover(self.moddir), [])
         self.assertFalse((self.moddir / 'Broken').exists())
+
+    def test_nested_drive_and_alternate_stream_paths_are_refused(self):
+        for member in ('wrapper/E:/outside.txt', 'wrapper/E:outside.txt',
+                       'wrapper\\E:\\outside.txt', 'patches/u.xml:stream'):
+            with self.subTest(member=member):
+                path = self.make_zip('Unsafe', {'patches/u.xml': self.PATCH, member: 'unsafe'})
+                with zipfile.ZipFile(path) as archive:
+                    with self.assertRaisesRegex(ValueError, 'unsafe path'):
+                        mods.zip_members(archive)
+
+    def test_windows_normalized_traversal_paths_are_refused(self):
+        for member in ('patches/.. /outside.txt', 'patches/.../outside.txt',
+                       'patches/..\\outside.txt'):
+            with self.subTest(member=member):
+                path = self.make_zip('Unsafe', {member: 'unsafe'})
+                with zipfile.ZipFile(path) as archive:
+                    with self.assertRaisesRegex(ValueError, 'unsafe path'):
+                        mods.zip_members(archive)
+
+    def test_unsafe_zip_is_refused_before_any_member_is_extracted(self):
+        self.make_zip('Unsafe', {'patches/u.xml': self.PATCH, 'wrapper/E:/outside.txt': 'unsafe'})
+        with mock.patch.object(zipfile.ZipFile, 'open', side_effect=AssertionError('extraction started')):
+            self.assertEqual(mods.unpack_zips(self.moddir), [])
+        self.assertFalse((self.moddir / 'Unsafe').exists())
+
+    def test_unresolvable_zip_target_does_not_stop_other_mods(self):
+        self.make_zip('Broken', {'patches/u.xml': self.PATCH})
+        self.make_zip('Good', {'patches/u.xml': self.PATCH})
+        resolve = Path.resolve
+        for error in (OSError('unreadable target'), RuntimeError('symlink loop')):
+            with self.subTest(error=type(error).__name__):
+                def resolve_target(path, *args, **kwargs):
+                    if path == self.moddir / 'Broken':
+                        raise error
+                    return resolve(path, *args, **kwargs)
+                with mock.patch.object(Path, 'resolve', autospec=True, side_effect=resolve_target):
+                    mods.unpack_zips(self.moddir)
+                self.assertTrue((self.moddir / 'Good/patches/u.xml').is_file())
+                self.assertFalse((self.moddir / 'Broken').exists())
 
     def test_no_mod_returns_original_game(self):
         self.assertEqual(mods.build_overlay(self.game, self.root / 'out', []), self.game)
