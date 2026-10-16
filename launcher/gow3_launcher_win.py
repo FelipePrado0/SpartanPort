@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import queue
 import re
+import shlex
 import runpy
 import shutil
 import stat
@@ -33,10 +34,10 @@ import webbrowser
 import zipfile
 
 WINDOWS = sys.platform == 'win32'
+import ctypes  # GDI on Windows, fontconfig elsewhere
 # Windows without a cursor of their own show the X root window's, which XWayland leaves blank.
 ARROW = '' if WINDOWS else 'left_ptr'
 if WINDOWS:
-    import ctypes
     # AMD hybrid laptops: this layer hides the NVIDIA GPU from Vulkan and the game stays black (#263).
     os.environ.setdefault('VK_LOADER_LAYERS_DISABLE', 'VK_LAYER_AMD_switchable_graphics')
 FROZEN = getattr(sys, 'frozen', False)
@@ -58,7 +59,7 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 NEW_GROUP = {} if WINDOWS else {'start_new_session': True}
 UI_FONT, MONO_FONT, SERIF_FONT = 'Segoe UI', 'Consolas', 'Georgia'
 # This build; GitHub release tags are windows-v<VERSION>.
-VERSION = '2.2.0'
+VERSION = '2.3.0'
 RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
@@ -243,12 +244,18 @@ def windows_language():
 
 
 def register_font(path):
-    """Makes a font file available to this process (nothing else sees it). False when the file is missing or
-    GDI refuses it: the launcher then keeps its standard fonts."""
-    if not WINDOWS:
+    """Makes a font file available to this process (nothing else sees it): GDI on Windows, fontconfig (which Tk
+    uses) elsewhere. False when the file is missing or the system refuses it: the launcher then keeps its
+    standard fonts."""
+    if not path.is_file():
         return False
     try:
-        return path.is_file() and bool(ctypes.windll.gdi32.AddFontResourceExW(str(path), FR_PRIVATE, 0))
+        if WINDOWS:
+            return bool(ctypes.windll.gdi32.AddFontResourceExW(str(path), FR_PRIVATE, 0))
+        fontconfig = ctypes.CDLL('libfontconfig.so.1')
+        fontconfig.FcConfigAppFontAddFile.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        fontconfig.FcConfigAppFontAddFile.restype = ctypes.c_int
+        return bool(fontconfig.FcConfigAppFontAddFile(None, os.fsencode(path)))
     except (AttributeError, OSError):
         return False
 
@@ -300,8 +307,10 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'live_resolution': 'auto', 'display_mode': 'windowed', 'vsync': '1', 'fps_limit': '0',
                 'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
                 'render_resolution': 'native', 'engine_fps': '120',
-                'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0'}
+                'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
+                'anisotropy': '0', 'vibration': '100'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
+ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
 # The sidebar's pages, top to bottom, and the methods that refresh a page's lists when it is shown.
 PAGES = ('home', 'graphics', 'performance', 'game', 'advanced')
@@ -309,8 +318,8 @@ PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_lists', 'refresh_
 APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
-                'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
-                'gpu_id': '', 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
+                'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
+                'gpu_id': '', 'partial_height_views': True, 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
@@ -657,11 +666,56 @@ def desktop_entry(command, icon, marker=False):
             + (DESKTOP_MARKER + '\n' if marker else ''))
 
 
-def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None):
+def other_desktop_entries(applications, appimage):
+    """Menu entries, other than ours, that start this very AppImage: another tool (Gear Lever,
+    AppImageLauncher, appimaged) has integrated it. The program is the first word of Exec or
+    TryExec, after any `env NAME=value` prefix and the quotes."""
+    here = os.path.realpath(appimage)
+    found = []
+    try:
+        entries = sorted(Path(applications).glob('*.desktop'))
+    except OSError:
+        return found
+    for entry in entries:
+        if entry.name == 'gow3.desktop':
+            continue
+        try:
+            lines = entry.read_text(encoding='utf-8', errors='replace').splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            key, _, value = line.partition('=')
+            if key not in ('Exec', 'TryExec'):
+                continue
+            try:
+                words = shlex.split(value)
+                while words and (words[0] == 'env' or re.match(r'[A-Za-z_][A-Za-z0-9_]*=', words[0])):
+                    words.pop(0)
+                # A file that another program left broken (a NUL byte in a path) is ignored, not fatal.
+                matches = bool(words) and os.path.realpath(words[0]) == here
+            except (OSError, ValueError):
+                continue
+            if matches:
+                found.append(entry)
+                break
+    return found
+
+
+def integrated_by_other_tool(applications, appimage, environment=None):
+    """True when another tool (Gear Lever sets DESKTOPINTEGRATION, AppImageLauncher and appimaged leave an
+    entry) already put this AppImage in the menu: an entry of ours would be a duplicate."""
+    return bool((environment if environment is not None else os.environ).get('DESKTOPINTEGRATION')
+                or (appimage and other_desktop_entries(applications, appimage)))
+
+
+def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None, environment=None):
     """AppImage on Linux: the menu entry the desktop matches the windows (application id gow3) to,
     which is what shows their icon in the dock. The entry is ours while it carries the marker; one
-    without it was written by hand (the Desktop shortcut button) and is left alone."""
-    entry = Path(home or Path.home()) / '.local' / 'share' / 'applications' / 'gow3.desktop'
+    without it was written by hand (the Desktop shortcut button) and is left alone. When another
+    tool already integrated this AppImage (an entry that starts it, or DESKTOPINTEGRATION in the
+    environment, which Gear Lever sets), ours would be a duplicate: it is not made, and removed."""
+    applications = Path(home or Path.home()) / '.local' / 'share' / 'applications'
+    entry = applications / 'gow3.desktop'
     try:
         ours = entry.is_file() and DESKTOP_MARKER in entry.read_text(encoding='utf-8', errors='replace')
         if not enabled:
@@ -669,6 +723,10 @@ def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None):
                 entry.unlink()
             return None
         if not appimage or (entry.is_file() and not ours):
+            return None
+        if integrated_by_other_tool(applications, appimage, environment):
+            if ours:
+                entry.unlink()
             return None
         icon = Path(data_dir) / 'gow3.png'
         icon.parent.mkdir(parents=True, exist_ok=True)
@@ -679,8 +737,37 @@ def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None):
         if not entry.is_file() or entry.read_text(encoding='utf-8') != text:
             entry.write_text(text, encoding='utf-8')
         return entry
-    except OSError:
+    except (OSError, ValueError):  # runs before the window opens: it must never stop the launcher
         return None
+
+
+def write_linux_shortcut(command, appimage, icon_source, desktop, home=None, environment=None):
+    """The shortcut button: the desktop entry on the desktop folder (when it exists) and in the applications
+    menu, except in the menu when another tool already integrated this AppImage (a second entry would
+    show the game twice). Returns the files written."""
+    home = Path(home or Path.home())
+    icon_dir = home / '.local' / 'share' / 'icons'
+    icon = icon_dir / 'gow3.png'
+    try:
+        icon_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(icon_source, icon)
+    except OSError:
+        icon = 'gow3'
+    entry = desktop_entry(command, icon)
+    applications = home / '.local' / 'share' / 'applications'
+    folders = [] if integrated_by_other_tool(applications, appimage, environment) else [applications]
+    folders.append(Path(desktop))
+    created = []
+    for folder in folders:
+        if not folder.is_dir() and folder != folders[0]:  # the first one is the point of the click
+            continue
+        folder.mkdir(parents=True, exist_ok=True)
+        # In the applications menu the file is named after the window's application id.
+        target = folder / ('gow3.desktop' if folder == applications else 'God of War III.desktop')
+        target.write_text(entry, encoding='utf-8')
+        target.chmod(0o755)
+        created.append(str(target))
+    return created
 
 
 def steam_icon(game):
@@ -737,8 +824,6 @@ def game_environment(s):
     env['GOW3_PATCHES_CONFIG'] = str(DATA_DIR / 'patches.json')
     env['GOW3_LANGUAGE'] = s['language']
     env['GOW3_DISCORD'] = '1' if s.get('discord_rpc') else '0'
-    if str(s['player_name']).strip():
-        env['GOW3_USER_NAME'] = str(s['player_name']).strip()
     if s['hdr']:
         env['GOW3_HDR'] = '1'
     for key, name in (('draw_pipe', 'GOW3_DRAW_PIPE'), ('readbacks', 'GOW3_READBACKS'), ('no_msaa', 'GOW3_NO_MSAA')):
@@ -755,6 +840,7 @@ def game_environment(s):
     env['GOW3_PARALLEL_WARMUP'] = '1' if s.get('parallel_warmup', True) else '0'
     env['GOW3_PIPELINE_BINARIES'] = '1' if s.get('pipeline_binary_cache', True) else '0'
     env['GOW3_PERF_DIAG'] = '1' if s.get('perf_diag', False) else '0'
+    env['GOW3_PARTIAL_HEIGHT_VIEWS'] = '1' if s.get('partial_height_views', True) else '0'
     for key, name in (('frame_stats', 'GOW3_FRAME_STATS'), ('gpu_profile', 'GOW3_GPU_PROFILE'),
                       ('vk_validation', 'GOW3_VK_VALIDATION'), ('frame_capture_key', 'GOW3_FRAME_CAPTURE_KEY')):
         if s[key]:
@@ -1078,7 +1164,8 @@ class Launcher:
         self.side_note = tk.Label(side, text=_('In the game: Insert or R3+L2\nopens the port\'s menu.',
                                                'В игре: Insert или R3+L2\nоткрывает меню порта.'),
                                   bg=BG, fg=MUTED, font=(UI_FONT, 9), justify='left', wraplength=self.px(210))
-        self.side_note.pack(anchor='w', padx=22, pady=(0, 18))
+        self.side_note.pack(anchor='w', padx=22, pady=(0, 4))
+        tk.Label(side, text=f'v{VERSION}', bg=BG, fg=MUTED, font=(UI_FONT, 9)).pack(anchor='w', padx=22, pady=(0, 18))
 
         right = tk.Frame(self.root, bg=PANEL)
         right.pack(side='left', fill='both', expand=True)
@@ -1226,9 +1313,19 @@ class Launcher:
         self.check(f, 'hdr', 'app', _('Allow HDR output', 'Разрешить HDR'),
                    _('When HDR is on in Windows and the display supports it.',
                      'Если HDR включён в Windows и монитор его поддерживает.'))
+        self.section(f, _('Textures'))
+        self.row(f, _('Anisotropic filtering'), self.choice(f, 'anisotropy', 'ini', ANISOTROPY),
+                 _('Sharper floors and walls seen at an angle, at little cost on most graphics cards.'),
+                 restart=True)
         self.section(f, _('Overlay'))
         self.check(f, 'show_fps', 'ini', _('Show performance overlay'),
                    _('Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.'))
+        self.section(f, _('Screenshots'))
+        shots = self.ttk.Button(f, text=_('Open the screenshots folder'),
+                           command=lambda: self.open_path(
+                               Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user') / 'screenshots'))
+        self.row(f, _('F12 in the game'), shots,
+                 _("Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves."))
 
     def build_performance(self):
         f = self.scrolled_page('performance', _('Performance'), _('Frame rate and speed options.'))
@@ -1268,6 +1365,10 @@ class Launcher:
                      'or objects look wrong.'), restart=True)
         self.check(f, 'deferred_readback', 'ini', _('Deferred GPU readbacks'),
                    _('Fewer waits for the GPU. Switch it off if textures or shadows look wrong.'), restart=True)
+        self.check(f, 'partial_height_views', 'app', _('Fast screen effects (Rage of Sparta, weapons)'),
+                   _('Keeps powers and weapon effects at full FPS. Switch it off if a screen effect '
+                     '(blur, distortion, the color change of a power) looks stretched, shifted or wrong.'),
+                   restart=True)
         self.row(f, _('Two-stage GPU pipeline', 'Двухстадийный конвейер GPU'), self.choice(f, 'draw_pipe', 'app', DRAW_PIPE),
                  _('20–30% faster; switch it off if the game is unstable.', 'Быстрее на 20–30%; при нестабильности выключите.'))
         self.row(f, _('GPU readbacks', 'Чтение данных GPU'), self.choice(f, 'readbacks', 'app', READBACKS),
@@ -1443,6 +1544,17 @@ class Launcher:
                  hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
                         'Works on a copy of two game files in the port\'s data folder (about 70 MB); your game folder '
                         'is never changed. Applied when the game starts.'))
+        holder = ttk.Frame(f)
+        strength = self.var('vibration', 'ini')
+        tk.Scale(holder, from_=0, to=100, orient='horizontal', variable=strength, showvalue=False, length=self.px(260),
+                 width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD, activebackground=ACCENT_HI,
+                 highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
+        value = ttk.Label(holder, width=5)
+        value.pack(side='left', padx=10)
+        show = lambda *_a: value.configure(text=f'{strength.get()}%')
+        strength.trace_add('write', show)
+        show()
+        self.row(f, _('Vibration'), holder, _("Strength of the gamepad's vibration; 0% turns it off."))
         table = ttk.Frame(f)
         table.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(16, 0))
         for column, span, title in ((0, 2, _('GAME BUTTON')), (2, 1, _('KEYBOARD')), (3, 2, _('GAMEPAD'))):
@@ -2178,32 +2290,14 @@ class Launcher:
     def linux_shortcut(self):
         launcher = os.environ.get('APPIMAGE') or (sys.executable if FROZEN else '')
         command = f'"{launcher}"' if launcher else f'python3 "{Path(__file__).resolve()}"'
-        icon_dir = Path.home() / '.local' / 'share' / 'icons'
-        icon = icon_dir / 'gow3.png'
-        try:
-            icon_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(PORT_DIR / 'launcher' / 'gow3.png', icon)
-        except OSError:
-            icon = 'gow3'
-        entry = desktop_entry(command, icon)
-        folders = [Path.home() / '.local' / 'share' / 'applications']
         try:
             desktop = subprocess.run(['xdg-user-dir', 'DESKTOP'], capture_output=True, text=True,
                                      env=host_environment()).stdout.strip()
         except OSError:
             desktop = ''
-        folders.append(Path(desktop) if desktop else Path.home() / 'Desktop')
-        created = []
         try:
-            for folder in folders:
-                if not folder.is_dir() and folder != folders[0]:
-                    continue
-                folder.mkdir(parents=True, exist_ok=True)
-                # In the applications menu the file is named after the window's application id.
-                target = folder / ('gow3.desktop' if folder == folders[0] else 'God of War III.desktop')
-                target.write_text(entry, encoding='utf-8')
-                target.chmod(0o755)
-                created.append(str(target))
+            created = write_linux_shortcut(command, launcher, PORT_DIR / 'launcher' / 'gow3.png',
+                                           Path(desktop) if desktop else Path.home() / 'Desktop')
         except OSError as error:
             self.messagebox.showerror(APP_NAME, str(error))
             return

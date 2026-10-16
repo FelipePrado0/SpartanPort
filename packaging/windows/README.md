@@ -18,15 +18,27 @@ pacman -S --needed git patch \
 ```
 
 magic_enum, miniz and xbyak (not packaged by MSYS2) are submodules under `gpu/third_party/`.
-Then, in the repository:
+Before packaging, also install Windows Python 3.10+ from python.org with Tk support; the
+packaging script uses it to create its private Python environment.
+Then, in the repository, build with MSYS2 CLANG64:
 
 ```bash
 git submodule update --init --recursive
 bash build.sh                      # out/gow3-probe.exe, out/gow3-gpu-capabilities.exe
-GOW3_GAME_DIR=F:/path/to/CUSA01623 python run.py
-python launcher/gow3_launcher_win.py
 bash packaging/windows/package.sh  # dist/gow3-windows/ and .zip: God of War III.exe + DLLs
 ```
+
+For a source launcher, install Windows Python 3.10+ from python.org with Tk support. In
+PowerShell at the repository root:
+
+```powershell
+python -m pip install pillow iced-x86==1.21.0
+python launcher/gow3_launcher_win.py
+```
+
+Choose the game folder in the launcher. For platform-specific tests, see
+[Tests in the root README](https://github.com/FelipePrado0/gow3_pc#tests): Windows uses Ninja
+test targets; `bash build.sh --test` runs additional runtime tests only on Linux.
 
 `run.py` is the Windows `run.sh` (same variables; works from a plain Windows Python too).
 The package freezes the launcher with PyInstaller (a private venv in `out/pyenv`, from a
@@ -37,17 +49,20 @@ BMI1 or LZCNT.
 `Play God of War III.exe` (`packaging/windows/play.c`) is a small native program that runs
 `God of War III.exe --play` from its folder and waits for it, for players who want to start the
 game directly with the saved settings.
-`patches.py` applies the built-in patches only to the game build they were checked against
-(CUSA01623 01.02, by eboot.bin sha256; `GOW3_FORCE_PATCHES=1` overrides); other builds run unpatched.
-From a source tree it adds `C:\msys64\clang64\bin` (or `$MSYS2_ROOT`) to `PATH` for the DLLs.
-`bash tools/fetch_fsr4_assets.sh` works in the CLANG64 shell as on Linux.
+`scripts/patches.py` identifies God of War III by title ID or title and finds built-in patch
+sites by signature, rather than requiring one `eboot.bin` hash. Each unmatched patch is skipped
+and reported; this is not a guarantee that every game build works. The startup black-screen
+fix is always requested, including with patch lists saved by older launchers. The resolution
+patch and texture fix are mutually exclusive. See the root README for tested builds.
+From a source tree, `run.py` adds `C:\msys64\clang64\bin` (or `$MSYS2_ROOT`) to `PATH` for DLLs.
 
-DLSS (optional): `DLSS_SDK_ROOT=<checkout of github.com/NVIDIA/DLSS> bash
-packaging/windows/build_dlss.sh` builds `gow3_dlss.dll` (`gpu/dlss_bridge`, the only code that
-uses the NVIDIA SDK, compiled with MSVC 2022) and copies it with `nvngx_dlss.dll` next to
-`out/gow3-probe.exe`; `package.sh` ships both when present. The renderer loads the bridge at run
-time (`vk_dlss.cpp`), adds the Vulkan extensions NGX asks for, and DLSS gets the same inputs as
-FSR 3 (scene color, depth, render-pixel motion vectors, jitter). `GOW3_DLSS=0` turns it off.
+FSR 1 and temporal upscaling (FSR 3.1, FSR 4, TAA and DLSS) are disabled in the current launcher
+and game settings path. RCAS sharpening remains available. The DLSS bridge and FSR asset tools
+remaining in the tree are experimental development code, not supported player setup steps.
+See [the historical research notes](../../docs/upscaler.md) for context.
+
+See the [feature availability table](https://github.com/FelipePrado0/gow3_pc#feature-availability)
+for differences between published packages and current source builds, including Discord Rich Presence.
 
 The launcher texts are written in English with the Russian beside them; the other languages
 are in `launcher/gow3_lang.py` (one list per language in the order of `KEYS`; a missing or
@@ -73,6 +88,6 @@ Diagnostics added on the way: `GOW3_FRAME_DUMP_TRIGGER=<file>` writes the guest 
 and the presented image of the next frame to `GOW3_DUMP_DIR` (raw 32-bit pixels), which also
 works for menus and movies.
 
-Not ported: the watchdog/`--timeout` thread dumps (Linux signals), userfaultfd tracking
-(`GOW3_UFFD`), MangoHud, PGO (GCC flags) and
-the `tests/` programs (several use Linux-only APIs).
+Linux-specific features include watchdog/`--timeout` thread dumps (Linux signals), userfaultfd
+tracking (`GOW3_UFFD`), MangoHud and PGO (GCC flags). Many Python and C/C++ tests run on Windows;
+some tests still require Linux APIs. See the root README and `gpu/CMakeLists.txt` for test commands.

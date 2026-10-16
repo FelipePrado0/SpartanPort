@@ -86,6 +86,8 @@ class ControlMapTest(unittest.TestCase):
         self.assertEqual(env['GOW3_PARALLEL_WARMUP'], '1')
         self.assertEqual(env['GOW3_BACKGROUND_WARMUP'], '1')
         self.assertEqual(env['GOW3_PERF_DIAG'], '0')
+        self.assertEqual(env['GOW3_PARTIAL_HEIGHT_VIEWS'], '1')
+        self.assertEqual(launcher.game_environment({**settings, 'partial_height_views': False})['GOW3_PARTIAL_HEIGHT_VIEWS'], '0')
         self.assertNotIn('GOW3_FRAME_CAPTURE_KEY', {k for k in env if k not in __import__('os').environ})
         self.assertEqual(launcher.game_environment({**settings, 'frame_capture_key': True})['GOW3_FRAME_CAPTURE_KEY'], '1')
         # Graphics options live in gow3.ini (run.py and the in-game menu), not in the environment.
@@ -126,12 +128,13 @@ class ControlMapTest(unittest.TestCase):
                              ['GOW3_GLYPH_STYLE'], 'nintendo')
 
     def test_settings_keys_kept(self):
-        # The redesign hides some options (player name) but keeps every saved setting working.
-        for key in ('game_dir', 'user_dir', 'mods_dir', 'patches_dir', 'language', 'player_name', 'hdr',
+        for key in ('game_dir', 'user_dir', 'mods_dir', 'patches_dir', 'language', 'hdr',
                     'draw_pipe', 'readbacks', 'background_warmup', 'parallel_warmup', 'controls', 'pad_style', 'glyph_style'):
             self.assertIn(key, launcher.APP_DEFAULTS)
+        # The player name option is gone: an old settings.json value is ignored.
+        self.assertNotIn('player_name', launcher.APP_DEFAULTS)
         env = launcher.game_environment({**launcher.APP_DEFAULTS, 'player_name': ' Kratos '})
-        self.assertEqual(env['GOW3_USER_NAME'], 'Kratos')
+        self.assertNotIn('GOW3_USER_NAME', env)
         for key in ('display_mode', 'fps_limit', 'render_resolution', 'engine_fps'):
             self.assertIn(key, launcher.INI_DEFAULTS)
 
@@ -549,9 +552,9 @@ class GpuChoiceTest(unittest.TestCase):
 
 class ReleaseVersionTest(unittest.TestCase):
     def test_god_of_war_release_is_newer_than_the_inherited_tags(self):
-        self.assertEqual(launcher.VERSION, '2.2.0')
+        self.assertEqual(launcher.VERSION, '2.3.0')
         self.assertGreater(launcher.version_tuple(launcher.VERSION), launcher.version_tuple('windows-v1.5'))
-        self.assertGreater(launcher.version_tuple('windows-v2.2.1'), launcher.version_tuple(launcher.VERSION))
+        self.assertGreater(launcher.version_tuple('windows-v2.3.1'), launcher.version_tuple(launcher.VERSION))
 
     def test_first_start_is_in_english(self):
         # The translations are partial; 'System' stays a choice in Advanced.

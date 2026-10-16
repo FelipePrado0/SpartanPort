@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include "gow3_settings.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/texture_cache/sampler.h"
@@ -11,12 +12,20 @@ namespace VideoCore {
 Sampler::Sampler(const Vulkan::Instance& instance, const AmdGpu::Sampler& sampler,
                  const AmdGpu::BorderColorBuffer border_color_base, const bool is_depth, float extra_lod_bias) {
     using namespace Vulkan;
-    const bool anisotropy_enable = instance.IsAnisotropicFilteringSupported() &&
-                                   (AmdGpu::IsAnisoFilter(sampler.xy_mag_filter) ||
-                                    AmdGpu::IsAnisoFilter(sampler.xy_min_filter));
+    const bool game_anisotropy = AmdGpu::IsAnisoFilter(sampler.xy_mag_filter) ||
+                                 AmdGpu::IsAnisoFilter(sampler.xy_min_filter);
+    // gow3: the menu's anisotropic filtering, on filtered and mipmapped textures (not on
+    // point-sampled lookups, unmipmapped render targets or depth compares).
+    const int forced = Gow3Settings::Get().startup_anisotropy;
+    const bool force_anisotropy = forced > 1 && !is_depth &&
+                                  sampler.xy_min_filter != AmdGpu::Filter::Point &&
+                                  sampler.mip_filter != AmdGpu::MipFilter::None;
+    const bool anisotropy_enable =
+        instance.IsAnisotropicFilteringSupported() && (game_anisotropy || force_anisotropy);
+    const float requested = std::max(game_anisotropy ? sampler.MaxAniso() : 1.0f,
+                                     force_anisotropy ? float(forced) : 1.0f);
     const float max_anisotropy =
-        anisotropy_enable ? std::clamp(sampler.MaxAniso(), 1.0f, instance.MaxSamplerAnisotropy())
-                          : 1.0f;
+        anisotropy_enable ? std::clamp(requested, 1.0f, instance.MaxSamplerAnisotropy()) : 1.0f;
     auto border_color = LiverpoolToVK::BorderColor(sampler.border_color_type);
     if (border_color == vk::BorderColor::eFloatCustomEXT &&
         !instance.IsCustomBorderColorSupported()) {

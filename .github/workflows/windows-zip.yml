@@ -1,0 +1,102 @@
+# Windows package: built with MSYS2 CLANG64 and a python.org-style Python (packaging/windows/README.md),
+# then opened on a clean runner without MSYS2 before it is published. Run by hand
+# (Actions > Windows zip > Run workflow), on the branch to build:
+#   - no tag: build and test only (the zip is kept as a workflow artifact).
+#   - tag of an existing release (e.g. windows-v2.3.0): the zip replaces the one attached to it.
+#   - new tag (e.g. windows-v2.3.1-test1): test build, published as a pre-release on that commit.
+name: Windows zip
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to attach the zip to; a new tag makes a test pre-release. Empty builds only.
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-zip-${{ inputs.tag || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      # The runner's Git turns LF into CRLF, and the FSR-Vulkan patches then no longer apply.
+      - name: Keep LF line endings
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      # The runner's C:/msys64, where msys2-env.sh and package.sh look for the CLANG64 DLLs.
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          release: false
+          update: true
+          install: git patch
+          pacboy: >-
+            toolchain:p cmake:p ninja:p pkgconf:p python:p
+            vulkan-headers:p vulkan-loader:p vulkan-memory-allocator:p glslang:p
+            sdl3:p fmt:p boost:p robin-map:p xxhash:p ffmpeg:p zydis:p
+            spirv-tools:p spirv-headers:p spirv-cross:p
+      - name: Build
+        run: bash build.sh
+      # Freezes the launcher; this Python ships Tk, as the python.org one does. Set up after the
+      # build so its Python_ROOT_DIR and PKG_CONFIG_PATH do not reach CMake.
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: '3.13'
+      - name: Package
+        env:
+          PYTHON_EXE: ${{ steps.python.outputs.python-path }}
+        run: |
+          WINPYTHON=$(cygpath -u "$PYTHON_EXE") bash packaging/windows/package.sh
+          cd dist && sha256sum -b gow3-windows.zip > gow3-windows.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gow3-windows.zip
+          path: dist/gow3-windows.zip*
+          if-no-files-found: error
+
+  smoke:
+    needs: build
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: gow3-windows.zip
+          path: dist
+      - name: Open the package without MSYS2
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/smoke-test.ps1 dist/gow3-windows.zip
+
+  publish:
+    needs: smoke
+    if: inputs.tag != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gow3-windows.zip
+          path: dist
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Windows test build $TAG" \
+              --notes "Windows test build from \`${GITHUB_SHA::7}\`. Download \`gow3-windows.zip\`, extract it and run \`God of War III.exe\`. Not a final release: please report in the linked issue whether it opens and runs."
+          fi
+          gh release upload "$TAG" dist/gow3-windows.zip dist/gow3-windows.zip.sha256 --clobber

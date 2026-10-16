@@ -22,6 +22,7 @@
 #include "video_core/texture_cache/aliasing.h"
 #include "video_core/texture_cache/host_compatibility.h"
 #include "video_core/texture_cache/texture_cache.h"
+#include <vulkan/vulkan_format_traits.hpp>
 #include "video_core/texture_cache/tile_manager.h"
 
 namespace VideoCore {
@@ -157,9 +158,74 @@ void TextureCache::CancelReadbacks(VAddr address, u64 size) {
     });
 }
 
+// gow3 (GOW3_PERF_DIAG): a request PartialHeightViews answered with a taller cached image.
+void TextureCache::NotePartialView(const ImageInfo& request, const ImageInfo& used,
+                                   BindingType binding) {
+    ++partial_views;
+    const auto same = [&](const PartialViewStat& s) {
+        return s.address == request.guest_address && s.format == request.pixel_format &&
+               s.used_format == used.pixel_format && s.used_height == used.size.height &&
+               s.binding == binding;
+    };
+    auto slot = std::ranges::find_if(partial_view_stats, same);
+    if (slot == partial_view_stats.end()) {
+        slot = std::ranges::min_element(partial_view_stats, {}, &PartialViewStat::count);
+        *slot = {request.guest_address, request.pixel_format, used.pixel_format, used.size.width,
+                 used.size.height, request.size.height, request.size.height, 0, binding};
+    }
+    slot->min_height = std::min(slot->min_height, request.size.height);
+    slot->max_height = std::max(slot->max_height, request.size.height);
+    ++slot->count;
+}
+
+// gow3 (GOW3_PERF_DIAG): every 5 s, the images FindImage created most often. Takes `mutex`
+// (held by FindImage), so it runs before ProcessDownloadImages takes readback_mutex.
+void TextureCache::ReportImageCreates() {
+    const auto now = std::chrono::steady_clock::now();
+    if (now - create_report < std::chrono::seconds(5)) {
+        return;
+    }
+    create_report = now;
+    std::scoped_lock lock{mutex};
+    static constexpr const char* bindings[] = {"texture", "storage", "render target",
+                                               "depth target", "video out"};
+    std::printf("Image creates: %llu in 5 s\n", static_cast<unsigned long long>(images_created));
+    std::ranges::sort(create_stats, std::greater{}, &CreateStat::count);
+    for (u32 i = 0; i < 8 && create_stats[i].count; ++i) {
+        const auto& s = create_stats[i];
+        std::printf("  %u x %#llx %ux%u %s pitch %u tile %u as %s%s: %s", s.count,
+                    static_cast<unsigned long long>(s.address), s.width, s.height,
+                    vk::to_string(s.format).c_str(), s.pitch, s.tile, bindings[u32(s.binding)],
+                    s.needs_native ? "" : " (sampled)", s.reason);
+        if (s.overlaps) {
+            std::printf(" (%u cached; was %#llx %ux%u %s pitch %u tile %u)", s.overlaps,
+                        static_cast<unsigned long long>(s.prev_address), s.prev_width,
+                        s.prev_height, vk::to_string(s.prev_format).c_str(), s.prev_pitch,
+                        s.prev_tile);
+        }
+        std::printf("\n");
+    }
+    create_stats = {};
+    images_created = 0;
+    std::printf("Partial height views: %llu in 5 s\n", static_cast<unsigned long long>(partial_views));
+    std::ranges::sort(partial_view_stats, std::greater{}, &PartialViewStat::count);
+    for (u32 i = 0; i < 8 && partial_view_stats[i].count; ++i) {
+        const auto& s = partial_view_stats[i];
+        std::printf("  %u x %#llx %s rows %u-%u as %s, on %ux%u %s\n", s.count,
+                    static_cast<unsigned long long>(s.address), vk::to_string(s.format).c_str(),
+                    s.min_height, s.max_height, bindings[u32(s.binding)], s.used_width,
+                    s.used_height, vk::to_string(s.used_format).c_str());
+    }
+    partial_view_stats = {};
+    partial_views = 0;
+}
+
 // gow3: every copy is recorded first and the GPU is waited for once. A wait per image (as
 // before) left the GPU mostly idle in God of War III's gameplay, at about 2 FPS.
 void TextureCache::ProcessDownloadImages() {
+    if (Vulkan::WaitDiagnostics::Enabled()) {
+        ReportImageCreates();
+    }
     if (deferred_readbacks) {
         // Upload workers must finish reading RAM before these pages become inaccessible.
         scheduler.WaitHostCopies();
@@ -543,6 +609,37 @@ void TextureCache::InvalidateMemory(VAddr addr, size_t size) {
     });
 }
 
+void TextureCache::NoteBackingWrite(VAddr address, u64 size) {
+    std::scoped_lock lock{backing_writes_mutex};
+    backing_writes.emplace_back(address, size);
+    has_backing_writes.store(true, std::memory_order_release);
+}
+
+void TextureCache::ApplyBackingWrites() {
+    if (!has_backing_writes.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::vector<std::pair<VAddr, u64>> writes;
+    {
+        std::scoped_lock lock{backing_writes_mutex};
+        writes.swap(backing_writes);
+        has_backing_writes.store(false, std::memory_order_release);
+    }
+    // God of War III streams textures with GPU copies through large storage images over the
+    // texture pool; their readbacks put the new texels in memory without a fault. Textures
+    // there kept the old contents (yellow ground #138, missing textures #194) until a restart.
+    for (const auto& [address, size] : writes) {
+        ForEachImageInRegion(address, size, [&](ImageId image_id, Image& image) {
+            // Images sharing memory with a GPU writer are synchronized by SynchronizeAlias.
+            if (True(image.flags & (ImageFlagBits::GpuModified | ImageFlagBits::Aliased))) {
+                return;
+            }
+            image.flags |= ImageFlagBits::CpuDirty;
+            UntrackImage(image_id);
+        });
+    }
+}
+
 void TextureCache::InvalidateMemoryFromGPU(VAddr address, size_t max_size) {
     // Partial buffer writes still need the image's untouched bytes in guest memory.
     ResolveReadbacks(address, max_size, true, ReadbackSource::GpuPartialWrite);
@@ -643,7 +740,8 @@ ImageId TextureCache::ResolveDepthOverlap(const ImageInfo& requested_info, Bindi
 std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& image_info,
                                                            BindingType binding,
                                                            ImageId cache_image_id,
-                                                           ImageId merged_image_id) {
+                                                           ImageId merged_image_id,
+                                                           bool native_reads) {
     auto& cache_image = slot_images[cache_image_id];
     const bool safe_to_delete =
         scheduler.CurrentTick() - cache_image.tick_accessed_last > NumFramesBeforeRemoval;
@@ -652,6 +750,46 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
     if (image_info.guest_address == cache_image.info.guest_address) {
         const u32 lhs_block_size = image_info.num_bits * image_info.guest_samples;
         const u32 rhs_block_size = cache_image.info.num_bits * cache_image.info.guest_samples;
+        // gow3: the top rows of a cached image with the same layout. God of War III reads its
+        // frame buffers as R8G8B8A8Uint with a height that changes every frame during Rage of
+        // Sparta and weapon effects; as a "pool allocation" below, each read created and uploaded
+        // a new ~8 MB image (FPS 120 -> 40).
+        // - Only an integer view of another format: same-format requests here are real pool
+        //   reuse (with them, normalized sampling read the wrong rows and blew out exposure).
+        // - Only for shaders that read with integer coordinates (ImageResource::needs_native):
+        //   normalized sampling of the taller image would read and clamp at the wrong rows.
+        // - Known limit: the view keeps the cached size. A size query sees it, and accesses past
+        //   the requested extent but inside the cached one reach the frame buffer instead of
+        //   being dropped (robustImageAccess2 bounds by the taller image).
+        const auto& a = image_info;
+        const auto& b = cache_image.info;
+        const auto is_integer = [](vk::Format format) {
+            const std::string_view numeric = vk::componentNumericFormat(format, 0);
+            return numeric == "UINT" || numeric == "SINT";
+        };
+        // Launcher: Performance, "Fast screen effects" (GOW3_PARTIAL_HEIGHT_VIEWS=0 turns it off).
+        static const bool partial_views_enabled = [] {
+            const char* value = std::getenv("GOW3_PARTIAL_HEIGHT_VIEWS");
+            return !value || value[0] != '0';
+        }();
+        if (partial_views_enabled && !Gow3Toggle::Disabled(Gow3Toggle::PartialHeightViews) &&
+            (binding == BindingType::Texture || binding == BindingType::Storage) && native_reads &&
+            a.pixel_format != b.pixel_format && is_integer(a.pixel_format) &&
+            lhs_block_size == rhs_block_size && a.pitch == b.pitch && a.tile_mode == b.tile_mode &&
+            a.type == b.type && a.size.width <= b.size.width && a.size.height < b.size.height &&
+            a.size.depth == 1 && b.size.depth == 1 && a.resources.levels == 1 &&
+            a.resources.layers == 1 && b.resources.levels == 1 && b.resources.layers == 1 &&
+            !a.props.is_block && !b.props.is_block && !a.props.is_depth && !b.props.is_depth &&
+            IsVulkanFormatCompatible(b.pixel_format, a.pixel_format)) {
+            // With partial images left from before at this address, FindImage's later iterations
+            // compare the merged image against the taller ones, so the loop ends on the full
+            // image (a taller non-integer image falls to the pool path and keeps the merged one).
+            // Counted only on the request's own comparison (a is the merged image afterwards).
+            if (Vulkan::WaitDiagnostics::Enabled() && !merged_image_id) {
+                NotePartialView(a, b, binding);
+            }
+            return {cache_image_id, -1, -1};
+        }
         if (image_info.BlockDim() != cache_image.info.BlockDim() ||
             lhs_block_size != rhs_block_size) {
             // Very likely this kind of overlap is caused by allocation from a pool.
@@ -897,7 +1035,7 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
 
     u64 key_hash = info.guest_address ^ info.guest_size << 17 ^ u64(info.pixel_format) << 40 ^
                    u64(info.size.width) << 24 ^ info.size.height ^ u64(desc.type) << 58 ^
-                   u64(exact_fmt) << 63;
+                   u64(exact_fmt) << 63 ^ u64(desc.needs_native) << 62;
     key_hash = (key_hash ^ key_hash >> 33) * 0xFF51AFD7ED558CCDull;
     key_hash = (key_hash ^ key_hash >> 33) * 0xC4CEB9FE1A85EC53ull;
     key_hash ^= key_hash >> 33;
@@ -919,7 +1057,7 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
         cached.size == info.guest_size && cached.extent == info.size &&
         cached.format == info.pixel_format && cached.type == info.type &&
         cached.exact_fmt == exact_fmt && cached.binding == desc.type &&
-        cached.levels == info.resources.levels && cached.layers == info.resources.layers &&
+        cached.needs_native == desc.needs_native && cached.levels == info.resources.levels && cached.layers == info.resources.layers &&
         !Gow3Toggle::Disabled(Gow3Toggle::FindImageCache)) {
         Image& image = slot_images[cached.image_id];
         image.tick_accessed_last = scheduler.CurrentTick();
@@ -961,6 +1099,27 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
         image_id = cache_id;
     }
 
+    // gow3 (GOW3_PERF_DIAG): what was cached here, read before overlap resolution may free it.
+    const bool diag = Vulkan::WaitDiagnostics::Enabled();
+    CreateStat created{info.guest_address, info.size.width, info.size.height, 1, info.pixel_format,
+                       desc.type, image_ids.empty() ? "nothing cached" : "overlap unresolved"};
+    if (diag && !image_id && !image_ids.empty()) {
+        const auto same = std::ranges::find_if(image_ids, [&](ImageId id) {
+            return slot_images[id].info.guest_address == info.guest_address;
+        });
+        const auto& prev = slot_images[same != image_ids.end() ? *same : image_ids.front()].info;
+        created.prev_address = prev.guest_address;
+        created.prev_width = prev.size.width;
+        created.prev_height = prev.size.height;
+        created.prev_format = prev.pixel_format;
+        created.overlaps = static_cast<u32>(image_ids.size());
+        created.prev_pitch = prev.pitch;
+        created.prev_tile = static_cast<u32>(prev.tile_mode);
+    }
+    created.pitch = info.pitch;
+    created.needs_native = desc.needs_native;
+    created.tile = static_cast<u32>(info.tile_mode);
+
     // Try to resolve overlaps (if any)
     int view_mip{-1};
     int view_slice{-1};
@@ -971,7 +1130,7 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
 
             const auto& merged_info = image_id ? slot_images[image_id].info : info;
             auto [overlap_image_id, overlap_view_mip, overlap_view_slice] =
-                ResolveOverlap(merged_info, desc.type, cache_id, image_id);
+                ResolveOverlap(merged_info, desc.type, cache_id, image_id, desc.needs_native);
             if (overlap_image_id) {
                 image_id = overlap_image_id;
                 view_mip = overlap_view_mip;
@@ -985,17 +1144,35 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
         if (exact_fmt && info.pixel_format != image_resolved.info.pixel_format) {
             // Cannot reuse this image as we need the exact requested format.
             image_id = {};
+            created.reason = "exact format";
         } else if (image_resolved.info.resources < info.resources) {
             // The image was clearly picked up wrong.
             FreeImage(image_id);
             image_id = {};
             LOG_WARNING(Render_Vulkan, "Image overlap resolve failed");
+            created.reason = "fewer resources";
         }
     }
     // Create and register a new image
     if (!image_id) {
         image_id = slot_images.insert(instance, runtime, slot_image_views, info);
         RegisterImage(image_id);
+        if (diag) {
+            ++images_created;
+            const auto same = [&](const CreateStat& s) {
+                return s.address == created.address && s.width == created.width &&
+                       s.height == created.height && s.format == created.format &&
+                       s.binding == created.binding;
+            };
+            auto slot = std::ranges::find_if(create_stats, same);
+            if (slot != create_stats.end()) {
+                created.count = slot->count + 1;
+            } else {
+                // A free slot, else the least seen one.
+                slot = std::ranges::min_element(create_stats, {}, &CreateStat::count);
+            }
+            *slot = created;
+        }
     }
 
     Image& image = slot_images[image_id];
@@ -1018,6 +1195,7 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
         .type = info.type,
         .exact_fmt = exact_fmt,
         .binding = desc.type,
+        .needs_native = desc.needs_native,
         .levels = info.resources.levels,
         .layers = info.resources.layers,
         .generation = registry_generation.load(std::memory_order_relaxed),
@@ -1581,6 +1759,10 @@ void TextureCache::RunGarbageCollector() {
     SCOPE_EXIT {
         ++gc_tick;
     };
+    {
+        std::scoped_lock lock{mutex};
+        ApplyBackingWrites();
+    }
 
     GarbageCollectImages();
     GarbageCollectSamplers();

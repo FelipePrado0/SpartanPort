@@ -22,6 +22,7 @@ mkdir -p "$share/launcher"
 icon=launcher/gow3.png
 [[ -f packaging/linux/gow3.png ]] && icon=packaging/linux/gow3.png
 install -m644 "$icon" "$share/launcher/gow3.png"
+install -m644 launcher/gowfont.ttf "$share/launcher/gowfont.ttf"
 
 # The launcher also runs run.py (--run) and the preparation scripts (--script) itself, as on
 # Windows: the standard modules those scripts import come along as hidden imports.

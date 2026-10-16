@@ -29,6 +29,7 @@ extern "C" void runtime_restart(void); // src/probe.c: starts run.py again, ends
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
+#include "video_core/renderdoc.h"
 
 // DejaVu Sans (Cyrillic), embedded (third_party/fonts, Bitstream Vera license).
 #ifdef _WIN32
@@ -66,6 +67,10 @@ bool r3_down = false, l2_down = false;
 std::atomic<bool> loading{false};
 std::atomic<u32> loading_done{0}, loading_total{0};
 std::atomic<u32> background_done{0}, background_total{0};
+// A short message in a corner (saved screenshot), shown until notice_until.
+std::mutex notice_mutex;
+std::string notice_text;
+std::atomic<s64> notice_until{0}; // steady_clock milliseconds
 bool dirty = false; // settings changed while open: saved on close
 int requested_tab = -1; // switch on the next frame (L1/R1, Q/E, menu opened)
 // The game's text dialog (SetTextEntry), guarded by imgui_mutex.
@@ -323,6 +328,13 @@ void GameTab() {
         ImGui::EndTable();
     }
 
+    ImGui::SeparatorText("Controller");
+    if (BeginRows("##controller")) {
+        SliderRow("Vibration", s.vibration, 0, 100, "%d%%",
+                  "Strength of the controller's vibration. 0% turns it off.");
+        ImGui::EndTable();
+    }
+
     ImGui::SeparatorText("Multipliers");
     if (ImGui::Button("Reset all to 1x")) {
         for (auto* m : {&s.red_orb_multiplier, &s.green_orb_multiplier, &s.blue_orb_multiplier,
@@ -393,6 +405,15 @@ void ImageTab() {
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
+    ImGui::SeparatorText("Textures (applied on restart)");
+    if (BeginRows("##textures")) {
+        static const char* const anisotropy_labels[] = {"Game default", "2x", "4x", "8x", "16x"};
+        ChoiceRow("Anisotropic filtering", s.anisotropy, anisotropy_labels, G::Anisotropies.data(),
+                  int(G::Anisotropies.size()),
+                  "Sharper floors and walls seen at an angle. Little cost on most GPUs.");
+        ImGui::EndTable();
+    }
+    ImGui::TextDisabled("F12 saves a screenshot to the user\\screenshots folder.");
     ImGui::SeparatorText("Information");
     if (BeginRows("##image_info")) {
         char text[96];
@@ -521,7 +542,8 @@ void OverlayTab() {
 int RestartChanges() {
     const auto& s = Gow3Settings::Get();
     return (s.render_resolution != s.startup_render_resolution) + (s.engine_fps != s.startup_engine_fps) +
-           (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback);
+           (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
+           (s.anisotropy != s.startup_anisotropy);
 }
 
 void Menu() {
@@ -806,7 +828,45 @@ void BackgroundLoading() {
     ImGui::End();
 }
 
+s64 NowMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+bool NoticeActive() {
+    return notice_until.load(std::memory_order_relaxed) > NowMs();
+}
+
+void Notice() {
+    std::string text;
+    {
+        std::scoped_lock lock{notice_mutex};
+        text = notice_text;
+    }
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float pad = 12.0f * base_scale;
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - pad,
+                                   viewport->WorkPos.y + viewport->WorkSize.y - pad),
+                            ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(0.6f);
+    ImGui::Begin("##notice", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                     ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
+                     ImGuiWindowFlags_NoFocusOnAppearing);
+    ImGui::TextUnformatted(text.c_str());
+    ImGui::End();
+}
+
 } // namespace
+
+void ShowNotice(const std::string& text, int milliseconds) {
+    {
+        std::scoped_lock lock{notice_mutex};
+        notice_text = text;
+    }
+    notice_until.store(NowMs() + milliseconds, std::memory_order_relaxed);
+}
 
 void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) {
     std::scoped_lock lock{imgui_mutex};
@@ -973,6 +1033,12 @@ bool HandleEvent(const SDL_Event& event) {
             const char* env = std::getenv("GOW3_FRAME_CAPTURE_KEY");
             return env && *env == '1';
         }();
+        if (event.key.key == SDLK_F12) {
+            if (down && !event.key.repeat) {
+                VideoCore::RequestScreenshot(VideoCore::ScreenshotRequest::GameOnly);
+            }
+            return true;
+        }
         if (down && !event.key.repeat && capture_key && event.key.key == SDLK_F11) {
             Vulkan::FrameCapture::Request();
             return true;
@@ -1094,7 +1160,7 @@ void SetLoading(bool active, u32 done, u32 total) {
 bool Visible() {
     const auto& s = Gow3Settings::Get();
     return initialized && (loading || background_total || menu_open || text_entry_active || choice_active ||
-                           choice_retiring || s.show_fps ||
+                           choice_retiring || s.show_fps || NoticeActive() ||
                            (s.actor_watch_supported && s.enemy_health_bar));
 }
 
@@ -1162,6 +1228,9 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     }
     if (Gow3Settings::Get().show_fps && !menu_open) {
         FpsCounter();
+    }
+    if (NoticeActive()) {
+        Notice();
     }
     if (!loading && !menu_open) {
         HealthDisplay();
