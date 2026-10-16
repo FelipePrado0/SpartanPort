@@ -76,6 +76,8 @@ struct Values {
     std::atomic<int> vibration{100};
     /// Mouse movement in px that counts as one step of a stick prompt (runtime_pad.c). Live.
     std::atomic<int> mouse_prompt_distance{48};
+    /// Keep the mouse in the game window while the game has it (window.cpp). Live.
+    std::atomic<bool> mouse_lock{true};
     // Startup: run.py turns them into patches and environment variables; "Apply and restart".
     std::atomic<int> render_resolution{0};
     std::atomic<int> engine_fps{120};

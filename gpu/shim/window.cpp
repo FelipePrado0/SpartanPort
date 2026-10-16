@@ -179,6 +179,14 @@ bool WindowSDL::PollEvents() {
             break;
         }
     }
+    // gow3: while the game has the mouse it stays in the window (relative mode: hidden, no edges,
+    // so a click cannot land on another monitor); the menu, the save list, a text dialog or
+    // another window get it back.
+    const bool lock = Gow3Settings::Get().mouse_lock.load(std::memory_order_relaxed) && !text_active &&
+                      !Gow3Overlay::CapturesInput() && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS);
+    if (lock != mouse_locked && SDL_SetWindowRelativeMouseMode(window, lock)) {
+        mouse_locked = lock;
+    }
     return is_open;
 }
 

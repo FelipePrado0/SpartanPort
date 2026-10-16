@@ -334,6 +334,8 @@ void GameTab() {
                   "Strength of the controller's vibration. 0% turns it off.");
         SliderRow("Mouse prompt distance", s.mouse_prompt_distance, 16, 200, "%d px",
                   "With Joystick prompts on Adaptive mouse: how far the mouse moves for one step of a rotation.");
+        CheckRow("Keep mouse in window", s.mouse_lock,
+                 "While you play, the mouse stays in the game window; this menu and other windows get it back.");
         ImGui::EndTable();
     }
 
