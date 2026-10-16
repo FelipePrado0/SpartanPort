@@ -32,9 +32,26 @@ MINGW*|MSYS*)
     exit 0
     ;;
 esac
+if [[ ${1:-} == --setup || ${1:-} == --setup-apple-silicon ]]; then
+    shift
+    exec bash packaging/macos/setup-apple-silicon.sh "$@"
+fi
+if [[ ${1:-} == --download || ${1:-} == --download-prebuilt ]]; then
+    shift
+    exec bash packaging/macos/download-prebuilt.sh "$@"
+fi
 is_darwin=0
 if [[ $(uname -s) == Darwin ]]; then
     is_darwin=1
+    # On Apple Silicon (arm64), the PS4 loader runs as x86_64 under Rosetta 2.
+    # If /usr/local has x86_64 Homebrew, re-exec seamlessly under arch -x86_64.
+    if [[ $(uname -m) == arm64 ]]; then
+        if arch -x86_64 /usr/bin/true 2>/dev/null; then
+            if [[ -x /usr/local/bin/brew || -f /usr/local/lib/libSDL3.dylib ]]; then
+                exec arch -x86_64 /bin/bash "$0" "$@"
+            fi
+        fi
+    fi
     # If /usr/local has x86_64 libraries, prioritize /usr/local for the x86_64 PS4 runtime
     if [[ -f /usr/local/lib/libSDL3.dylib ]] && file /usr/local/lib/libSDL3.dylib | grep -q 'x86_64'; then
         export PATH="/usr/local/bin:/opt/homebrew/bin:${PATH}"
@@ -75,7 +92,10 @@ if ! { command -v pkg-config >/dev/null && pkg-config --exists vulkan sdl3 && co
             pkg-config --exists sdl3 || echo '  - sdl3' >&2
         fi
         echo '' >&2
-        echo 'Install dependencies with Homebrew:' >&2
+        echo 'To set up build dependencies on Apple Silicon (M1/M2/M3/M4):' >&2
+        echo '  Run: bash build.sh --setup' >&2
+        echo '' >&2
+        echo 'Or install manually with Homebrew:' >&2
         echo '  • Intel Mac:' >&2
         echo '      brew install pkg-config cmake ninja molten-vk vulkan-headers vulkan-loader sdl3 ffmpeg boost fmt robin-map xxhash zydis glslang' >&2
         echo '  • Apple Silicon (M1/M2/M3/M4 via Rosetta 2 x86_64):' >&2
@@ -91,15 +111,17 @@ if [[ $is_darwin -eq 1 ]]; then
             if [[ -f out/gow3-probe || -f bin/gow3-probe ]]; then
                 echo "Notice: Found arm64 libraries in $sdl_lib. Keeping existing x86_64 gow3-probe."
             else
-                echo "Apple Silicon (ARM64) libraries found in $sdl_lib." >&2
+                echo "Apple Silicon (ARM64) environment detected." >&2
                 echo "The PS4 guest code and loader (gow3-probe) must run as x86_64 under Rosetta 2." >&2
-                echo "Because Homebrew on macOS is ARM64-only, building the x86_64 probe from source" >&2
-                echo "is done on Intel x86-64 Macs or via GitHub Actions CI (.github/workflows/macos-zip.yml)." >&2
                 echo "" >&2
-                echo "To play on Apple Silicon:" >&2
-                echo "  1. Download 'gow3-macos.zip' from GitHub Releases (or GitHub Actions artifact)." >&2
-                echo "  2. Extract it and run: bash run.sh" >&2
-                echo "     (Rosetta 2 executes the game seamlessly)." >&2
+                echo "Options to run or build on Apple Silicon:" >&2
+                echo "  1. Automatically set up x86_64 build dependencies and build from source:" >&2
+                echo "       bash build.sh --setup" >&2
+                echo "" >&2
+                echo "  2. Download prebuilt release binaries:" >&2
+                echo "       bash build.sh --download" >&2
+                echo "     Then run:" >&2
+                echo "       bash run.sh" >&2
                 exit 1
             fi
         fi

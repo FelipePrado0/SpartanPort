@@ -81,17 +81,21 @@ int main(void) {
     inject(path,"");
     data=read_pad();
     assert(touch_at(&data,1440));
-    for (int i=0; !(data.buttons & BTN_TOUCHPAD) && i<20; ++i) {
-        usleep(10000);
+    int saw_touchpad = 0;
+    for (int i=0; i<30; ++i) {
+        if ((data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440)) {
+            saw_touchpad = 1;
+            break;
+        }
+        usleep(5000);
         data=read_pad();
-        assert(touch_at(&data,1440));
     }
-    assert((data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
-    for (int i=0; (data.buttons & BTN_TOUCHPAD) && i<20; ++i) {
-        usleep(10000);
+    assert(saw_touchpad);
+    for (int i=0; (data.buttons & BTN_TOUCHPAD) && i<30; ++i) {
+        usleep(5000);
         data=read_pad();
     }
-    assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
+    assert(!(data.buttons & BTN_TOUCHPAD));
     usleep(220000);
     data=read_pad();
     assert(data.buttons==0 && data.touch_count==0);

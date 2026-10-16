@@ -197,9 +197,9 @@ def main():
         lib_dir = probe.parent / 'lib'
         if lib_dir.is_dir():
             dyld_paths.append(str(lib_dir))
-        for prefix in (Path('/opt/homebrew'), Path('/usr/local')):
-            if (prefix / 'lib').is_dir():
-                dyld_paths.append(str(prefix / 'lib'))
+        # Prioritize x86_64 /usr/local for Rosetta 2 compatibility
+        if (Path('/usr/local/lib')).is_dir():
+            dyld_paths.append('/usr/local/lib')
         if vulkan_sdk := env.get('VULKAN_SDK'):
             if (Path(vulkan_sdk) / 'lib').is_dir():
                 dyld_paths.append(str(Path(vulkan_sdk) / 'lib'))
@@ -208,6 +208,18 @@ def main():
             env['DYLD_FALLBACK_LIBRARY_PATH'] = ':'.join(dyld_paths + ([current_dyld] if current_dyld else []))
             current_lib = env.get('DYLD_LIBRARY_PATH', '')
             env['DYLD_LIBRARY_PATH'] = ':'.join(dyld_paths + ([current_lib] if current_lib else []))
+        if not env.get('VK_DRIVER_FILES') and not env.get('VK_ICD_FILENAMES'):
+            if (lib_dir / 'MoltenVK_icd.json').is_file():
+                env['VK_DRIVER_FILES'] = str(lib_dir / 'MoltenVK_icd.json')
+            else:
+                for candidate in (
+                    Path('/usr/local/etc/vulkan/icd.d/MoltenVK_icd.json'),
+                    Path('/usr/local/share/vulkan/icd.d/MoltenVK_icd.json'),
+                    Path(env.get('VULKAN_SDK', '/nonexistent')) / 'share/vulkan/icd.d/MoltenVK_icd.json',
+                ):
+                    if candidate.is_file():
+                        env['VK_DRIVER_FILES'] = str(candidate)
+                        break
     # Instruction sets this CPU lacks (MOVBE, BMI1, LZCNT): the ISA rewrite covers them; exit 20
     # is a set nothing covers.
     features = subprocess.run([str(probe), '--cpu-features'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,

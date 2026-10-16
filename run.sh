@@ -42,11 +42,12 @@ if [[ $(uname -s) == Darwin ]]; then
         export PKG_CONFIG_PATH="$VULKAN_SDK/lib/pkgconfig:${PKG_CONFIG_PATH}"
     fi
     if [[ -z ${VK_DRIVER_FILES:-} && -z ${VK_ICD_FILENAMES:-} ]]; then
-        for candidate in /opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json \
-                         /opt/homebrew/share/vulkan/icd.d/MoltenVK_icd.json \
+        for candidate in "$PWD/bin/lib/MoltenVK_icd.json" \
                          /usr/local/etc/vulkan/icd.d/MoltenVK_icd.json \
                          /usr/local/share/vulkan/icd.d/MoltenVK_icd.json \
-                         ${VULKAN_SDK:-/nonexistent}/share/vulkan/icd.d/MoltenVK_icd.json; do
+                         ${VULKAN_SDK:-/nonexistent}/share/vulkan/icd.d/MoltenVK_icd.json \
+                         /opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json \
+                         /opt/homebrew/share/vulkan/icd.d/MoltenVK_icd.json; do
             if [[ -f $candidate ]]; then export VK_DRIVER_FILES=$candidate; break; fi
         done
     fi
