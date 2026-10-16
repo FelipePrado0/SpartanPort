@@ -192,7 +192,7 @@ Instance::Instance(const Frontend::WindowSystemInfo& window_info, s32 physical_d
                VK_VERSION_MAJOR(TargetVulkanApiVersion), VK_VERSION_MINOR(TargetVulkanApiVersion),
                VK_VERSION_MAJOR(properties.apiVersion), VK_VERSION_MINOR(properties.apiVersion));
 
-    CreateDevice();
+    ASSERT_MSG(CreateDevice(), "Failed to create Vulkan device");
     CollectPhysicalMemoryInfo();
     CollectImageFormatInfo();
     CollectToolingInfo();
@@ -486,9 +486,17 @@ bool Instance::CreateDevice() {
                 return family.queueCount && (family.queueFlags & vk::QueueFlagBits::eSparseBinding);
             });
         if (sparse_family == family_properties.end()) {
+#ifndef __APPLE__
+            LOG_CRITICAL(Render_Vulkan, "No sparse binding queue family available.");
             return false;
+#else
+            LOG_INFO(Render_Vulkan,
+                     "No sparse binding queue family available; falling back to graphics queue.");
+            sparse_queue_family_index = queue_family_index;
+#endif
+        } else {
+            sparse_queue_family_index = static_cast<u32>(sparse_family - family_properties.begin());
         }
-        sparse_queue_family_index = static_cast<u32>(sparse_family - family_properties.begin());
     }
 
     static constexpr std::array queue_priorities = {1.0f};
