@@ -82,9 +82,14 @@ in place:
 4. PC Options: reuse the `PauseOptions` row and `optSet` machinery, then have the port read
    and write those SMI variables in guest memory.
 
-## Options row (in-game test pending)
+## Options row (tested in game 2026-10-15: shows in pause and main menu Options, works)
 
 `PauseOptions` (Controls, Game Settings, Audio, Display) shows four of the eight row slots and is
 also what the main menu's Options opens (`fromShell`). `add_options_row` adds `HLExit` as its fifth
 child (down from Display, up from Controls, wrapping both ways). It needs a record inserted into the
 state table, so the WAD grows by 144 bytes; see `docs/plans/2026-10-15-exit-confirmation.md`.
+
+First attempt (commit bd14fda) appended the row's code and label after the literal pool and the row
+did not show in game; the second (74677a0) keeps both rows' code and the label in WadChoose's dead
+code, so only the state table grows (one record, +48 bytes), and the row shows. The cause was never
+isolated: either the label or the code after the pool is not usable by the engine.
