@@ -1,4 +1,4 @@
-"""Exit to Desktop row (scripts/pause_menu.py). The script is the game's own, so the patch is
+"""Exit to Desktop rows (scripts/pause_menu.py). The script is the game's own, so the patch is
 checked on the dump's R_UI.WAD when GOW3_GAME_DIR points at one; the refusals need no files."""
 import os
 import struct
@@ -8,6 +8,7 @@ from pathlib import Path
 
 from paths import ROOT  # noqa: F401  (puts scripts/ on the path)
 import pause_menu
+from pause_menu import Script, decode
 
 GAME = Path(os.environ.get('GOW3_GAME_DIR', '')) if os.environ.get('GOW3_GAME_DIR') else None
 
@@ -15,6 +16,14 @@ GAME = Path(os.environ.get('GOW3_GAME_DIR', '')) if os.environ.get('GOW3_GAME_DI
 def wad(name, payload):
     return struct.pack('<HHI', 1, 0, len(payload)) + name.encode().ljust(56, b'\0') + payload.ljust(
         (len(payload) + 15) & ~15, b'\0')
+
+
+def gotos(data, base, spans):
+    """{code offset: index of the state it goes to} for the `47` instructions in `spans`."""
+    s = Script(data, base)
+    index = {r['at'] - 4: i for i, r in enumerate(s.records)}
+    return {at - base - s.lit: index[int.from_bytes(arg, 'big')]
+            for a, b in spans for at, op, arg in decode(data, base + s.lit + a, base + s.lit + b) if op == 0x47}
 
 
 class Refusals(unittest.TestCase):
@@ -32,20 +41,49 @@ class Refusals(unittest.TestCase):
 
 @unittest.skipUnless(GAME and (GAME / pause_menu.WAD).is_file(), 'needs GOW3_GAME_DIR with the game')
 class GameScript(unittest.TestCase):
-    def test_exit_row(self):
-        data = bytearray((GAME / pause_menu.WAD).read_bytes())
-        size = len(data)
-        pause_menu.patch(data)
-        self.assertEqual(len(data), size)  # nothing moves
-        base = next(o + 0x40 for o, _s, n in pause_menu.entries(data) if n == 'SMI_R_UI')
-        script = pause_menu.Script(data, base)  # the state tree still parses up to the code
-        main, row = script.one('PauseMain'), script.one('WadChoose')
+    def setUp(self):
+        self.original = (GAME / pause_menu.WAD).read_bytes()
+        self.data = bytearray(self.original)
+        pause_menu.patch(self.data)
+        entry = lambda d: next(o + 0x40 for o, _s, n in pause_menu.entries(d) if n == 'SMI_R_UI')  # noqa: E731
+        self.base, self.old_base = entry(self.data), entry(self.original)
+        self.old, self.new = Script(self.original, self.old_base), Script(self.data, self.base)
+
+    def test_pause_row(self):
+        main, row = self.new.one('PauseMain'), self.new.one('WadChoose')
         self.assertEqual(row['parent'], main['at'] - 4)
         self.assertEqual(main['at'] + main['size'], row['at'] + row['size'])
-        confirm = next(v for k, v, t in script.blocks(row) if k == 3 and t[0] == pause_menu.CONFIRM[0])
-        self.assertIn(pause_menu.EXIT_CALL, script.block_bytes(confirm))
+        confirm = next(v for k, v, t in self.new.blocks(row) if k == 3 and t[0] == pause_menu.CONFIRM[0])
+        self.assertIn(pause_menu.EXIT_CALL, self.new.block_bytes(confirm))
         with self.assertRaises(ValueError):  # a patched copy is refused, not patched twice
-            pause_menu.patch(data)
+            pause_menu.patch(bytearray(self.data))
+
+    def test_options_row(self):
+        options, row = self.new.one('PauseOptions'), self.new.by_name['HLDisplay'][1]
+        self.assertEqual(len(self.new.records), len(self.old.records) + 1)
+        self.assertEqual(row['parent'], options['at'] - 4)
+        self.assertEqual(options['size'], self.old.one('PauseOptions')['size'] + pause_menu.ROW_SIZE)
+        self.assertEqual(row['at'], options['at'] + options['size'] - pause_menu.ROW_SIZE)
+        # The WAD entry, the script header and the padding agree with the new size.
+        size = struct.unpack_from('<I', self.data, self.base - 0x40 + 4)[0]
+        old_size = struct.unpack_from('<I', self.original, self.old_base - 0x40 + 4)[0]
+        self.assertEqual(struct.unpack_from('<I', self.data, self.base + 8)[0], size - 4)
+        self.assertEqual(len(self.data) - len(self.original), ((size + 15) & ~15) - ((old_size + 15) & ~15))
+        self.assertEqual([n for _o, _s, n in pause_menu.entries(self.data)][-1], 'GroupEnd')
+
+    def test_every_other_goto_is_unchanged(self):
+        dead = self.old.one('WadChoose')  # its code is replaced by the pause row's
+        lo = min(v for k, v in dead['items'] if k in (1, 2, 3))
+        spans = [(a, b) for a, b in self.old.spans() if not lo <= a < lo + 0x40]
+        before = gotos(self.original, self.old_base, spans)
+        after = gotos(self.data, self.base, spans)
+        options = self.new.one('PauseOptions')
+        inserted = next(i for i, r in enumerate(self.new.records) if r['at'] == options['at'] + options['size'] - pause_menu.ROW_SIZE)
+        moved = lambda i: i + (i >= inserted)  # noqa: E731  (states after the new record shift by one)
+        changed = {at: after[at] for at, b in before.items() if after[at] != moved(b)}
+        wad_choose = moved(next(i for i, r in enumerate(self.old.records) if r['at'] == dead['at']))
+        # Continue up and Quit Game down go to the pause row; Controls up and Display down to the options row.
+        self.assertEqual(sorted(changed.values()), sorted([wad_choose, wad_choose, inserted, inserted]))
 
 
 if __name__ == '__main__':

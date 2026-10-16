@@ -81,3 +81,10 @@ in place:
    `src/cheat_hook.h`) on the global or builtin the new state sets, then exit from the port.
 4. PC Options: reuse the `PauseOptions` row and `optSet` machinery, then have the port read
    and write those SMI variables in guest memory.
+
+## Options row (in-game test pending)
+
+`PauseOptions` (Controls, Game Settings, Audio, Display) shows four of the eight row slots and is
+also what the main menu's Options opens (`fromShell`). `add_options_row` adds `HLExit` as its fifth
+child (down from Display, up from Controls, wrapping both ways). It needs a record inserted into the
+state table, so the WAD grows by 144 bytes; see `docs/plans/2026-10-15-exit-confirmation.md`.

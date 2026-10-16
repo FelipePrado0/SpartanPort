@@ -63,33 +63,44 @@ Extend the engine's dialog with action 0x7e (Exit): its own text, and on "yes" t
 
 ## Main menu row
 
-`SMI_Shell` (SHELL.WAD) has `MainMenu` → `NewGame`, `Load`, `OptionsShell`, `Treasures`. Unlike
-the pause menu, its UI object `gouimainmenuag` has **exactly four rows**: model `MDL_b2a8c32e`
-with materials `uimenuitemmat0..3`, text objects `SCP_menuItem0..3` (`[msg_A[8001..8004]]`) and
-animation clips `menuItem0..3Select` in `ANM_uimainmenuag`. A fifth row needs new geometry, a
-material, a text object and an animation clip in formats not decoded yet. That is a large,
-open-ended job, so it is not recommended for now.
+`SMI_Shell` (SHELL.WAD) has `MainMenu` -> `NewGame`, `Load`, `OptionsShell`, `Treasures`. Unlike
+the pause menu, its UI object `gouimainmenuag` has **exactly four rows**, so a fifth is a scene
+edit, not a script edit. What is known (decoded 2026-10-15, nothing built yet):
 
-Cheaper ways to exit from the main menu:
+- **Row geometry** `MG_b2a8c32e_0` (0x520 bytes): an offset table (`0xb4 0x17c 0x244 0x30c`) of four
+  0xc8-byte draw blocks that differ in 7 words each (indices 3/5/7/9, a slot 0x2c9d7d03/5/7/9 and
+  two values, 0x3a8/0x1f0/0x178/0x100, whose rule is not decoded), then a vertex stream.
+- **Materials** `MAT_uimenuitemmat0..42` all exist in SHELL.WAD; the model entry `MDL_b2a8c32e`
+  references `mat0..3`.
+- **Text** `SCP_menuItem0..3` (0xa0 bytes each, `[msg_A[8001..8004]]`); a fifth needs message 8005
+  in every `R_LANG_*.WAD` (plain text).
+- **Animation** `ANM_uimainmenuag` (0x1710 bytes): a clip table with room for 10 entries (offsets
+  `0x80 0x3c0 0x700 0xa40`, 0x340 apart, relative to 0x410) and a clip count of 4 at 0x420. Each
+  clip is 0x340 bytes: a header, a 4-byte **name hash**, the name (`menuItemNSelect`) and tracks.
+  The hash is the same for a name in every animation (`menuItem4Select` = `7f21ec50` wherever it
+  appears), so it can be copied from another animation without knowing the function.
+- **Scene nodes**: after the clips, node tables (about 0x30 bytes of scale/rotation/translation per
+  node) and index tables (0..9). Rows seem to use two nodes each, so a fifth row means inserting
+  nodes into several parallel tables. This is the undecoded, risky part.
 
-1. **Exit row in Options.** Options from the main menu runs the same `PauseMenu` machine
-   (`("PauseMenu", 76, 1, 3)`, `fromShell`), and `PauseOptions` shows 4 of its 8 rows. Adding
-   `HLExit` there gives Exit in both main menu → Options and pause → Options. This needs a real
-   record insertion in SMI_R_UI. Effort: small to medium.
-2. **Back button on the main menu.** `MainMenu` has no back action today. Map trigger 0xeb
-   (back) to the confirm dialog and exit. No visible row or hint, so it is hard to discover.
+A fifth row is therefore a multi-structure edit with a visual layout to get right (and room under
+the fourth row). Cheaper ways, in order:
 
-## Inserting records (needed for main menu option 1 and A without trade-offs)
+1. **Exit row in Options (implemented).** Options opened from the main menu runs the same
+   `PauseOptions` state of the `PauseMenu` machine (`fromShell`), so the row added there is one
+   step from the main menu and from the pause menu.
+2. **Back button on the main menu.** `MainMenu` has no back action. Adding trigger 0xeb to a
+   confirm dialog would work, but nothing on screen tells the player.
 
-Insert N bytes at the end of the parent's subtree, then:
+## Inserting records (implemented)
 
-- Add N to `+0x08`, `+0x0c` and `+0x10` in the header.
-- Add N to every ancestor's subtree size (not to siblings that end at the same offset).
-- Add N to every parent field and every `47 <state>` operand at or past the insertion point (found
-  with the decoder).
+`scripts/pause_menu.py:add_options_row` inserts a state record into the middle of the table and
+appends its code after the literal pool, then fixes: the header (+0x08, +0x0c, +0x10), the sizes of
+the new record's ancestors, the `parent` of records after it, every `47` operand to a later state
+(found by decoding all code blocks; the opcode length table decodes both scripts exactly), and the
+WAD entry size and padding. Code refs, literal operands and symbol refs are relative and do not
+move. `tests/test_pause_menu.py` compares every record and every goto before and after: exactly the
+expected five records and four gotos differ.
 
-Code refs, literal operands and symbol refs are relative and do not change. Put the new code and
-literals after the literal pool, before the symbol table, so no code or literal moves. Check
-first: whether anything else holds absolute state refs, such as `01 <imm>` pushes equal to a
-record ref passed to builtins. Grep both scripts with the decoder before trusting the
-relocation.
+Still unverified in game: that the engine accepts a *resized* R_UI.WAD (the first test only changed
+bytes in place).
