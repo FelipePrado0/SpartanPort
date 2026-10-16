@@ -59,6 +59,41 @@ Saves, `gow3.ini`, the shader cache and `user/last_run.log` are in the repositor
 Linux; the launcher keeps its own settings in `~/.config/gow3-launcher/settings.json`.
 **Advanced → Desktop shortcut** puts `God of War III.app` on the desktop, which opens the launcher.
 
+## Package
+
+```bash
+bash build.sh
+bash packaging/macos/package.sh   # dist/gow3-macos.dmg and dist/God of War III.app
+```
+
+`package.sh` freezes the launcher with PyInstaller (a venv in `out/pyenv`; Python 3 with Tk, as
+for the launcher, `PYTHON` overrides `python3`) into `God of War III.app`, so players need neither
+Python nor a build. The application holds, in `Contents/Resources`, what a packaged Windows build
+holds next to its executable: `run.py`, `scripts/`, `patches/` and `bin/` with `gow3-probe`,
+`gow3-gpu-capabilities`, `gpu/libgow3gpu.dylib`, the libraries they load through their run paths
+in `lib/` (SDL3, FFmpeg, the Vulkan loader) and KosmicKrisp in `vulkan/`. The executables lose
+their debug information and their run paths into the checkout. The launcher runs on the Python's
+architecture (arm64 on Apple Silicon); the game is x86-64 under Rosetta 2, as from the repository,
+and `run.py` says how to install Rosetta when it is missing. The disk image holds the application,
+a link to Applications, `README-macOS.txt` (for players) and the license. The script stops when
+game files, saves, caches or settings would ship. `dist/God of War III.app` is a copy to play
+from (not refreshed while it runs).
+
+The packaged launcher keeps nothing inside the application: generated files, saves, the shader
+cache and `gow3.ini` go to `~/Library/Application Support/gow3` (`GOW3_DATA_DIR` overrides), and
+it offers no desktop shortcut (the application itself goes in the Dock).
+
+A release is `dist/gow3-macos.dmg` on a GitHub release of `nizwar/gow3_macos` tagged
+`macos-v<VERSION>`, with `VERSION` from `launcher/gow3_launcher_win.py`: the launcher's update
+check compares that number and offers the `.dmg` asset. Raise `VERSION` before a new release.
+
+The application is signed ad hoc (Apple Silicon runs only signed code), not with an Apple Developer
+ID nor notarized, so macOS blocks a downloaded copy: players clear its quarantine once with
+`xattr -dr com.apple.quarantine "/Applications/God of War III.app"` (`README-macOS.txt`), which
+covers the executables inside it too. Tested on an M4 Pro (macOS 27): the game started from the mounted disk image
+with a fresh data folder (MetalFX at 720p, no faults), and the preparation and the launcher ran
+from the application without the checkout's Python.
+
 ## What is different from Linux
 
 | Linux | macOS |
@@ -77,9 +112,51 @@ Linux; the launcher keeps its own settings in `~/.config/gow3-launcher/settings.
 Overrides: `VK_DRIVER_FILES` (another Vulkan driver), `GOW3_VULKAN_LIBRARY` (another Vulkan
 loader or library), `GOW3_LTO=OFF bash build.sh` (faster builds of the GPU library).
 
-Not available on macOS: Add to Steam, the Linux options (Wayland/X11, GameMode, MangoHud),
-DLSS, userfaultfd tracking (`GOW3_UFFD`), PGO, and a packaged build (the port runs from the
-repository). The performance overlay shows the GPU name only, as on Linux.
+Not available on macOS: the Linux options (Wayland/X11, GameMode), DLSS, the graphics card and
+stream buffer memory choices (one GPU sharing the system's memory), userfaultfd tracking
+(`GOW3_UFFD`) and PGO.
+
+The rest of what the Windows and Linux launchers offer is there, the Mac's way:
+
+- **Advanced → macOS → Metal performance HUD**, in MangoHud's place: the launcher sets
+  `MTL_HUD_ENABLED` (1 or 0) for the game, and Apple's HUD shows frame rate, frame times and memory
+  on the game window (`libMTLHud` loads into `gow3-probe`; Command-F9 toggles it).
+- **Advanced → Add to Steam** writes the shortcut and its pictures into
+  `~/Library/Application Support/Steam/userdata/<account>/config` (the Mac client's process is
+  `steam_osx`; close Steam first). The shortcut starts
+  `God of War III.app/Contents/MacOS/God of War III --play`, or the source tree's launcher with
+  `--play`. The pictures use Georgia Bold from `/System/Library/Fonts/Supplemental`.
+- **Advanced → Check for updates** asks the latest release of `nizwar/gow3_macos` (tag
+  `macos-v<VERSION>`, asset `gow3-macos.dmg`) and, when it is newer than the launcher's `VERSION`,
+  offers to download the disk image in the browser; the new application replaces the old one by
+  hand. The Windows build installs its zip in place instead.
+- The God of War title font (`launcher/gowfont.ttf`) is registered for the launcher's process with
+  Core Text (`CTFontManagerRegisterFontsForURL`), as GDI does on Windows.
+- The performance overlay measures, as on Windows: GPU use (the whole GPU's, from the accelerator's
+  `PerformanceStatistics` in IOKit, the figure Activity Monitor shows: macOS has no counter per
+  process), the game's CPU time (`getrusage`) and memory (its physical footprint, Activity
+  Monitor's "Memory"), and VRAM (`VK_EXT_memory_budget`, as KosmicKrisp reports it). The log has
+  the first sample once: `Performance overlay: GPU …% (whole GPU), CPU …%, RAM … GB, VRAM … GB`.
+
+## Fewer GPU waits (experimental)
+
+Launcher: **Display → Fewer GPU waits**; in the game's menu: **Performance → Applied on restart**;
+`gow3.ini`: `fewer_gpu_waits=1` (`GOW3_FEWER_GPU_WAITS=1` overrides it at start). Off by default,
+applied at the next start, and only with `stale_readback=1` (both controls are greyed out without
+it). At every end-of-pipe fence the texture cache queues the readbacks of small
+linear images; it first waited for every guest memory copy in flight (`Scheduler::WaitHostCopies`),
+so the draw recording thread stopped until the Vulkan recording thread had drained, 12 to 14 times
+a frame in God of War III's gameplay, mostly at fences that queue no readback. With stale readbacks
+the watched pages keep read access and those copies only read guest memory, so the wait is skipped
+(`texture_cache.h`, `readbacks_skip_copy_wait`). It applies on every system.
+
+Measured on the M4 Pro (macOS 27) in the first fight after New Game, 720p with MetalFX, VSync off:
+the draw recording thread waited 40% of the time before and 2% after, and the command processor
+and draw recording threads went from 62% and 57% of a core to 28% and 23%. The frame rate stayed at
+52 FPS: on this Mac the GPU side limits it. Instruments' Metal System Trace shows the GPU busy 83%
+of the time and idle 2 to 4 ms at every frame start with the next command buffer already committed,
+and KosmicKrisp creating and releasing about 30 Metal heaps of 128 KiB a frame. `frames_queued`
+0, 1 or 2 and 480p change nothing measurable either.
 
 ## MetalFX upscaling
 
@@ -89,7 +166,7 @@ On a Mac, Apple's MetalFX (its spatial scaler) can enlarge the game's image to t
 FSR 1 does it otherwise. With a render resolution below the window's it raises the frame rate:
 
 - Launcher: **Display → Upscale to the window** on, **Upscaler → MetalFX (Apple)**, and
-  **Performance → Render resolution → 720p** (applied at the next start).
+  **Performance → Render resolution → 720p** or **480p** (applied at the next start).
 - In the game's menu (**`**): **Image → Upscale to the window** and **Upscaler**.
 - `gow3.ini`: `fsr1=1`, `screen_upscaler=metalfx`, `render_resolution=720p`
   (`GOW3_SCREEN_UPSCALER=metalfx` overrides the file at start).
@@ -97,8 +174,16 @@ FSR 1 does it otherwise. With a render resolution below the window's it raises t
 Nothing changes by default: upscaling stays off (`fsr1=0`) and its upscaler is FSR 1
 (`screen_upscaler=fsr1`). MetalFX sharpens the image by itself, more than FSR 1 with RCAS at 75%,
 so the sharpening setting (RCAS) applies to FSR 1 and to images the size of the window, not on top
-of MetalFX. The log says `Screen upscaler: MetalFX spatial 1280x720 -> 1920x1080 (...)` when it
-starts. When MetalFX or the Vulkan/Metal interop below cannot run, the log says once
+of MetalFX. The performance overlay's upscaler item says what enlarges the image: `MetalFX
+720p->1080p`, `FSR 1 720p->1080p` (also where MetalFX cannot run), `Native 1080p` when the image is
+the window's size, or the temporal upscaler's name when one runs. Every render resolution smaller
+than the window is enlarged, 480p as well as 720p (480p blows out bright areas in this game:
+upstream issue #390, marked ⚠ in the launcher). With upscaling on and nothing to enlarge (Native on
+a 1080p screen), the menu's Image tab says so under the upscaler and offers **Render at: 720p /
+480p** (then **Apply and restart**), and the launcher's Display page shows the same note with
+**720p** and **480p** buttons. The launcher's status line names the upscaler (`720p → MetalFX
+(Apple)`). The log says `Screen upscaler: MetalFX spatial 1280x720 -> 1920x1080
+(...)` when it starts. When MetalFX or the Vulkan/Metal interop below cannot run, the log says once
 `Screen upscaler: MetalFX unavailable (<why>); using FSR 1` and FSR 1 enlarges the image; the
 menu's Information rows show which one ran and why. On Windows and Linux a `screen_upscaler=metalfx`
 in `gow3.ini` falls back the same way, and the launcher and the menu do not offer it.
@@ -130,10 +215,10 @@ upscaled by MetalFX outside the game. HDR output with MetalFX was not tested.
 ### Temporal upscaling (experimental; waits for this game's frame mapping)
 
 On a Mac the temporal upscaler can also be Apple's MetalFX (its temporal scaler). Like FSR 3.1,
-FSR 4 and TAA it stays off unless the experimental switch is on: in the launcher, **Graphics
-(experimental) → Enable the upscaler**, then **Upscaler → MetalFX (Apple)**; without the
-launcher, `GOW3_EXPERIMENTAL_UPSCALER=1 GOW3_UPSCALER=metalfx ./play-mac.sh` (or `upscaler=metalfx`
-in `gow3.ini`). The preset and output resolution work as with FSR: Native AA is anti-aliasing at
+FSR 4 and TAA it stays off unless the experimental switch is on. A Mac's launcher leaves out the
+page with that switch (Graphics (experimental), see the status below) and starts the game with it
+off, so it is tried without the launcher: `GOW3_EXPERIMENTAL_UPSCALER=1 GOW3_UPSCALER=metalfx
+./play-mac.sh` (or `upscaler=metalfx` in `gow3.ini`). The preset and output resolution work as with FSR: Native AA is anti-aliasing at
 1:1, Ultra Performance (3x) is MetalFX's largest scale on Apple GPUs. MetalFX has no sharpening
 of its own; the upscaler sharpening setting runs the port's RCAS pass on its output, as for TAA.
 The log says `Upscaler: MetalFX temporal <input> -> <output>` when it runs; when it cannot, it
