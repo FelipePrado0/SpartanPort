@@ -24,14 +24,85 @@ for bin in "$dest/bin/gow3-probe" "$dest/bin/gow3-gpu-capabilities" "$dest/bin/g
     fi
 done
 
-# Copy any Homebrew dynamic libraries loaded by probe into bin/lib/ for bundling
-for bin in "$dest/bin/gow3-probe" "$dest/bin/gow3-gpu-capabilities"; do
-    [[ -f $bin ]] || continue
-    otool -L "$bin" | awk '/(\/usr\/local\/|\/opt\/homebrew\/)/ {print $1}' | while read -r lib; do
-        if [[ -f "$lib" ]]; then
-            cp -n "$lib" "$dest/bin/lib/" 2>/dev/null || true
+echo "Bundling dynamic libraries and fixing Mach-O references..."
+chmod -R u+w "$dest/bin"
+
+# 1. Recursively collect all Homebrew / non-system dependencies into bin/lib/
+to_process=("$dest/bin/gow3-probe" "$dest/bin/gpu/libgow3gpu.dylib")
+[[ -f "$dest/bin/gow3-gpu-capabilities" ]] && to_process+=("$dest/bin/gow3-gpu-capabilities")
+
+while ((${#to_process[@]} > 0)); do
+    item="${to_process[0]}"
+    to_process=("${to_process[@]:1}")
+    [[ -f "$item" ]] || continue
+    while read -r dep; do
+        [[ -f "$dep" ]] || continue
+        dep_name=$(basename "$dep")
+        if [[ ! -f "$dest/bin/lib/$dep_name" ]]; then
+            cp -L "$dep" "$dest/bin/lib/$dep_name"
+            chmod u+w "$dest/bin/lib/$dep_name"
+            strip -S "$dest/bin/lib/$dep_name" 2>/dev/null || true
+            to_process+=("$dest/bin/lib/$dep_name")
         fi
+    done < <(otool -L "$item" | awk '/(\/usr\/local\/|\/opt\/homebrew\/|\/Cellar\/)/ {print $1}')
+done
+
+# Also bundle libMoltenVK.dylib and MoltenVK_icd.json if available
+for mvk in /usr/local/lib/libMoltenVK.dylib /opt/homebrew/lib/libMoltenVK.dylib; do
+    if [[ -f "$mvk" && ! -f "$dest/bin/lib/libMoltenVK.dylib" ]]; then
+        cp -L "$mvk" "$dest/bin/lib/libMoltenVK.dylib"
+        chmod u+w "$dest/bin/lib/libMoltenVK.dylib"
+        strip -S "$dest/bin/lib/libMoltenVK.dylib" 2>/dev/null || true
+        cat <<EOF > "$dest/bin/lib/MoltenVK_icd.json"
+{
+    "file_format_version": "1.0.0",
+    "ICD": {
+        "library_path": "./libMoltenVK.dylib",
+        "api_version": "1.2.0"
+    }
+}
+EOF
+        break
+    fi
+done
+
+echo "Fixing library IDs and install names..."
+# 2. Update install names (ID and dependencies) inside all bundled dylibs
+for dylib in "$dest/bin/lib"/*.dylib; do
+    [[ -f "$dylib" ]] || continue
+    dname=$(basename "$dylib")
+    install_name_tool -id "@rpath/$dname" "$dylib" 2>/dev/null || true
+    otool -L "$dylib" | awk '/(\/usr\/local\/|\/opt\/homebrew\/|\/Cellar\/)/ {print $1}' | while read -r dep; do
+        dep_name=$(basename "$dep")
+        install_name_tool -change "$dep" "@rpath/$dep_name" "$dylib" 2>/dev/null || true
     done
+done
+
+# 3. Update references and add rpaths in main binaries
+for bin in "$dest/bin/gow3-probe" "$dest/bin/gow3-gpu-capabilities"; do
+    [[ -f "$bin" ]] || continue
+    otool -L "$bin" | awk '/(\/usr\/local\/|\/opt\/homebrew\/|\/Cellar\/)/ {print $1}' | while read -r dep; do
+        dep_name=$(basename "$dep")
+        install_name_tool -change "$dep" "@rpath/$dep_name" "$bin" 2>/dev/null || true
+    done
+    install_name_tool -add_rpath "@loader_path/lib" "$bin" 2>/dev/null || true
+    install_name_tool -add_rpath "@executable_path/lib" "$bin" 2>/dev/null || true
+done
+
+# Update references and rpaths for libgow3gpu.dylib
+if [[ -f "$dest/bin/gpu/libgow3gpu.dylib" ]]; then
+    otool -L "$dest/bin/gpu/libgow3gpu.dylib" | awk '/(\/usr\/local\/|\/opt\/homebrew\/|\/Cellar\/)/ {print $1}' | while read -r dep; do
+        dep_name=$(basename "$dep")
+        install_name_tool -change "$dep" "@rpath/$dep_name" "$dest/bin/gpu/libgow3gpu.dylib" 2>/dev/null || true
+    done
+    install_name_tool -add_rpath "@loader_path/../lib" "$dest/bin/gpu/libgow3gpu.dylib" 2>/dev/null || true
+    install_name_tool -add_rpath "@executable_path/lib" "$dest/bin/gpu/libgow3gpu.dylib" 2>/dev/null || true
+fi
+
+echo "Ad-hoc signing binaries and libraries for Gatekeeper/Rosetta 2..."
+for f in "$dest/bin/lib"/*.dylib "$dest/bin/gpu"/*.dylib "$dest/bin/gow3-probe" "$dest/bin/gow3-gpu-capabilities"; do
+    [[ -f "$f" ]] || continue
+    codesign -s - --force "$f" 2>/dev/null || true
 done
 
 echo "Copying scripts, launcher, and support assets..."

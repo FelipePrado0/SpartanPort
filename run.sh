@@ -12,6 +12,21 @@ if [[ ${1:-} == --software ]]; then
     export VK_LOADER_LAYERS_DISABLE='~implicit~'
 fi
 if [[ $(uname -s) == Darwin ]]; then
+    # Clear quarantine attributes from bundled files if extracted on macOS
+    xattr -dr com.apple.quarantine "$PWD" 2>/dev/null || true
+    # Ensure bundled binaries and libraries are executable
+    if [[ -d bin ]]; then
+        chmod -R u+rx bin 2>/dev/null || true
+    fi
+    # If prebuilt bundled libraries exist, add them to dyld search paths
+    if [[ -d bin/lib ]]; then
+        export DYLD_FALLBACK_LIBRARY_PATH="$PWD/bin/lib:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+        export DYLD_LIBRARY_PATH="$PWD/bin/lib:${DYLD_LIBRARY_PATH:-}"
+    fi
+    # If bundled MoltenVK ICD exists, point to it
+    if [[ -f bin/lib/MoltenVK_icd.json && -z ${VK_DRIVER_FILES:-} && -z ${VK_ICD_FILENAMES:-} ]]; then
+        export VK_DRIVER_FILES="$PWD/bin/lib/MoltenVK_icd.json"
+    fi
     # If /usr/local has x86_64 libraries, prioritize /usr/local for the x86_64 PS4 runtime
     if [[ -f /usr/local/lib/libSDL3.dylib ]] && file /usr/local/lib/libSDL3.dylib | grep -q 'x86_64'; then
         export PATH="/usr/local/bin:/opt/homebrew/bin:${PATH}"

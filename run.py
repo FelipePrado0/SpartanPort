@@ -129,7 +129,7 @@ def glyph_mounts(env, probe, game, out):
         pad = ''
         if choice == 'auto':
             pad = subprocess.run([str(probe), '--gamepad'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                 text=True, timeout=15, creationflags=no_console()).stdout
+                                 text=True, timeout=15, env=env, creationflags=no_console()).stdout
         style, faces, name = glyphs.resolve(choice, pad)
         mounts = glyphs.build(game, out, style, faces, env.get('GOW3_PAD_MAP', ''))
     except Exception as error:  # noqa: BLE001  (icons only: whatever fails, the game still starts)
@@ -194,6 +194,9 @@ def main():
             env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
     elif MACOS:
         dyld_paths = []
+        lib_dir = probe.parent / 'lib'
+        if lib_dir.is_dir():
+            dyld_paths.append(str(lib_dir))
         for prefix in (Path('/opt/homebrew'), Path('/usr/local')):
             if (prefix / 'lib').is_dir():
                 dyld_paths.append(str(prefix / 'lib'))
@@ -203,10 +206,12 @@ def main():
         if dyld_paths:
             current_dyld = env.get('DYLD_FALLBACK_LIBRARY_PATH', '')
             env['DYLD_FALLBACK_LIBRARY_PATH'] = ':'.join(dyld_paths + ([current_dyld] if current_dyld else []))
+            current_lib = env.get('DYLD_LIBRARY_PATH', '')
+            env['DYLD_LIBRARY_PATH'] = ':'.join(dyld_paths + ([current_lib] if current_lib else []))
     # Instruction sets this CPU lacks (MOVBE, BMI1, LZCNT): the ISA rewrite covers them; exit 20
     # is a set nothing covers.
     features = subprocess.run([str(probe), '--cpu-features'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                              text=True, creationflags=no_console())
+                              text=True, env=env, creationflags=no_console())
     if features.returncode == 20:
         print(features.stdout, end='', flush=True)
         sys.exit(20)
@@ -340,7 +345,7 @@ def main():
                    '--user', str(user_dir),
                    '--timeout', env.get('GOW3_TIMEOUT', '0'), *isa_args, *glyph_args, *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
-        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, creationflags=no_console())
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, env=env, creationflags=no_console())
         presence = None
         try:
             try:

@@ -194,7 +194,7 @@ target_compile_definitions(gow3gpu PRIVATE BOOST_ASIO_STANDALONE NDEBUG)
 target_compile_options(gow3gpu PRIVATE -Wno-deprecated-declarations -Wno-missing-field-initializers)
 # Runtime symbols (runtime_memory_*, runtime_process_*) resolve against gow3-probe.
 if (APPLE)
-    target_link_options(gow3gpu PRIVATE -Wl,-undefined,dynamic_lookup -L/opt/homebrew/lib -L/usr/local/lib)
+    target_link_options(gow3gpu PRIVATE -Wl,-undefined,dynamic_lookup -L/opt/homebrew/lib -L/usr/local/lib -Wl,-rpath,@loader_path/../lib -Wl,-rpath,@executable_path/lib)
 elseif (NOT WIN32)
     target_link_options(gow3gpu PRIVATE -Wl,--allow-shlib-undefined)
 endif()
