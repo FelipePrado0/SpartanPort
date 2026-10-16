@@ -23,8 +23,9 @@ its proportions, and the vertical view is the same as at 16:9.
 | 1920 × 1200 | 16:10 | **Tested in game** (taller than 16:9: no field of view change) |
 | 2560 × 1600 | 16:10 | **Tested in game** (taller than 16:9: no field of view change) |
 | 1280 × 800 | 16:10 | **Not tested** (the Steam Deck's screen; same as the other 16:10 sizes) |
+| 1280 × 960, 1440 × 1080, 1920 × 1440, 2048 × 1536, 2560 × 1920 | 4:3 | **Not tested** (like 16:10: the camera's horizontal view is fixed, so a taller picture shows more at the top and bottom) |
 
-Every size but 1280x800 was tested in game: all six on an RX 6700 XT (Windows 11, reference build `d85c8135…`), and
+Every size but 1280x800 and the 4:3 ones was tested in game: all six on an RX 6700 XT (Windows 11, reference build `d85c8135…`), and
 3440x1440, 5120x1440, 1920x1200 and 2560x1600 also by players in issue #180 (thank you!). They stay marked
 "(beta)" until more screens and GPUs confirm them. **If something looks wrong on yours, please say how it looks**
 (an issue): the resolution, your GPU, and whether anything is cropped, stretched or missing at the edges.
@@ -125,7 +126,7 @@ mexer na câmera só corta a imagem de 16:9 em cima e embaixo, e ela parece com 
 `Resolution Patch - <largura>x<altura>` corrige isso: a imagem enche a tela, o mundo mantém as proporções e a
 visão vertical é a mesma do 16:9.
 
-**Todas as resoluções, menos a 1280x800 (a tela do Steam Deck, ainda sem teste), foram testadas no jogo:** as seis numa RX 6700 XT (Windows 11, build de referência
+**Todas as resoluções, menos a 1280x800 (a tela do Steam Deck) e as 4:3 (1280x960, 1440x1080, 1920x1440, 2048x1536 e 2560x1920), ainda sem teste, foram testadas no jogo:** as seis numa RX 6700 XT (Windows 11, build de referência
 `d85c8135…`), e 3440x1440, 5120x1440, 1920x1200 e 2560x1600 também por jogadores na issue #180. Elas continuam
 marcadas como "(beta)" até mais telas e placas confirmarem; se algo parecer errado na sua, conte numa issue (a
 resolução, a placa de vídeo e o que aparece cortado, esticado ou faltando nas bordas). Os tamanhos 16:10
