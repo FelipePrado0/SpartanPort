@@ -146,7 +146,7 @@
         <Target Name="second3" Address="0x005c9a61" Line="28"/>
         <Target Name="back3" Address="0x005cc217" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="13"/>
     </Metadata>
-    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 5120x1440" Note="Ultrawide 5120x1440 (3.556:1), Hor+. Sets the game output resolution and the display aspect ratio, widens the horizontal field of view so the 16:9 vertical view is kept (no zoom) and sets the Video Arena to 3.75 GiB. Requires setting DMEM to 6144 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 5120x1440" Note="Ultrawide 5120x1440 (3.556:1), Hor+. Sets the game output resolution and the display aspect ratio, widens the horizontal field of view so the 16:9 vertical view is kept (no zoom) and sets the Video Arena to 3.75 GiB. Requires setting DMEM to 6144 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Tested in game by players (issue #180)." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
         <PatchList>
             <Line Type="bytes" Address="0x005f0b3b" Value="00140000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
             <Line Type="bytes" Address="0x005f0b43" Value="a0050000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
@@ -192,7 +192,7 @@
         <Target Name="second3" Address="0x005c9a61" Line="28"/>
         <Target Name="back3" Address="0x005cc217" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="13"/>
     </Metadata>
-    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1920x1200" Note="1920x1200 (1.600:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1920x1200" Note="1920x1200 (1.600:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Tested in game by players (issue #180)." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
         <PatchList>
             <Line Type="bytes" Address="0x005f0b3b" Value="80070000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
             <Line Type="bytes" Address="0x005f0b43" Value="b0040000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
@@ -212,7 +212,7 @@
             <Line Type="bytes" Address="0x005f0c77" Value="cdcccc3fcdcccc3f" Pattern="48 b8 39 8e e3 3f 39 8e e3 3f 49 89 45 00 b9 00 00 01 00" At="2"/>
         </PatchList>
     </Metadata>
-    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 2560x1600" Note="2560x1600 (1.600:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 3.25 GiB. Requires setting DMEM to 4608 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 2560x1600" Note="2560x1600 (1.600:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 3.25 GiB. Requires setting DMEM to 4608 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Tested in game by players (issue #180)." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
         <PatchList>
             <Line Type="bytes" Address="0x005f0b3b" Value="000a0000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
             <Line Type="bytes" Address="0x005f0b43" Value="40060000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
