@@ -864,6 +864,11 @@ def game_environment(s):
 # God of War III's own colors: near black, ash and blood red (no gold or orange).
 BG, PANEL, CARD, LINE = '#0d0b0b', '#161212', '#1d1717', '#2a2222'
 TEXT, MUTED, ACCENT, ACCENT_HI = '#e6e0d8', '#8a817a', '#a4161a', '#c81e25'
+def pad_labels(style):
+    """SDL gamepad button name -> its label in this naming style, in the launcher's language."""
+    return {name: _(label) for name, label in PAD_STYLES[style].items()}
+
+
 RESOLUTION_CHOICES = [(name, (graphics_options.resolution_label(name),)) for name in graphics_options.RESOLUTIONS]
 ENGINE_FPS_CHOICES = [('60', ('60 (original)',)), ('120', ('120',)), ('240', ('240',))]
 
@@ -1537,7 +1542,8 @@ class Launcher:
             var = tk.BooleanVar(value=name in on)
             self.game_patch_vars[name] = var
             author = meta.get('Author')
-            self.check(f, None, None, name + (f'  ({author})' if author else ''), meta.get('Note'), var=var)
+            self.check(f, None, None, name + (f'  ({author})' if author else ''), meta.get('Note') and _(meta.get('Note')),
+                       var=var)
         self.game_patch_title = title_id
 
     def store_game_patches(self):
@@ -1596,7 +1602,7 @@ class Launcher:
             ttk.Label(table, text=heading_text(title), style='Section.TLabel').grid(row=0, column=column, columnspan=span, sticky='w')
         self.control_vars, self.pad_boxes, self.pad_icons = {'key': {}, 'pad': {}}, {}, {}
         size = self.px(28)
-        labels = PAD_STYLES[style]
+        labels = pad_labels(style)
 
         def icon_canvas(parent):
             return tk.Canvas(parent, width=size, height=size, bg=PANEL, highlightthickness=0, bd=0)
@@ -1604,7 +1610,7 @@ class Launcher:
             game_icon = icon_canvas(table)
             game_icon.grid(row=r, column=0, sticky='w', pady=3)
             button_icons.draw(game_icon, button_icons.GAME_BUTTONS[button], 'playstation', size)
-            ttk.Label(table, text=PS_BUTTON_NAMES[button], width=14).grid(row=r, column=1, sticky='w', padx=(0, 12))
+            ttk.Label(table, text=_(PS_BUTTON_NAMES[button]), width=-14).grid(row=r, column=1, sticky='w', padx=(0, 12))
             key_var = tk.StringVar(value=saved.get('key', {}).get(button) or key)
             self.control_vars['key'][button] = key_var
             ttk.Entry(table, textvariable=key_var, width=16).grid(row=r, column=2, sticky='w', padx=(0, 18))
@@ -1615,7 +1621,8 @@ class Launcher:
             pad_icon.grid(row=r, column=3, sticky='w', padx=(0, 6))
             self.pad_icons[button] = pad_icon
             if pad:
-                box = ttk.Combobox(table, state='readonly', width=22, values=list(labels.values()))
+                box = ttk.Combobox(table, state='readonly', values=list(labels.values()),
+                                   width=max(22, *(len(l) + 2 for l in labels.values())))
                 box.set(labels.get(pad_name, pad_name))
 
                 def chosen(_e, b=box, v=pad_var, n=button):
@@ -1625,7 +1632,7 @@ class Launcher:
                 self.pad_boxes[button] = box
             else:
                 fixed = (_('L1 + Touchpad right') if button == 'touchpad_left'
-                         else _('{} trigger').format(PS_BUTTON_NAMES[button]))
+                         else _('{} trigger').format(_(PS_BUTTON_NAMES[button])))
                 box = ttk.Label(table, text=fixed, style='Muted.TLabel')
             box.grid(row=r, column=4, sticky='w')
             self.draw_pad_icon(button)
@@ -1644,10 +1651,10 @@ class Launcher:
 
     def pad_name(self, label):
         """SDL gamepad button name of a label in the current naming style."""
-        return next((n for n, l in PAD_STYLES[self.pad_style.get()].items() if l == label), label)
+        return next((n for n, l in pad_labels(self.pad_style.get()).items() if l == label), label)
 
     def relabel_pad_controls(self):
-        labels = PAD_STYLES[self.pad_style.get()]
+        labels = pad_labels(self.pad_style.get())
         for button, box in self.pad_boxes.items():
             box.configure(values=list(labels.values()))
             name = self.control_vars['pad'][button].get()
@@ -1788,7 +1795,7 @@ class Launcher:
         self.store_game_patches()
         title_id, _profile = game_profile_of(self.meta_dir())
         names = self.app.get('game_patches', {}).get(title_id) or []
-        resolution = dict((v, t[0]) for v, t in self.resolution_options()).get(self.var('render_resolution', 'ini').get(), '?')
+        resolution = dict((v, _(*t)) for v, t in self.resolution_options()).get(self.var('render_resolution', 'ini').get(), '?')
         from patches import game_patchable, patch_status
         if not game_patchable(self.meta_dir()):
             return _('{} · 60 FPS engine · no patches for this game').format(resolution)
