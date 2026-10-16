@@ -55,6 +55,14 @@ empty text falls back to English). The icon (`launcher/gow3.ico`/`.png`) is draw
 `packaging/windows/make_icon.py` and built into `God of War III.exe`, `gow3-probe.exe` (the game
 window) and `gow3-gpu-capabilities.exe`.
 
+## Online installer
+
+An optional standalone Windows setup program downloads and verifies the official
+release ZIP, installs the port for the current user, and creates shortcuts. It
+does not require a local game build, Python installation, or administrator rights.
+See [installer/README.md](installer/README.md) for the player flow, build commands
+and tests. The game dump is supplied separately.
+
 ## What is different from Linux
 
 | Linux | Windows |
