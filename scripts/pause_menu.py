@@ -28,12 +28,14 @@ import struct
 
 from glyphs import entries
 
-VERSION = 3  # of the patch: a change rebuilds the cached copy
+VERSION = 4  # of the patch: a change rebuilds the cached copy
 WAD = 'EXEC/WAD/PS4_LE/R_UI.WAD'
 LABEL = b'Exit to Desktop'
 EXIT_CALL = b'\x13\x0f\xff\x43'  # builtin 0xfff (src/menu_hook.h), then pop
-UP, DOWN, CONFIRM = [0xe0, 0xec], [0xe4, 0xf0], [0xe9]  # trigger ids of the pad events
-ROW_SIZE = 0x38  # of the row's state record
+UP, DOWN, CONFIRM, REPLY = [0xe0, 0xec], [0xe4, 0xf0], [0xe9], [0x4b]  # trigger ids: pad events and the dialog's answer
+ROW_SIZE = 0x3c  # of the row's state record
+# Quit Game's reaction to the dialog's answer: nothing on "yes" (the engine acts), input back on on "no".
+REPLY_TEMPLATE = bytes.fromhex('01 00000000 130047 01 00000000 3f 170005 19 130069 43 49')
 # Bytes taken by each opcode with its operands (the interpreter's handlers, image 0x1d5a4e).
 LENGTH = {op: 5 if op in (0x00, 0x01, 0x47, 0x4a) else 3 if 0x02 <= op <= 0x18 else 1 for op in range(0x4c)}
 
@@ -168,7 +170,9 @@ def retarget(s, record, triggers, old, new):
 def row_code(s, quit_, start, up, down, slot, label=True):
     """(code, pieces) of an Exit row: the label (unless `label` is false), then Quit Game's blocks
     as the template, with `slot` as its highlight, laid from code offset `start`; `up` and `down`
-    are the state refs its arrows go to. pieces: code offset of each block."""
+    are the state refs its arrows go to. Confirming asks Quit Game's own question ("Are you sure
+    you want to Quit?"); on "yes" the answer reaches the row, which ends the process. pieces: code
+    offset of each block."""
     lit = lambda text: be(s.literal(text), 2)  # noqa: E731
     blocks = {k: v for k, v, _t in s.blocks(quit_) if k in (1, 2)}
     highlight = (s.block_bytes(blocks[1]), s.block_bytes(blocks[2]))
@@ -176,10 +180,16 @@ def row_code(s, quit_, start, up, down, slot, label=True):
     if any(code.count(old) != 1 for code in highlight):
         raise ValueError('Quit Game highlight not found')
     arrow = s.block_bytes(transition(s, quit_, UP))
-    select = s.block_bytes(transition(s, quit_, CONFIRM))[:7]
-    if arrow[0] != 0x4a or select[0] != 0x16 or select[3:] != b'\x13\x00\x5c\x43':
+    ask = s.block_bytes(transition(s, quit_, CONFIRM))
+    answer = s.block_bytes(transition(s, quit_, REPLY))
+    if arrow[0] != 0x4a or ask[0] != 0x16 or ask[3:7] != b'\x13\x00\x5c\x43' or b'\x13\x00\x5e\x43' not in ask:
         raise ValueError('Quit Game transitions not as expected')
+    if answer != REPLY_TEMPLATE:
+        raise ValueError("Quit Game's answer handler not as expected")
     sound = transition(s, quit_, UP) + 5 + struct.unpack('>i', arrow[1:5])[0]  # the menu move sound
+    # "No" (the answer is 0) turns the input back on and returns; any other answer skips that
+    # (the jump grows by the return) and ends the process.
+    reply = answer.replace(b'\x17\x00\x05', b'\x17\x00\x06', 1) + EXIT_CALL + b'\x49'
 
     code, pieces = bytearray(LABEL + b'\0' if label else b''), {}
     for kind, body in (('entry', highlight[0]), ('update', highlight[1])):
@@ -188,19 +198,20 @@ def row_code(s, quit_, start, up, down, slot, label=True):
     for kind, target in (('up', up), ('down', down)):
         pieces[kind] = start + len(code)
         code += b'\x4a' + struct.pack('>i', sound - (pieces[kind] + 5)) + b'\x47' + be(target) + b'\x49'
-    pieces['confirm'] = start + len(code)
-    code += select + EXIT_CALL + b'\x49'
+    for kind, body in (('confirm', ask), ('reply', reply)):
+        pieces[kind] = start + len(code)
+        code += body
     return bytes(code), pieces
 
 
 def row_record(parent, sid, pieces):
-    """The row's state record: highlight, the two arrows and confirm."""
+    """The row's state record: highlight, the two arrows, confirm and the dialog's answer."""
+    triggers = lambda ids: b''.join(be(t | 0x80000000) for t in ids[:-1]) + be(ids[-1])  # noqa: E731
     record = (be(0x04000000 | ROW_SIZE) + be(parent) + be(sid)
               + be(0x01000000 | pieces['entry']) + be(0x02000000 | pieces['update'])
-              + be(0x03000000 | pieces['up']) + b''.join(be(t | 0x80000000) for t in UP[:-1]) + be(UP[-1])
-              + be(0x03000000 | pieces['down']) + b''.join(be(t | 0x80000000) for t in DOWN[:-1]) + be(DOWN[-1])
-              # the trigger repeated: the record keeps WadChoose's size
-              + be(0x03000000 | pieces['confirm']) + be(CONFIRM[0] | 0x80000000) + be(CONFIRM[0]))
+              + be(0x03000000 | pieces['up']) + triggers(UP) + be(0x03000000 | pieces['down']) + triggers(DOWN)
+              + be(0x03000000 | pieces['confirm']) + triggers(CONFIRM)
+              + be(0x03000000 | pieces['reply']) + triggers(REPLY))
     if len(record) != ROW_SIZE:
         raise ValueError('record size mismatch')
     return record
@@ -223,10 +234,13 @@ def patch(data):
     """Adds the rows to the R_UI.WAD in `data` (a bytearray); ValueError when this is not the
     script the patch was made for (nothing is changed then).
 
-    The pause row's record replaces WadChoose's in place. The Options row's record is new: it goes
-    after HLDisplay, so the state table grows by one record and everything after it moves. The code
-    of both rows, and their label, go over WadChoose's dead code, which leaves the literal pool and
-    the symbol table where they were."""
+    Both rows are new state records. The pause row's replaces WadChoose's, a cheat-only level
+    loader right after PauseMain's subtree; the Options row's goes after HLDisplay. Each record is
+    a little bigger than what it replaces or follows, so the state table grows and everything after
+    it moves: the header, the sizes of the subtrees the records join and leave, the parent of later
+    records, every goto to a later state and the WAD entry are corrected. The code of both rows and
+    their label go over WadChoose's dead code, which leaves the literal pool and the symbol table
+    where they were relative to the code."""
     base = next((offset + 0x40 for offset, _size, name in entries(data) if name == 'SMI_R_UI'), None)
     if base is None:
         raise ValueError('no SMI_R_UI in this WAD')
@@ -234,12 +248,23 @@ def patch(data):
     s = Script(work, base)
     main, cont, quit_, debug = (s.one(n) for n in ('PauseMain', 'HLContinue', 'HLQuitGame', 'WadChoose'))
     opt, ctl, dsp = (s.one(n) for n in ('PauseOptions', 'HLControls', 'HLDisplay'))
-    p1, n = opt['at'] + opt['size'], ROW_SIZE
-    if main['at'] + main['size'] != debug['at'] or debug['parent'] != main['parent'] or debug['size'] != ROW_SIZE:
+    n = ROW_SIZE
+    if main['at'] + main['size'] != debug['at'] or debug['parent'] != main['parent'] or debug['size'] > n:
         raise ValueError('WadChoose is not where the patch expects it')
-    if dsp['at'] + dsp['size'] != p1 or dsp['parent'] != opt['at'] - 4:
+    if dsp['at'] + dsp['size'] != opt['at'] + opt['size'] or dsp['parent'] != opt['at'] - 4:
         raise ValueError('PauseOptions is not laid out as expected')
-    ref = lambda record: record['at'] - 4  # noqa: E731
+    starts = {r['at'] for r in s.records}
+
+    # The two splices, in table order: WadChoose's record is replaced, the Options row is added.
+    pause_at, options_at = debug['at'], opt['at'] + opt['size']
+    deltas = [(debug['at'] + debug['size'], n - debug['size']), (options_at, n)]  # (first offset it moves, bytes)
+
+    def final(at):
+        """Where the old record starting at `at` ends up."""
+        return at + sum(delta for end, delta in deltas if end <= at)
+
+    pause_ref, options_ref = pause_at - 4, options_at + deltas[0][1] - 4  # state refs of the new records
+    fref = lambda record: final(record['at']) - 4  # noqa: E731
 
     # WadChoose's code is dead once its record is replaced: nothing else may use it.
     refs = s.code_refs()
@@ -253,42 +278,56 @@ def patch(data):
             target = i - base - s.lit + 5 + struct.unpack_from('>i', work, i + 1)[0]
             if start <= target < end:
                 raise ValueError('WadChoose code is called from elsewhere')
-    pause_code, pause_pieces = row_code(s, quit_, start, up=ref(quit_), down=ref(cont), slot=b'menuItem5Select')
+    pause_code, pause_pieces = row_code(s, quit_, start, up=fref(quit_), down=fref(cont), slot=b'menuItem5Select')
     options_start = start + len(pause_code)
-    options_code, options_pieces = row_code(s, quit_, options_start, up=ref(dsp), down=ref(ctl),
+    options_code, options_pieces = row_code(s, quit_, options_start, up=fref(dsp), down=fref(ctl),
                                             slot=b'menuItem4Select', label=False)
     if options_start + len(options_code) > end:
         raise ValueError('no room for the new rows')
 
-    # Edits in the layout as it is now. The Options row will sit at p1: refs to later states move.
-    edits = [retarget(s, cont, UP, ref(quit_), ref(debug)), retarget(s, quit_, DOWN, ref(cont), ref(debug)),
-             retarget(s, ctl, UP, ref(dsp), p1 - 4), retarget(s, dsp, DOWN, ref(ctl), p1 - 4),
-             (blank_line(s, main, 6), be(start, 2)),  # PauseMain clears line5 (local 6): the label goes there
-             (blank_line(s, opt, 5), be(start, 2)),   # PauseOptions clears line4 (local 5)
-             (base + s.lit + start, pause_code + options_code),
-             (base + debug['at'], row_record(ref(main), debug['id'], pause_pieces)),
-             (base + main['at'], be(0x04000000 | (main['size'] + debug['size'])))]
+    # Edits in the layout as it is now. First every goto to a state that moves (or to WadChoose,
+    # which the pause row replaces), then the rows' own wiring.
+    edits = []
     for a, b in s.spans():
         if start <= a < end:  # WadChoose's dead code: the new code goes over it
             continue
         for at, op, arg in decode(work, base + s.lit + a, base + s.lit + b):
-            if op == 0x47 and int.from_bytes(arg, 'big') + 4 >= p1:
-                edits.append((at + 1, be(int.from_bytes(arg, 'big') + n)))
-    parents, chain = {r['at']: r for r in s.records}, [opt]  # the subtrees the new record joins
-    while chain[-1]['parent']:
-        chain.append(parents[chain[-1]['parent'] + 4])
-    edits += [(base + r['at'], be(0x04000000 | (r['size'] + n))) for r in chain]
-    edits += [(base + r['at'] + 4, be(r['parent'] + n)) for r in s.records
-              if r['at'] >= p1 and r['parent'] and r['parent'] + 4 >= p1]
+            if op == 0x47:
+                target = int.from_bytes(arg, 'big') + 4
+                moved = pause_ref if target == debug['at'] else final(target) - 4
+                if moved != target - 4:
+                    edits.append((at + 1, be(moved)))
+    edits += [retarget(s, cont, UP, quit_['at'] - 4, pause_ref), retarget(s, quit_, DOWN, cont['at'] - 4, pause_ref),
+              retarget(s, ctl, UP, dsp['at'] - 4, options_ref), retarget(s, dsp, DOWN, ctl['at'] - 4, options_ref),
+              (blank_line(s, main, 6), be(start, 2)),  # PauseMain clears line5 (local 6): the label goes there
+              (blank_line(s, opt, 5), be(start, 2)),   # PauseOptions clears line4 (local 5)
+              (base + s.lit + start, pause_code + options_code)]
+    parents = {r['at']: r for r in s.records}
+    grow = {}  # sizes of the subtrees the new records join (+) and the replaced one leaves (-)
+
+    def chain(record):
+        out = [record]
+        while out[-1]['parent'] + 4 in starts:
+            out.append(parents[out[-1]['parent'] + 4])
+        return out
+    for record, sign, amount in ((main, 1, n), (opt, 1, n), (parents[debug['parent'] + 4], -1, debug['size'])):
+        for r in chain(record):
+            grow[r['at']] = grow.get(r['at'], 0) + sign * amount
+    edits += [(base + at, be(0x04000000 | (parents[at]['size'] + g))) for at, g in grow.items() if g]
+    for r in s.records:
+        if r['at'] != debug['at'] and r['parent'] + 4 in starts and final(r['parent'] + 4) != r['parent'] + 4:
+            edits.append((base + r['at'] + 4, be(final(r['parent'] + 4) - 4)))
     for at, value in edits:
         work[at:at + len(value)] = value
 
     old_size = struct.unpack_from('<I', work, base - 0x40 + 4)[0]
-    work[base + p1:base + p1] = row_record(ref(opt), dsp['id'], options_pieces)
+    grown = sum(delta for _end, delta in deltas)
+    work[base + options_at:base + options_at] = row_record(fref(opt), dsp['id'], options_pieces)
+    work[base + pause_at:base + pause_at + debug['size']] = row_record(fref(main), debug['id'], pause_pieces)
     for offset in (0x08, 0x0c, 0x10):  # the script's size, code start and symbol table
-        struct.pack_into('<I', work, base + offset, struct.unpack_from('<I', work, base + offset)[0] + n)
-    struct.pack_into('<I', work, base - 0x40 + 4, old_size + n)
-    work[base + old_size + n:base + old_size + n + -old_size % 16] = bytes(-(old_size + n) % 16)
+        struct.pack_into('<I', work, base + offset, struct.unpack_from('<I', work, base + offset)[0] + grown)
+    struct.pack_into('<I', work, base - 0x40 + 4, old_size + grown)
+    work[base + old_size + grown:base + old_size + grown + -old_size % 16] = bytes(-(old_size + grown) % 16)
     data[:] = work
 
 

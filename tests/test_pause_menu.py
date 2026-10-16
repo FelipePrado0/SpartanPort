@@ -53,10 +53,24 @@ class GameScript(unittest.TestCase):
         main, row = self.new.one('PauseMain'), self.new.one('WadChoose')
         self.assertEqual(row['parent'], main['at'] - 4)
         self.assertEqual(main['at'] + main['size'], row['at'] + row['size'])
-        confirm = next(v for k, v, t in self.new.blocks(row) if k == 3 and t[0] == pause_menu.CONFIRM[0])
+        confirm = next(v for k, v, t in self.new.blocks(row) if k == 3 and t == pause_menu.REPLY)
         self.assertIn(pause_menu.EXIT_CALL, self.new.block_bytes(confirm))
         with self.assertRaises(ValueError):  # a patched copy is refused, not patched twice
             pause_menu.patch(bytearray(self.data))
+
+    def test_exit_asks_quit_games_question(self):
+        quit_ = self.new.one('HLQuitGame')
+        block = lambda row, trigger: self.new.block_bytes(pause_menu.transition(self.new, row, trigger))  # noqa: E731
+        for row in (self.new.one('WadChoose'), self.new.by_name['HLDisplay'][1]):
+            self.assertTrue(block(quit_, pause_menu.CONFIRM).startswith(block(row, pause_menu.CONFIRM)))  # the same dialog
+            reply = block(row, pause_menu.REPLY)
+            at = self.base + self.new.lit + next(v for k, v, t in self.new.blocks(row) if t == pause_menu.REPLY)
+            code = decode(self.data, at, at + len(reply))
+            jump = next(c for c in code if c[1] == 0x17)
+            target = jump[0] + 3 + struct.unpack('>h', jump[2])[0]
+            call = [c for c in code if c[1] == 0x13 and c[2] == bytes([0x0f, 0xff])]
+            self.assertEqual([c[0] for c in call], [target])  # "yes" (any answer but 0) lands on the exit call
+            self.assertEqual(reply[:len(pause_menu.REPLY_TEMPLATE) - 9], pause_menu.REPLY_TEMPLATE[:-9])  # up to the answer test
 
     def test_options_row(self):
         options, row = self.new.one('PauseOptions'), self.new.by_name['HLDisplay'][1]
@@ -74,7 +88,8 @@ class GameScript(unittest.TestCase):
     def test_every_other_goto_is_unchanged(self):
         dead = self.old.one('WadChoose')  # its code is replaced by the pause row's
         lo = min(v for k, v in dead['items'] if k in (1, 2, 3))
-        spans = [(a, b) for a, b in self.old.spans() if not lo <= a < lo + 0x40]
+        hi = next(r for r in self.old.code_refs() if r > max(v for k, v in dead['items'] if k in (1, 2, 3)))
+        spans = [(a, b) for a, b in self.old.spans() if not lo <= a < hi]
         before = gotos(self.original, self.old_base, spans)
         after = gotos(self.data, self.base, spans)
         options = self.new.one('PauseOptions')
