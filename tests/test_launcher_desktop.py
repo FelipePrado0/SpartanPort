@@ -123,7 +123,16 @@ class DesktopIntegrationTest(unittest.TestCase):
         self.other_bytes(b'\xff\xfe\x00\x80Exec=\xff', 'binary.desktop')
         self.other_bytes(b'', 'empty.desktop')
         (self.entry.parent / 'folder.desktop').mkdir()
-        (self.entry.parent / 'dangling.desktop').symlink_to(self.home / 'nowhere')
+        self.assertEqual(self.integrate(), self.entry)
+
+    def test_a_dangling_symlink_entry_is_ignored(self):
+        self.entry.parent.mkdir(parents=True)
+        try:
+            (self.entry.parent / 'dangling.desktop').symlink_to(self.home / 'nowhere')
+        except OSError as error:
+            if getattr(error, 'winerror', None) == 1314:
+                self.skipTest('Windows symlink privilege unavailable')
+            raise
         self.assertEqual(self.integrate(), self.entry)
 
     def test_lines_that_do_not_parse_are_ignored(self):
@@ -134,12 +143,24 @@ class DesktopIntegrationTest(unittest.TestCase):
                 self.assertEqual(launcher.other_desktop_entries(self.entry.parent, '/games/gow3.AppImage'), [])
         self.assertEqual(self.integrate(), self.entry)
 
-    def test_a_path_with_spaces_or_a_symlink_to_the_file_counts(self):
+    def test_a_path_with_spaces_counts(self):
+        real = self.home / 'My Games' / 'gow3.AppImage'
+        real.parent.mkdir()
+        real.write_bytes(b'x')
+        self.other_entry(f'Exec=env DESKTOPINTEGRATION=1 "{real}" %U', 'spaces.desktop')
+        self.assertIsNone(self.integrate(appimage=str(real)))
+
+    def test_a_symlink_to_the_file_counts(self):
         real = self.home / 'My Games' / 'gow3.AppImage'
         real.parent.mkdir()
         real.write_bytes(b'x')
         link = self.home / 'link.AppImage'
-        link.symlink_to(real)
+        try:
+            link.symlink_to(real)
+        except OSError as error:
+            if getattr(error, 'winerror', None) == 1314:
+                self.skipTest('Windows symlink privilege unavailable')
+            raise
         self.other_entry(f'Exec=env DESKTOPINTEGRATION=1 "{real}" %U', 'spaces.desktop')
         self.assertIsNone(self.integrate(appimage=str(real)))
         self.assertIsNone(self.integrate(appimage=str(link)))
@@ -210,7 +231,7 @@ class LinuxShortcutTest(unittest.TestCase):
         self.desktop.mkdir()
         self.assertEqual(self.click(), [str(self.applications / 'gow3.desktop'), str(self.desktop / 'God of War III.desktop')])
 
-    def test_the_files_run_the_appimage_with_its_icon_and_are_executable(self):
+    def test_the_files_run_the_appimage_with_its_icon(self):
         self.desktop.mkdir()
         for path in self.click():
             text = Path(path).read_text()
@@ -218,6 +239,11 @@ class LinuxShortcutTest(unittest.TestCase):
             self.assertIn(f'Icon={self.home / ".local" / "share" / "icons" / "gow3.png"}', text)
             self.assertIn('StartupWMClass=gow3', text)
             self.assertNotIn(launcher.DESKTOP_MARKER, text)
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'Linux executable permissions')
+    def test_the_files_are_executable(self):
+        self.desktop.mkdir()
+        for path in self.click():
             self.assertEqual(Path(path).stat().st_mode & 0o777, 0o755)
 
     def test_a_missing_icon_falls_back_to_the_theme_name(self):
