@@ -151,7 +151,7 @@ Python, as bibliotecas e o driver Vulkan vêm dentro do aplicativo.
 **Baixar e jogar**
 
 1. Baixe o `gow3-macos.dmg` na
-   [página de releases do macOS](https://github.com/nizwar/gow3_macos/releases/latest).
+   [página de releases](https://github.com/FelipePrado0/gow3_pc/releases/latest).
 2. Abra e arraste **God of War III** para **Aplicativos**.
 3. O aplicativo não tem assinatura de Developer ID da Apple, então o macOS o bloqueia. Libere uma
    vez no Terminal:
@@ -174,8 +174,8 @@ nativo. Em 480p as áreas claras estouram (um bug conhecido do jogo nessa resolu
   `~/Library/Application Support/gow3` (**Advanced → Port folder** abre a pasta); as configurações
   do próprio launcher, em `~/.config/gow3-launcher`. Abra o aplicativo pelos Aplicativos, pelo
   Launchpad ou pelo Dock.
-- **Atualizações:** **Advanced → Check for updates** consulta as releases deste repositório (tags
-  `macos-v<versão>` com `gow3-macos.dmg`) e baixa a imagem de disco mais nova: arraste o novo
+- **Atualizações:** **Advanced → Check for updates** consulta a release mais recente deste
+  repositório e baixa o seu `gow3-macos.dmg` (ou abre a página da release quando não há um): arraste o novo
   aplicativo por cima do antigo. Saves e configurações são mantidos.
 - **Steam:** **Advanced → Add to Steam**, como no Linux (`~/Library/Application Support/Steam`), com a
   Steam fechada; a Steam então abre o jogo sem o launcher.
@@ -483,8 +483,7 @@ compilação baixa e compila as bibliotecas x86-64 que o jogo usa (cerca de 5 mi
 `packaging/macos/deps.sh`).
 
 ```bash
-git clone --recursive https://github.com/nizwar/gow3_macos && cd gow3_macos
-git checkout macos-port            # o trabalho do macOS
+git clone --recursive https://github.com/FelipePrado0/gow3_pc && cd gow3_pc
 ./play-mac.sh                      # compila, acha o dump em ~/Downloads, ~/Desktop ou ~/Documents e joga
 ./play-mac.sh /caminho/CUSA01623   # essa pasta (eboot.bin, sce_module, sce_sys)
 ./play-mac.sh --launcher           # o launcher: configurações, saves, mods

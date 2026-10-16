@@ -149,7 +149,7 @@ libraries and the Vulkan driver are inside the application.
 **Download and play**
 
 1. Download `gow3-macos.dmg` from the
-   [macOS releases page](https://github.com/nizwar/gow3_macos/releases/latest).
+   [releases page](https://github.com/FelipePrado0/gow3_pc/releases/latest).
 2. Open it and drag **God of War III** onto **Applications**.
 3. The application is not signed with an Apple Developer ID, so macOS blocks it. Allow it once in
    Terminal:
@@ -172,8 +172,8 @@ resolution smaller than the window is enlarged, and the performance overlay then
   `~/Library/Application Support/gow3` (**Advanced → Port folder** opens it); the launcher's own
   settings are in `~/.config/gow3-launcher`. Start the application from Applications, Launchpad or
   the Dock.
-- **Updates:** **Advanced → Check for updates** asks this repository's releases (tags
-  `macos-v<version>` with `gow3-macos.dmg`) and downloads the newer disk image: drag the new
+- **Updates:** **Advanced → Check for updates** asks this repository's latest release
+  and downloads its `gow3-macos.dmg` (or opens the release page when it has none): drag the new
   application over the old one. Saves and settings are kept.
 - **Steam:** **Advanced → Add to Steam**, as on Linux (`~/Library/Application Support/Steam`), with
   Steam closed; Steam then starts the game without the launcher.
@@ -474,8 +474,7 @@ You need the Xcode command line tools (`xcode-select --install`), Homebrew's
 and builds the x86-64 libraries the game links (about 5 minutes; `packaging/macos/deps.sh`).
 
 ```bash
-git clone --recursive https://github.com/nizwar/gow3_macos && cd gow3_macos
-git checkout macos-port            # the macOS work
+git clone --recursive https://github.com/FelipePrado0/gow3_pc && cd gow3_pc
 ./play-mac.sh                      # builds, finds the dump in ~/Downloads, ~/Desktop or ~/Documents, plays
 ./play-mac.sh /path/to/CUSA01623   # that folder (eboot.bin, sce_module, sce_sys)
 ./play-mac.sh --launcher           # the launcher: settings, saves, mods

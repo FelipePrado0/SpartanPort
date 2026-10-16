@@ -59,7 +59,7 @@ Data (kept when the application is replaced by a new version)
 Problems
 - "God of War III is damaged" or "cannot be opened": run the xattr line of step 2 again.
 - Importing shadPS4 saves: see "Importing shadPS4 saves" in the project's README:
-  https://github.com/nizwar/gow3_macos#importing-shadps4-saves
+  https://github.com/FelipePrado0/gow3_pc#importing-shadps4-saves
   Destination: ~/Library/Application Support/gow3/user/savedata/1/CUSA01623/, or
   <custom Saves folder>/savedata/1/CUSA01623/. RPCS3 saves are not compatible.
   Do not rename shadPS4's param.sfo to param.bin; the formats differ.

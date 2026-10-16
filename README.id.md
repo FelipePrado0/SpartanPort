@@ -154,7 +154,7 @@ di dalam aplikasi.
 **Unduh dan main**
 
 1. Unduh `gow3-macos.dmg` dari
-   [halaman rilis macOS](https://github.com/nizwar/gow3_macos/releases/latest).
+   [halaman rilis](https://github.com/FelipePrado0/gow3_pc/releases/latest).
 2. Buka file itu dan seret **God of War III** ke **Applications**.
 3. Aplikasinya tidak ditandatangani dengan Apple Developer ID, jadi macOS memblokirnya. Izinkan
    sekali di Terminal:
@@ -177,8 +177,8 @@ diketahui di resolusi itu).
 - **File:** save, pengaturan, cache shader, dan log ada di `~/Library/Application Support/gow3`
   (**Advanced → Port folder** membukanya); pengaturan launcher sendiri ada di
   `~/.config/gow3-launcher`. Buka aplikasinya dari Applications, Launchpad, atau Dock.
-- **Pembaruan:** **Advanced → Check for updates** memeriksa rilis di repository ini (tag
-  `macos-v<versi>` dengan `gow3-macos.dmg`) dan mengunduh disk image yang lebih baru: seret aplikasi
+- **Pembaruan:** **Advanced → Check for updates** memeriksa rilis terbaru repository ini
+  dan mengunduh `gow3-macos.dmg`-nya (atau membuka halaman rilis kalau tidak ada): seret aplikasi
   baru menimpa yang lama. Save dan pengaturan tetap aman.
 - **Steam:** **Advanced → Add to Steam**, seperti di Linux (`~/Library/Application Support/Steam`),
   dengan Steam dalam keadaan tertutup; setelah itu Steam memulai game tanpa launcher.
@@ -491,8 +491,7 @@ dari Homebrew, Rosetta 2, dan Python 3 dengan Tk dan Pillow untuk launcher
 membangun library x86-64 yang dipakai game (sekitar 5 menit; `packaging/macos/deps.sh`).
 
 ```bash
-git clone --recursive https://github.com/nizwar/gow3_macos && cd gow3_macos
-git checkout macos-port            # pekerjaan macOS
+git clone --recursive https://github.com/FelipePrado0/gow3_pc && cd gow3_pc
 ./play-mac.sh                      # build, mencari dump di ~/Downloads, ~/Desktop, atau ~/Documents, lalu main
 ./play-mac.sh /path/ke/CUSA01623   # folder itu (eboot.bin, sce_module, sce_sys)
 ./play-mac.sh --launcher           # launcher: pengaturan, save, mod

@@ -83,9 +83,10 @@ The packaged launcher keeps nothing inside the application: generated files, sav
 cache and `gow3.ini` go to `~/Library/Application Support/gow3` (`GOW3_DATA_DIR` overrides), and
 it offers no desktop shortcut (the application itself goes in the Dock).
 
-A release is `dist/gow3-macos.dmg` on a GitHub release of `nizwar/gow3_macos` tagged
-`macos-v<VERSION>`, with `VERSION` from `launcher/gow3_launcher_win.py`: the launcher's update
-check compares that number and offers the `.dmg` asset. Raise `VERSION` before a new release.
+A release attaches `dist/gow3-macos.dmg` to the GitHub release of this repository, beside the
+Windows zip, with `VERSION` from `launcher/gow3_launcher_win.py`: the launcher's update check
+compares that number and offers the `.dmg` asset (a release without one opens its page). Raise
+`VERSION` before a new release.
 
 The application is signed ad hoc (Apple Silicon runs only signed code), not with an Apple Developer
 ID nor notarized, so macOS blocks a downloaded copy: players clear its quarantine once with
@@ -126,9 +127,9 @@ The rest of what the Windows and Linux launchers offer is there, the Mac's way:
   `steam_osx`; close Steam first). The shortcut starts
   `God of War III.app/Contents/MacOS/God of War III --play`, or the source tree's launcher with
   `--play`. The pictures use Georgia Bold from `/System/Library/Fonts/Supplemental`.
-- **Advanced → Check for updates** asks the latest release of `nizwar/gow3_macos` (tag
-  `macos-v<VERSION>`, asset `gow3-macos.dmg`) and, when it is newer than the launcher's `VERSION`,
-  offers to download the disk image in the browser; the new application replaces the old one by
+- **Advanced → Check for updates** asks the latest release of this repository (asset
+  `gow3-macos.dmg`) and, when it is newer than the launcher's `VERSION`, offers to download the
+  disk image in the browser, or opens the release page when it has none; the new application replaces the old one by
   hand. The Windows build installs its zip in place instead.
 - The God of War title font (`launcher/gowfont.ttf`) is registered for the launcher's process with
   Core Text (`CTFontManagerRegisterFontsForURL`), as GDI does on Windows.

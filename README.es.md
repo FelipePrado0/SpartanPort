@@ -153,7 +153,7 @@ Python, las bibliotecas y el driver Vulkan vienen dentro de la aplicación.
 **Descargar y jugar**
 
 1. Descargá `gow3-macos.dmg` desde la
-   [página de releases de macOS](https://github.com/nizwar/gow3_macos/releases/latest).
+   [página de releases](https://github.com/FelipePrado0/gow3_pc/releases/latest).
 2. Abrilo y arrastrá **God of War III** a **Aplicaciones**.
 3. La aplicación no está firmada con un Developer ID de Apple, así que macOS la bloquea. Permitila
    una vez en Terminal:
@@ -175,8 +175,8 @@ nativo. En 480p las zonas claras se queman (un bug conocido del juego en esa res
 - **Archivos:** las partidas, los ajustes, la caché de shaders y el log están en
   `~/Library/Application Support/gow3` (**Advanced → Port folder** la abre); los ajustes propios del
   launcher en `~/.config/gow3-launcher`. Abrí la aplicación desde Aplicaciones, Launchpad o el Dock.
-- **Actualizaciones:** **Advanced → Check for updates** consulta las releases de este repositorio
-  (tags `macos-v<versión>` con `gow3-macos.dmg`) y descarga la imagen de disco más nueva: arrastrá la
+- **Actualizaciones:** **Advanced → Check for updates** consulta la release más reciente de este
+  repositorio y descarga su `gow3-macos.dmg` (o abre la página de la release si no lo tiene): arrastrá la
   aplicación nueva sobre la anterior. Tus partidas y ajustes se conservan.
 - **Steam:** **Advanced → Add to Steam**, como en Linux (`~/Library/Application Support/Steam`), con
   Steam cerrado; después Steam inicia el juego sin el launcher.
@@ -491,8 +491,7 @@ compilación descarga y compila las bibliotecas x86-64 que usa el juego (unos 5 
 `packaging/macos/deps.sh`).
 
 ```bash
-git clone --recursive https://github.com/nizwar/gow3_macos && cd gow3_macos
-git checkout macos-port            # el trabajo de macOS
+git clone --recursive https://github.com/FelipePrado0/gow3_pc && cd gow3_pc
 ./play-mac.sh                      # compila, busca el dump en ~/Downloads, ~/Desktop o ~/Documents y juega
 ./play-mac.sh /ruta/a/CUSA01623    # esa carpeta (eboot.bin, sce_module, sce_sys)
 ./play-mac.sh --launcher           # el launcher: ajustes, partidas, mods

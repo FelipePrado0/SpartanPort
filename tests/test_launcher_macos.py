@@ -29,9 +29,9 @@ class ReleaseTest(unittest.TestCase):
             self.assertEqual(launcher.latest_release()[1], 'https://example.com/w.zip')
 
     @unittest.skipUnless(sys.platform == 'darwin', 'the Mac build')
-    def test_a_mac_asks_the_mac_port_for_releases(self):
-        self.assertEqual((launcher.RELEASES_REPO, launcher.RELEASE_ASSET), ('nizwar/gow3_macos', '.dmg'))
-        self.assertIn('nizwar/gow3_macos', launcher.RELEASES_API)
+    def test_a_mac_asks_this_repository_for_the_disk_image(self):
+        self.assertEqual((launcher.RELEASES_REPO, launcher.RELEASE_ASSET), ('FelipePrado0/gow3_pc', '.dmg'))
+        self.assertIn('FelipePrado0/gow3_pc', launcher.RELEASES_API)
 
     def test_download_opens_the_disk_image_on_a_mac(self):
         app = launcher.Launcher.__new__(launcher.Launcher)
