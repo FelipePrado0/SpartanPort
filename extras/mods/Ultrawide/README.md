@@ -33,19 +33,19 @@ game stays at its usual resolution.
    separate choice that works with any resolution.
 4. Use a display or window of the same size (borderless is the easy way).
 
-**Version 2.2.0 (it cannot read zip mods yet): use the installer, `Ultrawide-installer-2.2.0.zip`**
+**Official 2.2.0 or 2.3.0 (they cannot read zip mods yet): use the installer, `Ultrawide-installer.zip`**
 (attached to pull request #202).
 
-1. Close the game and the launcher. Unzip `Ultrawide-installer-2.2.0.zip` anywhere.
+1. Close the game and the launcher. Unzip `Ultrawide-installer.zip` anywhere.
 2. Double-click **`INSTALL.bat`**. Paste the game folder when it asks (the one with `God of War III.exe`; if you
    unzipped inside that folder it finds it by itself), then pick a resolution from the menu.
-3. Start the game with **`Play God of War III.exe`**. Do not use the launcher on 2.2.0: it does not list the new
+3. Start the game with **`Play God of War III.exe`**. Do not use the launcher on 2.2.0 or 2.3.0: it does not list the new
    sizes and can reset the setting. To pick another size later, run `Ultrawide - choose resolution.bat` in the
    game folder.
 4. To undo everything: **`UNINSTALL.bat`** (it puts the original files back).
 
 The installer only touches `run.py` and three files of `scripts\`, after backing them up to
-`ultrawide-backup`, and refuses to run if they are not the stock 2.2.0 files (it never overwrites a newer
+`ultrawide-backup`, and refuses to run if they are not the stock 2.2.0 or 2.3.0 files (it never overwrites a newer
 version). Its files are plain text: read them before you run them.
 
 To go back to normal: untick the mod (or pick another resolution, or `UNINSTALL.bat`). Nothing of the game
@@ -91,8 +91,8 @@ lados.
 **Como instalar.** Nas versões **que leem mods em zip** (a build de teste do Ultrawide indicada no pull request
 #202 e as releases depois do merge; a 2.2.0 e a 2.3.0 não leem, e o jogo fica na resolução de sempre): coloque o
 `Ultrawide.zip` (sem extrair) na pasta `mods`, ao lado do `God of War III.exe` (no launcher: **Mods** →
-**Open**), abra o launcher e escolha o tamanho em **Render resolution**. Na **2.2.0** (que ainda não lê mods em zip): baixe o instalador
-`Ultrawide-installer-2.2.0.zip` (anexado ao pull request #202), extraia, dê dois cliques no **`INSTALL.bat`**, cole
+**Open**), abra o launcher e escolha o tamanho em **Render resolution**. Na **2.2.0 ou 2.3.0 oficiais** (que ainda não leem mods em zip): baixe o instalador
+`Ultrawide-installer.zip` (anexado ao pull request #202), extraia, dê dois cliques no **`INSTALL.bat`**, cole
 a pasta do jogo, escolha a resolução no menu e inicie o jogo pelo **`Play God of War III.exe`** (não pelo
 launcher). Para desfazer: **`UNINSTALL.bat`**. Em **Render resolution** aparecem `3440x1440 (mod)` e os outros tamanhos (e no menu do jogo,
 tecla Insert). O **Engine frame rate** (60, 120 ou 240) é uma escolha à parte e vale com qualquer resolução.
