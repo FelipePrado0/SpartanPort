@@ -15,9 +15,10 @@ UI already has. WadChoose, a cheat-only level loader right after PauseMain's sub
 sixth child HLExit, with its code written over WadChoose's: no byte moves.
 
 Options screen (reached from the pause menu and from the main menu): PauseOptions shows four rows
-and clears line4. A fifth state record is inserted after HLDisplay and its code is appended after
-the literal pool, so the state table and everything after it move: state refs, parents and
-subtree sizes are corrected, and the header and the WAD entry grow.
+and clears line4. A fifth state record is inserted after HLDisplay, so the state table and
+everything after it move: state refs, parents and subtree sizes are corrected, and the header and
+the WAD entry grow. Its code and the label share WadChoose's dead code with the pause row, so the
+literal pool and the symbol table keep their places relative to the code.
 
 Confirming a row calls builtin 0xfff, which src/menu_hook.h turns into the end of the process."""
 import json
@@ -27,7 +28,7 @@ import struct
 
 from glyphs import entries
 
-VERSION = 2  # of the patch: a change rebuilds the cached copy
+VERSION = 3  # of the patch: a change rebuilds the cached copy
 WAD = 'EXEC/WAD/PS4_LE/R_UI.WAD'
 LABEL = b'Exit to Desktop'
 EXIT_CALL = b'\x13\x0f\xff\x43'  # builtin 0xfff (src/menu_hook.h), then pop
@@ -164,10 +165,10 @@ def retarget(s, record, triggers, old, new):
     return at + 1, be(new)
 
 
-def row_code(s, quit_, start, up, down, slot):
-    """(code, pieces) of an Exit row: the label, then Quit Game's blocks as the template, with
-    `slot` as its highlight, laid from code offset `start`; `up` and `down` are the state refs
-    its arrows go to. pieces: code offset of each block."""
+def row_code(s, quit_, start, up, down, slot, label=True):
+    """(code, pieces) of an Exit row: the label (unless `label` is false), then Quit Game's blocks
+    as the template, with `slot` as its highlight, laid from code offset `start`; `up` and `down`
+    are the state refs its arrows go to. pieces: code offset of each block."""
     lit = lambda text: be(s.literal(text), 2)  # noqa: E731
     blocks = {k: v for k, v, _t in s.blocks(quit_) if k in (1, 2)}
     highlight = (s.block_bytes(blocks[1]), s.block_bytes(blocks[2]))
@@ -180,7 +181,7 @@ def row_code(s, quit_, start, up, down, slot):
         raise ValueError('Quit Game transitions not as expected')
     sound = transition(s, quit_, UP) + 5 + struct.unpack('>i', arrow[1:5])[0]  # the menu move sound
 
-    code, pieces = bytearray(LABEL + b'\0'), {}
+    code, pieces = bytearray(LABEL + b'\0' if label else b''), {}
     for kind, body in (('entry', highlight[0]), ('update', highlight[1])):
         pieces[kind] = start + len(code)
         code += body.replace(old, new)
@@ -218,20 +219,29 @@ def blank_line(s, record, local):
     return s.base + s.lit + entry_ref + found[0] + 1
 
 
-def add_pause_row(data, base):
-    """The sixth pause row, over WadChoose (no byte moves)."""
-    s = Script(data, base)
+def patch(data):
+    """Adds the rows to the R_UI.WAD in `data` (a bytearray); ValueError when this is not the
+    script the patch was made for (nothing is changed then).
+
+    The pause row's record replaces WadChoose's in place. The Options row's record is new: it goes
+    after HLDisplay, so the state table grows by one record and everything after it moves. The code
+    of both rows, and their label, go over WadChoose's dead code, which leaves the literal pool and
+    the symbol table where they were."""
+    base = next((offset + 0x40 for offset, _size, name in entries(data) if name == 'SMI_R_UI'), None)
+    if base is None:
+        raise ValueError('no SMI_R_UI in this WAD')
+    work = bytearray(data)
+    s = Script(work, base)
     main, cont, quit_, debug = (s.one(n) for n in ('PauseMain', 'HLContinue', 'HLQuitGame', 'WadChoose'))
+    opt, ctl, dsp = (s.one(n) for n in ('PauseOptions', 'HLControls', 'HLDisplay'))
+    p1, n = opt['at'] + opt['size'], ROW_SIZE
     if main['at'] + main['size'] != debug['at'] or debug['parent'] != main['parent'] or debug['size'] != ROW_SIZE:
         raise ValueError('WadChoose is not where the patch expects it')
+    if dsp['at'] + dsp['size'] != p1 or dsp['parent'] != opt['at'] - 4:
+        raise ValueError('PauseOptions is not laid out as expected')
     ref = lambda record: record['at'] - 4  # noqa: E731
 
-    # Rows: Continue wraps up to Exit, Quit Game goes down to it.
-    edits = [retarget(s, cont, UP, ref(quit_), ref(debug)), retarget(s, quit_, DOWN, ref(cont), ref(debug))]
-    # PauseMain clears line5 (local 6): show the label there instead.
-    label = blank_line(s, main, 6)
-
-    # HLExit's code over WadChoose's: none of it is reached once the record is replaced.
+    # WadChoose's code is dead once its record is replaced: nothing else may use it.
     refs = s.code_refs()
     own = [v for k, v in debug['items'] if k in (1, 2, 3)]
     start, end = min(own), next(r for r in refs if r > max(own))
@@ -239,47 +249,31 @@ def add_pause_row(data, base):
         raise ValueError('WadChoose code is shared')
     # No call into it from elsewhere (a 0x4a byte that is not an opcode can only refuse too much).
     for i in range(base + s.lit, base + s.symtab - 5):
-        if data[i] == 0x4a and not start <= i - base - s.lit < end:
-            target = i - base - s.lit + 5 + struct.unpack_from('>i', data, i + 1)[0]
+        if work[i] == 0x4a and not start <= i - base - s.lit < end:
+            target = i - base - s.lit + 5 + struct.unpack_from('>i', work, i + 1)[0]
             if start <= target < end:
                 raise ValueError('WadChoose code is called from elsewhere')
-    code, pieces = row_code(s, quit_, start, up=ref(quit_), down=ref(cont), slot=b'menuItem5Select')
-    if start + len(code) > end:
-        raise ValueError('no room for the new row')
-    record = row_record(ref(main), debug['id'], pieces)
+    pause_code, pause_pieces = row_code(s, quit_, start, up=ref(quit_), down=ref(cont), slot=b'menuItem5Select')
+    options_start = start + len(pause_code)
+    options_code, options_pieces = row_code(s, quit_, options_start, up=ref(dsp), down=ref(ctl),
+                                            slot=b'menuItem4Select', label=False)
+    if options_start + len(options_code) > end:
+        raise ValueError('no room for the new rows')
 
-    for at, value in edits:
-        data[at:at + len(value)] = value
-    data[label:label + 2] = be(start, 2)
-    data[base + s.lit + start:base + s.lit + start + len(code)] = code
-    data[base + debug['at']:base + debug['at'] + len(record)] = record
-    struct.pack_into('>I', data, base + main['at'], 0x04000000 | (main['size'] + debug['size']))
-
-
-def add_options_row(data, base):
-    """A fifth Options row after HLDisplay. The record goes in the state table and its code after
-    the literal pool, so everything after them moves."""
-    s = Script(data, base)
-    opt, ctl, dsp, quit_ = (s.one(n) for n in ('PauseOptions', 'HLControls', 'HLDisplay', 'HLQuitGame'))
-    p1, n = opt['at'] + opt['size'], ROW_SIZE
-    if dsp['at'] + dsp['size'] != p1 or dsp['parent'] != opt['at'] - 4:
-        raise ValueError('PauseOptions is not laid out as expected')
-    ref = lambda record: record['at'] - 4  # noqa: E731
-    start = s.symtab - s.lit
-    code, pieces = row_code(s, quit_, start, up=ref(dsp), down=ref(ctl), slot=b'menuItem4Select')
-    if start + len(code) > 0xffff:
-        raise ValueError('literal offsets would overflow')
-    m = len(code)
-    record = row_record(ref(opt), dsp['id'], pieces)
-
-    # Edits in the layout as it is now: refs to states after the new record move by n.
-    edits = []
+    # Edits in the layout as it is now. The Options row will sit at p1: refs to later states move.
+    edits = [retarget(s, cont, UP, ref(quit_), ref(debug)), retarget(s, quit_, DOWN, ref(cont), ref(debug)),
+             retarget(s, ctl, UP, ref(dsp), p1 - 4), retarget(s, dsp, DOWN, ref(ctl), p1 - 4),
+             (blank_line(s, main, 6), be(start, 2)),  # PauseMain clears line5 (local 6): the label goes there
+             (blank_line(s, opt, 5), be(start, 2)),   # PauseOptions clears line4 (local 5)
+             (base + s.lit + start, pause_code + options_code),
+             (base + debug['at'], row_record(ref(main), debug['id'], pause_pieces)),
+             (base + main['at'], be(0x04000000 | (main['size'] + debug['size'])))]
     for a, b in s.spans():
-        for at, op, arg in decode(data, base + s.lit + a, base + s.lit + b):
+        if start <= a < end:  # WadChoose's dead code: the new code goes over it
+            continue
+        for at, op, arg in decode(work, base + s.lit + a, base + s.lit + b):
             if op == 0x47 and int.from_bytes(arg, 'big') + 4 >= p1:
                 edits.append((at + 1, be(int.from_bytes(arg, 'big') + n)))
-    edits += [retarget(s, ctl, UP, ref(dsp), p1 - 4), retarget(s, dsp, DOWN, ref(ctl), p1 - 4)]
-    edits.append((blank_line(s, opt, 5), be(start, 2)))
     parents, chain = {r['at']: r for r in s.records}, [opt]  # the subtrees the new record joins
     while chain[-1]['parent']:
         chain.append(parents[chain[-1]['parent'] + 4])
@@ -287,28 +281,14 @@ def add_options_row(data, base):
     edits += [(base + r['at'] + 4, be(r['parent'] + n)) for r in s.records
               if r['at'] >= p1 and r['parent'] and r['parent'] + 4 >= p1]
     for at, value in edits:
-        data[at:at + len(value)] = value
+        work[at:at + len(value)] = value
 
-    old_size = struct.unpack_from('<I', data, base - 0x40 + 4)[0]
-    old_pad = -old_size % 16
-    data[base + s.symtab:base + s.symtab] = code
-    data[base + p1:base + p1] = record
-    new_size = old_size + n + m
-    for offset, grow in ((0x08, n + m), (0x0c, n), (0x10, n + m)):
-        struct.pack_into('<I', data, base + offset, struct.unpack_from('<I', data, base + offset)[0] + grow)
-    struct.pack_into('<I', data, base - 0x40 + 4, new_size)
-    data[base + new_size:base + new_size + old_pad] = bytes(-new_size % 16)
-
-
-def patch(data):
-    """Adds the rows to the R_UI.WAD in `data` (a bytearray); ValueError when this is not the
-    script the patch was made for (nothing is changed then)."""
-    base = next((offset + 0x40 for offset, _size, name in entries(data) if name == 'SMI_R_UI'), None)
-    if base is None:
-        raise ValueError('no SMI_R_UI in this WAD')
-    work = bytearray(data)
-    add_options_row(work, base)
-    add_pause_row(work, base)
+    old_size = struct.unpack_from('<I', work, base - 0x40 + 4)[0]
+    work[base + p1:base + p1] = row_record(ref(opt), dsp['id'], options_pieces)
+    for offset in (0x08, 0x0c, 0x10):  # the script's size, code start and symbol table
+        struct.pack_into('<I', work, base + offset, struct.unpack_from('<I', work, base + offset)[0] + n)
+    struct.pack_into('<I', work, base - 0x40 + 4, old_size + n)
+    work[base + old_size + n:base + old_size + n + -old_size % 16] = bytes(-(old_size + n) % 16)
     data[:] = work
 
 
