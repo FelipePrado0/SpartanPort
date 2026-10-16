@@ -94,6 +94,8 @@ std::vector<Gow3Png::Image> choice_pictures;
 std::vector<ImTextureData*> choice_textures, choice_retired;
 std::atomic<bool> choice_retiring{false};
 float base_scale = 1.0f;
+// Text that asks for something: a pending restart, an option that has no effect.
+constexpr ImVec4 Attention{0.85f, 0.72f, 0.45f, 1.0f};
 
 // Present rate for the FPS counter.
 std::chrono::steady_clock::time_point last_present{};
@@ -301,7 +303,8 @@ std::string OverlayText() {
     P::Sample sample = P::Latest();
     sample.fps = frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f;
     sample.frame_ms = frame_ms_avg;
-    sample.upscaler = UpscalerLabel(s.upscaler);
+    sample.upscaler = P::UpscalerText(UpscalerLabel(s.upscaler), s.fsr1, s.screen_metalfx_applied, s.image_width,
+                                      s.image_height, s.window_width, s.window_height);
     return P::Format(sample, items, s.overlay_layout == 0);
 }
 
@@ -387,23 +390,59 @@ void ImageTab() {
     const bool upscaling = iw < ww && ih < wh;
     const bool downscaling = iw > ww || ih > wh;
     const bool rcas_blocked = s.rcas && !s.rcas_applied;
+#ifdef __APPLE__
+    constexpr const char* rcas_needs = "Needs upscaling: the game's image is smaller than the window.";
+#else
+    constexpr const char* rcas_needs = "Needs FSR 1: the game's image is smaller than the window.";
+#endif
     ImGui::SeparatorText("Scaling and sharpening");
     if (BeginRows("##scaling")) {
 #ifdef __APPLE__
         // gow3 (macOS): Apple's MetalFX can enlarge the image in FSR 1's place.
         CheckRow("Upscale to the window", s.fsr1,
-                 "Enlarges a smaller game image to the window. For more FPS: Render resolution 720p + upscaling.");
+                 "Enlarges every game image smaller than the window. For more FPS: Render resolution 720p or "
+                 "480p + upscaling.");
         ImGui::BeginDisabled(!s.fsr1);
         ChoiceRow("Upscaler", s.screen_upscaler, G::ScreenUpscalerNames.data(), nullptr, G::ScreenUpscalerCount,
                   "FSR 1 (AMD) or MetalFX (Apple, on the GPU through Metal): both enlarge the finished image. "
                   "MetalFX also sharpens it, so RCAS sharpening applies to FSR 1.");
         ImGui::EndDisabled();
-        constexpr const char* rcas_needs = "Needs upscaling: the game's image is smaller than the window.";
 #else
         CheckRow("Upscale with FSR 1", s.fsr1,
-                 "Enlarges a smaller game image to the window. For more FPS: Render resolution 720p + FSR 1.");
-        constexpr const char* rcas_needs = "Needs FSR 1: the game's image is smaller than the window.";
+                 "Enlarges every game image smaller than the window. For more FPS: Render resolution 720p or "
+                 "480p + FSR 1.");
 #endif
+        ImGui::EndTable();
+    }
+    if (s.fsr1 && iw > 0 && !upscaling) {
+        // Upscaling with nothing to enlarge. Every render resolution below the window's is enlarged;
+        // it is a startup option, so the buttons pick one and "Apply and restart" applies it.
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextColored(Attention, "No effect: the game draws at %d x %d, not smaller than the window (%d x %d).",
+                           iw, ih, ww, wh);
+        const int r720 = G::ParseResolution("720p"), r480 = G::ParseResolution("480p");
+        if (s.render_resolution != s.startup_render_resolution) {
+            ImGui::TextDisabled("The new render resolution applies with \"Apply and restart\" below.");
+        } else if (s.render_resolution == r480) {
+            ImGui::TextDisabled("Make the window larger than the game's image: Borderless or Fullscreen.");
+        } else {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("Render at:");
+            for (const int resolution : {r720, r480}) {
+                if (resolution == s.render_resolution) {
+                    continue;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(resolution == r720 ? "720p" : "480p")) {
+                    Store(s.render_resolution, resolution, true);
+                }
+                Help("Render resolution (Performance tab), applied with \"Apply and restart\": the upscaler then "
+                     "enlarges the image to the window, for more FPS. 480p blows out bright areas (a known bug).");
+            }
+        }
+        ImGui::PopTextWrapPos();
+    }
+    if (BeginRows("##sharpening")) {
         ImGui::BeginDisabled(rcas_blocked);
         CheckRow("Sharpening (RCAS)", s.rcas,
                  rcas_blocked && s.screen_metalfx_applied ? "No effect with MetalFX: it sharpens the image itself."
@@ -465,9 +504,11 @@ void PerformanceTab() {
     }
     ImGui::SeparatorText("Applied on restart");
     if (BeginRows("##restart")) {
-        static const char* const resolution_labels[] = {"Native (1080p)", "480p", "720p", "1440p", "1800p", "4K"};
+        static const char* const resolution_labels[] = {"Native (1080p)", "480p (bright areas blow out)", "720p",
+                                                        "1440p", "1800p", "4K"};
         ChoiceRow("Render resolution", s.render_resolution, resolution_labels, nullptr, int(G::Resolutions.size()),
-                  "The resolution the game draws at. Higher is sharper and slower.");
+                  "The resolution the game draws at. Higher is sharper and slower; below the window's size the "
+                  "upscaler enlarges it (Image tab). 480p blows out bright areas (a known bug).");
         static const char* const engine_labels[] = {"60 (original)", "120", "240"};
         ChoiceRow("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()),
                   "The highest frame rate the game itself runs at.");
@@ -475,6 +516,13 @@ void PerformanceTab() {
                  "Big FPS gain. Switch it off if lighting or objects look wrong.");
         CheckRow("Deferred GPU readbacks", s.deferred_readback,
                  "Fewer waits for the GPU. Switch it off if textures or shadows look wrong.");
+        // The launcher shows it with the upscaler (Display); it is a startup option, so it is here.
+        ImGui::BeginDisabled(!s.stale_readback);
+        CheckRow("Fewer GPU waits (experimental)", s.fewer_gpu_waits,
+                 s.stale_readback ? "The game keeps preparing draws while small images are read back for it: "
+                                    "less CPU load, more FPS where the CPU limits it."
+                                  : "Needs \"Game reads GPU data without waiting\".");
+        ImGui::EndDisabled();
         ImGui::EndTable();
     }
 }
@@ -555,7 +603,8 @@ void OverlayTab() {
 int RestartChanges() {
     const auto& s = Gow3Settings::Get();
     return (s.render_resolution != s.startup_render_resolution) + (s.engine_fps != s.startup_engine_fps) +
-           (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback);
+           (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
+           (s.fewer_gpu_waits != s.startup_fewer_gpu_waits);
 }
 
 void Menu() {
@@ -629,7 +678,7 @@ void Menu() {
     ImGui::TextDisabled("%s", footer_help ? footer_help : "L1 / R1 or Q / E: switch tabs. Settings are saved in gow3.ini.");
     ImGui::PopTextWrapPos();
     if (const int changes = RestartChanges()) {
-        ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "%d change%s need%s a restart (unsaved progress is lost).",
+        ImGui::TextColored(Attention, "%d change%s need%s a restart (unsaved progress is lost).",
                            changes, changes == 1 ? "" : "s", changes == 1 ? "s" : "");
         ImGui::SameLine();
         ImGui::BeginDisabled(!std::getenv("GOW3_RESTART_COMMAND"));

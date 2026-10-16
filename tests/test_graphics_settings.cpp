@@ -54,7 +54,8 @@ int main() {
         std::ofstream out(path);
         out << "display_mode=borderless\nvsync=0\nfps_limit=240\nasync_shaders=0\n"
                "render_resolution=1440p\nengine_fps=240\ndeferred_readback=0\nstale_readback=1\n"
-               "fsr1=1\nscreen_upscaler=metalfx\nrcas=0\nrcas_strength=40\nframes_queued=2\n";
+               "fsr1=1\nscreen_upscaler=metalfx\nrcas=0\nrcas_strength=40\nframes_queued=2\n"
+               "fewer_gpu_waits=1\n";
     }
     SetEnv("GOW3_CONFIG", path);
     SetEnv("GOW3_ASYNC_SHADERS", "");
@@ -64,7 +65,7 @@ int main() {
     assert(v.display_mode == G::Borderless && !v.vsync && v.fps_limit == 240 && !v.async_shaders);
     assert(v.render_resolution == 3 && v.engine_fps == 240 && !v.deferred_readback && v.stale_readback);
     assert(v.fsr1 && !v.rcas && v.rcas_strength == 40 && v.frames_queued == 2);
-    assert(v.screen_upscaler == G::ScreenMetalFx);
+    assert(v.screen_upscaler == G::ScreenMetalFx && v.fewer_gpu_waits);
     assert(!Gow3Settings::GraphicsNeedRestart());
     assert(v.applied_engine_fps == 240);  // no GOW3_ENGINE_FPS: the configured rate
     SetEnv("GOW3_ENGINE_FPS", "60");    // run.py: the frame rate patch did not apply
@@ -76,13 +77,16 @@ int main() {
     v.fps_limit = 60;  // live: no restart because of it
     v.engine_fps = 240;
     assert(!Gow3Settings::GraphicsNeedRestart());
+    v.fewer_gpu_waits = false;  // the texture cache reads it at start
+    assert(Gow3Settings::GraphicsNeedRestart());
+    v.fewer_gpu_waits = true;
 
     Gow3Settings::Save();
     const std::string saved = Read(path);
     for (const char* line : {"display_mode=borderless\n", "vsync=0\n", "fps_limit=60\n", "async_shaders=0\n",
                              "render_resolution=1440p\n", "engine_fps=240\n", "deferred_readback=0\n",
                              "stale_readback=1\n", "fsr1=1\n", "screen_upscaler=metalfx\n", "rcas=0\n",
-                             "rcas_strength=40\n", "frames_queued=2\n"}) {
+                             "rcas_strength=40\n", "frames_queued=2\n", "fewer_gpu_waits=1\n"}) {
         assert(saved.find(line) != std::string::npos);
     }
 

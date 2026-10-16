@@ -116,6 +116,84 @@ class GameSettingsTest(unittest.TestCase):
         for key in launcher.INI_DEFAULTS:
             self.assertIn(f'\n{key}=', text)
 
+    def test_fewer_gpu_waits_switch(self):
+        # Off unless chosen; the Display page's switch writes it for run.py's next start.
+        self.app.collect()
+        self.assertEqual(self.saved()['fewer_gpu_waits'], '0')
+        self.app.vars['fewer_gpu_waits'].set(True)
+        self.app.collect()
+        self.assertEqual(self.saved()['fewer_gpu_waits'], '1')
+        sys.path.insert(0, str(ROOT / 'scripts'))
+        import graphics_options
+        options = graphics_options.startup_options(self.saved())
+        self.assertEqual(graphics_options.environment(options)['GOW3_FEWER_GPU_WAITS'], '1')
+        box = next(w for w in self.widgets() if isinstance(w, self.app.ttk.Checkbutton)
+                   and str(w.cget('variable')) == str(self.app.vars['fewer_gpu_waits']))
+        self.app.vars['stale_readback'].set(False)  # what it builds on
+        self.assertEqual(str(box.cget('state')), 'disabled')
+        self.app.vars['stale_readback'].set(True)
+        self.assertEqual(str(box.cget('state')), 'normal')
+
+    def widgets(self, parent=None):
+        parent = parent or self.app.pages['display']
+        for child in parent.winfo_children():
+            yield child
+            yield from self.widgets(child)
+
+    def test_upscaling_note(self):
+        # Under the Display page's upscaler when it has nothing to enlarge, with the lower render
+        # resolutions: each of them is enlarged, none is required.
+        self.assertIn('nothing to enlarge', launcher.upscaling_note(True, 'native', 1080))
+        self.assertIn('nothing to enlarge', launcher.upscaling_note(True, 'native', 900))  # a laptop
+        for upscale, resolution in ((False, 'native'), (True, '720p'), (True, '480p'), (False, '480p')):
+            self.assertEqual(launcher.upscaling_note(upscale, resolution, 1080), '')
+        # A taller screen (1440p, 4K): FSR 1 or MetalFX enlarges native 1080p to it.
+        self.assertEqual(launcher.upscaling_note(True, 'native', 2160), '')
+        buttons = {w.cget('text'): w for w in self.widgets() if isinstance(w, self.app.ttk.Button)
+                   and w.cget('text') in ('720p', '480p')}
+        note = buttons['720p'].master
+        self.app.root.winfo_screenheight = lambda: 1080  # the note concerns screens up to 1080p
+        self.app.vars['fsr1'].set(True)  # render resolution native (setUp's file)
+        self.assertTrue(note.winfo_manager())
+        buttons['480p'].invoke()
+        self.assertEqual(self.app.vars['render_resolution'].get(), '480p')
+        self.assertFalse(note.winfo_manager())
+        self.app.vars['render_resolution'].set('native')
+        buttons['720p'].invoke()
+        self.assertEqual(self.app.vars['render_resolution'].get(), '720p')
+
+    @unittest.skipUnless(launcher.MACOS, 'the screen upscaler choice is on a Mac')
+    def test_upscaler_choice_needs_upscaling(self):
+        box = next(w for w in self.widgets() if isinstance(w, self.app.ttk.Combobox)
+                   and 'MetalFX (Apple)' in w.cget('values'))
+        self.app.vars['fsr1'].set(False)
+        self.assertEqual(str(box.cget('state')), 'disabled')
+        self.app.vars['fsr1'].set(True)
+        self.assertEqual(str(box.cget('state')), 'readonly')
+
+    def whole_launcher(self, upscaler_page):
+        """The launcher as it opens, with the experimental upscaler switched on in settings.json."""
+        from tkinter import filedialog, messagebox
+        load_json = launcher.load_json
+        saved = lambda path, default: ({'experimental_upscaler': True} if path == launcher.CONFIG_FILE
+                                       else load_json(path, default))
+        with mock.patch.object(launcher, 'UPSCALER_PAGE', upscaler_page), \
+                mock.patch.object(launcher, 'load_json', side_effect=saved):
+            # setUp's window: the launcher makes its styles once in a Tk interpreter.
+            return launcher.Launcher(self.app.root, self.app.tk, self.app.ttk, filedialog, messagebox)
+
+    def test_a_mac_has_no_upscaler_page(self):
+        # The temporal upscalers change nothing on a Mac yet: no page, and the game starts with them off.
+        app = self.whole_launcher(upscaler_page=False)
+        self.assertNotIn('graphics', app.nav)
+        self.assertNotIn('graphics', app.pages)
+        self.assertEqual(launcher.game_environment(app.app)['GOW3_EXPERIMENTAL_UPSCALER'], '0')
+
+    def test_the_upscaler_page_elsewhere(self):
+        app = self.whole_launcher(upscaler_page=True)
+        self.assertIn('graphics', app.nav)
+        self.assertIn('graphics', app.pages)
+        self.assertEqual(launcher.game_environment(app.app)['GOW3_EXPERIMENTAL_UPSCALER'], '1')
 
 if __name__ == '__main__':
     unittest.main()

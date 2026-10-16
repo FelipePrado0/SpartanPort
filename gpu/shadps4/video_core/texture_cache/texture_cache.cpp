@@ -36,9 +36,10 @@ TextureCache::TextureCache(const Vulkan::Instance& instance_, Vulkan::Scheduler&
       tile_manager{instance, scheduler, runtime, buffer_cache.GetStreamBuffer()},
       readback_linear_images{EmulatorSettings.IsReadbackLinearImagesEnabled()} {
 
-    std::printf("GPU: deferred image readback %s (64 copies, 64 MiB pending limit)%s\n",
+    std::printf("GPU: deferred image readback %s (64 copies, 64 MiB pending limit)%s%s\n",
                 deferred_readbacks ? "enabled" : "disabled",
-                stale_readbacks ? "; CPU reads use the previous frame's copy" : "");
+                stale_readbacks ? "; CPU reads use the previous frame's copy" : "",
+                readbacks_skip_copy_wait ? "; fewer GPU waits: no copy wait before readbacks" : "");
 
     u32 max_samplers = instance.GetMaxSamplerAllocationCount();
     trigger_gc_samplers = max_samplers * 3 / 4;
@@ -160,8 +161,11 @@ void TextureCache::CancelReadbacks(VAddr address, u64 size) {
 // before) left the GPU mostly idle in God of War III's gameplay, at about 2 FPS.
 void TextureCache::ProcessDownloadImages() {
     if (deferred_readbacks) {
-        // Upload workers must finish reading RAM before these pages become inaccessible.
-        scheduler.WaitHostCopies();
+        // Upload workers must finish reading RAM before these pages become inaccessible (read
+        // watches only: readbacks_skip_copy_wait).
+        if (!readbacks_skip_copy_wait) {
+            scheduler.WaitHostCopies();
+        }
         std::scoped_lock readback_lock{readback_mutex};
         RetireReadbacks();
         std::unique_lock lock{download_images_mutex};

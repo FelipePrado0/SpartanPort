@@ -40,10 +40,23 @@ MENU_KEY = '`' if MACOS else 'Insert'
 if WINDOWS:
     import ctypes
 FROZEN = getattr(sys, 'frozen', False)
-PORT_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
+# The port's files: the source tree; next to the frozen executable on Windows; in the macOS
+# application's Contents/Resources (packaging/macos/package.sh), as code signing wants only the
+# executable in Contents/MacOS.
+if not FROZEN:
+    PORT_DIR = Path(__file__).resolve().parent.parent
+elif MACOS:
+    PORT_DIR = Path(sys.executable).resolve().parent.parent / 'Resources'
+else:
+    PORT_DIR = Path(sys.executable).resolve().parent
 sys.path.insert(0, str(PORT_DIR / 'scripts'))
 import save_backup  # noqa: E402  (scripts/)
 import steam_shortcut  # noqa: E402  (scripts/)
+# The macOS application keeps nothing inside its bundle: generated files, saves and gow3.ini go to
+# Application Support (as the AppImage's go to ~/.local/share/gow3); run.py inherits the variable.
+if MACOS and FROZEN and not os.environ.get('GOW3_DATA_DIR'):
+    os.environ['GOW3_DATA_DIR'] = str(Path.home() / 'Library' / 'Application Support' / 'gow3')
+    Path(os.environ['GOW3_DATA_DIR']).mkdir(parents=True, exist_ok=True)
 DATA_DIR = Path(os.environ.get('GOW3_DATA_DIR', PORT_DIR))
 CONFIG_DIR = (Path(os.environ.get('APPDATA', Path.home())) if WINDOWS else
               Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')) / 'gow3-launcher'
@@ -55,10 +68,14 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 # The game and everything it starts form one process group, ended together (GameJob).
 NEW_GROUP = {} if WINDOWS else {'start_new_session': True}
 UI_FONT, MONO_FONT, SERIF_FONT = 'Segoe UI', 'Consolas', 'Georgia'
-# This build; GitHub release tags are windows-v<VERSION>.
+# This build; GitHub release tags are windows-v<VERSION>, and macos-v<VERSION> for the Mac
+# application's disk image, published from the macOS port's own repository.
 VERSION = '2.1.7'
-RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
-RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
+RELEASES_REPO = 'nizwar/gow3_macos' if MACOS else 'FelipePrado0/gow3_pc'
+RELEASES_API = f'https://api.github.com/repos/{RELEASES_REPO}/releases/latest'
+RELEASES_PAGE = f'https://github.com/{RELEASES_REPO}/releases/latest'
+# The download a release offers: the zip an update installs in place, or the Mac disk image.
+RELEASE_ASSET = '.dmg' if MACOS else '.zip'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
 # Never copied over an installation by an update (the package does not hold them either).
 USER_FILES = ('user', 'out', 'mods', 'gow3.ini', 'mods.json', 'mods_presets.json', 'patches.json', 'last_run.log')
@@ -228,14 +245,40 @@ def windows_language():
 
 
 def register_font(path):
-    """Makes a font file available to this process (nothing else sees it). False when the file is missing or
-    GDI refuses it: the launcher then keeps its standard fonts."""
+    """Makes a font file available to this process (nothing else sees it): GDI on Windows, Core Text
+    on macOS. False when the file is missing or refused: the launcher then keeps its standard fonts."""
+    if MACOS:
+        return path.is_file() and register_font_macos(path)
     if not WINDOWS:
         return False
     try:
         return path.is_file() and bool(ctypes.windll.gdi32.AddFontResourceExW(str(path), FR_PRIVATE, 0))
     except (AttributeError, OSError):
         return False
+
+
+def register_font_macos(path):
+    """CTFontManagerRegisterFontsForURL in the process scope; Tk lists the family afterwards."""
+    import ctypes
+    try:
+        cf = ctypes.CDLL('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
+        ct = ctypes.CDLL('/System/Library/Frameworks/CoreText.framework/CoreText')
+    except OSError:
+        return False
+    cf.CFURLCreateFromFileSystemRepresentation.restype = ctypes.c_void_p
+    cf.CFURLCreateFromFileSystemRepresentation.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long,
+                                                           ctypes.c_bool]
+    cf.CFRelease.argtypes = [ctypes.c_void_p]
+    ct.CTFontManagerRegisterFontsForURL.restype = ctypes.c_bool
+    ct.CTFontManagerRegisterFontsForURL.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p]
+    name = os.fsencode(path)
+    url = cf.CFURLCreateFromFileSystemRepresentation(None, name, len(name), False)
+    if not url:
+        return False
+    try:
+        return bool(ct.CTFontManagerRegisterFontsForURL(url, 1, None))  # kCTFontManagerScopeProcess
+    finally:
+        cf.CFRelease(url)
 
 
 def heading_font(size, fallback=None, every_language=False):
@@ -251,12 +294,12 @@ def heading_font(size, fallback=None, every_language=False):
 # launcher's own settings.json (passed to run.py as environment variables).
 
 INI_FLAGS = {'cheat_double_jumps', 'cheat_very_hard', 'sharpen', 'object_motion', 'show_fps', 'vsync', 'async_shaders', 'deferred_readback',
-             'stale_readback', 'fsr1', 'rcas'}
+             'stale_readback', 'fewer_gpu_waits', 'fsr1', 'rcas'}
 # The graphics keys are also in the in-game menu (Insert / R3+L2); run.py reads the startup ones.
 INI_DEFAULTS = {'upscaler': 'fsr4', 'preset': '1', 'sharpen': '1', 'sharpness': '0.50',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
                 'live_resolution': 'auto', 'display_mode': 'windowed', 'vsync': '1', 'fps_limit': '0',
-                'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
+                'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1', 'fewer_gpu_waits': '0',
                 'render_resolution': 'native', 'engine_fps': '120', 'fsr1': '0', 'rcas': '1',
                 'rcas_strength': '75', 'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
@@ -272,6 +315,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR',
                 'player_name': '', 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'stream_memory': 'cached',
                 'gpu_id': '', 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
+                'metal_hud': False,
                 'vk_validation': False, 'close_on_play': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation'}
 
@@ -338,6 +382,10 @@ UPSCALERS = [('dlss', ('DLSS (NVIDIA GeForce RTX)',)),
 if MACOS:  # DLSS needs an NVIDIA GPU
     UPSCALERS = [choice for choice in UPSCALERS if choice[0] != 'dlss']
     UPSCALERS.insert(0, ('metalfx', ('MetalFX (Apple)',)))  # Metal only: vk_metalfx.mm
+# The temporal upscalers change nothing in this game yet (its frame is not mapped), and FSR 3.1,
+# which the others fall back to, does not start on a Mac's KosmicKrisp (packaging/macos/README.md):
+# a Mac's launcher leaves their page out and starts the game with them off.
+UPSCALER_PAGE = not MACOS
 PRESETS = [('0', ('Native AA (×1.0)',)), ('1', ('Quality (×1.5)',)), ('2', ('Balanced (×1.7)',)),
            ('3', ('Performance (×2)',)), ('4', ('Ultra Performance (×3)',))]
 OUTPUTS = [('1280x720', ('1280 × 720 (Steam Deck)',)), ('1920x1080', ('1920 × 1080',)),
@@ -374,8 +422,9 @@ def fsr4_files():
 
 
 def fsr4_folder():
-    """Next to the port; in the data directory when the port is read-only (AppImage)."""
-    if WINDOWS or os.access(PORT_DIR, os.W_OK):
+    """Next to the port; in the data directory when the port is read-only (AppImage) or an
+    application bundle (macOS)."""
+    if WINDOWS or (os.access(PORT_DIR, os.W_OK) and not (MACOS and FROZEN)):
         return PORT_DIR / 'fsr4_shaders'
     return DATA_DIR / 'fsr4_shaders'
 
@@ -521,7 +570,7 @@ def integrate_desktop(enabled, appimage, icon_source, data_dir, home=None):
 
 
 def steam_icon(game):
-    """Picture of the Steam shortcut's icon: the launcher's own on Linux, the game's on Windows."""
+    """Picture of the Steam shortcut's icon: the launcher's own on Linux and macOS, the game's on Windows."""
     return Path(game) / 'sce_sys' / 'icon0.png' if WINDOWS else PORT_DIR / 'launcher' / 'gow3.png'
 
 
@@ -555,6 +604,8 @@ def game_environment(s):
             env['SDL_VIDEO_DRIVER'] = env['SDL_VIDEODRIVER'] = backend
         env['GOW3_GAMEMODE'] = '1' if s.get('gamemode') else '0'
         env['GOW3_MANGOHUD'] = '1' if s.get('mangohud') else '0'
+    if MACOS:  # Apple's Metal performance HUD on the game window, as MangoHud on Linux
+        env['MTL_HUD_ENABLED'] = '1' if s.get('metal_hud') else '0'
     # The launcher's patch selection is the whole list (run.py, patches.py).
     title_id, profile = game_profile_of(meta_folder(s['game_dir'], s.get('update_dir')))
     chosen = s.get('game_patches', {}).get(title_id) if title_id else None
@@ -607,9 +658,20 @@ def game_environment(s):
 # God of War III's own colors: near black, ash and blood red (no gold or orange).
 BG, PANEL, CARD, LINE = '#0d0b0b', '#161212', '#1d1717', '#2a2222'
 TEXT, MUTED, ACCENT, ACCENT_HI = '#e6e0d8', '#8a817a', '#a4161a', '#c81e25'
-RESOLUTION_CHOICES = [('native', ('Native (1080p)',)), ('480p', ('480p',)), ('720p', ('720p',)),
+RESOLUTION_CHOICES = [('native', ('Native (1080p)',)), ('480p', ('480p' + WARN,)), ('720p', ('720p',)),
                       ('1440p', ('1440p',)), ('1800p', ('1800p',)), ('4K', ('4K',))]
 ENGINE_FPS_CHOICES = [('60', ('60 (original)',)), ('120', ('120',)), ('240', ('240',))]
+
+
+def upscaling_note(upscale, resolution, screen_height):
+    """The Display page's note under the upscaler when it has nothing to enlarge: upscaling on at
+    Native (1080p) on a screen no taller than that. Every render resolution smaller than the window
+    is enlarged; screen_height is in the units the game's window uses (Tk's: pixels, points on a
+    Mac, whose game window is not high density)."""
+    if upscale and resolution == 'native' and 0 < screen_height <= 1080:
+        return _('Render resolution is Native (1080p), as tall as this screen: there is nothing to enlarge. '
+                 'Every lower render resolution is enlarged:')
+    return ''
 
 
 class Launcher:
@@ -617,6 +679,8 @@ class Launcher:
         self.tk, self.ttk, self.filedialog, self.messagebox = tk, ttk, filedialog, messagebox
         self.root = root
         self.app = {**APP_DEFAULTS, **load_json(CONFIG_FILE, {})}
+        if not UPSCALER_PAGE:
+            self.app['experimental_upscaler'] = False  # its switch is on that page
         self.ini, self.ini_lines = load_ini()
         self.vars = {}
         self.process = self.job = None
@@ -655,7 +719,7 @@ class Launcher:
         self.show('home')
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.drain_output)
-        if WINDOWS and self.app.get('check_updates', True):
+        if (WINDOWS or MACOS) and self.app.get('check_updates', True):
             threading.Thread(target=self.check_update, daemon=True).start()
 
     def link_sharpening(self):
@@ -913,6 +977,8 @@ class Launcher:
                             ('game', _('Game', 'Игра')), ('patches', _('Patches', 'Патчи')),
                             ('mods', _('Mods', 'Моды')), ('controls', _('Controls', 'Управление')),
                             ('advanced', _('Advanced', 'Дополнительно')), ('log', _('Log', 'Журнал'))):
+            if name == 'graphics' and not UPSCALER_PAGE:
+                continue
             item = tk.Label(side, text='    ' + title, bg=BG, fg=TEXT, anchor='w', font=heading_font(11, UI_FONT),
                             pady=10, cursor='hand2')
             item.pack(fill='x')
@@ -941,7 +1007,8 @@ class Launcher:
 
         self.pages = {}
         self.build_home()
-        self.build_graphics()
+        if UPSCALER_PAGE:
+            self.build_graphics()
         self.build_display()
         self.build_performance()
         self.build_game()
@@ -996,6 +1063,9 @@ class Launcher:
             r, c = 2 + index // 2, (index % 2) * 2
             ttk.Label(quick, text=title).grid(row=r, column=c, sticky='w', pady=6, padx=(0, 12))
             self.choice(quick, key, 'ini', options, width=18).grid(row=r, column=c + 1, sticky='w', padx=(0, 40))
+        ttk.Label(quick, text=_('The same settings as on the Display and Performance pages: a change here is a '
+                                'change there.'), style='Muted.TLabel').grid(row=4, column=0, columnspan=4, sticky='w',
+                                                                             pady=(4, 0))
 
     def draw_banner(self):
         """The cover art of the selected dump (sce_sys/pic1.png) under the title."""
@@ -1112,15 +1182,47 @@ class Launcher:
                      'Если HDR включён в Windows и монитор его поддерживает.') if WINDOWS
                    else _('When the display supports HDR.', 'Если монитор поддерживает HDR.'))
         self.section(f, _('Scaling and sharpening'))
+        upscale, resolution = self.var('fsr1', 'ini'), self.var('render_resolution', 'ini')
         self.check(f, 'fsr1', 'ini', _('Upscale to the window') if MACOS else _('Upscale with FSR 1'),
-                   _('Enlarges a smaller game image to the window. With Render resolution 720p (Performance) '
-                     'it raises the FPS; at the size of the window it does nothing.'))
+                   _('Enlarges every game image smaller than the window: with Render resolution 720p or 480p '
+                     '(Home or Performance) it raises the FPS; at the size of the window it does nothing.'))
         if MACOS:
-            self.row(f, _('Upscaler'), self.choice(f, 'screen_upscaler', 'ini', SCREEN_UPSCALERS),
+            box = self.choice(f, 'screen_upscaler', 'ini', SCREEN_UPSCALERS)
+            self.row(f, _('Upscaler'), box,
                      _('FSR 1 (AMD) or MetalFX (Apple, on the GPU through Metal): both enlarge the finished '
                        'image. MetalFX also sharpens it, so the sharpening below applies to FSR 1. Where '
                        'MetalFX cannot run, the game uses FSR 1.'))
+            # As in the in-game menu: the choice counts only with upscaling on.
+            enable = lambda *_a: box.configure(state='readonly' if upscale.get() else 'disabled')
+            upscale.trace_add('write', enable)
+            enable()
+        # Under the upscaler: nothing to enlarge at this render resolution, and the lower ones.
+        note = ttk.Frame(f)
+        note.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(8, 2))
+        text = ttk.Label(note, style='Warning.TLabel', wraplength=self.px(420), justify='left')
+        text.pack(side='left')
+        for value in ('720p', '480p'):
+            ttk.Button(note, text=value, width=6, command=lambda v=value: resolution.set(v)).pack(
+                side='left', padx=(10, 0))
+
+        def explain(*_args):
+            message = upscaling_note(upscale.get(), resolution.get(), self.root.winfo_screenheight())
+            text.configure(text=message)
+            (note.grid if message else note.grid_remove)()
+        upscale.trace_add('write', explain)
+        resolution.trace_add('write', explain)
+        explain()
+        waits = self.check(f, 'fewer_gpu_waits', 'ini', _('Fewer GPU waits (experimental)'),
+                           _('The game keeps preparing draws while small images are read back for it, instead '
+                             'of stopping each time: less CPU load, and more FPS where the CPU limits it. Needs '
+                             '"Game reads GPU data without waiting" (Performance).'), restart=True)
+        stale = self.var('stale_readback', 'ini')
+        follow = lambda *_a: waits.configure(state='normal' if stale.get() else 'disabled')
+        stale.trace_add('write', follow)
+        follow()
         self.check(f, 'rcas', 'ini', _('Screen sharpening (RCAS)'),
+                   _('Sharpens the image FSR 1 enlarged. No effect with MetalFX: it sharpens the image itself.')
+                   if MACOS else
                    _('Sharpens the final image when it is the size of the window. With the upscaler on, '
                      'turn on its own sharpening (Graphics page) instead: they switch each other off.'))
         holder = ttk.Frame(f)
@@ -1136,7 +1238,9 @@ class Launcher:
         self.row(f, _('Sharpening strength'), holder)
         self.section(f, _('Overlay'))
         self.check(f, 'show_fps', 'ini', _('Show performance overlay'),
-                   menu_key(_('Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.')))
+                   menu_key(_('Its upscaler item says what enlarges the image, such as "{} 720p->1080p", '
+                              'or "Native 1080p" without upscaling. Items, size and corner: in-game menu '
+                              '(Insert / R3+L2) > Overlay.').format('MetalFX' if MACOS else 'FSR 1')))
 
     def build_performance(self):
         f = self.scrolled_page('performance', _('Performance'), _('Frame rate and speed options.'))
@@ -1149,7 +1253,8 @@ class Launcher:
                  _('The highest frame rate the game itself runs at (a game patch).'), restart=True)
         self.row(f, _('Render resolution'), self.choice(f, 'render_resolution', 'ini', RESOLUTION_CHOICES),
                  _('The size the game draws at; higher is sharper and slower. A resolution patch replaces the '
-                   'texture fix and reserves the memory it needs.'), restart=True)
+                   'texture fix and reserves the memory it needs. 480p blows out bright areas (a known bug).'),
+                 restart=True)
         self.section(f, _('Shaders'))
         self.check(f, 'pipeline_binary_cache', 'app', _('Use pipeline binary cache (A/B test)'),
                    _('Reuse saved Vulkan pipelines. Disable to compare FPS with normal compilation. '
@@ -1427,6 +1532,13 @@ class Launcher:
             if not tools[name]:
                 box.configure(state='disabled')
 
+    def build_macos_options(self, f):
+        """Apple's Metal performance HUD, the counterpart of the MangoHud switch on Linux."""
+        self.section(f, _('macOS'), top=4)
+        self.check(f, 'metal_hud', 'app', _('Metal performance HUD'),
+                   _("Apple's overlay on the game window: frame rate, frame times and memory, measured by Metal "
+                     'itself.'), restart=True)
+
     def build_advanced(self):
         tk, ttk = self.tk, self.ttk
         f = self.scrolled_page('advanced', _('Advanced', 'Дополнительно'),
@@ -1435,21 +1547,23 @@ class Launcher:
         self.row(f, _('Launcher language', 'Язык лаунчера'), self.choice(f, 'ui_language', 'app', UI_LANGUAGES),
                  _('Applies when the launcher opens again.', 'Применится при следующем открытии лаунчера.'))
         self.check(f, 'close_on_play', 'app', _('Close the launcher when the game starts', 'Закрывать лаунчер при запуске игры'))
-        if WINDOWS:
+        if WINDOWS or MACOS:  # the Windows zip installs itself; a Mac downloads the new disk image
             self.check(f, 'check_updates', 'app', _('Check for updates when the launcher opens',
                                                     'Проверять обновления при открытии лаунчера'))
         holder = ttk.Frame(f)
         holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(10, 0))
-        if WINDOWS:
+        if WINDOWS or MACOS:
             ttk.Button(holder, text=_('Check for updates', 'Проверить обновления'),
                        command=lambda: threading.Thread(target=self.check_update, args=(True,), daemon=True).start()
                        ).pack(side='left')
-        ttk.Button(holder, text=_('Desktop shortcut', 'Ярлык на рабочем столе'), command=self.shortcut).pack(side='left', padx=6)
-        if not MACOS:  # steam_shortcut.py knows the Windows and Linux Steam folders
-            ttk.Button(holder, text=_('Add to Steam'), command=self.add_to_steam).pack(side='left')
+        if not (MACOS and FROZEN):  # the macOS application is its own shortcut (Dock, Launchpad)
+            ttk.Button(holder, text=_('Desktop shortcut', 'Ярлык на рабочем столе'), command=self.shortcut).pack(side='left', padx=6)
+        ttk.Button(holder, text=_('Add to Steam'), command=self.add_to_steam).pack(side='left')
         ttk.Label(holder, text=f'v{VERSION}', style='Muted.TLabel').pack(side='left', padx=10)
         if LINUX:
             self.build_linux_options(f)
+        elif MACOS:
+            self.build_macos_options(f)
         self.section(f, _('Files'))
         holder = ttk.Frame(f)
         holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(6, 0))
@@ -1529,7 +1643,11 @@ class Launcher:
         self.store_game_patches()
         title_id, _profile = game_profile_of(self.meta_dir())
         names = self.app.get('game_patches', {}).get(title_id) or []
-        resolution = dict((v, t[0]) for v, t in RESOLUTION_CHOICES).get(self.var('render_resolution', 'ini').get(), '?')
+        chosen = self.var('render_resolution', 'ini').get()
+        resolution = dict((v, t[0]) for v, t in RESOLUTION_CHOICES).get(chosen, '?')
+        if self.var('fsr1', 'ini').get() and chosen in ('480p', '720p'):  # what enlarges it to the window
+            upscaler = self.var('screen_upscaler', 'ini').get() if MACOS else 'fsr1'
+            resolution += ' → ' + dict(SCREEN_UPSCALERS).get(upscaler, ('FSR 1',))[0]
         from patches import game_patchable, patch_status
         if not game_patchable(self.meta_dir()):
             return _('{} · 60 FPS engine · no patches for this game').format(resolution)
@@ -1847,7 +1965,10 @@ class Launcher:
         try:
             version, url, page = latest_release()
         except (OSError, ValueError, KeyError) as failure:
-            if manual:
+            if manual and getattr(failure, 'code', None) == 404:  # a repository with no release yet
+                self.ui_calls.put(lambda: self.messagebox.showinfo(
+                    APP_NAME, _('No release has been published yet: {}').format(RELEASES_PAGE)))
+            elif manual:
                 self.ui_calls.put(lambda error=failure: self.messagebox.showerror(
                     APP_NAME, _('Could not check for updates: {}', 'Не удалось проверить обновления: {}').format(error)))
             return
@@ -1871,7 +1992,7 @@ class Launcher:
         self.update_label.pack(anchor='w', padx=10, pady=(8, 6))
         buttons = tk.Frame(box, bg=CARD)
         buttons.pack(fill='x', padx=10, pady=(0, 10))
-        self.update_button = ttk.Button(buttons, text=_('Update', 'Обновить'),
+        self.update_button = ttk.Button(buttons, text=_('Download', 'Скачать') if MACOS else _('Update', 'Обновить'),
                                         command=lambda: self.install_update(version, url, page))
         self.update_button.pack(fill='x')
         ttk.Button(buttons, text=_("What's new", 'Что нового'), command=lambda: open_url(page)).pack(
@@ -1882,6 +2003,9 @@ class Launcher:
             self.status.configure(text=text, fg=TEXT)
 
     def install_update(self, version, url, page):
+        if MACOS and FROZEN and url:  # the browser downloads the disk image; it replaces the application
+            open_url(url)
+            return
         if self.process:
             self.messagebox.showinfo(APP_NAME, _('Close the game before updating.', 'Закройте игру перед обновлением.'))
             return
@@ -2130,14 +2254,14 @@ def version_tuple(text):
 
 
 def latest_release():
-    """(version, zip URL, page URL) of the newest GitHub release."""
+    """(version, download URL, page URL) of the newest GitHub release."""
     request = urllib.request.Request(RELEASES_API, headers={'Accept': 'application/vnd.github+json',
                                                             'User-Agent': 'gow3-launcher'})
     with urllib.request.urlopen(request, timeout=15) as response:
         release = json.load(response)
     version = '.'.join(re.findall(r'\d+', release['tag_name']))
     url = next((asset['browser_download_url'] for asset in release.get('assets', [])
-                if asset.get('name', '').lower().endswith('.zip')), None)
+                if asset.get('name', '').lower().endswith(RELEASE_ASSET)), None)
     return version, url, release.get('html_url') or RELEASES_PAGE
 
 

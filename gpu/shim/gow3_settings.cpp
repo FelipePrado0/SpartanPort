@@ -122,6 +122,8 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.deferred_readback = i != 0;
     } else if (key == "stale_readback") {
         v.stale_readback = i != 0;
+    } else if (key == "fewer_gpu_waits") {
+        v.fewer_gpu_waits = i != 0;
     } else if (key == "restart_unconfirmed") {
         v.restart_unconfirmed = i != 0;
     } else if (key == "enemy_health_bar") {
@@ -193,7 +195,7 @@ void Load() {
         {"GOW3_ASYNC_SHADERS", "async_shaders"},      {"GOW3_DEFERRED_READBACK", "deferred_readback"},
         {"GOW3_STALE_READBACK", "stale_readback"},     {"GOW3_FSR1", "fsr1"},
         {"GOW3_RCAS", "rcas"},                        {"GOW3_FRAMES_AHEAD", "frames_queued"},
-        {"GOW3_SCREEN_UPSCALER", "screen_upscaler"},
+        {"GOW3_SCREEN_UPSCALER", "screen_upscaler"},  {"GOW3_FEWER_GPU_WAITS", "fewer_gpu_waits"},
     };
     for (const auto& [env, key] : env_keys) {
         if (const char* value = std::getenv(env); value && value[0]) {
@@ -212,6 +214,7 @@ void Load() {
                                                  : v.engine_fps.load();
     v.startup_deferred_readback = v.deferred_readback;
     v.startup_stale_readback = v.stale_readback;
+    v.startup_fewer_gpu_waits = v.fewer_gpu_waits;
 }
 
 bool GraphicsNeedRestart() {
@@ -219,7 +222,8 @@ bool GraphicsNeedRestart() {
     return v.render_resolution != v.startup_render_resolution ||
            v.engine_fps != v.startup_engine_fps ||
            v.deferred_readback != v.startup_deferred_readback ||
-           v.stale_readback != v.startup_stale_readback;
+           v.stale_readback != v.startup_stale_readback ||
+           v.fewer_gpu_waits != v.startup_fewer_gpu_waits;
 }
 
 void ConfigureUpscalerSupport(bool fsr4, bool fsr411) {
@@ -327,7 +331,7 @@ void Save() {
                  "display_mode=%s\nvsync=%d\nfps_limit=%d\nasync_shaders=%d\n"
                  "fsr1=%d\nscreen_upscaler=%s\nrcas=%d\nrcas_strength=%d\nframes_queued=%d\n"
                  "render_resolution=%s\nengine_fps=%d\ndeferred_readback=%d\nstale_readback=%d\n"
-                 "restart_unconfirmed=%d\n",
+                 "fewer_gpu_waits=%d\nrestart_unconfirmed=%d\n",
                  Gow3Graphics::DisplayModeKeys[std::clamp(v.display_mode.load(), 0, 2)].data(),
                  int(v.vsync.load()), v.fps_limit.load(), int(v.async_shaders.load()),
                  int(v.fsr1.load()),
@@ -335,7 +339,7 @@ void Save() {
                  int(v.rcas.load()), v.rcas_strength.load(), v.frames_queued.load(),
                  Gow3Graphics::Resolutions[std::clamp(v.render_resolution.load(), 0, 5)].data(),
                  v.engine_fps.load(), int(v.deferred_readback.load()), int(v.stale_readback.load()),
-                 int(v.restart_unconfirmed.load()));
+                 int(v.fewer_gpu_waits.load()), int(v.restart_unconfirmed.load()));
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");

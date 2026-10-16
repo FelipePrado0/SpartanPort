@@ -236,7 +236,14 @@ def main():
                    '--user', str(user_dir),
                    '--timeout', env.get('GOW3_TIMEOUT', '0'), *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
-        return subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console()).returncode
+        try:
+            return subprocess.run(command, stdin=subprocess.DEVNULL, creationflags=no_console()).returncode
+        except OSError as error:
+            # macOS runs the x86-64 game through Rosetta 2, which a new Mac does not have yet.
+            if sys.platform == 'darwin' and error.errno == 86:  # EBADARCH
+                fail('The game needs Rosetta 2. Install it in Terminal with:\n'
+                     '  softwareupdate --install-rosetta --agree-to-license')
+            raise
     finally:
         if mod_view:
             shutil.rmtree(mod_view, ignore_errors=True)

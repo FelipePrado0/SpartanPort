@@ -198,6 +198,8 @@ elseif (APPLE)
     set_source_files_properties(shadps4/video_core/renderer_vulkan/vk_metalfx.mm PROPERTIES
         COMPILE_OPTIONS "-fobjc-arc")
     target_link_libraries(gow3gpu PRIVATE "-framework Foundation" "-framework Metal" "-framework MetalFX")
+    # The performance overlay's GPU use (gow3_perf_stats.cpp).
+    target_link_libraries(gow3gpu PRIVATE "-framework IOKit")
 else()
     target_link_libraries(gow3gpu PUBLIC PkgConfig::X11)
 endif()
