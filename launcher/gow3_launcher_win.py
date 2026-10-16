@@ -59,7 +59,7 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 NEW_GROUP = {} if WINDOWS else {'start_new_session': True}
 UI_FONT, MONO_FONT, SERIF_FONT = 'Segoe UI', 'Consolas', 'Georgia'
 # This build; GitHub release tags are windows-v<VERSION>.
-VERSION = '2.4.0'
+VERSION = '2.4.1'
 RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
