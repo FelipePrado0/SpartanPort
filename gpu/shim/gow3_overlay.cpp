@@ -435,8 +435,8 @@ void ImageTab() {
             n += std::snprintf(chain + n, sizeof(chain) - n, " > %s > %dx%d",
                                s.upscaler == Gow3Settings::UpscalerDlss ? "DLSS" : "FSR 3.1", uw, uh);
         }
-        if (upscaling) {
-            std::snprintf(chain + n, sizeof(chain) - n, " > %s > %dx%d", s.fsr1 ? "FSR 1" : "stretch", ww, wh);
+        if (iw != ww || ih != wh) {
+            std::snprintf(chain + n, sizeof(chain) - n, " > window > %dx%d", ww, wh);
         }
         InfoRow("Resolution chain", chain);
         std::snprintf(text, sizeof(text), "%d x %d", temporal ? rw : iw, temporal ? rh : ih);
