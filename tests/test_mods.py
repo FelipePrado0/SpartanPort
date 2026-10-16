@@ -1,4 +1,5 @@
 from paths import ROOT
+import contextlib
 import importlib.util
 import json
 import os
@@ -7,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from unittest import mock
 import zipfile
@@ -48,6 +50,25 @@ class ModTests(unittest.TestCase):
         self.assertEqual((self.assets / 'a.wad').read_bytes(), b'original')
         self.assertFalse((self.assets / 'new.wad').exists())
         self.assertEqual((result / 'eboot.bin').read_bytes(), b'original executable')
+
+    def test_a_network_share_without_symlinks_or_junctions_still_overlays(self):
+        # A network share (SMB) refuses symlinks and junctions alike; only hard links work.
+        # The overlay must still merge the mod and leave the game folder untouched.
+        a = self.mod('A')
+        self.mod('A', b'new', 'new.wad')
+        def create_junction(src, dst):  # CreateJunction creates the dir, then refuses the reparse point
+            Path(dst).mkdir()
+            raise PermissionError(5, 'Access is denied')
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.object(Path, 'symlink_to', side_effect=PermissionError(5, 'Access is denied')))
+            stack.enter_context(mock.patch.object(os, 'name', 'nt'))
+            stack.enter_context(mock.patch.dict(sys.modules, {'_winapi': types.SimpleNamespace(CreateJunction=create_junction)}))
+            result = mods.build_overlay(self.game, self.root / 'out', [('A', a)])
+        folder = result / 'dvdroot_ps4' / 'data'
+        self.assertEqual((folder / 'a.wad').read_bytes(), b'mod')
+        self.assertEqual((folder / 'b.wad').read_bytes(), b'untouched')
+        self.assertEqual((folder / 'new.wad').read_bytes(), b'new')
+        self.assertEqual((self.assets / 'a.wad').read_bytes(), b'original')  # the game folder is untouched
 
     def test_last_mod_wins_and_reordering_changes_winner(self):
         a, b = self.mod('A', b'A'), self.mod('B', b'B')
