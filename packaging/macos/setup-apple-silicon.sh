@@ -18,9 +18,14 @@ fi
 
 # 2. Verify / Install x86_64 Homebrew in /usr/local
 if [[ ! -x /usr/local/bin/brew ]]; then
-    echo "==> Installing x86_64 Homebrew into /usr/local..."
+    echo "==> Setting up x86_64 Homebrew into /usr/local..."
     echo "    (Apple Silicon macOS installs x86_64 Homebrew to /usr/local without affecting /opt/homebrew)"
-    arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    sudo mkdir -p /usr/local/Homebrew /usr/local/bin /usr/local/lib /usr/local/etc /usr/local/var /usr/local/share 2>/dev/null || true
+    sudo chown -R "$(whoami)" /usr/local/Homebrew /usr/local/bin /usr/local/lib /usr/local/etc /usr/local/var /usr/local/share 2>/dev/null || true
+    if [[ ! -d /usr/local/Homebrew/.git ]]; then
+        git clone https://github.com/Homebrew/brew /usr/local/Homebrew
+    fi
+    ln -sf /usr/local/Homebrew/bin/brew /usr/local/bin/brew
 else
     echo "==> x86_64 Homebrew found at /usr/local/bin/brew."
 fi

@@ -31,10 +31,14 @@ if [[ $DOWNLOADED -eq 0 ]]; then
 fi
 
 if [[ $DOWNLOADED -eq 0 ]]; then
-    echo "==> Could not find release on latest tag, checking workflow artifacts..."
+    echo "==> Checking latest successful workflow artifact..."
     if command -v gh >/dev/null 2>&1; then
-        if gh run download --name gow3-macos -D . 2>/dev/null; then
-            DOWNLOADED=1
+        RUN_ID=$(gh run list --workflow "macOS zip" --status success -L 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+        if [[ -n $RUN_ID ]]; then
+            echo "==> Found successful workflow run $RUN_ID. Downloading artifact..."
+            if gh run download "$RUN_ID" --name gow3-macos.zip --dir . 2>/dev/null; then
+                DOWNLOADED=1
+            fi
         fi
     fi
 fi
@@ -49,7 +53,12 @@ fi
 
 echo "==> Extracting $ZIP_FILE..."
 unzip -q -o "$ZIP_FILE"
-rm -f "$ZIP_FILE"
+rm -f "$ZIP_FILE" "$ZIP_FILE.sha256" 2>/dev/null || true
+
+if [[ -d gow3-macos ]]; then
+    cp -R gow3-macos/* .
+    rm -rf gow3-macos
+fi
 
 echo "==> Setting permissions and clearing quarantine..."
 xattr -dr com.apple.quarantine . 2>/dev/null || true

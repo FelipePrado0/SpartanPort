@@ -43,13 +43,27 @@ if [[ $(uname -s) == Darwin ]]; then
     fi
     if [[ -z ${VK_DRIVER_FILES:-} && -z ${VK_ICD_FILENAMES:-} ]]; then
         for candidate in "$PWD/bin/lib/MoltenVK_icd.json" \
-                         /usr/local/etc/vulkan/icd.d/MoltenVK_icd.json \
                          /usr/local/share/vulkan/icd.d/MoltenVK_icd.json \
+                         /usr/local/etc/vulkan/icd.d/MoltenVK_icd.json \
                          ${VULKAN_SDK:-/nonexistent}/share/vulkan/icd.d/MoltenVK_icd.json \
-                         /opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json \
-                         /opt/homebrew/share/vulkan/icd.d/MoltenVK_icd.json; do
+                         /opt/homebrew/share/vulkan/icd.d/MoltenVK_icd.json \
+                         /opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json; do
             if [[ -f $candidate ]]; then export VK_DRIVER_FILES=$candidate; break; fi
         done
+    fi
+fi
+# If prebuilt binaries exist in bin/, treat as prebuilt (no rebuild needed)
+if [[ -z ${GOW3_PREBUILT:-} && -f bin/gow3-probe && -f bin/gpu/libgow3gpu.dylib ]]; then
+    export GOW3_PREBUILT=1
+fi
+# On Apple Silicon macOS, if binaries are missing, automatically download prebuilt package
+if [[ $(uname -s) == Darwin && $(uname -m) == arm64 && -z ${GOW3_PREBUILT:-} ]]; then
+    if [[ ! -f bin/gow3-probe && ! -f out/gow3-probe ]]; then
+        echo "Prebuilt binaries not found. Downloading latest package for Apple Silicon..."
+        bash packaging/macos/download-prebuilt.sh || true
+        if [[ -f bin/gow3-probe && -f bin/gpu/libgow3gpu.dylib ]]; then
+            export GOW3_PREBUILT=1
+        fi
     fi
 fi
 # GOW3_PREBUILT=1 (packaged builds, the AppImage): bin/gow3-probe and its GPU library are installed

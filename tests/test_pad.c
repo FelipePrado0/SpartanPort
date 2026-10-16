@@ -28,7 +28,7 @@ static void inject(const char *path, const char *tokens) {
     assert(f);
     fputs(tokens,f);
     fclose(f);
-    usleep(25000);
+    usleep(6000);
 }
 static PadData read_pad(void) {
     PadData d;
@@ -80,19 +80,19 @@ int main(void) {
     assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
     inject(path,"");
     data=read_pad();
-    assert(touch_at(&data,1440));
+    assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
     int saw_touchpad = 0;
-    for (int i=0; i<30; ++i) {
+    for (int i=0; i<60; ++i) {
         if ((data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440)) {
             saw_touchpad = 1;
             break;
         }
-        usleep(5000);
+        usleep(2000);
         data=read_pad();
     }
     assert(saw_touchpad);
-    for (int i=0; (data.buttons & BTN_TOUCHPAD) && i<30; ++i) {
-        usleep(5000);
+    for (int i=0; (data.buttons & BTN_TOUCHPAD) && i<60; ++i) {
+        usleep(2000);
         data=read_pad();
     }
     assert(!(data.buttons & BTN_TOUCHPAD));

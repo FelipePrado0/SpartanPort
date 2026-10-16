@@ -197,9 +197,22 @@ def main():
         lib_dir = probe.parent / 'lib'
         if lib_dir.is_dir():
             dyld_paths.append(str(lib_dir))
-        # Prioritize x86_64 /usr/local for Rosetta 2 compatibility
-        if (Path('/usr/local/lib')).is_dir():
-            dyld_paths.append('/usr/local/lib')
+        is_arm64_probe = False
+        try:
+            with open(probe, 'rb') as f:
+                f.seek(4)
+                if int.from_bytes(f.read(4), 'little') == 0x0100000C:
+                    is_arm64_probe = True
+        except Exception:
+            pass
+        if is_arm64_probe:
+            for prefix in (Path('/opt/homebrew'),):
+                if (prefix / 'lib').is_dir():
+                    dyld_paths.append(str(prefix / 'lib'))
+        else:
+            for prefix in (Path('/usr/local'), Path('/usr/local/opt/vulkan-loader')):
+                if (prefix / 'lib').is_dir():
+                    dyld_paths.append(str(prefix / 'lib'))
         if vulkan_sdk := env.get('VULKAN_SDK'):
             if (Path(vulkan_sdk) / 'lib').is_dir():
                 dyld_paths.append(str(Path(vulkan_sdk) / 'lib'))
@@ -212,11 +225,15 @@ def main():
             if (lib_dir / 'MoltenVK_icd.json').is_file():
                 env['VK_DRIVER_FILES'] = str(lib_dir / 'MoltenVK_icd.json')
             else:
-                for candidate in (
-                    Path('/usr/local/etc/vulkan/icd.d/MoltenVK_icd.json'),
+                candidates = (
+                    Path('/opt/homebrew/share/vulkan/icd.d/MoltenVK_icd.json'),
+                    Path('/opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json'),
+                ) if is_arm64_probe else (
                     Path('/usr/local/share/vulkan/icd.d/MoltenVK_icd.json'),
+                    Path('/usr/local/etc/vulkan/icd.d/MoltenVK_icd.json'),
                     Path(env.get('VULKAN_SDK', '/nonexistent')) / 'share/vulkan/icd.d/MoltenVK_icd.json',
-                ):
+                )
+                for candidate in candidates:
                     if candidate.is_file():
                         env['VK_DRIVER_FILES'] = str(candidate)
                         break
