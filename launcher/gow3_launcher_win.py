@@ -1748,7 +1748,7 @@ class Launcher:
         self.key_rows = {}  # keyboard button: (input box, reset arrow)
         self.capturing_key = self.capture_wheel = None  # the key box waiting for an input
         size = self.px(28)
-        labels = PAD_STYLES[style]
+        labels = pad_labels(style)
 
         def icon_canvas(parent):
             return tk.Canvas(parent, width=size, height=size, bg=PANEL, highlightthickness=0, bd=0)
@@ -1767,8 +1767,8 @@ class Launcher:
                 button_icons.draw(game_icon, 'label:L3+R3' if button == 'rage' else 'label:L1+O', 'playstation', size)
             else:  # an action of the right stick (dodge): the stick icon labelled RS
                 button_icons.draw(game_icon, 'rightstick', 'xbox', size)
-            title = PS_BUTTON_NAMES.get(button) or _(ACTION_NAMES[button])
-            ttk.Label(table, text=title, width=14).grid(row=r, column=1, sticky='w', padx=(0, 12))
+            title = _(PS_BUTTON_NAMES.get(button) or ACTION_NAMES[button])
+            ttk.Label(table, text=title, width=-14).grid(row=r, column=1, sticky='w', padx=(0, 12))
 
         def slider(key, low, high, unit):
             holder = ttk.Frame(f)
