@@ -309,7 +309,8 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
                 'render_resolution': 'native', 'engine_fps': '120',
                 'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
-                'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1'}
+                'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1',
+                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
@@ -356,6 +357,8 @@ PAD_STYLES = {
 
 # Keyboard & mouse: how the game's stick-rotation prompts (QTEs) are answered (runtime_pad.c).
 STICK_PROMPTS = [('keyboard', ('Keyboard (native)',)), ('mouse', ('Adaptive mouse (experimental)',))]
+# L2 aim with the mouse (Head of Helios, Bow of Apollo): gow3.ini mouse_aim_style.
+AIM_STYLES = [('0', ('Relative',)), ('1', ('Absolute',))]
 GLYPH_STYLES = [('off', ('Original (default)',)), ('auto', ('Match my controller',)), ('xbox', ('Xbox',)),
                 ('nintendo', ('Nintendo',))]
 
@@ -1820,6 +1823,14 @@ class Launcher:
                         'or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.'))
         self.row(f, _('Mouse prompt distance'), slider('mouse_prompt_distance', 16, 200, ' px'),
                  _('Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.'))
+        self.row(f, _('Right stick style'), self.choice(f, 'mouse_aim_style', 'ini', AIM_STYLES),
+                 hint=_('Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick '
+                        'follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse '
+                        'was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in '
+                        'the in-game menu.'))
+        self.row(f, _('Right stick sensitivity'), slider('mouse_aim_sensitivity', 10, 200, '%'),
+                 _('Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, '
+                   'higher less. Also in the in-game menu.'))
         self.check(f, 'mouse_lock', 'ini', _('Keep the mouse in the game window'),
                    _('While you play, the mouse stays in the game window, so a click cannot land on another monitor '
                      'or app. The in-game menu and switching windows get it back. Also in the in-game menu.'))

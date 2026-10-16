@@ -243,12 +243,15 @@ Valores por defecto; cambialos en la página **Controls** del launcher, sección
 | Insert | el menú del port (R3+L2 en el control) |
 
 **Rage of Sparta en una tecla** (activado por defecto) deja Z y X sin uso. Los **Joystick prompts**
-responden a los quick-time events de girar el stick sin stick: escribí el giro (medias vueltas D S A,
-A S D, A W D o D W A; vueltas completas D S A W o A S D W) o, con *Adaptive mouse*, dibujalo con el
-mouse. Mientras jugás, el mouse queda dentro de la ventana del juego; el menú del juego y otras
-ventanas lo liberan. Sin el launcher, el juego usa sus propias teclas: E y Q para Cuadrado y
-Triángulo, 1 y 3 para L1 y R1, F para R2, C para R3, I, K, J, L para la cruceta, Enter para Options,
-Tab y Retroceso para el touchpad.
+responden a los quick-time events de girar el stick sin stick: escribí el giro (medias vueltas D S
+A, A S D, A W D o D W A; vueltas completas D S A W o A S D W) o, con *Adaptive mouse*, dibujalo con
+el mouse. Mientras jugás, el mouse queda dentro de la ventana del juego; el menú del juego, la tecla
+de pausa (Esc) y otras ventanas lo liberan, y Esc de nuevo o un clic en la ventana lo vuelve a
+tomar. Con L2 apretado (R), el mouse apunta con el stick derecho, para la Cabeza de Helios o el Arco
+de Apolo: *Relative* sigue el movimiento, *Absolute* apunta desde donde estaba el mouse al apretar
+L2, y *Right stick sensitivity* define cuánto mouse hace falta. Sin el launcher, el juego usa sus
+propias teclas: E y Q para Cuadrado y Triángulo, 1 y 3 para L1 y R1, F para R2, C para R3, I, K, J,
+L para la cruceta, Enter para Options, Tab y Retroceso para el touchpad.
 
 En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic del touchpad derecho)
 y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad funciona como en la

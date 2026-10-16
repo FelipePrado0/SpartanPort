@@ -234,12 +234,16 @@ Defaults; change them on the launcher's **Controls** page, under **Keyboard & Mo
 | Esc | right touchpad click (pause menu) |
 | Insert | the port's menu (R3+L2 on the controller) |
 
-**Rage of Sparta on one input** (on by default) leaves Z and X unused. **Joystick prompts** answer the
-stick-rotation quick-time events without a stick: type the turn (half turns D S A, A S D, A W D or
-D W A; full turns D S A W or A S D W) or, with *Adaptive mouse*, draw it. While you play, the mouse
-stays in the game window; the in-game menu and other windows get it back. Without the launcher the
-game keeps its own keys: E and Q for Square and Triangle, 1 and 3 for L1 and R1, F for R2, C for R3,
-I, K, J, L for the d-pad, Enter for Options, Tab and Backspace for the touchpad.
+**Rage of Sparta on one input** (on by default) leaves Z and X unused. **Joystick prompts** answer
+the stick-rotation quick-time events without a stick: type the turn (half turns D S A, A S D, A W D
+or D W A; full turns D S A W or A S D W) or, with *Adaptive mouse*, draw it. While you play, the
+mouse stays in the game window; the in-game menu, the pause key (Esc) and other windows get it back,
+and Esc again or a click in the window takes it back. With L2 held (R), the mouse aims with the
+right stick, for the Head of Helios or the Bow of Apollo: *Relative* follows the movement,
+*Absolute* points from where the mouse was when L2 was pressed, and *Right stick sensitivity* sets
+how much mouse it takes. Without the launcher the game keeps its own keys: E and Q for Square and
+Triangle, 1 and 3 for L1 and R1, F for R2, C for R3, I, K, J, L for the d-pad, Enter for Options,
+Tab and Backspace for the touchpad.
 
 On a controller without a touchpad (Xbox and others), View opens the pause menu (the right
 touchpad click) and L1 + View opens photo mode (the left click). On a DualSense the touchpad

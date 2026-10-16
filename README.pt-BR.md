@@ -240,11 +240,14 @@ Padrão; mude na tela **Controls** do launcher, seção **Keyboard & Mouse Mappi
 
 **Rage of Sparta em uma tecla** (ligado por padrão) deixa Z e X sem uso. Os **Joystick prompts**
 respondem aos eventos rápidos de girar o analógico sem analógico: digite o giro (meias-voltas D S A,
-A S D, A W D ou D W A; voltas completas D S A W ou A S D W) ou, com *Adaptive mouse*, desenhe-o com o
-mouse. Enquanto você joga, o mouse fica preso na janela do jogo; o menu do jogo e outras janelas o
-liberam. Sem o launcher, o jogo usa as próprias teclas: E e Q para Quadrado e Triângulo, 1 e 3 para
-L1 e R1, F para R2, C para R3, I, K, J, L para o direcional, Enter para Options, Tab e Backspace para
-o touchpad.
+A S D, A W D ou D W A; voltas completas D S A W ou A S D W) ou, com *Adaptive mouse*, desenhe-o com
+o mouse. Enquanto você joga, o mouse fica preso na janela do jogo; o menu do jogo, a tecla de pausa
+(Esc) e outras janelas o liberam, e Esc de novo ou um clique na janela o prende outra vez. Com L2
+pressionado (R), o mouse mira com o analógico direito, para a Cabeça de Hélio ou o Arco de Apolo:
+*Relative* segue o movimento, *Absolute* aponta a partir de onde o mouse estava ao apertar L2, e
+*Right stick sensitivity* define quanto mouse é preciso. Sem o launcher, o jogo usa as próprias
+teclas: E e Q para Quadrado e Triângulo, 1 e 3 para L1 e R1, F para R2, C para R3, I, K, J, L para o
+direcional, Enter para Options, Tab e Backspace para o touchpad.
 
 Em um controle sem touchpad (Xbox e outros), View abre o menu de pausa (o clique direito do
 touchpad) e L1 + View abre o modo foto (o clique esquerdo). No DualSense o touchpad funciona
