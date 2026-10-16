@@ -22,7 +22,7 @@ literal pool and the symbol table keep their places relative to the code.
 
 Confirming a row asks Quit Game's question (the confirmation is the FailSafe machine of the same
 script: a message to it shows the dialog, and its FailSafeYes state acts on "yes" by the kind of
-action). The row marks its request with a third parameter of 5 instead of 4; FailSafeDisplay keeps
+action). The row marks its request with a third parameter of 5 (builtin 0x5e pops a count, then up to 3 parameters, the message and the target); FailSafeDisplay keeps
 that mark in a local nothing else uses, and FailSafeYes, given the mark, calls builtin 0xfff, which
 src/menu_hook.h turns into the end of the process, instead of what Quit Game does. Both states get a
 copy of their block with the few instructions added, written over WadChoose's dead code.
@@ -34,7 +34,7 @@ import struct
 
 from glyphs import entries
 
-VERSION = 5  # of the patch: a change rebuilds the cached copy
+VERSION = 6  # of the patch: a change rebuilds the cached copy
 WAD = 'EXEC/WAD/PS4_LE/R_UI.WAD'
 LABEL = b'Exit to Desktop'
 EXIT_CALL = b'\x13\x0f\xff\x43'  # builtin 0xfff (src/menu_hook.h), then pop
@@ -42,7 +42,7 @@ UP, DOWN, CONFIRM, REPLY = [0xe0, 0xec], [0xe4, 0xf0], [0xe9], [0x4b]  # trigger
 ROW_SIZE = 0x3c  # of the row's state record
 # Quit Game's reaction to the dialog being hidden by "no" (the message's first parameter is 0): input back on.
 REPLY_TEMPLATE = bytes.fromhex('01 00000000 130047 01 00000000 3f 170005 19 130069 43 49')
-MARK = 5  # the exit rows' third message parameter (Restart and Quit send 4)
+MARK = 5  # the exit rows' third message parameter (Restart and Quit send two)
 # Opening of FailSafeDisplay's block for message 75 ("show" when the first parameter is 1) and of
 # FailSafeYes' confirm block (it branches on the action's kind).
 SHOW_BLOCK = bytes.fromhex('01 00000000 130047 01 00000001 3f 170084')
@@ -202,10 +202,11 @@ def row_code(s, quit_, start, up, down, slot, label=True):
         raise ValueError('Quit Game transitions not as expected')
     if answer != REPLY_TEMPLATE:
         raise ValueError("Quit Game's answer handler not as expected")
-    request = b'\x01' + be(4) + b'\x13\x00\x5e\x43'  # the message's third parameter, then the send
+    request = b'\x01' + be(4) + b'\x13\x00\x5e\x43'  # the argument count (target, message, 2 parameters), then the send
     if ask.count(request) != 1:
         raise ValueError("Quit Game's request not as expected")
-    ask = ask.replace(request, b'\x01' + be(MARK) + b'\x13\x00\x5e\x43')
+    # A third parameter goes in before the count, which becomes 5 (the count alone underflows the stack).
+    ask = ask.replace(request, b'\x01' + be(MARK) + b'\x01' + be(5) + b'\x13\x00\x5e\x43')
     sound = transition(s, quit_, UP) + 5 + struct.unpack('>i', arrow[1:5])[0]  # the menu move sound
 
     code, pieces = bytearray(LABEL + b'\0' if label else b''), {}

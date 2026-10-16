@@ -64,9 +64,9 @@ class GameScript(unittest.TestCase):
         ask = block(quit_, pause_menu.CONFIRM)
         for row in (self.new.one('WadChoose'), self.new.by_name['HLDisplay'][1]):
             mine = block(row, pause_menu.CONFIRM)
-            third = b'' + pause_menu.MARK.to_bytes(4, 'big') + SEND  # the mark, then the send
+            third = b'\x01' + pause_menu.MARK.to_bytes(4, 'big') + b'\x01' + (5).to_bytes(4, 'big') + SEND  # the mark, the count of 5, the send
             self.assertEqual(mine.count(third), 1)
-            self.assertEqual(mine.replace(third, b'' + (4).to_bytes(4, 'big') + SEND), ask[:len(mine)])
+            self.assertEqual(mine.replace(third, b'\x01' + (4).to_bytes(4, 'big') + SEND), ask[:len(mine) - 5])  # the mark is five bytes longer
             self.assertEqual(block(row, pause_menu.REPLY)[:len(pause_menu.REPLY_TEMPLATE)], pause_menu.REPLY_TEMPLATE)  # "no" as Quit Game
 
     def test_failsafe_states_end_the_process_on_the_mark(self):

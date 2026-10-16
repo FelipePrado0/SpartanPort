@@ -43,8 +43,10 @@ The dialog is not native. It is the `FailSafeDisplay` machine of the same script
   and reacts to the hide. A first attempt put the exit in the row's own 0x4b handler and ended the
   process the moment the request was sent (the log showed no dialog).
 
-So each Exit row sends Quit Game's request with a third parameter of 5 instead of 4 (nothing reads
-parameter 2 of this message). `FailSafeDisplay`'s block now also stores that parameter in its local
+So each Exit row sends Quit Game's request with a third parameter of 5 (nothing reads parameter 2 of
+this message; a missing one reads as 0). Builtin 0x5e pops the argument count (the trailing `01 4`),
+then up to 3 parameters, the message and the target: the first mark attempt (`ff4cbea`) raised the count
+to 5 without pushing a value and crashed the interpreter's value stack (read fault at image 0x21702). `FailSafeDisplay`'s block now also stores that parameter in its local
 22 (`failSafeMenu`, unused), and `FailSafeYes`'s confirm block starts with "if local 22 is 5: builtin
 0xfff, return", which `src/menu_hook.h` turns into the end of the process. Both blocks are copies
 with those instructions added, written over WadChoose's dead code, with the states' items pointing at
