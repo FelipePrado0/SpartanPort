@@ -34,8 +34,10 @@ jobs:
           submodules: recursive
 
       - name: Install dependencies
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_UPGRADE: "1"
         run: |
-          brew update || true
           brew install pkg-config cmake ninja molten-vk vulkan-headers vulkan-loader \
                        sdl3 ffmpeg boost fmt robin-map xxhash zydis glslang
 

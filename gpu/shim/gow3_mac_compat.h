@@ -7,6 +7,7 @@
 #include <pthread.h>
 
 #ifdef __cplusplus
+#include "common/polyfill_thread.h"
 extern "C" {
 #endif
 

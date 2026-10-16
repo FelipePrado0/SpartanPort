@@ -2,6 +2,9 @@
 # drivers, adapted to the native_probe runtime through shims in shim/.
 cmake_minimum_required(VERSION 3.24)
 project(gow3gpu LANGUAGES C CXX)
+if (POLICY CMP0167)
+    cmake_policy(SET CMP0167 OLD)
+endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -10,6 +13,16 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 # Frame pointers keep the loader's thread dumps (watchdog, SIGUSR2 sampling) walkable.
 add_compile_options(-fno-omit-frame-pointer)
+
+# Apple Clang in Xcode 16 and earlier requires -fexperimental-library for std::jthread and <stop_token>.
+if (APPLE)
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("-fexperimental-library" CXX_SUPPORTS_EXPERIMENTAL_LIBRARY)
+    if (CXX_SUPPORTS_EXPERIMENTAL_LIBRARY)
+        add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fexperimental-library>)
+        add_link_options(-fexperimental-library)
+    endif()
+endif()
 
 # gow3: link-time optimization (GOW3_LTO, default on) and profile-guided optimization
 # (GOW3_PGO: off, generate = instrumented build writing into GOW3_PGO_DIR, use = build with that

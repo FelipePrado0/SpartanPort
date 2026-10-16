@@ -12,7 +12,7 @@
 #include <mutex>
 #include <semaphore>
 #include <span>
-#include <thread>
+#include "common/polyfill_thread.h"
 #include <vector>
 #include <queue>
 
