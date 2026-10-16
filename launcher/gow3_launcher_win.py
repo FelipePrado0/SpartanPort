@@ -426,6 +426,23 @@ def save_ini(values, lines):
     ini_path().write_text('\n'.join(out) + '\n', encoding='utf-8')
 
 
+def ini_text(key, value):
+    """A control's value as gow3.ini holds it: flags as 1 or 0, the sharpness with two decimals."""
+    return ('1' if value else '0') if key in INI_FLAGS else f'{float(value):.2f}' if key == 'sharpness' else str(value)
+
+
+def ini_control_value(key, text):
+    """What the control of a gow3.ini key holds for the file's text."""
+    if key in INI_FLAGS:
+        return text == '1'
+    if key == 'sharpness':
+        try:
+            return float(text or 0.5)
+        except ValueError:
+            return 0.5
+    return text
+
+
 def game_info(folder):
     """(title, app version) of a game folder, or None without eboot.bin."""
     folder = Path(folder or '.')
@@ -769,13 +786,16 @@ class Launcher:
         tk = self.tk
         if key not in self.vars:
             if store == 'ini':
-                value = self.ini.get(key, INI_DEFAULTS[key])
+                value = ini_control_value(key, self.ini.get(key, INI_DEFAULTS[key]))
                 if key in INI_FLAGS:
-                    v = tk.BooleanVar(value=value == '1')
+                    v = tk.BooleanVar(value=value)
                 elif key == 'sharpness':
-                    v = tk.DoubleVar(value=float(value or 0.5))
+                    v = tk.DoubleVar(value=value)
                 else:
                     v = tk.StringVar(value=value)
+                # The file's value when this window read it: collect() writes only the keys
+                # changed here since, as the in-game menu writes the same file.
+                v.base = ini_text(key, value)
             else:
                 value = self.app.get(key, APP_DEFAULTS[key])
                 if isinstance(APP_DEFAULTS[key], bool):
@@ -1676,8 +1696,7 @@ class Launcher:
             except self.tk.TclError:  # an unfinished number in a spinbox
                 value = APP_DEFAULTS.get(key, INI_DEFAULTS.get(key))
             if var.store == 'ini':
-                self.ini[key] = ('1' if value else '0') if key in INI_FLAGS else \
-                    f'{float(value):.2f}' if key == 'sharpness' else str(value)
+                self.ini[key] = ini_text(key, value)
             else:
                 self.app[key] = value
         self.app['controls'] = {kind: control_changes({b: v.get() for b, v in vars_.items()}, kind)
@@ -1685,8 +1704,14 @@ class Launcher:
         self.app['pad_style'] = self.pad_style.get()
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         CONFIG_FILE.write_text(json.dumps(self.app, indent=2, ensure_ascii=False), encoding='utf-8')
-        save_ini({key: self.ini[key] for key in INI_DEFAULTS}, self.ini_lines)
-        self.ini, self.ini_lines = load_ini()
+        # The in-game menu writes gow3.ini too, also while this window is open: a key keeps the
+        # file's value unless it was changed here since the file was read, or the file lacks it.
+        _values, lines = load_ini()
+        present = {line.split('=', 1)[0].strip() for line in lines
+                   if '=' in line and not line.lstrip().startswith('#')}
+        save_ini({key: self.ini[key] for key in INI_DEFAULTS if key not in present or
+                  (key in self.vars and self.ini[key] != getattr(self.vars[key], 'base', None))}, lines)
+        self.reload_ini()
         if self.mod_order:
             (DATA_DIR / 'mods.json').write_text(json.dumps(
                 {'order': self.mod_order, 'disabled': [n for n, v in self.mod_vars.items() if not v.get()]},
@@ -1698,6 +1723,24 @@ class Launcher:
             disabled = {k for k in chosen.get('disabled', []) if k not in shown} | {k for k, v in self.patch_vars.items() if not v.get()}
             (DATA_DIR / 'patches.json').write_text(json.dumps(
                 {'enabled': sorted(enabled), 'disabled': sorted(disabled)}, indent=2), encoding='utf-8')
+
+    def reload_ini(self):
+        """gow3.ini as it is now into the controls (the in-game menu writes it too); a control
+        changed here and not saved yet keeps its value."""
+        self.ini, self.ini_lines = load_ini()
+        controls = {key: var for key, var in self.vars.items() if var.store == 'ini'}
+        pending = set()
+        for key, var in controls.items():
+            try:
+                if ini_text(key, var.get()) != getattr(var, 'base', None):
+                    pending.add(key)
+            except (self.tk.TclError, ValueError):  # an unfinished number
+                pending.add(key)
+        for key, var in controls.items():
+            value = ini_control_value(key, self.ini[key])
+            var.base = ini_text(key, value)
+            if key not in pending:
+                var.set(value)
 
     # ---- game process ------------------------------------------------------------------------
     def play(self):
@@ -1749,6 +1792,7 @@ class Launcher:
                     self.process = None
                     if self.job:
                         self.job.close()
+                    self.reload_ini()  # what the in-game menu saved
                     self.refresh_status()
                 else:
                     if 'Entering original x86-64 code' in item:
