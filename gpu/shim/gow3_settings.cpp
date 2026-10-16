@@ -14,6 +14,11 @@ namespace Gow3Settings {
 
 namespace {
 
+// gow3.ini's upscaler while GOW3_UPSCALER overrides it for the run (run.py: "none" while the
+// temporal upscalers are experimental), else -1. Save writes it back unless the run changed the
+// upscaler itself, so a save from the in-game menu does not turn the launcher's choice to "off".
+int file_upscaler = -1;
+
 const char* Path() {
     const char* env = std::getenv("GOW3_CONFIG");
     return env && env[0] ? env : "gow3.ini";
@@ -172,7 +177,9 @@ void Load() {
         std::printf("Settings: %s\n", Path());
     }
     // Environment overrides (scripts, A/B tests).
+    file_upscaler = -1;
     if (const char* env = std::getenv("GOW3_UPSCALER")) {
+        file_upscaler = v.upscaler;
         v.upscaler = UpscalerOff;
         for (int u = 0; u < UpscalerCount; ++u) {
             if (std::strcmp(env, UpscalerName(u)) == 0) v.upscaler = u;
@@ -277,6 +284,8 @@ bool ResolutionNeedsRestart() {
 
 void Save() {
     const auto& v = Get();
+    const int upscaler =
+        file_upscaler >= 0 && v.upscaler == v.startup_upscaler ? file_upscaler : v.upscaler.load();
     FILE* file = std::fopen(Path(), "w");
     if (!file) {
         std::printf("Settings: cannot write %s\n", Path());
@@ -287,7 +296,7 @@ void Save() {
                  "upscaler=%s\npreset=%d\nsharpen=%d\nsharpness=%.2f\njitter=%d\n"
                  "reactive=%d\nobject_motion=%d\nreactive_scale=%.2f\nreactive_threshold=%.2f\nreactive_max=%.2f\n"
                  "debug_view=%d\nshow_fps=%d\nfsr4_auto_exposure=%d\nfsr4_invert_jitter=%d\n",
-                 UpscalerName(v.upscaler), v.preset.load(), int(v.sharpen.load()),
+                 UpscalerName(upscaler), v.preset.load(), int(v.sharpen.load()),
                  v.sharpness.load(), int(v.jitter.load()), int(v.reactive.load()),
                  int(v.object_motion.load()),
                  v.reactive_scale.load(), v.reactive_threshold.load(), v.reactive_max.load(),

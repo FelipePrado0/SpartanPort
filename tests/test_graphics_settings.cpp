@@ -10,6 +10,19 @@
 
 namespace G = Gow3Graphics;
 
+// _putenv_s on Windows: an empty value removes the variable.
+static void SetEnv(const char* name, const char* value) {
+#ifdef _WIN32
+    _putenv_s(name, value);
+#else
+    if (value[0]) {
+        setenv(name, value, 1);
+    } else {
+        unsetenv(name);
+    }
+#endif
+}
+
 static std::string Read(const char* path) {
     std::ifstream in(path);
     std::stringstream s;
@@ -43,8 +56,8 @@ int main() {
                "render_resolution=1440p\nengine_fps=240\ndeferred_readback=0\nstale_readback=1\n"
                "fsr1=1\nscreen_upscaler=metalfx\nrcas=0\nrcas_strength=40\nframes_queued=2\n";
     }
-    _putenv_s("GOW3_CONFIG", path);
-    _putenv_s("GOW3_ASYNC_SHADERS", "");
+    SetEnv("GOW3_CONFIG", path);
+    SetEnv("GOW3_ASYNC_SHADERS", "");
     auto& v = Gow3Settings::Get();
     assert(v.screen_upscaler == G::ScreenFsr1);  // the default
     Gow3Settings::Load();
@@ -54,10 +67,10 @@ int main() {
     assert(v.screen_upscaler == G::ScreenMetalFx);
     assert(!Gow3Settings::GraphicsNeedRestart());
     assert(v.applied_engine_fps == 240);  // no GOW3_ENGINE_FPS: the configured rate
-    _putenv_s("GOW3_ENGINE_FPS", "60");    // run.py: the frame rate patch did not apply
+    SetEnv("GOW3_ENGINE_FPS", "60");    // run.py: the frame rate patch did not apply
     Gow3Settings::Load();
     assert(v.engine_fps == 240 && v.applied_engine_fps == 60 && !Gow3Settings::GraphicsNeedRestart());
-    _putenv_s("GOW3_ENGINE_FPS", "");
+    SetEnv("GOW3_ENGINE_FPS", "");
     v.engine_fps = 120;
     assert(Gow3Settings::GraphicsNeedRestart());
     v.fps_limit = 60;  // live: no restart because of it
@@ -78,16 +91,16 @@ int main() {
         out << "display_mode=huge\nfps_limit=7\nrender_resolution=8K\nengine_fps=1\n"
                "rcas_strength=250\nframes_queued=9\nscreen_upscaler=bogus\n";
     }
-    _putenv_s("GOW3_ASYNC_SHADERS", "1");  // the environment still wins at start
+    SetEnv("GOW3_ASYNC_SHADERS", "1");  // the environment still wins at start
     v.async_shaders = false;
     Gow3Settings::Load();
     assert(v.display_mode == G::Windowed && v.fps_limit == 0 && v.render_resolution == 0 && v.engine_fps == 120);
     assert(v.rcas_strength == 75 && v.frames_queued == 1 && v.screen_upscaler == G::ScreenFsr1);
     assert(v.async_shaders);
-    _putenv_s("GOW3_SCREEN_UPSCALER", "metalfx");
+    SetEnv("GOW3_SCREEN_UPSCALER", "metalfx");
     Gow3Settings::Load();
     assert(v.screen_upscaler == G::ScreenMetalFx);
-    _putenv_s("GOW3_SCREEN_UPSCALER", "");
+    SetEnv("GOW3_SCREEN_UPSCALER", "");
     {
         std::ofstream out(path);
         out << "cheat_double_jumps=1\ncheat_very_hard=1\n";
@@ -97,6 +110,24 @@ int main() {
     const std::string cheats = Read(path);
     assert(cheats.find("cheat_double_jumps=1\n") != std::string::npos);
     assert(cheats.find("cheat_very_hard=1\n") != std::string::npos);
+
+    // run.py turns the temporal upscalers off for the run (GOW3_UPSCALER=none): a save from the
+    // in-game menu keeps the one gow3.ini names, unless the run changed the upscaler itself.
+    {
+        std::ofstream out(path);
+        out << "upscaler=fsr4\n";
+    }
+    SetEnv("GOW3_UPSCALER", "none");
+    Gow3Settings::Load();
+    assert(v.upscaler == Gow3Settings::UpscalerOff);
+    Gow3Settings::Save();
+    assert(Read(path).find("\nupscaler=fsr4\n") != std::string::npos);
+    v.upscaler = Gow3Settings::UpscalerFsr3;  // a fallback during the run
+    Gow3Settings::Save();
+    assert(Read(path).find("\nupscaler=fsr3\n") != std::string::npos);
+    SetEnv("GOW3_UPSCALER", "");
+    Gow3Settings::Load();
+    assert(v.upscaler == Gow3Settings::UpscalerFsr3);
     std::remove(path);
     std::puts("PASS: graphics settings");
 }
