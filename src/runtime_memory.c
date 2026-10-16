@@ -42,7 +42,13 @@ static uint64_t pool_size_bytes(void) {
 #define POOL_SIZE pool_size_bytes()
 #define FLEXIBLE_SIZE (UINT64_C(448) * 1024 * 1024)
 #define PAGE UINT64_C(16384)
+#ifdef __APPLE__
+/* Under Rosetta 2 on macOS, [0x1000000000, 0x7000000000) (64-448 GiB) is reserved by the
+ * translation runtime. Start user allocations at 512 GiB, well within the 40-bit address space. */
+#define USER_MIN UINT64_C(0x8000000000)
+#else
 #define USER_MIN UINT64_C(0x1000000000)
+#endif
 #define USER_MAX UINT64_C(0xfc00000000)
 #define LIMIT 4096
 #define INVALID ((int32_t)UINT32_C(0x80020016))
@@ -409,7 +415,11 @@ static int32_t place(void **inout, uint64_t size, int prot, int flags, uint64_t 
         address=find_free(address,size,alignment);
         if (!address) return NO_MEMORY;
     }
-    if (host_map(address,size,host_prot(prot),kind==KIND_RESERVED,phys)) return NO_MEMORY;
+    if (host_map(address,size,host_prot(prot),kind==KIND_RESERVED,phys)) {
+        fprintf(stderr, "Runtime: host_map failed for address=0x%" PRIxPTR ", size=%" PRIu64 " (errno=%d: %s)\n",
+                address, size, errno, strerror(errno));
+        return NO_MEMORY;
+    }
     void *mapped=(void *)address;
     drop_range(address,address+size);
     if (vma_insert(vma_index(address),(Vma){address,address+size,kind,prot,type,phys})) return NO_MEMORY;
@@ -479,6 +489,7 @@ static ABI int32_t direct_map(void **out, uint64_t size, int prot, int flags, in
     write_unlock();
     flush_hooks();
     if (!result) printf("Runtime: mapped direct memory %p, size=%" PRIu64 ", prot=0x%x\n", *out, size, prot);
+    else fprintf(stderr, "Runtime: direct_map failed: result=0x%x, size=%" PRIu64 ", physical=0x%" PRIx64 "\n", result, size, physical);
     return result;
 }
 static ABI int32_t direct_map_named(void **out, uint64_t size, int prot, int flags, int64_t physical,
