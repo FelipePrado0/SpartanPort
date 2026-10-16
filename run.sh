@@ -11,6 +11,31 @@ if [[ ${1:-} == --software ]]; then
     if [[ -z ${VK_DRIVER_FILES:-} ]]; then echo 'Lavapipe not found; set VK_DRIVER_FILES.' >&2; exit 1; fi
     export VK_LOADER_LAYERS_DISABLE='~implicit~'
 fi
+if [[ $(uname -s) == Darwin ]]; then
+    # If /usr/local has x86_64 libraries, prioritize /usr/local for the x86_64 PS4 runtime
+    if [[ -f /usr/local/lib/libSDL3.dylib ]] && file /usr/local/lib/libSDL3.dylib | grep -q 'x86_64'; then
+        export PATH="/usr/local/bin:/opt/homebrew/bin:${PATH}"
+        export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig:/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:${PKG_CONFIG_PATH:-}"
+    elif [[ $(uname -m) == x86_64 ]]; then
+        export PATH="/usr/local/bin:/opt/homebrew/bin:${PATH}"
+        export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig:/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:${PKG_CONFIG_PATH:-}"
+    else
+        export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH}"
+        export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig:${PKG_CONFIG_PATH:-}"
+    fi
+    if [[ -n ${VULKAN_SDK:-} ]]; then
+        export PKG_CONFIG_PATH="$VULKAN_SDK/lib/pkgconfig:${PKG_CONFIG_PATH}"
+    fi
+    if [[ -z ${VK_DRIVER_FILES:-} && -z ${VK_ICD_FILENAMES:-} ]]; then
+        for candidate in /opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json \
+                         /opt/homebrew/share/vulkan/icd.d/MoltenVK_icd.json \
+                         /usr/local/etc/vulkan/icd.d/MoltenVK_icd.json \
+                         /usr/local/share/vulkan/icd.d/MoltenVK_icd.json \
+                         ${VULKAN_SDK:-/nonexistent}/share/vulkan/icd.d/MoltenVK_icd.json; do
+            if [[ -f $candidate ]]; then export VK_DRIVER_FILES=$candidate; break; fi
+        done
+    fi
+fi
 # GOW3_PREBUILT=1 (packaged builds, the AppImage): bin/gow3-probe and its GPU library are installed
 # next to this script; nothing is built and no nix-shell is needed.
 # GOW3_DATA_DIR: writable directory for the generated files (out/), saves (user/) and gow3.ini;

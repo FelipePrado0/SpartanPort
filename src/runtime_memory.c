@@ -22,6 +22,10 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
+#endif
 #endif
 /* sceKernelGetDirectMemorySize on retail PS4: 5056 MiB. GOW3_DMEM_MB raises it (the resolution
  * patches above 1080p need about 4 GiB more; run.sh sets it). */
@@ -241,6 +245,34 @@ static int pool(void) {
     backing_base=MapViewOfFile3(section,GetCurrentProcess(),NULL,0,bytes,0,PAGE_READWRITE,NULL,0);
     return backing_base ? 0 : -1;
 }
+#elif defined(__APPLE__)
+/* Direct memory occupies [0,POOL_SIZE) of the shared memory, flexible memory [POOL_SIZE,+FLEX_SPAN). */
+static int pool(void) {
+    if (pool_fd>=0) return 0;
+    char shm_name[64];
+    snprintf(shm_name, sizeof(shm_name), "/gow3-guest-mem-%d", getpid());
+    pool_fd = shm_open(shm_name, O_RDWR | O_CREAT | O_EXCL, 0600);
+    if (pool_fd < 0) {
+        shm_unlink(shm_name);
+        pool_fd = shm_open(shm_name, O_RDWR | O_CREAT | O_EXCL, 0600);
+    }
+    if (pool_fd < 0 || ftruncate(pool_fd, (off_t)(POOL_SIZE+FLEX_SPAN))) return -1;
+    shm_unlink(shm_name);
+    void *view = mmap(NULL, POOL_SIZE+FLEX_SPAN, PROT_READ|PROT_WRITE, MAP_SHARED, pool_fd, 0);
+    if (view == MAP_FAILED) return -1;
+    backing_base = view;
+    return 0;
+}
+void runtime_memory_reserve(void) {}
+static int host_map(uintptr_t address, uint64_t size, int prot, int reserved, uint64_t phys) {
+    void *mapped = !reserved
+        ? mmap((void *)address,size,prot,MAP_SHARED|MAP_FIXED,pool_fd,(off_t)phys)
+        : mmap((void *)address,size,PROT_NONE,MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE|MAP_FIXED,-1,0);
+    return mapped==MAP_FAILED ? -1 : 0;
+}
+static int host_unmap(uintptr_t address, uint64_t size) { return munmap((void *)address,size); }
+static int host_protect(uintptr_t address, uint64_t size, int prot) { return mprotect((void *)address,size,prot); }
+static void host_discard(uint64_t phys, uint64_t size) { memset(backing_base+phys,0,size); }
 #else
 /* Direct memory occupies [0,POOL_SIZE) of the memfd, flexible memory [POOL_SIZE,+FLEX_SPAN). */
 static int pool(void) {
@@ -675,6 +707,22 @@ void *runtime_low_map(size_t size, int prot) {
     while (!p && low_next+size<=USER_MIN) {
         p=VirtualAlloc((void *)low_next,size,MEM_RESERVE|MEM_COMMIT,win_prot(prot));
         low_next+=size+UINT64_C(65536); /* unmapped gap catches overruns; allocation granularity */
+    }
+    write_unlock();
+    return p;
+#elif defined(__APPLE__)
+    void *p=NULL;
+    while (!p && low_next+size<=USER_MIN) {
+        mach_vm_address_t addr=(mach_vm_address_t)low_next;
+        kern_return_t kr=mach_vm_allocate(mach_task_self(),&addr,size,VM_FLAGS_FIXED);
+        if (kr==KERN_SUCCESS) {
+            vm_prot_t vm_p=((prot & PROT_READ) ? VM_PROT_READ : 0) |
+                           ((prot & PROT_WRITE) ? VM_PROT_WRITE : 0) |
+                           ((prot & PROT_EXEC) ? VM_PROT_EXECUTE : 0);
+            mach_vm_protect(mach_task_self(),addr,size,FALSE,vm_p);
+            p=(void *)addr;
+        }
+        low_next+=size+PAGE; /* unmapped gap catches overruns */
     }
     write_unlock();
     return p;

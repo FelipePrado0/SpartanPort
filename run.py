@@ -16,6 +16,7 @@ import sys
 import time
 
 WINDOWS = sys.platform == 'win32'
+MACOS = sys.platform == 'darwin'
 EXE_SUFFIX = '.exe' if WINDOWS else ''
 if WINDOWS:
     import ctypes
@@ -95,7 +96,7 @@ def run_script(name, *args, capture=False, check=True):
 def launch_prefix(env):
     """Linux integrations chosen in the launcher: MangoHud is its Vulkan layer (an environment
     variable), GameMode a command that starts the game."""
-    if WINDOWS:
+    if WINDOWS or MACOS:
         return []
     if env.get('GOW3_MANGOHUD') == '1':
         env.setdefault('MANGOHUD', '1')
@@ -191,6 +192,17 @@ def main():
         clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
         if clang64.is_dir():
             env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
+    elif MACOS:
+        dyld_paths = []
+        for prefix in (Path('/opt/homebrew'), Path('/usr/local')):
+            if (prefix / 'lib').is_dir():
+                dyld_paths.append(str(prefix / 'lib'))
+        if vulkan_sdk := env.get('VULKAN_SDK'):
+            if (Path(vulkan_sdk) / 'lib').is_dir():
+                dyld_paths.append(str(Path(vulkan_sdk) / 'lib'))
+        if dyld_paths:
+            current_dyld = env.get('DYLD_FALLBACK_LIBRARY_PATH', '')
+            env['DYLD_FALLBACK_LIBRARY_PATH'] = ':'.join(dyld_paths + ([current_dyld] if current_dyld else []))
     # Instruction sets this CPU lacks (MOVBE, BMI1, LZCNT): the ISA rewrite covers them; exit 20
     # is a set nothing covers.
     features = subprocess.run([str(probe), '--cpu-features'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
