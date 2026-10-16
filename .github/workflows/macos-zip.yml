@@ -1,4 +1,4 @@
-# macOS package: built on macOS 13 (Intel x86-64) so it runs natively on Intel Macs
+# macOS package: built on macOS 15 Intel (x86-64) so it runs natively on Intel Macs
 # and under Rosetta 2 on Apple Silicon Macs (M1/M2/M3/M4).
 # Run on push/PR, or manually (Actions > macOS zip > Run workflow):
 #   - no tag: build and test only (the zip is kept as a workflow artifact).
@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-13
+    runs-on: macos-15-intel
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
