@@ -23,8 +23,10 @@ inline constexpr std::array<const char*, DisplayModeCount> DisplayModeNames = {
 inline constexpr std::array<int, 5> FpsLimits = {30, 60, 120, 240, 0};
 
 /// Game patch suffixes ("Resolution Patch - <name>"); "native" is no resolution patch.
-inline constexpr std::array<std::string_view, 6> Resolutions = {"native", "480p", "720p",
-                                                                "1440p", "1800p", "4K"};
+/// The last six are the Ultrawide mod's sizes (#202), built in as beta (scripts/graphics_options.py).
+inline constexpr std::array<std::string_view, 12> Resolutions = {
+    "native", "480p", "720p", "1440p", "1800p", "4K",
+    "2560x1080", "3440x1440", "3840x1600", "5120x1440", "1920x1200", "2560x1600"};
 /// The resolutions to choose from: the built-in ones, then those of the enabled mods' patch files
 /// (GOW3_EXTRA_RESOLUTIONS, ";"-separated sizes such as "3440x1440"; run.py sets it at every start).
 inline std::vector<std::string> ResolutionNames() {

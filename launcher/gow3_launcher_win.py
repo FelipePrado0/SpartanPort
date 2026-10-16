@@ -43,6 +43,7 @@ if WINDOWS:
 FROZEN = getattr(sys, 'frozen', False)
 PORT_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PORT_DIR / 'scripts'))
+import graphics_options  # noqa: E402  (scripts/)
 import save_backup  # noqa: E402  (scripts/)
 import steam_shortcut  # noqa: E402  (scripts/)
 from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
@@ -863,8 +864,7 @@ def game_environment(s):
 # God of War III's own colors: near black, ash and blood red (no gold or orange).
 BG, PANEL, CARD, LINE = '#0d0b0b', '#161212', '#1d1717', '#2a2222'
 TEXT, MUTED, ACCENT, ACCENT_HI = '#e6e0d8', '#8a817a', '#a4161a', '#c81e25'
-RESOLUTION_CHOICES = [('native', ('Native (1080p)',)), ('480p', ('480p',)), ('720p', ('720p',)),
-                      ('1440p', ('1440p',)), ('1800p', ('1800p',)), ('4K', ('4K',))]
+RESOLUTION_CHOICES = [(name, (graphics_options.resolution_label(name),)) for name in graphics_options.RESOLUTIONS]
 ENGINE_FPS_CHOICES = [('60', ('60 (original)',)), ('120', ('120',)), ('240', ('240',))]
 
 
@@ -1055,10 +1055,18 @@ class Launcher:
         def values():
             return [v for v, _t in pairs()]
 
+        def labels():
+            return [_(*text) for _v, text in pairs()]
+
+        def fit(texts):
+            # Wide enough for the longest label: the dropdown list is as wide as the box.
+            return max([width] + [len(t) + 2 for t in texts])
+
         def reload():
-            box.configure(values=[_(*text) for _v, text in pairs()])
-        box = self.ttk.Combobox(parent, values=[_(*text) for _v, text in pairs()], state='readonly', width=width,
-                                postcommand=reload)
+            texts = labels()
+            box.configure(values=texts, width=fit(texts))
+        texts = labels()
+        box = self.ttk.Combobox(parent, values=texts, state='readonly', width=fit(texts), postcommand=reload)
         if var.get() not in values():
             var.set(values()[0])
 
@@ -1074,7 +1082,6 @@ class Launcher:
     def mod_resolutions(self):
         """(size, (label,)) of the render resolutions the enabled mods add: the "Resolution Patch - <size>"
         entries of their patch files (a mod is on when its box is ticked on the Mods page, else as saved)."""
-        from graphics_options import RESOLUTIONS
         from mods import patch_files, selected
         from patches import resolution_names
         if not self.var('mods_enabled', 'app').get():
@@ -1083,7 +1090,8 @@ class Launcher:
         names = ([n for n in self.mod_order if self.mod_vars.get(n) is None or self.mod_vars[n].get()]
                  if getattr(self, 'mod_vars', None) else selected(root, DATA_DIR / 'mods.json'))
         files = [f for n in names for f in patch_files(root / n)]
-        return [(size, (size + ' (mod)',)) for size in resolution_names(files) if size not in RESOLUTIONS]
+        return [(size, (graphics_options.resolution_label(size) + ' (mod)',)) for size in resolution_names(files)
+                if size not in graphics_options.RESOLUTIONS]
 
     def resolution_options(self):
         """The render resolutions to choose from: the built-in ones and those of the enabled mods."""

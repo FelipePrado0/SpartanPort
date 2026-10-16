@@ -453,7 +453,15 @@ void PerformanceTab() {
     ImGui::SeparatorText("Applied on restart");
     if (BeginRows("##restart")) {
         // The built-in sizes, then those of the enabled mods' patch files (ultrawide, for one).
-        static const char* const builtin_labels[] = {"Native (1080p)", "480p", "720p", "1440p", "1800p", "4K"};
+        // The same labels as the launcher (graphics_options.resolution_label): name, exact size, aspect ratio.
+        static const char* const builtin_labels[] = {
+            "Native · 1920 × 1080 · 16:9", "480p · 854 × 480 · 16:9",
+            "720p · 1280 × 720 · 16:9", "1440p · 2560 × 1440 · 16:9",
+            "1800p · 3200 × 1800 · 16:9", "4K · 3840 × 2160 · 16:9",
+            "2560 × 1080 · 21:9 (beta)", "3440 × 1440 · 21:9 (beta)",
+            "3840 × 1600 · 21:9 (beta)", "5120 × 1440 · 32:9 (beta)",
+            "1920 × 1200 · 16:10 (beta)", "2560 × 1600 · 16:10 (beta)"};
+        static_assert(std::size(builtin_labels) == G::Resolutions.size());
         const std::vector<std::string> resolution_names = G::ResolutionNames();
         std::vector<const char*> resolution_labels;
         for (std::size_t i = 0; i < resolution_names.size(); ++i) {

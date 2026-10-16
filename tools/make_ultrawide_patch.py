@@ -46,7 +46,7 @@ from make_signatures import code_signature, load, pattern_text  # noqa: E402
 from patches import EBOOT_BASE, find_pattern, locate  # noqa: E402
 
 REFERENCE_ASPECT = 16 / 9
-TESTED_IN_GAME = {(3440, 1440), (5120, 1440), (1920, 1200), (2560, 1600)}  # the sizes somebody has played at; the others say so in their Note
+TESTED_IN_GAME = {(2560, 1080), (3440, 1440), (3840, 1600), (5120, 1440), (1920, 1200), (2560, 1600)}  # the sizes somebody has played at; the others say so in their Note
 # Addresses in the 6e72 build. (address, original instruction bytes, register holding the FOV tangent after it)
 CAMERA_SITES = [
     (0x5cc01f, 'c5fa1089d8000000', 1),   # vmovss xmm1, [rcx+0xd8]         projection of the flagged camera

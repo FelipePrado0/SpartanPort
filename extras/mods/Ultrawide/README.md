@@ -9,15 +9,16 @@ proportions and you see more to the sides.
 
 | Render resolution | Aspect | Status |
 |---|---|---|
+| 2560x1080 | 21:9 | **Tested in game** |
 | 3440x1440 | 21:9 | **Tested in game** |
-| 2560x1080 | 21:9 | Not tested |
-| 3840x1600 | 21:9 | Not tested |
-| 5120x1440 | 32:9 | Works (tester report) |
-| 1920x1200 | 16:10 | Works (tester report; taller than 16:9: see Notes) |
-| 2560x1600 | 16:10 | Works (tester report; taller than 16:9: see Notes) |
+| 3840x1600 | 21:9 | **Tested in game** |
+| 5120x1440 | 32:9 | **Tested in game** |
+| 1920x1200 | 16:10 | **Tested in game** (taller than 16:9: see Notes) |
+| 2560x1600 | 16:10 | **Tested in game** (taller than 16:9: see Notes) |
 
-Thanks to the players who tested the other sizes in issue #180. If you try one of the untested sizes, please say how it looks (resolution, and whether anything is
-cropped, stretched or missing at the edges) in an issue of the project.
+Every size was tested in game. Thanks to the players who tested them in issue #180. Since 2.4.0 these sizes are
+built in (Render resolution); the mod is for older versions. If something looks wrong on your screen, please say
+how it looks (resolution, and whether anything is cropped, stretched or missing at the edges) in an issue.
 
 ## How to install
 

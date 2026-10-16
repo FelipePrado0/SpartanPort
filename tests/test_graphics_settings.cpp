@@ -76,20 +76,20 @@ int main() {
     {
         // The resolutions of the enabled mods' patch files (run.py: GOW3_EXTRA_RESOLUTIONS) follow the built-in
         // ones and keep their names through a load and a save; repeated or built-in names are not added twice.
-        _putenv_s("GOW3_EXTRA_RESOLUTIONS", "2560x1080;3440x1440;;3440x1440;4K");
+        _putenv_s("GOW3_EXTRA_RESOLUTIONS", "3840x1080;2880x1200;;2880x1200;4K;3440x1440");
         const auto names = G::ResolutionNames();
-        assert(names.size() == 8 && names[6] == "2560x1080" && names[7] == "3440x1440");
+        assert(names.size() == 14 && names[12] == "3840x1080" && names[13] == "2880x1200");
         {
             std::ofstream out(path);
-            out << "render_resolution=3440x1440\n";
+            out << "render_resolution=2880x1200\n";
         }
         Gow3Settings::Load();
-        assert(v.render_resolution == 7);
+        assert(v.render_resolution == 13);
         Gow3Settings::Save();
-        assert(Read(path).find("render_resolution=3440x1440\n") != std::string::npos);
+        assert(Read(path).find("render_resolution=2880x1200\n") != std::string::npos);
         _putenv_s("GOW3_EXTRA_RESOLUTIONS", "");  // the mod is off: its resolution is unknown, so native
         Gow3Settings::Load();
-        assert(v.render_resolution == 0 && G::ResolutionNames().size() == 6);
+        assert(v.render_resolution == 0 && G::ResolutionNames().size() == 12);
     }
 
     {

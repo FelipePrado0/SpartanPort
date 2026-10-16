@@ -71,7 +71,8 @@ não abrem são ignorados, com aviso no log. `isEnabled="true"` liga o patch com
 **Resoluções:** um patch chamado `Resolution Patch - <largura>x<altura>` vira uma opção de **Render
 resolution** no launcher e no menu do jogo (tecla Insert), depois das embutidas. Vale a mesma regra das
 resoluções embutidas (a nota pede memória com `Requires setting DMEM to N MB`). Se o mod é desativado, a
-resolução volta a `native`. O exemplo é o mod [Ultrawide](ultrawide.md) (`extras/mods/Ultrawide`).
+resolução volta a `native`. O exemplo é o mod [Ultrawide](ultrawide.md) (`extras/mods/Ultrawide`); as mesmas
+resoluções agora também são embutidas, então o mod só faz diferença em versões antigas.
 
 *English:* a mod can be dropped into the mods folder as a **.zip** (it is unpacked into a folder with the zip's name when the launcher or the game starts; `tools/zip_mod.py` packs a mod folder). A mod folder can also carry **game patches**: XML files in its `patches/` folder, in the format of
 the built-in patches (signatures, `Pattern`/`At`). They apply while the mod is enabled, together with the

@@ -147,9 +147,11 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
 - Parches: resolución de render de 480p, 720p, 1440p, 1800p o 4K, corrección de texturas corruptas
   y saltar videos con el botón X (comunidad); tasa de cuadros del motor de 120 FPS (kvicken) o 240
   FPS (adaptado por Felipe Prado).
-- **Mod Ultrawide (beta):** los mods ahora pueden incluir parches del juego. El [mod Ultrawide](extras/mods/Ultrawide)
-  opcional añade resoluciones 21:9, 32:9 y 16:10 (3440x1440 probada) con un campo de visión más ancho en lugar de
-  una imagen con zoom; las escenas de vídeo mantienen sus bordes 16:9 (ver [docs/ultrawide.md](docs/ultrawide.md)).
+- **Ultrawide (beta):** resoluciones 21:9, 32:9 y 16:10 (3440x1440 probada) con un campo de visión más ancho en
+  lugar de una imagen con zoom, ya incluidas: elige una en **Resolución de render**, donde cada opción muestra la
+  resolución exacta y la relación de aspecto. Las escenas de vídeo mantienen sus bordes 16:9 (ver
+  [docs/ultrawide.md](docs/ultrawide.md)). Los mods también pueden incluir parches del juego; el
+  [mod Ultrawide](extras/mods/Ultrawide) es lo mismo para versiones anteriores.
   **Cómo instalar un mod:** pon su `.zip` (sin descomprimir) en la carpeta `mods`, junto a `God of War III.exe`; el
   juego lo descomprime solo. El mod Ultrawide y un instalador de un clic para la 2.2.0 se explican en
   [extras/mods/Ultrawide](extras/mods/Ultrawide/README.md).

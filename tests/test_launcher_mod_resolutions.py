@@ -4,7 +4,7 @@ import unittest
 from test_launcher_save import LauncherOverTemporaryFiles, launcher
 
 PATCH = ('<Patch><TitleID><ID>CUSA01623</ID></TitleID>'
-         '<Metadata Name="Resolution Patch - 3440x1440" AppVer="01.02"><PatchList/></Metadata></Patch>')
+         '<Metadata Name="Resolution Patch - 3840x1080" AppVer="01.02"><PatchList/></Metadata></Patch>')
 
 
 class ModResolutionsTest(LauncherOverTemporaryFiles):
@@ -21,9 +21,9 @@ class ModResolutionsTest(LauncherOverTemporaryFiles):
         self.assertEqual(self.sizes(), builtin)  # no mod yet
         self.make_mod()
         self.app.refresh_lists()  # the Mods page lists the new folder
-        self.assertEqual(self.sizes(), builtin + ['3440x1440'])
-        label = dict(self.app.resolution_options())['3440x1440'][0]
-        self.assertIn('3440x1440', label)
+        self.assertEqual(self.sizes(), builtin + ['3840x1080'])
+        label = dict(self.app.resolution_options())['3840x1080'][0]
+        self.assertEqual(label, '3840 × 1080 · 32:9 (mod)')
         self.app.mod_vars['Ultrawide'].set(False)  # unticked on the Mods page
         self.assertEqual(self.sizes(), builtin)
         self.app.mod_vars['Ultrawide'].set(True)
@@ -33,10 +33,10 @@ class ModResolutionsTest(LauncherOverTemporaryFiles):
     def test_a_saved_mod_resolution_stays_chosen_while_its_mod_is_on(self):
         self.make_mod()
         self.app.refresh_lists()
-        self.app.var('render_resolution', 'ini').set('3440x1440')
+        self.app.var('render_resolution', 'ini').set('3840x1080')
         self.root.update()
-        self.assertEqual(self.app.var('render_resolution', 'ini').get(), '3440x1440')
-        self.assertIn('3440x1440', self.app.summary())
+        self.assertEqual(self.app.var('render_resolution', 'ini').get(), '3840x1080')
+        self.assertIn('3840 × 1080 · 32:9 (mod)', self.app.summary())
 
 
 if __name__ == '__main__':
