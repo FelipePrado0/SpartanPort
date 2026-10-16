@@ -26,29 +26,32 @@ The opcode length table (5 bytes: `00 01 47 4a`; 3: `02`–`18`; 1: the rest) de
 code blocks of SMI_R_UI and SMI_Shell exactly to their boundaries. The decoder is reliable, so
 relocating inserted records is now possible.
 
-## Implemented: option A, the Quit Game dialog with the answer handled by the row
+## Implemented: the exit rows mark Quit Game's question; FailSafeYes acts on the mark
 
-What the files show (decoded 2026-10-16):
+The dialog is not native. It is the `FailSafeDisplay` machine of the same script (decoded 2026-10-16):
 
-- The dialog text is message `4470 + action`: 4470 "Are you sure you want to Restart?", 4471 "...Quit?",
-  4472 Easy Mode, 4473 Challenge Select, 4474 Treasures, 4475 Arena Options, 4476 Easy Mode (no
-  way back). Yes/No are messages 4003/4004. There is no spare action or text.
-- `HLQuitGame`'s confirm block is the whole request: select sound, then
-  `16 "" 01 75 01 1 01 1 01 4 13 005e 43` (message 75 with the action 1), then input off.
-- The answer comes back to the active state as trigger 0x4b. `HLQuitGame`'s handler is
-  `01 0  13 0047  01 0  3f  17 +5  19 13 0069 43  49`: if the answer is 0 ("no") it turns the
-  input back on; any other answer ("yes") skips that, because the engine carries the action out.
+- A message to the empty target (`16 "" 01 75 01 <show> 01 <action> 01 <mode> 13 005e`) reaches the
+  states that have a handler for trigger 0x4b (75). `FailSafeDisplay`'s shows the dialog when the
+  first parameter is 1 (action in the second) and keeps the action in `failSafeID`; two arrays set
+  at its entry give each action's text (`failSafeMsgID`: 0 Restart 4470, 1 and 2 Quit 4471, 3 Easy
+  Mode 4472, 4 Easy Mode 4476) and kind (`failSafeExec`: 1 restart, 2 quit, 3 ask again, 4 restart
+  after Easy Mode). Yes/No are messages 4003/4004.
+- `FailSafeYes`'s confirm block branches on the kind: restart is builtin 0x64, quit is builtin 0x63.
+  `FailSafeNoXfer` hides the dialog with `16 "" 01 75 01 0 01 3 13 005e` (first parameter 0).
+- Every state with a 0x4b handler sees both messages, including the sender: `HLQuitGame`'s handler is
+  "if the first parameter is 0, turn the input back on", so it ignores its own request (parameter 1)
+  and reacts to the hide. A first attempt put the exit in the row's own 0x4b handler and ended the
+  process the moment the request was sent (the log showed no dialog).
 
-So each Exit row copies Quit Game's confirm block (the same question) and gets its own 0x4b handler
-whose "yes" path (jump +6, over the input-on and its return) ends with the builtin 0xfff, which
-`src/menu_hook.h` turns into the end of the process. Nothing native changes. The record grows to 0x3c
-bytes (one more transition), so the pause row is no longer written over WadChoose's record: both rows
-are new records, and `scripts/pause_menu.py` keeps a list of splices and corrects sizes, parents and
-gotos for each.
+So each Exit row sends Quit Game's request with a third parameter of 5 instead of 4 (nothing reads
+parameter 2 of this message). `FailSafeDisplay`'s block now also stores that parameter in its local
+22 (`failSafeMenu`, unused), and `FailSafeYes`'s confirm block starts with "if local 22 is 5: builtin
+0xfff, return", which `src/menu_hook.h` turns into the end of the process. Both blocks are copies
+with those instructions added, written over WadChoose's dead code, with the states' items pointing at
+the copies (gotos in the copies follow the states that move). The rows' own 0x4b block is Quit Game's.
 
-Not yet checked in game: that the answer reaches the row on "yes" (the handler's shape says it does),
-and that the engine's own "quit" for action 1 has not started yet when the row ends the process. If
-"yes" does nothing, or the game returns to the main menu first, use option B.
+Not yet checked in game after this change. If the dialog does not show, check that the mark did not
+break `FailSafeOn`'s visuals (it keys on the action, which stays 1).
 
 ## Option B: a native action code
 

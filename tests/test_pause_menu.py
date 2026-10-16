@@ -10,6 +10,7 @@ from paths import ROOT  # noqa: F401  (puts scripts/ on the path)
 import pause_menu
 from pause_menu import Script, decode
 
+SEND = bytes([0x13, 0x00, 0x5e, 0x43])  # builtin 0x5e (send a message), then pop
 GAME = Path(os.environ.get('GOW3_GAME_DIR', '')) if os.environ.get('GOW3_GAME_DIR') else None
 
 
@@ -53,24 +54,43 @@ class GameScript(unittest.TestCase):
         main, row = self.new.one('PauseMain'), self.new.one('WadChoose')
         self.assertEqual(row['parent'], main['at'] - 4)
         self.assertEqual(main['at'] + main['size'], row['at'] + row['size'])
-        confirm = next(v for k, v, t in self.new.blocks(row) if k == 3 and t == pause_menu.REPLY)
-        self.assertIn(pause_menu.EXIT_CALL, self.new.block_bytes(confirm))
+        self.assertEqual([t for k, _v, t in self.new.blocks(row) if k == 3], [pause_menu.UP, pause_menu.DOWN, pause_menu.CONFIRM, pause_menu.REPLY])
         with self.assertRaises(ValueError):  # a patched copy is refused, not patched twice
             pause_menu.patch(bytearray(self.data))
 
-    def test_exit_asks_quit_games_question(self):
+    def test_exit_asks_quit_games_question_with_the_mark(self):
         quit_ = self.new.one('HLQuitGame')
         block = lambda row, trigger: self.new.block_bytes(pause_menu.transition(self.new, row, trigger))  # noqa: E731
+        ask = block(quit_, pause_menu.CONFIRM)
         for row in (self.new.one('WadChoose'), self.new.by_name['HLDisplay'][1]):
-            self.assertTrue(block(quit_, pause_menu.CONFIRM).startswith(block(row, pause_menu.CONFIRM)))  # the same dialog
-            reply = block(row, pause_menu.REPLY)
-            at = self.base + self.new.lit + next(v for k, v, t in self.new.blocks(row) if t == pause_menu.REPLY)
-            code = decode(self.data, at, at + len(reply))
-            jump = next(c for c in code if c[1] == 0x17)
-            target = jump[0] + 3 + struct.unpack('>h', jump[2])[0]
-            call = [c for c in code if c[1] == 0x13 and c[2] == bytes([0x0f, 0xff])]
-            self.assertEqual([c[0] for c in call], [target])  # "yes" (any answer but 0) lands on the exit call
-            self.assertEqual(reply[:len(pause_menu.REPLY_TEMPLATE) - 9], pause_menu.REPLY_TEMPLATE[:-9])  # up to the answer test
+            mine = block(row, pause_menu.CONFIRM)
+            third = b'' + pause_menu.MARK.to_bytes(4, 'big') + SEND  # the mark, then the send
+            self.assertEqual(mine.count(third), 1)
+            self.assertEqual(mine.replace(third, b'' + (4).to_bytes(4, 'big') + SEND), ask[:len(mine)])
+            self.assertEqual(block(row, pause_menu.REPLY)[:len(pause_menu.REPLY_TEMPLATE)], pause_menu.REPLY_TEMPLATE)  # "no" as Quit Game
+
+    def test_failsafe_states_end_the_process_on_the_mark(self):
+        old_s, new_s = self.old, self.new
+        for name, trigger, prefix in (('FailSafeDisplay', pause_menu.REPLY, pause_menu.SHOW_PREFIX),
+                                      ('FailSafeYes', pause_menu.CONFIRM, pause_menu.YES_PREFIX)):
+            ref_old = pause_menu.transition(old_s, old_s.one(name), trigger)
+            ref_new = pause_menu.transition(new_s, new_s.one(name), trigger)
+            self.assertNotEqual(ref_old, ref_new)  # the state runs the new block
+            before = old_s.block_bytes(ref_old)
+            after = new_s.block_bytes(ref_new)
+            self.assertTrue(after.startswith(prefix))
+            first, second = self.old_base + old_s.lit + ref_old, self.base + new_s.lit + ref_new + len(prefix)
+            a = decode(self.original, first, first + len(before))
+            b = decode(self.data, second, second + len(before))
+            self.assertEqual([(op, arg) for _, op, arg in a if op != 0x47], [(op, arg) for _, op, arg in b if op != 0x47])
+            index = lambda script, ref: next(i for i, r in enumerate(script.records) if r['at'] - 4 == ref)  # noqa: E731
+            gotos = lambda script, code: [index(script, int.from_bytes(arg, 'big')) for _, op, arg in code if op == 0x47]  # noqa: E731
+            self.assertEqual(len(gotos(old_s, a)), len(gotos(new_s, b)))
+        # The exit call is skipped unless the local holds the mark.
+        code = decode(self.data, self.base + new_s.lit + pause_menu.transition(new_s, new_s.one('FailSafeYes'), pause_menu.CONFIRM),
+                      self.base + new_s.lit + pause_menu.transition(new_s, new_s.one('FailSafeYes'), pause_menu.CONFIRM) + len(pause_menu.YES_PREFIX))
+        jump = next(c for c in code if c[1] == 0x17)
+        self.assertEqual(jump[0] + 3 + struct.unpack('>h', jump[2])[0], code[-1][0] + 1)
 
     def test_options_row(self):
         options, row = self.new.one('PauseOptions'), self.new.by_name['HLDisplay'][1]

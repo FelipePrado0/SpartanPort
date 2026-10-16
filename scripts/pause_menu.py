@@ -20,7 +20,13 @@ everything after it move: state refs, parents and subtree sizes are corrected, a
 the WAD entry grow. Its code and the label share WadChoose's dead code with the pause row, so the
 literal pool and the symbol table keep their places relative to the code.
 
-Confirming a row calls builtin 0xfff, which src/menu_hook.h turns into the end of the process."""
+Confirming a row asks Quit Game's question (the confirmation is the FailSafe machine of the same
+script: a message to it shows the dialog, and its FailSafeYes state acts on "yes" by the kind of
+action). The row marks its request with a third parameter of 5 instead of 4; FailSafeDisplay keeps
+that mark in a local nothing else uses, and FailSafeYes, given the mark, calls builtin 0xfff, which
+src/menu_hook.h turns into the end of the process, instead of what Quit Game does. Both states get a
+copy of their block with the few instructions added, written over WadChoose's dead code.
+"""
 import json
 from pathlib import Path
 import shutil
@@ -28,14 +34,24 @@ import struct
 
 from glyphs import entries
 
-VERSION = 4  # of the patch: a change rebuilds the cached copy
+VERSION = 5  # of the patch: a change rebuilds the cached copy
 WAD = 'EXEC/WAD/PS4_LE/R_UI.WAD'
 LABEL = b'Exit to Desktop'
 EXIT_CALL = b'\x13\x0f\xff\x43'  # builtin 0xfff (src/menu_hook.h), then pop
 UP, DOWN, CONFIRM, REPLY = [0xe0, 0xec], [0xe4, 0xf0], [0xe9], [0x4b]  # trigger ids: pad events and the dialog's answer
 ROW_SIZE = 0x3c  # of the row's state record
-# Quit Game's reaction to the dialog's answer: nothing on "yes" (the engine acts), input back on on "no".
+# Quit Game's reaction to the dialog being hidden by "no" (the message's first parameter is 0): input back on.
 REPLY_TEMPLATE = bytes.fromhex('01 00000000 130047 01 00000000 3f 170005 19 130069 43 49')
+MARK = 5  # the exit rows' third message parameter (Restart and Quit send 4)
+# Opening of FailSafeDisplay's block for message 75 ("show" when the first parameter is 1) and of
+# FailSafeYes' confirm block (it branches on the action's kind).
+SHOW_BLOCK = bytes.fromhex('01 00000000 130047 01 00000001 3f 170084')
+YES_BLOCK = bytes.fromhex('03 e001 0b e002 01 00000001 3f 17002f')
+# FailSafeDisplay keeps the mark in its local 22 (failSafeMenu, unused); the confirm block ends the
+# process when it is MARK. The jump skips the exit call, its pop and the return.
+LOCAL = bytes([0xe0, 0x16])
+SHOW_PREFIX = bytes.fromhex('01 00000002 130047') + b'\x07' + LOCAL + b'\x43'
+YES_PREFIX = b'\x03' + LOCAL + b'\x01' + MARK.to_bytes(4, "big") + bytes.fromhex('3f 170005') + EXIT_CALL + b'\x49'
 # Bytes taken by each opcode with its operands (the interpreter's handlers, image 0x1d5a4e).
 LENGTH = {op: 5 if op in (0x00, 0x01, 0x47, 0x4a) else 3 if 0x02 <= op <= 0x18 else 1 for op in range(0x4c)}
 
@@ -171,8 +187,8 @@ def row_code(s, quit_, start, up, down, slot, label=True):
     """(code, pieces) of an Exit row: the label (unless `label` is false), then Quit Game's blocks
     as the template, with `slot` as its highlight, laid from code offset `start`; `up` and `down`
     are the state refs its arrows go to. Confirming asks Quit Game's own question ("Are you sure
-    you want to Quit?"); on "yes" the answer reaches the row, which ends the process. pieces: code
-    offset of each block."""
+    you want to Quit?") with the exit mark; the row's handler for the dialog being hidden is Quit
+    Game's. pieces: code offset of each block."""
     lit = lambda text: be(s.literal(text), 2)  # noqa: E731
     blocks = {k: v for k, v, _t in s.blocks(quit_) if k in (1, 2)}
     highlight = (s.block_bytes(blocks[1]), s.block_bytes(blocks[2]))
@@ -186,10 +202,11 @@ def row_code(s, quit_, start, up, down, slot, label=True):
         raise ValueError('Quit Game transitions not as expected')
     if answer != REPLY_TEMPLATE:
         raise ValueError("Quit Game's answer handler not as expected")
+    request = b'\x01' + be(4) + b'\x13\x00\x5e\x43'  # the message's third parameter, then the send
+    if ask.count(request) != 1:
+        raise ValueError("Quit Game's request not as expected")
+    ask = ask.replace(request, b'\x01' + be(MARK) + b'\x13\x00\x5e\x43')
     sound = transition(s, quit_, UP) + 5 + struct.unpack('>i', arrow[1:5])[0]  # the menu move sound
-    # "No" (the answer is 0) turns the input back on and returns; any other answer skips that
-    # (the jump grows by the return) and ends the process.
-    reply = answer.replace(b'\x17\x00\x05', b'\x17\x00\x06', 1) + EXIT_CALL + b'\x49'
 
     code, pieces = bytearray(LABEL + b'\0' if label else b''), {}
     for kind, body in (('entry', highlight[0]), ('update', highlight[1])):
@@ -198,7 +215,7 @@ def row_code(s, quit_, start, up, down, slot, label=True):
     for kind, target in (('up', up), ('down', down)):
         pieces[kind] = start + len(code)
         code += b'\x4a' + struct.pack('>i', sound - (pieces[kind] + 5)) + b'\x47' + be(target) + b'\x49'
-    for kind, body in (('confirm', ask), ('reply', reply)):
+    for kind, body in (('confirm', ask), ('reply', answer)):
         pieces[kind] = start + len(code)
         code += body
     return bytes(code), pieces
@@ -215,6 +232,38 @@ def row_record(parent, sid, pieces):
     if len(record) != ROW_SIZE:
         raise ValueError('record size mismatch')
     return record
+
+
+def moved_copy(s, ref, at, final):
+    """The code block at `ref`, laid at code offset `at`: states that move are followed and calls
+    are rebased."""
+    end = next(r for r in s.code_refs() if r > ref)
+    first = s.base + s.lit + ref
+    out = bytearray(s.data[first:s.base + s.lit + end])
+    for pos, op, arg in decode(s.data, first, s.base + s.lit + end):
+        i = pos - first
+        if op == 0x47:
+            out[i + 1:i + 5] = be(final(int.from_bytes(arg, 'big') + 4) - 4)
+        elif op == 0x4a:
+            out[i + 1:i + 5] = struct.pack('>i', ref + i + 5 + struct.unpack('>i', arg)[0] - (at + i + 5))
+    return bytes(out)
+
+
+def failsafe_code(s, start, final):
+    """(code, {record: (old block, offset of the new one)}): the FailSafe states' two blocks with
+    the exit mark's instructions added, to be laid from code offset `start`."""
+    out, code, redirects = bytearray(), bytearray(), {}
+    for name, trigger, opening, prefix in (('FailSafeDisplay', REPLY, SHOW_BLOCK, SHOW_PREFIX),
+                                           ('FailSafeYes', CONFIRM, YES_BLOCK, YES_PREFIX)):
+        record = s.one(name)
+        ref = transition(s, record, trigger)
+        block = s.block_bytes(ref)
+        if not block.startswith(opening):
+            raise ValueError(f'{name} not as expected')
+        at = start + len(code)
+        code += prefix + moved_copy(s, ref, at + len(prefix), final)
+        redirects[name] = (record, ref, at)
+    return bytes(code), redirects
 
 
 def blank_line(s, record, local):
@@ -282,7 +331,9 @@ def patch(data):
     options_start = start + len(pause_code)
     options_code, options_pieces = row_code(s, quit_, options_start, up=fref(dsp), down=fref(ctl),
                                             slot=b'menuItem4Select', label=False)
-    if options_start + len(options_code) > end:
+    failsafe_start = options_start + len(options_code)
+    failsafe, redirects = failsafe_code(s, failsafe_start, final)
+    if failsafe_start + len(failsafe) > end:
         raise ValueError('no room for the new rows')
 
     # Edits in the layout as it is now. First every goto to a state that moves (or to WadChoose,
@@ -301,7 +352,10 @@ def patch(data):
               retarget(s, ctl, UP, dsp['at'] - 4, options_ref), retarget(s, dsp, DOWN, ctl['at'] - 4, options_ref),
               (blank_line(s, main, 6), be(start, 2)),  # PauseMain clears line5 (local 6): the label goes there
               (blank_line(s, opt, 5), be(start, 2)),   # PauseOptions clears line4 (local 5)
-              (base + s.lit + start, pause_code + options_code)]
+              (base + s.lit + start, pause_code + options_code + failsafe)]
+    for record, ref, at in redirects.values():  # the FailSafe states run their new blocks
+        item = next(i for i, (k, v) in enumerate(record['items']) if k == 3 and v == ref)
+        edits.append((base + record['at'] + 12 + 4 * item, be(0x03000000 | at)))
     parents = {r['at']: r for r in s.records}
     grow = {}  # sizes of the subtrees the new records join (+) and the replaced one leaves (-)
 
