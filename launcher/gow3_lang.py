@@ -1176,6 +1176,13 @@ EXTRA = {
     },
 }
 
+EXTRA['pt'].update({
+    'GUI Scale': 'Escala da interface',
+    'Auto': 'Automático',
+    'For launcher only. Applies after Save.':
+        'Somente para o inicializador. Aplica-se após Salvar.',
+})
+
 _tables = {}
 
 

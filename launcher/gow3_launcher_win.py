@@ -14,6 +14,7 @@ so a packaged port needs no Python installation.
 import contextlib
 import glob
 import json
+import math
 import os
 from pathlib import Path
 import queue
@@ -192,13 +193,87 @@ def monitor_under_pointer(root):
 
 
 def pick_fonts(families):
-    """Windows fonts first, then the DejaVu family that most Linux desktops ship."""
-    global UI_FONT, MONO_FONT, SERIF_FONT
+    """Prefer installed desktop fonts, ending with Tk's portable font aliases."""
+    global UI_FONT, MONO_FONT, SERIF_FONT, FONT_LOADED
     available = set(families)
+    # Registration can succeed in fontconfig even when Tk uses the X core font backend.
+    FONT_LOADED = FONT_LOADED and bool({'Cinzel Black', 'Cinzel'} & available)
     pick = lambda names: next((name for name in names if name in available), names[-1])
-    UI_FONT = pick(('Segoe UI', 'Noto Sans', 'DejaVu Sans'))
-    MONO_FONT = pick(('Consolas', 'Noto Sans Mono', 'DejaVu Sans Mono'))
-    SERIF_FONT = pick(('Georgia', 'Noto Serif', 'DejaVu Serif'))
+    UI_FONT = pick(('Segoe UI', 'Helvetica Neue', 'Noto Sans', 'DejaVu Sans', 'Helvetica'))
+    MONO_FONT = pick(('Consolas', 'Menlo', 'Noto Sans Mono', 'DejaVu Sans Mono', 'Courier'))
+    SERIF_FONT = pick(('Georgia', 'Noto Serif', 'DejaVu Serif', 'Times'))
+
+
+def positive_number(value):
+    try:
+        number = float(value)
+        return number if math.isfinite(number) and number > 0 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def x11_font_dpi(root):
+    """The Xft resource shared by X11/XWayland desktops, independent of screen millimeters."""
+    from ctypes.util import find_library
+    try:
+        library = find_library('X11')
+        if not library:
+            return None
+        x11 = ctypes.CDLL(library)
+        x11.XOpenDisplay.argtypes, x11.XOpenDisplay.restype = [ctypes.c_char_p], ctypes.c_void_p
+        x11.XGetDefault.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+        x11.XGetDefault.restype = ctypes.c_char_p
+        x11.XCloseDisplay.argtypes, x11.XCloseDisplay.restype = [ctypes.c_void_p], ctypes.c_int
+        display = x11.XOpenDisplay(os.fsencode(root.winfo_screen()))
+        if not display:
+            return None
+        try:
+            return positive_number(x11.XGetDefault(display, b'Xft', b'dpi'))
+        finally:
+            x11.XCloseDisplay(display)
+    except (AttributeError, OSError):
+        return None
+
+
+def x11_window_scale():
+    """Fallback for desktops whose window scale is separate from their font DPI."""
+    value = os.environ.get('GDK_SCALE', '')
+    if not value and 'xfce' in (
+            os.environ.get('XDG_CURRENT_DESKTOP', '') + os.environ.get('DESKTOP_SESSION', '')).lower():
+        try:
+            value = subprocess.run(['xfconf-query', '-c', 'xsettings', '-p', '/Gdk/WindowScalingFactor'],
+                                   capture_output=True, text=True, timeout=1, env=host_environment()).stdout
+        except (OSError, subprocess.SubprocessError):
+            pass
+    scale = positive_number(value)
+    return scale if scale and 1 <= scale <= 4 else 1.0
+
+
+def desktop_ui_scale(root):
+    """Capture the platform scale once; launcher zoom must not change Tk's unit conversion."""
+    backend = root.tk.call('tk', 'windowingsystem')
+    if backend == 'aqua':
+        # Tk uses logical coordinates here; macOS already handles Retina's backing pixels.
+        return 1.0
+    scale = float(root.tk.call('tk', 'scaling')) * 72.0 / 96.0
+    has_native_scale = root.tk.call('info', 'exists', 'tk::scalingPct')
+    if has_native_scale:
+        scale = (positive_number(root.tk.getvar('tk::scalingPct')) or 100) / 100.0
+    if backend == 'x11':
+        dpi = x11_font_dpi(root)
+        if dpi and 36 <= dpi <= 768:
+            # Tk 8.6.15+ converts pixel fonts to points before passing them to Xft.
+            # Match that conversion to Xft once, never to the user's 1x/2x override.
+            root.tk.call('tk', 'scaling', dpi / 72.0)
+            scale = max(scale, dpi / 96.0) if has_native_scale else dpi / 96.0
+        if scale <= 1.05:
+            scale = max(scale, x11_window_scale())
+    return max(1.0, min(scale, 4.0))
+
+
+def launcher_ui_scale(mode, desktop_scale=1.0):
+    """Manual zoom is absolute in the toolkit's logical coordinates, including on Retina."""
+    return float(mode) if mode in ('1', '2') else desktop_scale
 
 
 def host_environment():
@@ -297,7 +372,8 @@ FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240
 # The sidebar's pages, top to bottom, and the methods that refresh a page's lists when it is shown.
 PAGES = ('home', 'graphics', 'performance', 'game', 'advanced')
 PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_lists', 'refresh_game_patches')}
-APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
+UI_SCALES = [('auto', ('Auto',)), ('1', ('1x',)), ('2', ('2x',))]
+APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
@@ -905,21 +981,12 @@ class Launcher:
             except (AttributeError, OSError):
                 pass
         root.configure(bg=BG)
-        self.dpi = root.winfo_fpixels('1i') / 96.0
-        left, top, width, height = (0, 0, 0, 0) if WINDOWS else monitor_under_pointer(root)
-        if width:
-            # Linux reports 96 dpi everywhere: size the interface by the monitor it opens on.
-            boost = max(1.0, min(width / 1920, height / 1080, 2.0)) * 1.25
-            self.dpi *= boost
-            root.tk.call('tk', 'scaling', root.winfo_fpixels('1i') / 72.0 * boost)
-        window_width, window_height = self.px(1120), self.px(740)
-        if width:
-            window_width, window_height = min(window_width, int(width * 0.9)), min(window_height, int(height * 0.9))
-            root.geometry(f'{window_width}x{window_height}+{left + (width - window_width) // 2}'
-                          f'+{top + (height - window_height) // 2}')
-        else:
-            root.geometry(f'{window_width}x{window_height}')
-        root.minsize(min(self.px(980), window_width), min(self.px(660), window_height))
+        self.fonts = {}
+        self.desktop_scale = desktop_ui_scale(root)
+        self.monitor = (monitor_under_pointer(root) if root.tk.call('tk', 'windowingsystem') == 'x11'
+                        else (0, 0, 0, 0))
+        self.apply_ui_scale()
+        self.size_window()
         self.set_icon()
         self.style()
         self.build()
@@ -937,7 +1004,41 @@ class Launcher:
         return meta_folder(self.var('game_dir', 'app').get(), self.var('update_dir', 'app').get())
 
     def px(self, size):
-        return int(size * self.dpi)
+        if isinstance(size, tuple):
+            return tuple(self.px(value) for value in size)
+        return round(size * self.dpi)
+
+    def font(self, family, points, *style):
+        # Own the fonts instead of changing TkDefaultFont and other platform-owned fonts.
+        from tkinter.font import Font
+        key = (family, points, style)
+        if key not in self.fonts:
+            self.fonts[key] = Font(self.root, family=family, weight='bold' if 'bold' in style else 'normal')
+        result = self.fonts[key]
+        result.configure(size=-max(1, self.px(points * 96.0 / 72.0)))
+        return result
+
+    def heading_font(self, size, fallback=None, every_language=False, bold=False):
+        style = ('bold',) if bold else ()
+        return self.font(*heading_font(size, fallback, every_language), *style)
+
+    def apply_ui_scale(self):
+        self.dpi = launcher_ui_scale(self.app.get('ui_scale'), self.desktop_scale)
+        for family, points, style in self.fonts:
+            self.font(family, points, *style)
+
+    def size_window(self):
+        left, top, width, height = self.monitor
+        window_width, window_height = self.px(1120), self.px(740)
+        if width:
+            window_width, window_height = min(window_width, int(width * 0.9)), min(window_height, int(height * 0.9))
+            self.root.geometry(f'{window_width}x{window_height}{left + (width - window_width) // 2:+d}'
+                               f'{top + (height - window_height) // 2:+d}')
+        else:
+            window_width = min(window_width, int(self.root.winfo_screenwidth() * 0.9))
+            window_height = min(window_height, int(self.root.winfo_screenheight() * 0.9))
+            self.root.geometry(f'{window_width}x{window_height}')
+        self.root.minsize(min(self.px(980), window_width), min(self.px(660), window_height))
 
     def set_icon(self):
         game_icon = Path(self.meta_dir() or '.') / 'sce_sys' / 'icon0.png'
@@ -951,10 +1052,16 @@ class Launcher:
         n = max(14, int(16 * self.dpi))
         images = []
         for checked in (False, True):
-            image = tk.PhotoImage(width=n + self.px(8), height=n)  # unset pixels stay transparent
+            image = getattr(self, 'check_on' if checked else 'check_off', None)
+            if image is None:
+                image = tk.PhotoImage(width=n + self.px(8), height=n)
+            else:
+                image.configure(width=n + self.px(8), height=n)
+                image.blank()  # keep the image name used by the existing theme element
             fill = ACCENT if checked else CARD
             image.put(ACCENT_HI if checked else '#4a4040', to=(0, 0, n, n))
-            image.put(fill, to=(1, 1, n - 1, n - 1))
+            border = self.px(1)
+            image.put(fill, to=(border, border, n - border, n - border))
             if checked:
                 # Tick: down from (0.22n, 0.52n) to (0.42n, 0.72n), up to (0.78n, 0.30n).
                 pts = []
@@ -973,43 +1080,53 @@ class Launcher:
         ttk = self.ttk
         s = ttk.Style(self.root)
         s.theme_use('clam')
-        if not hasattr(self, 'check_on'):  # once: a rebuilt window keeps the element and its images
-            self.check_images()
+        first_style = not hasattr(self, 'check_on')
+        self.check_images()
+        if first_style:  # a rebuilt window keeps the element and its image names
             s.element_create('Bb.indicator', 'image', self.check_off, ('selected', self.check_on), sticky='')
         s.layout('TCheckbutton', [('Checkbutton.padding', {'sticky': 'nswe', 'children': [
             ('Bb.indicator', {'side': 'left', 'sticky': ''}),
             ('Checkbutton.focus', {'side': 'left', 'sticky': 'w', 'children': [
                 ('Checkbutton.label', {'sticky': 'nswe'})]})]})])
-        base = (UI_FONT, 10)
+        base = self.font(UI_FONT, 10)
+        # These widgets have a font option that overrides the ttk style's font.
+        # Keep the option scoped so labels can still use their heading/hint styles.
+        for widget in ('TEntry', 'TCombobox', 'TSpinbox'):
+            self.root.option_add(f'*{widget}.font', base)
         self.root.option_add('*TCombobox*Listbox.background', CARD)
         self.root.option_add('*TCombobox*Listbox.foreground', TEXT)
         self.root.option_add('*TCombobox*Listbox.selectBackground', ACCENT)
         self.root.option_add('*TCombobox*Listbox.font', base)
         s.configure('.', background=PANEL, foreground=TEXT, fieldbackground=CARD, bordercolor=LINE,
-                    lightcolor=LINE, darkcolor=LINE, troughcolor=CARD, focuscolor=ACCENT, font=base)
+                    lightcolor=LINE, darkcolor=LINE, troughcolor=CARD, focuscolor=ACCENT, font=base,
+                    borderwidth=self.px(1), focusthickness=self.px(1))
         s.configure('TFrame', background=PANEL)
         s.configure('TLabel', background=PANEL, foreground=TEXT)
-        s.configure('Muted.TLabel', background=PANEL, foreground=MUTED, font=(UI_FONT, 9))
-        s.configure('Restart.TLabel', background=PANEL, foreground=ACCENT_HI, font=(UI_FONT, 8, 'bold'))
-        s.configure('Section.TLabel', background=PANEL, foreground=ACCENT_HI, font=heading_font(12))
-        s.configure('TCheckbutton', background=PANEL, foreground=TEXT, padding=(0, 3))
+        s.configure('Muted.TLabel', background=PANEL, foreground=MUTED, font=self.font(UI_FONT, 9))
+        s.configure('Restart.TLabel', background=PANEL, foreground=ACCENT_HI, font=self.font(UI_FONT, 8, 'bold'))
+        s.configure('Section.TLabel', background=PANEL, foreground=ACCENT_HI, font=self.heading_font(12))
+        s.configure('TCheckbutton', background=PANEL, foreground=TEXT, padding=self.px((0, 3)))
         s.map('TCheckbutton', background=[('active', PANEL)], foreground=[('disabled', MUTED)])
-        s.configure('TRadiobutton', background=PANEL, foreground=TEXT, indicatorcolor=CARD)
+        s.configure('TRadiobutton', background=PANEL, foreground=TEXT, indicatorcolor=CARD,
+                    indicatorsize=self.px(12), indicatormargin=self.px((1, 1, 4, 1)))
         s.map('TRadiobutton', background=[('active', PANEL)], indicatorcolor=[('selected', ACCENT)])
-        s.configure('Warning.TLabel', background='#2a1414', foreground='#e0a0a0', padding=(10, 6))
-        s.configure('TCombobox', arrowcolor=MUTED, foreground=TEXT, padding=4)
+        s.configure('Warning.TLabel', background='#2a1414', foreground='#e0a0a0', padding=self.px((10, 6)))
+        s.configure('TCombobox', arrowcolor=MUTED, foreground=TEXT, padding=self.px(4), arrowsize=self.px(14))
         s.map('TCombobox', fieldbackground=[('readonly', CARD)], foreground=[('readonly', TEXT)],
               selectbackground=[('readonly', CARD)], selectforeground=[('readonly', TEXT)])
-        s.configure('TEntry', foreground=TEXT, insertcolor=TEXT, padding=4)
-        s.configure('TSpinbox', foreground=TEXT, arrowcolor=MUTED, insertcolor=TEXT, padding=4)
-        s.configure('TButton', background=CARD, foreground=TEXT, padding=(12, 6), borderwidth=1)
+        s.configure('TEntry', foreground=TEXT, insertcolor=TEXT, padding=self.px(4))
+        s.configure('TSpinbox', foreground=TEXT, arrowcolor=MUTED, insertcolor=TEXT, padding=self.px(4),
+                    arrowsize=self.px(10))
+        s.configure('TButton', background=CARD, foreground=TEXT, padding=self.px((12, 6)), borderwidth=self.px(1))
         s.map('TButton', background=[('active', LINE), ('disabled', PANEL)], foreground=[('disabled', MUTED)])
-        s.configure('Play.TButton', background=ACCENT, foreground='#f4ece0', font=(*heading_font(15), 'bold'),
-                    padding=(36, 10), borderwidth=0)
+        s.configure('Play.TButton', background=ACCENT, foreground='#f4ece0', font=self.heading_font(15, bold=True),
+                    padding=self.px((36, 10)), borderwidth=0)
         s.map('Play.TButton', background=[('active', ACCENT_HI), ('disabled', '#2e1c1c')],
               foreground=[('disabled', '#8a7a78')])
-        s.configure('Horizontal.TProgressbar', background=ACCENT, troughcolor=CARD, bordercolor=LINE)
-        s.configure('Vertical.TScrollbar', background=CARD, arrowcolor=MUTED, troughcolor=PANEL, bordercolor=PANEL)
+        s.configure('Horizontal.TProgressbar', background=ACCENT, troughcolor=CARD, bordercolor=LINE,
+                    arrowsize=self.px(14), sliderlength=self.px(30))
+        s.configure('TScrollbar', background=CARD, arrowcolor=MUTED, troughcolor=PANEL, bordercolor=PANEL,
+                    arrowsize=self.px(14))
 
     # ---- widget helpers ----------------------------------------------------------------------
     def var(self, key, store):
@@ -1091,17 +1208,17 @@ class Launcher:
         cell = self.ttk.Frame(parent)
         self.ttk.Label(cell, text=title).pack(side='left')
         if restart:
-            self.ttk.Label(cell, text=_('restart'), style='Restart.TLabel').pack(side='left', padx=(8, 0))
+            self.ttk.Label(cell, text=_('restart'), style='Restart.TLabel').pack(side='left', padx=self.px((8, 0)))
         return cell
 
     def row(self, parent, title, widget, hint=None, restart=False):
         """Name on the left, control on the right, an optional note below."""
         r = self.next_row(parent)
-        self.title_cell(parent, title, restart).grid(row=r, column=0, sticky='w', padx=(0, 18), pady=(8, 0))
-        widget.grid(row=r, column=1, sticky='w', pady=(5, 0))
+        self.title_cell(parent, title, restart).grid(row=r, column=0, sticky='w', padx=self.px((0, 18)), pady=self.px((8, 0)))
+        widget.grid(row=r, column=1, sticky='w', pady=self.px((5, 0)))
         if hint:
             self.ttk.Label(parent, text=hint, style='Muted.TLabel', wraplength=self.px(640), justify='left').grid(
-                row=r + 1, column=0, columnspan=2, sticky='w', pady=(1, 2))
+                row=r + 1, column=0, columnspan=2, sticky='w', pady=self.px((1, 2)))
         return widget
 
     def check(self, parent, key, store, title, hint=None, var=None, restart=False):
@@ -1110,13 +1227,13 @@ class Launcher:
 
     def note(self, parent, text, top=12):
         self.ttk.Label(parent, text=text, style='Muted.TLabel', wraplength=self.px(680), justify='left').grid(
-            row=self.next_row(parent), column=0, columnspan=2, sticky='w', pady=(top, 0))
+            row=self.next_row(parent), column=0, columnspan=2, sticky='w', pady=self.px((top, 0)))
 
     def section(self, parent, title, top=20):
         r = self.next_row(parent)
         self.ttk.Label(parent, text=title.upper(), style='Section.TLabel').grid(
-            row=r, column=0, columnspan=2, sticky='w', pady=(top, 0))
-        self.tk.Frame(parent, bg=LINE, height=1).grid(row=r + 1, column=0, columnspan=2, sticky='we', pady=(2, 2))
+            row=r, column=0, columnspan=2, sticky='w', pady=self.px((top, 0)))
+        self.tk.Frame(parent, bg=LINE, height=self.px(1)).grid(row=r + 1, column=0, columnspan=2, sticky='we', pady=self.px((2, 2)))
 
     def folder(self, parent, key, title, prompt, hint=None, on_change=None):
         ttk = self.ttk
@@ -1128,9 +1245,9 @@ class Launcher:
             chosen = self.filedialog.askdirectory(title=prompt, initialdir=var.get() or str(PORT_DIR))
             if chosen:
                 var.set(str(Path(chosen)))
-        ttk.Button(holder, text=_('Browse…', 'Обзор…'), command=browse).pack(side='left', padx=(6, 0))
+        ttk.Button(holder, text=_('Browse…', 'Обзор…'), command=browse).pack(side='left', padx=self.px((6, 0)))
         ttk.Button(holder, text=_('Open', 'Открыть'), command=lambda: self.open_path(var.get(), key)).pack(
-            side='left', padx=(6, 0))
+            side='left', padx=self.px((6, 0)))
         if on_change:
             var.trace_add('write', lambda *_a: on_change())
         return self.row(parent, title, holder, hint)
@@ -1139,13 +1256,13 @@ class Launcher:
         """A settings page: a heading and content that scrolls vertically."""
         tk, ttk = self.tk, self.ttk
         outer = ttk.Frame(self.content)
-        head = ttk.Frame(outer, padding=(28, 22, 28, 6))
+        head = ttk.Frame(outer, padding=self.px((28, 22, 28, 6)))
         head.pack(fill='x')
-        ttk.Label(head, text=title.upper(), background=PANEL, foreground=TEXT, font=heading_font(20)).pack(anchor='w')
+        ttk.Label(head, text=title.upper(), background=PANEL, foreground=TEXT, font=self.heading_font(20)).pack(anchor='w')
         ttk.Label(head, text=subtitle, style='Muted.TLabel').pack(anchor='w')
         canvas = tk.Canvas(outer, bg=PANEL, highlightthickness=0, bd=0)
         bar = ttk.Scrollbar(outer, orient='vertical', command=canvas.yview)
-        inner = ttk.Frame(canvas, padding=(28, 0, 28, 24))
+        inner = ttk.Frame(canvas, padding=self.px((28, 0, 28, 24)))
         inner.columnconfigure(1, weight=1)
         window = canvas.create_window(0, 0, window=inner, anchor='nw')
         inner.bind('<Configure>', lambda _e: canvas.configure(scrollregion=canvas.bbox('all')))
@@ -1164,17 +1281,17 @@ class Launcher:
         side.pack(side='left', fill='y')
         side.pack_propagate(False)
         self.side_title = tk.Label(side, text=APP_NAME.upper(), bg=BG, fg=TEXT,
-                                   font=heading_font(15, every_language=True),
+                                   font=self.heading_font(15, every_language=True),
                                    wraplength=self.px(190), justify='left')
-        self.side_title.pack(anchor='w', padx=22, pady=(24, 22))
+        self.side_title.pack(anchor='w', padx=self.px(22), pady=self.px((24, 22)))
         self.side = side
         self.nav, self.current_page = {}, None
         titles = {'home': _('Home'), 'graphics': _('Graphics', 'Графика'), 'performance': _('Performance'),
                   'game': _('Game', 'Игра'), 'advanced': _('Advanced', 'Дополнительно')}
         for name in PAGES:
             item = tk.Label(side, text='    ' + titles[name], bg=BG, fg=TEXT, anchor='w',
-                            font=heading_font(11, UI_FONT),
-                            pady=10, cursor='hand2')
+                            font=self.heading_font(11, UI_FONT),
+                            pady=self.px(10), cursor='hand2')
             item.pack(fill='x')
             item.bind('<Button-1>', lambda _e, n=name: self.show(n))
             item.bind('<Enter>', lambda _e, n=name: n != self.current_page and self.nav[n].configure(bg='#1a1414'))
@@ -1184,17 +1301,17 @@ class Launcher:
         self.update_box = None
         self.side_note = tk.Label(side, text=_('In the game: Insert or R3+L2\nopens the port\'s menu.',
                                                'В игре: Insert или R3+L2\nоткрывает меню порта.'),
-                                  bg=BG, fg=MUTED, font=(UI_FONT, 9), justify='left', wraplength=self.px(210))
-        self.side_note.pack(anchor='w', padx=22, pady=(0, 4))
-        tk.Label(side, text=f'v{VERSION}', bg=BG, fg=MUTED, font=(UI_FONT, 9)).pack(anchor='w', padx=22, pady=(0, 18))
+                                  bg=BG, fg=MUTED, font=self.font(UI_FONT, 9), justify='left', wraplength=self.px(210))
+        self.side_note.pack(anchor='w', padx=self.px(22), pady=self.px((0, 4)))
+        tk.Label(side, text=f'v{VERSION}', bg=BG, fg=MUTED, font=self.font(UI_FONT, 9)).pack(anchor='w', padx=self.px(22), pady=self.px((0, 18)))
 
         right = tk.Frame(self.root, bg=PANEL)
         right.pack(side='left', fill='both', expand=True)
         bar = tk.Frame(right, bg=BG, height=self.px(72))
         bar.pack(fill='x', side='bottom')
         bar.pack_propagate(False)
-        self.status = tk.Label(bar, text='', bg=BG, fg=MUTED, font=(UI_FONT, 10), anchor='w', justify='left')
-        self.status.pack(side='left', padx=24)
+        self.status = tk.Label(bar, text='', bg=BG, fg=MUTED, font=self.font(UI_FONT, 10), anchor='w', justify='left')
+        self.status.pack(side='left', padx=self.px(24))
         self.play_button = ttk.Button(bar, text=_('PLAY', 'ИГРАТЬ'), style='Play.TButton', command=self.play)
         self.play_button.pack(side='right', padx=(self.px(10), self.px(24)), pady=self.px(11))
         self.save_button = ttk.Button(bar, text=_('Save', 'Сохранить'), command=self.save, state='disabled')
@@ -1239,24 +1356,24 @@ class Launcher:
         self.banner.bind('<Configure>', lambda _e: self.draw_banner())
         self.banner_button = ttk.Button(self.banner, text=_('Choose the game folder'),
                                         command=lambda: self.show('game'))
-        quick = ttk.Frame(page, padding=(28, 14, 28, 8))
+        quick = ttk.Frame(page, padding=self.px((28, 14, 28, 8)))
         quick.pack(fill='x')
         ttk.Label(quick, text=_('Quick settings', 'Основное').upper(), style='Section.TLabel').grid(
             row=0, column=0, columnspan=4, sticky='w')
-        tk.Frame(quick, bg=LINE, height=1).grid(row=1, column=0, columnspan=4, sticky='we', pady=(2, 6))
+        tk.Frame(quick, bg=LINE, height=self.px(1)).grid(row=1, column=0, columnspan=4, sticky='we', pady=self.px((2, 6)))
         items = ((_('Display mode'), 'display_mode', DISPLAY_MODES), (_('Frame rate limit'), 'fps_limit', FPS_LIMITS),
                  (_('Render resolution'), 'render_resolution', self.resolution_options),
                  (_('Engine frame rate'), 'engine_fps', ENGINE_FPS_CHOICES))
         for index, (title, key, options) in enumerate(items):
             r, c = 2 + index // 2, (index % 2) * 2
-            ttk.Label(quick, text=title).grid(row=r, column=c, sticky='w', pady=6, padx=(0, 12))
-            self.choice(quick, key, 'ini', options, width=18).grid(row=r, column=c + 1, sticky='w', padx=(0, 40))
+            ttk.Label(quick, text=title).grid(row=r, column=c, sticky='w', pady=self.px(6), padx=self.px((0, 12)))
+            self.choice(quick, key, 'ini', options, width=18).grid(row=r, column=c + 1, sticky='w', padx=self.px((0, 40)))
 
     def draw_banner(self):
         """The cover art of the selected dump (sce_sys/pic1.png) under the title."""
         tk, c = self.tk, self.banner
         c.delete('all')
-        w, h, bar = max(c.winfo_width(), 400), int(c['height']), self.px(44)
+        w, h, bar = max(c.winfo_width(), self.px(400)), int(c['height']), self.px(44)
         folder = self.meta_dir()
         info = game_info(folder)
         art = Path(folder or '.') / 'sce_sys' / 'pic1.png'
@@ -1274,15 +1391,15 @@ class Launcher:
             # A solid strip under the art: the title id and version sit in it, not over the picture.
             c.create_rectangle(0, h - bar, w, h, fill=PANEL, outline='')
         else:
-            c.create_text(30, h - 74, text=APP_NAME.upper(), anchor='w', fill=TEXT,
-                          font=heading_font(32, every_language=True))
+            c.create_text(self.px(30), h - self.px(74), text=APP_NAME.upper(), anchor='w', fill=TEXT,
+                          font=self.heading_font(32, every_language=True))
         if info:
             title_id = game_profile_of(folder)[0]
             sub = _('{} · version {}', '{} · версия {}').format(title_id or '?', info[1])
-            c.create_text(33, h - bar // 2, text=sub, anchor='w', fill=ACCENT_HI, font=(UI_FONT, 11, 'bold'))
+            c.create_text(self.px(33), h - bar // 2, text=sub, anchor='w', fill=ACCENT_HI, font=self.font(UI_FONT, 11, 'bold'))
         else:
-            c.create_text(w // 2, h // 2 - 40, text=_('Choose your game folder to play.'),
-                          fill=TEXT, font=(UI_FONT, 12))
+            c.create_text(w // 2, h // 2 - self.px(40), text=_('Choose your game folder to play.'),
+                          fill=TEXT, font=self.font(UI_FONT, 12))
             c.create_window(w // 2, h // 2, window=self.banner_button)
 
     def scaled_art(self, path, width):
@@ -1446,8 +1563,8 @@ class Launcher:
         holder = ttk.Frame(f)
         self.backup_choice = ttk.Combobox(holder, state='readonly', width=30)
         self.backup_choice.pack(side='left')
-        ttk.Button(holder, text=_('Restore', 'Восстановить'), command=self.restore_backup).pack(side='left', padx=(6, 0))
-        ttk.Button(holder, text=_('Refresh', 'Обновить'), command=self.refresh_backups).pack(side='left', padx=(6, 0))
+        ttk.Button(holder, text=_('Restore', 'Восстановить'), command=self.restore_backup).pack(side='left', padx=self.px((6, 0)))
+        ttk.Button(holder, text=_('Refresh', 'Обновить'), command=self.refresh_backups).pack(side='left', padx=self.px((6, 0)))
         self.row(f, _('Save backups', 'Резервные копии'), holder,
                  _('Made before every start, newest first; the last {} are kept. Restoring backs up the '
                    'current saves first.').format(save_backup.KEEP))
@@ -1491,9 +1608,9 @@ class Launcher:
                       'XML-патчи shadPS4/GoldHEN для этой версии игры. Пусто: {}').format(DATA_DIR / 'patches'),
                     on_change=self.refresh_lists)
         self.patches_frame = self.ttk.Frame(f)
-        self.patches_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=(8, 0))
+        self.patches_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=self.px((8, 0)))
         self.ttk.Button(f, text=_('Refresh', 'Обновить'), command=self.refresh_lists).grid(
-            row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
+            row=self.next_row(f), column=0, sticky='w', pady=self.px((14, 0)))
 
     def refresh_game_patches(self):
         import xml.etree.ElementTree as ET
@@ -1544,9 +1661,9 @@ class Launcher:
         self.folder(f, 'mods_dir', _('Mods folder', 'Папка модов'), _('Choose the mods folder', 'Выберите папку модов'),
                     _('Empty: {}', 'Пусто: {}').format(DATA_DIR / 'mods'), on_change=self.refresh_lists)
         self.mods_frame = self.ttk.Frame(f)
-        self.mods_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=(8, 0))
+        self.mods_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=self.px((8, 0)))
         self.ttk.Button(f, text=_('Refresh', 'Обновить'), command=self.refresh_lists).grid(
-            row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
+            row=self.next_row(f), column=0, sticky='w', pady=self.px((14, 0)))
 
     def build_controls(self, f):
         """Remapping of the PS4 buttons, on the Game page (run.py passes GOW3_KEY_MAP and
@@ -1560,7 +1677,7 @@ class Launcher:
         names = ttk.Frame(f)
         for value, label in (('playstation', 'PlayStation'), ('xbox', 'Xbox')):
             ttk.Radiobutton(names, text=label, value=value, variable=self.pad_style,
-                            command=self.relabel_pad_controls).pack(side='left', padx=(0, 14))
+                            command=self.relabel_pad_controls).pack(side='left', padx=self.px((0, 14)))
         self.row(f, _('Gamepad names'), names)
         self.row(f, _('In-game button icons'), self.choice(f, 'glyph_style', 'app', GLYPH_STYLES),
                  hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
@@ -1572,13 +1689,13 @@ class Launcher:
                  width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD, activebackground=ACCENT_HI,
                  highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
         value = ttk.Label(holder, width=5)
-        value.pack(side='left', padx=10)
+        value.pack(side='left', padx=self.px(10))
         show = lambda *_a: value.configure(text=f'{strength.get()}%')
         strength.trace_add('write', show)
         show()
         self.row(f, _('Vibration'), holder, _("Strength of the gamepad's vibration; 0% turns it off."))
         table = ttk.Frame(f)
-        table.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(16, 0))
+        table.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((16, 0)))
         for column, span, title in ((0, 2, _('GAME BUTTON')), (2, 1, _('KEYBOARD')), (3, 2, _('GAMEPAD'))):
             ttk.Label(table, text=title, style='Section.TLabel').grid(row=0, column=column, columnspan=span, sticky='w')
         self.control_vars, self.pad_boxes, self.pad_icons = {'key': {}, 'pad': {}}, {}, {}
@@ -1589,17 +1706,17 @@ class Launcher:
             return tk.Canvas(parent, width=size, height=size, bg=PANEL, highlightthickness=0, bd=0)
         for r, (button, key, pad) in enumerate(CONTROLS, start=1):
             game_icon = icon_canvas(table)
-            game_icon.grid(row=r, column=0, sticky='w', pady=3)
+            game_icon.grid(row=r, column=0, sticky='w', pady=self.px(3))
             button_icons.draw(game_icon, button_icons.GAME_BUTTONS[button], 'playstation', size)
-            ttk.Label(table, text=_(PS_BUTTON_NAMES[button]), width=-14).grid(row=r, column=1, sticky='w', padx=(0, 12))
+            ttk.Label(table, text=_(PS_BUTTON_NAMES[button]), width=-14).grid(row=r, column=1, sticky='w', padx=self.px((0, 12)))
             key_var = tk.StringVar(value=saved.get('key', {}).get(button) or key)
             self.control_vars['key'][button] = key_var
-            ttk.Entry(table, textvariable=key_var, width=16).grid(row=r, column=2, sticky='w', padx=(0, 18))
+            ttk.Entry(table, textvariable=key_var, width=16).grid(row=r, column=2, sticky='w', padx=self.px((0, 18)))
             pad_name = saved.get('pad', {}).get(button) or pad
             pad_var = tk.StringVar(value=pad_name or '')
             self.control_vars['pad'][button] = pad_var
             pad_icon = icon_canvas(table)
-            pad_icon.grid(row=r, column=3, sticky='w', padx=(0, 6))
+            pad_icon.grid(row=r, column=3, sticky='w', padx=self.px((0, 6)))
             self.pad_icons[button] = pad_icon
             if pad:
                 box = ttk.Combobox(table, state='readonly', values=list(labels.values()),
@@ -1623,7 +1740,7 @@ class Launcher:
                        'game\'s pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert '
                        'and R3+L2 always open the port\'s menu. Applied when the game starts.'))
         self.ttk.Button(f, text=_('Reset to defaults'), command=self.reset_controls).grid(
-            row=self.next_row(f), column=0, sticky='w', pady=(14, 0))
+            row=self.next_row(f), column=0, sticky='w', pady=self.px((14, 0)))
 
     def draw_pad_icon(self, button):
         """The gamepad column's icon of a game button, in the chosen style (L2/R2: the triggers)."""
@@ -1675,6 +1792,8 @@ class Launcher:
         self.section(f, _('Launcher', 'Лаунчер'), top=4)
         self.row(f, _('Launcher language', 'Язык лаунчера'), self.choice(f, 'ui_language', 'app', UI_LANGUAGES),
                  _('Applies when the launcher opens again.', 'Применится при следующем открытии лаунчера.'))
+        self.row(f, _('GUI Scale'), self.choice(f, 'ui_scale', 'app', UI_SCALES),
+                 _('For launcher only. Applies after Save.'))
         self.check(f, 'discord_rpc', 'app', _('Show Discord Rich Presence', 'Показывать Discord Rich Presence'),
                    _('Shows only the game name and the time played on your Discord profile.',
                      'Показывает в профиле Discord только название игры и время в игре.'))
@@ -1683,30 +1802,30 @@ class Launcher:
             self.check(f, 'check_updates', 'app', _('Check for updates when the launcher opens',
                                                     'Проверять обновления при открытии лаунчера'))
         holder = ttk.Frame(f)
-        holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(10, 0))
+        holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((10, 0)))
         if WINDOWS:
             ttk.Button(holder, text=_('Check for updates', 'Проверить обновления'),
                        command=lambda: threading.Thread(target=self.check_update, args=(True,), daemon=True).start()
                        ).pack(side='left')
-        ttk.Button(holder, text=_('Desktop shortcut', 'Ярлык на рабочем столе'), command=self.shortcut).pack(side='left', padx=6)
+        ttk.Button(holder, text=_('Desktop shortcut', 'Ярлык на рабочем столе'), command=self.shortcut).pack(side='left', padx=self.px(6))
         ttk.Button(holder, text=_('Add to Steam'), command=self.add_to_steam).pack(side='left')
-        ttk.Label(holder, text=f'v{VERSION}', style='Muted.TLabel').pack(side='left', padx=10)
+        ttk.Label(holder, text=f'v{VERSION}', style='Muted.TLabel').pack(side='left', padx=self.px(10))
         if not WINDOWS:
             self.build_linux_options(f)
         self.section(f, _('Files'))
         holder = ttk.Frame(f)
-        holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(6, 0))
+        holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((6, 0)))
         ttk.Button(holder, text=_('Port folder', 'Папка порта'), command=lambda: self.open_path(DATA_DIR)).pack(side='left')
-        ttk.Button(holder, text='gow3.ini', command=lambda: self.open_path(ini_path())).pack(side='left', padx=6)
+        ttk.Button(holder, text='gow3.ini', command=lambda: self.open_path(ini_path())).pack(side='left', padx=self.px(6))
         holder = ttk.Frame(f)
-        holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(10, 0))
+        holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((10, 0)))
         ttk.Button(holder, text=_('Clear shader cache', 'Очистить кэш шейдеров'), command=self.clear_cache).pack(side='left')
         ttk.Label(holder, text=_('If the game only shows a black screen, this usually helps.',
                                  'Если игра показывает только чёрный экран, обычно это помогает.'),
-                  style='Muted.TLabel').pack(side='left', padx=10)
+                  style='Muted.TLabel').pack(side='left', padx=self.px(10))
         # Diagnostics: for development, folded away until asked for.
         toggle = ttk.Label(f, text='', style='Section.TLabel', cursor='hand2')
-        toggle.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(22, 2))
+        toggle.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((22, 2)))
         body = ttk.Frame(f)
         body.columnconfigure(1, weight=1)
         body_row = self.next_row(f)
@@ -1737,13 +1856,13 @@ class Launcher:
         tk, ttk = self.tk, self.ttk
         self.section(f, _('Log', 'Журнал'))
         buttons = ttk.Frame(f)
-        buttons.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(6, 8))
+        buttons.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((6, 8)))
         ttk.Button(buttons, text=_('Copy', 'Копировать'), command=self.copy_log).pack(side='left')
-        ttk.Button(buttons, text=_('Clear', 'Очистить'), command=lambda: self.set_log('')).pack(side='left', padx=6)
+        ttk.Button(buttons, text=_('Clear', 'Очистить'), command=lambda: self.set_log('')).pack(side='left', padx=self.px(6))
         holder = ttk.Frame(f)
         holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we')
         self.log = tk.Text(holder, wrap='none', height=18, bg='#0a0808', fg='#cfc6bc', insertbackground=TEXT,
-                           relief='flat', font=(MONO_FONT, 9), padx=8, pady=6, state='disabled', highlightthickness=0)
+                           relief='flat', font=self.font(MONO_FONT, 9), padx=self.px(8), pady=self.px(6), state='disabled', highlightthickness=0)
         bar = ttk.Scrollbar(holder, command=self.log.yview)
         self.log.configure(yscrollcommand=bar.set)
         bar.pack(side='right', fill='y')
@@ -1809,31 +1928,31 @@ class Launcher:
                       style='Muted.TLabel').pack(anchor='w')
         for index, name in enumerate(self.mod_order):
             line = ttk.Frame(self.mods_frame)
-            line.pack(fill='x', pady=1)
+            line.pack(fill='x', pady=self.px(1))
             var = tk.BooleanVar(value=old.get(name, name not in profile.get('disabled', [])))
             self.mod_vars[name] = var
             ttk.Button(line, text='▲', width=3, command=lambda i=index: self.move_mod(i, -1)).pack(side='left')
-            ttk.Button(line, text='▼', width=3, command=lambda i=index: self.move_mod(i, 1)).pack(side='left', padx=(2, 10))
+            ttk.Button(line, text='▼', width=3, command=lambda i=index: self.move_mod(i, 1)).pack(side='left', padx=self.px((2, 10)))
             has_patches = bool(patch_files(root / name))
             ttk.Checkbutton(line, text=f'{index + 1}.  {name}' + (_('   (game patches)') if has_patches else ''),
                             variable=var, command=self.refresh_conflicts).pack(side='left')
         if len(self.mod_order) > 1:
             ttk.Label(self.mods_frame, text=_('Lower in the list loads later and wins conflicts.',
                                               'Ниже в списке — загружается позже и перекрывает.'),
-                      style='Muted.TLabel').pack(anchor='w', pady=(4, 0))
+                      style='Muted.TLabel').pack(anchor='w', pady=self.px((4, 0)))
         self.conflict_label = ttk.Label(self.mods_frame, text='', justify='left', foreground='#e08080',
                                         wraplength=self.px(680))
-        self.conflict_label.pack(anchor='w', pady=(4, 0))
+        self.conflict_label.pack(anchor='w', pady=self.px((4, 0)))
         self.refresh_conflicts()
         if available:
             presets = ttk.Frame(self.mods_frame)
-            presets.pack(anchor='w', pady=(8, 0))
-            ttk.Label(presets, text=_('Preset', 'Пресет')).pack(side='left', padx=(0, 6))
+            presets.pack(anchor='w', pady=self.px((8, 0)))
+            ttk.Label(presets, text=_('Preset', 'Пресет')).pack(side='left', padx=self.px((0, 6)))
             self.preset_choice = ttk.Combobox(presets, values=sorted(load_json(MOD_PRESETS, {})), width=24)
             self.preset_choice.pack(side='left')
-            ttk.Button(presets, text=_('Load', 'Загрузить'), command=self.load_mod_preset).pack(side='left', padx=(6, 0))
-            ttk.Button(presets, text=_('Save', 'Сохранить'), command=self.save_mod_preset).pack(side='left', padx=(6, 0))
-            ttk.Button(presets, text=_('Delete', 'Удалить'), command=self.delete_mod_preset).pack(side='left', padx=(6, 0))
+            ttk.Button(presets, text=_('Load', 'Загрузить'), command=self.load_mod_preset).pack(side='left', padx=self.px((6, 0)))
+            ttk.Button(presets, text=_('Save', 'Сохранить'), command=self.save_mod_preset).pack(side='left', padx=self.px((6, 0)))
+            ttk.Button(presets, text=_('Delete', 'Удалить'), command=self.delete_mod_preset).pack(side='left', padx=self.px((6, 0)))
         chosen = load_json(DATA_DIR / 'patches.json', {})
         _title_id, game = game_profile_of(self.meta_dir())
         found = external_patches(Path(self.var('patches_dir', 'app').get() or DATA_DIR / 'patches'),
@@ -1966,7 +2085,11 @@ class Launcher:
         if not self.collect():
             return
         language = self.app.get('ui_language') or windows_language()
-        if language != LANG:
+        previous_scale = self.dpi
+        self.apply_ui_scale()
+        if self.dpi != previous_scale:
+            self.size_window()
+        if language != LANG or self.dpi != previous_scale:
             self.rebuild(language)
 
     def rebuild(self, language):
@@ -2210,18 +2333,18 @@ class Launcher:
             return
         tk, ttk = self.tk, self.ttk
         text = _('Version {} is available.', 'Доступна версия {}.').format(version)
-        box = tk.Frame(self.side, bg=CARD, highlightthickness=1, highlightbackground=ACCENT)
-        self.update_label = tk.Label(box, text=text, bg=CARD, fg=TEXT, font=(UI_FONT, 10, 'bold'),
+        box = tk.Frame(self.side, bg=CARD, highlightthickness=self.px(1), highlightbackground=ACCENT)
+        self.update_label = tk.Label(box, text=text, bg=CARD, fg=TEXT, font=self.font(UI_FONT, 10, 'bold'),
                                      wraplength=self.px(160), justify='left')
-        self.update_label.pack(anchor='w', padx=10, pady=(8, 6))
+        self.update_label.pack(anchor='w', padx=self.px(10), pady=self.px((8, 6)))
         buttons = tk.Frame(box, bg=CARD)
-        buttons.pack(fill='x', padx=10, pady=(0, 10))
+        buttons.pack(fill='x', padx=self.px(10), pady=self.px((0, 10)))
         self.update_button = ttk.Button(buttons, text=_('Update', 'Обновить'),
                                         command=lambda: self.install_update(version, url, page))
         self.update_button.pack(fill='x')
         ttk.Button(buttons, text=_("What's new", 'Что нового'), command=lambda: open_url(page)).pack(
-            fill='x', pady=(4, 0))
-        box.pack(fill='x', padx=(22, 18), pady=(0, 14), before=self.side_note)
+            fill='x', pady=self.px((4, 0)))
+        box.pack(fill='x', padx=self.px((22, 18)), pady=self.px((0, 14)), before=self.side_note)
         self.update_box = box
         self.pending_update = (version, url, page)
         if not self.process:
@@ -2546,7 +2669,7 @@ def main():
     import tkinter as tk
     from tkinter import filedialog, font, messagebox, ttk
     root = tk.Tk() if WINDOWS else tk.Tk(className='gow3')
-    if not WINDOWS:
+    if root.tk.call('tk', 'windowingsystem') == 'x11':
         root.configure(cursor=ARROW)
         for window in ('Toplevel', 'Dialog', 'TkFDialog', 'TkChooseDir'):  # dialogs: tk_messageBox, file pickers
             root.option_add(f'*{window}.cursor', ARROW)

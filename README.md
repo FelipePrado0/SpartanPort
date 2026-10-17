@@ -192,6 +192,15 @@ Settings are kept in `gow3.ini` (the game and the in-game menu) and in
 `%APPDATA%\gow3-launcher\settings.json` (the launcher). Saves, the shader cache and
 `last_run.log` go to the project's `user` folder.
 
+**GUI Scale:** choose **Auto**, **1x** or **2x** under **Advanced → Launcher**,
+then click **Save**. Text, controls and layout resize together, without changing
+game resolution. Auto follows the desktop scale reported by Tk, with X11/XWayland
+font DPI and window-scale fallbacks on Linux. On macOS, Retina scaling stays with
+the operating system. Manual 1x/2x sets the launcher's logical size, including text,
+icons, controls, scrollbars and spacing. Screen resolution alone does not select
+a scale. The choice is saved in
+`~/.config/gow3-launcher/settings.json` (or `$XDG_CONFIG_HOME/gow3-launcher/settings.json`).
+
 On **Performance → GPU data → Stream buffer memory**, choose **System RAM (cached, default)**,
 **System RAM (uncached)** or **GPU memory (previous behavior)**. System RAM can improve frame
 rates on NVIDIA laptops. The choice is saved and applies on the next game launch, including
