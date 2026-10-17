@@ -1,4 +1,5 @@
 // gow3: SDL3 window for the Vulkan swapchain (X11 or Wayland).
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -12,11 +13,30 @@
 
 namespace Frontend {
 
+// gow3: a window opens at the render resolution chosen in the launcher (or the in-game menu); one too
+// large for the screen's usable area (with room for the title bar) opens maximized, restoring to that
+// size shrunk to fit. The picture is scaled to the window either way. True when shrunk.
+static bool StartSize(s32& width, s32& height) {
+    constexpr int title_room = 48;
+    const std::vector<std::string> names = Gow3Graphics::ResolutionNames();
+    const int index = std::clamp(Gow3Settings::Get().render_resolution.load(), 0, int(names.size()) - 1);
+    const auto [w, h] = Gow3Graphics::ResolutionSize(names[index]);
+    double scale = 1.0;
+    SDL_Rect usable{};
+    if (SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &usable) && usable.w > 0 && usable.h > title_room) {
+        scale = std::min({1.0, double(usable.w) / w, double(usable.h - title_room) / h});
+    }
+    width = std::max(320, int(w * scale));
+    height = std::max(180, int(h * scale));
+    return scale < 1.0;
+}
+
 WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}, height{height_} {
     // Gamepads are sampled by runtime_pad.c; their events are pumped here with the window's.
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         UNREACHABLE_MSG("Failed to initialize SDL video: {}", SDL_GetError());
     }
+    const bool too_large = StartSize(width_, height_);
     SDL_PropertiesID props = SDL_CreateProperties();
     SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, SDL_WINDOWPOS_CENTERED);
@@ -24,6 +44,7 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, width_);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height_);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, too_large);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
     base_title = title;
     window = SDL_CreateWindowWithProperties(props);

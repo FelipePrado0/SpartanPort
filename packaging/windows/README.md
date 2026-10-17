@@ -82,7 +82,7 @@ window) and `gow3-gpu-capabilities.exe`.
 | glibc `nanosleep`, monotonic condition variables | High-resolution waitable timers (`compat_sleep_ns`; winpthreads' sleep rounds to 15.6 ms); semaphore deadlines use `CLOCK_REALTIME` (winpthreads rejects monotonic condition variables). |
 | `libgow3gpu.so` | `libgow3gpu.a`, linked into `gow3-probe.exe` by CMake (`gpu/CMakeLists.txt`), with a manifest for UTF-8 paths and long paths. |
 | `execlp bash run.sh` (in-game restart) | `run.py` puts its command line in `GOW3_RESTART_COMMAND`; the new launch waits for the old process (`--after PID`). The launcher keeps the game in a job object. |
-| Mod overlay with symlinks | Symlinks when allowed (Developer Mode), else junctions for folders and hard links for files. |
+| Mod overlay with symlinks | Symlinks when allowed (Developer Mode), else junctions for folders and hard links for files. On a network share (SMB), which refuses junctions too, folders are mirrored with hard links so the game still reads real files through the view. |
 
 Diagnostics added on the way: `GOW3_FRAME_DUMP_TRIGGER=<file>` writes the guest display buffer
 and the presented image of the next frame to `GOW3_DUMP_DIR` (raw 32-bit pixels), which also

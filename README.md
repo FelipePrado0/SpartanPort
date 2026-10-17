@@ -124,7 +124,7 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   the Windows launcher (not tested there yet).
 - **Steam Deck / SteamOS (Gaming Mode):** if Steam tries to launch the AppImage with Proton, open
   the shortcut's **Properties → Compatibility** and select **Steam Linux Runtime** instead of Proton.
-  The AppImage is a native Linux application.
+  The AppImage is a native Linux application. If it fails to launch using **Steam Linux Runtime**, open the shortcut’s **Properties → Compatibility** and select **Default** to use the host libraries instead.
 - **Menu entry:** the AppImage writes `~/.local/share/applications/gow3.desktop` when it starts, so
   the launcher and the game window show their icon in the dock; **Advanced → Linux** turns it off and
   removes the entry. When another tool (Gear Lever, AppImageLauncher…) already made an entry that
@@ -137,10 +137,10 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
 - Controller (DualSense, Xbox and others, through SDL3) and keyboard at the same time, both
   remappable.
 - **In-game button icons** (opt-in, off by default): the PlayStation button icons in the game can
-  show your controller's, Xbox or Nintendo ones (Game page, Controls).
+  show your controller's, Xbox or Nintendo ones, or the keyboard keys you play with (Game page, Controls).
 - Saving and loading: the save list is shown on screen, as on the PS4. Autosave works too. The
   launcher backs the saves up before every start.
-- Patches: render resolution of 480p, 720p, 1440p, 1800p or 4K, corrupted texture fix and skip
+- Patches: render resolution of 480p, 720p, 900p, 1440p, 1800p or 4K, corrupted texture fix and skip
   videos with the X button (community); engine frame rate of 120 FPS (kvicken) or 240 FPS
   (adapted by Felipe Prado).
 - **Ultrawide (beta):** 21:9, 32:9 and 16:10 render resolutions (3440x1440 tested) with a wider field of view
@@ -192,6 +192,15 @@ Settings are kept in `gow3.ini` (the game and the in-game menu) and in
 `%APPDATA%\gow3-launcher\settings.json` (the launcher). Saves, the shader cache and
 `last_run.log` go to the project's `user` folder.
 
+**GUI Scale:** choose **Auto**, **1x** or **2x** under **Advanced → Launcher**,
+then click **Save**. Text, controls and layout resize together, without changing
+game resolution. Auto follows the desktop scale reported by Tk, with X11/XWayland
+font DPI and window-scale fallbacks on Linux. On macOS, Retina scaling stays with
+the operating system. Manual 1x/2x sets the launcher's logical size, including text,
+icons, controls, scrollbars and spacing. Screen resolution alone does not select
+a scale. The choice is saved in
+`~/.config/gow3-launcher/settings.json` (or `$XDG_CONFIG_HOME/gow3-launcher/settings.json`).
+
 On **Performance → GPU data → Stream buffer memory**, choose **System RAM (cached, default)**,
 **System RAM (uncached)** or **GPU memory (previous behavior)**. System RAM can improve frame
 rates on NVIDIA laptops. The choice is saved and applies on the next game launch, including
@@ -236,11 +245,13 @@ touchpad click) and L1 + View opens photo mode (the left click). On a DualSense 
 works as on the PS4, and Share/Create works like View.
 
 **In-game button icons** (off by default) are chosen in the launcher's Game page, Controls section, under
-*In-game button icons*: *Match my controller*, *Xbox* or *Nintendo*. They replace the PlayStation icons in the
+*In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* or *Keyboard*. They replace the PlayStation icons in the
 tutorial, move-list and quick-time prompts; the pause-menu controller drawing stays a DualShock 4.
+*Keyboard* shows the key that presses each button, following your keyboard mapping (a changed key shows
+on the next start); *Match my controller* shows the keys too when no gamepad is connected.
 The launcher writes a patched copy of two game files into the port's data folder and never changes
 your game folder. A new controller is picked up after a restart. Without the launcher, set
-`GOW3_GLYPH_STYLE` to `auto`, `xbox` or `nintendo` before starting `run.py`.
+`GOW3_GLYPH_STYLE` to `auto`, `xbox`, `nintendo` or `keyboard` before starting `run.py`.
 
 In the menu: L1/R1 or Q/E switch tabs. In the save list: arrows or the d-pad choose, Enter or
 Cross confirm, Esc or Circle cancel.
@@ -282,6 +293,10 @@ for every overlay configuration.
 
 ## Troubleshooting
 
+- Executable format errors: source builds accept plaintext PS4 SELF containers and unpacked
+  little-endian x86-64 ELF executables and modules. A valid unpacked ELF was previously rejected
+  with `prepare failed: expected PS4 SELF`. Files in another format and encrypted/compressed
+  SELF segments still need a correctly prepared game dump.
 - Black screen at start: use the latest release, which includes the startup deadlock patch.
   If it persists, report your GPU, driver, game build and **Advanced → Log** output. Clearing
   the shader cache is not a general fix and requires rebuilding it on the next launch.
