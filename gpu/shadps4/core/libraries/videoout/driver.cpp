@@ -334,10 +334,14 @@ void VideoOutDriver::Flip(const Request& req) {
         static u64 last_proc_flt, last_copy_ns, last_copy_bytes, last_rf, last_trf, last_twf;
         const u64 rf = Gow3Stats::read_faults.load(), trf = Gow3Stats::t_read_faults.load(),
                   twf = Gow3Stats::t_write_faults.load();
-        // gow3: every frame over 40 ms after the first, at most 10 per 5 s window.
+        // gow3: every frame over 40 ms (GOW3_STALL_MS) after the first, at most 10 per 5 s window.
+        static const double stall_ms = [] {
+            const char* value = std::getenv("GOW3_STALL_MS");
+            return value ? std::atof(value) : 40.0;
+        }();
         static bool primed = false;
         static u32 stalls_shown = 0;
-        const bool stall = primed && frame_ms > 40.0 && stalls_shown < 10;
+        const bool stall = primed && frame_ms > stall_ms && stalls_shown < 10;
         stalls_shown += stall;
         primed = true;
         // Waits and work inside the long frame (window counters are reset every 5 s, so the
