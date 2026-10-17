@@ -171,8 +171,8 @@ if [[ $is_darwin -eq 1 ]]; then
         done
         libraries=(-L"$PWD/bin/lib" "${libraries[@]}")
     fi
-    gpu=(-Lout/gpu -lgow3gpu -Wl,-rpath,'@loader_path/gpu' -Wl,-rpath,'@executable_path/gpu' -Wl,-rpath,'@loader_path/lib' -Wl,-rpath,'@executable_path/lib' -Wl,-rpath,"$PWD/out/gpu" -Wl,-export_dynamic -framework Metal -framework Foundation -framework QuartzCore)
-    probe_link_flags=(-Wl,-pie -Wl,-rpath,'@loader_path/lib' -Wl,-rpath,'@executable_path/lib')
+    gpu=(-Lout/gpu -lgow3gpu -Wl,-rpath,'@loader_path/gpu' -Wl,-rpath,'@executable_path/gpu' -Wl,-rpath,'@loader_path/lib' -Wl,-rpath,'@executable_path/lib' -Wl,-rpath,'@loader_path/../bin/lib' -Wl,-rpath,'@loader_path/../bin/gpu' -Wl,-rpath,'@loader_path/../out/gpu' -Wl,-rpath,"$PWD/bin/lib" -Wl,-rpath,"$PWD/out/gpu" -Wl,-export_dynamic -framework Metal -framework Foundation -framework QuartzCore)
+    probe_link_flags=(-Wl,-pie -Wl,-rpath,'@loader_path/lib' -Wl,-rpath,'@executable_path/lib' -Wl,-rpath,'@loader_path/../bin/lib' -Wl,-rpath,'@loader_path/../bin/gpu' -Wl,-rpath,'@loader_path/../out/gpu' -Wl,-rpath,"$PWD/bin/lib" -Wl,-rpath,"$PWD/out/gpu")
     arch_flags=(-arch x86_64)
 else
     gpu=(-Lout/gpu -lgow3gpu -Wl,-rpath,'$ORIGIN/gpu' -Wl,-rpath,"$PWD/out/gpu" -rdynamic)
@@ -200,19 +200,19 @@ if [[ $is_darwin -eq 1 && -d bin ]]; then
     fi
 fi
 if [[ ${1:-} == --test ]]; then
-    "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${includes[@]}" -I. -Isrc tests/test_pad.c "${libraries[@]}" -o out/pad-test
+    "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${probe_link_flags[@]}" "${includes[@]}" -I. -Isrc tests/test_pad.c "${libraries[@]}" -o out/pad-test
     out/pad-test
-    "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_runtime.c "${runtime[@]}" out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/runtime-test
+    "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${probe_link_flags[@]}" "${includes[@]}" -I. -Isrc tests/test_runtime.c "${runtime[@]}" out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/runtime-test
     out/runtime-test
     "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -Isrc tests/test_file_mods.c -o out/file-mods-test
     out/file-mods-test
-    "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_sema.c "${runtime[@]}" out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/sema-test
+    "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${probe_link_flags[@]}" "${includes[@]}" -I. -Isrc tests/test_sema.c "${runtime[@]}" out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/sema-test
     out/sema-test
     "$CC" "${arch_flags[@]}" -std=c11 -D_GNU_SOURCE -O2 -g -Wall -Wextra -Werror -I. -Isrc tests/test_content.c src/runtime_content.c -o out/content-test
     out/content-test
-    "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${includes[@]}" -I. -Isrc tests/test_mp3.c src/runtime_mp3.c out/libatrac9.a -lm "${libraries[@]}" -o out/mp3-test
+    "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${probe_link_flags[@]}" "${includes[@]}" -I. -Isrc tests/test_mp3.c src/runtime_mp3.c out/libatrac9.a -lm "${libraries[@]}" -o out/mp3-test
     out/mp3-test tests/data/sine.mp3
-    "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${includes[@]}" -I. -Isrc tests/test_videodec.c "${libraries[@]}" -o out/videodec-test
+    "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${probe_link_flags[@]}" "${includes[@]}" -I. -Isrc tests/test_videodec.c "${libraries[@]}" -o out/videodec-test
     out/videodec-test tests/data/tiny.h264
     "$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_services.c -o out/services-test
     out/services-test

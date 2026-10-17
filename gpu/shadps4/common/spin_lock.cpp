@@ -31,11 +31,16 @@ void ThreadPause() {
 
 } // Anonymous namespace
 
+#include <thread>
+
 namespace Common {
 
 void SpinLock::lock() {
-    while (lck.test_and_set(std::memory_order_acquire)) {
+    for (unsigned spins = 0; lck.test_and_set(std::memory_order_acquire); ++spins) {
         ThreadPause();
+        if ((spins & 63) == 0) {
+            std::this_thread::yield();
+        }
     }
 }
 

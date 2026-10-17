@@ -222,7 +222,7 @@ struct PageManager::Impl {
     }
 
     std::array<PageState, NUM_ADDRESS_PAGES> cached_pages{};
-#ifdef PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
+#if defined(PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP) || defined(__APPLE__)
     using LockType = Common::AdaptiveMutex;
 #else
     using LockType = Common::SpinLock;
