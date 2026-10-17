@@ -63,6 +63,12 @@ static int initialized, opened, sdl_ready;
 static SDL_Gamepad *gamepad;
 static size_t reads;
 static uint8_t connected_count;
+static SDL_Scancode right_stick_keys[4] = {
+    SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT
+};
+static SDL_Scancode left_stick_keys[4] = {
+    SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A, SDL_SCANCODE_D
+};
 
 static uint64_t now_us(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t); return (uint64_t)t.tv_sec*1000000u+(uint64_t)t.tv_nsec/1000u; }
 static uint8_t axis(int16_t v) { int x=(v+32768)>>8; return (uint8_t)(x<0 ? 0 : x>255 ? 255 : x); }
@@ -202,6 +208,54 @@ static void load_button_maps(void) {
     loaded=true;
     const int pad=apply_button_map(&pad_map,getenv("GOW3_PAD_MAP"),false);
     const int keys=apply_button_map(&key_map,getenv("GOW3_KEY_MAP"),true);
+    const char *spec = getenv("GOW3_RIGHT_STICK_MAP");
+    if (spec && *spec) {
+        char copy[256], *entry;
+        snprintf(copy, sizeof(copy), "%s", spec);
+        for (entry = copy; entry;) {
+            char *next = strchr(entry, ',');
+            char *equals;
+            int axis = -1;
+            if (next) *next++ = 0;
+            equals = strchr(entry, '=');
+            if (equals) {
+                *equals++ = 0;
+                if (!strcmp(entry, "up")) axis = 0;
+                else if (!strcmp(entry, "down")) axis = 1;
+                else if (!strcmp(entry, "left")) axis = 2;
+                else if (!strcmp(entry, "right")) axis = 3;
+                if (axis >= 0) {
+                    SDL_Scancode key = SDL_GetScancodeFromName(equals);
+                    if (key != SDL_SCANCODE_UNKNOWN) right_stick_keys[axis] = key;
+                }
+            }
+            entry = next;
+        }
+    }
+    spec = getenv("GOW3_LEFT_STICK_MAP");
+    if (spec && *spec) {
+        char copy[256], *entry;
+        snprintf(copy, sizeof(copy), "%s", spec);
+        for (entry = copy; entry;) {
+            char *next = strchr(entry, ',');
+            char *equals;
+            int axis = -1;
+            if (next) *next++ = 0;
+            equals = strchr(entry, '=');
+            if (equals) {
+                *equals++ = 0;
+                if (!strcmp(entry, "up")) axis = 0;
+                else if (!strcmp(entry, "down")) axis = 1;
+                else if (!strcmp(entry, "left")) axis = 2;
+                else if (!strcmp(entry, "right")) axis = 3;
+                if (axis >= 0) {
+                    SDL_Scancode key = SDL_GetScancodeFromName(equals);
+                    if (key != SDL_SCANCODE_UNKNOWN) left_stick_keys[axis] = key;
+                }
+            }
+            entry = next;
+        }
+    }
     if (pad || keys) printf("Runtime: pad map: %d gamepad and %d keyboard buttons remapped\n",pad,keys);
 }
 
@@ -247,10 +301,13 @@ static void sample_host(PadData *d) {
     for (size_t i=0;i<key_map.count;++i) if (k[key_map.entries[i].source]) d->buttons|=key_map.entries[i].ps;
     if (d->buttons & BTN_L2) d->l2=255;
     if (d->buttons & BTN_R2) d->r2=255;
-    key_axis(&d->left_x,k[SDL_SCANCODE_A],k[SDL_SCANCODE_D]);
-    key_axis(&d->left_y,k[SDL_SCANCODE_W],k[SDL_SCANCODE_S]);
-    key_axis(&d->right_x,k[SDL_SCANCODE_LEFT],k[SDL_SCANCODE_RIGHT]);
-    key_axis(&d->right_y,k[SDL_SCANCODE_UP],k[SDL_SCANCODE_DOWN]);
+    if (!runtime_mouse_enabled()) {
+        key_axis(&d->left_x,k[left_stick_keys[2]],k[left_stick_keys[3]]);
+        key_axis(&d->left_y,k[left_stick_keys[0]],k[left_stick_keys[1]]);
+    }
+    key_axis(&d->right_x,k[right_stick_keys[2]],k[right_stick_keys[3]]);
+    key_axis(&d->right_y,k[right_stick_keys[0]],k[right_stick_keys[1]]);
+    runtime_mouse_add_stick(d->left_x, d->left_y, d->timestamp);
 }
 
 /* GOW3_PAD_FILE=<file>: scripted input for automated runs. The file holds whitespace-separated
@@ -365,6 +422,7 @@ static void replay_sample(PadData *d) {
  * name) stay hidden until released: the game would take them as a new press. */
 static int hold_after_capture;
 static void sample(PadData *d) {
+    int32_t mouse_x, mouse_y;
     sample_host(d);
     if (gow3gpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */
@@ -376,6 +434,14 @@ static void sample(PadData *d) {
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
     play_click(d);
+    d->buttons |= runtime_mouse_pad_buttons();
+    runtime_mouse_take_pad_motion(&mouse_x, &mouse_y);
+    if (mouse_x || mouse_y) {
+        int x = (int)d->left_x + mouse_x;
+        int y = (int)d->left_y + mouse_y;
+        d->left_x = (uint8_t)(x < 0 ? 0 : x > 255 ? 255 : x);
+        d->left_y = (uint8_t)(y < 0 ? 0 : y > 255 ? 255 : y);
+    }
     if (hold_after_capture) {
         if (d->buttons) d->buttons=0;
         else hold_after_capture=0;

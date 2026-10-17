@@ -2,6 +2,7 @@
 #define GOW3_RUNTIME_H
 #include <stdint.h>
 #include <stddef.h>
+#include "runtime_mouse.h"
 #ifdef _WIN32
 #include "compat_win.h"
 /* No signals on Windows: the exception handler resumes the thread in gow3_longjmp

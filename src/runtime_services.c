@@ -532,15 +532,32 @@ static ABI int32_t discmap_8a82(const char *path,int64_t offset,int64_t size,int
     (void)path; (void)offset; (void)size; (void)flags; (void)r1; (void)r2; return DISC_MAP_NO_BITMAP;
 }
 
-/* ---- Devices that are absent: mouse, microphone, voice chat ---- */
-/* A mouse port opens but never reports a connected device. */
-static ABI int32_t mouse_open(int32_t user,int32_t type,int32_t index,const void *param) { (void)user; (void)type; (void)index; (void)param; return new_id(); }
-static ABI int32_t mouse_read(int32_t handle,unsigned char *data,int32_t count) {
-    (void)handle;
-    if (!data || count<1) return (int32_t)0x80DF0001;
-    memset(data,0,40); return 1; /* timestamp 0, connected=false */
+/* ---- Mouse, microphone and voice chat ---- */
+static int mouse_initialized, mouse_opened;
+static ABI int32_t mouse_init(void) {
+    runtime_mouse_configure();
+    mouse_initialized = 1;
+    return 0;
 }
-static ABI int32_t mouse_close(int32_t handle) { (void)handle; return 0; }
+static ABI int32_t mouse_open(int32_t user,int32_t type,int32_t index,const void *param) {
+    (void)param;
+    if (!mouse_initialized || user != 1 || type != 0 || index != 0) return (int32_t)0x80920001;
+    if (mouse_opened) return (int32_t)0x80920004;
+    mouse_opened = 1;
+    return 1;
+}
+static ABI int32_t mouse_read(int32_t handle,unsigned char *data,int32_t count) {
+    if (handle != 1 || !mouse_opened) return (int32_t)0x80920003;
+    if (!data || count<1 || count>64) return (int32_t)0x80920001;
+    runtime_mouse_read((RuntimeMouseData *)data);
+    return 1;
+}
+static ABI int32_t mouse_close(int32_t handle) {
+    if (handle != 1 || !mouse_opened) return (int32_t)0x80920003;
+    mouse_opened = 0;
+    runtime_mouse_focus_lost();
+    return 0;
+}
 static ABI int32_t audio_in_open(void) { return AUDIO_IN_NOT_OPENED; }
 
 
@@ -664,7 +681,7 @@ static const RuntimeExport exports[]={
     {"scePlayGoGetLocus",playgo_locus}, {"scePlayGoSetInstallSpeed",playgo_speed},
     {"scePlayGoGetInstallSpeed",playgo_get_speed}, {"scePlayGoGetProgress",playgo_progress},
     {"scePlayGoSetToDoList",playgo_todo}, {"scePlayGoClose",playgo_close}, {"scePlayGoTerminate",playgo_terminate},
-    {"sceMouseInit",ok_void}, {"sceMouseOpen",mouse_open}, {"sceMouseRead",mouse_read}, {"sceMouseClose",mouse_close},
+    {"sceMouseInit",mouse_init}, {"sceMouseOpen",mouse_open}, {"sceMouseRead",mouse_read}, {"sceMouseClose",mouse_close},
     {"sceAudioInOpen",audio_in_open},
     {"sceDiscMapIsRequestOnHDD",discmap_on_hdd}, {"sceDiscMap_8A828CAEE7EDD5E9",discmap_8a82},
     {"sceVoiceInit",ok_void}, {"sceVoiceEnd",ok_void},

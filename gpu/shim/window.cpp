@@ -9,6 +9,9 @@
 #include "gow3_overlay.h"
 #include "gow3_graphics.h"
 #include "gow3_settings.h"
+extern "C" {
+#include "../../src/runtime.h"
+}
 
 namespace Frontend {
 
@@ -62,8 +65,9 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
         Gow3Settings::Get().display_mode = Gow3Graphics::Borderless;
     }
     ApplyDisplayMode(Gow3Settings::Get().display_mode);
-    // gow3: the game has no mouse; the in-game menu draws its own cursor (Gow3Overlay::SetOpen).
+    // Mouse input is relative while the game is active; the overlay switches back to an OS cursor.
     SDL_HideCursor();
+    runtime_mouse_configure();
     int w = 0, h = 0;
     SDL_GetWindowSizeInPixels(window, &w, &h);
     width = w;
@@ -131,6 +135,14 @@ bool WindowSDL::PollEvents() {
         ApplyDisplayMode(mode);
     }
     SDL_Event event;
+    static bool relative_mouse;
+    const bool want_relative = runtime_mouse_enabled() && !Gow3Overlay::CapturesInput();
+    if (want_relative != relative_mouse) {
+        SDL_SetWindowRelativeMouseMode(window, want_relative);
+        if (want_relative) SDL_HideCursor();
+        else SDL_ShowCursor();
+        relative_mouse = want_relative;
+    }
     while (SDL_PollEvent(&event)) {
         if (text_active && (event.type == SDL_EVENT_TEXT_INPUT || event.type == SDL_EVENT_KEY_DOWN)) {
             std::scoped_lock lock{text_mutex};
@@ -161,6 +173,26 @@ bool WindowSDL::PollEvents() {
         }
         if (Gow3Overlay::HandleEvent(event)) {
             continue;
+        }
+        if (runtime_mouse_enabled()) {
+            switch (event.type) {
+            case SDL_EVENT_MOUSE_MOTION:
+                runtime_mouse_event_motion((int32_t)event.motion.xrel, (int32_t)event.motion.yrel);
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+                runtime_mouse_event_button((uint8_t)event.button.button,
+                                            event.type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+                break;
+            case SDL_EVENT_MOUSE_WHEEL:
+                runtime_mouse_event_wheel((int32_t)event.wheel.y);
+                break;
+            case SDL_EVENT_WINDOW_FOCUS_LOST:
+                runtime_mouse_focus_lost();
+                break;
+            default:
+                break;
+            }
         }
         switch (event.type) {
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:

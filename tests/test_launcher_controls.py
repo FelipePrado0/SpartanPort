@@ -97,6 +97,19 @@ class ControlMapTest(unittest.TestCase):
         self.assertEqual(launcher.game_environment({**settings, 'parallel_warmup': False})['GOW3_PARALLEL_WARMUP'], '0')
         self.assertEqual(launcher.game_environment({**settings, 'background_warmup': False})['GOW3_BACKGROUND_WARMUP'], '0')
 
+    def test_mouse_environment(self):
+        settings = {**launcher.APP_DEFAULTS, 'mouse_enabled': False, 'stick_mouse': True,
+                    'mouse_sensitivity': '1.25', 'stick_mouse_sensitivity': '10', 'mouse_invert_y': True}
+        env = launcher.game_environment(settings)
+        self.assertEqual(env['GOW3_MOUSE'], '0')
+        self.assertEqual(env['GOW3_STICK_MOUSE'], '1')
+        self.assertEqual(env['GOW3_MOUSE_SENSITIVITY'], '1.25')
+        self.assertEqual(env['GOW3_STICK_MOUSE_SENSITIVITY'], '10')
+        self.assertEqual(env['GOW3_MOUSE_INVERT_Y'], '1')
+        self.assertEqual(env['GOW3_MOUSE_MAP'], 'left=cross,middle=triangle,right=circle')
+        self.assertEqual(env['GOW3_RIGHT_STICK_MAP'], 'up=Up,down=Down,left=Left,right=Right')
+        self.assertEqual(env['GOW3_LEFT_STICK_MAP'], 'up=W,down=S,left=A,right=D')
+
     def test_temporal_upscaler_stays_off_with_a_saved_2_1_8_switch(self):
         # 2.1.8 showed the experimental switch; a player who turned it on must not keep it on now that it is hidden.
         for saved in (True, False, None):

@@ -58,7 +58,7 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 NEW_GROUP = {} if WINDOWS else {'start_new_session': True}
 UI_FONT, MONO_FONT, SERIF_FONT = 'Segoe UI', 'Consolas', 'Georgia'
 # This build; GitHub release tags are windows-v<VERSION>.
-VERSION = '2.3.0'
+VERSION = '2.4.1'
 RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
@@ -315,6 +315,13 @@ APP_DEFAULTS = {'ui_language': 'en', 'game_dir': os.environ.get('GOW3_GAME_DIR',
                 'gpu_id': '', 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
+                'mouse_enabled': True, 'stick_mouse': False, 'mouse_sensitivity': '1.0',
+                'stick_mouse_sensitivity': '8.0', 'mouse_invert_y': False,
+                'mouse_left_button': 'cross', 'mouse_middle_button': 'triangle', 'mouse_right_button': 'circle',
+                'right_stick_up': 'Up', 'right_stick_down': 'Down',
+                'right_stick_left': 'Left', 'right_stick_right': 'Right',
+                'left_stick_up': 'W', 'left_stick_down': 'S',
+                'left_stick_left': 'A', 'left_stick_right': 'D',
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
                 'glyph_style': 'off'}
 
@@ -347,6 +354,9 @@ PAD_STYLES = {
 
 GLYPH_STYLES = [('off', ('Original (default)',)), ('auto', ('Match my controller',)), ('xbox', ('Xbox',)),
                 ('nintendo', ('Nintendo',))]
+MOUSE_BUTTONS = [('', ('None',)), ('cross', ('Cross',)), ('circle', ('Circle',)),
+                 ('triangle', ('Triangle',)), ('square', ('Square',)), ('l1', ('L1',)),
+                 ('r1', ('R1',)), ('l2', ('L2',)), ('r2', ('R2',)), ('options', ('Options',))]
 
 
 def control_changes(values, kind):
@@ -762,6 +772,22 @@ def game_environment(s):
     for kind, name in (('key', 'GOW3_KEY_MAP'), ('pad', 'GOW3_PAD_MAP')):
         if value := control_map(s.get('controls', {}), kind):
             env[name] = value
+    env['GOW3_MOUSE'] = '1' if s.get('mouse_enabled', True) else '0'
+    env['GOW3_STICK_MOUSE'] = '1' if s.get('stick_mouse', False) else '0'
+    env['GOW3_MOUSE_SENSITIVITY'] = str(s.get('mouse_sensitivity', '1.0'))
+    env['GOW3_STICK_MOUSE_SENSITIVITY'] = str(s.get('stick_mouse_sensitivity', '8.0'))
+    env['GOW3_MOUSE_INVERT_Y'] = '1' if s.get('mouse_invert_y', False) else '0'
+    mouse_map = ','.join(f'{side}={s[key]}' for side, key in (
+        ('left', 'mouse_left_button'), ('middle', 'mouse_middle_button'), ('right', 'mouse_right_button'))
+                         if s.get(key) in ('cross', 'circle', 'triangle', 'square', 'l1', 'r1', 'l2', 'r2', 'options'))
+    if mouse_map:
+        env['GOW3_MOUSE_MAP'] = mouse_map
+    env['GOW3_RIGHT_STICK_MAP'] = ','.join(f'{direction}={s[key]}' for direction, key in (
+        ('up', 'right_stick_up'), ('down', 'right_stick_down'),
+        ('left', 'right_stick_left'), ('right', 'right_stick_right')) if s.get(key))
+    env['GOW3_LEFT_STICK_MAP'] = ','.join(f'{direction}={s[key]}' for direction, key in (
+        ('up', 'left_stick_up'), ('down', 'left_stick_down'),
+        ('left', 'left_stick_left'), ('right', 'left_stick_right')) if s.get(key))
     glyph_style = s.get('glyph_style')
     env.pop('GOW3_GLYPH_STYLE', None)
     if glyph_style in ('auto', 'xbox', 'nintendo'):
@@ -1465,6 +1491,34 @@ class Launcher:
         strength.trace_add('write', show)
         show()
         self.row(f, _('Vibration'), holder, _("Strength of the gamepad's vibration; 0% turns it off."))
+        self.section(f, _('Mouse'))
+        self.check(f, 'mouse_enabled', 'app', _('Enable mouse input'),
+               _('Uses relative mouse movement and mouse buttons in the game.'))
+        self.check(f, 'stick_mouse', 'app', _('Map left analog stick to mouse movement'),
+               _('Adds left-stick movement to the mouse camera input.'))
+        self.check(f, 'mouse_invert_y', 'app', _('Invert mouse and stick Y'))
+        mouse_sensitivity = ttk.Entry(f, textvariable=self.var('mouse_sensitivity', 'app'), width=12)
+        self.row(f, _('Mouse sensitivity'), mouse_sensitivity,
+             _('1.0 is unchanged; values above 1.0 are faster.'))
+        stick_sensitivity = ttk.Entry(f, textvariable=self.var('stick_mouse_sensitivity', 'app'), width=12)
+        self.row(f, _('Stick-to-mouse sensitivity'), stick_sensitivity,
+             _('Higher values make a partially deflected stick move the camera faster.'))
+        self.row(f, _('Left mouse button'), self.choice(f, 'mouse_left_button', 'app', MOUSE_BUTTONS),
+             _('The left mouse button can press a game button.'))
+        self.row(f, _('Middle mouse button'), self.choice(f, 'mouse_middle_button', 'app', MOUSE_BUTTONS))
+        self.row(f, _('Right mouse button'), self.choice(f, 'mouse_right_button', 'app', MOUSE_BUTTONS))
+        self.section(f, _('Right analog stick'))
+        self.note(f, _('Keyboard keys for camera pan. SDL names such as Up, Down, Left, Right, I, J, K, L, or F1.'), top=4)
+        for direction, key in (('up', 'right_stick_up'), ('down', 'right_stick_down'),
+                       ('left', 'right_stick_left'), ('right', 'right_stick_right')):
+            self.row(f, _('Right stick ' + direction),
+                 ttk.Entry(f, textvariable=self.var(key, 'app'), width=16))
+        self.section(f, _('Left analog stick'))
+        self.note(f, _('Keyboard keys for movement. Disabled while mouse-left-stick mode is enabled.'), top=4)
+        for direction, key in (('up', 'left_stick_up'), ('down', 'left_stick_down'),
+                       ('left', 'left_stick_left'), ('right', 'left_stick_right')):
+            self.row(f, _('Left stick ' + direction),
+                 ttk.Entry(f, textvariable=self.var(key, 'app'), width=16))
         table = ttk.Frame(f)
         table.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(16, 0))
         for column, span, title in ((0, 2, _('GAME BUTTON')), (2, 1, _('KEYBOARD')), (3, 2, _('GAMEPAD'))):
