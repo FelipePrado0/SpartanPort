@@ -1185,6 +1185,53 @@ EXTRA['pt'].update({
         'Somente para o inicializador. Aplica-se após Salvar.',
 })
 
+EXTRA['pt'].update({
+    '1 file': '1 arquivo',
+    'Change textures, sounds and text. Your game files stay untouched.': 'Troque texturas, sons e textos. Os arquivos do jogo não são alterados.',
+    'Details': 'Detalhes',
+    'Drop a mod folder or .zip in the mods folder.': 'Coloque a pasta ou o .zip do mod na pasta de mods.',
+    'Hide': 'Ocultar',
+    'Load order': 'Ordem de carga',
+    'Lower in the list wins': 'O mais abaixo na lista vence',
+    'No mods yet': 'Nenhum mod ainda',
+    'Open folder': 'Abrir pasta',
+    'Open mod folder': 'Abrir pasta do mod',
+    'Open mods folder': 'Abrir pasta de mods',
+    'Presets': 'Presets',
+    'Website': 'Site',
+    'by {}': 'por {}',
+    'game patches': 'patches de jogo',
+    '{} files': '{} arquivos',
+    '{} of {} active': '{} de {} ativos',
+    '… and {} more': '… e mais {}',
+    '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 arquivo é alterado por dois mods. {} vence.',
+    '⚠ {} also in {}. {} wins.': '⚠ {} também em {}. {} vence.',
+    '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ {} arquivos são alterados por mais de um mod. Vence o mais abaixo na lista.',
+})
+EXTRA['es'].update({
+    '1 file': '1 archivo',
+    'Change textures, sounds and text. Your game files stay untouched.': 'Cambia texturas, sonidos y textos. Los archivos del juego no se modifican.',
+    'Details': 'Detalles',
+    'Drop a mod folder or .zip in the mods folder.': 'Coloca la carpeta o el .zip del mod en la carpeta de mods.',
+    'Hide': 'Ocultar',
+    'Load order': 'Orden de carga',
+    'Lower in the list wins': 'Gana el que está más abajo',
+    'No mods yet': 'Aún no hay mods',
+    'Open folder': 'Abrir carpeta',
+    'Open mod folder': 'Abrir carpeta del mod',
+    'Open mods folder': 'Abrir carpeta de mods',
+    'Presets': 'Preajustes',
+    'Website': 'Sitio web',
+    'by {}': 'por {}',
+    'game patches': 'parches del juego',
+    '{} files': '{} archivos',
+    '{} of {} active': '{} de {} activos',
+    '… and {} more': '… y {} más',
+    '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 archivo lo cambian dos mods. Gana {}.',
+    '⚠ {} also in {}. {} wins.': '⚠ {} también en {}. Gana {}.',
+    '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ {} archivos los cambian varios mods. Gana el que está más abajo.',
+})
+
 _tables = {}
 
 
