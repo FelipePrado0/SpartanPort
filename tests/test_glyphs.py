@@ -78,6 +78,26 @@ class GlyphTableTest(unittest.TestCase):
         self.assertEqual(set(button for _form, names in glyphs.TEXTURES.values()
                              for button in ([names] if isinstance(names, str) else names)) - set(glyphs.DEFAULT_MAP), set())
 
+    def test_key_map_moves_the_key(self):
+        keys = glyphs.key_buttons('Cross = Q, square=Left Shift,l2=G,nonsense=Y,circle=')
+        self.assertEqual((keys['cross'], keys['square'], keys['l2']), ('Q', 'Left Shift', 'G'))
+        self.assertEqual(keys['circle'], 'Left Shift')  # empty: the default
+        self.assertEqual(glyphs.key_buttons('l3=None')['l3'], 'Z')
+        self.assertEqual(glyphs.key_buttons(''), glyphs.DEFAULT_KEYS)
+        self.assertEqual(set(glyphs.DEFAULT_KEYS), set(glyphs.DEFAULT_MAP))
+
+    def test_key_caps(self):
+        self.assertEqual(glyphs.glyph('Space', 'keyboard'), ('plate', 'SPACE', glyphs.INK))
+        self.assertEqual(glyphs.glyph('Left Shift', 'keyboard')[:2], ('plate', 'SHIFT'))
+        self.assertEqual(glyphs.glyph('e', 'keyboard')[:2], ('key', 'E'))
+        self.assertEqual(glyphs.glyph('a', 'keyboard')[:2], ('key', 'A'))  # a key, not the south button
+        self.assertEqual(glyphs.glyph('F10', 'keyboard')[:2], ('plate', 'F10'))
+        self.assertEqual(glyphs.glyph('Up', 'keyboard')[:2], ('key', 'dpup'))
+        self.assertEqual(glyphs.glyph('Keypad 4', 'keyboard')[:2], ('plate', 'NUM 4'))
+        self.assertEqual(glyphs.glyph('Return', 'keyboard')[:2], ('plate', 'ENTER'))
+        self.assertEqual(glyphs.glyph('Mouse Left', 'keyboard')[:2], ('plate', 'LMB'))
+        self.assertEqual(glyphs.glyph('Mouse Back', 'keyboard')[:2], ('key', 'M4'))
+
     def test_gamepad_line(self):
         line = 'CPU: complete\nGamepad: type=xboxone south=a east=b west=x north=y name=Xbox One Controller\n'
         self.assertEqual(glyphs.parse_gamepad(line),
@@ -92,7 +112,8 @@ class GlyphTableTest(unittest.TestCase):
     def test_resolve(self):
         pad = 'Gamepad: type=switchpro south=b east=a west=y north=x name=Pro Controller'
         self.assertEqual(glyphs.resolve('auto', pad)[::2], ('nintendo', 'Pro Controller'))
-        self.assertEqual(glyphs.resolve('auto', 'Gamepad: none'), ('playstation', None, ''))
+        self.assertEqual(glyphs.resolve('auto', 'Gamepad: none'), ('keyboard', None, ''))  # no gamepad: the keys
+        self.assertEqual(glyphs.resolve('keyboard', pad), ('keyboard', None, ''))
         self.assertEqual(glyphs.resolve('xbox', pad), ('xbox', None, ''))  # chosen: its own letters
         self.assertEqual(glyphs.resolve('off', pad)[0], 'playstation')
         self.assertEqual(glyphs.resolve('', pad)[0], 'playstation')
@@ -127,11 +148,21 @@ class GlyphPatchTest(unittest.TestCase):
 
     def test_remap_and_style_change_the_pixels(self):
         drawn = []
-        for style, pad_map in (('xbox', ''), ('nintendo', ''), ('xbox', 'cross=b')):
+        for style, pad_map, key_map in (('xbox', '', ''), ('nintendo', '', ''), ('xbox', 'cross=b', ''),
+                                        ('keyboard', '', ''), ('keyboard', '', 'cross=Q,l1=G')):
             data = wad()
-            glyphs.patch(data, style, None, pad_map)
+            glyphs.patch(data, style, None, pad_map, key_map)
             drawn.append(bytes(data))
-        self.assertEqual(len(set(drawn)), 3)
+        self.assertEqual(len(set(drawn)), 5)
+
+    def test_the_keyboard_follows_only_the_key_map(self):
+        copy = glyphs.build(self.game, self.out, 'keyboard')['/app0/EXEC/WAD/PS4_LE/R_UI.WAD']
+        first = copy.read_bytes()
+        with mock.patch.object(glyphs, 'patch', side_effect=AssertionError('redrawn')):
+            glyphs.build(self.game, self.out, 'keyboard', None, 'cross=b')  # the gamepad map: no change
+        glyphs.build(self.game, self.out, 'keyboard', None, '', 'cross=Q')
+        self.assertNotEqual(copy.read_bytes(), first)
+        self.assertEqual(self.source.read_bytes(), wad())
 
     def test_a_texture_of_another_size_is_left_alone(self):
         data = bytearray(texture('TX7FF61BF7.CC842B4F.dds', 128, 128, 'DXT1', length=1000))
@@ -206,7 +237,7 @@ class RunGlyphsTest(unittest.TestCase):
                 mock.patch.object(glyphs, 'build', return_value=copies) as build:
             arguments, style = run.glyph_mounts(env, Path('probe'), Path('game'), self.out)
         self.assertEqual(started.call_args.args[0], ['probe', '--gamepad'])
-        self.assertEqual(build.call_args.args[2:], ('xbox', {'south': 'a', 'east': 'b', 'west': 'x', 'north': 'y'}, 'cross=b'))
+        self.assertEqual(build.call_args.args[2:], ('xbox', {'south': 'a', 'east': 'b', 'west': 'x', 'north': 'y'}, 'cross=b', ''))
         self.assertEqual(arguments, ['--mount', f'/app0/EXEC/WAD/PS4_LE/R_UI.WAD={self.out / "glyphs/R_UI.WAD"}'])
         self.assertEqual(style, 'xbox')
 
@@ -214,7 +245,24 @@ class RunGlyphsTest(unittest.TestCase):
         with mock.patch.object(run.subprocess, 'run') as started, mock.patch.object(glyphs, 'build', return_value={}) as build:
             self.assertEqual(run.glyph_mounts({'GOW3_GLYPH_STYLE': 'nintendo'}, Path('probe'), Path('game'), self.out), ([], None))
         started.assert_not_called()
-        self.assertEqual(build.call_args.args[2:], ('nintendo', None, ''))
+        self.assertEqual(build.call_args.args[2:], ('nintendo', None, '', ''))
+
+    def test_keyboard_passes_the_key_map(self):
+        copies = {'/app0/EXEC/WAD/PS4_LE/R_UI.WAD': self.out / 'glyphs/R_UI.WAD'}
+        env = {'GOW3_GLYPH_STYLE': 'keyboard', 'GOW3_KEY_MAP': 'cross=Q'}
+        with mock.patch.object(run.subprocess, 'run') as started, \
+                mock.patch.object(glyphs, 'build', return_value=copies) as build:
+            self.assertEqual(run.glyph_mounts(env, Path('probe'), Path('game'), self.out)[1], 'keyboard')
+        started.assert_not_called()
+        self.assertEqual(build.call_args.args[2:], ('keyboard', None, '', 'cross=Q'))
+
+    def test_auto_without_a_gamepad_shows_the_keys(self):
+        pad = mock.Mock(stdout='Gamepad: none\n')
+        with mock.patch.object(run.subprocess, 'run', return_value=pad), \
+                mock.patch.object(glyphs, 'build', return_value={'/app0/x': self.out / 'x'}) as build:
+            self.assertEqual(run.glyph_mounts({'GOW3_GLYPH_STYLE': 'auto', 'GOW3_KEY_MAP': 'square=G'}, Path('probe'),
+                                              Path('game'), self.out)[1], 'keyboard')
+        self.assertEqual(build.call_args.args[2:], ('keyboard', None, '', 'square=G'))
 
     def test_a_failure_starts_the_game_with_its_own_glyphs(self):
         with mock.patch.object(run.subprocess, 'run', side_effect=OSError('no probe')):

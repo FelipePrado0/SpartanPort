@@ -68,6 +68,7 @@ class StreamMemoryLauncherTest(unittest.TestCase):
                 mock.patch.dict(os.environ, {'GOW3_CONFIG': str(Path(folder) / 'gow3.ini')}):
             app = launcher.Launcher.__new__(launcher.Launcher)
             app.tk, app.ttk, app.root, app.dpi = tk, ttk, root, 1.0
+            app.fonts = {}
             app.content, app.pages, app.vars = ttk.Frame(root), {}, {}
             app.app = dict(launcher.APP_DEFAULTS)
             app.ini, app.ini_lines = launcher.load_ini()
