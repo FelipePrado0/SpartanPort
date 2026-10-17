@@ -282,6 +282,10 @@ for every overlay configuration.
 
 ## Troubleshooting
 
+- Executable format errors: source builds accept plaintext PS4 SELF containers and unpacked
+  little-endian x86-64 ELF executables and modules. A valid unpacked ELF was previously rejected
+  with `prepare failed: expected PS4 SELF`. Files in another format and encrypted/compressed
+  SELF segments still need a correctly prepared game dump.
 - Black screen at start: use the latest release, which includes the startup deadlock patch.
   If it persists, report your GPU, driver, game build and **Advanced → Log** output. Clearing
   the shader cache is not a general fix and requires rebuilding it on the next launch.

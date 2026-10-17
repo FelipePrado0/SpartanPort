@@ -23,6 +23,14 @@ int main() {
     assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 0);
     // #238: 900p (1600x900) sits between 720p and 1440p in the built-in list.
     assert(G::Resolutions[3] == "900p" && G::Resolutions[2] == "720p" && G::Resolutions[4] == "1440p");
+    // The window's starting size (window.cpp): built-in names, a mod's size, native otherwise.
+    assert(G::ResolutionSize("720p") == std::make_pair(1280, 720));
+    assert(G::ResolutionSize("900p") == std::make_pair(1600, 900));
+    assert(G::ResolutionSize("4K") == std::make_pair(3840, 2160));
+    assert(G::ResolutionSize("3440x1440") == std::make_pair(3440, 1440));
+    assert(G::ResolutionSize("native") == std::make_pair(1920, 1080));
+    assert(G::ResolutionSize("8K") == std::make_pair(1920, 1080));
+    for (const auto name : G::Resolutions) assert(G::ResolutionSize(name).first > 0);
     assert(G::ParseEngineFps(240) == 240 && G::ParseEngineFps(90) == 120);
     assert(G::ParseFramesQueued(2) == 2 && G::ParseFramesQueued(0) == 0 && G::ParseFramesQueued(5) == 1);
     assert(G::ParseRcasStrength(100) == 100 && G::ParseRcasStrength(101) == 75 && G::ParseRcasStrength(-1) == 75);
