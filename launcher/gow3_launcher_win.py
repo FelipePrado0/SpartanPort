@@ -1724,11 +1724,14 @@ class Launcher:
                                  'Если игра показывает только чёрный экран, обычно это помогает.'),
                   style='Muted.TLabel').pack(side='left', padx=10)
         # Diagnostics: for development, folded away until asked for.
-        toggle = ttk.Label(f, text='', style='Section.TLabel', cursor='hand2')
-        toggle.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=(22, 2))
-        body = ttk.Frame(f)
+        diagnostics = ttk.Frame(f)
+        diagnostics.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we')
+        diagnostics.columnconfigure(1, weight=1)
+        toggle = ttk.Label(diagnostics, text='', style='Section.TLabel', cursor='hand2')
+        toggle.grid(row=0, column=0, columnspan=2, sticky='w', pady=(22, 2))
+        body = ttk.Frame(diagnostics)
         body.columnconfigure(1, weight=1)
-        body_row = self.next_row(f)
+        body_row = self.next_row(diagnostics)
         self.check(body, 'frame_stats', 'app', _('Frame statistics in the log (every 5 s)', 'Статистика кадров в журнале (раз в 5 с)'))
         self.check(body, 'gpu_profile', 'app', _('GPU time per pass in the log', 'Профиль GPU в журнале'))
         self.check(body, 'perf_diag', 'app', _('GPU wait and readback report in the log (every 5 s)'),
