@@ -2,8 +2,8 @@
 """Controller button glyphs for the game's own prompts (tutorials, move list, QTE buttons).
 
 The prompts are DDS textures in R_UI.WAD (one more copy of the QTE circle in R_PERM.WAD). build()
-writes patched copies of those WADs, with the glyphs of an Xbox or Nintendo controller drawn over
-the PlayStation ones, and returns the guest paths run.py mounts them on. The game folder is never
+writes patched copies of those WADs, with the glyphs of an Xbox or Nintendo controller (or the
+keyboard keys of GOW3_KEY_MAP) drawn over the PlayStation ones, and returns the guest paths run.py mounts them on. The game folder is never
 written: a texture keeps its size and format, so only its pixels change inside the copy.
 
 WAD (little-endian): entries of a 0x40 header (u16 tag, u16 flags, u32 size, name[56]) and `size`
@@ -37,6 +37,18 @@ TEXTURES = {
 DEFAULT_MAP = {'cross': 'a', 'circle': 'b', 'square': 'x', 'triangle': 'y', 'l1': 'leftshoulder',
                'r1': 'rightshoulder', 'l2': 'lefttrigger', 'r2': 'righttrigger', 'l3': 'leftstick',
                'r3': 'rightstick', 'options': 'start', 'touchpad_right': 'back'}
+# The key (SDL scancode name) that presses each game button (src/runtime_pad.c key_map).
+DEFAULT_KEYS = {'cross': 'Space', 'circle': 'Left Shift', 'square': 'E', 'triangle': 'Q', 'l1': '1', 'r1': '3',
+                'l2': 'R', 'r2': 'F', 'l3': 'Z', 'r3': 'C', 'options': 'Return', 'touchpad_right': 'Backspace'}
+# Key caps for the longer SDL key names (casefolded); the others print their name in capitals.
+KEY_LABELS = {'space': 'SPACE', 'left shift': 'SHIFT', 'right shift': 'R SHIFT', 'left ctrl': 'CTRL',
+              'right ctrl': 'R CTRL', 'left alt': 'ALT', 'right alt': 'ALT GR', 'left gui': 'WIN',
+              'right gui': 'WIN', 'return': 'ENTER', 'keypad enter': 'ENTER', 'return2': 'ENTER',
+              'backspace': 'BKSP', 'tab': 'TAB', 'escape': 'ESC', 'capslock': 'CAPS', 'delete': 'DEL',
+              'insert': 'INS', 'pageup': 'PG UP', 'pagedown': 'PG DN', 'home': 'HOME', 'end': 'END',
+              'up': 'dpup', 'down': 'dpdown', 'left': 'dpleft', 'right': 'dpright',
+              'mouse left': 'LMB', 'mouse right': 'RMB', 'mouse middle': 'MMB', 'mouse back': 'M4',
+              'mouse forward': 'M5', 'wheel up': 'WH UP', 'wheel down': 'WH DN'}
 POSITIONS = {'a': 'south', 'b': 'east', 'x': 'west', 'y': 'north'}  # SDL names are positions
 STYLES = {
     'xbox': {'faces': {'south': 'a', 'east': 'b', 'west': 'x', 'north': 'y'},
@@ -46,6 +58,7 @@ STYLES = {
     'nintendo': {'faces': {'south': 'b', 'east': 'a', 'west': 'y', 'north': 'x'}, 'colors': {},
                  'labels': {'leftshoulder': 'L', 'rightshoulder': 'R', 'lefttrigger': 'ZL', 'righttrigger': 'ZR',
                             'leftstick': 'LS', 'rightstick': 'RS', 'start': 'plus', 'back': 'minus'}},
+    'keyboard': {'faces': {}, 'colors': {}, 'labels': {}},  # key caps: see key_label
 }
 ICONS = {'menu', 'view', 'plus', 'minus', 'dpup', 'dpdown', 'dpleft', 'dpright'}
 INK = (240, 240, 240)
@@ -74,9 +87,36 @@ def pad_buttons(pad_map):
     return buttons
 
 
+def key_buttons(key_map):
+    """Game button -> keyboard key, with a GOW3_KEY_MAP value ('cross=Q,circle=Left Shift') applied.
+    Unlike the gamepad, L2/R2 are keys too. 'None' (a button left without a key) keeps the default."""
+    buttons = dict(DEFAULT_KEYS)
+    for entry in (key_map or '').split(','):
+        game, _, host = (part.strip() for part in entry.partition('='))
+        game = game.casefold()
+        if game in buttons and host and host.casefold() != 'none':
+            buttons[game] = host
+    return buttons
+
+
+def key_label(name):
+    """What a key cap shows for an SDL key name: 'Left Shift' -> 'SHIFT', 'Up' -> the dpup arrow,
+    'Keypad 4' -> 'NUM 4', 'e' -> 'E'."""
+    key = name.strip().casefold()
+    if key in KEY_LABELS:
+        return KEY_LABELS[key]
+    if key.startswith('keypad '):
+        return 'NUM ' + name.strip()[7:].upper()
+    return name.strip().upper()
+
+
 def glyph(host, style, faces=None):
     """(shape, label, color) of a gamepad button: a letter or an ICONS name on a disc or a plate.
-    `faces` are the letters this controller prints on south/east/west/north."""
+    `faces` are the letters this controller prints on south/east/west/north. With the keyboard
+    style `host` is a key name, drawn on a square cap (one or two characters) or a wide one."""
+    if style == 'keyboard':
+        label = key_label(host)
+        return ('key' if len(label) <= 2 or label in ICONS else 'plate'), label, INK
     look = STYLES[style]
     if host in POSITIONS:
         letter = (faces or {}).get(POSITIONS[host])
@@ -103,10 +143,12 @@ def parse_gamepad(output):
 
 def resolve(choice, probe_output=''):
     """(style, faces, controller name) for a GOW3_GLYPH_STYLE value. 'auto' follows the connected
-    gamepad (the PlayStation glyphs without one); a chosen style uses its own letters."""
+    gamepad (the keyboard keys without one); a chosen style uses its own letters."""
     if choice in STYLES:
         return choice, None, ''
-    return (parse_gamepad(probe_output) if choice == 'auto' else None) or ('playstation', None, '')
+    if choice != 'auto':
+        return 'playstation', None, ''
+    return parse_gamepad(probe_output) or ('keyboard', None, '')
 
 
 def draw_label(image, box, label, color):
@@ -148,7 +190,7 @@ def draw_inline(shape, label, color, width, height):
     from PIL import Image, ImageDraw
     w, h, k = width * SCALE, height * SCALE, SCALE
     image = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    if shape == 'disc':
+    if shape in ('disc', 'key'):
         d = min(w, h) - 2 * k
         box = ((w - d) // 2, (h - d) // 2, (w + d) // 2, (h + d) // 2)
     else:
@@ -167,36 +209,45 @@ def draw_inline(shape, label, color, width, height):
         edge.ellipse(box, outline=(14, 14, 14, 255), width=k * 3 // 2)
     else:
         edge.rounded_rectangle(box, 5 * k, outline=(14, 14, 14, 255), width=k * 3 // 2)
-    inset_x = size[0] * (0.2 if shape == 'disc' else 0.1)
-    inset_y = size[1] * (0.2 if shape == 'disc' else 0.16)
+    inset_x = size[0] * (0.2 if shape == 'disc' else 0.22 if shape == 'key' else 0.1)
+    inset_y = size[1] * (0.2 if shape in ('disc', 'key') else 0.16)
     draw_label(image, (box[0] + inset_x, box[1] + inset_y, box[2] - inset_x, box[3] - inset_y), label, color)
     return image.resize((width, height), Image.LANCZOS)
 
 
-def draw_prompt(label, color, width, height):
-    """A QTE label: bright on black (the game adds these textures to the picture)."""
-    from PIL import Image, ImageFilter
+def draw_prompt(label, color, width, height, cap=False):
+    """A QTE label: bright on black (the game adds these textures to the picture). `cap` frames it
+    as a keyboard key."""
+    from PIL import Image, ImageDraw, ImageFilter
     w, h = width * SCALE, height * SCALE
     layer = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    draw_label(layer, (w * 0.24, h * 0.2, w * 0.76, h * 0.8), label, color)
+    if cap:
+        side = min(w, h)
+        ImageDraw.Draw(layer).rounded_rectangle((w * 0.14, h * 0.14, w * 0.86, h * 0.86), side * 0.1,
+                                                outline=color, width=max(1, int(side * 0.035)))
+        draw_label(layer, (w * 0.26, h * 0.3, w * 0.74, h * 0.7), label, color)
+    else:
+        draw_label(layer, (w * 0.24, h * 0.2, w * 0.76, h * 0.8), label, color)
     image = Image.new('RGBA', (w, h), (0, 0, 0, 255))
     image.alpha_composite(layer.filter(ImageFilter.GaussianBlur(SCALE * 2.5)))
     image.alpha_composite(layer)
     return image.resize((width, height), Image.LANCZOS)
 
 
-def render(form, buttons, style, faces, pad_map, width, height):
+def render(form, buttons, style, faces, pad_map, width, height, key_map=''):
     """The picture that replaces a texture of TEXTURES, at its size."""
     from PIL import Image
-    hosts = pad_buttons(pad_map)
+    keyboard = style == 'keyboard'
+    hosts = key_buttons(key_map) if keyboard else pad_buttons(pad_map)
     if form == 'atlas':
         image = Image.new('RGBA', (width, height), (0, 0, 0, 255))
         for row, button in enumerate(buttons):
-            half = draw_prompt(glyph(hosts[button], style, faces)[1], INK, width, height // 2)
+            half = draw_prompt(glyph(hosts[button], style, faces)[1], INK, width, height // 2, keyboard)
             image.paste(half.rotate(180) if row == 0 else half, (0, row * (height // 2)))
         return image
     shape, label, color = glyph(hosts[buttons], style, faces)
-    return draw_inline(shape, label, color, width, height) if form == 'inline' else draw_prompt(label, color, width, height)
+    return (draw_inline(shape, label, color, width, height) if form == 'inline' else
+            draw_prompt(label, color, width, height, keyboard))
 
 
 def encode(image, fourcc, length):
@@ -216,7 +267,7 @@ def encode(image, fourcc, length):
     return pixels
 
 
-def patch(data, style, faces=None, pad_map=''):
+def patch(data, style, faces=None, pad_map='', key_map=''):
     """Replaces the glyph textures inside the WAD in `data` (a bytearray); returns how many."""
     count = 0
     for offset, size, name in entries(data):
@@ -231,7 +282,7 @@ def patch(data, style, faces=None, pad_map=''):
         height, width = struct.unpack_from('<II', data, dds + 12)
         form, buttons = TEXTURES[name[:10]]
         try:
-            data[dds + 128:end] = encode(render(form, buttons, style, faces, pad_map, width, height),
+            data[dds + 128:end] = encode(render(form, buttons, style, faces, pad_map, width, height, key_map),
                                          fourcc, end - dds - 128)
         except ValueError as error:
             print(f'Glyphs: {name}: {error}, left as it is', flush=True)
@@ -240,16 +291,20 @@ def patch(data, style, faces=None, pad_map=''):
     return count
 
 
-def build(game, out, style, faces=None, pad_map=''):
+def build(game, out, style, faces=None, pad_map='', key_map=''):
     """{guest path: patched copy} for run.py to mount; {} (and no copies) for the PlayStation
-    glyphs. The copies in out/glyphs are kept until the style, the mapping or the game's WADs
-    change."""
+    glyphs. The copies in out/glyphs are kept until the style, the mapping (the keyboard one for
+    the keyboard style, the gamepad one otherwise) or the game's WADs change."""
     target = Path(out) / 'glyphs'
     if style not in STYLES:
         shutil.rmtree(target, ignore_errors=True)
         return {}
+    if style == 'keyboard':
+        pad_map = ''
+    else:
+        key_map = ''
     sources = [(name, Path(game) / name) for name in WADS if (Path(game) / name).is_file()]
-    stamp = json.dumps([VERSION, style, faces, pad_map,
+    stamp = json.dumps([VERSION, style, faces, pad_map, *([key_map] if key_map else []),
                         [(name, path.stat().st_size, path.stat().st_mtime_ns) for name, path in sources]])
     stamp_file = target / 'stamp.json'
     made = sorted(path.name for path in target.glob('*.WAD')) if target.is_dir() else []
@@ -259,7 +314,7 @@ def build(game, out, style, faces=None, pad_map=''):
         made = []
         for name, path in sources:
             data = bytearray(path.read_bytes())
-            if patch(data, style, faces, pad_map):
+            if patch(data, style, faces, pad_map, key_map):
                 (target / path.name).write_bytes(data)
                 made.append(path.name)
         stamp_file.write_text(stamp)  # last: an interrupted build is redone

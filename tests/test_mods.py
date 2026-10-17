@@ -1,4 +1,5 @@
 from paths import ROOT
+import contextlib
 import importlib.util
 import json
 import os
@@ -7,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from unittest import mock
 import zipfile
@@ -48,6 +50,25 @@ class ModTests(unittest.TestCase):
         self.assertEqual((self.assets / 'a.wad').read_bytes(), b'original')
         self.assertFalse((self.assets / 'new.wad').exists())
         self.assertEqual((result / 'eboot.bin').read_bytes(), b'original executable')
+
+    def test_a_network_share_without_symlinks_or_junctions_still_overlays(self):
+        # A network share (SMB) refuses symlinks and junctions alike; only hard links work.
+        # The overlay must still merge the mod and leave the game folder untouched.
+        a = self.mod('A')
+        self.mod('A', b'new', 'new.wad')
+        def create_junction(src, dst):  # CreateJunction creates the dir, then refuses the reparse point
+            Path(dst).mkdir()
+            raise PermissionError(5, 'Access is denied')
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.object(Path, 'symlink_to', side_effect=PermissionError(5, 'Access is denied')))
+            stack.enter_context(mock.patch.object(os, 'name', 'nt'))
+            stack.enter_context(mock.patch.dict(sys.modules, {'_winapi': types.SimpleNamespace(CreateJunction=create_junction)}))
+            result = mods.build_overlay(self.game, self.root / 'out', [('A', a)])
+        folder = result / 'dvdroot_ps4' / 'data'
+        self.assertEqual((folder / 'a.wad').read_bytes(), b'mod')
+        self.assertEqual((folder / 'b.wad').read_bytes(), b'untouched')
+        self.assertEqual((folder / 'new.wad').read_bytes(), b'new')
+        self.assertEqual((self.assets / 'a.wad').read_bytes(), b'original')  # the game folder is untouched
 
     def test_last_mod_wins_and_reordering_changes_winner(self):
         a, b = self.mod('A', b'A'), self.mod('B', b'B')
@@ -310,3 +331,67 @@ class ModTests(unittest.TestCase):
         self.assertEqual(mounted['content'], 'mod')
         self.assertFalse(Path(mounted['path']).exists())
         self.assertEqual((self.assets/'a.wad').read_bytes(), b'original')
+
+
+class GodOfWarLayout(unittest.TestCase):
+    """The GOW3PC game keeps its data in EXEC and one folder per language at the game root, with
+    no dvdroot_ps4 folder (#473, #574)."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.game = self.root / 'CUSA01623'
+        for folder in ('EXEC/WAD/PS4_LE', 'PORTUGUESE/SOUNDS', 'sce_sys'):
+            (self.game / folder).mkdir(parents=True)
+        (self.game / 'eboot.bin').write_bytes(b'original executable')
+        (self.game / 'EXEC/WAD/PS4_LE/R_UI.WAD').write_bytes(b'original ui')
+        (self.game / 'PORTUGUESE/SOUNDS/X.XVAG').write_bytes(b'original voice')
+        self.moddir = self.root / 'mods'
+
+    def mod(self, name, path, contents=b'mod'):
+        file = self.moddir / name / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(contents)
+        return self.moddir / name
+
+    def overlay(self, *names):
+        return mods.build_overlay(self.game, self.root / 'out', [(n, self.moddir / n) for n in names])
+
+    def test_exec_and_language_folders_replace_game_files(self):
+        self.mod('UI', 'exec/wad/ps4_le/r_ui.wad', b'mod ui')
+        self.mod('UI', 'Portuguese/SOUNDS/X.XVAG', b'mod voice')
+        (self.moddir / 'UI' / 'readme.txt').write_text('ignored')
+        self.assertEqual(mods.discover(self.moddir), ['UI'])
+        view = self.overlay('UI')
+        self.assertEqual((view / 'EXEC/WAD/PS4_LE/R_UI.WAD').read_bytes(), b'mod ui')
+        self.assertEqual((view / 'PORTUGUESE/SOUNDS/X.XVAG').read_bytes(), b'mod voice')
+        self.assertFalse((view / 'readme.txt').exists())
+        self.assertEqual((self.game / 'EXEC/WAD/PS4_LE/R_UI.WAD').read_bytes(), b'original ui')
+
+    def test_dvdroot_prefix_is_dropped_when_the_game_has_none(self):
+        self.mod('Voice', 'dvdroot_ps4/PORTUGUESE/SOUNDS/X.XVAG', b'mod voice')
+        with mock.patch('sys.stderr') as log:
+            view = self.overlay('Voice')
+        self.assertEqual((view / 'PORTUGUESE/SOUNDS/X.XVAG').read_bytes(), b'mod voice')
+        self.assertFalse((view / 'dvdroot_ps4').exists())
+        self.assertIn('1 game files replaced, 0 added', ''.join(c.args[0] for c in log.write.call_args_list))
+
+    def test_wrapper_folder_around_exec(self):
+        self.mod('Pack', 'Pack v1.0/EXEC/WAD/PS4_LE/R_UI.WAD', b'wrapped')
+        self.assertEqual(mods.discover(self.moddir), ['Pack'])
+        self.assertEqual((self.overlay('Pack') / 'EXEC/WAD/PS4_LE/R_UI.WAD').read_bytes(), b'wrapped')
+
+    def test_system_files_are_refused_with_or_without_the_prefix(self):
+        self.mod('Bad', 'EXEC/WAD/PS4_LE/R_UI.WAD')
+        self.mod('Bad', 'sce_sys/param.sfo')
+        self.mod('Sneaky', 'dvdroot_ps4/eboot.bin')
+        for name in ('Bad', 'Sneaky'):
+            with self.assertRaises(ValueError):
+                self.overlay(name)
+        self.assertEqual((self.game / 'eboot.bin').read_bytes(), b'original executable')
+
+    def test_conflicts_match_across_layouts(self):
+        self.mod('A', 'EXEC/WAD/PS4_LE/R_UI.WAD')
+        self.mod('B', 'dvdroot_ps4/EXEC/WAD/PS4_LE/R_UI.WAD')
+        self.assertEqual(mods.conflicts(self.moddir, ['A', 'B']), [('EXEC/WAD/PS4_LE/R_UI.WAD', ['A', 'B'])])

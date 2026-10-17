@@ -98,6 +98,7 @@ class NoMsaaLauncherTest(unittest.TestCase):
                     mock.patch.object(launcher, 'list_gpus', return_value=ARC_LAPTOP):
                 app = launcher.Launcher.__new__(launcher.Launcher)
                 app.tk, app.ttk, app.root, app.dpi = tk, ttk, root, 1.0
+                app.fonts = {}
                 app.content, app.pages, app.vars = ttk.Frame(root), {}, {}
                 app.app = {**launcher.APP_DEFAULTS, 'gpu_id': gpu_id}
                 app.ini, app.ini_lines = launcher.load_ini()
