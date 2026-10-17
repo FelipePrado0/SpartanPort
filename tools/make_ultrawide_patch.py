@@ -113,9 +113,11 @@ def aspect_floats(aspect):
     return first + second
 
 
-def entry(image, text, reference_lines, width, height):
+def entry(image, text, reference_lines, width, height, fov=None):
+    """fov: the factor k of the field of view tangent, when it is not the one the shape gives (a portrait
+    picture: k < 1 narrows the horizontal view and zooms in)."""
     aspect = width / height
-    k = aspect / REFERENCE_ASPECT
+    k = fov if fov else aspect / REFERENCE_ASPECT
     area = width * height
     arena, dmem, gib = (('000000b0', 3072, '2.75') if area <= 2560 * 1440 else
                         ('000000d0', 4608, '3.25') if area <= 3200 * 1800 else ('000000f0', 6144, '3.75'))
@@ -142,7 +144,7 @@ def entry(image, text, reference_lines, width, height):
     pattern, at = signature(off, 8)
     lines.append((f'0x{ASPECT_SITE[0]:08x}', aspect_floats(aspect).hex(), pattern, at))
 
-    camera_sites = CAMERA_SITES if k > 1.0001 else []  # k <= 1: the picture is not wider than 16:9
+    camera_sites = CAMERA_SITES if abs(k - 1) > 0.0001 and (fov or k > 1.0001) else []  # no --fov and k <= 1: not wider than 16:9
     pads = free_pads(image, text, 1 + 2 * len(camera_sites)) if camera_sites else []
     constant = pads[0] if pads else None
 
@@ -166,7 +168,11 @@ def entry(image, text, reference_lines, width, height):
         # where the original code goes on: 8 bytes after the site
         targets.append((f'back{n}', None, f'0x{address + 8:08x}', site[0], str(int(site[1]) + 8)))
 
-    if camera_sites:
+    if camera_sites and k < 1:
+        what = (f'Portrait {width}x{height} ({aspect:.3f}:1). Sets the game output resolution and the display aspect ratio '
+                f'and narrows the horizontal field of view (x{k:.2f}) so the picture is not as tall as the fixed horizontal '
+                f'view would make it')
+    elif camera_sites:
         what = (f'Ultrawide {width}x{height} ({aspect:.3f}:1), Hor+. Sets the game output resolution and the display '
                 f'aspect ratio, widens the horizontal field of view so the 16:9 vertical view is kept (no zoom)')
     elif aspect >= REFERENCE_ASPECT * 0.99:  # 16:9 or a hair narrower: the picture is the game's own shape
@@ -236,6 +242,8 @@ def main():
     p.add_argument('--xml', type=Path, default=Path(__file__).resolve().parent.parent / 'patches/God_of_War_III_Remastered.xml',
                    help='the built-in patch file (the render resolution sites)')
     p.add_argument('--rebase', action='store_true')
+    p.add_argument('--fov', type=float, default=None,
+                   help='the factor k of the field of view tangent (default: from the shape; < 1 for a portrait picture)')
     a = p.parse_args()
     if a.rebase:
         if not a.mod:
@@ -243,7 +251,7 @@ def main():
         return rebase(a.mod, a.eboot, a.width, a.height)
     image, text = load(a.eboot)
     base = next(m for m in ET.parse(a.xml).getroot().iter('Metadata') if m.get('Name') == 'Resolution Patch - 1800p')
-    result, k, aspect = entry(image, text, list(base.iter('Line')), a.width, a.height)
+    result, k, aspect = entry(image, text, list(base.iter('Line')), a.width, a.height, a.fov)
     if not a.mod:
         print(result)
         return
@@ -253,7 +261,7 @@ def main():
     a.mod.parent.mkdir(parents=True, exist_ok=True)
     a.mod.write_text(xml.replace('</Patch>', result + '</Patch>'), encoding='utf-8')
     print(f'{name}: written to {a.mod} (aspect {aspect:.5f}, '
-          + (f'field of view x{k:.5f})' if k > 1.0001 else 'field of view unchanged)'))
+          + (f'field of view x{k:.5f})' if camera_sites else 'field of view unchanged)'))
 
 
 if __name__ == '__main__':
