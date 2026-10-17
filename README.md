@@ -124,7 +124,7 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   the Windows launcher (not tested there yet).
 - **Steam Deck / SteamOS (Gaming Mode):** if Steam tries to launch the AppImage with Proton, open
   the shortcut's **Properties → Compatibility** and select **Steam Linux Runtime** instead of Proton.
-  The AppImage is a native Linux application.
+  The AppImage is a native Linux application. If it fails to launch using **Steam Linux Runtime**, open the shortcut’s **Properties → Compatibility** and select **Default** to use the host libraries instead.
 - **Menu entry:** the AppImage writes `~/.local/share/applications/gow3.desktop` when it starts, so
   the launcher and the game window show their icon in the dock; **Advanced → Linux** turns it off and
   removes the entry. When another tool (Gear Lever, AppImageLauncher…) already made an entry that
