@@ -60,10 +60,10 @@ class DiagnosticsLayoutTest(unittest.TestCase):
     def check_layout(self, language, scale):
         with self.window(language, scale) as (root, app):
             widgets = list(descendants(app.pages['advanced']))
-            title = launcher.heading_text(launcher._('Diagnostics (for development)').upper())
+            title = launcher._('Diagnostics (for development)').upper()
             toggle = next(w for w in widgets if w.winfo_class() == 'TLabel'
                           and str(w.cget('text')).endswith(title))
-            heading = launcher.heading_text(launcher._('Log').upper())
+            heading = launcher._('Log').upper()
             log = next(w for w in widgets if w.winfo_class() == 'TLabel' and w.cget('text') == heading)
             hint = launcher._('Shows where the frame waits for the GPU and which reads cause it. For performance tests.')
             diagnostics_hint = next(w for w in widgets if w.winfo_class() == 'TLabel' and w.cget('text') == hint)
