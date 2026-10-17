@@ -16,6 +16,13 @@ extern "C" {
 
 namespace Frontend {
 
+// gow3: set by the pause key (any thread), cleared by it or a click in the window.
+static std::atomic<bool> mouse_paused{false};
+
+void ToggleMousePause() {
+    mouse_paused.store(!mouse_paused.load(std::memory_order_relaxed), std::memory_order_relaxed);
+}
+
 // gow3: a window opens at the render resolution chosen in the launcher (or the in-game menu); one too
 // large for the screen's usable area (with room for the title bar) opens maximized, restoring to that
 // size shrunk to fit. The picture is scaled to the window either way. True when shrunk.
@@ -228,9 +235,27 @@ bool WindowSDL::PollEvents() {
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             is_open = false;
             break;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            mouse_paused = false; // a click in the window takes the mouse back
+            break;
         default:
             break;
         }
+    }
+    // gow3: while the game has the mouse it stays in the window (relative mode: hidden, no edges,
+    // so a click cannot land on another monitor); the menu, the save list, a text dialog,
+    // another window or the game's pause menu (the pause key) get it back. Taken back, it starts
+    // at the window's centre; let go by the pause key, the system cursor shows.
+    const bool paused = mouse_paused.load(std::memory_order_relaxed);
+    const bool lock = Gow3Settings::Get().mouse_lock.load(std::memory_order_relaxed) && !text_active && !paused &&
+                      !Gow3Overlay::CapturesInput() && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS);
+    if (lock != mouse_locked) {
+        if (lock) SDL_WarpMouseInWindow(window, width / 2.0f, height / 2.0f);
+        if (SDL_SetWindowRelativeMouseMode(window, lock)) mouse_locked = lock;
+    }
+    if (const bool show = paused && !mouse_locked; show != cursor_shown) {
+        show ? SDL_ShowCursor() : SDL_HideCursor();
+        cursor_shown = show;
     }
     return is_open;
 }

@@ -86,6 +86,12 @@ class GlyphTableTest(unittest.TestCase):
         self.assertEqual(glyphs.key_buttons(''), glyphs.DEFAULT_KEYS)
         self.assertEqual(set(glyphs.DEFAULT_KEYS), set(glyphs.DEFAULT_MAP))
 
+    def test_rage_on_one_input_draws_its_key_on_l3_and_r3(self):
+        keys = glyphs.key_buttons('l3=None,r3=None,rage=Mouse Middle,grab=C')
+        self.assertEqual((keys['l3'], keys['r3']), ('Mouse Middle', 'Mouse Middle'))
+        keys = glyphs.key_buttons('l3=None,r3=V')  # no rage key: an unbound L3 keeps the default
+        self.assertEqual((keys['l3'], keys['r3']), ('Z', 'V'))
+
     def test_key_caps(self):
         self.assertEqual(glyphs.glyph('Space', 'keyboard'), ('plate', 'SPACE', glyphs.INK))
         self.assertEqual(glyphs.glyph('Left Shift', 'keyboard')[:2], ('plate', 'SHIFT'))

@@ -395,3 +395,68 @@ class GodOfWarLayout(unittest.TestCase):
         self.mod('A', 'EXEC/WAD/PS4_LE/R_UI.WAD')
         self.mod('B', 'dvdroot_ps4/EXEC/WAD/PS4_LE/R_UI.WAD')
         self.assertEqual(mods.conflicts(self.moddir, ['A', 'B']), [('EXEC/WAD/PS4_LE/R_UI.WAD', ['A', 'B'])])
+
+
+class ModInfo(unittest.TestCase):
+    """What the launcher's Mods page shows for a mod: mod.json, else the readme and an image."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.mod = Path(self.temp.name) / 'Gold Armor'
+        (self.mod / 'EXEC').mkdir(parents=True)
+        (self.mod / 'EXEC' / 'R_HERO00.WAD').write_bytes(b'x')
+
+    def test_mod_json_fields(self):
+        (self.mod / 'mod.json').write_text(json.dumps({
+            'name': 'Kratos Gold Armor', 'author': 'someone', 'version': '1.2',
+            'description': 'Golden armor.', 'url': 'https://example.com/mod'}), encoding='utf-8')
+        info = mods.mod_info(self.mod)
+        self.assertEqual((info['name'], info['author'], info['version'], info['description'], info['url']),
+                         ('Kratos Gold Armor', 'someone', '1.2', 'Golden armor.', 'https://example.com/mod'))
+        self.assertIsNone(info['image'])
+
+    def test_without_mod_json_the_folder_name_and_readme_are_used(self):
+        (self.mod / 'Readme.txt').write_text('\n  First line.\nSecond line.\n\n' + 'x' * 900, encoding='utf-8')
+        info = mods.mod_info(self.mod)
+        self.assertEqual(info['name'], 'Gold Armor')
+        self.assertTrue(info['description'].startswith('First line.\nSecond line.'))
+        self.assertLessEqual(len(info['description']), 400)
+        self.assertEqual((info['author'], info['version'], info['url']), ('', '', ''))
+
+    def test_invalid_mod_json_falls_back(self):
+        (self.mod / 'mod.json').write_text('{not json', encoding='utf-8')
+        self.assertEqual(mods.mod_info(self.mod)['name'], 'Gold Armor')
+        (self.mod / 'mod.json').write_text('["a list"]', encoding='utf-8')
+        self.assertEqual(mods.mod_info(self.mod)['name'], 'Gold Armor')
+
+    def test_only_web_links_are_kept(self):
+        (self.mod / 'mod.json').write_text(json.dumps({'url': 'file:///C:/Windows/system32'}), encoding='utf-8')
+        self.assertEqual(mods.mod_info(self.mod)['url'], '')
+
+    def test_preview_image_wins_over_other_images(self):
+        for name in ('a.jpg', 'screenshot.png', 'Preview.PNG'):
+            (self.mod / name).write_bytes(b'img')
+        self.assertEqual(mods.mod_info(self.mod)['image'].name, 'Preview.PNG')
+        (self.mod / 'Preview.PNG').unlink()
+        self.assertEqual(mods.mod_info(self.mod)['image'].name, 'screenshot.png')
+        (self.mod / 'screenshot.png').unlink()
+        self.assertEqual(mods.mod_info(self.mod)['image'].name, 'a.jpg')
+
+    def test_metadata_inside_a_wrapper_folder(self):
+        wrapper = Path(self.temp.name) / 'Pack'
+        (wrapper / 'Pack v1' / 'EXEC').mkdir(parents=True)
+        (wrapper / 'Pack v1' / 'EXEC' / 'R_UI.WAD').write_bytes(b'x')
+        (wrapper / 'Pack v1' / 'mod.json').write_text(json.dumps({'name': 'Wrapped'}), encoding='utf-8')
+        (wrapper / 'Pack v1' / 'cover.jpg').write_bytes(b'img')
+        self.assertEqual(mods.discover(Path(self.temp.name)), ['Gold Armor', 'Pack'])
+        info = mods.mod_info(wrapper)
+        self.assertEqual((info['name'], info['image'].name), ('Wrapped', 'cover.jpg'))
+
+    def test_mod_json_beside_the_wrapper_folder_keeps_the_mod(self):
+        wrapper = Path(self.temp.name) / 'Outer'
+        (wrapper / 'Outer v2' / 'EXEC').mkdir(parents=True)
+        (wrapper / 'Outer v2' / 'EXEC' / 'R_UI.WAD').write_bytes(b'x')
+        (wrapper / 'mod.json').write_text(json.dumps({'name': 'Outer Mod'}), encoding='utf-8')
+        self.assertIn('Outer', mods.discover(Path(self.temp.name)))
+        self.assertEqual(mods.mod_info(wrapper)['name'], 'Outer Mod')

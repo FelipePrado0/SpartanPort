@@ -89,13 +89,20 @@ def pad_buttons(pad_map):
 
 def key_buttons(key_map):
     """Game button -> keyboard key, with a GOW3_KEY_MAP value ('cross=Q,circle=Left Shift') applied.
-    Unlike the gamepad, L2/R2 are keys too. 'None' (a button left without a key) keeps the default."""
-    buttons = dict(DEFAULT_KEYS)
+    Unlike the gamepad, L2/R2 are keys too. 'None' (a button left without a key) keeps the default,
+    except L3/R3 with Rage of Sparta on one input: they show the rage key, which presses both."""
+    buttons, unbound, rage = dict(DEFAULT_KEYS), set(), ''
     for entry in (key_map or '').split(','):
         game, _, host = (part.strip() for part in entry.partition('='))
         game = game.casefold()
-        if game in buttons and host and host.casefold() != 'none':
+        if game == 'rage':
+            rage = host if host.casefold() != 'none' else ''
+        elif game in buttons and host.casefold() == 'none':
+            unbound.add(game)
+        elif game in buttons and host:
             buttons[game] = host
+    for game in unbound & {'l3', 'r3'} if rage else ():
+        buttons[game] = rage
     return buttons
 
 
