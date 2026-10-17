@@ -1003,6 +1003,14 @@ class Launcher:
     def meta_dir(self):
         return meta_folder(self.var('game_dir', 'app').get(), self.var('update_dir', 'app').get())
 
+    def artwork_file(self, name):
+        """Prefer an update's image, falling back to the base dump when it omits that file."""
+        preferred = Path(self.meta_dir() or '.') / 'sce_sys' / name
+        base = self.var('game_dir', 'app').get()
+        if preferred.is_file() or not base:
+            return preferred
+        return Path(base) / 'sce_sys' / name
+
     def px(self, size):
         if isinstance(size, tuple):
             return tuple(self.px(value) for value in size)
@@ -1041,7 +1049,7 @@ class Launcher:
         self.root.minsize(min(self.px(980), window_width), min(self.px(660), window_height))
 
     def set_icon(self):
-        game_icon = Path(self.meta_dir() or '.') / 'sce_sys' / 'icon0.png'
+        game_icon = self.artwork_file('icon0.png')
         self.icon = window_icon(self.root, self.tk, game_icon, PORT_DIR / 'launcher' / 'gow3.png',
                                 CONFIG_DIR / 'game_icon.ico')
 
@@ -1376,7 +1384,7 @@ class Launcher:
         w, h, bar = max(c.winfo_width(), self.px(400)), int(c['height']), self.px(44)
         folder = self.meta_dir()
         info = game_info(folder)
-        art = Path(folder or '.') / 'sce_sys' / 'pic1.png'
+        art = self.artwork_file('pic1.png')
         if self.banner_source != art:
             self.banner_source, self.banner_image, self.banner_size = art, None, None
             try:
@@ -1824,11 +1832,14 @@ class Launcher:
                                  'Если игра показывает только чёрный экран, обычно это помогает.'),
                   style='Muted.TLabel').pack(side='left', padx=self.px(10))
         # Diagnostics: for development, folded away until asked for.
-        toggle = ttk.Label(f, text='', style='Section.TLabel', cursor='hand2')
-        toggle.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((22, 2)))
-        body = ttk.Frame(f)
+        diagnostics = ttk.Frame(f)
+        diagnostics.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we')
+        diagnostics.columnconfigure(1, weight=1)
+        toggle = ttk.Label(diagnostics, text='', style='Section.TLabel', cursor='hand2')
+        toggle.grid(row=0, column=0, columnspan=2, sticky='w', pady=self.px((22, 2)))
+        body = ttk.Frame(diagnostics)
         body.columnconfigure(1, weight=1)
-        body_row = self.next_row(f)
+        body_row = self.next_row(diagnostics)
         self.check(body, 'frame_stats', 'app', _('Frame statistics in the log (every 5 s)', 'Статистика кадров в журнале (раз в 5 с)'))
         self.check(body, 'gpu_profile', 'app', _('GPU time per pass in the log', 'Профиль GPU в журнале'))
         self.check(body, 'perf_diag', 'app', _('GPU wait and readback report in the log (every 5 s)'),
@@ -2209,6 +2220,7 @@ class Launcher:
             return
         self.set_log('')
         self.exit_hint = None
+        self.hidden_for_game = False
         # The same last_run.log as --play, so a report from the PLAY button has the file too.
         run_log = open_play_log(self.app)
         try:
@@ -2226,7 +2238,15 @@ class Launcher:
         self.status.configure(text=_('Preparing the game; it opens in its own window…',
                                      'Подготовка игры; она откроется в своём окне…'), fg=TEXT)
         if self.app.get('close_on_play'):
-            self.root.after(5000, self.root.destroy)  # the game keeps running
+            self.root.after(5000, self.hide_for_game, self.process)
+
+    def hide_for_game(self, process):
+        # Keep the reader thread and the pipe alive until the game exits. An
+        # early failure should leave its error visible; an old timer must not
+        # hide the window after a different launch has started.
+        if self.process is process and process.poll() is None:
+            self.hidden_for_game = True
+            self.root.withdraw()
 
     def read_output(self, process, run_log=None):
         try:
@@ -2259,6 +2279,9 @@ class Launcher:
                     self.process = None
                     if self.job:
                         self.job.close()
+                    if getattr(self, 'hidden_for_game', False):
+                        self.root.destroy()
+                        return
                     self.refresh_status()
                 else:
                     self.exit_hint = exit_hint(item) or getattr(self, 'exit_hint', None)
@@ -2552,11 +2575,7 @@ def open_run_log(settings):
 
 
 def open_play_log(settings):
-    """The run log for the PLAY button. With 'close_on_play' the launcher exits 5 s after the
-    start and the reader thread dies with it: a truncated file would replace the previous full
-    log, so that mode leaves the file alone."""
-    if settings.get('close_on_play'):
-        return _NullLog()
+    """The PLAY log stays open while the game runs, including with a hidden launcher."""
     return open_run_log(settings)
 
 

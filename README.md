@@ -124,7 +124,7 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   the Windows launcher (not tested there yet).
 - **Steam Deck / SteamOS (Gaming Mode):** if Steam tries to launch the AppImage with Proton, open
   the shortcut's **Properties → Compatibility** and select **Steam Linux Runtime** instead of Proton.
-  The AppImage is a native Linux application.
+  The AppImage is a native Linux application. If it fails to launch using **Steam Linux Runtime**, open the shortcut’s **Properties → Compatibility** and select **Default** to use the host libraries instead.
 - **Menu entry:** the AppImage writes `~/.local/share/applications/gow3.desktop` when it starts, so
   the launcher and the game window show their icon in the dock; **Advanced → Linux** turns it off and
   removes the entry. When another tool (Gear Lever, AppImageLauncher…) already made an entry that
@@ -140,7 +140,7 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   show your controller's, Xbox or Nintendo ones (Game page, Controls).
 - Saving and loading: the save list is shown on screen, as on the PS4. Autosave works too. The
   launcher backs the saves up before every start.
-- Patches: render resolution of 480p, 720p, 1440p, 1800p or 4K, corrupted texture fix and skip
+- Patches: render resolution of 480p, 720p, 900p, 1440p, 1800p or 4K, corrupted texture fix and skip
   videos with the X button (community); engine frame rate of 120 FPS (kvicken) or 240 FPS
   (adapted by Felipe Prado).
 - **Ultrawide (beta):** 21:9, 32:9 and 16:10 render resolutions (3440x1440 tested) with a wider field of view
@@ -291,6 +291,10 @@ for every overlay configuration.
 
 ## Troubleshooting
 
+- Executable format errors: source builds accept plaintext PS4 SELF containers and unpacked
+  little-endian x86-64 ELF executables and modules. A valid unpacked ELF was previously rejected
+  with `prepare failed: expected PS4 SELF`. Files in another format and encrypted/compressed
+  SELF segments still need a correctly prepared game dump.
 - Black screen at start: use the latest release, which includes the startup deadlock patch.
   If it persists, report your GPU, driver, game build and **Advanced → Log** output. Clearing
   the shader cache is not a general fix and requires rebuilding it on the next launch.

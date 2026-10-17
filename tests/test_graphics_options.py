@@ -1,4 +1,5 @@
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -71,6 +72,7 @@ class GraphicsOptionsTest(unittest.TestCase):
     def test_resolution_labels_show_the_size_and_aspect_ratio(self):
         self.assertEqual(g.resolution_label('native'), 'Native · 1920 × 1080 · 16:9')
         self.assertEqual(g.resolution_label('480p'), '480p · 854 × 480 · 16:9')
+        self.assertEqual(g.resolution_label('900p'), '900p · 1600 × 900 · 16:9')
         self.assertEqual(g.resolution_label('3440x1440'), '3440 × 1440 · 21:9 (beta)')
         self.assertEqual(g.resolution_label('5120x1440'), '5120 × 1440 · 32:9 (beta)')
         self.assertEqual(g.resolution_label('2560x1600'), '2560 × 1600 · 16:10 (beta)')
@@ -85,6 +87,15 @@ class GraphicsOptionsTest(unittest.TestCase):
         import patches
         xml = Path(__file__).resolve().parent.parent / 'patches' / 'God_of_War_III_Remastered.xml'
         self.assertEqual(sorted(r for r in g.RESOLUTIONS if r != 'native'), sorted(patches.resolution_names([xml])))
+
+    def test_900p_is_the_built_in_size_between_720p_and_1440p(self):
+        # #238: 900p (1600x900) sits between 720p and 1440p, with its own resolution patch.
+        self.assertEqual(g.RESOLUTIONS.index('900p'), 3)
+        self.assertEqual(g.SIZES['900p'], (1600, 900))
+        import xml.etree.ElementTree as ET
+        xml = Path(__file__).resolve().parent.parent / 'patches' / 'God_of_War_III_Remastered.xml'
+        names = {m.get('Name') for m in ET.parse(xml).getroot().iter('Metadata')}
+        self.assertIn('Resolution Patch - 900p', names)
 
     def test_resolutions_of_enabled_mods(self):
         # A mod's "Resolution Patch - <size>" is a render resolution only while its mod is on.
@@ -118,6 +129,14 @@ class GraphicsOptionsTest(unittest.TestCase):
     def test_environment(self):
         env = g.environment(g.startup_options({'stale_readback': '0'}))
         self.assertEqual(env, {'GOW3_DEFERRED_READBACK': '1', 'GOW3_STALE_READBACK': '0', 'GOW3_ASYNC_SHADERS': '1'})
+
+
+class WindowSizeTest(unittest.TestCase):
+    def test_the_game_knows_the_launcher_sizes(self):
+        """gpu/shim/gow3_graphics.h ResolutionSizes, which sizes the window, matches SIZES."""
+        header = (paths.ROOT / 'gpu' / 'shim' / 'gow3_graphics.h').read_text(encoding='utf-8')
+        found = {name: (int(w), int(h)) for name, w, h in re.findall(r'\{"(\w+)", \{(\d+), (\d+)\}\}', header)}
+        self.assertEqual(found, g.SIZES)
 
 
 if __name__ == '__main__':

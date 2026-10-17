@@ -456,7 +456,8 @@ void PerformanceTab() {
         // The same labels as the launcher (graphics_options.resolution_label): name, exact size, aspect ratio.
         static const char* const builtin_labels[] = {
             "Native · 1920 × 1080 · 16:9", "480p · 854 × 480 · 16:9",
-            "720p · 1280 × 720 · 16:9", "1440p · 2560 × 1440 · 16:9",
+            "720p · 1280 × 720 · 16:9", "900p · 1600 × 900 · 16:9",
+            "1440p · 2560 × 1440 · 16:9",
             "1800p · 3200 × 1800 · 16:9", "4K · 3840 × 2160 · 16:9",
             "2560 × 1080 · 21:9 (beta)", "3440 × 1440 · 21:9 (beta)",
             "3840 × 1600 · 21:9 (beta)", "5120 × 1440 · 32:9 (beta)",

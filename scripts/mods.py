@@ -234,7 +234,9 @@ def apply_preset(preset, available):
 
 # Windows without the symlink privilege (Developer Mode off): directories become junctions,
 # files hard links (copies across volumes). Those are not symlinks, so the overlay remembers
-# what it linked and where to.
+# what it linked and where to. A network share (SMB) refuses junctions too: a folder is then
+# mirrored instead (real directories, files hard-linked), which is not a link and so is not
+# recorded here - expand()/remove() treat it as the ordinary directory it has become.
 LINKED = {}
 
 
@@ -246,8 +248,21 @@ def make_link(link, target):
         if os.name != 'nt':
             raise
     if target.is_dir():
-        import _winapi
-        _winapi.CreateJunction(str(target), str(link))
+        try:
+            import _winapi
+            _winapi.CreateJunction(str(target), str(link))
+        except OSError:
+            # A network share supports neither symlinks nor junctions. Mirror the folder:
+            # real directories whose files are hard-linked (or copied across volumes) by
+            # make_link, so the game reads real files through the view without copying the
+            # data. CreateJunction leaves the empty directory behind when it refuses the
+            # reparse point, so mkdir must tolerate it. Unlike a junction this is a plain
+            # directory, so it is not recorded in LINKED and needs no special handling when
+            # the view is expanded or removed.
+            link.mkdir(exist_ok=True)
+            for entry in target.iterdir():
+                make_link(link / entry.name, entry)
+            return
     else:
         try:
             os.link(target, link)
