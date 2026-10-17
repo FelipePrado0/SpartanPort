@@ -2105,6 +2105,7 @@ class Launcher:
             return
         self.set_log('')
         self.exit_hint = None
+        self.hidden_for_game = False
         # The same last_run.log as --play, so a report from the PLAY button has the file too.
         run_log = open_play_log(self.app)
         try:
@@ -2122,7 +2123,15 @@ class Launcher:
         self.status.configure(text=_('Preparing the game; it opens in its own window…',
                                      'Подготовка игры; она откроется в своём окне…'), fg=TEXT)
         if self.app.get('close_on_play'):
-            self.root.after(5000, self.root.destroy)  # the game keeps running
+            self.root.after(5000, self.hide_for_game, self.process)
+
+    def hide_for_game(self, process):
+        # Keep the reader thread and the pipe alive until the game exits. An
+        # early failure should leave its error visible; an old timer must not
+        # hide the window after a different launch has started.
+        if self.process is process and process.poll() is None:
+            self.hidden_for_game = True
+            self.root.withdraw()
 
     def read_output(self, process, run_log=None):
         try:
@@ -2155,6 +2164,9 @@ class Launcher:
                     self.process = None
                     if self.job:
                         self.job.close()
+                    if getattr(self, 'hidden_for_game', False):
+                        self.root.destroy()
+                        return
                     self.refresh_status()
                 else:
                     self.exit_hint = exit_hint(item) or getattr(self, 'exit_hint', None)
@@ -2448,11 +2460,7 @@ def open_run_log(settings):
 
 
 def open_play_log(settings):
-    """The run log for the PLAY button. With 'close_on_play' the launcher exits 5 s after the
-    start and the reader thread dies with it: a truncated file would replace the previous full
-    log, so that mode leaves the file alone."""
-    if settings.get('close_on_play'):
-        return _NullLog()
+    """The PLAY log stays open while the game runs, including with a hidden launcher."""
     return open_run_log(settings)
 
 
