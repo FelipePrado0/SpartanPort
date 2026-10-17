@@ -955,11 +955,19 @@ class Launcher:
     def meta_dir(self):
         return meta_folder(self.var('game_dir', 'app').get(), self.var('update_dir', 'app').get())
 
+    def artwork_file(self, name):
+        """Prefer an update's image, falling back to the base dump when it omits that file."""
+        preferred = Path(self.meta_dir() or '.') / 'sce_sys' / name
+        base = self.var('game_dir', 'app').get()
+        if preferred.is_file() or not base:
+            return preferred
+        return Path(base) / 'sce_sys' / name
+
     def px(self, size):
         return int(size * self.dpi)
 
     def set_icon(self):
-        game_icon = Path(self.meta_dir() or '.') / 'sce_sys' / 'icon0.png'
+        game_icon = self.artwork_file('icon0.png')
         self.icon = window_icon(self.root, self.tk, game_icon, PORT_DIR / 'launcher' / 'gow3.png',
                                 CONFIG_DIR / 'game_icon.ico')
 
@@ -1278,7 +1286,7 @@ class Launcher:
         w, h, bar = max(c.winfo_width(), 400), int(c['height']), self.px(44)
         folder = self.meta_dir()
         info = game_info(folder)
-        art = Path(folder or '.') / 'sce_sys' / 'pic1.png'
+        art = self.artwork_file('pic1.png')
         if self.banner_source != art:
             self.banner_source, self.banner_image, self.banner_size = art, None, None
             try:
