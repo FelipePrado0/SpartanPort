@@ -903,6 +903,7 @@ EXTRA = {
         'In-game button icons': 'Ícones dos botões no jogo',
         'Original (default)': 'Original (padrão)',
         'Match my controller': 'Igual ao meu controle',
+        'Keyboard': 'Teclado',
         "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of two game files in the port's data folder (about 70 MB); your game folder is never changed. Applied when the game starts.": 'Troca os ícones de botões PlayStation dentro do jogo pelos do seu controle. Funciona com uma cópia de dois arquivos do jogo na pasta de dados do port (cerca de 70 MB); a pasta do jogo nunca é alterada. Aplicado quando o jogo inicia.',
         'Textures': 'Texturas',
         'Anisotropic filtering': 'Filtro anisotrópico',
@@ -1197,6 +1198,7 @@ EXTRA = {
         'In-game button icons': 'Iconos de botones en el juego',
         'Original (default)': 'Original (predeterminado)',
         'Match my controller': 'Igual que mi mando',
+        'Keyboard': 'Teclado',
         "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of two game files in the port's data folder (about 70 MB); your game folder is never changed. Applied when the game starts.":
             'Sustituye los iconos de botones de PlayStation dentro del juego por los de tu mando. Trabaja sobre una copia de dos archivos del juego en la carpeta de datos del port (unos 70 MB); tu carpeta del juego nunca se modifica. Se aplica al iniciar el juego.',
         'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
@@ -1259,6 +1261,60 @@ EXTRA = {
         'Dodge': 'Esquivar',
     },
 }
+
+EXTRA['pt'].update({
+    'GUI Scale': 'Escala da interface',
+    'Auto': 'Automático',
+    'For launcher only. Applies after Save.':
+        'Somente para o inicializador. Aplica-se após Salvar.',
+})
+
+EXTRA['pt'].update({
+    '1 file': '1 arquivo',
+    'Change textures, sounds and text. Your game files stay untouched.': 'Troque texturas, sons e textos. Os arquivos do jogo não são alterados.',
+    'Details': 'Detalhes',
+    'Drop a mod folder or .zip in the mods folder.': 'Coloque a pasta ou o .zip do mod na pasta de mods.',
+    'Hide': 'Ocultar',
+    'Load order': 'Ordem de carga',
+    'Lower in the list wins': 'O mais abaixo na lista vence',
+    'No mods yet': 'Nenhum mod ainda',
+    'Open folder': 'Abrir pasta',
+    'Open mod folder': 'Abrir pasta do mod',
+    'Open mods folder': 'Abrir pasta de mods',
+    'Presets': 'Presets',
+    'Website': 'Site',
+    'by {}': 'por {}',
+    'game patches': 'patches de jogo',
+    '{} files': '{} arquivos',
+    '{} of {} active': '{} de {} ativos',
+    '… and {} more': '… e mais {}',
+    '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 arquivo é alterado por dois mods. {} vence.',
+    '⚠ {} also in {}. {} wins.': '⚠ {} também em {}. {} vence.',
+    '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ {} arquivos são alterados por mais de um mod. Vence o mais abaixo na lista.',
+})
+EXTRA['es'].update({
+    '1 file': '1 archivo',
+    'Change textures, sounds and text. Your game files stay untouched.': 'Cambia texturas, sonidos y textos. Los archivos del juego no se modifican.',
+    'Details': 'Detalles',
+    'Drop a mod folder or .zip in the mods folder.': 'Coloca la carpeta o el .zip del mod en la carpeta de mods.',
+    'Hide': 'Ocultar',
+    'Load order': 'Orden de carga',
+    'Lower in the list wins': 'Gana el que está más abajo',
+    'No mods yet': 'Aún no hay mods',
+    'Open folder': 'Abrir carpeta',
+    'Open mod folder': 'Abrir carpeta del mod',
+    'Open mods folder': 'Abrir carpeta de mods',
+    'Presets': 'Preajustes',
+    'Website': 'Sitio web',
+    'by {}': 'por {}',
+    'game patches': 'parches del juego',
+    '{} files': '{} archivos',
+    '{} of {} active': '{} de {} activos',
+    '… and {} more': '… y {} más',
+    '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 archivo lo cambian dos mods. Gana {}.',
+    '⚠ {} also in {}. {} wins.': '⚠ {} también en {}. Gana {}.',
+    '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ {} archivos los cambian varios mods. Gana el que está más abajo.',
+})
 
 _tables = {}
 
