@@ -15,9 +15,9 @@ from pathlib import Path
 import shutil
 import struct
 
-VERSION = 1  # of the drawing: a change redraws the cached copies
+VERSION = 2  # of the drawing: a change redraws the cached copies
 WADS = ('EXEC/WAD/PS4_LE/R_UI.WAD', 'EXEC/WAD/PS4_LE/R_PERM.WAD')
-FONT = Path(__file__).resolve().parent.parent / 'launcher' / 'gowfont.ttf'
+FONT = Path(__file__).resolve().parent.parent / 'launcher' / 'Cinzel-Black.ttf'
 
 # Texture (the first hash of its name) -> how it is drawn and the game button(s) it shows.
 # inline: the 64 px icons inside text; qte: the large prompt on black; atlas: two QTE labels,
