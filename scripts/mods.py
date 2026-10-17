@@ -62,9 +62,49 @@ def content_root(folder):
     entries = [e for e in folder.iterdir() if not e.name.startswith('.')]
     folders = [e for e in entries if e.is_dir()]
     if len(folders) == 1 and not [e for e in entries if e.is_file() and
-                                  e.suffix.casefold() not in ('.txt', '.md', '.jpg', '.png', '.ini')]:
+                                  e.suffix.casefold() not in METADATA]:
         return content_root(folders[0])
     return None
+
+
+# Files beside a mod's game folders that only describe it (a wrapper folder may hold them too).
+METADATA = ('.txt', '.md', '.jpg', '.jpeg', '.png', '.ini', '.json')
+IMAGES = ('.png', '.jpg', '.jpeg')
+FIRST_IMAGES = ('preview', 'cover', 'screenshot')
+
+
+def mod_info(folder):
+    """What the launcher shows for a mod: name, author, version, description and url from an
+    optional mod.json, else the folder name and the start of a readme; image is the mod's preview
+    (preview, cover or screenshot first, else any picture) or None. Only reads inside the mod."""
+    folder = Path(folder)
+    layout = content_root(folder)
+    places = list(dict.fromkeys([folder, layout[0] if layout else folder]))
+    info = {'name': folder.name, 'author': '', 'version': '', 'description': '', 'url': '', 'image': None}
+    files = [e for place in places for e in sorted(place.iterdir(), key=lambda e: e.name.casefold())
+             if e.is_file() and not e.is_symlink()]
+    meta = next((e for e in files if e.name.casefold() == 'mod.json'), None)
+    try:
+        fields = json.loads(meta.read_text(encoding='utf-8')) if meta else {}
+    except (OSError, ValueError):
+        fields = {}
+    for key in info.keys() - {'image'}:
+        value = fields.get(key) if isinstance(fields, dict) else None
+        if isinstance(value, str) and value.strip():
+            info[key] = value.strip()
+    if not info['url'].casefold().startswith(('http://', 'https://')):
+        info['url'] = ''
+    readme = next((e for e in files if e.stem.casefold() == 'readme' and e.suffix.casefold() in ('.txt', '.md')), None)
+    if not info['description'] and readme:
+        try:
+            info['description'] = readme.read_text(encoding='utf-8', errors='replace').strip()[:400]
+        except OSError:
+            pass
+    images = [e for e in files if e.suffix.casefold() in IMAGES]
+    images.sort(key=lambda e: FIRST_IMAGES.index(e.stem.casefold()) if e.stem.casefold() in FIRST_IMAGES
+                else len(FIRST_IMAGES))
+    info['image'] = images[0] if images else None
+    return info
 
 
 ZIP_STAMP = '.from-zip'
@@ -159,7 +199,7 @@ def patch_files(folder):
     entries = [e for e in folder.iterdir() if not e.name.startswith('.')]
     folders = [e for e in entries if e.is_dir()]
     if len(folders) == 1 and not [e for e in entries if e.is_file() and
-                                  e.suffix.casefold() not in ('.txt', '.md', '.jpg', '.png', '.ini')]:
+                                  e.suffix.casefold() not in METADATA]:
         return patch_files(folders[0])
     return []
 
