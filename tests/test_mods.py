@@ -313,7 +313,7 @@ class ModTests(unittest.TestCase):
 
 
 class GodOfWarLayout(unittest.TestCase):
-    """God of War III keeps its data in EXEC and one folder per language at the game root, with
+    """The GOW3PC game keeps its data in EXEC and one folder per language at the game root, with
     no dvdroot_ps4 folder (#473, #574)."""
 
     def setUp(self):

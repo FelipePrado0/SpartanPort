@@ -5,7 +5,7 @@ e setas de ordem de carga. As mudanças valem no próximo início. O mod mais ab
 prioridade; quando dois mods trocam o mesmo arquivo, o log mostra qual venceu.
 
 A pasta padrão é `mods/` no diretório de dados. Cada mod fica na sua própria pasta e espelha a
-árvore do jogo, que no God of War III tem os dados em `EXEC/` e numa pasta por idioma
+árvore do jogo, que no GOW3PC tem os dados em `EXEC/` e numa pasta por idioma
 (`ENGLISH/`, `PORTUGUESE/`, ...):
 
 ```text
