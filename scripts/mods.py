@@ -23,18 +23,41 @@ def child(folder, name):
     return folder / name
 
 
+# Top-level folders a mod may shadow (casefolded). God of War III keeps its data in EXEC and one
+# folder per language at the game root; dvdroot_ps4 is the shadPS4 layout many mods still use.
+GAME_ROOTS = frozenset({'dvdroot_ps4', 'exec', 'dutch', 'english', 'french', 'german', 'italian',
+                        'polish', 'portuguese', 'russian', 'spanish'})
+# Never replaced through the overlay: executable patches go through the patch compiler.
+PROTECTED = frozenset({'eboot.bin', 'sce_module', 'sce_sys'})
+
+
+def has_game_root(folder):
+    folder = Path(folder)
+    return folder.is_dir() and any(e.is_dir() and e.name.casefold() in GAME_ROOTS for e in folder.iterdir())
+
+
+def game_path(relative, flat):
+    """Where a mod file lands: in a game without dvdroot_ps4 (`flat`), a mod's dvdroot_ps4/
+    prefix is dropped so dvdroot_ps4/EXEC/... replaces EXEC/... (#473)."""
+    if flat and len(relative.parts) > 1 and relative.parts[0].casefold() == 'dvdroot_ps4':
+        relative = Path(*relative.parts[1:])
+    if relative.parts[0].casefold() in PROTECTED:
+        raise ValueError(f'Executable/system replacement is unsupported: {relative}')
+    return relative
+
+
 def content_root(folder):
     """(root, prefix): where a mod's files are and the game path they go to, or None.
 
-    Accepted layouts: <mod>/dvdroot_ps4, <mod>/app0/dvdroot_ps4 and one wrapper folder around
-    either (an archive extracted into a folder of its name)."""
+    Accepted layouts: <mod>/<game folder>, <mod>/app0/<game folder> and one wrapper folder
+    around either (an archive extracted into a folder of its name), where <game folder> is EXEC,
+    a language folder or dvdroot_ps4 (GAME_ROOTS)."""
     folder = Path(folder)
     if not folder.is_dir():
         return None
     for wrapper in ('', 'app0'):
         base = child(folder, wrapper) if wrapper else folder
-        dvdroot = child(base, 'dvdroot_ps4')
-        if dvdroot.is_dir():
+        if has_game_root(base):
             return base, ''
     entries = [e for e in folder.iterdir() if not e.name.startswith('.')]
     folders = [e for e in entries if e.is_dir()]
@@ -113,7 +136,7 @@ def unpack_zips(root):
             target.mkdir(exist_ok=True)
             marker.write_text(stamp)
             done.append(archive_path.stem)
-            kind = 'a mod' if (content_root(target) or patch_files(target)) else 'not a mod (no dvdroot_ps4 or patches)'
+            kind = 'a mod' if (content_root(target) or patch_files(target)) else 'not a mod (no EXEC, language folder, dvdroot_ps4 or patches)'
             print(f'Mods: {archive_path.name} unpacked: {kind}', file=sys.stderr)
         except (OSError, ValueError, RuntimeError, zipfile.BadZipFile) as error:
             shutil.rmtree(target, ignore_errors=True)
@@ -178,12 +201,13 @@ def enabled_patch_files(root, config, enabled=True):
 
 
 def mod_files(folder):
-    """(game path, source) of every file a mod replaces or adds under dvdroot_ps4."""
+    """(mod path, source) of every file a mod replaces or adds under a GAME_ROOTS folder; the
+    game path is game_path(mod path)."""
     layout = content_root(folder)
     if not layout:
         if patch_files(folder):
             return  # patches only
-        raise ValueError(f'{folder}: expected dvdroot_ps4 (or chr/, parts/, ...) inside the mod folder')
+        raise ValueError(f'{folder}: expected EXEC, a language folder or dvdroot_ps4 inside the mod folder')
     root, prefix = layout
     root = root.resolve()
     for directory, folders, files in os.walk(root, followlinks=False):
@@ -199,8 +223,8 @@ def mod_files(folder):
             relative = Path(prefix) / source.relative_to(root) if prefix else source.relative_to(root)
             # Readme/metadata stay outside the mounted game. This loader handles assets;
             # executable patches use the existing patch compiler, with address validation.
-            if relative.parts[0].casefold() != 'dvdroot_ps4':
-                if relative.parts[0].casefold() in ('eboot.bin', 'sce_module', 'sce_sys'):
+            if relative.parts[0].casefold() not in GAME_ROOTS:
+                if relative.parts[0].casefold() in PROTECTED:
                     raise ValueError(f'Executable/system replacement is unsupported: {source}')
                 continue
             if not source.is_file():
@@ -216,6 +240,7 @@ def conflicts(root, names):
     for name in names:
         try:
             for relative, _source in mod_files(Path(root) / name):
+                relative = game_path(relative, flat=True)  # God of War III has no dvdroot_ps4
                 key = relative.as_posix().casefold()
                 owners.setdefault(key, (relative.as_posix(), []))[1].append(name)
         except (OSError, ValueError):
@@ -301,11 +326,13 @@ def expand(directory):
 
 def build_overlay(game, out, mods):
     game = Path(game).resolve(strict=True)
+    flat = not child(game, 'dvdroot_ps4').is_dir()
     replacements = []
     owners = {}
     for name, root in mods:
         count = 0
         for relative, source in mod_files(root):
+            relative = game_path(relative, flat)
             key = relative.as_posix().casefold()
             if key in owners:
                 print(f'Mods: {relative}: {owners[key]} -> {name}', file=sys.stderr)
@@ -362,7 +389,7 @@ def main():
         if legacy.is_dir():
             layers.append((legacy.name, legacy))
         # A directly selected loose overlay is also accepted.
-        if child(args.mods_dir, 'dvdroot_ps4').is_dir():
+        if has_game_root(args.mods_dir):
             layers.append((args.mods_dir.name, args.mods_dir))
         else:
             for name in selected(args.mods_dir, args.config):
