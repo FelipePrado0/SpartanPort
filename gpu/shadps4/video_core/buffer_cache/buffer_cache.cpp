@@ -507,9 +507,35 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
     const u64 alloc_size = u64{resident_blocks} << block_shift;
     vk::DeviceMemory device_memory{};
     vk::Result last_result = vk::Result::eErrorOutOfDeviceMemory;
+    // gow3: the device-local heaps of a Windows APU are the BIOS carve-out (here 2 x 256 MiB) and
+    // the driver keeps saying yes to allocations past their size by paging into system memory,
+    // until it refuses one and the game aborts (issue #181). Once three quarters of a carve-out
+    // heap has been filled by arena pages, the arenas go to the shared heap instead (7.5 GiB on
+    // this machine); the carve-out stays available to the swapchain and the driver itself.
+    const auto& arena_memory_props = instance.GetMemoryProperties();
+    const auto carve_out_full = [&](u32 type) {
+        const u32 heap = arena_memory_props.memoryTypes[type].heapIndex;
+        if (!bool(arena_memory_props.memoryHeaps[heap].flags &
+                  vk::MemoryHeapFlagBits::eDeviceLocal)) {
+            return false;
+        }
+        return arena_type_bytes[type] + alloc_size >
+               arena_memory_props.memoryHeaps[heap].size / 4 * 3;
+    };
     for (const u32 type : arena_memory_types) {
         if (arena_limit_bytes != 0 && type == arena_memory_types[0] &&
             arena_type_bytes[type] + alloc_size > arena_limit_bytes) {
+            last_result = vk::Result::eErrorOutOfDeviceMemory;
+        } else if (carve_out_full(type)) {
+            if ((arena_fallback_logged & (1u << type)) == 0) {
+                arena_fallback_logged |= 1u << type;
+                std::printf("GPU: buffer arena type %u is a device-local heap with %llu MiB "
+                            "placed there already; keeping the carve-out for the rest and using "
+                            "the shared heap; heaps:%s\n",
+                            type, (unsigned long long)(arena_type_bytes[type] >> 20),
+                            instance.HeapUsageText().c_str());
+                std::fflush(stdout);
+            }
             last_result = vk::Result::eErrorOutOfDeviceMemory;
         } else {
             const vk::MemoryAllocateInfo alloc_info = {

@@ -39,6 +39,80 @@ static std::string VmaHeapText(VmaAllocator allocator) {
     return text;
 }
 
+// gow3: VMA takes the first memory type with the lowest cost and never looks at heap sizes
+// (vk_mem_alloc.h, FindMemoryTypeIndex: "if(currCost < minCost)"). On an AMD APU the device-local
+// heaps are the BIOS carve-out (here two of 256 MiB) and the shared heap with the rest of the RAM
+// (7.5 GiB) is *not* device-local, so every image was crammed into the carve-out: 937 MiB alive in
+// a 243 MiB heap, with the driver paging it into system memory until it refused an allocation and
+// the game aborted (image.cpp:120, issue #181). When device-local memory is a small carve-out next
+// to a much larger shared heap, images belong in the shared heap: on an integrated GPU that is the
+// same physical memory the iGPU uses for everything else, and it is measured in GiB, not in MiB.
+// Returns 0 to leave the choice to VMA (dedicated GPUs, one heap, or a carve-out that is big).
+static u32 SharedHeapMemoryTypes(VmaAllocator allocator) {
+    static const u32 types = [allocator] {
+        const VkPhysicalDeviceMemoryProperties* props{};
+        vmaGetMemoryProperties(allocator, &props);
+        u32 shared = VK_MAX_MEMORY_HEAPS;
+        VkDeviceSize shared_size = 0;
+        VkDeviceSize local_size = 0;
+        std::string text;
+        for (u32 i = 0; i < props->memoryHeapCount; ++i) {
+            const bool device_local =
+                (props->memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0;
+            text += fmt::format(" {}: {} MiB{}", i, props->memoryHeaps[i].size >> 20,
+                                device_local ? " device-local" : "");
+            if (device_local) {
+                local_size += props->memoryHeaps[i].size;
+                continue;
+            }
+            if (props->memoryHeaps[i].size > shared_size) {
+                shared_size = props->memoryHeaps[i].size;
+                shared = i;
+            }
+        }
+        // Only intervene when device-local memory is a small carve-out and the shared heap is
+        // several times larger (discrete GPUs and single-heap systems keep VMA's own choice).
+        if (shared == VK_MAX_MEMORY_HEAPS || local_size == 0 || shared_size < (2ull << 30) ||
+            shared_size < 4 * local_size) {
+            return 0u;
+        }
+        u32 types = 0;
+        for (u32 i = 0; i < props->memoryTypeCount; ++i) {
+            if (props->memoryTypes[i].heapIndex == shared) {
+                types |= 1u << i;
+            }
+        }
+        if (types == 0) {
+            return 0u;
+        }
+        std::printf("GPU: memory heaps:%s; images use the %llu MiB shared heap, device-local is a "
+                    "%llu MiB carve-out VMA was filling first\n",
+                    text.c_str(), (unsigned long long)(shared_size >> 20),
+                    (unsigned long long)(local_size >> 20));
+        std::fflush(stdout);
+        return types;
+    }();
+    return types;
+}
+
+// gow3: every device-local memory type, for the last-resort retry of an image (the carve-out is
+// small but it is still memory the driver can honour when the shared heap is exhausted).
+static u32 DeviceLocalMemoryTypes(VmaAllocator allocator) {
+    static const u32 types = [allocator] {
+        const VkPhysicalDeviceMemoryProperties* props{};
+        vmaGetMemoryProperties(allocator, &props);
+        u32 types = 0;
+        for (u32 i = 0; i < props->memoryTypeCount; ++i) {
+            const u32 heap = props->memoryTypes[i].heapIndex;
+            if ((props->memoryHeaps[heap].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0) {
+                types |= 1u << i;
+            }
+        }
+        return types;
+    }();
+    return types;
+}
+
 static vk::ImageUsageFlags ImageUsageFlags(const Vulkan::Instance& instance,
                                            const ImageInfo& info) {
     vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eTransferSrc |
@@ -122,11 +196,12 @@ void UniqueImage::Destroy() {
 void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
     this->image_ci = image_ci;
     ASSERT(!image);
-    const VmaAllocationCreateInfo alloc_ci = {
+    VmaAllocationCreateInfo alloc_ci = {
         .flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT,
         .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         .requiredFlags = 0,
         .preferredFlags = 0,
+        .memoryTypeBits = SharedHeapMemoryTypes(allocator),
         .pool = VK_NULL_HANDLE,
         .pUserData = nullptr,
     };
@@ -136,6 +211,15 @@ void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
     VmaAllocationInfo alloc_info{};
     VkResult result = vmaCreateImage(allocator, &image_ci_unsafe, &alloc_ci, &unsafe_image,
                                      &allocation, &alloc_info);
+    if (result != VK_SUCCESS && alloc_ci.memoryTypeBits != 0) {
+        // gow3: this image does not support the shared heap (format or usage restrictions), or
+        // that heap is at its budget while the others are not. Fall back to VMA's own choice
+        // before treating the failure as memory pressure.
+        VmaAllocationCreateInfo relaxed_ci = alloc_ci;
+        relaxed_ci.memoryTypeBits = 0;
+        result = vmaCreateImage(allocator, &image_ci_unsafe, &relaxed_ci, &unsafe_image,
+                                &allocation, &alloc_info);
+    }
     if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
         // gow3: WITHIN_BUDGET made VMA refuse once every allowed heap was at its budget. On
         // integrated GPUs (Vega 8: a 256 MiB carve-out, the rest shared with a busy system)
@@ -181,6 +265,18 @@ void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
                     std::fflush(stdout);
                 }
                 retry_ci.memoryTypeBits = host_types;
+                result = vmaCreateImage(allocator, &image_ci_unsafe, &retry_ci, &unsafe_image,
+                                        &allocation, &alloc_info);
+            }
+        }
+        if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            // gow3: the images already live in the shared (host) heap, so the retry above asked
+            // for the same memory types again. The last memory the driver can still honour is
+            // the small carve-out the policy avoids for images: slower than the shared heap is
+            // not a thing on an integrated GPU, and a texture is better than an abort.
+            const u32 local_types = DeviceLocalMemoryTypes(allocator);
+            if (local_types != 0 && local_types != retry_ci.memoryTypeBits) {
+                retry_ci.memoryTypeBits = local_types;
                 result = vmaCreateImage(allocator, &image_ci_unsafe, &retry_ci, &unsafe_image,
                                         &allocation, &alloc_info);
             }
