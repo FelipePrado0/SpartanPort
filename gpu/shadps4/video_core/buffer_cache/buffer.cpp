@@ -82,6 +82,7 @@ static StreamPlacement StreamMemory() {
         return VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
     }
     switch (type) {
+    case MemoryType::Sparse:
     case MemoryType::DeviceLocal:
     case MemoryType::Stream:
         return VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -114,7 +115,13 @@ void UniqueBuffer::Destroy() {
 void UniqueBuffer::Create(vk::BufferCreateInfo& buffer_ci, MemoryType mem_type,
                           VmaAllocationInfo* out_alloc_info) {
     const bool with_bda = bool(buffer_ci.usage & vk::BufferUsageFlagBits::eShaderDeviceAddress);
-    if (mem_type != MemoryType::Sparse) {
+#ifndef __APPLE__
+    const bool is_sparse = (mem_type == MemoryType::Sparse);
+#else
+    const bool is_sparse = false;
+#endif
+
+    if (!is_sparse) {
         const VmaAllocationCreateFlags bda_flag =
             with_bda ? VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT : 0;
         const VmaAllocationCreateInfo alloc_ci = {
@@ -145,9 +152,7 @@ void UniqueBuffer::Create(vk::BufferCreateInfo& buffer_ci, MemoryType mem_type,
             .buffer = buffer,
         };
         auto bda_result = device.getBufferAddress(bda_info);
-        if (mem_type != MemoryType::Sparse) {
-            ASSERT_MSG(bda_result != 0, "Failed to get buffer device address");
-        }
+        ASSERT_MSG(bda_result != 0, "Failed to get buffer device address");
         bda_addr = bda_result;
     }
 }

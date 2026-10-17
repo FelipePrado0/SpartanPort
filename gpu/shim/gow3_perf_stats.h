@@ -79,7 +79,7 @@ inline std::string Format(const Sample& s, unsigned mask, bool row) {
     if (mask & Gpu) {
         const char* name = s.gpu_name.empty() ? "GPU" : s.gpu_name.c_str();
         if (s.gpu_percent < 0.0f) {
-            std::snprintf(part, sizeof(part), "%s n/a", name);
+            std::snprintf(part, sizeof(part), "%s", name);
         } else {
             std::snprintf(part, sizeof(part), "%s %.0f%%", name, s.gpu_percent);
         }

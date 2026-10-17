@@ -560,8 +560,10 @@ bool Instance::CreateDevice() {
                 .shaderFloat64 = features.shaderFloat64,
                 .shaderInt64 = features.shaderInt64,
                 .shaderInt16 = features.shaderInt16,
+#ifndef __APPLE__
                 .sparseBinding = features.sparseBinding,
                 .sparseResidencyBuffer = features.sparseResidencyBuffer,
+#endif
             },
         },
         vk::PhysicalDeviceVulkan11Features{

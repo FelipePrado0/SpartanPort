@@ -51,6 +51,15 @@ if [[ $(uname -s) == Darwin ]]; then
             if [[ -f $candidate ]]; then export VK_DRIVER_FILES=$candidate; break; fi
         done
     fi
+    # Performance optimizations for MoltenVK on Apple Silicon / macOS
+    export MVK_CONFIG_FAST_MATH_ENABLED="${MVK_CONFIG_FAST_MATH_ENABLED:-1}"
+    export MVK_CONFIG_RESUME_LOST_DEVICE="${MVK_CONFIG_RESUME_LOST_DEVICE:-1}"
+    export MVK_CONFIG_PREFILL_METAL_ARGUMENT_BUFFERS="${MVK_CONFIG_PREFILL_METAL_ARGUMENT_BUFFERS:-1}"
+    export MVK_CONFIG_USE_COMMAND_POOLING="${MVK_CONFIG_USE_COMMAND_POOLING:-1}"
+    export MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS="${MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS:-0}"
+    export MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS="${MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS:-1}"
+    export MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION="${MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION:-1}"
+    export MVK_CONFIG_ALLOW_METAL_EVENTS="${MVK_CONFIG_ALLOW_METAL_EVENTS:-1}"
 fi
 # If prebuilt binaries exist in bin/, treat as prebuilt (no rebuild needed)
 if [[ -z ${GOW3_PREBUILT:-} && -f bin/gow3-probe && -f bin/gpu/libgow3gpu.dylib ]]; then

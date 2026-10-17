@@ -381,6 +381,11 @@ void EmitContext::DefineInputs() {
                 bary_coord_smooth = DefineVariable(F32[2], spv::BuiltIn::BaryCoordSmoothAMD,
                                                    spv::StorageClass::Input);
             } else if (profile.supports_fragment_shader_barycentric && !ValidId(bary_coord)) {
+#ifdef __APPLE__
+                if (ValidId(bary_coord_nopersp)) {
+                    bary_coord = bary_coord_nopersp;
+                } else
+#endif
                 bary_coord =
                     DefineVariable(F32[3], spv::BuiltIn::BaryCoordKHR, spv::StorageClass::Input);
             }
@@ -390,6 +395,11 @@ void EmitContext::DefineInputs() {
                 bary_coord_pull_model = DefineVariable(F32[3], spv::BuiltIn::BaryCoordPullModelAMD,
                                                        spv::StorageClass::Input);
             } else if (profile.supports_fragment_shader_barycentric && !ValidId(bary_coord)) {
+#ifdef __APPLE__
+                if (ValidId(bary_coord_nopersp)) {
+                    bary_coord = bary_coord_nopersp;
+                } else
+#endif
                 bary_coord =
                     DefineVariable(F32[3], spv::BuiltIn::BaryCoordKHR, spv::StorageClass::Input);
             }
@@ -399,6 +409,11 @@ void EmitContext::DefineInputs() {
                 bary_coord_smooth_centroid = DefineVariable(
                     F32[2], spv::BuiltIn::BaryCoordSmoothCentroidAMD, spv::StorageClass::Input);
             } else if (profile.supports_fragment_shader_barycentric && !ValidId(bary_coord)) {
+#ifdef __APPLE__
+                if (ValidId(bary_coord_nopersp)) {
+                    bary_coord = bary_coord_nopersp;
+                } else
+#endif
                 bary_coord =
                     DefineVariable(F32[3], spv::BuiltIn::BaryCoordKHR, spv::StorageClass::Input);
             }
@@ -408,6 +423,11 @@ void EmitContext::DefineInputs() {
                 bary_coord_smooth_sample = DefineVariable(
                     F32[2], spv::BuiltIn::BaryCoordSmoothSampleAMD, spv::StorageClass::Input);
             } else if (profile.supports_fragment_shader_barycentric && !ValidId(bary_coord)) {
+#ifdef __APPLE__
+                if (ValidId(bary_coord_nopersp)) {
+                    bary_coord = bary_coord_nopersp;
+                } else
+#endif
                 bary_coord =
                     DefineVariable(F32[3], spv::BuiltIn::BaryCoordKHR, spv::StorageClass::Input);
                 // we would need sample_index to interpolate the bary_coord later
@@ -423,6 +443,11 @@ void EmitContext::DefineInputs() {
                 bary_coord_nopersp = DefineVariable(F32[2], spv::BuiltIn::BaryCoordNoPerspAMD,
                                                     spv::StorageClass::Input);
             } else if (profile.supports_fragment_shader_barycentric) {
+#ifdef __APPLE__
+                if (ValidId(bary_coord)) {
+                    bary_coord_nopersp = bary_coord;
+                } else
+#endif
                 bary_coord_nopersp = DefineVariable(F32[3], spv::BuiltIn::BaryCoordNoPerspKHR,
                                                     spv::StorageClass::Input);
             }
@@ -432,6 +457,13 @@ void EmitContext::DefineInputs() {
                 bary_coord_nopersp_sample = DefineVariable(
                     F32[2], spv::BuiltIn::BaryCoordNoPerspSampleAMD, spv::StorageClass::Input);
             } else if (profile.supports_fragment_shader_barycentric) {
+#ifdef __APPLE__
+                if (ValidId(bary_coord)) {
+                    bary_coord_nopersp_sample = bary_coord;
+                } else if (ValidId(bary_coord_nopersp)) {
+                    bary_coord_nopersp_sample = bary_coord_nopersp;
+                } else
+#endif
                 bary_coord_nopersp_sample = DefineVariable(
                     F32[3], spv::BuiltIn::BaryCoordNoPerspKHR, spv::StorageClass::Input);
                 // Decorate(bary_coord_nopersp_sample, spv::Decoration::Sample);

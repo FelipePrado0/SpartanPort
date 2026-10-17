@@ -71,8 +71,12 @@ BufferCache::BufferCache(const Vulkan::Instance& instance_, Vulkan::Scheduler& s
                  arena_page_size >> 20, instance.GetMaxBufferSize() >> 20);
     }
     const vk::BufferCreateInfo probe_ci = {
+#ifndef __APPLE__
         .flags =
             vk::BufferCreateFlagBits::eSparseBinding | vk::BufferCreateFlagBits::eSparseResidency,
+#else
+        .flags = {},
+#endif
         .size = arena_page_size,
         .usage = ARENA_USAGE,
         .sharingMode = vk::SharingMode::eExclusive,
@@ -438,13 +442,27 @@ const Buffer* BufferCache::GetArena(u64 first_block, u64 last_block) {
     resident_ranges.ForEachInRange(base_block, end_block, [&](const Backing& backing) {
         const u64 start = std::max(base_block, backing.start);
         const u64 end = std::min(end_block, backing.end);
+#ifndef __APPLE__
         bind->binds.push_back(vk::SparseMemoryBind{
             .resourceOffset = (start - base_block) << block_shift,
             .size = (end - start) << block_shift,
             .memory = backing.memory,
             .memoryOffset = backing.offset + ((start - backing.start) << block_shift),
         });
+#endif
     });
+#ifdef __APPLE__
+    if (first_arena) {
+        const u64 copy_size = first_arena->size_bytes;
+        const vk::BufferCopy copy{0, first_arena->cpu_addr - new_arena->cpu_addr, copy_size};
+        runtime.CopyBuffer(first_arena, new_arena, std::span{&copy, 1});
+    }
+    if (last_arena && last_arena != first_arena) {
+        const u64 copy_size = last_arena->size_bytes;
+        const vk::BufferCopy copy{0, last_arena->cpu_addr - new_arena->cpu_addr, copy_size};
+        runtime.CopyBuffer(last_arena, new_arena, std::span{&copy, 1});
+    }
+#endif
 
     u64 base_page = first_addr >> arena_page_bits;
     for (u32 page = 0; page < (first_size >> arena_page_bits); ++page) {
@@ -470,11 +488,15 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
     }
     Gow3Stats::Timer timer{Gow3Stats::t_resident};
 
+#ifndef __APPLE__
     const vk::MemoryAllocateInfo alloc_info = {
         .allocationSize = resident_blocks << block_shift,
         .memoryTypeIndex = arena_memory_type_index,
     };
     const auto device_memory = Vulkan::Check(instance.GetDevice().allocateMemory(alloc_info));
+#else
+    const vk::DeviceMemory device_memory = VK_NULL_HANDLE;
+#endif
 
     boost::container::small_vector<vk::BufferCopy, 8> copies;
     const auto staging =
@@ -494,9 +516,13 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
 
         LOG_INFO(Render, "Making range start={}, end={} resident", backing.start, backing.end);
 
+        const u64 range_resource_offset = (range.start << block_shift) - arena->cpu_addr;
+        const u64 range_size = (range.end - range.start) << block_shift;
+
+#ifndef __APPLE__
         const auto& bind = binds->binds.emplace_back(vk::SparseMemoryBind{
-            .resourceOffset = (range.start << block_shift) - arena->cpu_addr,
-            .size = (range.end - range.start) << block_shift,
+            .resourceOffset = range_resource_offset,
+            .size = range_size,
             .memory = device_memory,
             .memoryOffset = memory_offset,
         });
@@ -505,6 +531,11 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
         for (u32 block = 0; block < bind.size; block += block_size) {
             *(bda_addrs++) = arena->BufferDeviceAddress() + bind.resourceOffset + block;
         }
+#else
+        for (u32 block = 0; block < range_size; block += block_size) {
+            *(bda_addrs++) = arena->BufferDeviceAddress() + range_resource_offset + block;
+        }
+#endif
         const u64 copy_size = (backing.end - backing.start) * sizeof(vk::DeviceAddress);
         copies.emplace_back(offset, backing.start * sizeof(vk::DeviceAddress), copy_size);
         offset += copy_size;
@@ -680,6 +711,10 @@ bool BufferCache::SynchronizeMemoryFromImage(const Buffer* arena, VAddr device_a
 }
 
 void BufferCache::SubmitPendingArenaBinds(Vulkan::SubmitInfo& info) {
+#ifdef __APPLE__
+    pending_binds.clear();
+    return;
+#endif
     if (pending_binds.empty()) {
         return;
     }

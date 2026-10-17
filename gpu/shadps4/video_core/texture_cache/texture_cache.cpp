@@ -48,6 +48,18 @@ TextureCache::TextureCache(const Vulkan::Instance& instance_, Vulkan::Scheduler&
     critical_gc_samplers = max_samplers * 15 / 16;
 
     // Set up garbage collection parameters.
+#ifdef __APPLE__
+    // On macOS / Apple Silicon with unified memory, instance.GetDeviceMemoryUsage()
+    // includes guest memory (5.6+ GB), buffer arenas, and system resources.
+    // Overwriting total_used_memory causes the texture cache to believe it is constantly
+    // above the critical memory threshold, evicting and synchronously downloading 100+ images
+    // back to the CPU on every single frame, causing severe frame drops (< 20 FPS).
+    // Instead, track texture cache memory directly and set generous limits for unified memory.
+    trigger_gc_memory = 3_GB;
+    pressure_gc_memory = 4_GB;
+    critical_gc_memory = 6_GB;
+    return;
+#else
     if (!instance.CanReportMemoryUsage()) {
         trigger_gc_memory = 0;
         pressure_gc_memory = DEFAULT_PRESSURE_GC_MEMORY;
@@ -68,6 +80,7 @@ TextureCache::TextureCache(const Vulkan::Instance& instance_, Vulkan::Scheduler&
         std::max<u64>(std::min(device_local_memory - min_vacancy_critical, min_spacing_critical),
                       DEFAULT_CRITICAL_GC_MEMORY));
     trigger_gc_memory = static_cast<u64>((device_local_memory - mem_threshold) / 2);
+#endif
 }
 
 TextureCache::~TextureCache() {
@@ -1613,6 +1626,7 @@ void TextureCache::UntrackImageTail(ImageId image_id) {
 
 void TextureCache::GarbageCollectImages() {
     Gow3Stats::Timer gc_timer{Gow3Stats::t_gc};
+#ifndef __APPLE__
     if (instance.CanReportMemoryUsage()) {
         total_used_memory = instance.GetDeviceMemoryUsage();
         // gow3: on integrated GPUs (Steam Deck) the usage covers system-memory heaps holding
@@ -1634,6 +1648,7 @@ void TextureCache::GarbageCollectImages() {
             }
         }
     }
+#endif
     if (total_used_memory < trigger_gc_memory) {
         return;
     }

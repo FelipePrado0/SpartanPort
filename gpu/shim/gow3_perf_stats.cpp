@@ -117,6 +117,93 @@ void Run(const Vulkan::Instance* instance) {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 }
+#elif defined(__APPLE__)
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
+#include <mach/mach.h>
+#include <sys/resource.h>
+#include <sys/sysctl.h>
+#include <unistd.h>
+
+void Run(const Vulkan::Instance* instance) {
+    uint64_t last_process_us = 0, last_wall_us = 0;
+    const unsigned cores = std::max(1u, std::thread::hardware_concurrency());
+    constexpr double GiB = 1024.0 * 1024.0 * 1024.0;
+    while (true) {
+        Sample s;
+        s.gpu_name = std::string(instance->GetModelName());
+
+        // GPU percentage via IOKit IOAccelerator
+        CFMutableDictionaryRef matching = IOServiceMatching("IOAccelerator");
+        io_iterator_t iterator;
+        if (matching && IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS) {
+            io_registry_entry_t entry;
+            while ((entry = IOIteratorNext(iterator)) != 0) {
+                CFMutableDictionaryRef props = nullptr;
+                if (IORegistryEntryCreateCFProperties(entry, &props, kCFAllocatorDefault, kNilOptions) == KERN_SUCCESS && props) {
+                    CFDictionaryRef stats = (CFDictionaryRef)CFDictionaryGetValue(props, CFSTR("PerformanceStatistics"));
+                    if (stats) {
+                        CFNumberRef util = (CFNumberRef)CFDictionaryGetValue(stats, CFSTR("Device Utilization %"));
+                        if (util) {
+                            int64_t val = 0;
+                            if (CFNumberGetValue(util, kCFNumberSInt64Type, &val)) {
+                                s.gpu_percent = std::clamp(float(val), 0.0f, 100.0f);
+                            }
+                        }
+                    }
+                    CFRelease(props);
+                }
+                IOObjectRelease(entry);
+                if (s.gpu_percent >= 0.0f) {
+                    break;
+                }
+            }
+            IOObjectRelease(iterator);
+        }
+
+        // CPU percentage
+        struct rusage usage;
+        if (getrusage(RUSAGE_SELF, &usage) == 0) {
+            const uint64_t process_us = uint64_t(usage.ru_utime.tv_sec) * 1000000ULL + usage.ru_utime.tv_usec +
+                                        uint64_t(usage.ru_stime.tv_sec) * 1000000ULL + usage.ru_stime.tv_usec;
+            const auto now = std::chrono::steady_clock::now();
+            const uint64_t wall_us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count();
+            if (last_wall_us > 0 && wall_us > last_wall_us) {
+                s.cpu_percent = CpuPercent(process_us - last_process_us, wall_us - last_wall_us, cores);
+            }
+            last_process_us = process_us;
+            last_wall_us = wall_us;
+        }
+
+        // Process RAM & Total RAM
+        mach_task_basic_info_data_t task_info_data;
+        mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+        if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&task_info_data, &count) == KERN_SUCCESS) {
+            s.ram_used_gb = double(task_info_data.resident_size) / GiB;
+        }
+        int64_t mem_size = 0;
+        size_t len = sizeof(mem_size);
+        if (sysctlbyname("hw.memsize", &mem_size, &len, nullptr, 0) == 0) {
+            s.ram_total_gb = double(mem_size) / GiB;
+        }
+
+        // VRAM (VK_EXT_memory_budget or unified memory fallback)
+        if (instance->CanReportMemoryUsage()) {
+            s.vram_used_gb = double(instance->GetDeviceMemoryUsage()) / GiB;
+            s.vram_total_gb = double(instance->GetDeviceMemoryBudgetNow()) / GiB;
+        }
+        if (s.vram_used_gb < 0.0 && s.ram_used_gb >= 0.0) {
+            s.vram_used_gb = s.ram_used_gb;
+            s.vram_total_gb = s.ram_total_gb;
+        }
+
+        {
+            std::scoped_lock lock{mutex};
+            latest = std::move(s);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+}
 #else
 void Run(const Vulkan::Instance* instance) {
     while (true) {

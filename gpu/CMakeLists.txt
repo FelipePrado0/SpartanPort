@@ -213,6 +213,8 @@ elseif (APPLE)
     find_library(METAL_LIB Metal REQUIRED)
     find_library(FOUNDATION_LIB Foundation REQUIRED)
     find_library(QUARTZCORE_LIB QuartzCore REQUIRED)
+    find_library(IOKIT_LIB IOKit REQUIRED)
+    find_library(COREFOUNDATION_LIB CoreFoundation REQUIRED)
     set(BIN_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../bin/lib")
     if (EXISTS "${BIN_LIB}/libfmt.dylib")
         target_link_directories(gow3gpu BEFORE PUBLIC "${BIN_LIB}")
@@ -252,10 +254,10 @@ elseif (APPLE)
             "${BIN_LIB}/libavutil.dylib"
             "${BIN_LIB}/libswscale.dylib"
             "${BIN_LIB}/libswresample.dylib"
-            ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZCORE_LIB}
+            ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZCORE_LIB} ${IOKIT_LIB} ${COREFOUNDATION_LIB}
         )
     else()
-        target_link_libraries(gow3gpu PUBLIC Vulkan::Vulkan ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZCORE_LIB})
+        target_link_libraries(gow3gpu PUBLIC Vulkan::Vulkan ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZCORE_LIB} ${IOKIT_LIB} ${COREFOUNDATION_LIB})
     endif()
 else()
     target_link_libraries(gow3gpu PUBLIC PkgConfig::X11)
