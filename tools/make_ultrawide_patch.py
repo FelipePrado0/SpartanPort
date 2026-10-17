@@ -102,6 +102,17 @@ def free_pads(image, text, count):
     raise SystemExit(f'only {len(pads)} usable pads')
 
 
+def aspect_floats(aspect):
+    """The video mode's two aspect floats. The game letterboxes its picture to 16:9 when the second one is exactly
+    4/3 (the function at 0x56fc60 sets the aspect to 16/9 and its letterbox flag), so for a 4:3 size that float
+    is one unit in the last place above 4/3: the same value to the eye, but not the one that test looks for."""
+    first = struct.pack('<f', aspect)
+    second = first
+    if first == struct.pack('<f', 4 / 3):
+        second = struct.pack('<I', struct.unpack('<I', first)[0] + 1)
+    return first + second
+
+
 def entry(image, text, reference_lines, width, height):
     aspect = width / height
     k = aspect / REFERENCE_ASPECT
@@ -129,7 +140,7 @@ def entry(image, text, reference_lines, width, height):
     off = ASPECT_SITE[0] - EBOOT_BASE
     assert image[off:off + 8].hex() == ASPECT_SITE[1], 'the aspect ratio site differs: needs the 6e72 eboot.bin'
     pattern, at = signature(off, 8)
-    lines.append((f'0x{ASPECT_SITE[0]:08x}', (struct.pack('<f', aspect) * 2).hex(), pattern, at))
+    lines.append((f'0x{ASPECT_SITE[0]:08x}', aspect_floats(aspect).hex(), pattern, at))
 
     camera_sites = CAMERA_SITES if k > 1.0001 else []  # k <= 1: the picture is not wider than 16:9
     pads = free_pads(image, text, 1 + 2 * len(camera_sites)) if camera_sites else []
