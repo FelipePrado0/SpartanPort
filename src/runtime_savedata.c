@@ -65,7 +65,7 @@ _Static_assert(sizeof(SearchCond)==64 && sizeof(SearchResult)==56,"dir name sear
 static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
 static int initialized;
 static char title_id[16]="UNKNOWN";
-static struct { int used; char host[700], meta[700]; } slots[SLOTS];
+static struct { int used, writable; char host[700], meta[700]; } slots[SLOTS];
 static char memory_path[720];
 static uint64_t memory_size;
 static size_t mounts_done, memory_writes;
@@ -129,6 +129,58 @@ int runtime_savedata_icon(int32_t user, const char *dir, char *out, size_t size)
     snprintf(out,size,"%s/%s.sce_sys/icon0.png",base,dir);
     return 0;
 }
+/* Newest modification time (seconds) of a save: its files and its param.bin; 0 when absent. */
+static int64_t newest(const char *path, int depth) {
+    struct stat st;
+    if (stat(path,&st)) return 0;
+    int64_t t=(int64_t)st.st_mtime;
+    if (!S_ISDIR(st.st_mode) || depth>4) return t;
+    DIR *d=opendir(path);
+    for (struct dirent *e; d && (e=readdir(d));) {
+        if (!strcmp(e->d_name,".") || !strcmp(e->d_name,"..")) continue;
+        char child[1024]; snprintf(child,sizeof(child),"%s/%s",path,e->d_name);
+        int64_t c=newest(child,depth+1);
+        if (c>t) t=c;
+    }
+    if (d) closedir(d);
+    return t;
+}
+int64_t runtime_savedata_mtime(int32_t user, const char *dir) {
+    if (!valid_name(dir,32)) return 0;
+    char base[600], path[700];
+    root(user,NULL,base,sizeof(base));
+    snprintf(path,sizeof(path),"%s/%s",base,dir);
+    struct stat st;
+    if (stat(path,&st) || !S_ISDIR(st.st_mode)) return 0;
+    int64_t t=newest(path,0);
+    snprintf(path,sizeof(path),"%s/%s.sce_sys/param.bin",base,dir);
+    if (!stat(path,&st) && (int64_t)st.st_mtime>t) t=(int64_t)st.st_mtime;
+    return t;
+}
+/* The most recently written save (AUTOSAVE after a checkpoint): its directory name and time; 0 when found. */
+int runtime_savedata_latest(int32_t user, char *dir, size_t size, int64_t *mtime) {
+    char base[600];
+    root(user,NULL,base,sizeof(base));
+    int64_t best=0;
+    DIR *d=opendir(base);
+    for (struct dirent *e; d && (e=readdir(d));) {
+        size_t n=strlen(e->d_name);
+        if (e->d_name[0]=='.' || n>=32 || (n>8 && !strcmp(e->d_name+n-8,".sce_sys"))) continue;
+        int64_t t=runtime_savedata_mtime(user,e->d_name);
+        if (t>best) { best=t; if (dir && size) snprintf(dir,size,"%s",e->d_name); }
+    }
+    if (d) closedir(d);
+    if (mtime) *mtime=best;
+    return best ? 0 : -1;
+}
+/* Whether the game is writing a save now (a save mounted for writing); waits out a SaveDataMemory write. */
+int runtime_savedata_writing(void) {
+    pthread_mutex_lock(&lock);
+    int writing=0;
+    for (int i=0;i<SLOTS;++i) writing|=slots[i].used && slots[i].writable;
+    pthread_mutex_unlock(&lock);
+    return writing;
+}
 static ABI int32_t save_initialize(const void *param) { (void)param; initialized=1; return 0; }
 static ABI int32_t save_terminate(void) {
     if (!initialized) return ERR_NOT_INITIALIZED;
@@ -156,6 +208,7 @@ static int32_t mount(int32_t user, const char *title, const DirName *dir, uint32
     if (!exists && (make_dirs(host) || make_dirs(meta))) { pthread_mutex_unlock(&lock); return ERR_INTERNAL; }
     if (!exists) { Param empty={0}; write_param(meta,&empty); }
     slots[slot].used=1;
+    slots[slot].writable=!(mode & MODE_RDONLY);
     snprintf(slots[slot].host,sizeof(slots[slot].host),"%s",host);
     snprintf(slots[slot].meta,sizeof(slots[slot].meta),"%s",meta);
     memset(result,0,sizeof(*result));

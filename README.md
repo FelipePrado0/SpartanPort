@@ -42,7 +42,8 @@ Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.
 - **In-game button icons** (opt-in, off by default): the PlayStation button icons in the game can
   show your controller's, Xbox or Nintendo ones (Game page, Controls).
 - Saving and loading: the save list is shown on screen, as on the PS4. Autosave works too. The
-  launcher backs the saves up before every start.
+  launcher backs the saves up before every start. Loading opens on the newest save, and closing
+  the game waits for a save it is writing.
 - Patches: render resolution of 480p, 720p, 1440p, 1800p or 4K, corrupted texture fix and skip
   videos with the X button (community); engine frame rate of 120 FPS (kvicken) or 240 FPS
   (adapted by Felipe Prado).
@@ -62,6 +63,9 @@ Progress is tracked (in Portuguese) in [docs/gow3/ROADMAP.md](docs/gow3/ROADMAP.
   - **Overlay:** a performance overlay with FPS, frametime, upscaler, GPU (name and use), CPU,
     RAM and VRAM, each optional, with font size, corner, background opacity and layout. The
     numbers are the game's own use, not the whole system's.
+  - **Quit game** (at the bottom): shows when the game last saved (the autosave at each
+    checkpoint) and closes the game; a save being written is finished first. The next time,
+    **Load game** opens on the newest save, so you continue where the autosave left you.
 
 ## Download and play
 

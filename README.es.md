@@ -65,6 +65,10 @@ El progreso se registra (en portugués) en [docs/gow3/ROADMAP.md](docs/gow3/ROAD
   - **Overlay:** un overlay de rendimiento con FPS, tiempo de cuadro, escalador, GPU (nombre y uso),
     CPU, RAM y VRAM, cada uno opcional, con tamaño de fuente, esquina, opacidad del fondo y diseño.
     Los números son el uso del propio juego, no el de todo el sistema.
+  - **Quit game** (abajo): muestra cuándo guardó el juego por última vez (el autoguardado de cada
+    punto de control) y cierra el juego; si se está escribiendo un guardado, termina antes. La
+    próxima vez, la lista de carga abre en el guardado más reciente, para seguir donde quedó el
+    autoguardado.
 
 ## Descargar y jugar
 

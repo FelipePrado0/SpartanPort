@@ -41,7 +41,8 @@ O andamento está em
 - Controle (DualSense, Xbox e outros, via SDL3) e teclado ao mesmo tempo, os dois com botões
   configuráveis.
 - Salvar e carregar: a lista de saves aparece na tela, como no PS4. O autosave também funciona.
-  O launcher faz backup dos saves antes de cada partida.
+  O launcher faz backup dos saves antes de cada partida. A lista de carregar abre no save mais
+  recente, e fechar o jogo espera um save que esteja sendo gravado.
 - Patches: resolução de renderização de 480p, 720p, 1440p, 1800p ou 4K, correção de texturas
   corrompidas e pular vídeos com o botão X (comunidade); FPS do motor de 120 (kvicken) ou 240
   (adaptado por Felipe Prado).
@@ -63,6 +64,9 @@ O andamento está em
   - **Overlay:** contador de desempenho com FPS, tempo de quadro, upscaler, GPU (nome e uso),
     CPU, RAM e VRAM, cada um opcional, com tamanho da fonte, canto, transparência e formato. Os
     números são o uso do próprio jogo, não do sistema inteiro.
+  - **Quit game** (embaixo): mostra quando o jogo salvou pela última vez (o autosave de cada
+    checkpoint) e fecha o jogo; se um save estiver sendo gravado, ele termina antes. Na próxima vez,
+    a lista de carregar já abre no save mais recente, para continuar de onde o autosave parou.
 
 ## Baixar e jogar
 

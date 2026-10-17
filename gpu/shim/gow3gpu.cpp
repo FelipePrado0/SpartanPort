@@ -48,6 +48,8 @@ int32_t* runtime_errno(void);
 void runtime_memory_set_gpu_hooks(RuntimeGpuRange map, RuntimeGpuRange unmap, RuntimeGpuRange invalidate);
 // runtime.c: exit counters (and the ISA site report), as on the guest's own exit
 void runtime_report(void);
+// runtime_savedata.c: a save mounted for writing (the game is saving now)
+int runtime_savedata_writing(void);
 }
 
 Frontend::WindowSDL* g_window = nullptr;
@@ -237,6 +239,14 @@ extern "C" int gow3gpu_init(const Gow3GpuConfig* config) {
             SDL_Delay(2);
         }
         LOG_INFO(Frontend, "Window closed by user");
+        // Closing in the middle of a save would cut its files short: let the game finish
+        // writing it (a few seconds at most; a save is small).
+        if (runtime_savedata_writing()) {
+            std::puts("Runtime: waiting for the game to finish saving before closing");
+            for (int i = 0; i < 80 && runtime_savedata_writing(); ++i) {
+                SDL_Delay(100);
+            }
+        }
         runtime_report();
         std::fflush(stdout);
         std::_Exit(0);

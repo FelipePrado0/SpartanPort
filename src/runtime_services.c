@@ -305,7 +305,16 @@ static ABI int32_t save_open(const unsigned char *p) {
     }
     uint32_t type; memcpy(&type,p+56,4);
     const char *title=type==1 ? "Save game" : type==2 ? "Load game" : "Delete save";
-    if (!n || !gow3gpu_choice_begin(title,labels,icons,n,0)) {
+    /* Loading starts on the newest save (the autosave after a checkpoint): continue where you stopped. */
+    int focus=0;
+    if (type==2) {
+        int64_t best=0;
+        for (int i=0;i<save_dialog.dir_count;++i) {
+            int64_t t=runtime_savedata_mtime(USER_ID,save_dialog.dirs[i]);
+            if (t>best) { best=t; focus=i+save_dialog.has_new; }
+        }
+    }
+    if (!n || !gow3gpu_choice_begin(title,labels,icons,n,focus)) {
         printf("Runtime: SaveDataDialog list (%s): %s\n",title,n ? "no window, cancelled" : "no saves, cancelled");
         save_dialog.result=SAVE_RESULT_CANCELED;
         dialogs[2].status=DIALOG_FINISHED; dialogs[2].button=0;

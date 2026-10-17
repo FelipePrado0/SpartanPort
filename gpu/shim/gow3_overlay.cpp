@@ -9,7 +9,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <mutex>
+#include <string>
 #include <vector>
 
 #include <SDL3/SDL.h>
@@ -22,6 +24,9 @@
 
 extern Gow3ActorSlot gow3_actor_slots[2];
 extern "C" void runtime_restart(void); // src/probe.c: starts run.py again, ends this process
+// src/runtime_savedata.c: the newest save of the game (user 1), for the quit dialog.
+extern "C" int runtime_savedata_latest(int32_t user, char* dir, size_t size, int64_t* mtime);
+extern "C" int runtime_savedata_param(int32_t user, const char* dir, void* param);
 #include "common/elf_info.h"
 #include "imgui.h"
 #include "imgui_internal.h" // RegisterUserTexture (save pictures)
@@ -95,6 +100,9 @@ void SetOpen(bool value) {
     ImGui::GetIO().MouseDrawCursor = value;
     if (value) {
         requested_tab = Gow3Settings::Get().menu_tab;
+    }
+    if (!value && ImGui::GetCurrentContext()->OpenPopupStack.Size > 0) {
+        ImGui::ClosePopupToLevel(0, false); // the quit question does not come back with the menu
     }
     if (!value && dirty) {
         dirty = false;
@@ -524,6 +532,49 @@ int RestartChanges() {
            (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback);
 }
 
+// "Quit game": when the game last saved, so the player knows what an exit keeps.
+std::string LastSaveText() {
+    char dir[32] = {};
+    int64_t mtime = 0;
+    if (runtime_savedata_latest(1, dir, sizeof(dir), &mtime)) {
+        return "No save yet: quitting now loses this game's progress.";
+    }
+    // OrbisSaveDataParam: title @0, subtitle @128 (the game puts the location there).
+    unsigned char param[1328] = {};
+    std::string subtitle;
+    if (!runtime_savedata_param(1, dir, param)) {
+        subtitle.assign(reinterpret_cast<const char*>(param) + 128, strnlen(reinterpret_cast<const char*>(param) + 128, 128));
+    }
+    const time_t t = time_t(mtime);
+    std::tm tm{};
+#ifdef _WIN32
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    char when[32];
+    std::strftime(when, sizeof(when), "%Y-%m-%d %H:%M", &tm);
+    const long long minutes = std::max<long long>(0, (long long)(std::time(nullptr) - t) / 60);
+    char ago[48];
+    if (minutes < 1) {
+        std::snprintf(ago, sizeof(ago), "less than a minute ago");
+    } else if (minutes < 120) {
+        std::snprintf(ago, sizeof(ago), "%lld minute%s ago", minutes, minutes == 1 ? "" : "s");
+    } else {
+        std::snprintf(ago, sizeof(ago), "%lld hours ago", minutes / 60);
+    }
+    return std::string("Last save: ") + dir + (subtitle.empty() ? "" : " - " + subtitle) + ", " + when + " (" + ago + ").";
+}
+
+// Closes the game as the window's close button does; the window thread waits for a save the
+// game is writing (gow3gpu.cpp) before the process ends.
+void QuitGame() {
+    std::puts("Overlay: quit game");
+    SDL_Event quit{};
+    quit.type = SDL_EVENT_QUIT;
+    SDL_PushEvent(&quit);
+}
+
 void Menu() {
     auto& s = Gow3Settings::Get();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -606,14 +657,49 @@ void Menu() {
     } else {
         ImGui::NewLine();
     }
+    static std::string last_save;
+    bool quit = false;
+    if (ImGui::Button("Quit game")) {
+        last_save = LastSaveText();
+        ImGui::OpenPopup("Quit the game?");
+    }
+    if (ImGui::IsItemHovered() || ImGui::IsItemFocused()) {
+        footer_help = "Closes the game. It keeps what the game last saved (the autosave at each checkpoint).";
+    }
+    ImGui::SameLine();
     const float close_width = ImGui::CalcTextSize("Close").x + ImGui::GetStyle().FramePadding.x * 2;
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - close_width);
     if (ImGui::Button("Close")) {
         keep_open = false;
     }
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(std::min(520.0f * base_scale, viewport->WorkSize.x * 0.9f), 0.0f));
+    if (ImGui::BeginPopupModal("Quit the game?", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove)) {
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextUnformatted(last_save.c_str());
+        ImGui::Spacing();
+        ImGui::TextDisabled("The game saves by itself at every checkpoint (AUTOSAVE); progress after the last "
+                            "save is lost. If the game is saving now, it closes when the save is written.");
+        ImGui::TextDisabled("Next time, Load game opens on the newest save.");
+        ImGui::PopTextWrapPos();
+        ImGui::Spacing();
+        if (ImGui::Button("Quit")) {
+            quit = true;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SetItemDefaultFocus(); // a stray Cross (A) does not quit
+        ImGui::EndPopup();
+    }
     ImGui::End();
-    if (!keep_open) {
+    if (!keep_open || quit) {
         SetOpen(false);
+    }
+    if (quit) {
+        QuitGame();
     }
 }
 
