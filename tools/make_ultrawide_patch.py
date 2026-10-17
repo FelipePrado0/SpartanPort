@@ -158,6 +158,9 @@ def entry(image, text, reference_lines, width, height):
     if camera_sites:
         what = (f'Ultrawide {width}x{height} ({aspect:.3f}:1), Hor+. Sets the game output resolution and the display '
                 f'aspect ratio, widens the horizontal field of view so the 16:9 vertical view is kept (no zoom)')
+    elif aspect >= REFERENCE_ASPECT * 0.99:  # 16:9 or a hair narrower: the picture is the game's own shape
+        what = (f'{width}x{height} ({aspect:.3f}:1). Sets the game output resolution and the display aspect ratio; '
+                f'the picture has the shape of the original 16:9 one')
     else:
         what = (f'{width}x{height} ({aspect:.3f}:1). Sets the game output resolution and the display aspect ratio; '
                 f'the horizontal field of view is the game\'s own, so this taller picture shows more at the top and bottom')
