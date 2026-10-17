@@ -245,6 +245,9 @@ def main():
         env.setdefault('MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS', '1')
         env.setdefault('MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION', '1')
         env.setdefault('MVK_CONFIG_ALLOW_METAL_EVENTS', '1')
+        env.setdefault('MVK_CONFIG_USE_MTLHEAP', '1')
+        env.setdefault('MVK_CONFIG_PREALLOCATE_DESCRIPTORS', '1')
+        env.setdefault('MVK_CONFIG_TEXTURE_1D_AS_2D', '1')
     # Instruction sets this CPU lacks (MOVBE, BMI1, LZCNT): the ISA rewrite covers them; exit 20
     # is a set nothing covers.
     features = subprocess.run([str(probe), '--cpu-features'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,

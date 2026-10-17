@@ -60,6 +60,9 @@ if [[ $(uname -s) == Darwin ]]; then
     export MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS="${MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS:-1}"
     export MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION="${MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION:-1}"
     export MVK_CONFIG_ALLOW_METAL_EVENTS="${MVK_CONFIG_ALLOW_METAL_EVENTS:-1}"
+    export MVK_CONFIG_USE_MTLHEAP="${MVK_CONFIG_USE_MTLHEAP:-1}"
+    export MVK_CONFIG_PREALLOCATE_DESCRIPTORS="${MVK_CONFIG_PREALLOCATE_DESCRIPTORS:-1}"
+    export MVK_CONFIG_TEXTURE_1D_AS_2D="${MVK_CONFIG_TEXTURE_1D_AS_2D:-1}"
 fi
 # If prebuilt binaries exist in bin/, treat as prebuilt (no rebuild needed)
 if [[ -z ${GOW3_PREBUILT:-} && -f bin/gow3-probe && -f bin/gpu/libgow3gpu.dylib ]]; then

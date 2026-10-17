@@ -135,6 +135,7 @@ typedef struct {
 static void *guest_main_thread(void *arg) {
     GuestStartArgs *a = (GuestStartArgs *)arg;
     pthread_setname_np("main");
+    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
     if (a->native_libc) {
         runtime_thread_attach_main();
         runtime_set_procparam(a->image + a->procparam);

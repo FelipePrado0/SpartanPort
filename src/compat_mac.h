@@ -75,7 +75,17 @@ static inline ssize_t compat_getrandom(void *buf, size_t buflen, unsigned int fl
 #define getrandom compat_getrandom
 
 static inline int compat_pthread_mutex_timedlock(pthread_mutex_t *mutex, const struct timespec *abs_timeout) {
-    int res;
+    int res = pthread_mutex_trylock(mutex);
+    if (res != EBUSY) return res;
+    for (int spin = 0; spin < 40; ++spin) {
+#if defined(__x86_64__)
+        __asm__ __volatile__("pause");
+#elif defined(__aarch64__)
+        __asm__ __volatile__("yield");
+#endif
+        res = pthread_mutex_trylock(mutex);
+        if (res != EBUSY) return res;
+    }
     while ((res = pthread_mutex_trylock(mutex)) == EBUSY) {
         struct timespec now;
         clock_gettime(CLOCK_REALTIME, &now);
@@ -83,7 +93,10 @@ static inline int compat_pthread_mutex_timedlock(pthread_mutex_t *mutex, const s
             (now.tv_sec == abs_timeout->tv_sec && now.tv_nsec >= abs_timeout->tv_nsec)) {
             return ETIMEDOUT;
         }
-        struct timespec sleep_ts = {0, 100000}; /* 100 µs */
+        sched_yield();
+        res = pthread_mutex_trylock(mutex);
+        if (res != EBUSY) return res;
+        struct timespec sleep_ts = {0, 50000}; /* 50 µs */
         nanosleep(&sleep_ts, NULL);
     }
     return res;
@@ -91,7 +104,17 @@ static inline int compat_pthread_mutex_timedlock(pthread_mutex_t *mutex, const s
 #define pthread_mutex_timedlock compat_pthread_mutex_timedlock
 
 static inline int compat_pthread_rwlock_timedrdlock(pthread_rwlock_t *rwlock, const struct timespec *abs_timeout) {
-    int res;
+    int res = pthread_rwlock_tryrdlock(rwlock);
+    if (res != EBUSY) return res;
+    for (int spin = 0; spin < 40; ++spin) {
+#if defined(__x86_64__)
+        __asm__ __volatile__("pause");
+#elif defined(__aarch64__)
+        __asm__ __volatile__("yield");
+#endif
+        res = pthread_rwlock_tryrdlock(rwlock);
+        if (res != EBUSY) return res;
+    }
     while ((res = pthread_rwlock_tryrdlock(rwlock)) == EBUSY) {
         struct timespec now;
         clock_gettime(CLOCK_REALTIME, &now);
@@ -99,7 +122,10 @@ static inline int compat_pthread_rwlock_timedrdlock(pthread_rwlock_t *rwlock, co
             (now.tv_sec == abs_timeout->tv_sec && now.tv_nsec >= abs_timeout->tv_nsec)) {
             return ETIMEDOUT;
         }
-        struct timespec sleep_ts = {0, 100000};
+        sched_yield();
+        res = pthread_rwlock_tryrdlock(rwlock);
+        if (res != EBUSY) return res;
+        struct timespec sleep_ts = {0, 50000};
         nanosleep(&sleep_ts, NULL);
     }
     return res;
@@ -107,7 +133,17 @@ static inline int compat_pthread_rwlock_timedrdlock(pthread_rwlock_t *rwlock, co
 #define pthread_rwlock_timedrdlock compat_pthread_rwlock_timedrdlock
 
 static inline int compat_pthread_rwlock_timedwrlock(pthread_rwlock_t *rwlock, const struct timespec *abs_timeout) {
-    int res;
+    int res = pthread_rwlock_trywrlock(rwlock);
+    if (res != EBUSY) return res;
+    for (int spin = 0; spin < 40; ++spin) {
+#if defined(__x86_64__)
+        __asm__ __volatile__("pause");
+#elif defined(__aarch64__)
+        __asm__ __volatile__("yield");
+#endif
+        res = pthread_rwlock_trywrlock(rwlock);
+        if (res != EBUSY) return res;
+    }
     while ((res = pthread_rwlock_trywrlock(rwlock)) == EBUSY) {
         struct timespec now;
         clock_gettime(CLOCK_REALTIME, &now);
@@ -115,7 +151,10 @@ static inline int compat_pthread_rwlock_timedwrlock(pthread_rwlock_t *rwlock, co
             (now.tv_sec == abs_timeout->tv_sec && now.tv_nsec >= abs_timeout->tv_nsec)) {
             return ETIMEDOUT;
         }
-        struct timespec sleep_ts = {0, 100000};
+        sched_yield();
+        res = pthread_rwlock_trywrlock(rwlock);
+        if (res != EBUSY) return res;
+        struct timespec sleep_ts = {0, 50000};
         nanosleep(&sleep_ts, NULL);
     }
     return res;

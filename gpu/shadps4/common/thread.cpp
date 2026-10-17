@@ -130,6 +130,25 @@ bool AccurateSleep(const std::chrono::nanoseconds duration, std::chrono::nanosec
 #else
 
 void SetCurrentThreadPriority(ThreadPriority new_priority) {
+#ifdef __APPLE__
+    qos_class_t qos = QOS_CLASS_DEFAULT;
+    switch (new_priority) {
+    case ThreadPriority::Low:
+        qos = QOS_CLASS_UTILITY;
+        break;
+    case ThreadPriority::Normal:
+        qos = QOS_CLASS_DEFAULT;
+        break;
+    case ThreadPriority::High:
+        qos = QOS_CLASS_USER_INITIATED;
+        break;
+    case ThreadPriority::VeryHigh:
+    case ThreadPriority::Critical:
+        qos = QOS_CLASS_USER_INTERACTIVE;
+        break;
+    }
+    pthread_set_qos_class_self_np(qos, 0);
+#else
     pthread_t this_thread = pthread_self();
 
     const auto scheduling_type = SCHED_OTHER;
@@ -145,10 +164,24 @@ void SetCurrentThreadPriority(ThreadPriority new_priority) {
     }
 
     pthread_setschedparam(this_thread, scheduling_type, &params);
+#endif
 }
 
 bool AccurateSleep(const std::chrono::nanoseconds duration, std::chrono::nanoseconds* remaining,
                    const bool interruptible) {
+#ifdef __APPLE__
+    static mach_timebase_info_data_t tb;
+    if (tb.denom == 0) mach_timebase_info(&tb);
+    const uint64_t start = mach_absolute_time();
+    const uint64_t ticks = static_cast<uint64_t>(duration.count()) * tb.denom / tb.numer;
+    mach_wait_until(start + ticks);
+    if (remaining) {
+        const uint64_t end = mach_absolute_time();
+        const auto elapsed = std::chrono::nanoseconds(static_cast<int64_t>((end - start) * tb.numer / tb.denom));
+        *remaining = duration > elapsed ? duration - elapsed : std::chrono::nanoseconds(0);
+    }
+    return true;
+#else
     timespec request = {
         .tv_sec = duration.count() / 1'000'000'000,
         .tv_nsec = duration.count() % 1'000'000'000,
@@ -165,6 +198,7 @@ bool AccurateSleep(const std::chrono::nanoseconds duration, std::chrono::nanosec
         *remaining = std::chrono::nanoseconds(remain.tv_sec * 1'000'000'000 + remain.tv_nsec);
     }
     return ret == 0 || errno != EINTR;
+#endif
 }
 
 #endif
