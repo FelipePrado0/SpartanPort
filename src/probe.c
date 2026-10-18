@@ -10,8 +10,10 @@
 #include "isa_rewrite.h"
 #include "orb_hook.h"
 #include "cheat_hook.h"
+#include "qte_hook.h"
 #include "actor_hook.h"
 #include "damage_hook.h"
+#include "menu_hook.h"
 #include "gpu/gow3gpu.h"
 #if !defined(__x86_64__) || !defined(__GNUC__)
 #error This prototype requires x86-64 GCC or Clang (including MinGW).
@@ -376,6 +378,7 @@ extern void gow3_cheat_status(unsigned id);
 extern uintptr_t gow3_damage_multiplier(int taken);
 extern uintptr_t gow3_orb_pickup_multiplier(unsigned kind);
 extern void gow3_stat_multipliers_status(int damage, int orb_pickup);
+extern uintptr_t gow3_qte_state_address(void);
 
 /* The hooks below find their sites by signature (src/signature.h), so they work in any region
  * and version of the game whose code matches; a site that is not found leaves its feature off. */
@@ -451,6 +454,50 @@ static void install_actor_watch(Segment *segments, uint64_t count, uint64_t size
     printf("Health display: damage hook ready (enemy health bar in the menu)\n");
 }
 
+/* QTE prompts (src/qte_hook.h): a frame count in the prompt's update and an answer in its
+ * rotation check, for the stick prompts in runtime_pad.c (typed or drawn rotations). Both or
+ * neither; they do nothing until the player finishes a rotation that way. */
+static void install_qte_hooks(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t sites[2] = {gow3_signature_find(image, size, &gow3_qte_update_site),
+                               gow3_signature_find(image, size, &gow3_qte_rotation_site)};
+    const unsigned char *originals[2] = {gow3_qte_update_original, gow3_qte_rotation_original};
+    for (unsigned i = 0; i < 2; ++i) {
+        if (sites[i] == UINT64_MAX || !mapped(segments, count, sites[i], GOW3_QTE_BLOCK_NEXT) ||
+            memcmp(image + sites[i], originals[i], GOW3_QTE_HOOK_LENGTH)) {
+            printf("Stick prompts: unavailable (code not found in this eboot.bin)\n");
+            return;
+        }
+    }
+    const uint64_t block = gow3_qte_block(image + sites[1], sites[1]);
+    if (!mapped(segments, count, block, GOW3_QTE_TYPE_OFFSET + 2)) {
+        printf("Stick prompts: unavailable (prompt state outside the image)\n");
+        return;
+    }
+    unsigned char *stubs = allocate(page_size);
+    int32_t relative[2];
+    for (unsigned i = 0; i < 2; ++i) {
+        const int64_t delta = (int64_t)(uintptr_t)(stubs + i * 128) - (int64_t)(uintptr_t)(image + sites[i] + 5);
+        if (delta < INT32_MIN || delta > INT32_MAX) {
+            printf("Stick prompts: unavailable (hook outside relative-jump range)\n");
+            return;
+        }
+        relative[i] = (int32_t)delta;
+    }
+    Gow3QteState *state = (Gow3QteState *)gow3_qte_state_address();
+    gow3_qte_build_update_stub(stubs, (uintptr_t)&state->heartbeat,
+                               (uintptr_t)(image + sites[0] + GOW3_QTE_HOOK_LENGTH));
+    gow3_qte_build_rotation_stub(stubs + 128, (uintptr_t)&state->pass,
+                                 (uintptr_t)(image + sites[1] + GOW3_QTE_HOOK_LENGTH));
+    protect(stubs, page_size, 5);
+    for (unsigned i = 0; i < 2; ++i) {
+        image[sites[i]] = 0xe9;
+        memcpy(image + sites[i] + 1, &relative[i], 4);
+        memset(image + sites[i] + 5, 0x90, GOW3_QTE_HOOK_LENGTH - 5);
+    }
+    state->block = (uint64_t)(uintptr_t)(image + block);
+    printf("Stick prompts: rotation prompt hooks ready\n");
+}
+
 static void install_orb_multiplier(Segment *segments, uint64_t count, uint64_t size) {
     uint64_t calls[3];
     const uint64_t setter_at = gow3_orb_find(image, size, calls);
@@ -520,6 +567,35 @@ static void install_stat_multipliers(Segment *segments, uint64_t count, uint64_t
     gow3_stat_multipliers_status(damage, pickup);
     printf("Multipliers: damage %s, green/blue/gold orbs %s\n", damage ? "ready" : "unavailable",
            pickup ? "ready" : "unavailable");
+}
+/* The pause menu's "Exit to Desktop" row (src/menu_hook.h). Ends the process as the restart
+ * does: GPU, audio and guest threads are still running, so no destructors. */
+static void menu_quit(void) {
+    puts("Pause menu: Exit to Desktop");
+    fflush(NULL);
+#ifdef _WIN32
+    TerminateProcess(GetCurrentProcess(),0);
+#endif
+    _exit(0);
+}
+/* The row comes with the hook: its copy of R_UI.WAD (scripts/pause_menu.py) is mounted over the
+ * game's, and over the glyphs' copy it was made from, only once the hook is in. */
+static void install_menu_exit(Segment *segments, uint64_t count, uint64_t size, const char *wad) {
+    const uint64_t at = gow3_signature_find(image, size, &gow3_menu_site);
+    if (at == UINT64_MAX || !mapped(segments, count, at, GOW3_MENU_HOOK_LENGTH) ||
+        !gow3_menu_signature_match(image + at, size - at)) {
+        printf("Pause menu: Exit to Desktop unavailable (code not found in this eboot.bin)\n");
+        return;
+    }
+    unsigned char *stub = allocate(page_size);
+    gow3_menu_build_stub(stub, (uintptr_t)menu_quit, (uintptr_t)(image + at + GOW3_MENU_HOOK_LENGTH));
+    protect(stub, page_size, 5);
+    if (!install_jump(at, GOW3_MENU_HOOK_LENGTH, stub)) {
+        puts("Pause menu: Exit to Desktop unavailable (hook outside relative-jump range)");
+        return;
+    }
+    runtime_file_mount("/app0/EXEC/WAD/PS4_LE/R_UI.WAD", wad);
+    puts("Pause menu: Exit to Desktop ready");
 }
 /* G3PATCH2 (patches.py): the patches' image base, then byte writes at image offsets, applied
  * after relocation. A write may replace a whole base-relative pointer slot (60/90 FPS++ swap
@@ -640,7 +716,7 @@ int main(int argc, char **argv) {
 #endif
     int cpu_only = 0, strict_imports = 0, check_imports = 0;
     unsigned timeout_seconds = 10;
-    const char *content_profile=NULL, *app0=NULL, *user_dir=NULL, *patch_file=NULL, *isa_file=NULL;
+    const char *content_profile=NULL, *app0=NULL, *user_dir=NULL, *patch_file=NULL, *isa_file=NULL, *pause_menu=NULL;
     const char *mounts[8]; int mount_count=0;
     for (int i = 2; i < argc; ++i) {
         if (!strcmp(argv[i], "--cpu-only")) cpu_only = 1;
@@ -651,6 +727,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "--user") && i+1<argc) user_dir=argv[++i];
         else if (!strcmp(argv[i], "--patches") && i+1<argc) patch_file=argv[++i];
         else if (!strcmp(argv[i], "--isa-rewrite") && i+1<argc) isa_file=argv[++i];
+        else if (!strcmp(argv[i], "--pause-menu") && i+1<argc) pause_menu=argv[++i];
         else if (!strcmp(argv[i], "--mount") && i+1<argc) {
             /* guest=host; the guest part never has '=', so the first one splits */
             const char *spec=argv[++i], *eq=strchr(spec,'=');
@@ -661,7 +738,7 @@ int main(int argc, char **argv) {
         else { fprintf(stderr, "Unknown option: %s\n", argv[i]); return 1; }
     }
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s boot.bin [--cpu-only] [--strict-imports] [--check-imports] [--content-profile file] [--app0 dir] [--user dir] [--patches file] [--isa-rewrite file] [--mount guest=host]... [--timeout seconds] | --vulkan-only | --cpu-features | --gamepad\n", argv[0]);
+        fprintf(stderr, "Usage: %s boot.bin [--cpu-only] [--strict-imports] [--check-imports] [--content-profile file] [--app0 dir] [--user dir] [--patches file] [--isa-rewrite file] [--pause-menu R_UI.WAD] [--mount guest=host]... [--timeout seconds] | --vulkan-only | --cpu-features | --gamepad\n", argv[0]);
         return 1;
     }
     if (!cpu_supported(missing, sizeof missing)) return 20;
@@ -908,6 +985,8 @@ int main(int argc, char **argv) {
     if (gpu_enabled) install_cheats(segments, ns, size);
     if (gpu_enabled) install_actor_watch(segments, ns, size);
     if (gpu_enabled) install_stat_multipliers(segments, ns, size);
+    if (gpu_enabled) install_qte_hooks(segments, ns, size);
+    if (gpu_enabled && pause_menu && app0) install_menu_exit(segments, ns, size, pause_menu);
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
 #endif

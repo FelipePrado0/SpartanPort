@@ -37,8 +37,8 @@ KEYS = [
     'Immediate (tearing)', '1 (default)', 'Unbounded',
     'Your game dump, saves and the game patches.', 'Game', 'Game folder',
     'Choose the folder with eboot.bin', 'Saves folder', 'Choose the saves folder',
-    'Empty: {} (shader caches are kept there too).', 'Game language', 'Player name',
-    'Where the game shows the PSN name; empty: the default.', 'English', 'Russian', 'Japanese',
+    'Empty: {} (shader caches are kept there too).', 'Game language',
+    'English', 'Russian', 'Japanese',
     'French', 'Spanish', 'German', 'Italian',
     'The game files are never changed: mods are layered over them at start.', 'Mods', 'Load mods',
     'Mods folder', 'Choose the mods folder', 'Empty: {}', 'Third-party patches', 'Patches folder',
@@ -103,8 +103,8 @@ TRANSLATIONS = {
         'تلقائي: تردد الشاشة، بحد أقصى 120 (موصى به)', 'بدون حد', 'Mailbox (تأخير منخفض، بلا تمزق)',
         'Immediate (مع تمزق)', '1 (افتراضي)', 'بلا حد', 'نسخة اللعبة والحفظ ورقع اللعبة.', 'اللعبة',
         'مجلد اللعبة', 'اختر المجلد الذي يحتوي eboot.bin', 'مجلد الحفظ', 'اختر مجلد الحفظ',
-        'فارغ: {} (يُحفظ فيه أيضًا كاش الشيدر).', 'لغة اللعبة', 'اسم اللاعب',
-        'حيث تعرض اللعبة اسم PSN؛ فارغ: الافتراضي.', 'الإنجليزية', 'الروسية', 'اليابانية',
+        'فارغ: {} (يُحفظ فيه أيضًا كاش الشيدر).', 'لغة اللعبة',
+        'الإنجليزية', 'الروسية', 'اليابانية',
         'الفرنسية', 'الإسبانية', 'الألمانية', 'الإيطالية',
         'ملفات اللعبة لا تتغير أبدًا: التعديلات تُطبّق فوقها عند التشغيل.', 'التعديلات',
         'تحميل التعديلات', 'مجلد التعديلات', 'اختر مجلد التعديلات', 'فارغ: {}', 'رقع خارجية',
@@ -169,8 +169,8 @@ TRANSLATIONS = {
         'Mailbox (baja latencia, sin cortes)', 'Immediate (con cortes)', '1 (predeterminado)',
         'Sin límite', 'Tu volcado del juego, partidas y parches.', 'Juego', 'Carpeta del juego',
         'Elige la carpeta con eboot.bin', 'Carpeta de partidas', 'Elige la carpeta de partidas',
-        'Vacío: {} (también guarda la caché de shaders).', 'Idioma del juego', 'Nombre del jugador',
-        'Donde el juego muestra el nombre de PSN; vacío: el predeterminado.', 'Inglés', 'Ruso',
+        'Vacío: {} (también guarda la caché de shaders).', 'Idioma del juego',
+        'Inglés', 'Ruso',
         'Japonés', 'Francés', 'Español', 'Alemán', 'Italiano',
         'Los archivos del juego nunca cambian: los mods se superponen al iniciar.', 'Mods',
         'Cargar mods', 'Carpeta de mods', 'Elige la carpeta de mods', 'Vacío: {}',
@@ -197,8 +197,13 @@ TRANSLATIONS = {
         'Cierra el juego antes de actualizar.', 'Buscar actualizaciones al abrir el lanzador',
         'Buscar actualizaciones', 'Tienes la última versión ({}).',
         'No se pudieron buscar actualizaciones: {}',
-        'No se pudo instalar la actualización. Descárgala desde la página de versiones.', '', '',
-        '', '', '', '', '', '', '', '',
+        'No se pudo instalar la actualización. Descárgala desde la página de versiones.',
+        'Parches del juego', 'Parches de la comunidad para el juego elegido, aplicados al iniciar.',
+        '{} · versión {} · {}', 'Nativa (1920 × 1080)', 'Resolución',
+        'El juego renderiza a este tamaño; un parche de resolución reemplaza la corrección de texturas y reserva la memoria que necesita.',
+        'Parches', '✓ Versión del juego {}: se aplican los parches del juego',
+        '⚠ Versión del juego {}: los parches del juego necesitan {}; no se aplicó ninguno',
+        '{} · {} parches más',
     ],
     'pt': [
         'Jogar', 'Gráficos', 'Tela e FPS', 'Jogo e efeitos', 'Mods e patches', 'Avançado',
@@ -240,8 +245,8 @@ TRANSLATIONS = {
         'Mailbox (baixa latência, sem tearing)', 'Immediate (com tearing)', '1 (padrão)',
         'Ilimitado', 'Seu dump do jogo, saves e patches.', 'Jogo', 'Pasta do jogo',
         'Escolha a pasta com eboot.bin', 'Pasta de saves', 'Escolha a pasta de saves',
-        'Vazio: {} (o cache de shaders também fica lá).', 'Idioma do jogo', 'Nome do jogador',
-        'Onde o jogo mostra o nome da PSN; vazio: o padrão.', 'Inglês', 'Russo', 'Japonês',
+        'Vazio: {} (o cache de shaders também fica lá).', 'Idioma do jogo',
+        'Inglês', 'Russo', 'Japonês',
         'Francês', 'Espanhol', 'Alemão', 'Italiano',
         'Os arquivos do jogo nunca mudam: os mods são sobrepostos ao iniciar.', 'Mods',
         'Carregar mods', 'Pasta de mods', 'Escolha a pasta de mods', 'Vazio: {}',
@@ -253,7 +258,7 @@ TRANSLATIONS = {
         'Desempenho', 'Pipeline de GPU em dois estágios',
         '20–30% mais rápido; desligue se o jogo ficar instável.', 'Automático (8+ threads)',
         'Ligado', 'Desligado (mais estável)', 'Leituras da GPU',
-        'Com que precisão os dados escritos pela GPU voltam para o jogo.', 'Relaxed (padrão)',
+        'Com que precisão os dados escritos pela GPU voltam para o jogo.', 'Flexível (padrão)',
         'Diagnóstico', 'Estatísticas de quadros no registro (a cada 5 s)',
         'Tempo de GPU por passe no registro',
         'Camadas de validação do Vulkan (precisa do Vulkan SDK; muito mais lento)',
@@ -316,7 +321,7 @@ TRANSLATIONS = {
         'Illimité', 'Votre dump du jeu, vos sauvegardes et les patchs.', 'Jeu', 'Dossier du jeu',
         'Choisissez le dossier contenant eboot.bin', 'Dossier des sauvegardes',
         'Choisissez le dossier des sauvegardes', 'Vide : {} (le cache des shaders y est aussi).',
-        'Langue du jeu', 'Nom du joueur', 'Là où le jeu affiche le nom PSN ; vide : par défaut.',
+        'Langue du jeu',
         'Anglais', 'Russe', 'Japonais', 'Français', 'Espagnol', 'Allemand', 'Italien',
         'Les fichiers du jeu ne sont jamais modifiés : les mods s’y superposent au lancement.',
         'Mods', 'Charger les mods', 'Dossier des mods', 'Choisissez le dossier des mods',
@@ -385,8 +390,8 @@ TRANSLATIONS = {
         'Mailbox (geringe Latenz, ohne Tearing)', 'Immediate (mit Tearing)', '1 (Standard)',
         'Unbegrenzt', 'Dein Spiel-Dump, Spielstände und Spiel-Patches.', 'Spiel', 'Spielordner',
         'Ordner mit eboot.bin wählen', 'Spielstandordner', 'Spielstandordner wählen',
-        'Leer: {} (dort liegt auch der Shader-Cache).', 'Spielsprache', 'Spielername',
-        'Wo das Spiel den PSN-Namen zeigt; leer: Standard.', 'Englisch', 'Russisch', 'Japanisch',
+        'Leer: {} (dort liegt auch der Shader-Cache).', 'Spielsprache',
+        'Englisch', 'Russisch', 'Japanisch',
         'Französisch', 'Spanisch', 'Deutsch', 'Italienisch',
         'Die Spieldateien werden nie verändert: Mods werden beim Start darübergelegt.', 'Mods',
         'Mods laden', 'Mod-Ordner', 'Mod-Ordner wählen', 'Leer: {}', 'Patches von Drittanbietern',
@@ -454,8 +459,8 @@ TRANSLATIONS = {
         'Illimitato', 'Il tuo dump del gioco, i salvataggi e le patch.', 'Gioco',
         'Cartella del gioco', 'Scegli la cartella con eboot.bin', 'Cartella dei salvataggi',
         'Scegli la cartella dei salvataggi', 'Vuoto: {} (contiene anche la cache degli shader).',
-        'Lingua del gioco', 'Nome del giocatore',
-        'Dove il gioco mostra il nome PSN; vuoto: quello predefinito.', 'Inglese', 'Russo',
+        'Lingua del gioco',
+        'Inglese', 'Russo',
         'Giapponese', 'Francese', 'Spagnolo', 'Tedesco', 'Italiano',
         'I file del gioco non vengono mai modificati: le mod si sovrappongono all’avvio.', 'Mod',
         'Carica le mod', 'Cartella delle mod', 'Scegli la cartella delle mod', 'Vuoto: {}',
@@ -524,8 +529,8 @@ TRANSLATIONS = {
         'Mailbox (niskie opóźnienie, bez rozrywania)', 'Immediate (z rozrywaniem)', '1 (domyślnie)',
         'Bez ograniczenia', 'Twój zrzut gry, zapisy i łatki gry.', 'Gra', 'Folder gry',
         'Wybierz folder z eboot.bin', 'Folder zapisów', 'Wybierz folder zapisów',
-        'Puste: {} (tam też jest pamięć podręczna shaderów).', 'Język gry', 'Nazwa gracza',
-        'Tam, gdzie gra pokazuje nazwę PSN; puste: domyślna.', 'Angielski', 'Rosyjski', 'Japoński',
+        'Puste: {} (tam też jest pamięć podręczna shaderów).', 'Język gry',
+        'Angielski', 'Rosyjski', 'Japoński',
         'Francuski', 'Hiszpański', 'Niemiecki', 'Włoski',
         'Pliki gry nigdy nie są zmieniane: mody są nakładane przy starcie.', 'Mody', 'Wczytuj mody',
         'Folder modów', 'Wybierz folder modów', 'Puste: {}', 'Łatki zewnętrzne', 'Folder łatek',
@@ -589,8 +594,8 @@ TRANSLATIONS = {
         'Mailbox (düşük gecikme, yırtılma yok)', 'Immediate (yırtılmalı)', '1 (varsayılan)',
         'Sınırsız', 'Oyun dökümünüz, kayıtlarınız ve oyun yamaları.', 'Oyun', 'Oyun klasörü',
         'eboot.bin içeren klasörü seçin', 'Kayıt klasörü', 'Kayıt klasörünü seçin',
-        'Boş: {} (shader önbelleği de orada tutulur).', 'Oyun dili', 'Oyuncu adı',
-        'Oyunun PSN adını gösterdiği yerler; boş: varsayılan.', 'İngilizce', 'Rusça', 'Japonca',
+        'Boş: {} (shader önbelleği de orada tutulur).', 'Oyun dili',
+        'İngilizce', 'Rusça', 'Japonca',
         'Fransızca', 'İspanyolca', 'Almanca', 'İtalyanca',
         'Oyun dosyaları asla değiştirilmez: modlar başlangıçta üzerlerine eklenir.', 'Modlar',
         'Modları yükle', 'Mod klasörü', 'Mod klasörünü seçin', 'Boş: {}', 'Üçüncü taraf yamalar',
@@ -635,8 +640,8 @@ TRANSLATIONS = {
         '开启（无需重启即可更改）', '在游戏启动时应用。', '领先 GPU 的帧数', '1 可保持帧节奏平稳；显卡成为瓶颈时，更大的值可能提高帧率。', '窗口', '呈现方式',
         '允许 HDR 输出', '在 Windows 中开启 HDR 且显示器支持时。', '自动：显示器刷新率，最高 120（推荐）', '不限制',
         'Mailbox（低延迟，无撕裂）', 'Immediate（有撕裂）', '1（默认）', '不限', '你的游戏转储、存档和游戏补丁。', '游戏', '游戏文件夹',
-        '选择包含 eboot.bin 的文件夹', '存档文件夹', '选择存档文件夹', '为空：{}（着色器缓存也保存在此）。', '游戏语言', '玩家名称',
-        '游戏显示 PSN 名称的位置；为空：默认。', '英语', '俄语', '日语', '法语', '西班牙语', '德语', '意大利语',
+        '选择包含 eboot.bin 的文件夹', '存档文件夹', '选择存档文件夹', '为空：{}（着色器缓存也保存在此）。', '游戏语言',
+        '英语', '俄语', '日语', '法语', '西班牙语', '德语', '意大利语',
         '游戏文件永远不会被修改：模组在启动时叠加。', '模组', '加载模组', '模组文件夹', '选择模组文件夹', '为空：{}', '第三方补丁', '补丁文件夹',
         '选择补丁文件夹', '刷新', '{} 中还没有模组。', '列表中越靠下越晚加载，冲突时优先。', '启动器选项、性能开关和诊断。', '启动器', '启动器语言',
         '重新打开启动器后生效。', '游戏启动时关闭启动器', '桌面快捷方式', '移植版文件夹', '已在桌面创建快捷方式。', '性能', '两阶段 GPU 流水线',
@@ -672,7 +677,7 @@ TRANSLATIONS = {
         'Windows で HDR がオンで、ディスプレイが対応している場合。', '自動：ディスプレイのリフレッシュレート、最大 120（推奨）', '上限なし',
         'Mailbox（低遅延・ティアリングなし）', 'Immediate（ティアリングあり）', '1（既定）', '無制限', 'ゲームのダンプ、セーブデータ、ゲームパッチ。',
         'ゲーム', 'ゲームフォルダー', 'eboot.bin のあるフォルダーを選択', 'セーブフォルダー', 'セーブフォルダーを選択',
-        '空欄：{}（シェーダーキャッシュもここに保存されます）。', 'ゲームの言語', 'プレイヤー名', 'ゲームが PSN 名を表示する箇所。空欄：既定。', '英語',
+        '空欄：{}（シェーダーキャッシュもここに保存されます）。', 'ゲームの言語', '英語',
         'ロシア語', '日本語', 'フランス語', 'スペイン語', 'ドイツ語', 'イタリア語', 'ゲームファイルは変更されません。MOD は起動時に重ねて読み込まれます。',
         'MOD', 'MOD を読み込む', 'MOD フォルダー', 'MOD フォルダーを選択', '空欄：{}', 'サードパーティ製パッチ', 'パッチフォルダー',
         'パッチフォルダーを選択', '更新', '{} にはまだ MOD がありません。', 'リストの下にあるものほど後に読み込まれ、競合時に優先されます。',
@@ -712,7 +717,7 @@ TRANSLATIONS = {
         'Windows에서 HDR이 켜져 있고 디스플레이가 지원할 때.', '자동: 디스플레이 주사율, 최대 120 (권장)', '제한 없음',
         'Mailbox (낮은 지연, 티어링 없음)', 'Immediate (티어링 있음)', '1 (기본)', '무제한', '게임 덤프, 세이브, 게임 패치.',
         '게임', '게임 폴더', 'eboot.bin이 있는 폴더 선택', '세이브 폴더', '세이브 폴더 선택',
-        '비어 있음: {} (셰이더 캐시도 여기에 저장됩니다).', '게임 언어', '플레이어 이름', '게임이 PSN 이름을 표시하는 곳. 비어 있으면 기본값.',
+        '비어 있음: {} (셰이더 캐시도 여기에 저장됩니다).', '게임 언어',
         '영어', '러시아어', '일본어', '프랑스어', '스페인어', '독일어', '이탈리아어',
         '게임 파일은 절대 바뀌지 않습니다. 모드는 시작 시 위에 덧씌워집니다.', '모드', '모드 불러오기', '모드 폴더', '모드 폴더 선택',
         '비어 있음: {}', '서드파티 패치', '패치 폴더', '패치 폴더 선택', '새로 고침', '{}에 아직 모드가 없습니다.',
@@ -741,10 +746,12 @@ WINDOWS_LANGUAGES = {0x19: 'ru', 0x01: 'ar', 0x0a: 'es', 0x16: 'pt', 0x0c: 'fr',
                      0x15: 'pl', 0x1f: 'tr', 0x04: 'zh', 0x11: 'ja', 0x12: 'ko'}
 
 # Texts added after the KEYS tables were written, looked up by English text (positional tables
-# need every language updated at once). Portuguese only, the port's own language: the other
-# languages fall back to English for them until someone who speaks them contributes.
+# need every language updated at once). Portuguese (the port's own language) and Spanish: the
+# other languages fall back to English for them until someone who speaks them contributes.
 EXTRA = {
     'pt': {
+        'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
+        'Shows only the game name and the time played on your Discord profile.': 'Mostra no seu perfil do Discord apenas o nome do jogo e o tempo jogado.',
         'Game multisampling': 'Multisampling do jogo',
         'Automatic ({}: off)': 'Automático ({}: desligado)',
         'Automatic ({}: on)': 'Automático ({}: ligado)',
@@ -896,9 +903,522 @@ EXTRA = {
         'In-game button icons': 'Ícones dos botões no jogo',
         'Original (default)': 'Original (padrão)',
         'Match my controller': 'Igual ao meu controle',
+        'Keyboard': 'Teclado',
         "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of two game files in the port's data folder (about 70 MB); your game folder is never changed. Applied when the game starts.": 'Troca os ícones de botões PlayStation dentro do jogo pelos do seu controle. Funciona com uma cópia de dois arquivos do jogo na pasta de dados do port (cerca de 70 MB); a pasta do jogo nunca é alterada. Aplicado quando o jogo inicia.',
+        'Textures': 'Texturas',
+        'Anisotropic filtering': 'Filtro anisotrópico',
+        'Game default': 'Padrão do jogo',
+        'Sharper floors and walls seen at an angle, at little cost on most graphics cards.': 'Chão e paredes vistos de lado ficam mais nítidos, com pouco custo na maioria das placas de vídeo.',
+        'Screenshots': 'Capturas de tela',
+        'Open the screenshots folder': 'Abrir a pasta das capturas',
+        'F12 in the game': 'F12 no jogo',
+        "Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves.": 'Salva a imagem do jogo, sem o overlay, em PNG na pasta screenshots dos saves.',
+        'Vibration': 'Vibração',
+        "Strength of the gamepad's vibration; 0% turns it off.": 'Força da vibração do controle; 0% desliga.',
+        'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
+            'O Windows não conseguiu reservar a memória que o jogo precisa. Feche outros programas, ou deixe o arquivo de paginação do Windows crescer (por exemplo 16384 MB inicial, 32768 MB máximo), e inicie de novo.',
+        'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.':
+            'O jogo parou ao ler os próprios arquivos: o dump do jogo pode estar incompleto. Extraia o pkg de novo e confira se a pasta do jogo tem cerca de 40 GB.',
+        'Native · 1920 × 1080 · 16:9': 'Nativa · 1920 × 1080 · 16:9',
+        'Graphics card': 'Placa de vídeo',
+        'The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.':
+            'A GPU em que o jogo roda. Escolha a placa dedicada se o jogo estiver usando a integrada.',
+        'Fast screen effects (Rage of Sparta, weapons)': 'Efeitos de tela rápidos (Rage of Sparta, armas)',
+        'Keeps powers and weapon effects at full FPS. Switch it off if a screen effect (blur, distortion, the color change of a power) looks stretched, shifted or wrong.':
+            'Mantém os efeitos de poderes e armas no FPS máximo. Desative se um efeito de tela (desfoque, distorção, a mudança de cor de um poder) parecer esticado, deslocado ou errado.',
+        'Your own dump of the game (eboot.bin, sce_module, sce_sys): God of War III Remastered, any region and version.':
+            'O seu próprio dump do jogo (eboot.bin, sce_module, sce_sys): God of War III Remastered, de qualquer região e versão.',
+        'L1 + Touchpad right': 'L1 + Touchpad direito',
+        "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert and R3+L2 always open the port's menu. Applied when the game starts.":
+            'As teclas usam os nomes do SDL: letras, números, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 a F12. Um nome que o jogo não conhece mantém o padrão (o registro diz qual). L2/R2 no controle ficam nos gatilhos. Touchpad direito abre o menu de pausa do jogo; Touchpad esquerdo (modo foto) é L1 + Touchpad direito no controle. Insert e R3+L2 sempre abrem o menu do port. Vale quando o jogo inicia.',
+        '{} · 60 FPS engine · no patches for this game': '{} · motor a 60 FPS · sem patches para este jogo',
+        '{} not found in this eboot.bin at the last start (see Log)': '{} não encontrados neste eboot.bin na última inicialização (veja o Registro)',
+        '   (game patches)': '   (patches do jogo)',
+        # Button names (PS_BUTTON_NAMES, PAD_STYLES).
+        'Cross': 'X', 'Circle': 'Círculo', 'Square': 'Quadrado', 'Triangle': 'Triângulo',
+        'Touchpad left': 'Touchpad esquerdo', 'Touchpad right': 'Touchpad direito',
+        'D-pad up': 'Direcional ↑', 'D-pad down': 'Direcional ↓', 'D-pad left': 'Direcional ←',
+        'D-pad right': 'Direcional →',
+        'Touchpad click': 'Clique do touchpad', 'PS button': 'Botão PS', 'Mute button': 'Botão de mudo',
+        'LS (left stick click)': 'LS (clique do analógico esquerdo)',
+        'RS (right stick click)': 'RS (clique do analógico direito)', 'Xbox button': 'Botão Xbox',
+        # Notes of the game patches (patches/God_of_War_III_Remastered.xml) shown on the Game page.
+        'Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.':
+            'Corrige texturas corrompidas no jogo aumentando a Video Arena, para o jogo usar mais memória de vídeo em texturas e efeitos. Exige DMEM de 2048 MB ou mais, senão o jogo fecha. Ative este patch ou um patch de resolução, nunca os dois.',
+        'Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+            'Pula os logos iniciais. Agradecimentos a illusion0001, também conhecido como illusionyy, pelo patch do PS3 que tornou isso muito fácil.',
+        'Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+            'Permite pular qualquer cinemática com o botão X. Agradecimentos a illusion0001, também conhecido como illusionyy, pelo patch do PS3 que tornou isso muito fácil.',
+        'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.':
+            'Corrige a tela preta na inicialização com o contador de FPS rodando: o índice de ritmo dos quadros começa em 2 em vez de 0, então o segundo quadro não espera mais por um flip que só ele pode disparar.',
+        '(none)': '(nenhuma)',
+        'Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.':
+            'Mouse adaptativo: quanto o mouse se move para cada passo de um giro. Também no menu do jogo.',
+        'Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.':
+            'Mira com o mouse enquanto L2 está pressionado (Cabeça de Hélio, Arco de Apolo). Relativo: o analógico segue o movimento e volta ao centro quando o mouse para. Absoluto: onde o mouse estava ao apertar L2 é o centro, e o analógico aponta dele até o mouse. Também no menu do jogo.',
+        'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
+            'Mira com o mouse enquanto L2 está pressionado: menor precisa de mais movimento do mouse para o mesmo analógico, maior de menos. Também no menu do jogo.',
+        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+            'Clique em uma caixa e aperte uma tecla, clique com um botão do mouse ou gire a roda (desiste após {} segundos). Uma entrada já usada por outro botão troca com ele; a seta devolve um botão ao padrão. Rage of Sparta aperta L3 e R3 juntos: marque a caixa acima dele para usar uma entrada em vez de duas. Agarrar aperta L1 e Círculo juntos. A esquiva vai na direção em que você anda (WASD), ou para trás quando parado. O touchpad direito abre o menu de pausa do jogo. Insert sempre abre o menu do port e não pode ser atribuído. Aplicado ao iniciar o jogo.',
+        'Gamepad Mapping': 'Mapeamento do controle',
+        'General': 'Geral',
+        'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
+            'Como os eventos de girar o analógico são respondidos. Teclado: digite o giro, meias-voltas a partir de cima D S A (horário) ou A S D, a partir de baixo A W D ou D W A, voltas completas D S A W ou A S D W; uma tecla fora de ordem recomeça. Mouse adaptativo: desenhe o giro com o mouse.',
+        'Joystick prompts': 'Prompts do analógico',
+        'Keep the mouse in the game window': 'Manter o mouse na janela do jogo',
+        'Key not supported': 'Tecla não suportada',
+        'Keyboard & Mouse Mapping': 'Mapeamento de teclado e mouse',
+        'Keyboard and mouse, button icons and gamepad mapping.':
+            'Teclado e mouse, ícones dos botões e mapeamento do controle.',
+        "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.":
+            'L2/R2 ficam nos gatilhos. O touchpad direito abre o menu de pausa do jogo; o touchpad esquerdo (modo foto) é L1 + touchpad direito. R3+L2 sempre abre o menu do port. Aplicado ao iniciar o jogo.',
+        'Mouse prompt distance': 'Distância do mouse nos prompts',
+        'Press a key': 'Aperte uma tecla',
+        'Press a key or mouse': 'Aperte uma tecla ou o mouse',
+        'Rage of Sparta on one input (L3 + R3 together)':
+            'Rage of Sparta em uma entrada (L3 + R3 juntos)',
+        'Reset gamepad to defaults': 'Restaurar o controle ao padrão',
+        'Reset keyboard & mouse to defaults': 'Restaurar teclado e mouse ao padrão',
+        'Right stick sensitivity': 'Sensibilidade do analógico direito',
+        'Right stick style': 'Estilo do analógico direito',
+        'Which gamepad button presses each button of the game.':
+            'Qual botão do controle aperta cada botão do jogo.',
+        'Which key or mouse input presses each button of the game.':
+            'Qual tecla ou entrada do mouse aperta cada botão do jogo.',
+        'While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.':
+            'Enquanto você joga, o mouse fica na janela do jogo, então um clique não cai em outro monitor ou programa. O menu do jogo e trocar de janela o liberam. Também no menu do jogo.',
+        'Keyboard (native)': 'Teclado (nativo)',
+        'Adaptive mouse (experimental)': 'Mouse adaptativo (experimental)',
+        'Relative': 'Relativo',
+        'Absolute': 'Absoluto',
+        'Grab': 'Agarrar',
+        'Dodge': 'Esquiva',
+    },
+    'es': {
+        'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
+        'Shows only the game name and the time played on your Discord profile.': 'Muestra en tu perfil de Discord solo el nombre del juego y el tiempo jugado.',
+        'Game multisampling': 'Multisampling del juego',
+        'Automatic ({}: off)': 'Automático ({}: desactivado)',
+        'Automatic ({}: on)': 'Automático ({}: activado)',
+        'Off (fixes black lines)': 'Desactivado (corrige las líneas negras)',
+        "The game's 2-sample depth buffer, read as a texture by its lighting. AMD's and Intel's Windows drivers read it wrong and the lighting shows black lines, so Automatic turns multisampling off on those cards (Radeon, Arc) and keeps it on elsewhere (NVIDIA). Off and On force the choice on any card.":
+            'El búfer de profundidad de 2 muestras del juego, leído como textura por su iluminación. Los controladores de AMD e Intel en Windows lo leen mal y la iluminación muestra líneas negras, así que Automático desactiva el multisampling en esas tarjetas (Radeon, Arc) y lo mantiene en las demás (NVIDIA). Desactivado y Activado fuerzan la elección en cualquier tarjeta.',
+        'Display': 'Pantalla',
+        'How the game appears on your screen.': 'Cómo se ve el juego en tu pantalla.',
+        'Display mode': 'Modo de pantalla',
+        'Borderless covers the screen without changing the display mode.':
+            'Sin bordes cubre toda la pantalla sin cambiar el modo de vídeo.',
+        'VSync': 'VSync',
+        'Off allows tearing for the lowest latency.':
+            'Desactivado permite cortes (tearing) para obtener la menor latencia.',
+        'Enlarges a smaller game image to the window. With Render resolution 720p (Performance) it raises the FPS; at the size of the window it does nothing.':
+            'Amplía una imagen del juego más pequeña hasta la ventana. Con Resolución de render en 720p (Rendimiento) sube los FPS; al tamaño de la ventana no hace nada.',
+        'Overlay': 'Overlay',
+        'Show performance overlay': 'Mostrar el overlay de rendimiento',
+        'Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.':
+            'Elementos, tamaño y esquina: menú del juego (Insert / R3+L2) > Overlay.',
+        'Frame rate and speed options.': 'Opciones de velocidad de fotogramas y de rendimiento.',
+        'Frame rate limit': 'Límite de velocidad de fotogramas',
+        'The engine frame rate (below) is the highest it can go.':
+            'La velocidad de fotogramas del motor (abajo) es el máximo que se puede alcanzar.',
+        'Frames queued': 'Fotogramas en cola',
+        '1 is the lowest input latency; more can raise FPS when the graphics card is the limit.':
+            '1 da la menor latencia de entrada; más puede subir los FPS cuando la tarjeta gráfica es el límite.',
+        'Engine frame rate': 'Velocidad de fotogramas del motor',
+        'The highest frame rate the game itself runs at (a game patch).':
+            'La mayor velocidad de fotogramas a la que corre el propio juego (un parche del juego).',
+        'Render resolution': 'Resolución de render',
+        'The size the game draws at; higher is sharper and slower. A resolution patch replaces the texture fix and reserves the memory it needs.':
+            'El tamaño al que dibuja el juego; más alto es más nítido y más lento. Un parche de resolución reemplaza la corrección de texturas y reserva la memoria que necesita.',
+        'Shaders': 'Shaders',
+        'Use pipeline binary cache (A/B test)': 'Usar caché binaria de pipelines (prueba A/B)',
+        'Reuse saved Vulkan pipelines. Disable to compare FPS with normal compilation. Takes effect on the next launch; saved caches are preserved.':
+            'Reutiliza pipelines de Vulkan guardados. Desactívalo para comparar los FPS con la compilación normal. Se aplica en el próximo inicio; las cachés guardadas se conservan.',
+        'Load shader cache in the background': 'Cargar la caché de shaders en segundo plano',
+        'The game opens at once and the saved shaders load while you play; a small note in the corner shows the progress. Switch it off to wait on the loading screen instead.':
+            'El juego abre al instante y los shaders guardados se cargan mientras juegas; una pequeña nota en la esquina muestra el progreso. Desactívalo para esperar en la pantalla de carga.',
+        'Compile new shaders in the background': 'Compilar shaders nuevos en segundo plano',
+        'Fewer stutters in new areas: the game keeps running while new shaders compile. An object or effect may appear a moment later. Switch it off if something stays missing.':
+            'Menos tirones en zonas nuevas: el juego sigue corriendo mientras se compilan shaders nuevos. Un objeto o efecto puede aparecer un instante después. Desactívalo si algo sigue sin aparecer.',
+        'Fast shader cache loading (parallel)': 'Carga rápida de la caché de shaders (paralela)',
+        'Loading screen only: builds the cached pipelines on several CPU threads.':
+            'Solo en la pantalla de carga: construye los pipelines en caché en varios hilos de la CPU.',
+        'GPU data': 'Datos de la GPU',
+        'Stream buffer memory': 'Memoria del búfer de streaming',
+        'System RAM can improve FPS on NVIDIA laptops. Choose GPU memory to restore the previous behavior. Applies on the next game launch.':
+            'La RAM del sistema puede mejorar los FPS en portátiles con NVIDIA. Elige la memoria de la GPU para restaurar el comportamiento anterior. Se aplica en el próximo inicio del juego.',
+        'Game reads GPU data without waiting (big FPS gain)':
+            'El juego lee datos de la GPU sin esperar (gran mejora de FPS)',
+        'About 40 to 66 FPS in a heavy scene. Needs deferred GPU readbacks. Switch it off if lighting or objects look wrong.':
+            'Unos 40 a 66 FPS en una escena pesada. Requiere lecturas de la GPU diferidas. Desactívalo si la iluminación o los objetos se ven mal.',
+        'Deferred GPU readbacks': 'Lecturas de la GPU diferidas',
+        'Fewer waits for the GPU. Switch it off if textures or shadows look wrong.':
+            'Menos esperas por la GPU. Desactívalo si las texturas o las sombras se ven mal.',
+        'Your game dump, saves and language.': 'Tu volcado del juego, partidas e idioma.',
+        'Cheats': 'Trucos',
+        'Infinite Double Jumps': 'Dobles saltos infinitos',
+        'Repeat air jumps without landing. Also available in the in-game Cheats menu.':
+            'Repite los saltos en el aire sin tocar el suelo. También está en el menú de trucos del juego.',
+        'Unlock Very Hard': 'Desbloquear Muy difícil',
+        'Select Very Hard without completing the game. Does not change existing save difficulty. In-game: enable before opening New Game.':
+            'Permite elegir Muy difícil sin completar el juego. No cambia la dificultad de las partidas existentes. En el juego: actívalo antes de abrir Nuevo juego.',
+        'Folders': 'Carpetas',
+        'Your own dump of the game (eboot.bin, sce_module, sce_sys); God of War III Remastered: CUSA01623, version 01.02 for the community patches.':
+            'Tu propio volcado del juego (eboot.bin, sce_module, sce_sys); God of War III Remastered: CUSA01623, versión 01.02 para los parches de la comunidad.',
+        'Update folder (optional)': 'Carpeta de la actualización (opcional)',
+        'Choose the folder of the update (eboot.bin, sce_sys)':
+            'Elige la carpeta de la actualización (eboot.bin, sce_sys)',
+        'Only if the update is dumped apart from the game: it is laid over the game folder without changing either. Leave empty when the game folder already has the update.':
+            'Solo si la actualización se volcó aparte del juego: se superpone a la carpeta del juego sin modificar ninguna de las dos. Déjala vacía cuando la carpeta del juego ya incluya la actualización.',
+        'Saves': 'Partidas',
+        'Language': 'Idioma',
+        'Save backups': 'Copias de seguridad de partidas',
+        'Changes applied to the game code at start.':
+            'Cambios que se aplican al código del juego al iniciar.',
+        'Files layered over the game at start; the game files are never changed.':
+            'Archivos que se superponen al juego al iniciar; los archivos del juego nunca se modifican.',
+        'Loose-file mods, each in its own folder with dvdroot_ps4.':
+            'Mods de archivos sueltos, cada uno en su propia carpeta con dvdroot_ps4.',
+        'Controls': 'Controles',
+        'Which key or gamepad button presses each button of the game.':
+            'Qué tecla o botón del mando activa cada botón del juego.',
+        'Gamepad names': 'Nombres de los botones del mando',
+        "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Insert and R3+L2 always open the port's menu. Applied when the game starts.":
+            'Las teclas usan nombres de SDL: letras, dígitos, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 a F12. Un nombre que el juego no reconoce mantiene el predeterminado (el registro indica cuál). L2/R2 del mando se quedan en los gatillos. Insert y R3+L2 siempre abren el menú del port. Se aplica al iniciar el juego.',
+        'Linux': 'Linux',
+        'Window system': 'Sistema de ventanas',
+        'Launcher options, files and diagnostics.': 'Opciones del lanzador, archivos y diagnóstico.',
+        'Files': 'Archivos',
+        'GPU wait and readback report in the log (every 5 s)':
+            'Informe de esperas y lecturas de la GPU en el registro (cada 5 s)',
+        'Shows where the frame waits for the GPU and which reads cause it. For performance tests.':
+            'Muestra dónde espera el fotograma a la GPU y qué lecturas lo causan. Para pruebas de rendimiento.',
+        'F11 captures a frame for analysis': 'F11 captura un fotograma para analizarlo',
+        'Records how the next frame is drawn into the captures folder.':
+            'Graba cómo se dibuja el siguiente fotograma en la carpeta de capturas.',
+        'Home': 'Inicio',
+        'Choose the game folder': 'Elige la carpeta del juego',
+        'Close the game before restoring saves.': 'Cierra el juego antes de restaurar las partidas.',
+        'No built-in patches for this game.': 'No hay parches integrados para este juego.',
+        'GAME BUTTON': 'BOTÓN DEL JUEGO',
+        'KEYBOARD': 'TECLADO',
+        'GAMEPAD': 'MANDO',
+        'GameMode': 'GameMode',
+        'Asks GameMode (gamemoderun) for the performance governor while the game runs.':
+            'Pide a GameMode (gamemoderun) el governor de rendimiento de la CPU mientras el juego se ejecuta.',
+        'MangoHud overlay': 'Overlay de MangoHud',
+        'Shows MangoHud (FPS, frame times, temperatures) through its Vulkan layer.':
+            'Muestra MangoHud (FPS, tiempos de fotograma, temperaturas) mediante su capa de Vulkan.',
+        '{} · {} FPS engine · {} patches': '{} · motor a {} FPS · {} parches',
+        'Type a name for the preset first.': 'Escribe primero un nombre para el preajuste.',
+        'RUNNING': 'EN EJECUCIÓN',
+        '{} · version {}': '{} · versión {}',
+        'Choose your game folder to play.': 'Elige la carpeta del juego para jugar.',
+        'Made before every start, newest first; the last {} are kept. Restoring backs up the current saves first.':
+            'Se hace antes de cada inicio, de la más reciente a la más antigua; se conservan las últimas {}. Antes de restaurar se hace una copia de las partidas actuales.',
+        'shadPS4/GoldHEN XML patch files for this game version. Empty: {}':
+            'Archivos de parche XML de shadPS4/GoldHEN para esta versión del juego. Vacío: {}',
+        '{} · version {} · {}. Resolution and frame rate patches follow Performance.':
+            '{} · versión {} · {}. Los parches de resolución y de velocidad de fotogramas siguen a Rendimiento.',
+        'Automatic lets SDL choose. Pick X11 if the window misbehaves on Wayland (it runs through XWayland).':
+            'Automático deja que SDL elija. Elige X11 si la ventana falla en Wayland (se ejecuta mediante XWayland).',
+        '{} · 60 FPS engine · patches not available for this game build':
+            '{} · motor a 60 FPS · parches no disponibles para esta versión del juego',
+        'Shortcut created:': 'Acceso directo creado:',
+        'Restore': 'Restaurar',
+        'Replace the current saves with the backup {}? The current saves are backed up first.':
+            '¿Reemplazar las partidas actuales por la copia {}? Antes se hace una copia de las partidas actuales.',
+        'Saves restored from {}.': 'Partidas restauradas desde {}.',
+        'Reset to defaults': 'Restablecer valores predeterminados',
+        '⚠ {} file(s) replaced by more than one mod (the last one wins):':
+            '⚠ {} archivo(s) reemplazado(s) por más de un mod (gana el último):',
+        '   … and {} more': '   … y {} más',
+        'restart': 'reiniciar',
+        'Could not restore: {}': 'No se pudo restaurar: {}',
+        ' Previous saves: {}.': ' Partidas anteriores: {}.',
+        'No Wayland session detected.': 'No se detectó ninguna sesión de Wayland.',
+        'Not installed.': 'No instalado.',
+        'Preset': 'Preajuste',
+        'Load': 'Cargar',
+        'Save': 'Guardar',
+        'Could not save all settings. Check write permissions and free disk space, then try again.':
+            'No se pudieron guardar todos los ajustes. Comprueba los permisos de escritura y el espacio libre en disco e inténtalo de nuevo.',
+        'Delete': 'Borrar',
+        'No patch files for this game version yet.':
+            'Aún no hay archivos de parche para esta versión del juego.',
+        '{} trigger': 'gatillo {}',
+        'Diagnostics (for development)': 'Diagnóstico (para desarrollo)',
+        'Windowed': 'En ventana',
+        'Borderless': 'Sin bordes',
+        'Unlimited': 'Ilimitado',
+        'Automatic': 'Automático',
+        'Native AA (×1.0)': 'AA nativo (×1.0)',
+        'Quality (×1.5)': 'Calidad (×1.5)',
+        'Balanced (×1.7)': 'Equilibrado (×1.7)',
+        'Performance (×2)': 'Rendimiento (×2)',
+        'Ultra Performance (×3)': 'Rendimiento máximo (×3)',
+        'Precise': 'Preciso',
+        'System RAM (cached, default)': 'RAM del sistema (caché, predet.)',
+        'System RAM (uncached)': 'RAM del sistema (sin caché)',
+        'GPU memory (previous behavior)': 'Memoria de la GPU (anterior)',
+        '1 (lowest latency)': '1 (menor latencia)',
+        'Native (1080p)': 'Nativa (1080p)',
+        'Graphics (experimental)': 'Gráficos (experimental)',
+        'Experimental': 'Experimental',
+        'Enable the upscaler (experimental)': 'Activar el escalador (experimental)',
+        'Off (default): the game runs without temporal upscaling. These upscalers are not calibrated for this game yet: expect ghosting or flicker. FSR 3.1 needs nothing else; FSR 4 needs the assets below, and without them the game uses FSR 3.1. The options on this page only take effect with this switch on.':
+            'Desactivado (predeterminado): el juego corre sin escalado temporal. Estos escaladores aún no están calibrados para este juego: es posible que haya estelas (ghosting) o parpadeos. FSR 3.1 no necesita nada más; FSR 4 necesita los archivos de abajo y, sin ellos, el juego usa FSR 3.1. Las opciones de esta página solo surten efecto con este interruptor activado.',
+        'Add to Steam': 'Añadir a Steam',
+        'Steam is open. Close it completely (Steam > Exit) and click again: Steam rewrites its shortcuts when it closes.':
+            'Steam está abierto. Ciérralo por completo (Steam > Salir) y vuelve a hacer clic: Steam reescribe sus accesos directos al cerrarse.',
+        'Steam was not found for this user.': 'No se encontró Steam para este usuario.',
+        'The game folder has no sce_sys/pic1.png for the pictures.':
+            'La carpeta del juego no tiene sce_sys/pic1.png para generar las imágenes.',
+        'The shortcut "{}" was updated in Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.':
+            'El acceso directo "{}" se actualizó en Steam (cuentas: {}), con su icono, cápsulas, fondo y logotipo. Abre Steam para verlo en la biblioteca.',
+        'The shortcut "{}" was added to Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.':
+            'El acceso directo "{}" se añadió a Steam (cuentas: {}), con su icono, cápsulas, fondo y logotipo. Abre Steam para verlo en la biblioteca.',
+        'Menu entry and icon (AppImage)': 'Entrada de menú e icono (AppImage)',
+        'Creates gow3.desktop in ~/.local/share/applications so the launcher and the game show their icon in the dock and the menu. Turning it off removes the entry.':
+            'Crea gow3.desktop en ~/.local/share/applications para que el lanzador y el juego muestren su icono en el dock y en el menú. Al desactivarlo se elimina la entrada.',
+        'The game dump is incomplete. Missing or empty files:\n\n{}\n\nDump the game again, or copy these files from a complete dump.':
+            'El volcado del juego está incompleto. Archivos que faltan o están vacíos:\n\n{}\n\nVuelve a volcar el juego o copia esos archivos de un volcado completo.',
+        'The files in {} look like a PKG extraction: the system files (param.sfo, icon0.png, pic1.png and the rest) are in\n\n{}\n\nCopy all of them into its sce_sys folder now? Files already there are kept.':
+            'Los archivos de {} parecen la extracción de un PKG: los archivos del sistema (param.sfo, icon0.png, pic1.png y el resto) están en\n\n{}\n\n¿Copiarlos todos ahora a su carpeta sce_sys? Los archivos que ya están allí se conservan.',
+        'Could not copy the files: {}': 'No se pudieron copiar los archivos: {}',
+        '{} (empty)': '{} (vacío)',
+        '{} (unreadable)': '{} (no se puede leer)',
+        '{} (not a param.sfo)': '{} (no es un param.sfo)',
+        '{} (a folder, not a file)': '{} (es una carpeta, no un archivo)',
+        'Choose two separate folders for the game and its update, or leave the update folder empty.':
+            'Elige dos carpetas distintas para el juego y su actualización, o deja vacía la carpeta de la actualización.',
+        'Copying the system files…': 'Copiando los archivos del sistema…',
+        'The update folder {} is incomplete. Missing or empty files:\n\n{}\n\nChoose the folder of the update (eboot.bin, sce_sys), or leave it empty.':
+            'La carpeta de la actualización {} está incompleta. Archivos que faltan o están vacíos:\n\n{}\n\nElige la carpeta de la actualización (eboot.bin, sce_sys) o déjala vacía.',
+        'In-game button icons': 'Iconos de botones en el juego',
+        'Original (default)': 'Original (predeterminado)',
+        'Match my controller': 'Igual que mi mando',
+        'Keyboard': 'Teclado',
+        "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of two game files in the port's data folder (about 70 MB); your game folder is never changed. Applied when the game starts.":
+            'Sustituye los iconos de botones de PlayStation dentro del juego por los de tu mando. Trabaja sobre una copia de dos archivos del juego en la carpeta de datos del port (unos 70 MB); tu carpeta del juego nunca se modifica. Se aplica al iniciar el juego.',
+        'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
+            'Windows no pudo reservar la memoria que necesita el juego. Cierra otros programas, o deja que el archivo de paginación de Windows crezca (por ejemplo 16384 MB inicial, 32768 MB máximo), y vuelve a iniciarlo.',
+        'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.':
+            'El juego se detuvo al leer sus archivos: el dump del juego puede estar incompleto. Extrae el pkg de nuevo y comprueba que la carpeta del juego ocupa unos 40 GB.',
+        'Textures': 'Texturas',
+        'Anisotropic filtering': 'Filtrado anisotrópico',
+        'Game default': 'Predeterminado del juego',
+        'Sharper floors and walls seen at an angle, at little cost on most graphics cards.':
+            'Suelos y paredes vistos en ángulo se ven más nítidos, con poco coste en la mayoría de las tarjetas gráficas.',
+        'Screenshots': 'Capturas de pantalla',
+        'Open the screenshots folder': 'Abrir la carpeta de capturas',
+        'F12 in the game': 'F12 en el juego',
+        "Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves.":
+            'Guarda la imagen del juego, sin el overlay, como PNG en la carpeta screenshots de las partidas.',
+        'Vibration': 'Vibración',
+        "Strength of the gamepad's vibration; 0% turns it off.": 'Fuerza de la vibración del mando; 0% la desactiva.',
+        '(none)': '(ninguna)',
+        'Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.':
+            'Ratón adaptativo: cuánto se mueve el ratón para cada paso de un giro. También en el menú del juego.',
+        'Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.':
+            'Apuntar con el ratón mientras mantienes L2 (Cabeza de Helios, Arco de Apolo). Relativo: el stick sigue el movimiento y vuelve al centro cuando el ratón se detiene. Absoluto: donde estaba el ratón al pulsar L2 es el centro, y el stick apunta desde él hasta el ratón. También en el menú del juego.',
+        'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
+            'Apuntar con el ratón mientras mantienes L2: más bajo necesita más movimiento del ratón para el mismo stick, más alto menos. También en el menú del juego.',
+        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+            'Haz clic en una casilla y luego pulsa una tecla, haz clic con un botón del ratón o gira la rueda (se cancela tras {} segundos). Una entrada ya usada por otro botón se intercambia con él; la flecha devuelve un botón a su valor predeterminado. Rage of Sparta pulsa L3 y R3 a la vez: marca la casilla de encima para usar una entrada en lugar de dos. Agarrar pulsa L1 y Círculo a la vez. Esquivar evade hacia donde te mueves (WASD), o hacia atrás si estás quieto. El touchpad derecho abre el menú de pausa del juego. Insert siempre abre el menú del port y no se puede asignar. Se aplica al iniciar el juego.',
+        'Gamepad Mapping': 'Asignación del mando',
+        'General': 'General',
+        'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
+            'Cómo se responden los eventos de girar el stick. Teclado: escribe el giro, medias vueltas desde arriba D S A (horario) o A S D, desde abajo A W D o D W A, vueltas completas D S A W o A S D W; una tecla fuera de orden vuelve a empezar. Ratón adaptativo: dibuja el giro con el ratón.',
+        'Joystick prompts': 'Eventos del stick',
+        'Keep the mouse in the game window': 'Mantener el ratón en la ventana del juego',
+        'Key not supported': 'Tecla no compatible',
+        'Keyboard & Mouse Mapping': 'Asignación de teclado y ratón',
+        'Keyboard and mouse, button icons and gamepad mapping.':
+            'Teclado y ratón, iconos de botones y asignación del mando.',
+        "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.":
+            'L2/R2 siguen en los gatillos. El touchpad derecho abre el menú de pausa del juego; el touchpad izquierdo (modo foto) es L1 + touchpad derecho. R3+L2 siempre abre el menú del port. Se aplica al iniciar el juego.',
+        'Mouse prompt distance': 'Distancia del ratón en los eventos',
+        'Press a key': 'Pulsa una tecla',
+        'Press a key or mouse': 'Pulsa una tecla o el ratón',
+        'Rage of Sparta on one input (L3 + R3 together)':
+            'Rage of Sparta en una entrada (L3 + R3 a la vez)',
+        'Reset gamepad to defaults': 'Restablecer el mando',
+        'Reset keyboard & mouse to defaults': 'Restablecer teclado y ratón',
+        'Right stick sensitivity': 'Sensibilidad del stick derecho',
+        'Right stick style': 'Estilo del stick derecho',
+        'Which gamepad button presses each button of the game.':
+            'Qué botón del mando pulsa cada botón del juego.',
+        'Which key or mouse input presses each button of the game.':
+            'Qué tecla o entrada del ratón pulsa cada botón del juego.',
+        'While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.':
+            'Mientras juegas, el ratón se queda en la ventana del juego, así un clic no cae en otro monitor o programa. El menú del juego y cambiar de ventana lo liberan. También en el menú del juego.',
+        'Keyboard (native)': 'Teclado (nativo)',
+        'Adaptive mouse (experimental)': 'Ratón adaptativo (experimental)',
+        'Relative': 'Relativo',
+        'Absolute': 'Absoluto',
+        'Grab': 'Agarrar',
+        'Dodge': 'Esquivar',
     },
 }
+
+EXTRA['pt'].update({
+    'GUI Scale': 'Escala da interface',
+    'Auto': 'Automático',
+    'For launcher only. Applies after Save.':
+        'Somente para o inicializador. Aplica-se após Salvar.',
+})
+
+EXTRA['pt'].update({
+    '1 file': '1 arquivo',
+    'Change textures, sounds and text. Your game files stay untouched.': 'Troque texturas, sons e textos. Os arquivos do jogo não são alterados.',
+    'Details': 'Detalhes',
+    'Drop a mod folder or .zip in the mods folder.': 'Coloque a pasta ou o .zip do mod na pasta de mods.',
+    'Hide': 'Ocultar',
+    'Load order': 'Ordem de carga',
+    'Lower in the list wins': 'O mais abaixo na lista vence',
+    'No mods yet': 'Nenhum mod ainda',
+    'Open folder': 'Abrir pasta',
+    'Open mod folder': 'Abrir pasta do mod',
+    'Open mods folder': 'Abrir pasta de mods',
+    'Presets': 'Presets',
+    'Website': 'Site',
+    'by {}': 'por {}',
+    'game patches': 'patches de jogo',
+    '{} files': '{} arquivos',
+    '{} of {} active': '{} de {} ativos',
+    '… and {} more': '… e mais {}',
+    '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 arquivo é alterado por dois mods. {} vence.',
+    '⚠ {} also in {}. {} wins.': '⚠ {} também em {}. {} vence.',
+    '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ {} arquivos são alterados por mais de um mod. Vence o mais abaixo na lista.',
+})
+EXTRA['es'].update({
+    '1 file': '1 archivo',
+    'Change textures, sounds and text. Your game files stay untouched.': 'Cambia texturas, sonidos y textos. Los archivos del juego no se modifican.',
+    'Details': 'Detalles',
+    'Drop a mod folder or .zip in the mods folder.': 'Coloca la carpeta o el .zip del mod en la carpeta de mods.',
+    'Hide': 'Ocultar',
+    'Load order': 'Orden de carga',
+    'Lower in the list wins': 'Gana el que está más abajo',
+    'No mods yet': 'Aún no hay mods',
+    'Open folder': 'Abrir carpeta',
+    'Open mod folder': 'Abrir carpeta del mod',
+    'Open mods folder': 'Abrir carpeta de mods',
+    'Presets': 'Preajustes',
+    'Website': 'Sitio web',
+    'by {}': 'por {}',
+    'game patches': 'parches del juego',
+    '{} files': '{} archivos',
+    '{} of {} active': '{} de {} activos',
+    '… and {} more': '… y {} más',
+    '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 archivo lo cambian dos mods. Gana {}.',
+    '⚠ {} also in {}. {} wins.': '⚠ {} también en {}. Gana {}.',
+    '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ {} archivos los cambian varios mods. Gana el que está más abajo.',
+})
+
+EXTRA['pt'].update({
+    'Left stick click': 'Clique do analógico esquerdo',
+    'Right stick click': 'Clique do analógico direito',
+    'Plus (+)': 'Mais (+)',
+    'Minus (−)': 'Menos (−)',
+    'Home button': 'Botão Home',
+    'Capture': 'Captura',
+})
+EXTRA['es'].update({
+    'Left stick click': 'Clic del stick izquierdo',
+    'Right stick click': 'Clic del stick derecho',
+    'Plus (+)': 'Más (+)',
+    'Minus (−)': 'Menos (−)',
+    'Home button': 'Botón Home',
+    'Capture': 'Captura',
+})
+
+EXTRA['pt'].update({
+    'Device': 'Dispositivo',
+    'Keyboard & mouse': 'Teclado e mouse',
+    'Gamepad': 'Controle',
+    'Controller type': 'Tipo de controle',
+})
+EXTRA['es'].update({
+    'Device': 'Dispositivo',
+    'Keyboard & mouse': 'Teclado y ratón',
+    'Gamepad': 'Mando',
+    'Controller type': 'Tipo de mando',
+})
+
+EXTRA['es'].update({
+    'Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+        'Permite saltar manualmente cualquier cinemática con el botón X. Gracias a illusion0001, alias illusionyy, por el parche de PS3 que lo hizo muy fácil.',
+    'Circle':
+        'Círculo',
+    'Cross':
+        'X',
+    'D-pad down':
+        'Cruceta abajo',
+    'D-pad left':
+        'Cruceta izquierda',
+    'D-pad right':
+        'Cruceta derecha',
+    'D-pad up':
+        'Cruceta arriba',
+    'Fast screen effects (Rage of Sparta, weapons)':
+        'Efectos de pantalla rápidos (Rage of Sparta, armas)',
+    'Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.':
+        'Corrige las texturas corruptas del juego aumentando el tamaño del Video Arena, para que el juego use más memoria de vídeo en texturas y efectos. Requiere DMEM de 2048 MB o más, o el juego se cierra. Activa este parche o un parche de resolución, nunca los dos.',
+    'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.':
+        'Corrige la pantalla negra al iniciar con el contador de FPS en marcha: el índice de ritmo de fotogramas empieza en 2 en lugar de 0, así el segundo fotograma ya no espera un flip que solo él puede provocar.',
+    'For launcher only. Applies after Save.':
+        'Solo para el launcher. Se aplica después de Guardar.',
+    'GUI Scale':
+        'Escala de la interfaz',
+    'Graphics card':
+        'Tarjeta gráfica',
+    'Keeps powers and weapon effects at full FPS. Switch it off if a screen effect (blur, distortion, the color change of a power) looks stretched, shifted or wrong.':
+        'Mantiene los poderes y los efectos de las armas a FPS completos. Desactívalo si un efecto de pantalla (desenfoque, distorsión, el cambio de color de un poder) se ve estirado, desplazado o mal.',
+    'L1 + Touchpad right':
+        'L1 + touchpad derecho',
+    'LS (left stick click)':
+        'LS (clic del stick izquierdo)',
+    'Mute button':
+        'Botón de silencio',
+    'PS button':
+        'Botón PS',
+    'RS (right stick click)':
+        'RS (clic del stick derecho)',
+    'Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+        'Salta los logotipos iniciales. Gracias a illusion0001, alias illusionyy, por el parche de PS3 que lo hizo muy fácil.',
+    'Square':
+        'Cuadrado',
+    'The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.':
+        'La GPU en la que se ejecuta el juego. Elige tu tarjeta dedicada si el juego usa la integrada.',
+    'Touchpad click':
+        'Clic del touchpad',
+    'Touchpad left':
+        'Touchpad izquierdo',
+    'Touchpad right':
+        'Touchpad derecho',
+    'Triangle':
+        'Triángulo',
+    'Xbox button':
+        'Botón Xbox',
+    'Your own dump of the game (eboot.bin, sce_module, sce_sys): God of War III Remastered, any region and version.':
+        'Tu propio volcado del juego (eboot.bin, sce_module, sce_sys): God of War III Remastered, cualquier región y versión.',
+    '{} not found in this eboot.bin at the last start (see Log)':
+        '{} no se encontró en este eboot.bin en el último inicio (ver Registro)',
+    '{} · 60 FPS engine · no patches for this game':
+        '{} · motor a 60 FPS · sin parches para este juego',
+    'Native · 1920 × 1080 · 16:9':
+        'Nativa · 1920 × 1080 · 16:9',
+})
+
+EXTRA['pt'].update({
+    'Aspect ratio': 'Proporção da tela',
+    'Shows the render resolutions of this shape only.': 'Mostra só as resoluções de render desta proporção.',
+})
+EXTRA['es'].update({
+    'Aspect ratio': 'Relación de aspecto',
+    'Shows the render resolutions of this shape only.': 'Muestra solo las resoluciones de render de esta proporción.',
+})
 
 _tables = {}
 

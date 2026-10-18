@@ -35,6 +35,19 @@ int gow3gpu_choice_begin(const char *title, const char *const *items, const char
 int gow3gpu_choice_poll(void);
 /* 1 while the in-game settings menu is open: the game's pad input is held neutral. */
 int gow3gpu_overlay_captures_input(void);
+/* Controller vibration strength set in the menu, 0 (off) to 100 (the game's own). */
+int gow3gpu_vibration_percent(void);
+/* The video decoder handed the game a picture: a cutscene is on screen (the presenter draws
+ * black bars outside its 16:9 picture when the render resolution is not 16:9). */
+void gow3gpu_movie_picture(void);
+/* Mouse movement in px that counts as one step of a stick prompt, set in the menu. */
+int gow3gpu_mouse_prompt_distance(void);
+/* The pause key (touchpad right) was pressed: it lets go of the mouse lock, or takes it back. */
+void gow3gpu_mouse_pause_key(void);
+/* L2 aim with the mouse, set in the menu: 0 relative (follows movement), 1 absolute. */
+int gow3gpu_mouse_aim_style(void);
+/* L2 aim sensitivity in percent (10 to 200), set in the menu. */
+int gow3gpu_mouse_aim_sensitivity(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */
 unsigned gow3gpu_symbol_count(void);
 #ifdef __cplusplus

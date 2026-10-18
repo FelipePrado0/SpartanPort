@@ -27,8 +27,8 @@ fi
 out/pyenv/Scripts/python.exe -m pip install -q --disable-pip-version-check pyinstaller pillow iced-x86==1.21.0
 # The scripts run inside God of War III.exe (--script): the standard modules they import come along.
 hidden=()
-for module in argparse base64 collections hashlib json re shutil struct tempfile xml.etree.ElementTree \
-              urllib.request ctypes.wintypes iced_x86; do
+for module in argparse base64 collections hashlib json re shutil socket struct tempfile threading uuid \
+              xml.etree.ElementTree urllib.request ctypes.wintypes iced_x86; do
     hidden+=(--hidden-import "$module")
 done
 out/pyenv/Scripts/python.exe -m PyInstaller --noconfirm --clean --log-level WARN --windowed --copy-metadata pillow \
@@ -43,7 +43,7 @@ rm -rf -- out/stage
 mkdir -p "$dest/bin" "$dest/launcher"
 cp -r "out/pyi-dist/God of War III/." "$dest/"
 llvm-strip -o "$dest/Play God of War III.exe" out/gow3-play.exe
-cp launcher/gow3.ico launcher/gow3.png launcher/gowfont.ttf "$dest/launcher/"
+cp launcher/gow3.ico launcher/gow3.png launcher/Cinzel-Black.ttf launcher/OFL-Cinzel.txt "$dest/launcher/"
 # The executables without debug information (out/ keeps the symbols for crash reports).
 for exe in gow3-probe.exe gow3-gpu-capabilities.exe; do
     llvm-strip --strip-debug -o "$dest/bin/$exe" "out/$exe"
@@ -56,6 +56,9 @@ ldd "$dest/bin/gow3-probe.exe" "$dest/bin/gow3-gpu-capabilities.exe" |
 cp -r scripts patches "$dest/"
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 find "$dest" -name __pycache__ -prune -exec rm -r {} +
+[[ -f $dest/scripts/discord_presence.py ]] || { echo 'scripts/discord_presence.py is missing from the package' >&2; exit 1; }
+grep -Eq "^CLIENT_ID = '[0-9]+'" "$dest/scripts/discord_presence.py" ||
+    echo 'Warning: CLIENT_ID is empty in discord_presence.py; Discord Rich Presence will not start.' >&2
 # No game files and nothing a player made (saves, shader caches built from the game's shaders,
 # settings, logs) may ship: stop when one is found.
 forbidden=$(find "$dest" \( -iname eboot.bin -o -iname sce_module -o -iname sce_sys -o -iname savedata \

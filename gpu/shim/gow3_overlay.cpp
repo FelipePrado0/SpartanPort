@@ -29,6 +29,7 @@ extern "C" void runtime_restart(void); // src/probe.c: starts run.py again, ends
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
+#include "video_core/renderdoc.h"
 
 // DejaVu Sans (Cyrillic), embedded (third_party/fonts, Bitstream Vera license).
 #ifdef _WIN32
@@ -66,6 +67,10 @@ bool r3_down = false, l2_down = false;
 std::atomic<bool> loading{false};
 std::atomic<u32> loading_done{0}, loading_total{0};
 std::atomic<u32> background_done{0}, background_total{0};
+// A short message in a corner (saved screenshot), shown until notice_until.
+std::mutex notice_mutex;
+std::string notice_text;
+std::atomic<s64> notice_until{0}; // steady_clock milliseconds
 bool dirty = false; // settings changed while open: saved on close
 int requested_tab = -1; // switch on the next frame (L1/R1, Q/E, menu opened)
 // The game's text dialog (SetTextEntry), guarded by imgui_mutex.
@@ -323,6 +328,24 @@ void GameTab() {
         ImGui::EndTable();
     }
 
+    ImGui::SeparatorText("Controller");
+    if (BeginRows("##controller")) {
+        SliderRow("Vibration", s.vibration, 0, 100, "%d%%",
+                  "Strength of the controller's vibration. 0% turns it off.");
+        SliderRow("Mouse prompt distance", s.mouse_prompt_distance, 16, 200, "%d px",
+                  "With Joystick prompts on Adaptive mouse: how far the mouse moves for one step of a rotation.");
+        static const char* const aim_styles[] = {"Relative", "Absolute"};
+        ChoiceRow("Right stick style", s.mouse_aim_style, aim_styles, nullptr, 2,
+                  "L2 aim with the mouse (Head of Helios, Bow of Apollo). Relative: the stick follows the "
+                  "movement and goes back to neutral when the mouse stops. Absolute: the stick points from "
+                  "where the mouse was when L2 was pressed to where it is.");
+        SliderRow("Right stick sensitivity", s.mouse_aim_sensitivity, 10, 200, "%d%%",
+                  "L2 aim with the mouse: lower needs more mouse movement for the same stick, higher less.");
+        CheckRow("Keep mouse in window", s.mouse_lock,
+                 "While you play, the mouse stays in the game window; this menu and other windows get it back.");
+        ImGui::EndTable();
+    }
+
     ImGui::SeparatorText("Multipliers");
     if (ImGui::Button("Reset all to 1x")) {
         for (auto* m : {&s.red_orb_multiplier, &s.green_orb_multiplier, &s.blue_orb_multiplier,
@@ -393,6 +416,15 @@ void ImageTab() {
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
+    ImGui::SeparatorText("Textures (applied on restart)");
+    if (BeginRows("##textures")) {
+        static const char* const anisotropy_labels[] = {"Game default", "2x", "4x", "8x", "16x"};
+        ChoiceRow("Anisotropic filtering", s.anisotropy, anisotropy_labels, G::Anisotropies.data(),
+                  int(G::Anisotropies.size()),
+                  "Sharper floors and walls seen at an angle. Little cost on most GPUs.");
+        ImGui::EndTable();
+    }
+    ImGui::TextDisabled("F12 saves a screenshot to the user\\screenshots folder.");
     ImGui::SeparatorText("Information");
     if (BeginRows("##image_info")) {
         char text[96];
@@ -410,7 +442,7 @@ void PerformanceTab() {
     auto& s = Gow3Settings::Get();
     ImGui::SeparatorText("Live");
     if (BeginRows("##live")) {
-        static const char* const fps_labels[] = {"30", "60", "120", "240", "Unlimited"};
+        static const char* const fps_labels[] = {"30", "60", "100", "120", "240", "Unlimited"};
         ChoiceRow("Frame rate limit", s.fps_limit, fps_labels, G::FpsLimits.data(), int(G::FpsLimits.size()),
                   "Caps the frame rate. The engine frame rate (below) is the highest it can go.");
         const int effective = G::EffectiveFps(s.fps_limit, s.applied_engine_fps);
@@ -431,10 +463,29 @@ void PerformanceTab() {
     }
     ImGui::SeparatorText("Applied on restart");
     if (BeginRows("##restart")) {
-        static const char* const resolution_labels[] = {"Native (1080p)", "480p", "720p", "1440p", "1800p", "4K"};
-        ChoiceRow("Render resolution", s.render_resolution, resolution_labels, nullptr, int(G::Resolutions.size()),
-                  "The resolution the game draws at. Higher is sharper and slower.");
-        static const char* const engine_labels[] = {"60 (original)", "120", "240"};
+        // The built-in sizes, then those of the enabled mods' patch files (ultrawide, for one).
+        // The same labels as the launcher (graphics_options.resolution_label): name, exact size, aspect ratio.
+        static const char* const builtin_labels[] = {
+            "Native · 1920 × 1080 · 16:9", "480p · 854 × 480 · 16:9",
+            "720p · 1280 × 720 · 16:9", "900p · 1600 × 900 · 16:9",
+            "1440p · 2560 × 1440 · 16:9",
+            "1800p · 3200 × 1800 · 16:9", "4K · 3840 × 2160 · 16:9",
+            "2560 × 1080 · 21:9 (beta)", "3440 × 1440 · 21:9 (beta)",
+            "3840 × 1600 · 21:9 (beta)", "5120 × 1440 · 32:9 (beta)",
+            "1920 × 1200 · 16:10 (beta)", "2560 × 1600 · 16:10 (beta)",
+            "1280 × 800 · 16:10", "1440 × 900 · 16:10",
+            "1360 × 768 · 16:9",
+            "1280 × 960 · 4:3", "1440 × 1080 · 4:3 (beta)", "1920 × 1440 · 4:3 (beta)",
+            "2048 × 1536 · 4:3 (beta)", "2560 × 1920 · 4:3 (beta)", "5120 × 2160 · 21:9 (beta)"};
+        static_assert(std::size(builtin_labels) == G::Resolutions.size());
+        const std::vector<std::string> resolution_names = G::ResolutionNames();
+        std::vector<const char*> resolution_labels;
+        for (std::size_t i = 0; i < resolution_names.size(); ++i) {
+            resolution_labels.push_back(i < G::Resolutions.size() ? builtin_labels[i] : resolution_names[i].c_str());
+        }
+        ChoiceRow("Render resolution", s.render_resolution, resolution_labels.data(), nullptr,
+                  int(resolution_labels.size()), "The resolution the game draws at. Higher is sharper and slower.");
+        static const char* const engine_labels[] = {"60 (original)", "100", "120", "240"};
         ChoiceRow("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()),
                   "The highest frame rate the game itself runs at.");
         CheckRow("Game reads GPU data without waiting", s.stale_readback,
@@ -521,7 +572,8 @@ void OverlayTab() {
 int RestartChanges() {
     const auto& s = Gow3Settings::Get();
     return (s.render_resolution != s.startup_render_resolution) + (s.engine_fps != s.startup_engine_fps) +
-           (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback);
+           (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
+           (s.anisotropy != s.startup_anisotropy);
 }
 
 void Menu() {
@@ -806,7 +858,45 @@ void BackgroundLoading() {
     ImGui::End();
 }
 
+s64 NowMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+bool NoticeActive() {
+    return notice_until.load(std::memory_order_relaxed) > NowMs();
+}
+
+void Notice() {
+    std::string text;
+    {
+        std::scoped_lock lock{notice_mutex};
+        text = notice_text;
+    }
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float pad = 12.0f * base_scale;
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - pad,
+                                   viewport->WorkPos.y + viewport->WorkSize.y - pad),
+                            ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(0.6f);
+    ImGui::Begin("##notice", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                     ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
+                     ImGuiWindowFlags_NoFocusOnAppearing);
+    ImGui::TextUnformatted(text.c_str());
+    ImGui::End();
+}
+
 } // namespace
+
+void ShowNotice(const std::string& text, int milliseconds) {
+    {
+        std::scoped_lock lock{notice_mutex};
+        notice_text = text;
+    }
+    notice_until.store(NowMs() + milliseconds, std::memory_order_relaxed);
+}
 
 void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) {
     std::scoped_lock lock{imgui_mutex};
@@ -973,6 +1063,12 @@ bool HandleEvent(const SDL_Event& event) {
             const char* env = std::getenv("GOW3_FRAME_CAPTURE_KEY");
             return env && *env == '1';
         }();
+        if (event.key.key == SDLK_F12) {
+            if (down && !event.key.repeat) {
+                VideoCore::RequestScreenshot(VideoCore::ScreenshotRequest::GameOnly);
+            }
+            return true;
+        }
         if (down && !event.key.repeat && capture_key && event.key.key == SDLK_F11) {
             Vulkan::FrameCapture::Request();
             return true;
@@ -1094,7 +1190,7 @@ void SetLoading(bool active, u32 done, u32 total) {
 bool Visible() {
     const auto& s = Gow3Settings::Get();
     return initialized && (loading || background_total || menu_open || text_entry_active || choice_active ||
-                           choice_retiring || s.show_fps ||
+                           choice_retiring || s.show_fps || NoticeActive() ||
                            (s.actor_watch_supported && s.enemy_health_bar));
 }
 
@@ -1162,6 +1258,9 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
     }
     if (Gow3Settings::Get().show_fps && !menu_open) {
         FpsCounter();
+    }
+    if (NoticeActive()) {
+        Notice();
     }
     if (!loading && !menu_open) {
         HealthDisplay();

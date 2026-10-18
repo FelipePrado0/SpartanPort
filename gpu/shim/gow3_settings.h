@@ -72,11 +72,24 @@ struct Values {
     /// Set by the presenter: the game's image and the window it is shown in, in pixels.
     std::atomic<int> image_width{0}, image_height{0}, window_width{0}, window_height{0};
     std::atomic<int> frames_queued{1};
+    /// Controller vibration strength in percent; 0 turns it off (runtime_pad.c). Live.
+    std::atomic<int> vibration{100};
+    /// Mouse movement in px that counts as one step of a stick prompt (runtime_pad.c). Live.
+    std::atomic<int> mouse_prompt_distance{48};
+    /// Keep the mouse in the game window while the game has it (window.cpp). Live.
+    std::atomic<bool> mouse_lock{true};
+    /// L2 aim with the mouse (runtime_pad.c): 0 relative (follows movement), 1 absolute. Live.
+    std::atomic<int> mouse_aim_style{0};
+    /// L2 aim sensitivity in percent, 10 to 200: lower needs more mouse for the same stick. Live.
+    std::atomic<int> mouse_aim_sensitivity{100};
     // Startup: run.py turns them into patches and environment variables; "Apply and restart".
     std::atomic<int> render_resolution{0};
     std::atomic<int> engine_fps{120};
     std::atomic<bool> deferred_readback{true};
     std::atomic<bool> stale_readback{true};
+    /// Gow3Graphics::Anisotropies; the samplers read startup_anisotropy.
+    std::atomic<int> anisotropy{0};
+    int startup_anisotropy = 0;
     /// Set before an "Apply and restart"; cleared once the new launch shows the game. run.py
     /// restores the previous startup options when a launch never cleared it.
     std::atomic<bool> restart_unconfirmed{false};
