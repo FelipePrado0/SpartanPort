@@ -993,6 +993,7 @@ EXTRA = {
         'Absolute': 'Absoluto',
         'Grab': 'Agarrar',
         'Dodge': 'Esquiva',
+        'Portuguese (Brazil)': 'Português (Brasil)',
     },
     'es': {
         'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
@@ -1259,6 +1260,7 @@ EXTRA = {
         'Absolute': 'Absoluto',
         'Grab': 'Agarrar',
         'Dodge': 'Esquivar',
+        'Portuguese (Brazil)': 'Portugués (Brasil)',
     },
 }
 

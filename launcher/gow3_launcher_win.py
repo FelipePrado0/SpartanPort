@@ -641,7 +641,10 @@ LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарт�
         ('1', ('On (change without restarting)', 'Включена (без перезапуска)'))]
 LANGUAGES = [('1', ('English', 'Английский')), ('8', ('Russian', 'Русский')), ('0', ('Japanese', 'Японский')),
              ('2', ('French', 'Французский')), ('3', ('Spanish', 'Испанский')), ('4', ('German', 'Немецкий')),
-             ('5', ('Italian', 'Итальянский'))]
+             ('5', ('Italian', 'Итальянский')),
+             # The US dump lists Brazilian Portuguese as id 17 (LANGS_BCUS98111.TXT: Brazilian text,
+             # the only Portuguese voices, which are European); see issue #530.
+             ('17', ('Portuguese (Brazil)', 'Португальский (Бразилия)'))]
 DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', ('On', 'Включён')),
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
