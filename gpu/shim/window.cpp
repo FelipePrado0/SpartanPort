@@ -229,8 +229,15 @@ bool WindowSDL::PollEvents() {
     }
     if (window) {
         const SDL_WindowFlags flags = SDL_GetWindowFlags(window);
-        if (flags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN | SDL_WINDOW_OCCLUDED)) {
-            is_minimized.store(true, std::memory_order_release);
+        const bool min = (flags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN | SDL_WINDOW_OCCLUDED)) != 0;
+        const bool was_min = is_minimized.exchange(min, std::memory_order_acq_rel);
+        if (was_min && !min) {
+            int w = 0, h = 0;
+            SDL_GetWindowSizeInPixels(window, &w, &h);
+            if (w > 0 && h > 0) {
+                width = w;
+                height = h;
+            }
         }
     }
     // gow3: while the game has the mouse it stays in the window (relative mode: hidden, no edges,
