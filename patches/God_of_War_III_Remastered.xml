@@ -414,19 +414,19 @@
             <Line Type="bytes" Address="0x005c6341" Value="c5fa5e852cffffffe9{rel:second3:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 00 00 00 00 31 c0" At="1"/>
             <Line Type="bytes" Address="0x005c9941" Value="c5fa5905{rel:K:0}e9{rel:back3:0}" Pattern="eb 12 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 4d 8b 3f" At="2"/>
         </PatchList>
-        <Target Name="K" Address="0x005c04e1" Line="16"/>
-        <Target Name="first0" Address="0x005c0d51" Line="18"/>
-        <Target Name="second0" Address="0x005c0d61" Line="19"/>
-        <Target Name="back0" Address="0x005cc027" Pattern="c4 c1 78 29 47 10 c4 c1 78 29 07 c5 fa 10 89 d8 00 00 00" At="19"/>
-        <Target Name="first1" Address="0x005c3431" Line="21"/>
-        <Target Name="second1" Address="0x005c3441" Line="22"/>
-        <Target Name="back1" Address="0x005cbd91" Pattern="f6 80 91 00 00 00 40 74 51 c5 fa 10 80 d8 00 00 00" At="17"/>
-        <Target Name="first2" Address="0x005c3e61" Line="24"/>
-        <Target Name="second2" Address="0x005c6401" Line="25"/>
-        <Target Name="back2" Address="0x005ccab1" Pattern="74 4c c5 fa 10 80 d8 00 00 00 c4 c1 7a 5e 0c 24" At="10"/>
-        <Target Name="first3" Address="0x005c6461" Line="27"/>
-        <Target Name="second3" Address="0x005c9a61" Line="28"/>
-        <Target Name="back3" Address="0x005cc217" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="13"/>
+        <Target Name="K" Address="0x005c03c1" Line="16"/>
+        <Target Name="first0" Address="0x005c0c31" Line="18"/>
+        <Target Name="second0" Address="0x005c0c41" Line="19"/>
+        <Target Name="back0" Address="0x005cbf07" Pattern="c4 c1 78 29 47 10 c4 c1 78 29 07 c5 fa 10 89 d8 00 00 00" At="19"/>
+        <Target Name="first1" Address="0x005c3311" Line="21"/>
+        <Target Name="second1" Address="0x005c3321" Line="22"/>
+        <Target Name="back1" Address="0x005cbc71" Pattern="f6 80 91 00 00 00 40 74 51 c5 fa 10 80 d8 00 00 00" At="17"/>
+        <Target Name="first2" Address="0x005c3d41" Line="24"/>
+        <Target Name="second2" Address="0x005c62e1" Line="25"/>
+        <Target Name="back2" Address="0x005cc991" Pattern="74 4c c5 fa 10 80 d8 00 00 00 c4 c1 7a 5e 0c 24" At="10"/>
+        <Target Name="first3" Address="0x005c6341" Line="27"/>
+        <Target Name="second3" Address="0x005c9941" Line="28"/>
+        <Target Name="back3" Address="0x005cc0f7" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="13"/>
     </Metadata>
     <Metadata Title="God of War III Remastered" Name="Resolution Patch - 2048x1536" Note="2048x1536 (1.333:1). Sets the game output resolution and the display aspect ratio; the horizontal field of view is the game's own, so this taller picture shows more at the top and bottom and sets the Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix. Not tested in game yet: please report how it looks." Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
         <PatchList>

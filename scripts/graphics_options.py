@@ -16,8 +16,10 @@ RESOLUTIONS = ('native', '480p', '720p', '900p', '1440p', '1800p', '4K',
                '1440x900', '1360x768',
                '1280x960', '1440x1080', '1920x1440', '2048x1536', '2560x1920',
                '5120x2160')
-# The ultrawide and 16:10 sizes of the Ultrawide mod (#202), built in: beta until more players confirm them.
-BETA_RESOLUTIONS = RESOLUTIONS[7:]
+# The ultrawide, 16:10 and 4:3 sizes of the Ultrawide mod (#202), built in: beta until more players confirm
+# them, except the ones tested in game.
+TESTED_RESOLUTIONS = ('1280x800', '1440x900', '1360x768', '1280x960')
+BETA_RESOLUTIONS = tuple(r for r in RESOLUTIONS[7:] if r not in TESTED_RESOLUTIONS)
 SIZES = {'native': (1920, 1080), '480p': (854, 480), '720p': (1280, 720), '900p': (1600, 900),
          '1440p': (2560, 1440), '1800p': (3200, 1800), '4K': (3840, 2160)}
 ASPECTS = (('16:9', 16 / 9), ('16:10', 16 / 10), ('21:9', 2.37), ('32:9', 32 / 9))
