@@ -220,12 +220,15 @@ def parse_display_list(text):
 
 def display_label(row):
     """What the Monitor list shows for one of parse_display_list's rows: the name and the resolution,
-    plus the position when the monitor is not at the origin (that tells two identical screens apart)."""
-    _index, name, _primary, x, y, width, height = row
+    plus the position when the monitor is not at the origin (that tells two identical screens apart).
+    The primary monitor gets a (primary) suffix."""
+    _index, name, primary, x, y, width, height = row
     parts = [name] if name else []
     parts.append(f'{width} × {height}')
     if (x, y) != (0, 0):
         parts.append(f'({x}, {y})')
+    if primary == '1':
+        parts.append('(primary)')
     return ' · '.join(parts)
 
 
@@ -1748,7 +1751,8 @@ class Launcher:
         monitor = ttk.Frame(quick)
         monitor.grid(row=2 + (len(items) + 1) // 2, column=0, columnspan=4, sticky='w', pady=self.px(6))
         ttk.Label(monitor, text=_('Monitor', 'Монитор')).pack(side='left', padx=self.px((0, 12)))
-        self.choice(monitor, 'monitor', 'app', self.monitor_list).pack(side='left')
+        self.quick_monitor_box = self.choice(monitor, 'monitor', 'app', self.monitor_list)
+        self.quick_monitor_box.pack(side='left')
 
     def draw_banner(self):
         """The cover art of the selected dump (sce_sys/pic1.png) under the title."""
@@ -2612,6 +2616,7 @@ class Launcher:
         default, never to another screen that now sits at that position. Returns True only when it
         relisted: never where no window system is selectable (Windows) nor when it did not change."""
         box = getattr(self, 'monitor_box', None)
+        quick_box = getattr(self, 'quick_monitor_box', None)
         if box is None or 'video_backend' not in self.vars:
             return False
         backend = self.vars['video_backend'].get()
@@ -2629,6 +2634,8 @@ class Launcher:
         if var is not None:
             var.set(selected)  # the box's write trace re-reads the list and its selection
         box.refresh()
+        if quick_box is not None:
+            quick_box.refresh()
         return True
 
     def refresh_conflicts(self):

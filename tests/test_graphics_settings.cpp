@@ -11,6 +11,14 @@
 
 namespace G = Gow3Graphics;
 
+static int SetEnvironment(const char* name, const char* value) {
+#if defined(_WIN32)
+    return _putenv_s(name, value);
+#else
+    return value[0] ? setenv(name, value, 1) : unsetenv(name);
+#endif
+}
+
 static std::string Read(const char* path) {
     std::ifstream in(path);
     std::stringstream s;
@@ -74,24 +82,24 @@ int main() {
                "render_resolution=1440p\nengine_fps=240\ndeferred_readback=0\nstale_readback=1\n"
                "fsr1=1\nrcas=0\nrcas_strength=40\nframes_queued=2\n";
     }
-    _putenv_s("GOW3_CONFIG", path);
-    _putenv_s("GOW3_ASYNC_SHADERS", "");
+    SetEnvironment("GOW3_CONFIG", path);
+    SetEnvironment("GOW3_ASYNC_SHADERS", "");
     auto& v = Gow3Settings::Get();
     Gow3Settings::Load();
     assert(v.display_mode == G::Borderless && !v.vsync && v.fps_limit == 240 && !v.async_shaders);
     assert(v.render_resolution == 4 && v.engine_fps == 240 && !v.deferred_readback && v.stale_readback);
     // FSR 1 left the menus in 2.2.0: a saved fsr1=1 (or GOW3_FSR1) no longer turns it on.
     assert(!v.fsr1 && !v.rcas && v.rcas_strength == 40 && v.frames_queued == 2);
-    _putenv_s("GOW3_FSR1", "1");
+    SetEnvironment("GOW3_FSR1", "1");
     Gow3Settings::Load();
     assert(!v.fsr1);
-    _putenv_s("GOW3_FSR1", "");
+    SetEnvironment("GOW3_FSR1", "");
     assert(!Gow3Settings::GraphicsNeedRestart());
     assert(v.applied_engine_fps == 240);  // no GOW3_ENGINE_FPS: the configured rate
-    _putenv_s("GOW3_ENGINE_FPS", "60");    // run.py: the frame rate patch did not apply
+    SetEnvironment("GOW3_ENGINE_FPS", "60");    // run.py: the frame rate patch did not apply
     Gow3Settings::Load();
     assert(v.engine_fps == 240 && v.applied_engine_fps == 60 && !Gow3Settings::GraphicsNeedRestart());
-    _putenv_s("GOW3_ENGINE_FPS", "");
+    SetEnvironment("GOW3_ENGINE_FPS", "");
     v.render_resolution = 0;
     assert(Gow3Settings::GraphicsNeedRestart());
     v.render_resolution = 4;
@@ -112,7 +120,7 @@ int main() {
     {
         // The resolutions of the enabled mods' patch files (run.py: GOW3_EXTRA_RESOLUTIONS) follow the built-in
         // ones and keep their names through a load and a save; repeated or built-in names are not added twice.
-        _putenv_s("GOW3_EXTRA_RESOLUTIONS", "3840x1080;2880x1200;;2880x1200;4K;3440x1440");
+        SetEnvironment("GOW3_EXTRA_RESOLUTIONS", "3840x1080;2880x1200;;2880x1200;4K;3440x1440");
         const auto names = G::ResolutionNames();
         assert(names.size() == 24 && names[22] == "3840x1080" && names[23] == "2880x1200");
         {
@@ -123,7 +131,7 @@ int main() {
         assert(v.render_resolution == 23);
         Gow3Settings::Save();
         assert(Read(path).find("render_resolution=2880x1200\n") != std::string::npos);
-        _putenv_s("GOW3_EXTRA_RESOLUTIONS", "");  // the mod is off: its resolution is unknown, so native
+        SetEnvironment("GOW3_EXTRA_RESOLUTIONS", "");  // the mod is off: its resolution is unknown, so native
         Gow3Settings::Load();
         assert(v.render_resolution == 0 && G::ResolutionNames().size() == 22);
     }
@@ -133,7 +141,7 @@ int main() {
         out << "display_mode=huge\nfps_limit=7\nrender_resolution=8K\nengine_fps=1\n"
                "rcas_strength=250\nframes_queued=9\n";
     }
-    _putenv_s("GOW3_ASYNC_SHADERS", "1");  // the environment still wins at start
+    SetEnvironment("GOW3_ASYNC_SHADERS", "1");  // the environment still wins at start
     v.async_shaders = false;
     Gow3Settings::Load();
     assert(v.display_mode == G::Windowed && v.fps_limit == 0 && v.render_resolution == 0 && v.engine_fps == 120);

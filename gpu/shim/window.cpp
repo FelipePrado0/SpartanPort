@@ -37,6 +37,7 @@ static SDL_DisplayID MonitorDisplay() {
     SDL_DisplayID* displays = SDL_GetDisplays(&count);
     if (!displays || count == 0) {
         LOG_WARNING(Frontend, "No displays available; using the primary display");
+        SDL_free(displays);
         return SDL_GetPrimaryDisplay();
     }
     if (index < 0 || index >= count) {

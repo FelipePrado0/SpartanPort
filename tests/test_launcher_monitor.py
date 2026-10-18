@@ -14,7 +14,7 @@ from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
 import gow3_launcher_win as launcher  # noqa: E402
 
-# `gow3-probe --displays`: index, name, primary, x, y, width, height. The name keeps spaces and a quote.
+# `gow3-probe --displays`: index, name, primary, x, y, width, height. The name keeps spaces.
 TWO_DISPLAYS = ('0\tMonitor A\t1\t0\t0\t1920\t1080\n'
                 '1\tMonitor B\t0\t1920\t0\t2560\t1440\n')
 
@@ -44,6 +44,11 @@ class DisplayParserTest(unittest.TestCase):
 
     def test_names_keep_spaces_quotes_and_utf8(self):
         name = 'Dell U2720Q «à esquerda» — 4K'
+        rows = launcher.parse_display_list(f'3\t{name}\t0\t-1920\t0\t3840\t2160\n')
+        self.assertEqual(rows, [('3', name, '0', -1920, 0, 3840, 2160)])
+
+    def test_a_name_with_a_straight_quote_is_preserved(self):
+        name = 'Monitor "Pro"'
         rows = launcher.parse_display_list(f'3\t{name}\t0\t-1920\t0\t3840\t2160\n')
         self.assertEqual(rows, [('3', name, '0', -1920, 0, 3840, 2160)])
 
@@ -102,7 +107,7 @@ class MonitorOptionsTest(unittest.TestCase):
         options = launcher.monitor_options(launcher.parse_display_list(TWO_DISPLAYS))
         self.assertEqual([value for value, _text in options], ['', '0', '1'])
         self.assertEqual(options[0], ('', ('Primary (default)',)))
-        self.assertEqual(options[1][1], ('Monitor A · 1920 × 1080',))
+        self.assertEqual(options[1][1], ('Monitor A · 1920 × 1080 · (primary)',))
         self.assertEqual(options[2][1], ('Monitor B · 2560 × 1440 · (1920, 0)',))
 
     def test_a_gap_in_the_indices_is_kept(self):
@@ -112,6 +117,26 @@ class MonitorOptionsTest(unittest.TestCase):
 
     def test_no_monitors_leaves_only_the_default(self):
         self.assertEqual(launcher.monitor_options([]), [('', ('Primary (default)',))])
+
+    def test_primary_at_nonzero_index(self):
+        # Case A: Primary monitor at index 1 (not 0)
+        displays = launcher.parse_display_list('0\tA\t0\t0\t0\t1920\t1080\n1\tB\t1\t1920\t0\t2560\t1440\n')
+        options = launcher.monitor_options(displays)
+        self.assertEqual([value for value, _text in options], ['', '0', '1'])
+        self.assertEqual(options[0], ('', ('Primary (default)',)))
+        self.assertEqual(options[1][1], ('A · 1920 × 1080',))  # index 0, not primary
+        self.assertEqual(options[2][1], ('B · 2560 × 1440 · (1920, 0) · (primary)',))  # index 1, primary
+        # Selection of '0' should work
+        self.assertEqual(launcher.monitor_selection(displays, '0'), '0')
+        self.assertEqual(launcher.monitor_selection(displays, '1'), '1')
+        # Empty selection falls back to system default (empty string)
+        self.assertEqual(launcher.monitor_selection(displays, ''), '')
+
+    def test_negative_coordinates(self):
+        # Case B: Monitor with negative coordinates (to the left of primary)
+        displays = launcher.parse_display_list('0\tLeft\t1\t-1920\t0\t1920\t1080\n')
+        self.assertEqual(displays, [('0', 'Left', '1', -1920, 0, 1920, 1080)])
+        self.assertEqual(launcher.display_label(displays[0]), 'Left · 1920 × 1080 · (-1920, 0) · (primary)')
 
 
 class ListDisplaysTest(unittest.TestCase):
@@ -338,6 +363,7 @@ class _LauncherStub:
         self.vars = {'video_backend': _ValueVar(pending),
                      'monitor': _ValueVar(monitor if visible is None else visible)}
         self.monitor_box = mock.Mock()
+        self.quick_monitor_box = mock.Mock()
         self.monitor_pairs = None
         self.patch_vars = {}
         self.messagebox = mock.Mock()
@@ -607,7 +633,7 @@ class MonitorLauncherTest(unittest.TestCase):
         self.assertEqual(detect.call_args.args[0], 'auto')  # the saved backend, as the game uses it
         box = monitor_box(app)
         self.assertEqual(tuple(box['values']),
-                         ('Primary (default)', 'Monitor A · 1920 × 1080', 'Monitor B · 2560 × 1440 · (1920, 0)'))
+                         ('Primary (default)', 'Monitor A · 1920 × 1080 · (primary)', 'Monitor B · 2560 × 1440 · (1920, 0)'))
         self.assertEqual(app.vars['monitor'].get(), '')
         box.current(2)
         box.event_generate('<<ComboboxSelected>>')
@@ -616,7 +642,7 @@ class MonitorLauncherTest(unittest.TestCase):
         # A gap in the indices is offered as it is, never renumbered.
         app, _ = build(displays='0\tA\t1\t0\t0\t1920\t1080\n2\tB\t0\t0\t0\t1280\t720\n')
         box = monitor_box(app)
-        self.assertEqual(tuple(box['values'])[1:], ('A · 1920 × 1080', 'B · 1280 × 720'))
+        self.assertEqual(tuple(box['values'])[1:], ('A · 1920 × 1080 · (primary)', 'B · 1280 × 720'))
         box.current(2)
         box.event_generate('<<ComboboxSelected>>')
         self.assertEqual(app.vars['monitor'].get(), '2')
@@ -726,7 +752,7 @@ class QuickSettingsMonitorTest(unittest.TestCase):
         app, detect = self.build()
         quick, graphics = self.boxes(app)
         self.assertEqual(tuple(quick['values']),
-                         ('Primary (default)', 'Monitor A · 1920 × 1080', 'Monitor B · 2560 × 1440 · (1920, 0)'))
+                         ('Primary (default)', 'Monitor A · 1920 × 1080 · (primary)', 'Monitor B · 2560 × 1440 · (1920, 0)'))
         self.assertEqual(tuple(quick['values']), tuple(graphics['values']))  # one list for the two rows
         self.assertEqual(app.vars['monitor'].get(), '')  # the primary default
         self.assertEqual(quick.current(), 0)
@@ -737,7 +763,7 @@ class QuickSettingsMonitorTest(unittest.TestCase):
         # A gap in the indices is offered as it is, never renumbered: index 2 stays the third entry.
         app, _ = self.build(displays='0\tA\t1\t0\t0\t1920\t1080\n2\tB\t0\t0\t0\t1280\t720\n')
         for box in self.boxes(app):
-            self.assertEqual(tuple(box['values']), ('Primary (default)', 'A · 1920 × 1080', 'B · 1280 × 720'))
+            self.assertEqual(tuple(box['values']), ('Primary (default)', 'A · 1920 × 1080 · (primary)', 'B · 1280 × 720'))
             box.current(2)
             box.event_generate('<<ComboboxSelected>>')
             self.assertEqual(app.vars['monitor'].get(), '2')
