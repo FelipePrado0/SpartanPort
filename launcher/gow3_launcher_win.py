@@ -407,6 +407,7 @@ UI_SCALES = [('auto', ('Auto',)), ('1', ('1x',)), ('2', ('2x',))]
 APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
+                'mouse_left_stick': False, 'keyboard_right_stick': False, 'left_stick_sensitivity': 100,
                 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
                 'gpu_id': '', 'partial_height_views': True, 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
@@ -424,6 +425,8 @@ CONTROLS = [('cross', 'Space', 'a'), ('circle', 'Left Shift', 'b'), ('square', '
             ('r3', 'C', 'rightstick'), ('options', 'Return', 'start'),
             ('touchpad_left', 'Tab', None), ('touchpad_right', 'Backspace', 'back'),
             ('up', 'I', 'dpup'), ('down', 'K', 'dpdown'), ('left', 'J', 'dpleft'), ('right', 'L', 'dpright')]
+LEFT_STICK_CONTROLS = [('left', 'A'), ('right', 'D'), ('up', 'W'), ('down', 'S')]
+STICK_CONTROLS = [('left', 'Left'), ('right', 'Right'), ('up', 'Up'), ('down', 'Down')]
 PS_BUTTON_NAMES = {'cross': 'Cross', 'circle': 'Circle', 'square': 'Square', 'triangle': 'Triangle',
                    'l1': 'L1', 'r1': 'R1', 'l2': 'L2', 'r2': 'R2', 'l3': 'L3', 'r3': 'R3',
                    'options': 'Options', 'touchpad_left': 'Touchpad left', 'touchpad_right': 'Touchpad right',
@@ -586,7 +589,7 @@ def default_input(row, kind):
     return KEY_DEFAULTS.get(button, key) if key else key
 
 
-def keyboard_map(controls, rage=True):
+def keyboard_map(controls, rage=True, keyboard_right_stick=False):
     """GOW3_KEY_MAP of the keyboard & mouse table: each button on its chosen input, written where
     that differs from the game's own key. With `rage` (one input for Rage of Sparta) L3 and R3 get
     none and the Rage row is used; otherwise the Rage row is left out."""
@@ -594,7 +597,7 @@ def keyboard_map(controls, rage=True):
     entries = []
     for row in table_rows('key'):
         button, key, _pad = row
-        if not key or (button == 'rage' and not rage):
+        if not key or (button == 'rage' and not rage) or (button == 'dodge' and keyboard_right_stick):
             continue
         if rage and button in RAGE_BUTTONS:
             entries.append(f'{button}=None')
@@ -626,11 +629,49 @@ def control_values(controls, kind):
             if (pad if kind == 'pad' else key) and isinstance(values.get(button), str) and values[button].strip()}
 
 
+def stick_control_values(controls):
+    chosen = controls.get('stick', {}) if isinstance(controls, dict) else {}
+    if not isinstance(chosen, dict):
+        return {}
+    return {direction: value for direction, _default in STICK_CONTROLS
+            if isinstance(value := chosen.get(direction), str) and value.strip()}
+
+
+def left_stick_control_values(controls):
+    chosen = controls.get('left_stick', {}) if isinstance(controls, dict) else {}
+    if not isinstance(chosen, dict):
+        return {}
+    return {direction: value for direction, _default in LEFT_STICK_CONTROLS
+            if isinstance(value := chosen.get(direction), str) and value.strip()}
+
+
+def stick_control_changes(values):
+    return {direction: values[direction].strip() for direction, default in STICK_CONTROLS
+            if values.get(direction, '').strip().casefold() != default.casefold()}
+
+
+def left_stick_control_changes(values):
+    return {direction: values[direction].strip() for direction, default in LEFT_STICK_CONTROLS
+            if values.get(direction, '').strip().casefold() != default.casefold()}
+
+
 def control_map(controls, kind):
     """GOW3_PAD_MAP value: 'cross=a,circle=b' for the changed buttons."""
     chosen = control_values(controls, kind)
     return ','.join(f'{button}={chosen[button].strip()}' for button, _key, _pad in CONTROLS
                     if button in chosen and not set(chosen[button]) & set(',='))
+
+
+def stick_map(controls):
+    chosen = stick_control_values(controls)
+    return ','.join(f'{direction}={chosen.get(direction, default)}' for direction, default in STICK_CONTROLS
+                    if not set(chosen.get(direction, default)) & set(',='))
+
+
+def left_stick_map(controls):
+    chosen = left_stick_control_values(controls)
+    return ','.join(f'{direction}={chosen.get(direction, default)}' for direction, default in LEFT_STICK_CONTROLS
+                    if not set(chosen.get(direction, default)) & set(',='))
 
 
 def migrate_controls(saved):
@@ -1123,7 +1164,14 @@ def game_environment(s):
         if s[key]:
             env[name] = '1'
     controls = s.get('controls', {})
-    if value := keyboard_map(controls, bool(s.get('rage_one_input', True))):
+    env['GOW3_MOUSE_LEFT_STICK'] = '1' if s.get('mouse_left_stick') else '0'
+    env['GOW3_LEFT_STICK_MAP'] = left_stick_map(controls)
+    env['GOW3_LEFT_STICK_SENSITIVITY'] = str(max(10, min(200, int(s.get('left_stick_sensitivity', 100)))))
+    env.pop('GOW3_RIGHT_STICK_MAP', None)
+    if s.get('keyboard_right_stick') and (value := stick_map(controls)):
+        env['GOW3_RIGHT_STICK_MAP'] = value
+    if value := keyboard_map(controls, bool(s.get('rage_one_input', True)),
+                             bool(s.get('keyboard_right_stick'))):
         env['GOW3_KEY_MAP'] = value
     if value := control_map(controls, 'pad'):
         env['GOW3_PAD_MAP'] = value
@@ -2002,7 +2050,11 @@ class Launcher:
         saved = {kind: control_values(self.app.get('controls'), kind) for kind in ('key', 'pad')}
         style = self.app.get('pad_style') if self.app.get('pad_style') in PAD_STYLES else 'playstation'
         self.pad_style = tk.StringVar(value=style)
-        self.control_vars, self.pad_boxes, self.pad_icons = {'key': {}, 'pad': {}}, {}, {}
+        self.control_vars, self.pad_boxes, self.pad_icons = {'key': {}, 'pad': {}, 'stick': {}, 'left_stick': {}}, {}, {}
+        self.stick_rows = {}
+        self.left_stick_rows = {}
+        self.aim_widgets = []
+        self.left_sensitivity_widget = None
         self.key_rows = {}  # keyboard button: (input box, reset arrow)
         self.capturing_key = self.capture_wheel = None  # the key box waiting for an input
         size = self.px(28)
@@ -2029,9 +2081,9 @@ class Launcher:
             title = _(PS_BUTTON_NAMES.get(button) or ACTION_NAMES[button])
             ttk.Label(table, text=title, width=-14).grid(row=r, column=1, sticky='w', padx=self.px((0, 12)))
 
-        def slider(key, low, high, unit, parent=None):
+        def slider(key, low, high, unit, parent=None, store='ini'):
             holder = ttk.Frame(parent or f)
-            amount = self.var(key, 'ini')
+            amount = self.var(key, store)
             tk.Scale(holder, from_=low, to=high, orient='horizontal', variable=amount, showvalue=False,
                      length=self.px(260), width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD,
                      activebackground=ACCENT_HI, highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
@@ -2066,6 +2118,32 @@ class Launcher:
         f.grid(row=self.next_row(page), column=0, columnspan=2, sticky='we')
         f.columnconfigure(1, weight=1)
         self.section(f, _('Keyboard & Mouse Mapping'), top=12)
+        self.check(f, 'mouse_left_stick', 'app', _('Move the left stick with the mouse'),
+                   _('Disables WASD movement while selected. Mouse movement is relative and returns to neutral when it stops.'))
+        self.check(f, 'keyboard_right_stick', 'app', _('Move the right stick with keyboard keys'),
+                   _('Disables mouse aim while L2 is held and the RS Dodge bind.'))
+        self.left_stick_section = ttk.Frame(f)
+        self.left_stick_section.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we')
+        self.left_stick_section.columnconfigure(1, weight=1)
+        self.section(self.left_stick_section, _('Left Stick Keys'), top=8)
+        for direction, default in LEFT_STICK_CONTROLS:
+            var = tk.StringVar(value=left_stick_control_values(self.app.get('controls')).get(direction, default))
+            self.control_vars['left_stick'][direction] = var
+            box = self.key_binder(self.left_stick_section, 'left_stick', direction, var)
+            self.row(self.left_stick_section, direction.capitalize(), box)
+            self.left_stick_rows[direction] = box
+        self.stick_section = ttk.Frame(f)
+        self.stick_section.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we')
+        self.stick_section.columnconfigure(1, weight=1)
+        self.section(self.stick_section, _('Right Stick Keys'), top=8)
+        for direction, default in STICK_CONTROLS:
+            var = tk.StringVar(value=stick_control_values(self.app.get('controls')).get(direction, default))
+            self.control_vars['stick'][direction] = var
+            box = self.key_binder(self.stick_section, 'stick', direction, var)
+            self.row(self.stick_section, direction.capitalize(), box)
+            self.stick_rows[direction] = box
+        self.var('mouse_left_stick', 'app').trace_add('write', lambda *_a: self.update_stick_options())
+        self.var('keyboard_right_stick', 'app').trace_add('write', lambda *_a: self.update_stick_options())
         self.note(f, _('Which key or mouse input presses each button of the game.'), top=4)
         table = mapping_table()
         r = 0
@@ -2104,14 +2182,18 @@ class Launcher:
                         'or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.'))
         self.row(f, _('Mouse prompt distance'), slider('mouse_prompt_distance', 16, 200, ' px'),
                  _('Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.'))
-        self.row(f, _('Right stick style'), self.choice(f, 'mouse_aim_style', 'ini', AIM_STYLES),
+        self.left_sensitivity_widget = self.row(
+            f, _('Left stick sensitivity'), slider('left_stick_sensitivity', 10, 200, '%', store='app'),
+            _('How far the mouse moves the left stick.'))
+        self.aim_widgets.append(self.row(f, _('Right stick style'), self.choice(f, 'mouse_aim_style', 'ini', AIM_STYLES),
                  hint=_('Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick '
                         'follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse '
                         'was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in '
-                        'the in-game menu.'))
-        self.row(f, _('Right stick sensitivity'), slider('mouse_aim_sensitivity', 10, 200, '%'),
+                        'the in-game menu.')))
+        self.aim_widgets.append(self.row(f, _('Right stick sensitivity'), slider('mouse_aim_sensitivity', 10, 200, '%'),
                  _('Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, '
-                   'higher less. Also in the in-game menu.'))
+                   'higher less. Also in the in-game menu.')))
+        self.update_stick_options()
         self.check(f, 'mouse_lock', 'ini', _('Keep the mouse in the game window'),
                    _('While you play, the mouse stays in the game window, so a click cannot land on another monitor '
                      'or app. The in-game menu and switching windows get it back. Also in the in-game menu.'))
@@ -2239,6 +2321,38 @@ class Launcher:
             for widget in self.key_rows.get(button, ()):
                 widget.state(['!disabled'] if enabled else ['disabled'])
 
+    def set_enabled(self, widget, enabled):
+        """Enable or disable a control and its children, including Tk scales in ttk frames."""
+        state = 'normal' if enabled else 'disabled'
+        if isinstance(widget, self.tk.Scale):
+            widget.configure(state=state, bg=ACCENT if enabled else PANEL,
+                             activebackground=ACCENT_HI if enabled else MUTED,
+                             troughcolor=CARD if enabled else PANEL,
+                             highlightbackground=PANEL, highlightcolor=PANEL)
+            return
+        try:
+            widget.state(['!disabled'] if enabled else ['disabled'])
+        except (AttributeError, self.tk.TclError):
+            try:
+                widget.configure(state=state)
+            except (AttributeError, self.tk.TclError):
+                pass
+        for child in widget.winfo_children():
+            self.set_enabled(child, enabled)
+
+    def update_stick_options(self):
+        left_mouse = bool(self.var('mouse_left_stick', 'app').get())
+        right_keys = bool(self.var('keyboard_right_stick', 'app').get())
+        for widget in self.left_stick_rows.values():
+            self.set_enabled(widget, not left_mouse)
+        self.set_enabled(self.left_sensitivity_widget, left_mouse)
+        for widget in self.stick_rows.values():
+            self.set_enabled(widget, right_keys)
+        for widget in self.aim_widgets:
+            self.set_enabled(widget, not right_keys)
+        for widget in self.key_rows.get('dodge', ()):
+            self.set_enabled(widget, not right_keys)
+
     def assign_key(self, kind, button, name):
         """Binds `name` to `button` in a table; a button that had it takes the old one (bind_key)."""
         table = self.control_vars[kind]
@@ -2280,6 +2394,9 @@ class Launcher:
             for row in table_rows(table):
                 if kind in (None, table) and row[0] in self.control_vars.get(table, {}):
                     self.control_vars[table][row[0]].set(default_input(row, table) or '')
+        if kind in (None, 'stick'):
+            for direction, default in STICK_CONTROLS:
+                self.control_vars['stick'][direction].set(default)
         self.relabel_pad_controls()
 
     def build_linux_options(self, f):
@@ -2672,7 +2789,10 @@ class Launcher:
             else:
                 app[key] = value
         app['controls'] = {kind: control_changes({b: v.get() for b, v in vars_.items()}, kind)
-                           for kind, vars_ in self.control_vars.items()}
+                           for kind, vars_ in self.control_vars.items() if kind not in ('stick', 'left_stick')}
+        app['controls']['stick'] = stick_control_changes({b: v.get() for b, v in self.control_vars['stick'].items()})
+        app['controls']['left_stick'] = left_stick_control_changes(
+            {b: v.get() for b, v in self.control_vars['left_stick'].items()})
         app['pad_style'] = self.pad_style.get()
         if getattr(self, 'device_chosen', False):  # an untouched first choice stays automatic
             app['controls_device'] = self.device.get()

@@ -247,6 +247,54 @@ static int key_source(const char *name) {
     return (int)SDL_GetScancodeFromName(name);
 }
 
+typedef struct { int source, axis, sign; } StickSource;
+typedef struct { StickSource entries[4]; size_t count; } StickMap;
+static StickMap left_stick_map={{{SDL_SCANCODE_A,0,-1},{SDL_SCANCODE_D,0,1},
+                                 {SDL_SCANCODE_W,1,-1},{SDL_SCANCODE_S,1,1}},4};
+static StickMap right_stick_map={{{SDL_SCANCODE_LEFT,0,-1},{SDL_SCANCODE_RIGHT,0,1},
+                                  {SDL_SCANCODE_UP,1,-1},{SDL_SCANCODE_DOWN,1,1}},4};
+static int stick_options_loaded;
+static bool mouse_left_stick;
+static bool keyboard_right_stick;
+static float left_stick_sensitivity=100.0f;
+
+static bool parse_stick_map(StickMap *map, const char *spec) {
+    if (!spec || !*spec) return false;
+    map->count=0;
+    char copy[256];
+    snprintf(copy,sizeof(copy),"%s",spec);
+    for (char *entry=copy,*next; entry; entry=next) {
+        next=strchr(entry,',');
+        if (next) *next++=0;
+        char *eq=strchr(entry,'=');
+        if (!eq) continue;
+        *eq++=0;
+        char *direction=trim(entry), *name=trim(eq);
+        int axis=-1, sign=0;
+        if (!SDL_strcasecmp(direction,"left")) axis=0, sign=-1;
+        else if (!SDL_strcasecmp(direction,"right")) axis=0, sign=1;
+        else if (!SDL_strcasecmp(direction,"up")) axis=1, sign=-1;
+        else if (!SDL_strcasecmp(direction,"down")) axis=1, sign=1;
+        int source=key_source(name);
+        if (axis>=0 && source>SDL_SCANCODE_UNKNOWN && source<SDL_SCANCODE_COUNT && map->count<4)
+            map->entries[map->count++]=(StickSource){source,axis,sign};
+    }
+    return map->count>0;
+}
+
+static void load_stick_options(void) {
+    if (stick_options_loaded) return;
+    stick_options_loaded=1;
+    const char *mouse=getenv("GOW3_MOUSE_LEFT_STICK");
+    mouse_left_stick=mouse && !strcmp(mouse,"1");
+    parse_stick_map(&left_stick_map,getenv("GOW3_LEFT_STICK_MAP"));
+    keyboard_right_stick=parse_stick_map(&right_stick_map,getenv("GOW3_RIGHT_STICK_MAP"));
+    const char *sensitivity=getenv("GOW3_LEFT_STICK_SENSITIVITY");
+    if (sensitivity && *sensitivity) left_stick_sensitivity=(float)atof(sensitivity);
+    if (left_stick_sensitivity<10.0f) left_stick_sensitivity=10.0f;
+    if (left_stick_sensitivity>200.0f) left_stick_sensitivity=200.0f;
+}
+
 /* Applies a GOW3_PAD_MAP/GOW3_KEY_MAP value; returns how many entries were used. Bad entries are
  * logged and skipped, so their PS4 button keeps its default. */
 static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
@@ -304,6 +352,30 @@ static void load_button_maps(void) {
 static void key_axis(uint8_t *axis, bool negative, bool positive) {
     if (negative || positive) *axis=(uint8_t)(128-(negative ? 128 : 0)+(positive ? 127 : 0));
 }
+
+static void apply_mouse_left_stick(PadData *d);
+
+static void apply_stick_keys(PadData *d, const bool *keys, const StickMap *map, bool left) {
+    bool negative[2]={false,false}, positive[2]={false,false};
+    const bool no_wheel[2]={false,false};
+    for (size_t i=0;i<map->count;++i) {
+        if (!source_down(map->entries[i].source,keys,0,no_wheel)) continue;
+        if (map->entries[i].sign<0) negative[map->entries[i].axis]=true;
+        else positive[map->entries[i].axis]=true;
+    }
+    if (left) {
+        key_axis(&d->left_x,negative[0],positive[0]);
+        key_axis(&d->left_y,negative[1],positive[1]);
+    } else {
+        key_axis(&d->right_x,negative[0],positive[0]);
+        key_axis(&d->right_y,negative[1],positive[1]);
+    }
+}
+
+static void apply_right_stick_keys(PadData *d, const bool *keys) {
+    apply_stick_keys(d,keys,&right_stick_map,false);
+}
+
 /* Stick prompts (GOW3_STICK_PROMPTS; the launcher sets it with Native Translation). keyboard: while
  * the game shows a stick-rotation prompt (src/qte_hook.h), W/A/S/D stop moving the left stick and
  * the player types the prompt's keys instead; a finished sequence makes the game's own rotation
@@ -458,6 +530,7 @@ static void sample_host(PadData *d) {
     d->orientation[3]=1.0f;
     d->connected=1; d->connected_count=connected_count ? connected_count : 1;
     d->timestamp=now_us();
+    load_stick_options();
     SDL_Gamepad *g=current_gamepad();
     watch_wheel();
     if (gow3gpu_overlay_captures_input()) { drop_wheel(); return; } /* settings menu open: neutral input */
@@ -495,12 +568,16 @@ static void sample_host(PadData *d) {
         if (source_down(key_map.entries[i].source,k,mouse,wheel)) d->buttons|=key_map.entries[i].ps;
     if (d->buttons & BTN_L2) d->l2=255;
     if (d->buttons & BTN_R2) d->r2=255;
-    if (!qte_play(k,d->timestamp)) {
-        key_axis(&d->left_x,k[SDL_SCANCODE_A],k[SDL_SCANCODE_D]);
-        key_axis(&d->left_y,k[SDL_SCANCODE_W],k[SDL_SCANCODE_S]);
+    const bool qte_active=qte_play(k,d->timestamp);
+    if (!qte_active) {
+        if (mouse_left_stick) apply_mouse_left_stick(d);
+        else apply_stick_keys(d,k,&left_stick_map,true);
     }
-    key_axis(&d->right_x,k[SDL_SCANCODE_LEFT],k[SDL_SCANCODE_RIGHT]);
-    key_axis(&d->right_y,k[SDL_SCANCODE_UP],k[SDL_SCANCODE_DOWN]);
+    if (keyboard_right_stick) apply_right_stick_keys(d,k);
+    else {
+        key_axis(&d->right_x,k[SDL_SCANCODE_LEFT],k[SDL_SCANCODE_RIGHT]);
+        key_axis(&d->right_y,k[SDL_SCANCODE_UP],k[SDL_SCANCODE_DOWN]);
+    }
 }
 
 /* GOW3_PAD_FILE=<file>: scripted input for automated runs. The file holds whitespace-separated
@@ -654,6 +731,25 @@ static void apply_mouse_aim(PadData *d) {
     }
 }
 
+static struct { uint64_t moved; int x, y; } left_mouse;
+static void apply_mouse_left_stick(PadData *d) {
+    const float dx=SDL_GetAtomicInt(&mouse_motion[0])/16.0f;
+    const float dy=SDL_GetAtomicInt(&mouse_motion[1])/16.0f;
+    if (dx!=0 || dy!=0) {
+        const float scale=127.0f*left_stick_sensitivity/(100.0f*AIM_FULL_PX_PER_MS*16.0f);
+        const float x=dx*scale, y=dy*scale;
+        left_mouse.x=x>127 ? 127 : x<-128 ? -128 : (int)x;
+        left_mouse.y=y>127 ? 127 : y<-128 ? -128 : (int)y;
+        left_mouse.moved=d->timestamp;
+    }
+    if (left_mouse.moved && d->timestamp-left_mouse.moved<AIM_HOLD_US) {
+        d->left_x=(uint8_t)(128+left_mouse.x);
+        d->left_y=(uint8_t)(128+left_mouse.y);
+    } else {
+        d->left_x=d->left_y=128;
+    }
+}
+
 /* The pause key (touchpad right without L1, which is photo mode) lets go of the window's mouse
  * lock while the game's pause menu is up, and takes it back (gpu/shim/window.cpp). */
 static void note_pause_key(const PadData *d) {
@@ -724,8 +820,9 @@ static void sample(PadData *d) {
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
     apply_combos(d);
-    apply_dodge(d);
-    apply_mouse_aim(d);
+    if (!keyboard_right_stick) apply_dodge(d);
+    if (!keyboard_right_stick) apply_mouse_aim(d);
+    else SDL_SetAtomicInt(&mouse_motion[0],0), SDL_SetAtomicInt(&mouse_motion[1],0);
     note_pause_key(d);
     engine_fps_combo(d);
     play_click(d);

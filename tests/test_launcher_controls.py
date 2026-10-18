@@ -179,6 +179,26 @@ class ControlMapTest(unittest.TestCase):
         values['square'] = 'E'
         self.assertEqual(launcher.control_changes(values, 'key'), {'square': 'E'})
 
+    def test_stick_modes_reach_the_runtime(self):
+        controls = {'stick': {'left': 'Q', 'down': 'F'},
+                    'left_stick': {'left': 'J', 'up': 'I'}, 'key': {'dodge': 'V'}}
+        self.assertEqual(launcher.stick_map(controls), 'left=Q,right=Right,up=Up,down=F')
+        self.assertEqual(launcher.left_stick_map(controls), 'left=J,right=D,up=I,down=S')
+        settings = {**launcher.APP_DEFAULTS, 'controls': controls, 'mouse_left_stick': True,
+                    'left_stick_sensitivity': 135,
+                    'keyboard_right_stick': True}
+        env = launcher.game_environment(settings)
+        self.assertEqual(env['GOW3_MOUSE_LEFT_STICK'], '1')
+        self.assertEqual(env['GOW3_LEFT_STICK_MAP'], 'left=J,right=D,up=I,down=S')
+        self.assertEqual(env['GOW3_LEFT_STICK_SENSITIVITY'], '135')
+        self.assertEqual(env['GOW3_RIGHT_STICK_MAP'], 'left=Q,right=Right,up=Up,down=F')
+        self.assertNotIn('dodge=', env['GOW3_KEY_MAP'])
+
+    def test_default_right_stick_keys_are_native_arrows(self):
+        self.assertEqual(launcher.stick_map({}), 'left=Left,right=Right,up=Up,down=Down')
+        settings = {**launcher.APP_DEFAULTS, 'keyboard_right_stick': True}
+        self.assertIn('left=Left,right=Right,up=Up,down=Down', launcher.game_environment(settings)['GOW3_RIGHT_STICK_MAP'])
+
     def test_actions_belong_to_the_keyboard_table(self):
         names = [row[0] for row in launcher.table_rows('key')]
         self.assertEqual(names[names.index('r3') + 1], 'rage')

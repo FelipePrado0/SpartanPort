@@ -182,6 +182,41 @@ int main(void) {
     aim_sensitivity=100;
     aim_style=0;
 
+    /* Configured keyboard directions drive the right stick, independently of WASD. */
+    StickMap saved_stick_map=right_stick_map;
+    right_stick_map=(StickMap){{{SDL_SCANCODE_Q,0,-1},{SDL_SCANCODE_E,0,1},
+                                {SDL_SCANCODE_R,1,-1},{SDL_SCANCODE_F,1,1}},4};
+    bool stick_keys[SDL_SCANCODE_COUNT]={0};
+    stick_keys[SDL_SCANCODE_Q]=true; stick_keys[SDL_SCANCODE_F]=true;
+    PadData configured={.right_x=128,.right_y=128};
+    apply_right_stick_keys(&configured,stick_keys);
+    assert(configured.right_x==0 && configured.right_y==255);
+    right_stick_map=saved_stick_map;
+
+    StickMap configured_left={0};
+    assert(parse_stick_map(&configured_left,"left=Q,right=E,up=R,down=F"));
+    PadData left_keys={.left_x=128,.left_y=128};
+    stick_keys[SDL_SCANCODE_Q]=false; stick_keys[SDL_SCANCODE_F]=true;
+    apply_stick_keys(&left_keys,stick_keys,&configured_left,true);
+    assert(left_keys.left_x==128 && left_keys.left_y==255);
+
+    /* Mouse movement can replace WASD on the left stick and returns to neutral after a pause. */
+    mouse_left_stick=true;
+    PadData left={.left_x=128,.left_y=128,.timestamp=1000000};
+    glide.motion.xrel=100.0f; glide.motion.yrel=-50.0f; mouse_watch(NULL,&glide);
+    apply_mouse_left_stick(&left);
+    assert(left.left_x>128 && left.left_y<128);
+    left.left_x=left.left_y=128; left.timestamp+=AIM_HOLD_US;
+    apply_mouse_left_stick(&left);
+    assert(left.left_x==128 && left.left_y==128);
+    left_stick_sensitivity=50.0f;
+    SDL_SetAtomicInt(&mouse_motion[0],0); SDL_SetAtomicInt(&mouse_motion[1],0);
+    left.timestamp+=1000; glide.motion.xrel=10.0f; glide.motion.yrel=0; mouse_watch(NULL,&glide);
+    apply_mouse_left_stick(&left);
+    assert(left.left_x==161 && left.left_y==128);
+    left_stick_sensitivity=100.0f;
+    mouse_left_stick=false;
+
     /* Grab: L1 + Circle from one source, alongside rage. */
     ButtonMap grab=key_map;
     assert(apply_button_map(&grab,"r3=X,grab=C,rage=V",true)==3); /* C was R3's default key */
