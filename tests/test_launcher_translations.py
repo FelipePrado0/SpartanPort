@@ -42,5 +42,15 @@ class PortugueseTest(unittest.TestCase):
         self.assertEqual(self.pt[launcher.RESOLUTION_CHOICES[0][1][0]], 'Nativa · 1920 × 1080 · 16:9')
 
 
+
+class SpanishTest(PortugueseTest):
+    """Spanish covers the same texts as Brazilian Portuguese."""
+
+    def setUp(self):
+        self.pt = gow3_lang.table('es')
+
+    def test_resolution_labels(self):
+        self.assertEqual(self.pt[launcher.RESOLUTION_CHOICES[0][1][0]], 'Nativa · 1920 × 1080 · 16:9')
+
 if __name__ == '__main__':
     unittest.main()

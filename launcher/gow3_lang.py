@@ -1346,6 +1346,71 @@ EXTRA['es'].update({
     'Controller type': 'Tipo de mando',
 })
 
+EXTRA['es'].update({
+    'Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+        'Permite saltar manualmente cualquier cinemática con el botón X. Gracias a illusion0001, alias illusionyy, por el parche de PS3 que lo hizo muy fácil.',
+    'Circle':
+        'Círculo',
+    'Cross':
+        'X',
+    'D-pad down':
+        'Cruceta abajo',
+    'D-pad left':
+        'Cruceta izquierda',
+    'D-pad right':
+        'Cruceta derecha',
+    'D-pad up':
+        'Cruceta arriba',
+    'Fast screen effects (Rage of Sparta, weapons)':
+        'Efectos de pantalla rápidos (Rage of Sparta, armas)',
+    'Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.':
+        'Corrige las texturas corruptas del juego aumentando el tamaño del Video Arena, para que el juego use más memoria de vídeo en texturas y efectos. Requiere DMEM de 2048 MB o más, o el juego se cierra. Activa este parche o un parche de resolución, nunca los dos.',
+    'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.':
+        'Corrige la pantalla negra al iniciar con el contador de FPS en marcha: el índice de ritmo de fotogramas empieza en 2 en lugar de 0, así el segundo fotograma ya no espera un flip que solo él puede provocar.',
+    'For launcher only. Applies after Save.':
+        'Solo para el launcher. Se aplica después de Guardar.',
+    'GUI Scale':
+        'Escala de la interfaz',
+    'Graphics card':
+        'Tarjeta gráfica',
+    'Keeps powers and weapon effects at full FPS. Switch it off if a screen effect (blur, distortion, the color change of a power) looks stretched, shifted or wrong.':
+        'Mantiene los poderes y los efectos de las armas a FPS completos. Desactívalo si un efecto de pantalla (desenfoque, distorsión, el cambio de color de un poder) se ve estirado, desplazado o mal.',
+    'L1 + Touchpad right':
+        'L1 + touchpad derecho',
+    'LS (left stick click)':
+        'LS (clic del stick izquierdo)',
+    'Mute button':
+        'Botón de silencio',
+    'PS button':
+        'Botón PS',
+    'RS (right stick click)':
+        'RS (clic del stick derecho)',
+    'Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+        'Salta los logotipos iniciales. Gracias a illusion0001, alias illusionyy, por el parche de PS3 que lo hizo muy fácil.',
+    'Square':
+        'Cuadrado',
+    'The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.':
+        'La GPU en la que se ejecuta el juego. Elige tu tarjeta dedicada si el juego usa la integrada.',
+    'Touchpad click':
+        'Clic del touchpad',
+    'Touchpad left':
+        'Touchpad izquierdo',
+    'Touchpad right':
+        'Touchpad derecho',
+    'Triangle':
+        'Triángulo',
+    'Xbox button':
+        'Botón Xbox',
+    'Your own dump of the game (eboot.bin, sce_module, sce_sys): God of War III Remastered, any region and version.':
+        'Tu propio volcado del juego (eboot.bin, sce_module, sce_sys): God of War III Remastered, cualquier región y versión.',
+    '{} not found in this eboot.bin at the last start (see Log)':
+        '{} no se encontró en este eboot.bin en el último inicio (ver Registro)',
+    '{} · 60 FPS engine · no patches for this game':
+        '{} · motor a 60 FPS · sin parches para este juego',
+    'Native · 1920 × 1080 · 16:9':
+        'Nativa · 1920 × 1080 · 16:9',
+})
+
 _tables = {}
 
 
