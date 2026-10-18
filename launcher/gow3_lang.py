@@ -258,7 +258,7 @@ TRANSLATIONS = {
         'Desempenho', 'Pipeline de GPU em dois estágios',
         '20–30% mais rápido; desligue se o jogo ficar instável.', 'Automático (8+ threads)',
         'Ligado', 'Desligado (mais estável)', 'Leituras da GPU',
-        'Com que precisão os dados escritos pela GPU voltam para o jogo.', 'Relaxed (padrão)',
+        'Com que precisão os dados escritos pela GPU voltam para o jogo.', 'Flexível (padrão)',
         'Diagnóstico', 'Estatísticas de quadros no registro (a cada 5 s)',
         'Tempo de GPU por passe no registro',
         'Camadas de validação do Vulkan (precisa do Vulkan SDK; muito mais lento)',
@@ -903,6 +903,7 @@ EXTRA = {
         'In-game button icons': 'Ícones dos botões no jogo',
         'Original (default)': 'Original (padrão)',
         'Match my controller': 'Igual ao meu controle',
+        'Keyboard': 'Teclado',
         "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of two game files in the port's data folder (about 70 MB); your game folder is never changed. Applied when the game starts.": 'Troca os ícones de botões PlayStation dentro do jogo pelos do seu controle. Funciona com uma cópia de dois arquivos do jogo na pasta de dados do port (cerca de 70 MB); a pasta do jogo nunca é alterada. Aplicado quando o jogo inicia.',
         'Textures': 'Texturas',
         'Anisotropic filtering': 'Filtro anisotrópico',
@@ -918,6 +919,80 @@ EXTRA = {
             'O Windows não conseguiu reservar a memória que o jogo precisa. Feche outros programas, ou deixe o arquivo de paginação do Windows crescer (por exemplo 16384 MB inicial, 32768 MB máximo), e inicie de novo.',
         'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.':
             'O jogo parou ao ler os próprios arquivos: o dump do jogo pode estar incompleto. Extraia o pkg de novo e confira se a pasta do jogo tem cerca de 40 GB.',
+        'Native · 1920 × 1080 · 16:9': 'Nativa · 1920 × 1080 · 16:9',
+        'Graphics card': 'Placa de vídeo',
+        'The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.':
+            'A GPU em que o jogo roda. Escolha a placa dedicada se o jogo estiver usando a integrada.',
+        'Fast screen effects (Rage of Sparta, weapons)': 'Efeitos de tela rápidos (Rage of Sparta, armas)',
+        'Keeps powers and weapon effects at full FPS. Switch it off if a screen effect (blur, distortion, the color change of a power) looks stretched, shifted or wrong.':
+            'Mantém os efeitos de poderes e armas no FPS máximo. Desative se um efeito de tela (desfoque, distorção, a mudança de cor de um poder) parecer esticado, deslocado ou errado.',
+        'Your own dump of the game (eboot.bin, sce_module, sce_sys): God of War III Remastered, any region and version.':
+            'O seu próprio dump do jogo (eboot.bin, sce_module, sce_sys): God of War III Remastered, de qualquer região e versão.',
+        'L1 + Touchpad right': 'L1 + Touchpad direito',
+        "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert and R3+L2 always open the port's menu. Applied when the game starts.":
+            'As teclas usam os nomes do SDL: letras, números, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 a F12. Um nome que o jogo não conhece mantém o padrão (o registro diz qual). L2/R2 no controle ficam nos gatilhos. Touchpad direito abre o menu de pausa do jogo; Touchpad esquerdo (modo foto) é L1 + Touchpad direito no controle. Insert e R3+L2 sempre abrem o menu do port. Vale quando o jogo inicia.',
+        '{} · 60 FPS engine · no patches for this game': '{} · motor a 60 FPS · sem patches para este jogo',
+        '{} not found in this eboot.bin at the last start (see Log)': '{} não encontrados neste eboot.bin na última inicialização (veja o Registro)',
+        '   (game patches)': '   (patches do jogo)',
+        # Button names (PS_BUTTON_NAMES, PAD_STYLES).
+        'Cross': 'X', 'Circle': 'Círculo', 'Square': 'Quadrado', 'Triangle': 'Triângulo',
+        'Touchpad left': 'Touchpad esquerdo', 'Touchpad right': 'Touchpad direito',
+        'D-pad up': 'Direcional ↑', 'D-pad down': 'Direcional ↓', 'D-pad left': 'Direcional ←',
+        'D-pad right': 'Direcional →',
+        'Touchpad click': 'Clique do touchpad', 'PS button': 'Botão PS', 'Mute button': 'Botão de mudo',
+        'LS (left stick click)': 'LS (clique do analógico esquerdo)',
+        'RS (right stick click)': 'RS (clique do analógico direito)', 'Xbox button': 'Botão Xbox',
+        # Notes of the game patches (patches/God_of_War_III_Remastered.xml) shown on the Game page.
+        'Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.':
+            'Corrige texturas corrompidas no jogo aumentando a Video Arena, para o jogo usar mais memória de vídeo em texturas e efeitos. Exige DMEM de 2048 MB ou mais, senão o jogo fecha. Ative este patch ou um patch de resolução, nunca os dois.',
+        'Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+            'Pula os logos iniciais. Agradecimentos a illusion0001, também conhecido como illusionyy, pelo patch do PS3 que tornou isso muito fácil.',
+        'Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+            'Permite pular qualquer cinemática com o botão X. Agradecimentos a illusion0001, também conhecido como illusionyy, pelo patch do PS3 que tornou isso muito fácil.',
+        'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.':
+            'Corrige a tela preta na inicialização com o contador de FPS rodando: o índice de ritmo dos quadros começa em 2 em vez de 0, então o segundo quadro não espera mais por um flip que só ele pode disparar.',
+        '(none)': '(nenhuma)',
+        'Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.':
+            'Mouse adaptativo: quanto o mouse se move para cada passo de um giro. Também no menu do jogo.',
+        'Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.':
+            'Mira com o mouse enquanto L2 está pressionado (Cabeça de Hélio, Arco de Apolo). Relativo: o analógico segue o movimento e volta ao centro quando o mouse para. Absoluto: onde o mouse estava ao apertar L2 é o centro, e o analógico aponta dele até o mouse. Também no menu do jogo.',
+        'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
+            'Mira com o mouse enquanto L2 está pressionado: menor precisa de mais movimento do mouse para o mesmo analógico, maior de menos. Também no menu do jogo.',
+        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+            'Clique em uma caixa e aperte uma tecla, clique com um botão do mouse ou gire a roda (desiste após {} segundos). Uma entrada já usada por outro botão troca com ele; a seta devolve um botão ao padrão. Rage of Sparta aperta L3 e R3 juntos: marque a caixa acima dele para usar uma entrada em vez de duas. Agarrar aperta L1 e Círculo juntos. A esquiva vai na direção em que você anda (WASD), ou para trás quando parado. O touchpad direito abre o menu de pausa do jogo. Insert sempre abre o menu do port e não pode ser atribuído. Aplicado ao iniciar o jogo.',
+        'Gamepad Mapping': 'Mapeamento do controle',
+        'General': 'Geral',
+        'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
+            'Como os eventos de girar o analógico são respondidos. Teclado: digite o giro, meias-voltas a partir de cima D S A (horário) ou A S D, a partir de baixo A W D ou D W A, voltas completas D S A W ou A S D W; uma tecla fora de ordem recomeça. Mouse adaptativo: desenhe o giro com o mouse.',
+        'Joystick prompts': 'Prompts do analógico',
+        'Keep the mouse in the game window': 'Manter o mouse na janela do jogo',
+        'Key not supported': 'Tecla não suportada',
+        'Keyboard & Mouse Mapping': 'Mapeamento de teclado e mouse',
+        'Keyboard and mouse, button icons and gamepad mapping.':
+            'Teclado e mouse, ícones dos botões e mapeamento do controle.',
+        "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.":
+            'L2/R2 ficam nos gatilhos. O touchpad direito abre o menu de pausa do jogo; o touchpad esquerdo (modo foto) é L1 + touchpad direito. R3+L2 sempre abre o menu do port. Aplicado ao iniciar o jogo.',
+        'Mouse prompt distance': 'Distância do mouse nos prompts',
+        'Press a key': 'Aperte uma tecla',
+        'Press a key or mouse': 'Aperte uma tecla ou o mouse',
+        'Rage of Sparta on one input (L3 + R3 together)':
+            'Rage of Sparta em uma entrada (L3 + R3 juntos)',
+        'Reset gamepad to defaults': 'Restaurar o controle ao padrão',
+        'Reset keyboard & mouse to defaults': 'Restaurar teclado e mouse ao padrão',
+        'Right stick sensitivity': 'Sensibilidade do analógico direito',
+        'Right stick style': 'Estilo do analógico direito',
+        'Which gamepad button presses each button of the game.':
+            'Qual botão do controle aperta cada botão do jogo.',
+        'Which key or mouse input presses each button of the game.':
+            'Qual tecla ou entrada do mouse aperta cada botão do jogo.',
+        'While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.':
+            'Enquanto você joga, o mouse fica na janela do jogo, então um clique não cai em outro monitor ou programa. O menu do jogo e trocar de janela o liberam. Também no menu do jogo.',
+        'Keyboard (native)': 'Teclado (nativo)',
+        'Adaptive mouse (experimental)': 'Mouse adaptativo (experimental)',
+        'Relative': 'Relativo',
+        'Absolute': 'Absoluto',
+        'Grab': 'Agarrar',
+        'Dodge': 'Esquiva',
     },
     'es': {
         'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
@@ -1123,6 +1198,7 @@ EXTRA = {
         'In-game button icons': 'Iconos de botones en el juego',
         'Original (default)': 'Original (predeterminado)',
         'Match my controller': 'Igual que mi mando',
+        'Keyboard': 'Teclado',
         "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of two game files in the port's data folder (about 70 MB); your game folder is never changed. Applied when the game starts.":
             'Sustituye los iconos de botones de PlayStation dentro del juego por los de tu mando. Trabaja sobre una copia de dos archivos del juego en la carpeta de datos del port (unos 70 MB); tu carpeta del juego nunca se modifica. Se aplica al iniciar el juego.',
         'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
@@ -1141,8 +1217,199 @@ EXTRA = {
             'Guarda la imagen del juego, sin el overlay, como PNG en la carpeta screenshots de las partidas.',
         'Vibration': 'Vibración',
         "Strength of the gamepad's vibration; 0% turns it off.": 'Fuerza de la vibración del mando; 0% la desactiva.',
+        '(none)': '(ninguna)',
+        'Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.':
+            'Ratón adaptativo: cuánto se mueve el ratón para cada paso de un giro. También en el menú del juego.',
+        'Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.':
+            'Apuntar con el ratón mientras mantienes L2 (Cabeza de Helios, Arco de Apolo). Relativo: el stick sigue el movimiento y vuelve al centro cuando el ratón se detiene. Absoluto: donde estaba el ratón al pulsar L2 es el centro, y el stick apunta desde él hasta el ratón. También en el menú del juego.',
+        'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
+            'Apuntar con el ratón mientras mantienes L2: más bajo necesita más movimiento del ratón para el mismo stick, más alto menos. También en el menú del juego.',
+        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+            'Haz clic en una casilla y luego pulsa una tecla, haz clic con un botón del ratón o gira la rueda (se cancela tras {} segundos). Una entrada ya usada por otro botón se intercambia con él; la flecha devuelve un botón a su valor predeterminado. Rage of Sparta pulsa L3 y R3 a la vez: marca la casilla de encima para usar una entrada en lugar de dos. Agarrar pulsa L1 y Círculo a la vez. Esquivar evade hacia donde te mueves (WASD), o hacia atrás si estás quieto. El touchpad derecho abre el menú de pausa del juego. Insert siempre abre el menú del port y no se puede asignar. Se aplica al iniciar el juego.',
+        'Gamepad Mapping': 'Asignación del mando',
+        'General': 'General',
+        'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
+            'Cómo se responden los eventos de girar el stick. Teclado: escribe el giro, medias vueltas desde arriba D S A (horario) o A S D, desde abajo A W D o D W A, vueltas completas D S A W o A S D W; una tecla fuera de orden vuelve a empezar. Ratón adaptativo: dibuja el giro con el ratón.',
+        'Joystick prompts': 'Eventos del stick',
+        'Keep the mouse in the game window': 'Mantener el ratón en la ventana del juego',
+        'Key not supported': 'Tecla no compatible',
+        'Keyboard & Mouse Mapping': 'Asignación de teclado y ratón',
+        'Keyboard and mouse, button icons and gamepad mapping.':
+            'Teclado y ratón, iconos de botones y asignación del mando.',
+        "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.":
+            'L2/R2 siguen en los gatillos. El touchpad derecho abre el menú de pausa del juego; el touchpad izquierdo (modo foto) es L1 + touchpad derecho. R3+L2 siempre abre el menú del port. Se aplica al iniciar el juego.',
+        'Mouse prompt distance': 'Distancia del ratón en los eventos',
+        'Press a key': 'Pulsa una tecla',
+        'Press a key or mouse': 'Pulsa una tecla o el ratón',
+        'Rage of Sparta on one input (L3 + R3 together)':
+            'Rage of Sparta en una entrada (L3 + R3 a la vez)',
+        'Reset gamepad to defaults': 'Restablecer el mando',
+        'Reset keyboard & mouse to defaults': 'Restablecer teclado y ratón',
+        'Right stick sensitivity': 'Sensibilidad del stick derecho',
+        'Right stick style': 'Estilo del stick derecho',
+        'Which gamepad button presses each button of the game.':
+            'Qué botón del mando pulsa cada botón del juego.',
+        'Which key or mouse input presses each button of the game.':
+            'Qué tecla o entrada del ratón pulsa cada botón del juego.',
+        'While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.':
+            'Mientras juegas, el ratón se queda en la ventana del juego, así un clic no cae en otro monitor o programa. El menú del juego y cambiar de ventana lo liberan. También en el menú del juego.',
+        'Keyboard (native)': 'Teclado (nativo)',
+        'Adaptive mouse (experimental)': 'Ratón adaptativo (experimental)',
+        'Relative': 'Relativo',
+        'Absolute': 'Absoluto',
+        'Grab': 'Agarrar',
+        'Dodge': 'Esquivar',
     },
 }
+
+EXTRA['pt'].update({
+    'GUI Scale': 'Escala da interface',
+    'Auto': 'Automático',
+    'For launcher only. Applies after Save.':
+        'Somente para o inicializador. Aplica-se após Salvar.',
+})
+
+EXTRA['pt'].update({
+    '1 file': '1 arquivo',
+    'Change textures, sounds and text. Your game files stay untouched.': 'Troque texturas, sons e textos. Os arquivos do jogo não são alterados.',
+    'Details': 'Detalhes',
+    'Drop a mod folder or .zip in the mods folder.': 'Coloque a pasta ou o .zip do mod na pasta de mods.',
+    'Hide': 'Ocultar',
+    'Load order': 'Ordem de carga',
+    'Lower in the list wins': 'O mais abaixo na lista vence',
+    'No mods yet': 'Nenhum mod ainda',
+    'Open folder': 'Abrir pasta',
+    'Open mod folder': 'Abrir pasta do mod',
+    'Open mods folder': 'Abrir pasta de mods',
+    'Presets': 'Presets',
+    'Website': 'Site',
+    'by {}': 'por {}',
+    'game patches': 'patches de jogo',
+    '{} files': '{} arquivos',
+    '{} of {} active': '{} de {} ativos',
+    '… and {} more': '… e mais {}',
+    '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 arquivo é alterado por dois mods. {} vence.',
+    '⚠ {} also in {}. {} wins.': '⚠ {} também em {}. {} vence.',
+    '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ {} arquivos são alterados por mais de um mod. Vence o mais abaixo na lista.',
+})
+EXTRA['es'].update({
+    '1 file': '1 archivo',
+    'Change textures, sounds and text. Your game files stay untouched.': 'Cambia texturas, sonidos y textos. Los archivos del juego no se modifican.',
+    'Details': 'Detalles',
+    'Drop a mod folder or .zip in the mods folder.': 'Coloca la carpeta o el .zip del mod en la carpeta de mods.',
+    'Hide': 'Ocultar',
+    'Load order': 'Orden de carga',
+    'Lower in the list wins': 'Gana el que está más abajo',
+    'No mods yet': 'Aún no hay mods',
+    'Open folder': 'Abrir carpeta',
+    'Open mod folder': 'Abrir carpeta del mod',
+    'Open mods folder': 'Abrir carpeta de mods',
+    'Presets': 'Preajustes',
+    'Website': 'Sitio web',
+    'by {}': 'por {}',
+    'game patches': 'parches del juego',
+    '{} files': '{} archivos',
+    '{} of {} active': '{} de {} activos',
+    '… and {} more': '… y {} más',
+    '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 archivo lo cambian dos mods. Gana {}.',
+    '⚠ {} also in {}. {} wins.': '⚠ {} también en {}. Gana {}.',
+    '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ {} archivos los cambian varios mods. Gana el que está más abajo.',
+})
+
+EXTRA['pt'].update({
+    'Left stick click': 'Clique do analógico esquerdo',
+    'Right stick click': 'Clique do analógico direito',
+    'Plus (+)': 'Mais (+)',
+    'Minus (−)': 'Menos (−)',
+    'Home button': 'Botão Home',
+    'Capture': 'Captura',
+})
+EXTRA['es'].update({
+    'Left stick click': 'Clic del stick izquierdo',
+    'Right stick click': 'Clic del stick derecho',
+    'Plus (+)': 'Más (+)',
+    'Minus (−)': 'Menos (−)',
+    'Home button': 'Botón Home',
+    'Capture': 'Captura',
+})
+
+EXTRA['pt'].update({
+    'Device': 'Dispositivo',
+    'Keyboard & mouse': 'Teclado e mouse',
+    'Gamepad': 'Controle',
+    'Controller type': 'Tipo de controle',
+})
+EXTRA['es'].update({
+    'Device': 'Dispositivo',
+    'Keyboard & mouse': 'Teclado y ratón',
+    'Gamepad': 'Mando',
+    'Controller type': 'Tipo de mando',
+})
+
+EXTRA['es'].update({
+    'Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+        'Permite saltar manualmente cualquier cinemática con el botón X. Gracias a illusion0001, alias illusionyy, por el parche de PS3 que lo hizo muy fácil.',
+    'Circle':
+        'Círculo',
+    'Cross':
+        'X',
+    'D-pad down':
+        'Cruceta abajo',
+    'D-pad left':
+        'Cruceta izquierda',
+    'D-pad right':
+        'Cruceta derecha',
+    'D-pad up':
+        'Cruceta arriba',
+    'Fast screen effects (Rage of Sparta, weapons)':
+        'Efectos de pantalla rápidos (Rage of Sparta, armas)',
+    'Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.':
+        'Corrige las texturas corruptas del juego aumentando el tamaño del Video Arena, para que el juego use más memoria de vídeo en texturas y efectos. Requiere DMEM de 2048 MB o más, o el juego se cierra. Activa este parche o un parche de resolución, nunca los dos.',
+    'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.':
+        'Corrige la pantalla negra al iniciar con el contador de FPS en marcha: el índice de ritmo de fotogramas empieza en 2 en lugar de 0, así el segundo fotograma ya no espera un flip que solo él puede provocar.',
+    'For launcher only. Applies after Save.':
+        'Solo para el launcher. Se aplica después de Guardar.',
+    'GUI Scale':
+        'Escala de la interfaz',
+    'Graphics card':
+        'Tarjeta gráfica',
+    'Keeps powers and weapon effects at full FPS. Switch it off if a screen effect (blur, distortion, the color change of a power) looks stretched, shifted or wrong.':
+        'Mantiene los poderes y los efectos de las armas a FPS completos. Desactívalo si un efecto de pantalla (desenfoque, distorsión, el cambio de color de un poder) se ve estirado, desplazado o mal.',
+    'L1 + Touchpad right':
+        'L1 + touchpad derecho',
+    'LS (left stick click)':
+        'LS (clic del stick izquierdo)',
+    'Mute button':
+        'Botón de silencio',
+    'PS button':
+        'Botón PS',
+    'RS (right stick click)':
+        'RS (clic del stick derecho)',
+    'Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+        'Salta los logotipos iniciales. Gracias a illusion0001, alias illusionyy, por el parche de PS3 que lo hizo muy fácil.',
+    'Square':
+        'Cuadrado',
+    'The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.':
+        'La GPU en la que se ejecuta el juego. Elige tu tarjeta dedicada si el juego usa la integrada.',
+    'Touchpad click':
+        'Clic del touchpad',
+    'Touchpad left':
+        'Touchpad izquierdo',
+    'Touchpad right':
+        'Touchpad derecho',
+    'Triangle':
+        'Triángulo',
+    'Xbox button':
+        'Botón Xbox',
+    'Your own dump of the game (eboot.bin, sce_module, sce_sys): God of War III Remastered, any region and version.':
+        'Tu propio volcado del juego (eboot.bin, sce_module, sce_sys): God of War III Remastered, cualquier región y versión.',
+    '{} not found in this eboot.bin at the last start (see Log)':
+        '{} no se encontró en este eboot.bin en el último inicio (ver Registro)',
+    '{} · 60 FPS engine · no patches for this game':
+        '{} · motor a 60 FPS · sin parches para este juego',
+    'Native · 1920 × 1080 · 16:9':
+        'Nativa · 1920 × 1080 · 16:9',
+})
 
 _tables = {}
 

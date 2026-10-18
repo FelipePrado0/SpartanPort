@@ -33,7 +33,7 @@ GpuProfiler::GpuProfiler(const Instance& instance, Scheduler& scheduler_)
 }
 
 void GpuProfiler::WriteTimestamp(u64 key) {
-    if (used[slice] + 1 >= SliceQueries) {
+    if (paused || used[slice] + 1 >= SliceQueries) {
         return; // the frame's slice is full: the rest of the frame goes to the last label
     }
     // Outside render passes: radv_CmdWriteTimestamp2 crashed inside some. Marks sit where a
@@ -49,16 +49,25 @@ void GpuProfiler::WriteTimestamp(u64 key) {
 
 void GpuProfiler::BeginFrame() {
     // Close the frame: one more timestamp without a label.
-    if (used[slice] > 0 && used[slice] < SliceQueries) {
+    if (!paused && used[slice] > 0 && used[slice] < SliceQueries) {
         scheduler.EndRendering();
         const u32 query = slice * SliceQueries + used[slice]++;
         scheduler.Record([pool = *pool, query](vk::CommandBuffer cmdbuf) {
             cmdbuf.writeTimestamp2(vk::PipelineStageFlagBits2::eAllCommands, pool, query);
         });
         pending[slice] = true;
+        ticks[slice] = scheduler.CurrentTick();
     }
-    slice = (slice + 1) % NumSlices;
-    // The oldest slice: its frame was submitted four frames ago.
+    // The oldest slice, four frames back. While the GPU has not finished it (or its command
+    // buffer is not even submitted), its queries can be neither read nor reset: skip this
+    // frame's timestamps instead of waiting, which deadlocked during video playback.
+    const u32 next = (slice + 1) % NumSlices;
+    paused = pending[next] && !scheduler.IsFree(ticks[next]);
+    if (paused) {
+        Print();
+        return;
+    }
+    slice = next;
     if (pending[slice]) {
         Collect(slice);
     }
@@ -74,10 +83,10 @@ void GpuProfiler::BeginFrame() {
 void GpuProfiler::Collect(u32 which) {
     const u32 count = used[which];
     std::vector<u64> stamps(count);
-    // Four frames on this is complete unless the GPU lags that far: then wait for it.
+    // BeginFrame only collects a slice the GPU has finished, so the results are there.
     const auto result = device.getQueryPoolResults(
         *pool, which * SliceQueries, count, count * sizeof(u64), stamps.data(), sizeof(u64),
-        vk::QueryResultFlagBits::e64 | vk::QueryResultFlagBits::eWait);
+        vk::QueryResultFlagBits::e64);
     if (result != vk::Result::eSuccess) {
         return;
     }

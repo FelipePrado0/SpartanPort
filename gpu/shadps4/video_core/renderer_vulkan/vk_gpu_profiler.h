@@ -73,6 +73,8 @@ private:
     std::array<std::vector<u64>, NumSlices> keys; ///< label of each timestamp but the last
     std::array<u32, NumSlices> used{};
     std::array<bool, NumSlices> pending{};
+    std::array<u64, NumSlices> ticks{}; ///< scheduler tick of each pending slice's last timestamp
+    bool paused = false; ///< the next slice is still in flight: no timestamps this frame
     std::unordered_map<u64, std::string> described;
     struct Total {
         double ms = 0;

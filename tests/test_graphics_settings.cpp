@@ -20,7 +20,17 @@ static std::string Read(const char* path) {
 int main() {
     assert(G::ParseDisplayMode("borderless") == G::Borderless && G::ParseDisplayMode("bogus") == G::Windowed);
     assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(75) == 0);
-    assert(G::ParseResolution("1440p") == 3 && G::ParseResolution("8K") == 0);
+    assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 0);
+    // #238: 900p (1600x900) sits between 720p and 1440p in the built-in list.
+    assert(G::Resolutions[3] == "900p" && G::Resolutions[2] == "720p" && G::Resolutions[4] == "1440p");
+    // The window's starting size (window.cpp): built-in names, a mod's size, native otherwise.
+    assert(G::ResolutionSize("720p") == std::make_pair(1280, 720));
+    assert(G::ResolutionSize("900p") == std::make_pair(1600, 900));
+    assert(G::ResolutionSize("4K") == std::make_pair(3840, 2160));
+    assert(G::ResolutionSize("3440x1440") == std::make_pair(3440, 1440));
+    assert(G::ResolutionSize("native") == std::make_pair(1920, 1080));
+    assert(G::ResolutionSize("8K") == std::make_pair(1920, 1080));
+    for (const auto name : G::Resolutions) assert(G::ResolutionSize(name).first > 0);
     assert(G::ParseEngineFps(240) == 240 && G::ParseEngineFps(90) == 120);
     assert(G::ParseFramesQueued(2) == 2 && G::ParseFramesQueued(0) == 0 && G::ParseFramesQueued(5) == 1);
     assert(G::ParseRcasStrength(100) == 100 && G::ParseRcasStrength(101) == 75 && G::ParseRcasStrength(-1) == 75);
@@ -45,7 +55,7 @@ int main() {
     auto& v = Gow3Settings::Get();
     Gow3Settings::Load();
     assert(v.display_mode == G::Borderless && !v.vsync && v.fps_limit == 240 && !v.async_shaders);
-    assert(v.render_resolution == 3 && v.engine_fps == 240 && !v.deferred_readback && v.stale_readback);
+    assert(v.render_resolution == 4 && v.engine_fps == 240 && !v.deferred_readback && v.stale_readback);
     // FSR 1 left the menus in 2.2.0: a saved fsr1=1 (or GOW3_FSR1) no longer turns it on.
     assert(!v.fsr1 && !v.rcas && v.rcas_strength == 40 && v.frames_queued == 2);
     _putenv_s("GOW3_FSR1", "1");
@@ -71,6 +81,25 @@ int main() {
                              "stale_readback=1\n", "fsr1=0\n", "rcas=0\n", "rcas_strength=40\n",
                              "frames_queued=2\n"}) {
         assert(saved.find(line) != std::string::npos);
+    }
+
+    {
+        // The resolutions of the enabled mods' patch files (run.py: GOW3_EXTRA_RESOLUTIONS) follow the built-in
+        // ones and keep their names through a load and a save; repeated or built-in names are not added twice.
+        _putenv_s("GOW3_EXTRA_RESOLUTIONS", "3840x1080;2880x1200;;2880x1200;4K;3440x1440");
+        const auto names = G::ResolutionNames();
+        assert(names.size() == 15 && names[12] == "2560x1600" && names[13] == "3840x1080" && names[14] == "2880x1200");
+        {
+            std::ofstream out(path);
+            out << "render_resolution=2880x1200\n";
+        }
+        Gow3Settings::Load();
+        assert(v.render_resolution == 14);
+        Gow3Settings::Save();
+        assert(Read(path).find("render_resolution=2880x1200\n") != std::string::npos);
+        _putenv_s("GOW3_EXTRA_RESOLUTIONS", "");  // the mod is off: its resolution is unknown, so native
+        Gow3Settings::Load();
+        assert(v.render_resolution == 0 && G::ResolutionNames().size() == 13);
     }
 
     {

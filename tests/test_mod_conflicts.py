@@ -27,7 +27,7 @@ class ModConflictTest(unittest.TestCase):
         found = mods.conflicts(self.root, ['a', 'b', 'c'])
         self.assertEqual(len(found), 1)
         path, owners = found[0]
-        self.assertEqual(path.casefold(), 'dvdroot_ps4/chr/kratos.wad')
+        self.assertEqual(path.casefold(), 'chr/kratos.wad')  # the game path: this game has no dvdroot_ps4
         self.assertEqual(owners, ['a', 'b', 'c'])  # c, the last one, wins
 
     def test_only_given_mods_count(self):

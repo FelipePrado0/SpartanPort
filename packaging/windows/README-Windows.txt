@@ -38,8 +38,9 @@ While playing
   1/3 L1/R1, R/F L2/R2, Z/C L3/R3, I/K/J/L d-pad, Enter Options, Tab photo mode and Backspace
   pause menu. Change them under Game -> Controls. On controllers without a touchpad, View opens
   pause and L1 + View opens photo mode.
-- Game -> Controls -> In-game button icons: Original (default), Match my controller, Xbox or
-  Nintendo. Generated copies do not change the game folder. Changing controllers needs a restart.
+- Game -> Controls -> In-game button icons: Original (default), Match my controller, Xbox,
+  Nintendo or Keyboard (your keyboard mapping's keys; also Match my controller without a gamepad).
+  Generated copies do not change the game folder. Changing controllers needs a restart.
 
 Next time
 - "Play God of War III.exe" starts the game straight away with the saved settings. Make a
