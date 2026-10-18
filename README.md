@@ -265,6 +265,7 @@ Defaults; change them on the launcher's **Controls** page, under **Keyboard & Mo
 | C | Grab (L1 + Circle) |
 | The mouse's back button | Dodge |
 | 1, 2, 3, 4 | d-pad up, right, down, left (weapons) |
+| Mouse wheel up and down | next and previous weapon (cycles the d-pad weapons); with the pause menu up (Esc), moves the selection up and down |
 | Tab | Options |
 | P | left touchpad click (photo mode) |
 | Esc | right touchpad click (pause menu) |
