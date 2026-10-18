@@ -1766,7 +1766,7 @@ class Launcher:
         self.row(f, _('Frames queued'), self.choice(f, 'frames_queued', 'ini', FRAMES_QUEUED),
                  _('1 is the lowest input latency; more can raise FPS when the graphics card is the limit.'))
         self.row(f, _('Engine frame rate'), self.choice(f, 'engine_fps', 'ini', ENGINE_FPS_CHOICES),
-                 _('The highest frame rate the game itself runs at (a game patch).'), restart=True)
+                 _('The highest frame rate the game itself runs at (a game patch).'))
         self.row(f, _('Aspect ratio'), self.choice(f, None, None, self.aspect_options, var=self.aspect_var()),
                  _('Shows the render resolutions of this shape only.'))
         self.row(f, _('Render resolution'), self.choice(f, 'render_resolution', 'ini', self.aspect_resolution_options),
