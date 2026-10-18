@@ -218,5 +218,5 @@ in a mod ([Patches in mods](#patches-in-mods)).
 - **kvicken** and **cuesta4**: the resolution, texture fix, 120 FPS and skip video patches,
   published for shadPS4, building on the PS3 patches by **illusion0001**.
 - **gow3_pc** (Felipe Prado): the port of those patches to this build and to signatures, the 100 and
-  240 FPS versions, the startup black screen fix and the ultrawide, 16:10 and 4:3 sizes
+  144 and 240 FPS versions, the startup black screen fix and the ultrawide, 16:10 and 4:3 sizes
   (`tools/make_ultrawide_patch.py`).

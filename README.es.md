@@ -515,8 +515,8 @@ deadinside28:
 Parches: kvicken y cuesta4 (resolución, corrección de texturas, 120 FPS y saltar videos, sobre los
 parches de PS3 de illusion0001), publicados para shadPS4 en
 [shadps4-emu/ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145) y adaptados a este
-ejecutable. El parche de 240 FPS fue adaptado por Felipe Prado a partir del de 120 FPS; el de 100 FPS es el mismo
-parche con 100.
+ejecutable. Los parches de 144 y 240 FPS fueron adaptados por Felipe Prado a partir del de 120 FPS; el de 100 FPS es
+el mismo parche con 100.
 Trucos: adaptados de los [GoldHEN cheats](https://github.com/GoldHEN/GoldHEN_Cheat_Repository) de
 Celogamez.
 

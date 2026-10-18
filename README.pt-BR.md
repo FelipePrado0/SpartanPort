@@ -508,8 +508,8 @@ Este projeto é um fork do port para Windows de Supermedo, que parte do original
 Patches: kvicken e cuesta4 (resolução, correção de texturas, 120 FPS e pular vídeos, a partir
 dos patches de PS3 de illusion0001), publicados para o shadPS4 em
 [shadps4-emu/ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145) e adaptados a
-este executável. O patch de 240 FPS foi adaptado por Felipe Prado a partir do de 120 FPS; o de 100 FPS é o mesmo
-patch com 100.
+este executável. Os patches de 144 e 240 FPS foram adaptados por Felipe Prado a partir do de 120 FPS; o de 100 FPS é
+o mesmo patch com 100.
 Trapaças: adaptadas dos [cheats GoldHEN](https://github.com/GoldHEN/GoldHEN_Cheat_Repository) de
 Celogamez.
 

@@ -229,5 +229,5 @@ distribúyelo en un mod ([Parches en mods](#parches-en-mods)).
 - **kvicken** y **cuesta4**: los parches de resolución, corrección de texturas, 120 FPS y saltar
   vídeos, publicados para shadPS4, a partir de los parches de PS3 de **illusion0001**.
 - **gow3_pc** (Felipe Prado): la adaptación de esos parches a este build y a firmas, las versiones de
-  100 y 240 FPS, la corrección de la pantalla negra al iniciar y los tamaños ultrawide, 16:10 y 4:3
+  100, 144 y 240 FPS, la corrección de la pantalla negra al iniciar y los tamaños ultrawide, 16:10 y 4:3
   (`tools/make_ultrawide_patch.py`).

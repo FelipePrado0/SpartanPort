@@ -64,7 +64,7 @@ inline std::pair<int, int> ResolutionSize(std::string_view name) {
     return ResolutionSizes[0].second;
 }
 /// Engine frame rates: 60 is the game's own (59.94). The launch takes the 240 FPS patch and the
-/// rate is written live (Gow3Settings::SyncEngineFps); 100 fits 100 Hz displays.
+/// rate is written live (Gow3Settings::SyncEngineFps); 100 and 144 fit common high-refresh displays.
 inline constexpr std::array<int, 5> EngineFps = {60, 100, 120, 144, 240};
 
 template <typename T, std::size_t N>

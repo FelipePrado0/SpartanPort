@@ -286,6 +286,15 @@ class SignatureTests(unittest.TestCase):
         self.assertEqual(patch_requirements(GOW3, ['Frame Rate Patch - 144 FPS'], '01.02'), (None, 144))
         self.assertEqual(patch_requirements(GOW3, [], '01.02'), (None, None))
 
+    def test_144_frame_rate_patch_has_the_reference_sites_and_value(self):
+        metadata = next(m for m in ET.parse(GOW3).getroot().iter('Metadata')
+                        if m.get('Name') == 'Frame Rate Patch - 144 FPS')
+        lines = list(metadata.find('PatchList'))
+        self.assertEqual([line.get('Address') for line in lines],
+                         ['0x0048ff1a', '0x0075dbe4'])
+        self.assertEqual(lines[1].get('Value'), '00001043')
+        self.assertIn('VBlank to 144 FPS', metadata.get('Note'))
+
 
 
 class ModPatchTests(unittest.TestCase):

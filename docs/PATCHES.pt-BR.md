@@ -226,5 +226,5 @@ assinaturas, e distribua-o num mod ([Patches em mods](#patches-em-mods)).
 - **kvicken** e **cuesta4**: os patches de resolução, correção de textura, 120 FPS e pular vídeos,
   publicados para o shadPS4, a partir dos patches de PS3 de **illusion0001**.
 - **gow3_pc** (Felipe Prado): o porte desses patches para este build e para assinaturas, as versões
-  de 100 e 240 FPS, a correção da tela preta ao abrir e os tamanhos ultrawide, 16:10 e 4:3
+  de 100, 144 e 240 FPS, a correção da tela preta ao abrir e os tamanhos ultrawide, 16:10 e 4:3
   (`tools/make_ultrawide_patch.py`).

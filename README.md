@@ -510,8 +510,8 @@ This project is a fork of Supermedo's Windows port, which builds on deadinside28
 Patches: kvicken and cuesta4 (resolution, texture fix, 120 FPS and skip videos, building on the
 PS3 patches by illusion0001), published for shadPS4 in
 [shadps4-emu/ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145) and adapted to
-this executable. The 240 FPS patch was adapted by Felipe Prado from the 120 FPS patch; the 100 FPS one is the same
-patch with 100.
+this executable. The 144 and 240 FPS patches were adapted by Felipe Prado from the 120 FPS patch; the 100 FPS one is
+the same patch with 100.
 Cheats: adapted from Celogamez's [GoldHEN cheats](https://github.com/GoldHEN/GoldHEN_Cheat_Repository).
 
 Also used: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmpeg](https://ffmpeg.org),
