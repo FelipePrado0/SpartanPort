@@ -199,6 +199,23 @@ bool WindowSDL::PollEvents() {
             height = h;
             break;
         }
+        case SDL_EVENT_WINDOW_MINIMIZED:
+        case SDL_EVENT_WINDOW_HIDDEN:
+        case SDL_EVENT_WINDOW_OCCLUDED:
+            is_minimized.store(true, std::memory_order_relaxed);
+            break;
+        case SDL_EVENT_WINDOW_RESTORED:
+        case SDL_EVENT_WINDOW_SHOWN:
+        case SDL_EVENT_WINDOW_EXPOSED: {
+            is_minimized.store(false, std::memory_order_relaxed);
+            int w = 0, h = 0;
+            SDL_GetWindowSizeInPixels(window, &w, &h);
+            if (w > 0 && h > 0) {
+                width = w;
+                height = h;
+            }
+            break;
+        }
         case SDL_EVENT_QUIT:
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             is_open = false;
@@ -228,4 +245,18 @@ bool WindowSDL::PollEvents() {
     return is_open;
 }
 
+bool WindowSDL::IsMinimized() const {
+    if (is_minimized.load(std::memory_order_relaxed)) {
+        return true;
+    }
+    if (window) {
+        const SDL_WindowFlags flags = SDL_GetWindowFlags(window);
+        if (flags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN | SDL_WINDOW_OCCLUDED)) {
+            return true;
+        }
+    }
+    return width.load(std::memory_order_relaxed) <= 0 || height.load(std::memory_order_relaxed) <= 0;
+}
+
 } // namespace Frontend
+

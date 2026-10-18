@@ -39,11 +39,11 @@ public:
     }
 
     vk::Image Image() const {
-        return images[image_index];
+        return (image_index < images.size()) ? images[image_index] : vk::Image{};
     }
 
     vk::ImageView ImageView() const {
-        return images_view[image_index];
+        return (image_index < images_view.size()) ? images_view[image_index] : vk::ImageView{};
     }
 
     vk::SurfaceFormatKHR GetSurfaceFormat() const {
@@ -75,11 +75,11 @@ public:
     }
 
     [[nodiscard]] vk::Semaphore GetImageAcquiredSemaphore() const {
-        return image_acquired[frame_index];
+        return (frame_index < image_acquired.size()) ? image_acquired[frame_index] : vk::Semaphore{};
     }
 
     [[nodiscard]] vk::Semaphore GetPresentReadySemaphore() const {
-        return present_ready[image_index];
+        return (image_index < present_ready.size()) ? present_ready[image_index] : vk::Semaphore{};
     }
 
     bool HasHDR() const {
@@ -104,7 +104,10 @@ private:
     void FindPresentMode();
 
     /// Sets the surface properties according to device capabilities
-    void SetSurfaceProperties();
+    bool SetSurfaceProperties();
+
+    /// Recreates the Vulkan surface from the window
+    void RecreateSurface();
 
     /// Destroys current swapchain resources
     void Destroy();
