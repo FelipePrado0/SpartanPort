@@ -22,6 +22,7 @@ if (APPLE)
         add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fexperimental-library>)
         add_link_options(-fexperimental-library)
     endif()
+    add_compile_options(-mavx -msse4.2 -mbmi -mlzcnt)
 endif()
 
 # gow3: link-time optimization (GOW3_LTO, default on) and profile-guided optimization

@@ -91,7 +91,12 @@ private:
         while (!stop.stop_requested()) {
             // Draws arrive every few microseconds while a frame is recorded: spin, and sleep
             // only after a pause longer than that (between frames).
-            const auto spin_until = std::chrono::steady_clock::now() + std::chrono::microseconds(100);
+            const auto spin_until = std::chrono::steady_clock::now() + std::chrono::microseconds(
+#ifdef __APPLE__
+                20);
+#else
+                100);
+#endif
             u64 now = posted.load(std::memory_order_acquire);
             for (u32 spins = 1; now == seen; ++spins) {
                 __builtin_ia32_pause();

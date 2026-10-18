@@ -456,7 +456,7 @@ void SetupDenormFlushMode(EmitContext& ctx, const Profile& profile, const Runtim
         } else {
             static std::once_flag logged;
             std::call_once(logged, [] {
-                LOG_WARNING(Render_Vulkan, "Float32 denorm flushing is not supported by the GPU");
+                LOG_INFO(Render_Vulkan, "Float32 denorm flushing is not supported by the GPU (Metal default)");
             });
         }
     } else {

@@ -305,7 +305,7 @@ bool Instance::CreateDevice() {
             return true;
         }
 
-        LOG_WARNING(Render_Vulkan, "Extension {} unavailable.", extension);
+        LOG_INFO(Render_Vulkan, "Extension {} unavailable.", extension);
         return false;
     };
 
@@ -917,7 +917,7 @@ void Instance::CollectImageFormatInfo() {
     // Check and log format support details.
     for (const auto& format : LiverpoolToVK::SurfaceFormats()) {
         if (!IsFormatSupported(format.vk_format, format.flags)) {
-            LOG_WARNING(Render_Vulkan,
+            LOG_DEBUG(Render_Vulkan,
                         "Surface format data_format={}, number_format={} is not fully supported "
                         "(vk_format={}, missing features={})",
                         static_cast<u32>(format.data_format),
@@ -927,7 +927,7 @@ void Instance::CollectImageFormatInfo() {
     }
     for (const auto& format : LiverpoolToVK::DepthFormats()) {
         if (!IsFormatSupported(format.vk_format, format.flags)) {
-            LOG_WARNING(Render_Vulkan,
+            LOG_DEBUG(Render_Vulkan,
                         "Depth format z_format={}, stencil_format={} is not fully supported "
                         "(vk_format={}, missing features={})",
                         static_cast<u32>(format.z_format), static_cast<u32>(format.stencil_format),

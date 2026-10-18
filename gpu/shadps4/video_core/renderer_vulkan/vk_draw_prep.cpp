@@ -51,9 +51,16 @@ u32 DefaultWorkerCount() {
     if (const char* env = std::getenv("GOW3_PREP_WORKERS")) {
         return static_cast<u32>(std::clamp(std::atoi(env), 0, 16));
     }
+#if defined(__APPLE__)
+    // On Apple Silicon / macOS laptops, capping prep workers prevents starving
+    // the guest execution thread and Vulkan presentation thread on P-cores,
+    // avoiding thermal throttling and high temperatures.
+    return std::clamp<u32>(Gow3Threads::Available() <= 8 ? 2 : 3, 1, 4);
+#else
     // Workers are SCHED_IDLE and claim whole buffers, so more of them only use more idle
     // cores: half the hardware threads (Steam Deck 4, 16-thread desktop 8).
     return std::clamp<u32>(Gow3Threads::Available() / 2, 1, 8);
+#endif
 }
 
 /// Flattened user data of one submission: chunks never move, so the GPU thread can read a

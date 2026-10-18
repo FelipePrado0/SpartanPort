@@ -24,7 +24,7 @@
 
 namespace VideoCore {
 
-#ifdef PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
+#if defined(PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP) && !defined(__APPLE__)
 using LockType = Common::AdaptiveMutex;
 #else
 using LockType = Common::SpinLock;

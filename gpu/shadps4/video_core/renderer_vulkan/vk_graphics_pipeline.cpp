@@ -414,13 +414,17 @@ GraphicsPipeline::GraphicsPipeline(
     // In practice, we use dynamic state for all of it.
     constexpr vk::PipelineDepthStencilStateCreateInfo depth_stencil_info = {};
 
+    const bool has_tessellation = infos[u32(Shader::SwStage::TessellationControl)] != nullptr ||
+                                  infos[u32(Shader::SwStage::TessellationEval)] != nullptr ||
+                                  is_rect_list || is_quad_list;
+
     const vk::GraphicsPipelineCreateInfo pipeline_info = {
         .pNext = &pipeline_rendering_ci,
         .stageCount = static_cast<u32>(shader_stages.size()),
         .pStages = shader_stages.data(),
         .pVertexInputState = !instance.IsVertexInputDynamicState() ? &vertex_input_info : nullptr,
         .pInputAssemblyState = &input_assembly,
-        .pTessellationState = &tessellation_state,
+        .pTessellationState = has_tessellation ? &tessellation_state : nullptr,
         .pViewportState = &viewport_info,
         .pRasterizationState = &raster_chain.get(),
         .pMultisampleState = &sdata.multisampling,
@@ -436,13 +440,28 @@ GraphicsPipeline::GraphicsPipeline(
     auto [pipeline_result, pipe] =
         CreateCachedGraphicsPipeline(device, pipeline_cache, pipeline_info, key,
                                      instance.GetPipelineBinaryGlobalKey(), binary_directory);
-    ASSERT_MSG(pipeline_result == vk::Result::eSuccess, "Failed to create graphics pipeline: {}",
-               vk::to_string(pipeline_result));
-    pipeline = std::move(pipe);
-    SetObjectName(device, *pipeline, "Graphics Pipeline {}", debug_str);
-    RecordWaveSizes();
+    if (pipeline_result != vk::Result::eSuccess) {
+        LOG_WARNING(Render_Vulkan, "Graphics pipeline creation with cache failed ({}): retrying without cache...",
+                    vk::to_string(pipeline_result));
+        auto retry = device.createGraphicsPipelineUnique(nullptr, pipeline_info);
+        pipeline_result = retry.result;
+        pipe = std::move(retry.value);
+    }
+    if (pipeline_result != vk::Result::eSuccess) {
+        LOG_CRITICAL(Render_Vulkan, "Failed to create graphics pipeline ({}): stages={}, topology={}",
+                     vk::to_string(pipeline_result), shader_stages.size(), vk::to_string(input_assembly.topology));
+#ifndef __APPLE__
+        ASSERT_MSG(pipeline_result == vk::Result::eSuccess, "Failed to create graphics pipeline: {}",
+                   vk::to_string(pipeline_result));
+#endif
+    }
+    if (pipe) {
+        pipeline = std::move(pipe);
+        SetObjectName(device, *pipeline, "Graphics Pipeline {}", debug_str);
+        RecordWaveSizes();
+    }
 
-    if (needs_square_pass) {
+    if (needs_square_pass && pipeline) {
         auto square_blending = color_blending;
         square_blending.logicOpEnable = false;
         square_blending.pAttachments = square_attachments.data();
@@ -451,10 +470,24 @@ GraphicsPipeline::GraphicsPipeline(
         auto [square_result, square] =
             CreateCachedGraphicsPipeline(device, pipeline_cache, square_info, key,
                                          instance.GetPipelineBinaryGlobalKey(), binary_directory);
-        ASSERT_MSG(square_result == vk::Result::eSuccess,
-                   "Failed to create the squaring pipeline: {}", vk::to_string(square_result));
-        square_pipeline = std::move(square);
-        SetObjectName(device, *square_pipeline, "Graphics Pipeline {} squaring pass", debug_str);
+        if (square_result != vk::Result::eSuccess) {
+            LOG_WARNING(Render_Vulkan, "Squaring pipeline creation with cache failed ({}): retrying without cache...",
+                        vk::to_string(square_result));
+            auto retry = device.createGraphicsPipelineUnique(nullptr, square_info);
+            square_result = retry.result;
+            square = std::move(retry.value);
+        }
+        if (square_result != vk::Result::eSuccess) {
+            LOG_CRITICAL(Render_Vulkan, "Failed to create squaring pipeline ({})", vk::to_string(square_result));
+#ifndef __APPLE__
+            ASSERT_MSG(square_result == vk::Result::eSuccess,
+                       "Failed to create the squaring pipeline: {}", vk::to_string(square_result));
+#endif
+        }
+        if (square) {
+            square_pipeline = std::move(square);
+            SetObjectName(device, *square_pipeline, "Graphics Pipeline {} squaring pass", debug_str);
+        }
     }
     g_gow3_pipeline_total_ns += NsSince(started);
     ++g_gow3_pipelines_built;

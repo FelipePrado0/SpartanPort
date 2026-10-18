@@ -173,7 +173,7 @@ if [[ $is_darwin -eq 1 ]]; then
     fi
     gpu=(-Lout/gpu -lgow3gpu -Wl,-rpath,'@loader_path/gpu' -Wl,-rpath,'@executable_path/gpu' -Wl,-rpath,'@loader_path/lib' -Wl,-rpath,'@executable_path/lib' -Wl,-rpath,'@loader_path/../bin/lib' -Wl,-rpath,'@loader_path/../bin/gpu' -Wl,-rpath,'@loader_path/../out/gpu' -Wl,-rpath,"$PWD/bin/lib" -Wl,-rpath,"$PWD/out/gpu" -Wl,-export_dynamic -framework Metal -framework Foundation -framework QuartzCore)
     probe_link_flags=(-Wl,-pie -Wl,-rpath,'@loader_path/lib' -Wl,-rpath,'@executable_path/lib' -Wl,-rpath,'@loader_path/../bin/lib' -Wl,-rpath,'@loader_path/../bin/gpu' -Wl,-rpath,'@loader_path/../out/gpu' -Wl,-rpath,"$PWD/bin/lib" -Wl,-rpath,"$PWD/out/gpu")
-    arch_flags=(-arch x86_64)
+    arch_flags=(-arch x86_64 -mavx -msse4.2 -mbmi -mlzcnt)
 else
     gpu=(-Lout/gpu -lgow3gpu -Wl,-rpath,'$ORIGIN/gpu' -Wl,-rpath,"$PWD/out/gpu" -rdynamic)
     probe_link_flags=(-no-pie)
@@ -184,15 +184,15 @@ runtime=(src/runtime*.c)
 atrac9=(third_party/LibAtrac9/C/src/*.c)
 if [[ ! -f out/libatrac9.a || -n $(find third_party/LibAtrac9/C/src -newer out/libatrac9.a -name '*.c') ]]; then
     rm -rf out/atrac9 && mkdir -p out/atrac9
-    for source in "${atrac9[@]}"; do "$CC" "${arch_flags[@]}" -std=c99 -O2 -g -w -c "$source" -o "out/atrac9/$(basename "${source%.c}").o"; done
+    for source in "${atrac9[@]}"; do "$CC" "${arch_flags[@]}" -std=c99 -O3 -g -w -c "$source" -o "out/atrac9/$(basename "${source%.c}").o"; done
     ar rcs out/libatrac9.a out/atrac9/*.o
 fi
 # isa_emulate runs inside guest code: no XMM/YMM.
-"$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -mgeneral-regs-only -c src/isa_emulate.c -o out/isa_emulate.o
-"$CC" "${arch_flags[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${probe_link_flags[@]}" "${includes[@]}" -I. -Isrc src/probe.c "${runtime[@]}" src/cpu_check.c src/vulkan_smoke.c out/isa_emulate.o src/isa_rewrite.c out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/gow3-probe
+"$CC" "${arch_flags[@]}" -std=c11 -O3 -g -Wall -Wextra -Werror -mgeneral-regs-only -c src/isa_emulate.c -o out/isa_emulate.o
+"$CC" "${arch_flags[@]}" -std=c11 -O3 -g -Wall -Wextra -Werror -pthread "${probe_link_flags[@]}" "${includes[@]}" -I. -Isrc src/probe.c "${runtime[@]}" src/cpu_check.c src/vulkan_smoke.c out/isa_emulate.o src/isa_rewrite.c out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/gow3-probe
 echo "Built $PWD/out/gow3-probe"
 # GPU check for run.sh (live_resolution=auto): links only the Vulkan loader.
-"$CC" "${arch_flags[@]}" -std=c11 -O2 -Wall -Wextra -Werror "${probe_link_flags[@]}" "${includes[@]}" -Igpu/shadps4 tools/gpu_capabilities.c "${libraries[@]}" -o out/gow3-gpu-capabilities
+"$CC" "${arch_flags[@]}" -std=c11 -O3 -Wall -Wextra -Werror "${probe_link_flags[@]}" "${includes[@]}" -Igpu/shadps4 tools/gpu_capabilities.c "${libraries[@]}" -o out/gow3-gpu-capabilities
 if [[ $is_darwin -eq 1 && -d bin ]]; then
     cp out/gow3-probe out/gow3-gpu-capabilities bin/ 2>/dev/null || true
     if [[ -f out/gpu/libgow3gpu.dylib && -d bin/gpu ]]; then

@@ -111,7 +111,7 @@ public:
 
     /// gow3: second draw squaring a self-scaled MIN/MAX blend, or null (vk_blend_rewrite.h).
     vk::Pipeline SquarePassHandle() const noexcept {
-        return *square_pipeline;
+        return square_pipeline ? *square_pipeline : vk::Pipeline{};
     }
 
     /// Gets the attributes and bindings for vertex inputs.

@@ -33,6 +33,7 @@ void ThreadPause() {
 
 #include <thread>
 
+#ifndef __APPLE__
 namespace Common {
 
 void SpinLock::lock() {
@@ -56,3 +57,4 @@ bool SpinLock::try_lock() {
 }
 
 } // namespace Common
+#endif

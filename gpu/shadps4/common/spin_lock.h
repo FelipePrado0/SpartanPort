@@ -3,7 +3,11 @@
 
 #pragma once
 
+#if defined(__APPLE__)
+#include <os/lock.h>
+#else
 #include <atomic>
+#endif
 
 namespace Common {
 
@@ -22,12 +26,27 @@ public:
     SpinLock(SpinLock&&) = delete;
     SpinLock& operator=(SpinLock&&) = delete;
 
+#if defined(__APPLE__)
+    void lock() {
+        os_unfair_lock_lock(&lock_);
+    }
+    void unlock() {
+        os_unfair_lock_unlock(&lock_);
+    }
+    [[nodiscard]] bool try_lock() {
+        return os_unfair_lock_trylock(&lock_);
+    }
+
+private:
+    os_unfair_lock lock_ = OS_UNFAIR_LOCK_INIT;
+#else
     void lock();
     void unlock();
     [[nodiscard]] bool try_lock();
 
 private:
     std::atomic_flag lck = ATOMIC_FLAG_INIT;
+#endif
 };
 
 } // namespace Common

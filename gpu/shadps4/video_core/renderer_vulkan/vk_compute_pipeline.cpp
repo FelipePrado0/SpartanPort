@@ -108,11 +108,25 @@ ComputePipeline::ComputePipeline(const Instance& instance, Scheduler& scheduler,
     };
     auto [pipeline_result, pipe] =
         instance.GetDevice().createComputePipelineUnique(pipeline_cache, compute_pipeline_ci);
-    ASSERT_MSG(pipeline_result == vk::Result::eSuccess, "Failed to create compute pipeline: {}",
-               vk::to_string(pipeline_result));
-    pipeline = std::move(pipe);
-    SetObjectName(device, *pipeline, "Compute Pipeline {}", debug_str);
-    RecordWaveSizes();
+    if (pipeline_result != vk::Result::eSuccess) {
+        LOG_WARNING(Render_Vulkan, "Compute pipeline creation with cache failed ({}): retrying without cache...",
+                    vk::to_string(pipeline_result));
+        auto retry = instance.GetDevice().createComputePipelineUnique(nullptr, compute_pipeline_ci);
+        pipeline_result = retry.result;
+        pipe = std::move(retry.value);
+    }
+    if (pipeline_result != vk::Result::eSuccess) {
+        LOG_CRITICAL(Render_Vulkan, "Failed to create compute pipeline ({})", vk::to_string(pipeline_result));
+#ifndef __APPLE__
+        ASSERT_MSG(pipeline_result == vk::Result::eSuccess, "Failed to create compute pipeline: {}",
+                   vk::to_string(pipeline_result));
+#endif
+    }
+    if (pipe) {
+        pipeline = std::move(pipe);
+        SetObjectName(device, *pipeline, "Compute Pipeline {}", debug_str);
+        RecordWaveSizes();
+    }
 }
 
 ComputePipeline::~ComputePipeline() = default;

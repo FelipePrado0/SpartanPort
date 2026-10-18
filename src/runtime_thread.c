@@ -287,7 +287,10 @@ static void *host_start(void *p) {
     attach(t);
     set_host_name(t->name);
 #ifdef __APPLE__
-    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+    qos_class_t qos = (t->attr.prio <= 300) ? QOS_CLASS_USER_INTERACTIVE
+                    : (t->attr.prio <= 600) ? QOS_CLASS_USER_INITIATED
+                    : QOS_CLASS_UTILITY;
+    pthread_set_qos_class_self_np(qos, 0);
 #endif
     if (!exit_setjmp(t)) t->result=t->entry(t->argument);
     runtime_thread_keys_cleanup();

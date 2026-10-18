@@ -238,7 +238,7 @@ def main():
                     if candidate.is_file():
                         env['VK_DRIVER_FILES'] = str(candidate)
                         break
-        env.setdefault('MVK_CONFIG_FAST_MATH_ENABLED', '1')
+        env.setdefault('MVK_CONFIG_FAST_MATH_ENABLED', '0')
         env.setdefault('MVK_CONFIG_RESUME_LOST_DEVICE', '1')
         env.setdefault('MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS', '1')
         env.setdefault('MVK_CONFIG_USE_COMMAND_POOLING', '1')

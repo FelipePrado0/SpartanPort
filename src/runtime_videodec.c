@@ -80,7 +80,11 @@ static ABI int32_t videodec_create(const ConfigInfo *config, const ResourceInfo 
     d->packet=av_packet_alloc();
     d->frame=av_frame_alloc();
     d->nv12=av_frame_alloc();
-    if (d->codec) d->codec->flags|=AV_CODEC_FLAG_COPY_OPAQUE; /* attached data follows its picture */
+    if (d->codec) {
+        d->codec->flags |= AV_CODEC_FLAG_COPY_OPAQUE; /* attached data follows its picture */
+        d->codec->thread_count = 4;
+        d->codec->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+    }
     if (!d->codec || !d->packet || !d->frame || !d->nv12 || avcodec_open2(d->codec,codec,NULL)<0) {
         avcodec_free_context(&d->codec); av_packet_free(&d->packet); av_frame_free(&d->frame); av_frame_free(&d->nv12);
         free(d); return ERR_API_FAIL;
@@ -107,12 +111,28 @@ static int32_t picture(Decoder *d, FrameBuffer *buffer, PictureInfo *info) {
     uint32_t pitch=align(width,64), rows=align(height,16);
     if ((uint64_t)pitch*rows*3/2>buffer->frame_buffer_size) return ERR_FRAME_BUFFER_SIZE;
     unsigned char *luma=buffer->frame_buffer, *chroma=luma+(size_t)pitch*rows;
-    for (uint32_t y=0;y<rows;++y) {
-        uint32_t from=y<height ? y : height-1;
-        memcpy(luma+(size_t)y*pitch,f->data[0]+(size_t)from*(size_t)f->linesize[0],width);
-        if (y<rows/2) {
-            uint32_t c=y<height/2 ? y : height/2-1;
-            memcpy(chroma+(size_t)y*pitch,f->data[1]+(size_t)c*(size_t)f->linesize[1],width);
+
+    if (pitch == width && (uint32_t)f->linesize[0] == width) {
+        memcpy(luma, f->data[0], (size_t)width * height);
+        for (uint32_t y = height; y < rows; ++y) {
+            memcpy(luma + (size_t)y * pitch, luma + (size_t)(height - 1) * pitch, width);
+        }
+    } else {
+        for (uint32_t y = 0; y < rows; ++y) {
+            uint32_t from = y < height ? y : height - 1;
+            memcpy(luma + (size_t)y * pitch, f->data[0] + (size_t)from * (size_t)f->linesize[0], width);
+        }
+    }
+
+    if (pitch == width && (uint32_t)f->linesize[1] == width) {
+        memcpy(chroma, f->data[1], (size_t)width * (height / 2));
+        for (uint32_t y = height / 2; y < rows / 2; ++y) {
+            memcpy(chroma + (size_t)y * pitch, chroma + (size_t)(height / 2 - 1) * pitch, width);
+        }
+    } else {
+        for (uint32_t y = 0; y < rows / 2; ++y) {
+            uint32_t c = y < height / 2 ? y : height / 2 - 1;
+            memcpy(chroma + (size_t)y * pitch, f->data[1] + (size_t)c * (size_t)f->linesize[1], width);
         }
     }
     info->is_valid=1; info->codec_type=0;

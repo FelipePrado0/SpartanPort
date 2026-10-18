@@ -111,11 +111,19 @@ public:
         ++drains_by_reason[slot];
         const u64 start = __rdtsc();
         for (u32 spins = 0; consumed.load(std::memory_order_acquire) != head; ++spins) {
+#ifdef __APPLE__
+            if (spins < 128) {
+                __builtin_ia32_pause();
+            } else {
+                std::this_thread::yield();
+            }
+#else
             if (spins < 4096) {
                 __builtin_ia32_pause();
             } else {
                 std::this_thread::yield();
             }
+#endif
         }
         const u64 waited = __rdtsc() - start;
         drain_cycles += waited;
@@ -151,8 +159,16 @@ private:
     }
 
     void WaitForSpace(u64 at, u64 size) {
-        while (at + size - consumed.load(std::memory_order_acquire) > Capacity) {
+        for (u32 spins = 0; at + size - consumed.load(std::memory_order_acquire) > Capacity; ++spins) {
+#ifdef __APPLE__
+            if (spins < 64) {
+                __builtin_ia32_pause();
+            } else {
+                std::this_thread::yield();
+            }
+#else
             __builtin_ia32_pause();
+#endif
         }
     }
 
@@ -172,7 +188,11 @@ private:
                     if (const char* env = std::getenv("GOW3_PIPE_SPIN_US")) {
                         return std::max(0, std::atoi(env));
                     }
+#ifdef __APPLE__
+                    return 20;
+#else
                     return Gow3Threads::Available() >= 12 ? 200 : 50;
+#endif
                 }());
                 const auto spin_until = std::chrono::steady_clock::now() + spin_time;
                 for (u32 spins = 1; available == at; ++spins) {

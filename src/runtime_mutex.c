@@ -84,19 +84,6 @@ static ABI int32_t mutex_lock(GuestMutex **mutex) {
         ++locks;
         return 0;
     }
-#if defined(__APPLE__)
-    for (int spin = 0; spin < 40; ++spin) {
-#if defined(__x86_64__)
-        __asm__ __volatile__("pause");
-#elif defined(__aarch64__)
-        __asm__ __volatile__("yield");
-#endif
-        if (pthread_mutex_trylock(&(*mutex)->native) == 0) {
-            ++locks;
-            return 0;
-        }
-    }
-#endif
     e = orbis_error(pthread_mutex_lock(&(*mutex)->native));
     if (!e) ++locks;
     return e;
