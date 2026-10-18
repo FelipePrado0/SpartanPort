@@ -29,8 +29,8 @@ punto), así que también funcionan en otros builds cuyo código coincide.
 | **Skip Any Video With X Button** | Permite saltar cualquier cinemática con X | Página **Juego**, activado por defecto | cuesta4 |
 | **Skip Intro** | Salta los logotipos al iniciar | Página **Juego**, desactivado por defecto | cuesta4 |
 | **Resolution Patch - &lt;tamaño&gt;** (21 tamaños, de 480p a 5120 × 2160) | Fija la resolución de render y la video arena; los tamaños ultrawide también amplían el campo de visión (Hor+) | **Resolución de render** (página **Rendimiento** del launcher, o el menú del juego); uno a la vez | kvicken + cuesta4 (480p, 720p, 1440p, 1800p, 4K); gow3_pc (900p y los tamaños ultrawide, 16:10 y 4:3) |
-| **Frame Rate Patch - 240 FPS** | Sube el límite de fotogramas del motor y corrige la swing energy para que coincida con la simulación original de 60 Hz | Aplicado en cada inicio; la **Velocidad de fotogramas del motor** elegida (60, 100, 120 o 240) se escribe en vivo | kvicken, gow3_pc |
-| Frame Rate Patch - 120 FPS / 100 FPS | El mismo parche con un límite de 120 o 100 | El launcher ya no los usa; siguen en el archivo para otros usos | kvicken / kvicken, gow3_pc |
+| **Frame Rate Patch - 240 FPS** | Sube el límite de fotogramas del motor y corrige la swing energy para que coincida con la simulación original de 60 Hz | Aplicado en cada inicio; la **Velocidad de fotogramas del motor** elegida (60, 100, 120, 144 o 240) se escribe en vivo | kvicken, gow3_pc |
+| Frame Rate Patch - 120 FPS / 144 FPS / 100 FPS | El mismo parche con un límite de 120, 144 o 100 | El launcher ya no los usa; siguen en el archivo para otros usos | kvicken / kvicken, gow3_pc |
 
 Notas:
 
@@ -41,7 +41,8 @@ Notas:
   esa memoria directa de más, además de los 5056 MB del juego original. No hay que ajustar nada a mano.
 - **Tasa de fotogramas.** La tasa del motor cambia con el juego en marcha (menú del juego,
   **R3 + L1 + R1** o **F9**): cada inicio usa el parche de 240 FPS y el port escribe la tasa elegida
-  en el juego. Si el parche de 240 FPS no se encuentra en tu `eboot.bin`, se usa el parche de tasa de
+  en el juego. 144 FPS está pensado para pantallas de 144 Hz; con VSync, mantiene la presentación
+  alineada con esa frecuencia. Si el parche de 240 FPS no se encuentra en tu `eboot.bin`, se usa el parche de tasa de
   fotogramas más alto que se encuentre; si no se encuentra ninguno, el motor se queda en los 60 FPS
   originales.
 

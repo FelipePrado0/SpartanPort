@@ -19,7 +19,7 @@ static std::string Read(const char* path) {
 
 int main() {
     assert(G::ParseDisplayMode("borderless") == G::Borderless && G::ParseDisplayMode("bogus") == G::Windowed);
-    assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(100) == 100 && G::ParseFpsLimit(75) == 0);
+    assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(144) == 144 && G::ParseFpsLimit(100) == 100 && G::ParseFpsLimit(75) == 0);
     assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 0);
     // #238: 900p (1600x900) sits between 720p and 1440p in the built-in list.
     assert(G::Resolutions[3] == "900p" && G::Resolutions[2] == "720p" && G::Resolutions[4] == "1440p");
@@ -31,10 +31,10 @@ int main() {
     assert(G::ResolutionSize("native") == std::make_pair(1920, 1080));
     assert(G::ResolutionSize("8K") == std::make_pair(1920, 1080));
     for (const auto name : G::Resolutions) assert(G::ResolutionSize(name).first > 0);
-    assert(G::ParseEngineFps(240) == 240 && G::ParseEngineFps(100) == 100 && G::ParseEngineFps(90) == 120);
+    assert(G::ParseEngineFps(240) == 240 && G::ParseEngineFps(144) == 144 && G::ParseEngineFps(100) == 100 && G::ParseEngineFps(90) == 120);
     // R3 + L1 + R1 / F9: the next rate this launch supports, back to 60 after the last.
     assert(G::NextEngineFps(60, 240) == 100 && G::NextEngineFps(100, 240) == 120);
-    assert(G::NextEngineFps(120, 240) == 240 && G::NextEngineFps(240, 240) == 60);
+    assert(G::NextEngineFps(120, 240) == 144 && G::NextEngineFps(144, 240) == 240 && G::NextEngineFps(240, 240) == 60);
     assert(G::NextEngineFps(100, 120) == 120 && G::NextEngineFps(120, 120) == 60 && G::NextEngineFps(60, 60) == 60);
     assert(G::ParseFramesQueued(2) == 2 && G::ParseFramesQueued(0) == 0 && G::ParseFramesQueued(5) == 1);
     assert(G::ParseRcasStrength(100) == 100 && G::ParseRcasStrength(101) == 75 && G::ParseRcasStrength(-1) == 75);

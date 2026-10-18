@@ -141,8 +141,8 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
 - Saving and loading: the save list is shown on screen, as on the PS4. Autosave works too. The
   launcher backs the saves up before every start.
 - Patches: render resolution of 480p, 720p, 900p, 1440p, 1800p or 4K, corrupted texture fix and skip
-  videos with the X button (community); engine frame rate of 120 FPS (kvicken), 100 FPS (for 100 Hz displays) or 240 FPS
-  (adapted by Felipe Prado).
+  videos with the X button (community); engine frame rate of 120 FPS (kvicken), 100 FPS (for 100 Hz displays),
+  144 FPS (for 144 Hz displays) or 240 FPS (adapted by Felipe Prado).
 - **Ultrawide (beta):** 21:9, 32:9 and 16:10 render resolutions (3440x1440 tested) with a wider field of view
   instead of a zoomed-in picture, built in: choose one in **Render resolution**, where every size shows its exact
   resolution and aspect ratio. Cutscenes keep their 16:9 borders (see [docs/ultrawide.md](docs/ultrawide.md)).

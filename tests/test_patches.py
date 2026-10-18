@@ -267,6 +267,7 @@ class SignatureTests(unittest.TestCase):
         self.assertEqual(patch_requirements(GOW3, ['Resolution Patch - 4K', 'Skip Any Video With X Button'], '01.02'),
                          (5056 + 6144, None))
         self.assertEqual(patch_requirements(GOW3, ['Frame Rate Patch - 120 FPS'], '01.02'), (None, 120))
+        self.assertEqual(patch_requirements(GOW3, ['Frame Rate Patch - 144 FPS'], '01.02'), (None, 144))
         self.assertEqual(patch_requirements(GOW3, [], '01.02'), (None, None))
 
 

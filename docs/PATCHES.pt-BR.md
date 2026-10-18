@@ -29,8 +29,8 @@ então também funcionam em outros builds cujo código bate.
 | **Skip Any Video With X Button** | Permite pular qualquer cinemática com o X | Página **Jogo**, ligado por padrão | cuesta4 |
 | **Skip Intro** | Pula os logos ao abrir | Página **Jogo**, desligado por padrão | cuesta4 |
 | **Resolution Patch - &lt;tamanho&gt;** (21 tamanhos, de 480p a 5120 × 2160) | Define a resolução de renderização e a video arena; os tamanhos ultrawide também alargam o campo de visão (Hor+) | **Resolução de renderização** (página **Desempenho** do launcher, ou o menu do jogo); um por vez | kvicken + cuesta4 (480p, 720p, 1440p, 1800p, 4K); gow3_pc (900p e os tamanhos ultrawide, 16:10 e 4:3) |
-| **Frame Rate Patch - 240 FPS** | Sobe o limite de quadros do motor e corrige a swing energy para bater com a simulação original de 60 Hz | Aplicado em toda abertura; a **Taxa de quadros do motor** escolhida (60, 100, 120 ou 240) é escrita ao vivo | kvicken, gow3_pc |
-| Frame Rate Patch - 120 FPS / 100 FPS | O mesmo patch com limite de 120 ou 100 | O launcher não usa mais; ficam no arquivo para outros usos | kvicken / kvicken, gow3_pc |
+| **Frame Rate Patch - 240 FPS** | Sobe o limite de quadros do motor e corrige a swing energy para bater com a simulação original de 60 Hz | Aplicado em toda abertura; a **Taxa de quadros do motor** escolhida (60, 100, 120, 144 ou 240) é escrita ao vivo | kvicken, gow3_pc |
+| Frame Rate Patch - 120 FPS / 144 FPS / 100 FPS | O mesmo patch com limite de 120, 144 ou 100 | O launcher não usa mais; ficam no arquivo para outros usos | kvicken / kvicken, gow3_pc |
 
 Observações:
 
@@ -40,7 +40,8 @@ Observações:
 - **Memória.** Uma nota de patch como "Requires setting DMEM to 3072 MB" faz o port reservar essa
   memória direta a mais, além dos 5056 MB do jogo original. Nada precisa ser ajustado à mão.
 - **Taxa de quadros.** A taxa do motor muda com o jogo rodando (menu do jogo, **R3 + L1 + R1** ou
-  **F9**): toda abertura usa o patch de 240 FPS e o port escreve a taxa escolhida no jogo. Se o patch
+  **F9**): toda abertura usa o patch de 240 FPS e o port escreve a taxa escolhida no jogo. 144 FPS é
+  voltado para telas de 144 Hz; com VSync, ele mantém a apresentação alinhada a essa taxa. Se o patch
   de 240 FPS não for encontrado no seu `eboot.bin`, entra o maior patch de taxa de quadros encontrado;
   se nenhum for encontrado, o motor fica nos 60 FPS originais.
 
