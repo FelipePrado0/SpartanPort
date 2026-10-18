@@ -86,16 +86,13 @@ class RunLogTest(unittest.TestCase):
         self.assertTrue(log.closed)
         self.assertEqual([owner.output.get_nowait() for _ in range(3)], ['a\n', 'b\n', (0,)])
 
-    def test_play_log_is_skipped_when_the_launcher_closes_on_play(self):
-        # The reader thread dies with the launcher 5 s after start: a truncated file would
-        # replace the previous full log.
+    def test_play_log_is_kept_when_the_launcher_hides_on_play(self):
         with tempfile.TemporaryDirectory() as tmp:
-            self.assertIsInstance(launcher.open_play_log({'user_dir': tmp, 'close_on_play': True}),
-                                  launcher._NullLog)
-            self.assertFalse(launcher.run_log_path({'user_dir': tmp}).exists())
-            with launcher.open_play_log({'user_dir': tmp, 'close_on_play': False}) as log:
-                log.write('x\n')
-            self.assertEqual(launcher.run_log_path({'user_dir': tmp}).read_text(encoding='utf-8'), 'x\n')
+            for close_on_play in (True, False):
+                with self.subTest(close_on_play=close_on_play):
+                    with launcher.open_play_log({'user_dir': tmp, 'close_on_play': close_on_play}) as log:
+                        log.write('x\n')
+                    self.assertEqual(launcher.run_log_path({'user_dir': tmp}).read_text(encoding='utf-8'), 'x\n')
 
 
 def _launcher_class():
