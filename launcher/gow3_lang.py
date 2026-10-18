@@ -1316,6 +1316,36 @@ EXTRA['es'].update({
     '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ {} archivos los cambian varios mods. Gana el que está más abajo.',
 })
 
+EXTRA['pt'].update({
+    'Left stick click': 'Clique do analógico esquerdo',
+    'Right stick click': 'Clique do analógico direito',
+    'Plus (+)': 'Mais (+)',
+    'Minus (−)': 'Menos (−)',
+    'Home button': 'Botão Home',
+    'Capture': 'Captura',
+})
+EXTRA['es'].update({
+    'Left stick click': 'Clic del stick izquierdo',
+    'Right stick click': 'Clic del stick derecho',
+    'Plus (+)': 'Más (+)',
+    'Minus (−)': 'Menos (−)',
+    'Home button': 'Botón Home',
+    'Capture': 'Captura',
+})
+
+EXTRA['pt'].update({
+    'Device': 'Dispositivo',
+    'Keyboard & mouse': 'Teclado e mouse',
+    'Gamepad': 'Controle',
+    'Controller type': 'Tipo de controle',
+})
+EXTRA['es'].update({
+    'Device': 'Dispositivo',
+    'Keyboard & mouse': 'Teclado y ratón',
+    'Gamepad': 'Mando',
+    'Controller type': 'Tipo de mando',
+})
+
 _tables = {}
 
 

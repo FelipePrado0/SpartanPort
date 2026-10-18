@@ -2,13 +2,14 @@
 """Controller button icons for the launcher's Controls page, drawn on a Tk canvas (no images).
 
 Buttons are named as SDL gamepad buttons ('a', 'leftshoulder', 'dpup', ...); the style chooses
-PlayStation or Xbox symbols, colors and labels."""
+PlayStation, Xbox or Nintendo symbols, colors and labels."""
 
 # PlayStation symbols and Xbox letters of the face buttons, with their colors.
 FACE = {
     'playstation': {'a': ('cross', '#6b9ae8'), 'b': ('circle', '#e5555e'),
                     'x': ('square', '#d683d6'), 'y': ('triangle', '#45c4a2')},
     'xbox': {'a': ('A', '#3fae49'), 'b': ('B', '#d9372f'), 'x': ('X', '#2f6fd9'), 'y': ('Y', '#e5b521')},
+    'nintendo': {'a': ('B', '#cfcfcf'), 'b': ('A', '#cfcfcf'), 'x': ('Y', '#cfcfcf'), 'y': ('X', '#cfcfcf')},
 }
 LABELS = {
     'playstation': {'leftshoulder': 'L1', 'rightshoulder': 'R1', 'lefttrigger': 'L2', 'righttrigger': 'R2',
@@ -17,6 +18,9 @@ LABELS = {
     'xbox': {'leftshoulder': 'LB', 'rightshoulder': 'RB', 'lefttrigger': 'LT', 'righttrigger': 'RT',
              'leftstick': 'LS', 'rightstick': 'RS', 'start': 'MENU', 'back': 'VIEW',
              'touchpad': 'TOUCH', 'guide': 'XBOX', 'misc1': 'SHARE'},
+    'nintendo': {'leftshoulder': 'L', 'rightshoulder': 'R', 'lefttrigger': 'ZL', 'righttrigger': 'ZR',
+                 'leftstick': 'LS', 'rightstick': 'RS', 'start': '+', 'back': '−',
+                 'touchpad': 'TOUCH', 'guide': 'HOME', 'misc1': 'CAPT'},
 }
 DPAD = {'dpup': 'up', 'dpdown': 'down', 'dpleft': 'left', 'dpright': 'right'}
 # The game's PS4 buttons (launcher CONTROLS) as SDL buttons, for their PlayStation icon.

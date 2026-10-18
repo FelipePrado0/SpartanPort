@@ -701,3 +701,39 @@ class ReleaseVersionTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PadStyleTest(unittest.TestCase):
+    """Gamepad names: PlayStation, Xbox, Nintendo (by position) or Keyboard (no gamepad table)."""
+
+    def test_nintendo_names_follow_the_button_positions(self):
+        names = launcher.pad_labels('nintendo')
+        self.assertEqual((names['a'], names['b'], names['x'], names['y']), ('B', 'A', 'Y', 'X'))
+        self.assertEqual(len(set(names.values())), len(names))  # a label maps back to one button
+
+    def test_device_is_its_own_choice(self):
+        self.assertEqual([d for d, _l in launcher.CONTROL_DEVICES], ['keyboard', 'gamepad'])
+        self.assertEqual(list(launcher.PAD_STYLES), ['playstation', 'xbox', 'nintendo'])
+
+    def test_connected_gamepad_skips_a_probe_without_its_dlls(self):
+        on_disk = lambda path: path.name in ('gow3-probe.exe', 'gow3-probe')  # no SDL3.dll anywhere
+        with mock.patch.object(launcher, 'WINDOWS', True), \
+                mock.patch.object(launcher.Path, 'is_file', on_disk), \
+                mock.patch.object(launcher.subprocess, 'run') as run:
+            self.assertIsNone(launcher.connected_gamepad())
+            run.assert_not_called()
+
+    def test_connected_gamepad_reads_the_probe(self):
+        with mock.patch.object(launcher.Path, 'is_file', return_value=True), \
+                mock.patch.object(launcher.subprocess, 'run') as run:
+            run.return_value.stdout = 'Gamepad: type=xbox360 south=a name=Xbox Controller'
+            self.assertTrue(launcher.connected_gamepad())
+            run.return_value.stdout = 'No gamepad'
+            self.assertFalse(launcher.connected_gamepad())
+            run.side_effect = launcher.subprocess.TimeoutExpired('probe', 15)
+            self.assertIsNone(launcher.connected_gamepad())
+
+    def test_nintendo_icons(self):
+        import button_icons
+        self.assertEqual(button_icons.spec('a', 'nintendo')[:2], ('letter', 'B'))
+        self.assertEqual(button_icons.spec('lefttrigger', 'nintendo')[1], 'ZL')

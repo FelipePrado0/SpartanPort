@@ -409,7 +409,38 @@ PAD_STYLES = {
              'leftstick': 'LS (left stick click)', 'rightstick': 'RS (right stick click)', 'start': 'Menu',
              'back': 'View', 'touchpad': 'Touchpad click', 'guide': 'Xbox button', 'dpup': 'D-pad up',
              'dpdown': 'D-pad down', 'dpleft': 'D-pad left', 'dpright': 'D-pad right', 'misc1': 'Share'},
+    # By position, as printed on a Nintendo controller: the south button is B, the east one A.
+    'nintendo': {'a': 'B', 'b': 'A', 'x': 'Y', 'y': 'X', 'leftshoulder': 'L', 'rightshoulder': 'R',
+                 'leftstick': 'Left stick click', 'rightstick': 'Right stick click', 'start': 'Plus (+)',
+                 'back': 'Minus (−)', 'touchpad': 'Touchpad click', 'guide': 'Home button', 'dpup': 'D-pad up',
+                 'dpdown': 'D-pad down', 'dpleft': 'D-pad left', 'dpright': 'D-pad right', 'misc1': 'Capture'},
 }
+PAD_STYLE_NAMES = {'playstation': 'PlayStation', 'xbox': 'Xbox', 'nintendo': 'Nintendo'}
+# The device whose table the Controls page shows; both keep working in the game.
+CONTROL_DEVICES = (('keyboard', 'Keyboard & mouse'), ('gamepad', 'Gamepad'))
+
+
+def connected_gamepad():
+    """Whether gow3-probe sees a gamepad now; None when the probe is missing or fails."""
+    name = 'gow3-probe.exe' if WINDOWS else 'gow3-probe'
+    probe = next((p for p in (PORT_DIR / 'bin' / name, PORT_DIR / 'out' / name) if p.is_file()), None)
+    if not probe:
+        return None
+    env = dict(os.environ)
+    # As run.py: a development build loads the MSYS2 CLANG64 DLLs (SDL3, FFmpeg); without them Windows
+    # would show a missing-DLL dialog, so the probe is not run at all.
+    if WINDOWS and not (probe.parent / 'SDL3.dll').is_file():
+        clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
+        if not (clang64 / 'SDL3.dll').is_file():
+            return None
+        env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
+    try:
+        out = subprocess.run([str(probe), '--gamepad'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, text=True, timeout=15, creationflags=NO_WINDOW,
+                             env=env).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return 'Gamepad: type=' in out
 
 
 # Keyboard & mouse: how the game's stick-rotation prompts (QTEs) are answered (runtime_pad.c).
@@ -1454,6 +1485,12 @@ class Launcher:
         bar.pack(side='right', fill='y')
         canvas.pack(side='left', fill='both', expand=True)
         outer.scroll = lambda units: canvas.yview_scroll(units, 'units') if inner.winfo_height() > canvas.winfo_height() else None
+
+        def fit():  # after a section is hidden: the shorter content, kept in view
+            canvas.update_idletasks()
+            canvas.configure(scrollregion=(0, 0, canvas.winfo_width(), inner.winfo_reqheight()))
+            canvas.yview_moveto(min(canvas.yview()[0], max(0.0, 1 - canvas.winfo_height() / max(1, inner.winfo_reqheight()))))
+        outer.fit = fit
         self.pages[name] = outer
         return inner
 
@@ -1903,9 +1940,10 @@ class Launcher:
         def icon_canvas(parent):
             return tk.Canvas(parent, width=size, height=size, bg=PANEL, highlightthickness=0, bd=0)
 
-        def mapping_table():
-            table = ttk.Frame(f)
-            table.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((12, 0)))
+        def mapping_table(parent=None):
+            parent = parent or f
+            table = ttk.Frame(parent)
+            table.grid(row=self.next_row(parent), column=0, columnspan=2, sticky='w', pady=self.px((12, 0)))
             return table
 
         def game_button(table, r, button):
@@ -1920,8 +1958,8 @@ class Launcher:
             title = _(PS_BUTTON_NAMES.get(button) or ACTION_NAMES[button])
             ttk.Label(table, text=title, width=-14).grid(row=r, column=1, sticky='w', padx=self.px((0, 12)))
 
-        def slider(key, low, high, unit):
-            holder = ttk.Frame(f)
+        def slider(key, low, high, unit, parent=None):
+            holder = ttk.Frame(parent or f)
             amount = self.var(key, 'ini')
             tk.Scale(holder, from_=low, to=high, orient='horizontal', variable=amount, showvalue=False,
                      length=self.px(260), width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD,
@@ -1933,8 +1971,30 @@ class Launcher:
             show()
             return holder
 
+        # The in-game icons first, then the device: its section is shown, the other hidden (show_device).
+        page = f
+        self.row(page, _('In-game button icons'), self.choice(page, 'glyph_style', 'app', GLYPH_STYLES),
+                 hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
+                        'Works on a copy of two game files in the port\'s data folder (about 70 MB); your game folder '
+                        'is never changed. Applied when the game starts.'))
+        saved_device = self.app.get('controls_device')
+        self.device = tk.StringVar(value=saved_device if saved_device in dict(CONTROL_DEVICES) else 'keyboard')
+        self.device_chosen = saved_device in dict(CONTROL_DEVICES)
+
+        def choose_device():
+            self.device_chosen = True
+            self.show_device()
+        devices = ttk.Frame(page)
+        for value, label in CONTROL_DEVICES:
+            ttk.Radiobutton(devices, text=_(label), value=value, variable=self.device,
+                            command=choose_device).pack(side='left', padx=self.px((0, 18)))
+        self.row(page, _('Device'), devices)
+
         # Keyboard & mouse: one table for the keys and the mouse, with its own actions.
-        self.section(f, _('Keyboard & Mouse Mapping'), top=4)
+        f = self.key_section = ttk.Frame(page)
+        f.grid(row=self.next_row(page), column=0, columnspan=2, sticky='we')
+        f.columnconfigure(1, weight=1)
+        self.section(f, _('Keyboard & Mouse Mapping'), top=12)
         self.note(f, _('Which key or mouse input presses each button of the game.'), top=4)
         table = mapping_table()
         r = 0
@@ -1985,21 +2045,19 @@ class Launcher:
                    _('While you play, the mouse stays in the game window, so a click cannot land on another monitor '
                      'or app. The in-game menu and switching windows get it back. Also in the in-game menu.'))
 
-        self.section(f, _('General'))
-        self.row(f, _('In-game button icons'), self.choice(f, 'glyph_style', 'app', GLYPH_STYLES),
-                 hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
-                        'Works on a copy of two game files in the port\'s data folder (about 70 MB); your game folder '
-                        'is never changed. Applied when the game starts.'))
-
-        self.section(f, _('Gamepad Mapping'))
+        # Gamepad: the controller type names its buttons, then the vibration and the table.
+        f = self.pad_section = ttk.Frame(page)
+        f.grid(row=self.next_row(page), column=0, columnspan=2, sticky='we')
+        f.columnconfigure(1, weight=1)
+        self.section(f, _('Gamepad Mapping'), top=12)
         self.note(f, _('Which gamepad button presses each button of the game.'), top=4)
         names = ttk.Frame(f)
-        for value, label in (('playstation', 'PlayStation'), ('xbox', 'Xbox')):
-            ttk.Radiobutton(names, text=label, value=value, variable=self.pad_style,
+        for value in PAD_STYLES:
+            ttk.Radiobutton(names, text=PAD_STYLE_NAMES[value], value=value, variable=self.pad_style,
                             command=self.relabel_pad_controls).pack(side='left', padx=self.px((0, 14)))
-        self.row(f, _('Gamepad names'), names)
-        self.row(f, _('Vibration'), slider('vibration', 0, 100, '%'), _("Strength of the gamepad's vibration; 0% turns it off."))
-        table = mapping_table()
+        self.row(f, _('Controller type'), names)
+        self.row(f, _('Vibration'), slider('vibration', 0, 100, '%', f), _("Strength of the gamepad's vibration; 0% turns it off."))
+        table = mapping_table(f)
         for r, (button, _key, pad) in enumerate(CONTROLS, start=1):
             game_button(table, r, button)
             pad_name = saved['pad'].get(button) or pad
@@ -2029,6 +2087,12 @@ class Launcher:
                        'Applied when the game starts.'))
         ttk.Button(f, text=_('Reset gamepad to defaults'), command=lambda: self.reset_controls('pad')).grid(
             row=self.next_row(f), column=0, sticky='w', pady=self.px((14, 0)))
+        self.show_device(fit=False)
+        if not self.device_chosen:  # first time: the gamepad if one is connected
+            def detect():
+                if connected_gamepad():
+                    self.ui_calls.put(lambda: (self.device.set('gamepad'), self.show_device()))
+            threading.Thread(target=detect, daemon=True).start()
 
     def key_binder(self, parent, kind, button, var):
         """An input box of the keyboard & mouse table: click it, then press a key, click a mouse
@@ -2125,11 +2189,19 @@ class Launcher:
     def relabel_pad_controls(self):
         labels = pad_labels(self.pad_style.get())
         for button, box in self.pad_boxes.items():
-            box.configure(values=list(labels.values()))
+            box.configure(values=list(labels.values()), width=max(22, *(len(l) + 2 for l in labels.values())))
             name = self.control_vars['pad'][button].get()
             box.set(labels.get(name, name))
         for button in self.pad_icons:
             self.draw_pad_icon(button)
+
+    def show_device(self, fit=True):
+        """Shows the chosen device's section of the Controls page and hides the other."""
+        gamepad = self.device.get() == 'gamepad'
+        (self.pad_section if gamepad else self.key_section).grid()
+        (self.key_section if gamepad else self.pad_section).grid_remove()
+        if fit:
+            self.pages['controls'].fit()
 
     def reset_controls(self, kind=None):
         """Puts one table ('key' or 'pad') or both (None) back on the defaults."""
@@ -2529,6 +2601,8 @@ class Launcher:
         app['controls'] = {kind: control_changes({b: v.get() for b, v in vars_.items()}, kind)
                            for kind, vars_ in self.control_vars.items()}
         app['pad_style'] = self.pad_style.get()
+        if getattr(self, 'device_chosen', False):  # an untouched first choice stays automatic
+            app['controls_device'] = self.device.get()
         mods = {'order': list(self.mod_order),
                 'disabled': [n for n, v in self.mod_vars.items() if not v.get()]} if self.mod_order else None
         patches = {'enabled': sorted(k for k, v in self.patch_vars.items() if v.get()),
