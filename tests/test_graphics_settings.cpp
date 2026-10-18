@@ -32,6 +32,10 @@ int main() {
     assert(G::ResolutionSize("8K") == std::make_pair(1920, 1080));
     for (const auto name : G::Resolutions) assert(G::ResolutionSize(name).first > 0);
     assert(G::ParseEngineFps(240) == 240 && G::ParseEngineFps(100) == 100 && G::ParseEngineFps(90) == 120);
+    // R3 + L1 + R1 / F9: the next rate this launch supports, back to 60 after the last.
+    assert(G::NextEngineFps(60, 240) == 100 && G::NextEngineFps(100, 240) == 120);
+    assert(G::NextEngineFps(120, 240) == 240 && G::NextEngineFps(240, 240) == 60);
+    assert(G::NextEngineFps(100, 120) == 120 && G::NextEngineFps(120, 120) == 60 && G::NextEngineFps(60, 60) == 60);
     assert(G::ParseFramesQueued(2) == 2 && G::ParseFramesQueued(0) == 0 && G::ParseFramesQueued(5) == 1);
     assert(G::ParseRcasStrength(100) == 100 && G::ParseRcasStrength(101) == 75 && G::ParseRcasStrength(-1) == 75);
     assert(G::RcasAttenuation(100) == 0.0f && G::RcasAttenuation(0) == 2.0f && G::RcasAttenuation(75) == 0.5f);
@@ -40,8 +44,12 @@ int main() {
     assert(!G::FsrPassRuns(true, true, 2560, 1440, 1920, 1080));  // larger image: regular scaling
     assert(G::EffectiveFps(0, 120) == 120 && G::EffectiveFps(240, 120) == 120 && G::EffectiveFps(60, 240) == 60);
     // An unpatched engine steps 1/60 s per frame: presenting faster speeds the game up.
-    assert(G::PresentLimit(120, 60) == 60 && G::PresentLimit(240, 120) == 120 && G::PresentLimit(240, 240) == 240);
-    assert(G::PresentLimit(0, 60) == 0 && G::PresentLimit(30, 60) == 30);  // 0: paced by vblank
+    assert(G::PresentLimit(120, 60, 60) == 60 && G::PresentLimit(240, 120, 120) == 120);
+    assert(G::PresentLimit(240, 240, 240) == 240 && G::PresentLimit(30, 60, 240) == 30);
+    assert(G::PresentLimit(0, 60, 60) == 0 && G::PresentLimit(0, 240, 240) == 0);  // 0: paced by vblank
+    // A live engine rate below the vblank (it runs at the highest rate): unlimited is the engine rate.
+    assert(G::PresentLimit(0, 60, 240) == 60 && G::PresentLimit(0, 100, 240) == 100);
+    assert(G::PresentLimit(240, 100, 240) == 100);
 
     const char* path = "graphics-settings-test.ini";
     {
@@ -68,11 +76,13 @@ int main() {
     Gow3Settings::Load();
     assert(v.engine_fps == 240 && v.applied_engine_fps == 60 && !Gow3Settings::GraphicsNeedRestart());
     _putenv_s("GOW3_ENGINE_FPS", "");
-    v.engine_fps = 120;
+    v.render_resolution = 0;
     assert(Gow3Settings::GraphicsNeedRestart());
-    v.fps_limit = 60;  // live: no restart because of it
-    v.engine_fps = 240;
+    v.render_resolution = 4;
+    v.fps_limit = 60;   // live: no restart because of them
+    v.engine_fps = 120;
     assert(!Gow3Settings::GraphicsNeedRestart());
+    v.engine_fps = 240;
 
     Gow3Settings::Save();
     const std::string saved = Read(path);

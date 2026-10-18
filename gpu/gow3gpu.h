@@ -37,6 +37,8 @@ int gow3gpu_choice_poll(void);
 int gow3gpu_overlay_captures_input(void);
 /* Controller vibration strength set in the menu, 0 (off) to 100 (the game's own). */
 int gow3gpu_vibration_percent(void);
+/* R3 + L1 + R1 (pad) or F9: the next engine frame rate (60, 100, 120, 240), applied live. */
+void gow3gpu_engine_fps_cycle(void);
 /* The video decoder handed the game a picture: a cutscene is on screen (the presenter draws
  * black bars outside its 16:9 picture when the render resolution is not 16:9). */
 void gow3gpu_movie_picture(void);

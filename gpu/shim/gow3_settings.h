@@ -93,10 +93,14 @@ struct Values {
     /// Set before an "Apply and restart"; cleared once the new launch shows the game. run.py
     /// restores the previous startup options when a launch never cleared it.
     std::atomic<bool> restart_unconfirmed{false};
-    int startup_render_resolution = 0, startup_engine_fps = 120;
+    int startup_render_resolution = 0;
     /// The engine rate this launch really runs at (run.py's GOW3_ENGINE_FPS): 60 when the frame
     /// rate patch does not apply to this game build.
     std::atomic<int> applied_engine_fps{120};
+    /// The game's maximum frame rate, read every frame (src/probe.c finds it): as a float and
+    /// rounded. Null when this eboot.bin's code does not match. engine_fps is written there live.
+    std::atomic<float*> engine_fps_global{nullptr};
+    std::atomic<int32_t*> engine_fps_int_global{nullptr};
     bool startup_deferred_readback = true, startup_stale_readback = true;
     // FSR 4 checks (menu): the provider's auto exposure, the jitter sign it is given.
     std::atomic<bool> fsr4_auto_exposure{true};
@@ -135,6 +139,13 @@ int RenderPreset();
 bool ResolutionNeedsRestart();
 /// A startup graphics option differs from the one this launch started with.
 bool GraphicsNeedRestart();
+/// The engine rate in effect: engine_fps, up to what this launch's patch allows.
+int EngineFpsNow();
+/// Present thread, every vblank: writes EngineFpsNow() into the game once the game has set its
+/// own rate (a frame rate patch applied), when they differ.
+void SyncEngineFps();
+/// R3 + L1 + R1 / F9: the next engine rate (saved); 0 when this launch cannot change it.
+int CycleEngineFps();
 /// Writes the file (menu changes).
 void Save();
 

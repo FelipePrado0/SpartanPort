@@ -429,6 +429,40 @@ static void install_cheats(Segment *segments, uint64_t count, uint64_t size) {
     }
 }
 
+/* The engine's frame rate setter, called once at start-up with 59.94 (the frame rate patches
+ * change that constant): it stores the maximum frame rate as a float and rounded, and the frame
+ * timing reads both every frame. Writing them changes the engine rate live (SyncEngineFps). */
+extern void gow3_engine_fps_globals(uintptr_t fps, uintptr_t rounded);
+static const Gow3Signature engine_fps_setter={
+    "48 8d 05 ?? ?? ?? ?? c5 fa 11 00 c5 fa 58 0d ?? ?? ?? ?? c5 fa 2c c1 48 8d 0d ?? ?? ?? ?? 89 01",0};
+static uint64_t engine_fps_at, engine_rounded_at; /* image offsets; 0: not found */
+/* Before the image is protected: the search reads the gaps between segments too. */
+static void find_engine_fps(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t at=gow3_signature_find(image,size,&engine_fps_setter);
+    if (at==UINT64_MAX) {
+        puts("Engine FPS: live frame rate unavailable (code not found in this eboot.bin)");
+        return;
+    }
+    int32_t fps_displacement, rounded_displacement;
+    memcpy(&fps_displacement,image+at+3,4);      /* lea rax, [rip+fps] */
+    memcpy(&rounded_displacement,image+at+26,4); /* lea rcx, [rip+rounded] */
+    const uint64_t fps=(uint64_t)((int64_t)at+7+fps_displacement);
+    const uint64_t rounded=(uint64_t)((int64_t)at+30+rounded_displacement);
+    if (!mapped(segments,count,fps,4) || !mapped(segments,count,rounded,4)) {
+        puts("Engine FPS: live frame rate unavailable (globals outside the image)");
+        return;
+    }
+    engine_fps_at=fps;
+    engine_rounded_at=rounded;
+}
+/* After it: the present thread reads the globals every vblank, and the image is not
+ * accessible between the two protect passes. */
+static void publish_engine_fps(void) {
+    if (!engine_fps_at) return;
+    gow3_engine_fps_globals((uintptr_t)(image+engine_fps_at),(uintptr_t)(image+engine_rounded_at));
+    puts("Engine FPS: live frame rate ready (menu, R3 + L1 + R1 or F9)");
+}
+
 /* Damage hook for the enemy health bar (src/actor_hook.h). Always
  * installed when the code matches: it only records values; the overlay decides what to show. */
 static void install_actor_watch(Segment *segments, uint64_t count, uint64_t size) {
@@ -983,6 +1017,7 @@ int main(int argc, char **argv) {
     if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
     if (gpu_enabled) install_orb_multiplier(segments, ns, size);
     if (gpu_enabled) install_cheats(segments, ns, size);
+    if (gpu_enabled) find_engine_fps(segments, ns, size);
     if (gpu_enabled) install_actor_watch(segments, ns, size);
     if (gpu_enabled) install_stat_multipliers(segments, ns, size);
     if (gpu_enabled) install_qte_hooks(segments, ns, size);
@@ -1013,6 +1048,7 @@ int main(int argc, char **argv) {
     }
     if (!executable_entry) fail("entry is not executable");
     printf("Mapped %" PRIu64 " bytes, %" PRIu64 " segments; applied %" PRIu64 " relocations\n", size, ns, nr);
+    publish_engine_fps();
     if (native_libc) {
         for (uint64_t m=0;m<module_count;++m) {
             int init_executable=0;

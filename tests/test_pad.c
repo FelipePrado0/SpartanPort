@@ -11,6 +11,12 @@ static int vibration_percent=100;
 static uint16_t rumble_low, rumble_high;
 int gow3gpu_overlay_captures_input(void) { return capture; }
 int gow3gpu_vibration_percent(void) { return vibration_percent; }
+static int engine_fps_cycles;
+void gow3gpu_engine_fps_cycle(void) { ++engine_fps_cycles; }
+int gow3gpu_mouse_prompt_distance(void) { return 48; }
+void gow3gpu_mouse_pause_key(void) {}
+int gow3gpu_mouse_aim_style(void) { return 0; }
+int gow3gpu_mouse_aim_sensitivity(void) { return 100; }
 
 static bool SDLCALL record_rumble(void *userdata, uint16_t low, uint16_t high) {
     (void)userdata;
@@ -122,6 +128,31 @@ int main(void) {
     data=read_pad();
     assert(data.buttons==0 && data.touch_count==0);
 
+    /* R3 + L1 + R1 cycles the engine frame rate once per press; the three stay hidden from
+     * the game until each one is released (a stray R1 would grab in the middle of a ledge). */
+    inject(path,"r3 l1");
+    data=read_pad();
+    assert((data.buttons & (BTN_R3|BTN_L1))==(BTN_R3|BTN_L1) && engine_fps_cycles==0);
+    inject(path,"r3 l1 r1 cross");
+    data=read_pad();
+    assert(engine_fps_cycles==1 && !(data.buttons & (BTN_R3|BTN_L1|BTN_R1)) && (data.buttons & BTN_CROSS));
+    data=read_pad();
+    assert(engine_fps_cycles==1 && !(data.buttons & (BTN_R3|BTN_L1|BTN_R1)));
+    inject(path,"l1 r1");
+    data=read_pad();
+    assert(engine_fps_cycles==1 && data.buttons==0);
+    inject(path,"");
+    data=read_pad();
+    inject(path,"l1");
+    data=read_pad();
+    assert(data.buttons==BTN_L1 && engine_fps_cycles==1);
+    inject(path,"r3 l1 r1");
+    data=read_pad();
+    assert(engine_fps_cycles==2 && data.buttons==0);
+    inject(path,"");
+    data=read_pad();
+    assert(data.buttons==0);
+
     SDL_VirtualJoystickTouchpadDesc touch={.nfingers=2};
     SDL_VirtualJoystickDesc desc;
     SDL_INIT_INTERFACE(&desc);
@@ -211,5 +242,5 @@ int main(void) {
     assert(SDL_DetachVirtualJoystick(id));
     SDL_Quit();
     unlink(path);
-    puts("PASS: pad ABI, staged left/right clicks, L1 chord, SDL touch coordinates, overlay capture");
+    puts("PASS: pad ABI, staged left/right clicks, L1 chord, engine frame rate combo, SDL touch coordinates, overlay capture");
 }

@@ -694,6 +694,21 @@ static void apply_dodge(PadData *d) {
     if (held || d->timestamp<dodge.until) { d->right_x=dodge.x; d->right_y=dodge.y; }
 }
 
+/* R3 + L1 + R1 goes through the engine frame rates live (60 for spots that break at a higher
+ * rate). The three stay hidden from the game until each one is released: a stray R1 grabs. */
+enum { ENGINE_FPS_COMBO=BTN_R3|BTN_L1|BTN_R1 };
+static uint32_t engine_fps_hidden;
+static bool engine_fps_held;
+static void engine_fps_combo(PadData *d) {
+    const bool held=(d->buttons & ENGINE_FPS_COMBO)==ENGINE_FPS_COMBO;
+    if (held && !engine_fps_held) {
+        gow3gpu_engine_fps_cycle();
+        engine_fps_hidden=ENGINE_FPS_COMBO;
+    }
+    engine_fps_held=held;
+    engine_fps_hidden&=d->buttons;
+    d->buttons&=~engine_fps_hidden;
+}
 /* After the menu or the text dialog closes, buttons still held (the Cross that accepted a
  * name) stay hidden until released: the game would take them as a new press. */
 static int hold_after_capture;
@@ -712,6 +727,7 @@ static void sample(PadData *d) {
     apply_dodge(d);
     apply_mouse_aim(d);
     note_pause_key(d);
+    engine_fps_combo(d);
     play_click(d);
     if (hold_after_capture) {
         if (d->buttons) d->buttons=0;

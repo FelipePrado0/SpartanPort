@@ -134,6 +134,8 @@ class GraphicsOptionsTest(unittest.TestCase):
             ],
         )
 
+        # The engine rate changes live (in-game menu, R3 + L1 + R1): every launch takes the
+        # highest frame rate patch, even for 60 or 100 FPS.
         native = g.startup_options({'engine_fps': '60'})
         self.assertEqual(
             g.patch_names(
@@ -143,8 +145,10 @@ class GraphicsOptionsTest(unittest.TestCase):
             [
                 'Bug Fix - Texture Corruption Fix',
                 'Skip Any Video With X Button',
+                'Frame Rate Patch - 240 FPS',
             ],
         )
+        self.assertEqual(g.startup_options({'engine_fps': '100'})['engine_fps'], '100')
 
     def test_resolution_labels_show_the_size_and_aspect_ratio(self):
         self.assertEqual(g.resolution_label('native'), 'Native · 1920 × 1080 · 16:9')
@@ -185,7 +189,8 @@ class GraphicsOptionsTest(unittest.TestCase):
         self.assertEqual(g.startup_options(ini)['render_resolution'], 'native')
         options = g.startup_options(ini, ['3840x1080'])
         self.assertEqual(options['render_resolution'], '3840x1080')
-        self.assertEqual(g.patch_names(['Bug Fix - Texture Corruption Fix'], options), ['Resolution Patch - 3840x1080'])
+        self.assertEqual(g.patch_names(['Bug Fix - Texture Corruption Fix'], options),
+                         ['Resolution Patch - 3840x1080', 'Frame Rate Patch - 240 FPS'])
 
     def test_a_confirmed_mod_resolution_is_restored_while_its_mod_is_on(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -203,8 +208,9 @@ class GraphicsOptionsTest(unittest.TestCase):
         self.assertIn(100, g.ENGINE_FPS)
         options = g.startup_options({'render_resolution': 'native', 'engine_fps': '100'})
         self.assertEqual(options['engine_fps'], '100')
+        # 100 is written live over the 240 FPS patch (gow3_settings.cpp SyncEngineFps).
         self.assertEqual(g.patch_names(['Bug Fix - Texture Corruption Fix'], options),
-                         ['Bug Fix - Texture Corruption Fix', 'Frame Rate Patch - 100 FPS'])
+                         ['Bug Fix - Texture Corruption Fix', 'Frame Rate Patch - 240 FPS'])
         self.assertEqual(g.startup_options({'engine_fps': '90'})['engine_fps'], '120')  # not a choice: the default
 
     def test_applied_engine_fps(self):

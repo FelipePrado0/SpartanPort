@@ -379,6 +379,17 @@ extern "C" int gow3gpu_overlay_captures_input(void) {
     return Gow3Overlay::CapturesInput() ? 1 : 0;
 }
 
+extern "C" void gow3gpu_engine_fps_cycle(void) {
+    Gow3Overlay::CycleEngineFps();
+}
+
+// src/probe.c: the game's maximum frame rate globals (Gow3Settings::SyncEngineFps writes them).
+extern "C" void gow3_engine_fps_globals(uintptr_t fps, uintptr_t rounded) {
+    auto& s = Gow3Settings::Get();
+    s.engine_fps_int_global = reinterpret_cast<int32_t*>(rounded);
+    s.engine_fps_global = reinterpret_cast<float*>(fps);
+}
+
 extern "C" int gow3gpu_text_input_begin(const char* initial, const char* prompt) {
     if (!g_window) return 0;
     g_window->BeginTextInput(initial ? initial : "", prompt ? prompt : "Text");

@@ -176,8 +176,9 @@ def patch_names(names, options, texture_fix_available=True):
         names = [n for n in names if n != TEXTURE_FIX] + [f'{RESOLUTION_PREFIX} - {resolution}']
     elif texture_fix_available and TEXTURE_FIX not in names:
         names.insert(0, TEXTURE_FIX)
-    if options['engine_fps'] != '60':
-        names.append(f'{FPS_PREFIX} - {options["engine_fps"]} FPS')
+    # The engine rate is chosen live (gow3_settings.cpp SyncEngineFps): the highest patch gives
+    # the swing energy fix and a vblank every lower rate fits in.
+    names.append(f'{FPS_PREFIX} - {max(ENGINE_FPS)} FPS')
     return names
 
 

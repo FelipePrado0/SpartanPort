@@ -445,13 +445,18 @@ void PerformanceTab() {
         static const char* const fps_labels[] = {"30", "60", "100", "120", "240", "Unlimited"};
         ChoiceRow("Frame rate limit", s.fps_limit, fps_labels, G::FpsLimits.data(), int(G::FpsLimits.size()),
                   "Caps the frame rate. The engine frame rate (below) is the highest it can go.");
-        const int effective = G::EffectiveFps(s.fps_limit, s.applied_engine_fps);
+        static const char* const engine_labels[] = {"60 (original)", "100", "120", "240"};
+        static_assert(std::size(engine_labels) == G::EngineFps.size());
+        ChoiceRow("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()),
+                  "The highest frame rate the game itself runs at. 60 for spots that break above it (a ledge "
+                  "Kratos cannot cross, a button-mash prompt). R3 + L1 + R1 or F9 go through the list.");
+        const int effective = G::EffectiveFps(s.fps_limit, Gow3Settings::EngineFpsNow());
         if (s.fps_limit == 0 || effective < s.fps_limit) {
             char text[48];
             std::snprintf(text, sizeof(text), "%d FPS (engine frame rate)", effective);
             InfoRow("Effective limit", text);
         }
-        if (s.applied_engine_fps < s.startup_engine_fps) {
+        if (s.applied_engine_fps <= 60 && s.engine_fps > 60) {
             InfoRow("Engine frame rate", "60 FPS: the frame rate patch is not available for this game build");
         }
         static const char* const queued_labels[] = {"1 (lowest latency)", "2", "Unlimited"};
@@ -485,9 +490,6 @@ void PerformanceTab() {
         }
         ChoiceRow("Render resolution", s.render_resolution, resolution_labels.data(), nullptr,
                   int(resolution_labels.size()), "The resolution the game draws at. Higher is sharper and slower.");
-        static const char* const engine_labels[] = {"60 (original)", "100", "120", "240"};
-        ChoiceRow("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()),
-                  "The highest frame rate the game itself runs at.");
         CheckRow("Game reads GPU data without waiting", s.stale_readback,
                  "Big FPS gain. Switch it off if lighting or objects look wrong.");
         CheckRow("Deferred GPU readbacks", s.deferred_readback,
@@ -571,7 +573,7 @@ void OverlayTab() {
 // Startup options changed since this launch (applied by "Apply and restart").
 int RestartChanges() {
     const auto& s = Gow3Settings::Get();
-    return (s.render_resolution != s.startup_render_resolution) + (s.engine_fps != s.startup_engine_fps) +
+    return (s.render_resolution != s.startup_render_resolution) +
            (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
            (s.anisotropy != s.startup_anisotropy);
 }
@@ -898,6 +900,12 @@ void ShowNotice(const std::string& text, int milliseconds) {
     notice_until.store(NowMs() + milliseconds, std::memory_order_relaxed);
 }
 
+void CycleEngineFps() {
+    const int fps = Gow3Settings::CycleEngineFps();
+    ShowNotice(fps ? "Engine frame rate: " + std::to_string(fps) + " FPS"
+                   : std::string("Engine frame rate: 60 FPS only (no frame rate patch for this game build)"));
+}
+
 void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) {
     std::scoped_lock lock{imgui_mutex};
     if (initialized) {
@@ -1063,6 +1071,12 @@ bool HandleEvent(const SDL_Event& event) {
             const char* env = std::getenv("GOW3_FRAME_CAPTURE_KEY");
             return env && *env == '1';
         }();
+        if (event.key.key == SDLK_F9) {
+            if (down && !event.key.repeat) {
+                CycleEngineFps();
+            }
+            return true;
+        }
         if (event.key.key == SDLK_F12) {
             if (down && !event.key.repeat) {
                 VideoCore::RequestScreenshot(VideoCore::ScreenshotRequest::GameOnly);

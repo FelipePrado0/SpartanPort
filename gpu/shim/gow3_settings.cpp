@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -214,7 +215,6 @@ void Load() {
     v.startup_output_res = v.output_res;
     v.startup_live_resolution = v.live_resolution;
     v.startup_render_resolution = v.render_resolution;
-    v.startup_engine_fps = v.engine_fps;
     const char* applied = std::getenv("GOW3_ENGINE_FPS");
     v.applied_engine_fps = applied && applied[0] ? Gow3Graphics::ParseEngineFps(std::atoi(applied))
                                                  : v.engine_fps.load();
@@ -223,10 +223,43 @@ void Load() {
     v.startup_anisotropy = v.anisotropy;
 }
 
+int EngineFpsNow() {
+    const auto& v = Get();
+    return std::min(v.engine_fps.load(), v.applied_engine_fps.load());
+}
+
+void SyncEngineFps() {
+    const auto& v = Get();
+    volatile float* fps = v.engine_fps_global.load();
+    volatile int32_t* rounded = v.engine_fps_int_global.load();
+    // 0 until the game's setter ran; 60 when no frame rate patch applied (nothing to change).
+    if (!fps || !rounded || *fps <= 0.0f || v.applied_engine_fps <= 60) {
+        return;
+    }
+    const int now = EngineFpsNow();
+    const float value = now == 60 ? 59.94f : float(now); // 59.94: the game's own constant
+    if (*fps == value) {
+        return;
+    }
+    // The game's frame timing reads both every frame (rounded: int(fps + 0.5), as its setter).
+    *fps = value;
+    *rounded = int32_t(value + 0.5f);
+    std::printf("Engine FPS: %d\n", now);
+}
+
+int CycleEngineFps() {
+    auto& v = Get();
+    if (!v.engine_fps_global || v.applied_engine_fps <= 60) {
+        return 0;
+    }
+    v.engine_fps = Gow3Graphics::NextEngineFps(EngineFpsNow(), v.applied_engine_fps);
+    Save();
+    return v.engine_fps;
+}
+
 bool GraphicsNeedRestart() {
     const auto& v = Get();
     return v.render_resolution != v.startup_render_resolution ||
-           v.engine_fps != v.startup_engine_fps ||
            v.deferred_readback != v.startup_deferred_readback ||
            v.stale_readback != v.startup_stale_readback ||
            v.anisotropy != v.startup_anisotropy;
@@ -280,6 +313,8 @@ bool ResolutionNeedsRestart() {
 }
 
 void Save() {
+    static std::mutex mutex; // the menu and the pad thread (CycleEngineFps)
+    std::scoped_lock lock{mutex};
     const auto& v = Get();
     FILE* file = std::fopen(Path(), "w");
     if (!file) {

@@ -62,7 +62,8 @@ inline std::pair<int, int> ResolutionSize(std::string_view name) {
     }
     return ResolutionSizes[0].second;
 }
-/// Engine frame rate ceilings: 60 is the game's own, 100 (for 100 Hz displays), 120 and 240 are frame rate patches.
+/// Engine frame rates: 60 is the game's own (59.94). The launch takes the 240 FPS patch and the
+/// rate is written live (Gow3Settings::SyncEngineFps); 100 fits 100 Hz displays.
 inline constexpr std::array<int, 4> EngineFps = {60, 100, 120, 240};
 
 template <typename T, std::size_t N>
@@ -124,10 +125,22 @@ inline int EffectiveFps(int limit, int engine_fps) {
     return limit == 0 || limit > engine_fps ? engine_fps : limit;
 }
 
-/// The present thread's frame limit: never above the engine rate the patches applied, since the
-/// engine steps a fixed time per frame and faster flips speed the game up. 0 stays vblank paced.
-inline int PresentLimit(int limit, int engine_fps) {
-    return limit == 0 ? 0 : EffectiveFps(limit, engine_fps);
+/// The present thread's frame limit: never above the engine rate, since the engine steps a fixed
+/// time per frame and faster flips speed the game up. 0 stays vblank paced while the vblank is
+/// the engine rate; a live rate below it (the vblank runs at the highest one) caps it.
+inline int PresentLimit(int limit, int engine_fps, int vblank_hz) {
+    return limit == 0 && vblank_hz <= engine_fps ? 0 : EffectiveFps(limit, engine_fps);
+}
+
+/// R3 + L1 + R1 / F9: the engine rate after `current`, up to `highest` (this launch's patch);
+/// back to the first after the last.
+inline int NextEngineFps(int current, int highest) {
+    for (const int fps : EngineFps) {
+        if (fps > current && fps <= highest) {
+            return fps;
+        }
+    }
+    return EngineFps[0];
 }
 
 } // namespace Gow3Graphics
