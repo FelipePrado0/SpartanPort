@@ -14,6 +14,7 @@ uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *n
     return 0;
 }
 
+#ifdef _WIN32
 static SDL_AudioStream *mock_fail_wasapi(SDL_AudioDeviceID dev, const SDL_AudioSpec *spec, SDL_AudioStreamCallback cb, void *user) {
     const char *driver = SDL_GetCurrentAudioDriver();
     if (driver && !strcmp(driver, "wasapi")) {
@@ -22,6 +23,7 @@ static SDL_AudioStream *mock_fail_wasapi(SDL_AudioDeviceID dev, const SDL_AudioS
     }
     return SDL_OpenAudioDeviceStream(dev, spec, cb, user);
 }
+#endif
 
 static SDL_AudioStream *mock_fail_all(SDL_AudioDeviceID dev, const SDL_AudioSpec *spec, SDL_AudioStreamCallback cb, void *user) {
     (void)dev; (void)spec; (void)cb; (void)user;
@@ -145,9 +147,45 @@ static void test_complete_failure_timer_sink(void) {
     printf("Timer sink fallback passed!\n");
 }
 
+static void test_multiple_ports(void) {
+    printf("Testing multiple active audio ports...\n");
+    int32_t h0 = audio_open(0, 0, 0, 256, 48000, 5);  /* type 0: main */
+    int32_t h8 = audio_open(0, 1, 0, 256, 48000, 5);  /* type 1: bgm */
+    int32_t h17 = audio_open(0, 4, 0, 256, 48000, 5); /* type 4: pad speaker */
+    assert(h0 > 0 && h8 > 0 && h17 > 0);
+
+    int id0 = h0 & 0xff, id8 = h8 & 0xff, id17 = h17 & 0xff;
+    assert(ports[id0].used && ports[id8].used && ports[id17].used);
+
+    /* Output to all 3 ports concurrently via audio_outputs */
+    float buffer[256 * 8] = {0};
+    OutputParam params[3] = {
+        {h0, buffer},
+        {h8, buffer},
+        {h17, buffer}
+    };
+    int32_t samples = audio_outputs(params, 3);
+    assert(samples == 256 * 8);
+
+#ifdef _WIN32
+    if (ports[id0].stream) {
+        /* When an active stream exists on a port, try_audio_fallback must refuse to switch backends */
+        const char *driver_before = SDL_GetCurrentAudioDriver();
+        try_audio_fallback(&ports[id8], id8);
+        assert(!strcmp(SDL_GetCurrentAudioDriver(), driver_before));
+    }
+#endif
+
+    assert(audio_close(h0) == 0);
+    assert(audio_close(h8) == 0);
+    assert(audio_close(h17) == 0);
+    printf("Multiple active audio ports passed!\n");
+}
+
 int main(void) {
     test_lifecycle();
     test_invalid_parameters();
+    test_multiple_ports();
 #ifdef _WIN32
     test_wasapi_fallback();
     test_env_override_prevents_fallback();
