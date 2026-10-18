@@ -125,7 +125,7 @@ Fedora 42, Arch y openSUSE Tumbleweed; esto no comprueba gameplay en todas las G
 3. Elegí la carpeta del juego, guardá los ajustes y presioná **PLAY**.
 
 Si una descarga anterior muestra `GLIBC_2.44 not found`, descargá de nuevo el AppImage recompilado.
-El actualizador de Windows no está disponible en Linux; descargá un AppImage nuevo para actualizar.
+El AppImage se actualiza solo: **Advanced → Check for updates** (o el aviso al abrir el launcher) descarga el AppImage nuevo del release, verifica su SHA-256 y reemplaza el archivo. Necesita una carpeta con permiso de escritura; si no, abre la página de releases.
 La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 2.2.0 publicado.
 
 - **Archivos:** las partidas, los ajustes, la caché de shaders y el log están en

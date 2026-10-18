@@ -120,7 +120,7 @@ Arch and openSUSE Tumbleweed; this does not establish gameplay compatibility on 
 3. Choose your game folder, save the settings and press **PLAY**.
 
 If an older download reports `GLIBC_2.44 not found`, download the rebuilt AppImage again.
-The Windows updater is not available on Linux; download a newer AppImage to update.
+The AppImage updates itself: **Advanced → Check for updates** (or the notice when the launcher opens) downloads the newer AppImage from the release, checks its SHA-256 and replaces the file. It needs a writable folder; otherwise it opens the releases page.
 Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 AppImage.
 
 - **Files:** saves, settings, shader cache and the log are in `~/.local/share/spartanport`; the launcher's

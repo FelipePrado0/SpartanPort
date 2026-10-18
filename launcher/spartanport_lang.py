@@ -750,6 +750,8 @@ WINDOWS_LANGUAGES = {0x19: 'ru', 0x01: 'ar', 0x0a: 'es', 0x16: 'pt', 0x0c: 'fr',
 # other languages fall back to English for them until someone who speaks them contributes.
 EXTRA = {
     'pt': {
+        'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?': 'O launcher não consegue gravar em {}, então não pode se substituir ali. Abrir a página de releases para baixar a versão nova manualmente?',
+        'Version {} is out, but it has no Linux build yet.': 'A versão {} saiu, mas ainda não tem build para Linux.',
         'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
         'Shows only the game name and the time played on your Discord profile.': 'Mostra no seu perfil do Discord apenas o nome do jogo e o tempo jogado.',
         'Game multisampling': 'Multisampling do jogo',
@@ -996,6 +998,8 @@ EXTRA = {
         'Portuguese (Brazil)': 'Português (Brasil)',
     },
     'es': {
+        'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?': 'El launcher no puede escribir en {}, así que no puede reemplazarse ahí. ¿Abrir la página de releases para descargar la versión nueva a mano?',
+        'Version {} is out, but it has no Linux build yet.': 'La versión {} ya salió, pero aún no tiene compilación para Linux.',
         'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
         'Shows only the game name and the time played on your Discord profile.': 'Muestra en tu perfil de Discord solo el nombre del juego y el tiempo jugado.',
         'Game multisampling': 'Multisampling del juego',
@@ -1911,6 +1915,8 @@ for _language, _texts in spartanport_trophies.UI.items():
 
 
 EXTRA['zh'].update({
+ 'Version {} is out, but it has no Linux build yet.': '版本 {} 已发布，但还没有 Linux 版本。',
+ 'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?': '启动器无法写入 {}，因此无法在此处替换自身。是否打开发布页面手动下载新版本？',
     'Monitor': '显示器',
     'Primary (default)': '主显示器（默认）',
     'The screen the game opens its window on. Primary is the monitor the system considers the main one.':
