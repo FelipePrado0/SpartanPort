@@ -48,6 +48,19 @@
             <Line Type="bytes" Address="0x007cd918" Value="00000090" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
         </PatchList>
     </Metadata>
+    <Metadata Title="God of War III Remastered" Name="Resolution Patch - 900p" Note="Decreases game output resolution to 1600x900 and increases Video Arena to 2.25 GiB. Requires setting DMEM to 2048 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="kvicken + cuesta4 (900p: gow3_pc)" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+        <PatchList>
+            <Line Type="bytes" Address="0x005f0b3b" Value="40060000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
+            <Line Type="bytes" Address="0x005f0b43" Value="84030000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
+            <Line Type="bytes" Address="0x005f0b4c" Value="4006" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="13"/>
+            <Line Type="bytes" Address="0x005f0b53" Value="8403" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="20"/>
+            <Line Type="bytes" Address="0x005643f3" Value="84030000" Pattern="c7 04 24 38 04 00 00 48 8d 3d ?? ?? ?? ?? 41 b9 80 07 00 00" At="3"/>
+            <Line Type="bytes" Address="0x00564400" Value="40060000" Pattern="41 b9 80 07 00 00 4c 89 f9 4d 89 e0 e8 ?? ?? ?? ??" At="2"/>
+            <Line Type="bytes" Address="0x005ff769" Value="40060000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
+            <Line Type="bytes" Address="0x005ff76f" Value="84030000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
+            <Line Type="bytes" Address="0x007cd918" Value="00000090" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+        </PatchList>
+    </Metadata>
     <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1440p" Note="Increases game output resolution to 2560x1440 and Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="kvicken + cuesta4" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
         <PatchList>
             <Line Type="bytes" Address="0x005f0b3b" Value="000a0000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>

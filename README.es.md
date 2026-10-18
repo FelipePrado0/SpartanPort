@@ -140,11 +140,11 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
 - Audio: música, voces y efectos (ATRAC9 y MP3).
 - Control (DualSense, Xbox y otros, mediante SDL3) y teclado al mismo tiempo, ambos remapeables.
 - **Íconos de botones en el juego** (opcional, desactivado por defecto): los íconos de botones de
-  PlayStation dentro del juego pueden mostrar los de tu control, Xbox o Nintendo (página Game, sección Controls).
+  PlayStation dentro del juego pueden mostrar los de tu control, Xbox o Nintendo, o las teclas con las que jugás (página Game, sección Controls).
 - Guardado y carga: la lista de partidas guardadas se muestra en pantalla, como en la PS4. El
   autoguardado también funciona. El launcher hace una copia de seguridad de las partidas antes de
   cada inicio.
-- Parches: resolución de render de 480p, 720p, 1440p, 1800p o 4K, corrección de texturas corruptas
+- Parches: resolución de render de 480p, 720p, 900p, 1440p, 1800p o 4K, corrección de texturas corruptas
   y saltar videos con el botón X (comunidad); tasa de cuadros del motor de 120 FPS (kvicken), 100 FPS (para pantallas de 100 Hz) o 240
   FPS (adaptado por Felipe Prado).
 - **Ultrawide (beta):** resoluciones 21:9, 32:9 y 16:10 (3440x1440 probada) con un campo de visión más ancho en
@@ -220,7 +220,7 @@ Automatic deja pasar un `GOW3_NO_MSAA` heredado. Se aplica en el próximo inicio
 
 ## Controles de teclado
 
-Valores por defecto; cambialos en la página **Game** del launcher, sección **Controls**.
+Valores por defecto; cambialos en la página **Controls** del launcher, sección **Keyboard & Mouse Mapping**.
 
 | Tecla | Botón |
 |---|---|
@@ -228,28 +228,44 @@ Valores por defecto; cambialos en la página **Game** del launcher, sección **C
 | Flechas | stick derecho (cámara) |
 | Espacio | Cruz (X) |
 | Shift izquierdo | Círculo |
-| E | Cuadrado |
-| Q | Triángulo |
-| 1 y 3 | L1 y R1 |
-| R y F | L2 y R2 |
-| Z y C | L3 y R3 |
-| I, K, J, L | cruceta |
-| Enter | Options |
-| Tab | clic del touchpad izquierdo (modo foto) |
-| Retroceso | clic del touchpad derecho (menú de pausa) |
+| Clic izquierdo | Cuadrado |
+| Clic derecho | Triángulo |
+| Q y E | L1 y R1 |
+| R y el botón de avanzar del mouse | L2 y R2 |
+| Z y X | L3 y R3 |
+| Clic de la rueda | Rage of Sparta (L3 + R3) |
+| C | Agarre (L1 + Círculo) |
+| El botón de retroceder del mouse | Esquivar |
+| 1, 2, 3, 4 | cruceta: arriba, derecha, abajo, izquierda (armas) |
+| Tab | Options |
+| P | clic del touchpad izquierdo (modo foto) |
+| Esc | clic del touchpad derecho (menú de pausa) |
 | Insert | el menú del port (R3+L2 en el control) |
+
+**Rage of Sparta en una tecla** (activado por defecto) deja Z y X sin uso. Los **Joystick prompts**
+responden a los quick-time events de girar el stick sin stick: escribí el giro (medias vueltas D S
+A, A S D, A W D o D W A; vueltas completas D S A W o A S D W) o, con *Adaptive mouse*, dibujalo con
+el mouse. Mientras jugás, el mouse queda dentro de la ventana del juego; el menú del juego, la tecla
+de pausa (Esc) y otras ventanas lo liberan, y Esc de nuevo o un clic en la ventana lo vuelve a
+tomar. Con L2 apretado (R), el mouse apunta con el stick derecho, para la Cabeza de Helios o el Arco
+de Apolo: *Relative* sigue el movimiento, *Absolute* apunta desde donde estaba el mouse al apretar
+L2, y *Right stick sensitivity* define cuánto mouse hace falta. Sin el launcher, el juego usa sus
+propias teclas: E y Q para Cuadrado y Triángulo, 1 y 3 para L1 y R1, F para R2, C para R3, I, K, J,
+L para la cruceta, Enter para Options, Tab y Retroceso para el touchpad.
 
 En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic del touchpad derecho)
 y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad funciona como en la
 PS4, y Share/Create funciona como View.
 
-Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Game del launcher, sección Controls, en
-*In-game button icons*: *Match my controller*, *Xbox* o *Nintendo*. Reemplazan los íconos de
+Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls del launcher, en
+*In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* o *Keyboard*. Reemplazan los íconos de
 PlayStation en los tutoriales, la lista de movimientos y las indicaciones de quick-time events; el
-dibujo del control en el menú de pausa sigue siendo un DualShock 4. El launcher escribe una copia
+dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* muestra la tecla que
+presiona cada botón, según tu mapeo del teclado (una tecla cambiada aparece en el próximo inicio);
+*Match my controller* también muestra las teclas cuando no hay un control conectado. El launcher escribe una copia
 parcheada de dos archivos del juego en la carpeta de datos del port y nunca modifica tu carpeta del
 juego. Un control nuevo se detecta después de reiniciar. Sin el launcher, definí `GOW3_GLYPH_STYLE`
-como `auto`, `xbox` o `nintendo` antes de iniciar `run.py`.
+como `auto`, `xbox`, `nintendo` o `keyboard` antes de iniciar `run.py`.
 
 En el menú: L1/R1 o Q/E cambian de pestaña. En la lista de partidas: las flechas o la cruceta eligen,
 Enter o Cruz confirman, Esc o Círculo cancelan.

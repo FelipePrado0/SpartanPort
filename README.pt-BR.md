@@ -140,7 +140,7 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
   configuráveis.
 - Salvar e carregar: a lista de saves aparece na tela, como no PS4. O autosave também funciona.
   O launcher faz backup dos saves antes de cada partida.
-- Patches: resolução de renderização de 480p, 720p, 1440p, 1800p ou 4K, correção de texturas
+- Patches: resolução de renderização de 480p, 720p, 900p, 1440p, 1800p ou 4K, correção de texturas
   corrompidas e pular vídeos com o botão X (comunidade); FPS do motor de 120 (kvicken), 100 (para telas de 100 Hz) ou 240
   (adaptado por Felipe Prado).
 - **Ultrawide (beta):** resoluções 21:9, 32:9 e 16:10 (3440x1440 testada) com campo de visão mais largo, em vez de
@@ -159,7 +159,7 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
   desempenho, pasta do jogo e backups de save, patches, mods (ordem, presets e conflitos),
   controles com ícones de botões PlayStation ou Xbox, atualizações e diagnóstico.
 - **Ícones de botões no jogo** (opt-in, desligado por padrão): os ícones PlayStation do jogo podem
-  ser os do seu controle, Xbox ou Nintendo (tela Game, seção Controls).
+  ser os do seu controle, Xbox ou Nintendo, ou as teclas do teclado com que você joga (tela Game, seção Controls).
 - **Menu dentro do jogo** (Insert no teclado, R3+L2 no controle), com quatro abas:
   - **Game:** trapaças (vida, magia, item e Fúria de Esparta infinitos, orbes vermelhos no
     máximo); multiplicadores de 0,1x a 100x para orbes vermelhos, verdes (vida), azuis (magia)
@@ -216,7 +216,7 @@ essa variável caso ela já exista no ambiente.
 
 ## Teclado
 
-Padrão; mude na tela **Game** do launcher, seção **Controls**.
+Padrão; mude na tela **Controls** do launcher, seção **Keyboard & Mouse Mapping**.
 
 | Tecla | Botão |
 |---|---|
@@ -224,27 +224,43 @@ Padrão; mude na tela **Game** do launcher, seção **Controls**.
 | Setas | analógico direito (câmera) |
 | Espaço | Xis (Cross) |
 | Shift esquerdo | Círculo |
-| E | Quadrado |
-| Q | Triângulo |
-| 1 e 3 | L1 e R1 |
-| R e F | L2 e R2 |
-| Z e C | L3 e R3 |
-| I, K, J, L | direcional |
-| Enter | Options |
-| Tab | clique esquerdo do touchpad (modo foto) |
-| Backspace | clique direito do touchpad (menu de pausa) |
+| Clique esquerdo | Quadrado |
+| Clique direito | Triângulo |
+| Q e E | L1 e R1 |
+| R e o botão de avançar do mouse | L2 e R2 |
+| Z e X | L3 e R3 |
+| Clique da roda | Rage of Sparta (L3 + R3) |
+| C | Agarrar (L1 + Círculo) |
+| O botão de voltar do mouse | Esquiva |
+| 1, 2, 3, 4 | direcional: cima, direita, baixo, esquerda (armas) |
+| Tab | Options |
+| P | clique esquerdo do touchpad (modo foto) |
+| Esc | clique direito do touchpad (menu de pausa) |
 | Insert | menu do port (R3+L2 no controle) |
+
+**Rage of Sparta em uma tecla** (ligado por padrão) deixa Z e X sem uso. Os **Joystick prompts**
+respondem aos eventos rápidos de girar o analógico sem analógico: digite o giro (meias-voltas D S A,
+A S D, A W D ou D W A; voltas completas D S A W ou A S D W) ou, com *Adaptive mouse*, desenhe-o com
+o mouse. Enquanto você joga, o mouse fica preso na janela do jogo; o menu do jogo, a tecla de pausa
+(Esc) e outras janelas o liberam, e Esc de novo ou um clique na janela o prende outra vez. Com L2
+pressionado (R), o mouse mira com o analógico direito, para a Cabeça de Hélio ou o Arco de Apolo:
+*Relative* segue o movimento, *Absolute* aponta a partir de onde o mouse estava ao apertar L2, e
+*Right stick sensitivity* define quanto mouse é preciso. Sem o launcher, o jogo usa as próprias
+teclas: E e Q para Quadrado e Triângulo, 1 e 3 para L1 e R1, F para R2, C para R3, I, K, J, L para o
+direcional, Enter para Options, Tab e Backspace para o touchpad.
 
 Em um controle sem touchpad (Xbox e outros), View abre o menu de pausa (o clique direito do
 touchpad) e L1 + View abre o modo foto (o clique esquerdo). No DualSense o touchpad funciona
 como no PS4, e Share/Create funciona como View.
 
-Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Game do launcher, seção Controls, em
-*Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox* ou *Nintendo*. Eles trocam os ícones
+Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Controls do launcher, em
+*Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox*, *Nintendo* ou *Teclado*. Eles trocam os ícones
 PlayStation dos tutoriais, da lista de golpes e dos eventos rápidos; o desenho do controle no menu
-de pausa continua sendo um DualShock 4. O launcher grava uma cópia com patch de dois arquivos do
+de pausa continua sendo um DualShock 4. *Teclado* mostra a tecla que aperta cada botão, seguindo o seu
+mapeamento do teclado (uma tecla trocada aparece no próximo início); *Igual ao meu controle* também mostra
+as teclas quando nenhum controle está conectado. O launcher grava uma cópia com patch de dois arquivos do
 jogo na pasta de dados do port e nunca altera a pasta do jogo. Um controle novo é reconhecido após
-reiniciar. Sem o launcher, defina `GOW3_GLYPH_STYLE` como `auto`, `xbox` ou `nintendo` antes de
+reiniciar. Sem o launcher, defina `GOW3_GLYPH_STYLE` como `auto`, `xbox`, `nintendo` ou `keyboard` antes de
 iniciar o `run.py`.
 
 No menu: L1/R1 ou Q/E trocam de aba. Na lista de saves: setas ou direcional escolhem, Enter ou
