@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include "gow3_graphics.h"
@@ -19,6 +20,21 @@ static std::string Read(const char* path) {
 
 int main() {
     assert(G::ParseDisplayMode("borderless") == G::Borderless && G::ParseDisplayMode("bogus") == G::Windowed);
+    // Monitor preference (window.cpp): empty means the primary display, and that default is distinct
+    // from an explicit index 0. The launcher's value is untrusted text, so anything else falls back.
+    assert(G::ParseMonitor("") == G::PrimaryMonitor && G::PrimaryMonitor != 0);
+    assert(G::ParseMonitor("0") == 0);
+    assert(G::ParseMonitor("1") == 1 && G::ParseMonitor("2") == 2 && G::ParseMonitor("42") == 42);
+    assert(G::ParseMonitor("007") == 7);  // leading zeros are still an index
+    assert(G::ParseMonitor(" 1") == G::PrimaryMonitor && G::ParseMonitor("1 ") == G::PrimaryMonitor);
+    assert(G::ParseMonitor("abc") == G::PrimaryMonitor && G::ParseMonitor("1x") == G::PrimaryMonitor);
+    assert(G::ParseMonitor("-1") == G::PrimaryMonitor && G::ParseMonitor("+1") == G::PrimaryMonitor);
+    // Too large for an int falls back instead of wrapping into a bogus index: the exact INT_MAX + 1
+    // boundary, and an input far past any int.
+    const std::string widest = std::to_string(std::numeric_limits<int>::max());
+    assert(G::ParseMonitor(widest) == std::numeric_limits<int>::max());
+    assert(G::ParseMonitor(std::to_string(std::numeric_limits<int>::max() + 1LL)) == G::PrimaryMonitor);
+    assert(G::ParseMonitor("99999999999999999999") == G::PrimaryMonitor);
     assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(100) == 100 && G::ParseFpsLimit(75) == 0);
     assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 0);
     // #238: 900p (1600x900) sits between 720p and 1440p in the built-in list.

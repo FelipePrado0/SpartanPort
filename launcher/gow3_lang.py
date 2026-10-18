@@ -1267,6 +1267,10 @@ EXTRA['pt'].update({
     'Auto': 'Automático',
     'For launcher only. Applies after Save.':
         'Somente para o inicializador. Aplica-se após Salvar.',
+    'Monitor': 'Monitor',
+    'Primary (default)': 'Principal (padrão)',
+    'The screen the game opens its window on. Primary is the monitor Windows calls the main one.':
+        'A tela em que o jogo abre a sua janela. Principal é o monitor que o Windows considera o principal.',
 })
 
 EXTRA['pt'].update({

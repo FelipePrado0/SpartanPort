@@ -20,17 +20,39 @@ void ToggleMousePause() {
     mouse_paused.store(!mouse_paused.load(std::memory_order_relaxed), std::memory_order_relaxed);
 }
 
-// gow3: a window opens at the render resolution chosen in the launcher (or the in-game menu); one too
-// large for the screen's usable area (with room for the title bar) opens maximized, restoring to that
-// size shrunk to fit. The picture is scaled to the window either way. True when shrunk.
-static bool StartSize(s32& width, s32& height) {
+// gow3: the display the window opens on. GOW3_MONITOR is an index into SDL_GetDisplays() (the same
+// order a launcher's list would use); absent or empty means the primary display. An invalid,
+// negative or out-of-range value falls back to the primary with a diagnostic. SDL_WINDOWPOS_CENTERED
+// is SDL_WINDOWPOS_CENTERED_DISPLAY(0), so the primary stays the safe default on every path.
+static SDL_DisplayID MonitorDisplay() {
+    const char* value = std::getenv("GOW3_MONITOR");
+    const int index = Gow3Graphics::ParseMonitor(value ? value : "");
+    if (index == Gow3Graphics::PrimaryMonitor) {
+        if (value && value[0]) {
+            LOG_WARNING(Frontend, "GOW3_MONITOR \"{}\" is not a monitor index; using the primary display", value);
+        }
+        return SDL_GetPrimaryDisplay();
+    }
+    int count = 0;
+    SDL_DisplayID* displays = SDL_GetDisplays(&count);
+    const SDL_DisplayID chosen = displays && index < count ? displays[index] : 0;
+    SDL_free(displays);
+    if (chosen) return chosen;
+    LOG_WARNING(Frontend, "GOW3_MONITOR {} is out of range for {} display(s); using the primary display", value, count);
+    return SDL_GetPrimaryDisplay();
+}
+
+// gow3: a window opens at the render resolution chosen in the launcher (or the in-game menu), fitted
+// to the chosen display's usable area (with room for the title bar); one too large opens maximized,
+// restoring to that size shrunk to fit. The picture is scaled to the window either way. True when shrunk.
+static bool StartSize(s32& width, s32& height, SDL_DisplayID display) {
     constexpr int title_room = 48;
     const std::vector<std::string> names = Gow3Graphics::ResolutionNames();
     const int index = std::clamp(Gow3Settings::Get().render_resolution.load(), 0, int(names.size()) - 1);
     const auto [w, h] = Gow3Graphics::ResolutionSize(names[index]);
     double scale = 1.0;
     SDL_Rect usable{};
-    if (SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &usable) && usable.w > 0 && usable.h > title_room) {
+    if (SDL_GetDisplayUsableBounds(display, &usable) && usable.w > 0 && usable.h > title_room) {
         scale = std::min({1.0, double(usable.w) / w, double(usable.h - title_room) / h});
     }
     width = std::max(320, int(w * scale));
@@ -43,11 +65,12 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         UNREACHABLE_MSG("Failed to initialize SDL video: {}", SDL_GetError());
     }
-    const bool too_large = StartSize(width_, height_);
+    const SDL_DisplayID display = MonitorDisplay();
+    const bool too_large = StartSize(width_, height_, display);
     SDL_PropertiesID props = SDL_CreateProperties();
     SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
-    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, SDL_WINDOWPOS_CENTERED);
-    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER, SDL_WINDOWPOS_CENTERED);
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, SDL_WINDOWPOS_CENTERED_DISPLAY(display));
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER, SDL_WINDOWPOS_CENTERED_DISPLAY(display));
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, width_);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height_);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);

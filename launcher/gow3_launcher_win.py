@@ -190,6 +190,77 @@ def list_gpus():
     return parse_gpu_list(done.stdout) if done.returncode == 0 else []
 
 
+def parse_display_list(text):
+    """One tuple per line of `gow3-probe --displays`: index, name, primary, x, y, width, height. The
+    index is the position in SDL_GetDisplays() that GOW3_MONITOR names, so the game and the launcher
+    count the monitors the same way. A line is kept only with exactly seven well-formed columns, so a
+    monitor the tool could not describe leaves a gap in the indices instead of a wrong entry."""
+    def number(column):
+        return int(column) if re.fullmatch(r'-?[0-9]+', column) else None
+
+    rows = []
+    # Only the record separator the tool writes ends a row: LF, or CRLF when the C runtime of a
+    # Windows build translates it. str.splitlines() would also break on Unicode separators a monitor
+    # name can hold (U+2028 and friends), splitting a whole monitor into unreadable halves; here they
+    # stay inside the name column.
+    for raw in text.split('\n'):
+        line = raw[:-1] if raw.endswith('\r') else raw  # CRLF from a Windows C runtime
+        row = line.split('\t')
+        if len(row) != 7:
+            continue
+        index, name, primary, x, y, width, height = row
+        x, y, width, height = (number(column) for column in (x, y, width, height))
+        if not (index.isascii() and index.isdigit()) or primary not in ('0', '1') or None in (x, y, width, height):
+            continue
+        if width <= 0 or height <= 0:  # no usable geometry is no monitor to offer
+            continue
+        rows.append((index, name, primary, x, y, width, height))
+    return rows
+
+
+def display_label(row):
+    """What the Monitor list shows for one of parse_display_list's rows: the name and the resolution,
+    plus the position when the monitor is not at the origin (that tells two identical screens apart)."""
+    _index, name, _primary, x, y, width, height = row
+    parts = [name] if name else []
+    parts.append(f'{width} × {height}')
+    if (x, y) != (0, 0):
+        parts.append(f'({x}, {y})')
+    return ' · '.join(parts)
+
+
+def monitor_options(displays):
+    """The Monitor list: the primary default first, then every monitor the probe described, keyed by
+    its SDL index. A gap the probe left (a monitor without geometry) stays a gap, never renumbered."""
+    return [('', ('Primary (default)',))] + [(row[0], (display_label(row),)) for row in displays]
+
+
+def monitor_selection(displays, saved):
+    """The value the Monitor list takes for `displays`: the index it is given while it is still one of
+    the options, the primary default otherwise. The index is followed, never the position it used to
+    sit at, so a shorter or reordered list (another window system) never lands on a different screen."""
+    values = [value for value, _text in monitor_options(displays)]
+    return saved if saved in values else values[0]
+
+
+def list_displays(backend='auto'):
+    """The monitors the game can open on, in the order `gow3-probe --displays` numbers them, or [] when
+    the tool cannot tell. The probe runs under the same SDL video driver the game will use, so both
+    number the displays in the same order (an 'auto' driver lets SDL choose, exactly as the game does)."""
+    tool = find_tool('gow3-probe' + ('.exe' if WINDOWS else ''))
+    if not tool:
+        return []
+    env = dict(os.environ)
+    if not WINDOWS and backend in ('wayland', 'x11'):
+        env['SDL_VIDEO_DRIVER'] = env['SDL_VIDEODRIVER'] = backend
+    try:
+        done = subprocess.run([tool, '--displays'], capture_output=True, text=True, encoding='utf-8',
+                              errors='replace', timeout=5, creationflags=NO_WINDOW, env=env)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return parse_display_list(done.stdout) if done.returncode == 0 else []
+
+
 # ---------------------------------------------------------------------------------------------
 # Languages: every text is written in English with the Russian next to it; the other
 # languages are in gow3_lang.py, keyed by the English text.
@@ -408,7 +479,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
-                'gpu_id': '', 'partial_height_views': True, 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
+                'gpu_id': '', 'monitor': '', 'partial_height_views': True, 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
@@ -1113,6 +1184,13 @@ def game_environment(s):
     env.pop('GOW3_GPU_ID', None)
     if gpu_id.isdigit():
         env['GOW3_GPU_ID'] = gpu_id
+    # The monitor index the probe enumerated for the dialog; an empty choice is the primary display,
+    # the game's own default when GOW3_MONITOR is absent. isdigit() finds letters, signs and blanks;
+    # isascii() also rejects the Unicode digits isdigit() accepts, which the game cannot read.
+    monitor = str(s.get('monitor', ''))
+    env.pop('GOW3_MONITOR', None)
+    if monitor.isascii() and monitor.isdigit():
+        env['GOW3_MONITOR'] = monitor
     env['GOW3_BACKGROUND_WARMUP'] = '1' if s.get('background_warmup', True) else '0'
     env['GOW3_PARALLEL_WARMUP'] = '1' if s.get('parallel_warmup', True) else '0'
     env['GOW3_PIPELINE_BINARIES'] = '1' if s.get('pipeline_binary_cache', True) else '0'
@@ -1423,6 +1501,7 @@ class Launcher:
         show()
         box.bind('<<ComboboxSelected>>', lambda _e: var.set(values()[box.current()]))
         var.trace_add('write', show)
+        box.refresh = show  # re-read the list and the selection after it changed in place
         return box
 
     def mod_resolutions(self):
@@ -1604,6 +1683,7 @@ class Launcher:
         self.content.pack(fill='both', expand=True)
 
         self.pages = {}
+        self.monitor_pairs = None  # the Monitor rows (Quick settings and Graphics) list them again
         self.build_home()
         self.build_graphics()
         self.build_performance()
@@ -1661,6 +1741,14 @@ class Launcher:
             box = (self.choice(quick, key, 'ini', options, width=18) if key else
                    self.choice(quick, None, None, options, width=18, var=self.aspect_var()))
             box.grid(row=r, column=c + 1, sticky='w', padx=self.px((0, 40)))
+        # The Monitor row of the Graphics page, here too: the same list and the same 'monitor' setting
+        # (one variable), so choosing the screen in either section is the same choice. A row of its own,
+        # spanning the grid, keeps the longer labels (name, resolution, position) from widening the
+        # columns of the pairs above.
+        monitor = ttk.Frame(quick)
+        monitor.grid(row=2 + (len(items) + 1) // 2, column=0, columnspan=4, sticky='w', pady=self.px(6))
+        ttk.Label(monitor, text=_('Monitor', 'Монитор')).pack(side='left', padx=self.px((0, 12)))
+        self.choice(monitor, 'monitor', 'app', self.monitor_list).pack(side='left')
 
     def draw_banner(self):
         """The cover art of the selected dump (sce_sys/pic1.png) under the title."""
@@ -1735,11 +1823,27 @@ class Launcher:
         #            _('Less ghosting on characters, cloth and weapons; costs about 10% FPS.',
         #              'Меньше гостинга на персонажах и одежде; стоит около 10% FPS.'))
 
+    def monitor_list(self):
+        """The monitors the Monitor rows offer (self.monitor_pairs): the Quick settings row and the
+        Graphics page read this one list, and its control holds the one 'monitor' setting, so the two
+        rows always show the same screen. It follows the window system the game will use (gow3-probe
+        --displays): listed once per build, and again by refresh_monitors() when that changes."""
+        if getattr(self, 'monitor_pairs', None) is None:
+            self.monitor_pairs = monitor_options(
+                list_displays(self.app.get('video_backend', APP_DEFAULTS['video_backend'])))
+        return self.monitor_pairs
+
     def build_display(self, f):
         """Window and overlay: the top of the Graphics page."""
         self.section(f, _('Window', 'Окно'), top=4)
         self.row(f, _('Display mode'), self.choice(f, 'display_mode', 'ini', DISPLAY_MODES),
                  _('Borderless covers the screen without changing the display mode.'))
+        # Asked again whenever the box is drawn or opened (monitor_list), so a list refresh_monitors()
+        # put in place is picked up without capturing the list once.
+        self.monitor_box = self.choice(f, 'monitor', 'app', self.monitor_list, width=46)
+        self.row(f, _('Monitor', 'Монитор'), self.monitor_box,
+                 _('The screen the game opens its window on. Primary is the monitor Windows calls the main one.',
+                   'Экран, на котором игра открывает своё окно. Основной — монитор, который Windows считает главным.'))
         self.check(f, 'vsync', 'ini', _('VSync'), _('Off allows tearing for the lowest latency.'))
         self.check(f, 'hdr', 'app', _('Allow HDR output', 'Разрешить HDR'),
                    _('When HDR is on in Windows and the display supports it.',
@@ -2500,6 +2604,33 @@ class Launcher:
                  font=self.font(UI_FONT, 10)).pack(pady=self.px((4, 14)))
         ttk.Button(box, text=_('Open mods folder', 'Открыть папку модов'), command=lambda: self.open_path(str(root), 'mods_dir')).pack()
 
+    def refresh_monitors(self):
+        """The Monitor list again when the pending window system differs from the one it was listed
+        under: gow3-probe enumerates under the backend the game will use, so the options follow it. The
+        index on screen is re-mapped first (a choice not saved yet must survive the switch), then the
+        one collected earlier; an index the new list holds for neither goes back to the primary
+        default, never to another screen that now sits at that position. Returns True only when it
+        relisted: never where no window system is selectable (Windows) nor when it did not change."""
+        box = getattr(self, 'monitor_box', None)
+        if box is None or 'video_backend' not in self.vars:
+            return False
+        backend = self.vars['video_backend'].get()
+        if backend == self.app.get('video_backend', APP_DEFAULTS['video_backend']):
+            return False
+        displays = list_displays(backend)
+        self.monitor_pairs = monitor_options(displays)
+        # Save and PLAY store the choice the interface shows, so that is the index re-mapped first; the
+        # collected value only stands in when the box has no variable of its own (a stand-in launcher).
+        var = self.vars.get('monitor')
+        visible = var.get() if var is not None else None
+        values = [value for value, _text in self.monitor_pairs]
+        selected = visible if visible in values else monitor_selection(displays, self.app.get('monitor', ''))
+        self.app['monitor'] = selected
+        if var is not None:
+            var.set(selected)  # the box's write trace re-reads the list and its selection
+        box.refresh()
+        return True
+
     def refresh_conflicts(self):
         """The count of active mods, the conflict summary and marks, and the details panel."""
         from mods import conflicts
@@ -2683,7 +2814,10 @@ class Launcher:
         return {'app': app, 'ini': ini, 'mods': mods, 'patches': patches}
 
     def collect(self):
-        """Writes settings.json, gow3.ini, mods.json and patches.json."""
+        """Writes settings.json, gow3.ini, mods.json and patches.json. The monitor list is listed again
+        under the pending window system first, so the stored choice always belongs to the backend the
+        file carries: every caller that persists gets the same coherent pair, without asking for it."""
+        self.refresh_monitors()  # before the gather, so the monitor choice lands in settings.json too
         state = self.gather()
         _disk, lines = load_ini()
         persisted = {line.split('=', 1)[0].strip() for line in lines
@@ -2720,7 +2854,8 @@ class Launcher:
 
     def save(self):
         """The Save button: the files, without starting the game. A new launcher language rebuilds
-        the window in it."""
+        the window in it; collect() lists the monitors again for a new window system before it writes,
+        so the stored choice already follows the backend --play reads the same file for."""
         if not self.collect():
             return
         language = self.app.get('ui_language') or windows_language()
@@ -2729,7 +2864,7 @@ class Launcher:
         if self.dpi != previous_scale:
             self.size_window()
         if language != LANG or self.dpi != previous_scale:
-            self.rebuild(language)
+            self.rebuild(language)  # build_display lists the monitors again for the new backend too
 
     def rebuild(self, language):
         """The window again in another language: every setting stays in its variable; the page,
