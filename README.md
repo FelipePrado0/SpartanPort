@@ -488,7 +488,7 @@ It is a fork of [Supermedo's Windows port](https://github.com/Supermedo/bloodbor
 | Patches | `patches/God_of_War_III_Remastered.xml`, `scripts/patches.py` | Applied in memory at start, without changing the game files |
 | Launcher | `launcher/gow3_launcher_win.py` | Settings, patches, mods, controls and the play button |
 
-More documentation: [mods](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/MODS.md), [frame map and historical upscaler research](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/upscaler.md)
+More documentation: [mods](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/MODS.md), [patches](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/PATCHES.md), [frame map and historical upscaler research](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/upscaler.md)
 and [parallel GPU work](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/parallel_gpu.md).
 
 ## Credits

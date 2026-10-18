@@ -492,7 +492,7 @@ Es un fork del [port para Windows de Supermedo](https://github.com/Supermedo/blo
 | Parches | `patches/God_of_War_III_Remastered.xml`, `scripts/patches.py` | Se aplican en memoria al iniciar, sin modificar los archivos del juego |
 | Launcher | `launcher/gow3_launcher_win.py` | Ajustes, parches, mods, controles y el botón de jugar |
 
-Más documentación: [mods](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/MODS.md), [mapa de cuadros e historial de investigación de escaladores](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/upscaler.md)
+Más documentación: [mods](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/MODS.es.md), [parches](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/PATCHES.es.md), [mapa de cuadros e historial de investigación de escaladores](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/upscaler.md)
 y [trabajo paralelo de GPU](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/parallel_gpu.md).
 
 ## Créditos

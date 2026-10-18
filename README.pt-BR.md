@@ -486,7 +486,7 @@ menu no jogo).
 | Patches | `patches/God_of_War_III_Remastered.xml`, `scripts/patches.py` | Aplicados na memória ao iniciar, sem alterar os arquivos do jogo |
 | Launcher | `launcher/gow3_launcher_win.py` | Configurações, patches, mods, controles e o botão de jogar |
 
-Mais documentação: [mods](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/MODS.md), [mapa do quadro e histórico de pesquisa de upscalers](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/upscaler.md)
+Mais documentação: [mods](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/MODS.pt-BR.md), [patches](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/PATCHES.pt-BR.md), [mapa do quadro e histórico de pesquisa de upscalers](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/upscaler.md)
 e [trabalho paralelo da GPU](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/parallel_gpu.md).
 
 ## Créditos

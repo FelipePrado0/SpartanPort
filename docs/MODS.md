@@ -1,153 +1,338 @@
-# Mods de arquivos
+# File mods
 
-O launcher tem a aba **Mods**: chave geral, ativação de cada mod, setas de ordem de carga e um
-painel com os detalhes do mod selecionado. As mudanças valem no próximo início. O mod mais abaixo na lista tem
-prioridade; quando dois mods trocam o mesmo arquivo, o log mostra qual venceu.
+**English** | [Português](MODS.pt-BR.md) | [Español](MODS.es.md)
 
-## O que dá para mudar
+Mods replace the game's textures, models, sounds, text and videos without changing your game
+folder. At every start the launcher builds a view of the game with the mods' files on top, and
+removes it when the game closes.
 
-- Texturas e modelos: personagens, roupas, armas, inimigos e cenários (WADs em `EXEC/WAD/PS4_LE/`)
-- Interface: ícones de botão, menus e HUD
-- Textos: menus e legendas (WADs de idioma, como `R_LANG_EN.WAD`)
-- Áudio: falas (`.XVAG` nas pastas de idioma), música e efeitos (`EXEC/SOUNDS`)
-- Vídeos: cinemáticas (`EXEC/CINEMATICS`)
+**Contents:** [Mods page](#the-launchers-mods-page) ·
+[What you can change](#what-you-can-change-file-by-file) · [Examples](#examples) ·
+[Common problems](#common-problems) · [Sharing and copyright](#sharing-mods-and-copyright) · [How to lay out a mod](#how-to-lay-out-a-mod) ·
+[Where the mods are applied](#where-the-mods-are-applied) ·
+[Mods with game patches](#mods-with-game-patches) ·
+[Game patches](PATCHES.md)
 
-## O que não dá
+## The launcher's Mods page
 
-- Lógica do jogo (dano, física, IA, câmera): fica no executável. Use patches (pasta `patches/`)
-- `eboot.bin`, `sce_module` e `sce_sys`: recusados pelo carregador
-- Injetar DLL ou script
-- Mesclar dois mods no mesmo arquivo: o último da lista vence
-- Mod feito para outra região sem ajuste: um mod para `R_LANG_UK.WAD` não muda o `R_LANG_EN.WAD`
+![The Mods page with three sample mods: two of them replace R_UI.WAD, the conflict list is open and the details panel shows the selected mod](images/mods-page.png)
 
-## Como montar um mod
+*Three sample mods. "Kratos Gold Armor" and "Clean HUD" both replace `R_UI.WAD`: the warning
+under the list names the file, and "Clean HUD" wins because it is lower in the list.*
 
-A pasta padrão é `mods/` no diretório de dados. Cada mod fica na sua própria pasta e espelha a
-árvore do jogo, que no GOW3PC tem os dados em `EXEC/` e numa pasta por idioma
-(`ENGLISH/`, `PORTUGUESE/`, ...):
+- **Load mods**: the master switch. When it is off, no mod and no mod patch is loaded.
+- **Load order**: the list of mods, with a checkbox to enable each one and arrows to reorder them.
+  **The lower mod in the list wins** when two mods replace the same file. The counter shows how
+  many are enabled ("3 of 5 active").
+- **Conflicts**: when more than one enabled mod replaces the same file, a warning appears under
+  the list ("⚠ 2 files are changed by more than one mod") and a ⚠ beside each mod involved.
+  **Details** opens the list of files with the mods in load order (`EXEC/WAD/PS4_LE/R_UI.WAD:
+  A > B`, B wins). Two mods are never merged inside one file: the winner goes in whole.
+- **Mod details**: clicking a mod's name opens a panel with its picture, name, author, version,
+  description, how many files it replaces, whether it carries game patches and its conflicts. The
+  buttons open the mod's folder and its website (when the mod gives one). Clicking it again closes
+  the panel.
+- **Presets**: save the order and which mods are disabled. Type a name and click **Save**;
+  **Load** applies a saved preset and **Delete** removes it. When a preset is loaded, mods that no
+  longer exist are skipped and new mods go last, enabled. Presets are kept in `mods_presets.json`
+  in the data folder.
+- **Third-party patches** and **Folders** (the mods folder and the patches folder) are on the same
+  page.
+- **Refresh** reads the mods folder again after you copy a new mod with the launcher open.
+
+Changes apply on the next start of the game.
+
+## What you can change, file by file
+
+A mod replaces **whole files**. The loader never edits inside a file: to change one texture in a
+WAD, the mod ships the whole WAD with that texture changed. The table lists what the game folder
+holds (counts from CUSA01623 01.02, US English) and what replacing each kind of file takes. The
+formats come from the files themselves (`XVAG` and `GNF` headers, H.264 in the `.BSF` videos); what
+a folder holds comes from its folder and file names, and the subtitle timing in the cinematics'
+`.TXT` from the numbers they contain. Not every kind of file was replaced in game.
+
+| Game folder | What is in it | Format | Can a mod replace it? |
+|---|---|---|---|
+| `EXEC/WAD/PS4_LE/` | Almost all of the game: models, textures, levels, menus, HUD and text (410 `.WAD`) | WAD archive, little-endian | **Yes.** Ship the whole edited WAD under the same name |
+| `EXEC/SOUNDS/STREAMS_PS4/` | Music and sound effects (945 files) | `.XVAG` (Sony audio container) | **Yes**, as a valid `.XVAG` in the same format as the original |
+| `<LANGUAGE>/SOUNDS/STREAMS_PS4/` | Voices and dialogue, one folder per language (about 1,200 files each) | `.XVAG` | **Yes**, per language: `ENGLISH/` does not change `PORTUGUESE/` |
+| `EXEC/CINEMATICS/` | Pre-rendered cutscenes (48 `.BSF`) and their subtitle timing (35 `.TXT`) | `.BSF` = raw H.264 video stream; `.TXT` = line number, first frame, last frame | **Yes.** Keep the original's resolution and frame rate; a `.TXT` counts in frames of its video |
+| `EXEC/INTRO/` | Logos and pictures of the opening (18 files) | `.GNF` (PS4 texture) | **Yes**, as a `.GNF` |
+| `EXEC/photomode/` | Photo mode pictures (15 files) | `.gnf` | **Yes**, as a `.gnf` |
+| `EXEC/ICONS/` | Save-list pictures (`ICON0.PNG`, `ICON_AUTO.PNG`, `NEWSAVE.PNG`, ...) | `.PNG` | **Yes**, as PNGs |
+| `EXEC/DLC/` | Downloadable-content WADs and lists | `.WAD`, `.TXT` | **Yes**, like the other WADs |
+| `eboot.bin`, `sce_module/`, `sce_sys/` | The program, its libraries and the package data | PS4 executables | **No.** Refused by the loader; code changes go through [game patches](#mods-with-game-patches) |
+
+### Which WAD holds what
+
+The WAD names follow a pattern. Some groups in `EXEC/WAD/PS4_LE/`:
+
+| Files | What they hold |
+|---|---|
+| `R_UI.WAD` | Interface: menus, HUD, button prompts and the menus' script |
+| `R_PERM.WAD` | By the name, assets kept for the whole game; it holds one more copy of the QTE button |
+| `SHELL.WAD` | The main menu |
+| `R_LANG_EN.WAD`, `R_LANG_PT.WAD`, `R_LANG_BR.WAD`, ... (16 files) | Menu and subtitle text, one per language |
+| `R_HERO00.WAD` to `R_HERO08.WAD` | By the name, the hero (Kratos) |
+| `R_W_CESTUS*`, `R_W_ELECTRIC*`, `R_W_EXPLOSIVE*`, `R_W_GODMODE*`, `R_W_SOUL*` | By the name, weapons and their upgrade levels |
+| `R_ZEUS*`, `R_HADE*`, `R_POSH*`, `R_CYCL*`, `R_GRUN*`, `R_SOUL*`, ... | By the name, characters and enemies |
+| `OLY*`, `HDS*`, `POS*`, `LAB*`, `CRN*`, `BAS*`, `CAV*`, `ICA*`, `GAZ*`, ... | By the name, levels and areas, in parts (`BAS100.WAD`, `BAS125.WAD`, ...) |
+| `CHALLE*` | By the name, the challenge levels |
+
+"By the name" means the group was identified from the file names only; check inside the WAD
+before you rely on it.
+
+### Inside a WAD
+
+A WAD is a list of entries, each with a 64-byte header (tag, flags, size, a name of up to 56
+characters) and its data padded to 16 bytes. Textures are entries named `TX<hash>.<hash>.dds` that
+hold a short prefix followed by a plain DDS file (DXT1 or DXT5), and the materials find them by that name. The port itself
+changes textures this way: the button icons (Xbox, Nintendo, keyboard) are drawn into copies of
+`R_UI.WAD` and `R_PERM.WAD`, keeping each texture's size and format so that only its pixels change
+(`scripts/glyphs.py`). A texture mod that keeps the size and the DXT format of the original is the
+safest kind.
+
+The WADs in `PS4_LE` are little-endian. The PS3 release ran on a big-endian console, so its WADs
+are not expected to work here.
+
+### What a mod cannot do
+
+- Change game logic (damage, physics, AI, camera, timings): it lives in the executable. Use
+  [game patches](#mods-with-game-patches).
+- Replace `eboot.bin`, `sce_module` or `sce_sys`: refused by the loader.
+- Inject a DLL or a script.
+- Merge two mods inside one file: the lower one in the list replaces the file whole.
+- Change a file that is not in your game: a mod made for another region (for example the
+  European `R_LANG_UK.WAD`) adds a file nobody reads, and the log says `added` instead of
+  `replaced`.
+
+## Examples
+
+**A texture or model mod.** The mod ships the edited WAD at the game's path:
 
 ```text
 mods/
-  Nome do mod/
+  Kratos Gold Armor/
+    mod.json
+    preview.png
+    EXEC/WAD/PS4_LE/R_HERO00.WAD
+```
+
+**A voice line in Portuguese only.** The file goes in the language folder, with the original's
+name:
+
+```text
+mods/
+  Portuguese voices/
+    PORTUGUESE/SOUNDS/STREAMS_PS4/3004CA_ALT1.XVAG
+```
+
+**A subtitle fix.** The text of every language is in its `R_LANG_*.WAD`. Replace the one of the
+language you play in, and check in game that it is the file it reads: there is more than one
+Portuguese file (`R_LANG_PT.WAD` and `R_LANG_BR.WAD`).
+
+**A cutscene with new subtitles.** The video is `EXEC/CINEMATICS/<NAME>.BSF` and its subtitle
+timing is `EXEC/CINEMATICS/<NAME>.TXT`; the subtitle text itself is in the `R_LANG_*.WAD`.
+
+To find the exact path of a file, look for it in your game folder: the path inside the mod must be
+the same from `EXEC/` or the language folder on (upper and lower case do not matter).
+
+## Common problems
+
+| What you see | Why | What to do |
+|---|---|---|
+| The mod is not in the list | Its folder has no `EXEC`, language folder, `dvdroot_ps4` or `patches/`, or a wrapper folder around them also holds other folders or files | Move the files so that `EXEC/` is right inside the mod folder, or leave only that one folder (and readme or pictures) in each wrapper |
+| The log says `0 game files replaced` | The paths inside the mod do not match the game | Compare them with your game folder, from `EXEC/` on |
+| The log says `added` instead of `replaced` | The file does not exist in your game (another region or release) | Use a mod made for your release, or rename to your game's file |
+| A mod's change does not show up | Another mod lower in the list replaces the same file | Open **Details** under the list, or change the order |
+| The game crashes or shows broken models after a mod | The file is from another release (PS3, another version) or was saved in a different format | Disable the mod; use files made for this release, keeping the original's format and texture sizes |
+| A ZIP was not unpacked | A folder with the same name is already there, or the zip has unsafe paths | Remove or rename that folder, or extract the zip yourself; the log gives the reason |
+
+## Sharing mods and copyright
+
+The game's files belong to their rights holders. A mod made the way this guide describes ships
+whole game files (a WAD, an XVAG, a video) with your changes inside, so sharing it also shares
+the original content those files hold. Share only what you have the right to share: your own
+textures, sounds and text, or files whose owner allows it. The launcher does not download or
+share mods: it only layers the mods in your own mods folder over your own copy of the game.
+
+## How to lay out a mod
+
+The default folder is `mods/` in the data folder: on Windows, next to `God of War III.exe`; on
+Linux (AppImage), in `~/.local/share/gow3`. **Folders → Mods folder** chooses another one.
+
+Each mod has its own folder that mirrors the game's tree. In GOW3PC the data is in `EXEC/` and in
+one folder per language (`ENGLISH/`, `PORTUGUESE/`, ...):
+
+```text
+mods/
+  Mod name/
     EXEC/WAD/PS4_LE/R_UI.WAD
     PORTUGUESE/SOUNDS/...
 ```
 
-Pastas de outras regiões, como `JAPANESE/`, também são reconhecidas quando existem na raiz do
-jogo selecionado. Isso vale tanto para a lista do launcher quanto para a aplicação dos mods.
+These are accepted too:
 
-Também são aceitos:
+- `Mod name/dvdroot_ps4/EXEC/...` (the shadPS4 convention): `dvdroot_ps4/` is dropped and the rest
+  goes to the game's root;
+- `Mod name/app0/EXEC/...`;
+- wrapper folders around either, such as an archive extracted into a folder of its own name:
+  `Mod name/Mod name v1.2/EXEC/...`. Each wrapper may hold only that one folder, plus files that
+  describe the mod (`.txt`, `.md`, `.json`, `.ini` and pictures), which are ignored.
 
-- `Nome do mod/dvdroot_ps4/EXEC/...` (convenção do shadPS4): o `dvdroot_ps4/` é descartado e o
-  resto vai para a raiz do jogo;
-- `Nome do mod/app0/EXEC/...`;
-- uma pasta a mais por fora, como a de um arquivo extraído numa pasta com o nome dele:
-  `Nome do mod/Nome do mod v1.2/EXEC/...` (readme e imagens ao lado são ignorados).
+A folder without `EXEC`, a language folder, `dvdroot_ps4` or `patches/` does not appear in the
+list. A ZIP like that is unpacked, but the log says
+`not a mod (no EXEC, language folder, dvdroot_ps4 or patches)`.
 
-Na aba **Mods** do launcher, clicar no nome de um mod mostra os detalhes dele. Para preencher,
-coloque na pasta do mod, ao lado de `EXEC/`, um `mod.json` e uma imagem `preview.png` (ou `.jpg`),
-ambos opcionais:
+### Recognised folders
 
-```json
-{ "name": "Kratos Gold Armor", "author": "Seu nome", "version": "1.0",
-  "description": "O que o mod muda.", "url": "https://..." }
-```
+Language folders that are always recognised: `ENGLISH`, `FRENCH`, `GERMAN`, `ITALIAN`, `SPANISH`,
+`PORTUGUESE`, `DUTCH`, `POLISH` and `RUSSIAN`.
 
-Sem `mod.json`, o launcher usa o nome da pasta e o começo de um `readme.txt` ou `readme.md`. Sem
-`preview`, usa a primeira imagem da pasta (`cover` e `screenshot` também têm prioridade). O link
-só abre se começar com `http://` ou `https://`.
+The data folders found in the selected game's root count as well, such as `JAPANESE/` in an Asian
+release. This applies to the selected game only: a folder from another installation does not count
+here, and `eboot.bin`, `sce_module` and `sce_sys` are never replaced. The rule is the same for the
+launcher's list and for applying the mods.
 
-Pastas de idioma reconhecidas: `ENGLISH`, `FRENCH`, `GERMAN`, `ITALIAN`, `SPANISH`, `PORTUGUESE`,
-`DUTCH`, `POLISH` e `RUSSIAN`. Um mod feito para outra região (por exemplo, o `R_LANG_UK.WAD` da
-versão europeia) não troca nada num jogo que não tem esse arquivo: o log mostra `added` em vez de
-`replaced`.
+A mod made for another region (for example the European release's `R_LANG_UK.WAD`) replaces
+nothing in a game that does not have that file: the log says `added` instead of `replaced`.
 
-Maiúsculas e minúsculas nos nomes do mod não importam: um arquivo com outra caixa troca o
-arquivo do jogo de mesmo nome. O log mostra quantos arquivos o mod trocou e quantos acrescentou:
-`Mods: 12 game files replaced, 0 added`. Se o mod deveria trocar arquivos e aparece
-`0 game files replaced`, confira os caminhos dentro dele. Um mod em **ZIP** pode ser largado direto na pasta de mods: ao abrir o launcher ou iniciar o jogo ele é extraído numa pasta com o nome do zip (uma pasta de mesmo nome que você criou não é substituída, e caminhos perigosos ou links no zip são recusados). Arquivos 7z/RAR precisam ser extraídos antes. Dois mods que trocam o mesmo arquivo não são mesclados: o último vence inteiro.
+### Name, author, picture and website
 
-Uma pasta `<pasta do jogo>-mods/EXEC/...` ao lado da pasta do jogo (convenção do shadPS4)
-entra antes dos mods da lista. A chave geral também a desliga.
-
-Os arquivos do jogo nunca são alterados. A cada início é montada uma árvore de links em
-`out/mod-game-*` no diretório de dados, apagada quando o jogo termina. `/app0` fica só para
-leitura; os saves continuam na pasta de sempre.
-
-Patches de código ficam em `patches/` / `GOW3_PATCHES`. Links simbólicos dentro do mod são recusados.
-
-Pelo terminal:
-
-```sh
-GOW3_GAME_DIR=/caminho/CUSA01623 GOW3_MODS_DIR=/caminho/mods python run.py
-GOW3_GAME_DIR=/caminho/CUSA01623 GOW3_MODS_ENABLED=0 python run.py
-```
-
-Ordem e desativações ficam em `mods.json` no diretório de dados:
+The details panel reads an optional `mod.json` in the mod's folder, next to `EXEC/`. Every field is
+optional and must be text:
 
 ```json
-{"order": ["Primeiro", "Segundo"], "disabled": ["Primeiro"]}
+{
+  "name": "Kratos Gold Armor",
+  "author": "Your name",
+  "version": "1.0",
+  "description": "Gold armour for Kratos. Replaces R_HERO00.WAD.",
+  "url": "https://example.com/kratos-gold-armor"
+}
 ```
 
-Pastas novas entram ativadas, no fim da lista, em ordem alfabética. `GOW3_MODS_CONFIG` muda o
-caminho desse arquivo.
+| Field | Shown as | Without it |
+|---|---|---|
+| `name` | The mod's name in the list and in the panel | The folder name |
+| `author` | "by …" under the name | Nothing |
+| `version` | "v…" next to the author | Nothing |
+| `description` | The text of the panel | The first 400 characters of a `readme.txt` or `readme.md` |
+| `url` | The **Website** button (it only appears when the link starts with `http://` or `https://`) | No button |
 
-## Mods com patches de jogo / Mods with game patches
+**The picture is a file, not a field.** Put `preview.png` (or `.jpg`/`.jpeg`) in the same folder.
+Without it the launcher takes `cover.*`, then `screenshot.*`, then any other picture in the folder.
+The panel shows it at most 268 pixels wide (4:3 at most in height); a 16:9 picture of 1280 × 720 is
+plenty. A `mod.json` that cannot be read is ignored, as if it were not there.
 
-Uma pasta de mod também pode trazer **patches de código** (para o `eboot.bin`): arquivos XML na pasta
-`patches/` do mod, no mesmo formato dos patches embutidos (`patches/God_of_War_III_Remastered.xml`),
-com assinaturas (`Pattern`/`At`) que acham cada ponto em qualquer build. Um mod pode ter só patches, sem
-`dvdroot_ps4`:
+The finished folder:
 
 ```text
 mods/
-  Nome do mod/
-    patches/
-      meu-patch.xml
+  Kratos Gold Armor/
+    mod.json
+    preview.png
+    readme.txt
+    EXEC/WAD/PS4_LE/R_HERO00.WAD
 ```
 
-Os patches do mod valem enquanto o mod está ativado (a chave geral também os desliga) e entram junto com os
-embutidos. Um patch com o mesmo nome de um embutido o substitui; arquivos de outros jogos (`TitleID`) ou que
-não abrem são ignorados, com aviso no log. `isEnabled="true"` liga o patch com o mod.
+### ZIP mods
 
-**Resoluções:** um patch chamado `Resolution Patch - <largura>x<altura>` vira uma opção de **Render
-resolution** no launcher e no menu do jogo (tecla Insert), depois das embutidas. Vale a mesma regra das
-resoluções embutidas (a nota pede memória com `Requires setting DMEM to N MB`). Se o mod é desativado, a
-resolução volta a `native`. O exemplo é o mod [Ultrawide](ultrawide.md) (`extras/mods/Ultrawide`); as mesmas
-resoluções agora também são embutidas, então o mod só faz diferença em versões antigas.
+A mod in a **ZIP** can be dropped straight into the mods folder: when the launcher opens or the
+game starts, it is unpacked into a folder with the zip's name, and unpacked again when the zip
+changes. A folder with the same name that you made yourself is not replaced. Unsafe paths, links
+and zips larger than 16 GiB unpacked are refused. 7z and RAR archives must be extracted first.
+`tools/zip_mod.py` packs a mod folder.
 
-*English:* a mod can be dropped into the mods folder as a **.zip** (it is unpacked into a folder with the zip's name when the launcher or the game starts; `tools/zip_mod.py` packs a mod folder). A mod folder can also carry **game patches**: XML files in its `patches/` folder, in the format of
-the built-in patches (signatures, `Pattern`/`At`). They apply while the mod is enabled, together with the
-built-in ones (a patch with the same name replaces it). A patch named `Resolution Patch - <width>x<height>`
-becomes a **Render resolution** choice in the launcher and the in-game menu (Insert). See the
-[Ultrawide mod](ultrawide.md).
-## Ícones e imagem do controle
+### File names and the log
 
-A opção de ícones em **Controls** já prepara os prompts e a imagem do controle no menu de pausa
-ao escolher Xbox ou Nintendo (ou detectar um desses controles em automático). Não precisa instalar
-um mod. O estilo PlayStation mantém os arquivos originais; o estilo de teclado mantém o desenho
-original do controle. As cópias são criadas no cache local, sem modificar o dump do jogador.
+Upper and lower case in a mod's file names do not matter: a file in another case replaces the game
+file with the same name. Symlinks and junctions inside a mod are refused.
 
-Os desenhos e a ferramenta em `tools/controller_diagrams/` vieram da contribuição de Kristian
-Andreev na [PR #234](https://github.com/FelipePrado0/gow3_pc/pull/234), sob GPL-2.0-or-later.
-`scripts/controller_diagrams/*.png` contém apenas esses desenhos, sem arquivos do jogo. Para
-regenerá-los, a ferramenta usa Pillow, NumPy e scikit-image, com a fonte Cinzel distribuída no
-projeto (OFL). Essas dependências de desenho não são necessárias para usar os PNGs no launcher.
+The log shows how many files each mod has (`Mods: Mod name: 12 files`), which mod won each disputed
+file (`Mods: EXEC/...: A -> B`) and the total: `Mods: 12 game files replaced, 0 added`. If a mod
+should replace files and the log says `0 game files replaced`, check the paths inside it.
 
-# Patches de terceiros (XML do shadPS4)
+## Where the mods are applied
 
-Pasta `patches/` no diretório de dados (no launcher, grupo **Third-party patches**, onde também
-dá para escolher outra pasta). Servem arquivos XML no formato shadPS4/GoldHEN: entram os
-`Metadata` da versão do jogo (01.02) para `eboot.bin`, e arquivos com `TitleID` de outros jogos
-são ignorados. A ativação padrão vem do `isEnabled` do arquivo; a escolha do launcher fica em
-`patches.json`:
+The game's files are never changed. At every start the launcher builds a view of the game in a
+`mod-game-*` folder and deletes it when the game exits. `/app0` stays read-only; saves stay in their
+usual folder.
+
+- The view is created in `out/` in the data folder. On Windows without the symlink privilege
+  (Developer Mode off), when the data folder and the game are on different drives, it is created
+  next to the game folder instead, because hard links only work on the same drive.
+- Where symlinks are available, the game's folders and files are linked. Without them, on Windows,
+  folders become junctions and files become hard links (a copy when the file is on another drive).
+- On a network share (SMB), which refuses links and junctions, folders are mirrored: real folders
+  whose files are hard-linked or copied. The game's and the mod's files stay untouched.
+
+The `mod-game-*` folder points into your game files. If one is left behind after a crash, do not
+delete it with tools that follow links (such as `rm -rf` in Git Bash or WSL): that can delete the
+real game files.
+
+A `<game folder>-mods/EXEC/...` folder next to the game folder (the shadPS4 convention) is loaded
+before the mods in the list. The master switch turns it off too.
+
+## Order and configuration
+
+The order and the disabled mods are kept in `mods.json` in the data folder:
 
 ```json
-{"enabled": ["arquivo.xml/Nome do patch"], "disabled": ["arquivo.xml/Outro patch"]}
+{"order": ["First", "Second"], "disabled": ["First"]}
 ```
 
-Tipos de linha aceitos: `bytes`, `bytes16/32/64`, `float32/64`, `utf8`, `utf16`. Um patch com
-linhas `mask` (busca por padrão) ou com endereço fora do eboot é ignorado inteiro, com aviso no
-log. Os patches de terceiros são aplicados depois dos embutidos
-(`patches/God_of_War_III_Remastered.xml`): onde os dois escrevem, vence o de terceiros. Pelo
-terminal: `GOW3_PATCHES_DIR=/caminho GOW3_PATCHES_CONFIG=/caminho/patches.json python run.py`.
+New folders are enabled and added at the end of the list, in alphabetical order.
+`GOW3_MODS_CONFIG` changes the path of that file.
+
+The presets of the Mods page are kept in `mods_presets.json`, one entry per name, with the same two
+lists:
+
+```json
+{
+  "Only voices": {"order": ["Portuguese voices", "Kratos Gold Armor"], "disabled": ["Kratos Gold Armor"]}
+}
+```
+
+From a terminal:
+
+```sh
+GOW3_GAME_DIR=/path/CUSA01623 GOW3_MODS_DIR=/path/mods python run.py
+GOW3_GAME_DIR=/path/CUSA01623 GOW3_MODS_ENABLED=0 python run.py
+```
+
+## Mods with game patches
+
+A mod can also carry **code patches**: XML files in its `patches/` folder, in the format of the
+built-in patches. A mod can hold only patches, with no game files:
+
+```text
+mods/
+  Mod name/
+    patches/
+      my-patch.xml
+```
+
+They apply while the mod is enabled (**Load mods** off turns them off too), and a patch with the same
+name as a built-in one replaces it. A `Resolution Patch - <width>x<height>` becomes a **Render
+resolution** choice; the [Ultrawide](ultrawide.md) mod (`extras/mods/Ultrawide`) is the example.
+The format, the rules and how to test a patch are in the [patches guide](PATCHES.md#patches-in-mods).
+
+## Button icons and the controller drawing
+
+The icon option in **Controls** prepares the prompts and the controller drawing in the pause menu
+when you choose Xbox or Nintendo (or when automatic detects one of those controllers). No mod has to
+be installed. The PlayStation style keeps the original files; the keyboard style keeps the original
+controller drawing. The copies are made in the local cache, without changing the player's dump.
+
+The drawings and the tool in `tools/controller_diagrams/` come from Kristian Andreev's contribution
+in [PR #234](https://github.com/FelipePrado0/gow3_pc/pull/234), under GPL-2.0-or-later.
+`scripts/controller_diagrams/*.png` contains only those drawings, with no game files. To regenerate
+them, the tool uses Pillow, NumPy and scikit-image, with the Cinzel font shipped with the project
+(OFL). Those drawing dependencies are not needed to use the PNGs in the launcher.
+
+# Third-party patches
+
+shadPS4 and GoldHEN patch files go in the `patches/` folder in the data folder and are listed on the
+launcher's **Mods** page, under **Third-party patches**. They only apply to one build of `eboot.bin`: see the
+[patches guide](PATCHES.md#third-party-patches-shadps4-and-goldhen).

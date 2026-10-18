@@ -122,7 +122,7 @@ elas aparecem com "(beta)". Antes eram um **mod**, que continua disponível para
 [`extras/mods/Ultrawide`](../extras/mods/Ultrawide) (o passo a
 passo está no README dela). Ele usa o suporte a patches dos mods: uma pasta de mod pode trazer patches de
 jogo (arquivos XML com assinaturas, na pasta `patches/`), aplicados enquanto o mod está marcado na página
-Mods. Veja [MODS.md](MODS.md).
+Mods. Veja [MODS.pt-BR.md](MODS.pt-BR.md).
 
 A câmera do jogo tem campo de visão *horizontal* fixo. Aumentar a resolução para um tamanho ultrawide sem
 mexer na câmera só corta a imagem de 16:9 em cima e embaixo, e ela parece com zoom. Cada entrada
