@@ -19,7 +19,7 @@ static std::string Read(const char* path) {
 
 int main() {
     assert(G::ParseDisplayMode("borderless") == G::Borderless && G::ParseDisplayMode("bogus") == G::Windowed);
-    assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(75) == 0);
+    assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(100) == 100 && G::ParseFpsLimit(75) == 0);
     assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 0);
     // #238: 900p (1600x900) sits between 720p and 1440p in the built-in list.
     assert(G::Resolutions[3] == "900p" && G::Resolutions[2] == "720p" && G::Resolutions[4] == "1440p");

@@ -369,7 +369,7 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
-FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
+FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('100', ('100',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
 # The sidebar's pages, top to bottom, and the methods that refresh a page's lists when it is shown.
 PAGES = ('home', 'graphics', 'performance', 'game', 'controls', 'mods', 'advanced')
 PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_game_patches',), 'mods': ('refresh_lists',)}
