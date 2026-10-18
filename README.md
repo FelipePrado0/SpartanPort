@@ -271,10 +271,11 @@ works as on the PS4, and Share/Create works like View.
 
 **In-game button icons** (off by default) are chosen on the launcher's Controls page, under
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* or *Keyboard*. They replace the PlayStation icons in the
-tutorial, move-list and quick-time prompts; the pause-menu controller drawing stays a DualShock 4.
+tutorial, move-list and quick-time prompts and, for the controller styles, on the Muses' lyre in the
+Chamber of the Flame; the pause-menu controller drawing stays a DualShock 4.
 *Keyboard* shows the key that presses each button, following your keyboard mapping (a changed key shows
 on the next start); *Match my controller* shows the keys too when no gamepad is connected.
-The launcher writes a patched copy of two game files into the port's data folder and never changes
+The launcher writes a patched copy of up to three game files (about 410 MB) into the port's data folder and never changes
 your game folder. A new controller is picked up after a restart. Without the launcher, set
 `SPARTAN_GLYPH_STYLE` to `auto`, `xbox`, `nintendo` or `keyboard` before starting `run.py`.
 

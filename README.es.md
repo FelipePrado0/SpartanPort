@@ -270,11 +270,11 @@ PS4, y Share/Create funciona como View.
 
 Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls del launcher, en
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* o *Keyboard*. Reemplazan los íconos de
-PlayStation en los tutoriales, la lista de movimientos y las indicaciones de quick-time events; el
-dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* muestra la tecla que
+PlayStation en los tutoriales, la lista de movimientos, las indicaciones de quick-time events y, con los estilos
+de control, en la lira de las Musas en la Cámara de la Llama; el dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* muestra la tecla que
 presiona cada botón, según tu mapeo del teclado (una tecla cambiada aparece en el próximo inicio);
 *Match my controller* también muestra las teclas cuando no hay un control conectado. El launcher escribe una copia
-parcheada de dos archivos del juego en la carpeta de datos del port y nunca modifica tu carpeta del
+parcheada de hasta tres archivos del juego (unos 410 MB) en la carpeta de datos del port y nunca modifica tu carpeta del
 juego. Un control nuevo se detecta después de reiniciar. Sin el launcher, definí `SPARTAN_GLYPH_STYLE`
 como `auto`, `xbox`, `nintendo` o `keyboard` antes de iniciar `run.py`.
 

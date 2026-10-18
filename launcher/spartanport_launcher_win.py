@@ -2115,7 +2115,7 @@ class Launcher:
         page = f
         self.row(page, _('In-game button icons'), self.choice(page, 'glyph_style', 'app', GLYPH_STYLES),
                  hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
-                        'Works on a copy of two game files in the port\'s data folder (about 70 MB); your game folder '
+                        'Works on a copy of up to three game files in the port\'s data folder (about 410 MB); your game folder '
                         'is never changed. Applied when the game starts.'))
         saved_device = self.app.get('controls_device')
         self.device = tk.StringVar(value=saved_device if saved_device in dict(CONTROL_DEVICES) else 'keyboard')
