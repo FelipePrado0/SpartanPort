@@ -216,7 +216,7 @@ class SignatureTests(unittest.TestCase):
         moved = image[:0x1f0000] + bytes(0x120) + image[0x1f0000:0x210000] + image[0x210120:]
         self.assertEqual(len(moved), len(image))
         shift = lambda at: at + 0x120 if 0x1f0000 <= at < 0x210000 else at
-        for name in ('Resolution Patch - 4K', 'Skip Intro'):
+        for name in ('Resolution Patch - 4K', 'Resolution Patch - 8K', 'Skip Intro'):
             reference = compile_patches(GOW3, [name], None, segments, image, {})
             found = compile_patches(GOW3, [name], None, segments, moved, {})
             self.assertEqual([at for at, _ in found], [shift(at) for at, _ in reference], name)
@@ -261,6 +261,22 @@ class SignatureTests(unittest.TestCase):
         for offset, value in original.items():
             at = text['offset'] + offset - text['vaddr']
             self.assertEqual(bytes(elf[at:at + len(value) // 2]).hex(), value, hex(offset))
+
+    def test_8k_patch_dimensions_and_memory(self):
+        name = 'Resolution Patch - 8K'
+        writes = dict(compile_patches(GOW3, [name], '01.02', SEGMENTS))
+        expected = {0x55a876: (0x9090, 2),
+                    0x5f0b3b: (7680, 4), 0x5f0b43: (4320, 4),
+                    0x5f0b4c: (7680, 2), 0x5f0b53: (4320, 2),
+                    0x5643f3: (4320, 4), 0x564400: (7680, 4),
+                    0x5ff769: (7680, 4), 0x5ff76f: (4320, 4),
+                    0x7c46b4: (7680, 4), 0x7c46b8: (4320, 4),
+                    0x56bb82: (4320, 4), 0x60953d: (4320, 4),
+                    0x7f2a3c: (3840, 4), 0x7f2a40: (2160, 4),
+                    0x7cd918: (0xff000000, 4)}
+        self.assertEqual(writes, {address - 0x400000: value.to_bytes(size, 'little')
+                                  for address, (value, size) in expected.items()})
+        self.assertEqual(patch_requirements(GOW3, [name], '01.02'), (5056 + 6144, None))
 
     def test_requirements_from_patch_notes(self):
         # Notes ask for extra direct memory (shadPS4 "DMEM") and a VBlank rate.

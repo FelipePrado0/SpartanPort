@@ -20,7 +20,7 @@ static std::string Read(const char* path) {
 int main() {
     assert(G::ParseDisplayMode("borderless") == G::Borderless && G::ParseDisplayMode("bogus") == G::Windowed);
     assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(100) == 100 && G::ParseFpsLimit(75) == 0);
-    assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 0);
+    assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 22);
     // #238: 900p (1600x900) sits between 720p and 1440p in the built-in list.
     assert(G::Resolutions[3] == "900p" && G::Resolutions[2] == "720p" && G::Resolutions[4] == "1440p");
     // The window's starting size (window.cpp): built-in names, a mod's size, native otherwise.
@@ -29,7 +29,8 @@ int main() {
     assert(G::ResolutionSize("4K") == std::make_pair(3840, 2160));
     assert(G::ResolutionSize("3440x1440") == std::make_pair(3440, 1440));
     assert(G::ResolutionSize("native") == std::make_pair(1920, 1080));
-    assert(G::ResolutionSize("8K") == std::make_pair(1920, 1080));
+    assert(G::ResolutionSize("8K") == std::make_pair(7680, 4320));
+    assert(G::ParseResolution("invalid") == 0);
     for (const auto name : G::Resolutions) assert(G::ResolutionSize(name).first > 0);
     assert(G::ParseEngineFps(240) == 240 && G::ParseEngineFps(100) == 100 && G::ParseEngineFps(90) == 120);
     // R3 + L1 + R1 / F9: the next rate this launch supports, back to 60 after the last.
@@ -94,27 +95,36 @@ int main() {
     }
 
     {
+        std::ofstream out(path);
+        out << "render_resolution=8K\n";
+    }
+    Gow3Settings::Load();
+    assert(v.render_resolution == G::ParseResolution("8K"));
+    Gow3Settings::Save();
+    assert(Read(path).find("render_resolution=8K\n") != std::string::npos);
+
+    {
         // The resolutions of the enabled mods' patch files (run.py: GOW3_EXTRA_RESOLUTIONS) follow the built-in
         // ones and keep their names through a load and a save; repeated or built-in names are not added twice.
         _putenv_s("GOW3_EXTRA_RESOLUTIONS", "3840x1080;2880x1200;;2880x1200;4K;3440x1440");
         const auto names = G::ResolutionNames();
-        assert(names.size() == 24 && names[22] == "3840x1080" && names[23] == "2880x1200");
+        assert(names.size() == 25 && names[22] == "8K" && names[23] == "3840x1080" && names[24] == "2880x1200");
         {
             std::ofstream out(path);
             out << "render_resolution=2880x1200\n";
         }
         Gow3Settings::Load();
-        assert(v.render_resolution == 23);
+        assert(v.render_resolution == 24);
         Gow3Settings::Save();
         assert(Read(path).find("render_resolution=2880x1200\n") != std::string::npos);
         _putenv_s("GOW3_EXTRA_RESOLUTIONS", "");  // the mod is off: its resolution is unknown, so native
         Gow3Settings::Load();
-        assert(v.render_resolution == 0 && G::ResolutionNames().size() == 22);
+        assert(v.render_resolution == 0 && G::ResolutionNames().size() == G::Resolutions.size());
     }
 
     {
         std::ofstream out(path);
-        out << "display_mode=huge\nfps_limit=7\nrender_resolution=8K\nengine_fps=1\n"
+        out << "display_mode=huge\nfps_limit=7\nrender_resolution=invalid\nengine_fps=1\n"
                "rcas_strength=250\nframes_queued=9\n";
     }
     _putenv_s("GOW3_ASYNC_SHADERS", "1");  // the environment still wins at start

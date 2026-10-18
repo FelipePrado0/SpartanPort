@@ -15,13 +15,13 @@ RESOLUTIONS = ('native', '480p', '720p', '900p', '1440p', '1800p', '4K',
                '2560x1080', '3440x1440', '3840x1600', '5120x1440', '1920x1200', '2560x1600', '1280x800',
                '1440x900', '1360x768',
                '1280x960', '1440x1080', '1920x1440', '2048x1536', '2560x1920',
-               '5120x2160')
+               '5120x2160', '8K')
 # The ultrawide, 16:10 and 4:3 sizes of the Ultrawide mod (#202), built in: beta until more players confirm
-# them, except the ones tested in game.
+# them, except the ones tested in game. 8K remains beta pending full-game stability testing.
 TESTED_RESOLUTIONS = ('1280x800', '1440x900', '1360x768', '1280x960')
 BETA_RESOLUTIONS = tuple(r for r in RESOLUTIONS[7:] if r not in TESTED_RESOLUTIONS)
 SIZES = {'native': (1920, 1080), '480p': (854, 480), '720p': (1280, 720), '900p': (1600, 900),
-         '1440p': (2560, 1440), '1800p': (3200, 1800), '4K': (3840, 2160)}
+         '1440p': (2560, 1440), '1800p': (3200, 1800), '4K': (3840, 2160), '8K': (7680, 4320)}
 ASPECTS = (('16:9', 16 / 9), ('16:10', 16 / 10), ('21:9', 2.37), ('32:9', 32 / 9), ('4:3', 4 / 3))
 ENGINE_FPS = (60, 100, 120, 240)
 DEFAULTS = {'render_resolution': 'native', 'engine_fps': '120', 'deferred_readback': '1',

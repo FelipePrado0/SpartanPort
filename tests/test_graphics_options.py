@@ -19,7 +19,7 @@ class GraphicsOptionsTest(unittest.TestCase):
 
     def test_defaults_and_invalid_values(self):
         self.ini.write_text(
-            'render_resolution=8K\nengine_fps=90\nstale_readback=yes\n',
+            'render_resolution=invalid\nengine_fps=90\nstale_readback=yes\n',
             encoding='utf-8',
         )
         options, reverted = g.prepare(self.ini, self.state)
@@ -57,6 +57,16 @@ class GraphicsOptionsTest(unittest.TestCase):
         self.assertFalse(reverted)
         self.assertEqual(options['render_resolution'], '1440p')
         self.assertEqual(options['engine_fps'], '240')
+
+    def test_8k_selection_replaces_previous_resolution(self):
+        options = g.startup_options({'render_resolution': '8K'})
+        self.assertEqual(options['render_resolution'], '8K')
+        self.assertEqual(g.SIZES['8K'], (7680, 4320))
+        self.assertEqual(g.resolution_label('8K'), '8K · 7680 × 4320 · 16:9 (beta)')
+        names = g.patch_names(['Resolution Patch - 4K', g.TEXTURE_FIX], options)
+        self.assertEqual([n for n in names if n.startswith(g.RESOLUTION_PREFIX)],
+                         ['Resolution Patch - 8K'])
+        self.assertNotIn(g.TEXTURE_FIX, names)
 
     def test_write_keys_keeps_other_lines(self):
         self.ini.write_text(
@@ -272,7 +282,7 @@ class AspectRatioTest(unittest.TestCase):
 
     def test_resolutions_of_an_aspect_smallest_first_native_on_top(self):
         self.assertEqual(g.resolutions_for('16:9', g.RESOLUTIONS),
-                         ['native', '480p', '720p', '1360x768', '900p', '1440p', '1800p', '4K'])
+                         ['native', '480p', '720p', '1360x768', '900p', '1440p', '1800p', '4K', '8K'])
         self.assertEqual(g.resolutions_for('16:10', g.RESOLUTIONS), ['1280x800', '1440x900', '1920x1200', '2560x1600'])
         self.assertEqual(g.resolutions_for('4:3', g.RESOLUTIONS),
                          ['1280x960', '1440x1080', '1920x1440', '2048x1536', '2560x1920'])
