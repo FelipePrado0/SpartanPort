@@ -46,6 +46,8 @@ void spartanportgpu_movie_picture(void);
 int spartanportgpu_mouse_prompt_distance(void);
 /* The pause key (touchpad right) was pressed: it lets go of the mouse lock, or takes it back. */
 void spartanportgpu_mouse_pause_key(void);
+/* 1 while the pause key has let go of the mouse (the game's pause menu, as far as the port knows). */
+int spartanportgpu_mouse_paused(void);
 /* L2 aim with the mouse, set in the menu: 0 relative (follows movement), 1 absolute. */
 int spartanportgpu_mouse_aim_style(void);
 /* L2 aim sensitivity in percent (10 to 200), set in the menu. */

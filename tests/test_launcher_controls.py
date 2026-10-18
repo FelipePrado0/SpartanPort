@@ -187,7 +187,8 @@ class ControlMapTest(unittest.TestCase):
             default = launcher.KEY_DEFAULTS.get(button, key)
             if default.casefold() != key.casefold():
                 self.assertEqual(pairs.pop(button), default)
-        self.assertEqual(pairs, {'grab': 'C', 'dodge': 'Mouse Back'})
+        self.assertEqual(pairs, {'grab': 'C', 'dodge': 'Mouse Back',
+                                 'weapon_next': 'Wheel Up', 'weapon_prev': 'Wheel Down'})
         self.assertIn('l3=None,r3=None,rage=Mouse Middle', launcher.keyboard_map({}))
         controls = {'key': {'square': 'Wheel Up', 'cross': 'Q', 'triangle': 'E'}}
         self.assertIn('cross=Q,square=Wheel Up,triangle=E,', launcher.keyboard_map(controls))
@@ -199,13 +200,25 @@ class ControlMapTest(unittest.TestCase):
     def test_actions_belong_to_the_keyboard_table(self):
         names = [row[0] for row in launcher.table_rows('key')]
         self.assertEqual(names[names.index('r3') + 1], 'rage')
-        self.assertEqual(names[-2:], ['grab', 'dodge'])
+        self.assertEqual(names[-4:], ['grab', 'dodge', 'weapon_next', 'weapon_prev'])
         self.assertNotIn('dodge', [row[0] for row in launcher.table_rows('pad')])
         self.assertEqual(launcher.control_values({'key': {'dodge': 'V'}}, 'key'), {'dodge': 'V'})
         self.assertIn('dodge=V', launcher.keyboard_map({'key': {'dodge': 'V'}}))
         self.assertIn('grab=None', launcher.keyboard_map({'key': {'grab': 'None'}}))
         self.assertTrue(launcher.APP_DEFAULTS['rage_one_input'])
         self.assertNotIn('native_input', launcher.APP_DEFAULTS)
+
+    def test_the_wheel_cycles_the_weapons_by_default(self):
+        defaults = {row[0]: launcher.default_input(row, 'key') for row in launcher.table_rows('key')}
+        self.assertEqual((defaults['weapon_next'], defaults['weapon_prev']), ('Wheel Up', 'Wheel Down'))
+        self.assertEqual((launcher.ACTION_NAMES['weapon_next'], launcher.ACTION_NAMES['weapon_prev']),
+                         ('Next weapon', 'Previous weapon'))
+        self.assertIn('weapon_next=Wheel Up,weapon_prev=Wheel Down', launcher.keyboard_map({}))
+        env = launcher.game_environment(dict(launcher.APP_DEFAULTS))
+        self.assertTrue(env['SPARTAN_KEY_MAP'].endswith('weapon_next=Wheel Up,weapon_prev=Wheel Down'))
+        moved = launcher.keyboard_map({'key': {'weapon_next': 'Mouse Back', 'weapon_prev': 'None'}})
+        self.assertIn('weapon_next=Mouse Back,weapon_prev=None', moved)
+        self.assertEqual(launcher.APP_DEFAULTS['controls_layout'], launcher.CONTROLS_LAYOUT)
 
     def test_rage_switch_moves_l3_and_r3_to_one_input(self):
         controls = {'key': {'l3': 'Z', 'r3': 'X', 'rage': 'Mouse Middle'}}
@@ -247,12 +260,41 @@ class ControlMapTest(unittest.TestCase):
         self.assertFalse(apart['rage_one_input'])
         taken = launcher.migrate_controls({'controls': {'key': {'cross': 'Mouse Back'}}})
         self.assertEqual(taken['controls']['key']['dodge'], 'None')
+        self.assertEqual((key['weapon_next'], key['weapon_prev']), ('Wheel Up', 'Wheel Down'))
+        wheel = launcher.migrate_controls({'controls': {'key': {'cross': 'Wheel Down'}}})
+        self.assertEqual((wheel['controls']['key']['weapon_next'], wheel['controls']['key']['weapon_prev']),
+                         ('Wheel Up', 'None'))
+
+    def test_layout_two_keeps_its_table_and_gets_the_weapon_cycle(self):
+        free = launcher.migrate_controls({'controls_layout': 2, 'controls': {'key': {'cross': 'Q', 'dodge': 'V'}}})
+        self.assertEqual(free['controls']['key'], {'cross': 'Q', 'dodge': 'V'})  # not rebuilt with the game's keys
+        self.assertEqual(free['controls_layout'], launcher.CONTROLS_LAYOUT)
+        self.assertIn('weapon_next=Wheel Up,weapon_prev=Wheel Down', launcher.keyboard_map(free['controls']))
+        self.assertIn('square=Mouse Left', launcher.keyboard_map(free['controls']))
+        self.assertEqual(launcher.migrate_controls(free), free)  # once
+        busy = launcher.migrate_controls({'controls_layout': 2, 'controls': {'key': {'dodge': 'Wheel Up'}}})
+        self.assertEqual(busy['controls']['key'], {'dodge': 'Wheel Up', 'weapon_next': 'None'})
+        both = launcher.migrate_controls({'controls_layout': 2, 'controls': {'key': {'r1': 'Wheel Up', 'l1': 'Wheel Down'}}})
+        game = launcher.keyboard_map(both['controls'])
+        self.assertIn('weapon_next=None,weapon_prev=None', game)
+        self.assertIn('l1=Wheel Down,r1=Wheel Up', game)
+        # The wheel on L3 only counts while L3 is sent: with one Rage input it is free.
+        spare = launcher.migrate_controls({'controls_layout': 2, 'controls': {'key': {'l3': 'Wheel Up'}}})
+        self.assertNotIn('weapon_next', spare['controls']['key'])
+        apart = launcher.migrate_controls({'controls_layout': 2, 'rage_one_input': False,
+                                           'controls': {'key': {'l3': 'Wheel Up'}}})
+        self.assertEqual(apart['controls']['key']['weapon_next'], 'None')
+        untouched = launcher.migrate_controls({'controls_layout': 2, 'game_dir': 'D:/games'})
+        self.assertEqual(untouched['controls'], {})
+        self.assertIn('weapon_next=Wheel Up', launcher.keyboard_map(untouched['controls']))
 
     def test_native_translation_carries_over(self):
         old = {'controls': {'key': {'cross': 'Q'}, 'native': {'circle': 'Mouse Middle'}},
                'native_input': True, 'native_rage': True}
         new = launcher.migrate_controls(old)
         self.assertEqual(new['controls']['key'], {'circle': 'Mouse Middle'})
+        busy = launcher.migrate_controls({'controls': {'native': {'circle': 'Wheel Up'}}, 'native_input': True})
+        self.assertEqual(busy['controls']['key'], {'circle': 'Wheel Up', 'weapon_next': 'None'})
         self.assertNotIn('native', new['controls'])
         self.assertNotIn('native_input', new)
         self.assertTrue(new['rage_one_input'])

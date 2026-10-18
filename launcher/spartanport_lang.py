@@ -1061,6 +1061,8 @@ EXTRA = {
         'Absolute': 'Absoluto',
         'Grab': 'Agarrar',
         'Dodge': 'Esquiva',
+        'Next weapon': 'Próxima arma',
+        'Previous weapon': 'Arma anterior',
         'Portuguese (Brazil)': 'Português (Brasil)',
         'Reuse compiled shaders from disk': 'Reutilizar shaders compilados do disco',
         'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': 'Os shaders compilados em sessões anteriores carregam do cache de shaders em vez de compilar de novo: os objetos não aparecem mais alguns quadros atrasados depois de iniciar ou carregar um save, e o cache não é reescrito a cada sessão (o antivírus verifica cada arquivo gravado). A primeira inicialização com a opção ligada recria o cache uma vez. Desative se um objeto, efeito ou cor aparecer errado só depois de reiniciar e estiver certo na primeira execução de um cache novo.',
@@ -1345,6 +1347,8 @@ EXTRA = {
         'Absolute': 'Absoluto',
         'Grab': 'Agarrar',
         'Dodge': 'Esquivar',
+        'Next weapon': 'Arma siguiente',
+        'Previous weapon': 'Arma anterior',
         'Portuguese (Brazil)': 'Portugués (Brasil)',
         'Reuse compiled shaders from disk': 'Reutilizar shaders compilados del disco',
         'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': 'Los shaders compilados en sesiones anteriores se cargan de la caché de shaders en vez de compilarse de nuevo: los objetos ya no aparecen unos fotogramas tarde al iniciar o cargar una partida, y la caché no se reescribe en cada sesión (el antivirus revisa cada archivo escrito). El primer inicio con la opción activada reconstruye la caché una vez. Desactívalo si un objeto, efecto o color se ve mal solo después de reiniciar y está bien en la primera ejecución de una caché nueva.',
@@ -2425,6 +2429,10 @@ EXTRA['id'].update({
     'The shader cache is already empty.': 'Cache shader sudah kosong.',
     'Version {} is out, but it has no Linux build yet.': 'Versi {} telah tersedia, tetapi belum memiliki build Linux.',
 })
+
+# The weapon cycle rows of the keyboard table.
+EXTRA['zh'].update({'Next weapon': '下一把武器', 'Previous weapon': '上一把武器'})
+EXTRA['id'].update({'Next weapon': 'Senjata berikutnya', 'Previous weapon': 'Senjata sebelumnya'})
 
 _tables = {}
 

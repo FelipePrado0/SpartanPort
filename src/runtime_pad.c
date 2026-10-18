@@ -7,7 +7,8 @@
  *   Enter Options, Tab left touchpad (photo mode), Backspace right touchpad (pause menu),
  *   IJKL d-pad (I up, K down, J left, L right).
  * SPARTAN_KEY_MAP also takes the mouse: Mouse Left, Mouse Right, Mouse Middle, Mouse Back,
- * Mouse Forward, Wheel Up and Wheel Down (see mouse_names). */
+ * Mouse Forward, Wheel Up and Wheel Down (see mouse_names). The wheel cycles the weapons
+ * (weapon_next, weapon_prev: apply_weapon_cycle). */
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "gpu/spartanportgpu.h"
@@ -35,8 +36,10 @@ enum {
      * button or key without a touch surface (play_click turns them into a touch and a click). */
     CLICK_LEFT=0x40000000, CLICK_RIGHT=0x80000000,
     /* Host-only actions of the keyboard map: dodge tilts the right stick (apply_dodge); rage and
-     * grab press two buttons together (apply_combos). */
+     * grab press two buttons together (apply_combos); weapon_next and weapon_prev press the
+     * d-pad button of the next or previous weapon (apply_weapon_cycle). */
     DODGE=0x20000000, RAGE=0x10000000, GRAB=0x08000000,
+    WEAPON_NEXT=0x04000000, WEAPON_PREV=0x02000000,
 };
 typedef struct { uint16_t x, y; uint8_t id, reserve[3]; } PadTouch;
 typedef struct {
@@ -140,7 +143,7 @@ static const struct { const char *name; uint32_t ps; } ps_names[]={
     {"l1",BTN_L1}, {"r1",BTN_R1}, {"l2",BTN_L2}, {"r2",BTN_R2}, {"l3",BTN_L3}, {"r3",BTN_R3},
     {"options",BTN_OPTIONS}, {"touchpad",CLICK_LEFT}, {"touchpad_left",CLICK_LEFT}, {"touchpad_right",CLICK_RIGHT},
     {"up",BTN_UP}, {"down",BTN_DOWN}, {"left",BTN_LEFT}, {"right",BTN_RIGHT},
-    {"dodge",DODGE}, {"rage",RAGE}, {"grab",GRAB},
+    {"dodge",DODGE}, {"rage",RAGE}, {"grab",GRAB}, {"weapon_next",WEAPON_NEXT}, {"weapon_prev",WEAPON_PREV},
 };
 typedef struct { int source; uint32_t ps; } ButtonSource;
 typedef struct { ButtonSource entries[48]; size_t count; } ButtonMap;
@@ -505,7 +508,7 @@ static void sample_host(PadData *d) {
 
 /* SPARTAN_PAD_FILE=<file>: scripted input for automated runs. The file holds whitespace-separated
  * tokens, re-read when it changes: button names (cross circle square triangle l1 r1 l2 r2 l3 r3
- * options touchpad touchpad_left touchpad_right up down left right) are held while listed;
+ * options touchpad touchpad_left touchpad_right up down left right weapon_next weapon_prev) are held while listed;
  * touchpad is the left side; lx= ly= rx= ry= (0..255) override the sticks. An empty file
  * releases everything. */
 static struct { uint32_t buttons; int stick[4]; } injected={0,{-1,-1,-1,-1}};
@@ -694,6 +697,45 @@ static void apply_dodge(PadData *d) {
     if (held || d->timestamp<dodge.until) { d->right_x=dodge.x; d->right_y=dodge.y; }
 }
 
+/* Weapon cycle (SPARTAN_KEY_MAP "weapon_next=<key>", "weapon_prev=<key>"): the game keeps its weapons
+ * on the d-pad, one button each, and nothing here can read which one is equipped. So the cycle
+ * keeps its own index, follows any d-pad button pressed from another source (keys 1-4, the pad)
+ * and moves one step per press of the action, holding the new weapon's button WEAPON_MIN_US so
+ * the game sees it. The order is the one the game hands the weapons out in. */
+enum { WEAPON_MIN_US=80000, WEAPON_COUNT=4 };
+static const uint32_t weapon_buttons[WEAPON_COUNT]={BTN_UP,BTN_RIGHT,BTN_DOWN,BTN_LEFT};
+static struct { int index; bool next_held, prev_held, pressing; uint32_t button; uint64_t until; } weapon_cycle;
+static void reset_weapon_cycle(void) {
+    weapon_cycle.next_held=weapon_cycle.prev_held=weapon_cycle.pressing=false;
+    weapon_cycle.until=0;
+}
+static void apply_weapon_cycle(PadData *d) {
+    const bool next=(d->buttons & WEAPON_NEXT)!=0, prev=(d->buttons & WEAPON_PREV)!=0;
+    d->buttons&=~(WEAPON_NEXT|WEAPON_PREV);
+    /* With the pause key's menu up the wheel moves the selection up and down instead: walking
+     * every d-pad direction would make a list jump. The weapon stays as it was. */
+    const bool menu=spartanportgpu_mouse_paused()!=0;
+    const uint32_t dpad=d->buttons & (BTN_UP|BTN_RIGHT|BTN_DOWN|BTN_LEFT);
+    if (!menu) for (int i=0;i<WEAPON_COUNT;++i) if (dpad==weapon_buttons[i]) weapon_cycle.index=i;
+    if (dpad) weapon_cycle.pressing=false; /* a d-pad press from another source wins over ours */
+    const bool next_pressed=next && !weapon_cycle.next_held, prev_pressed=prev && !weapon_cycle.prev_held;
+    if (menu && (next_pressed || prev_pressed)) {
+        weapon_cycle.button=next_pressed ? BTN_UP : BTN_DOWN;
+    } else if (next_pressed || prev_pressed) {
+        if (next_pressed) weapon_cycle.index=(weapon_cycle.index+1)%WEAPON_COUNT;
+        if (prev_pressed) weapon_cycle.index=(weapon_cycle.index+WEAPON_COUNT-1)%WEAPON_COUNT;
+        weapon_cycle.button=weapon_buttons[weapon_cycle.index];
+    }
+    if (next_pressed || prev_pressed) {
+        weapon_cycle.pressing=true;
+        weapon_cycle.until=d->timestamp+WEAPON_MIN_US;
+    }
+    weapon_cycle.next_held=next;
+    weapon_cycle.prev_held=prev;
+    if (!next && !prev && d->timestamp>=weapon_cycle.until) weapon_cycle.pressing=false;
+    if (weapon_cycle.pressing) d->buttons|=weapon_cycle.button;
+}
+
 /* R3 + L1 + R1 goes through the engine frame rates live (60 for spots that break at a higher
  * rate). The three stay hidden from the game until each one is released: a stray R1 grabs. */
 enum { ENGINE_FPS_COMBO=BTN_R3|BTN_L1|BTN_R1 };
@@ -714,7 +756,7 @@ static void engine_fps_combo(PadData *d) {
 static int hold_after_capture;
 static void sample(PadData *d) {
     sample_host(d);
-    if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); return; }
+    if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */
     read_inject();
     replay_sample(d);
@@ -725,6 +767,7 @@ static void sample(PadData *d) {
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
     apply_combos(d);
     apply_dodge(d);
+    apply_weapon_cycle(d);
     apply_mouse_aim(d);
     note_pause_key(d);
     engine_fps_combo(d);

@@ -489,6 +489,7 @@ PAGES = ('home', 'graphics', 'performance', 'game', 'controls', 'mods', 'trophie
 PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_game_patches',), 'mods': ('refresh_lists',),
                 'trophies': ('refresh_trophies',)}
 UI_SCALES = [('auto', ('Auto',)), ('1', ('1x',)), ('2', ('2x',))]
+CONTROLS_LAYOUT = 3  # settings layout: 2 = one keyboard & mouse table, 3 = adds the weapon cycle (migrate_controls)
 APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.get('SPARTAN_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
@@ -497,7 +498,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
-                'rage_one_input': True, 'stick_prompts': 'keyboard', 'controls_layout': 2,
+                'rage_one_input': True, 'stick_prompts': 'keyboard', 'controls_layout': CONTROLS_LAYOUT,
                 'glyph_style': 'off'}
 
 # PS4 button, default key, default gamepad button (SDL names; src/runtime_pad.c). L2/R2 come
@@ -638,12 +639,13 @@ KEY_DEFAULTS = {'cross': 'Space', 'circle': 'Left Shift', 'square': 'Mouse Left'
                 'up': '1', 'right': '2', 'down': '3', 'left': '4'}
 # Actions of the keyboard map only (runtime_pad.c's host-only sources), as CONTROLS rows. Rage of
 # Sparta (L3 + R3 on one input) follows R3; it is used instead of L3 and R3 while 'rage_one_input'
-# is on. "None" leaves a row without an input.
+# is on. "None" leaves a row without an input. The wheel cycles the weapons on the d-pad.
 RAGE_ROW, GRAB_ROW, DODGE_ROW = ('rage', 'Mouse Middle', None), ('grab', 'C', None), ('dodge', 'Mouse Back', None)
-KEY_ACTIONS = [RAGE_ROW, GRAB_ROW, DODGE_ROW]
-ACTION_NAMES = {'rage': 'Rage of Sparta', 'grab': 'Grab', 'dodge': 'Dodge'}
+WEAPON_ROWS = (('weapon_next', 'Wheel Up', None), ('weapon_prev', 'Wheel Down', None))
+KEY_ACTIONS = [RAGE_ROW, GRAB_ROW, DODGE_ROW, *WEAPON_ROWS]
+ACTION_NAMES = {'rage': 'Rage of Sparta', 'grab': 'Grab', 'dodge': 'Dodge',
+                'weapon_next': 'Next weapon', 'weapon_prev': 'Previous weapon'}
 RAGE_BUTTONS = ('l3', 'r3')
-CONTROLS_LAYOUT = 2  # settings layout: 2 = one keyboard & mouse table (migrate_controls)
 
 
 def table_rows(kind):
@@ -655,7 +657,7 @@ def table_rows(kind):
         rows.append(row)
         if row[0] == 'r3':
             rows.append(RAGE_ROW)
-    return rows + [GRAB_ROW, DODGE_ROW]
+    return rows + [GRAB_ROW, DODGE_ROW, *WEAPON_ROWS]
 MOUSE_NAMES = {name.casefold() for name in (*TK_TO_MOUSE.values(), 'Wheel Up', 'Wheel Down')}
 
 
@@ -718,18 +720,38 @@ def control_map(controls, kind):
                     if button in chosen and not set(chosen[button]) & set(',='))
 
 
+def claim_new_actions(controls, rage, actions):
+    """Leaves the `actions` (rows) that a saved keyboard table predates without an input ('None')
+    when their default one is already used by another row; the rest follow their defaults. A
+    table with nothing saved follows the defaults, which never collide."""
+    chosen = control_values(controls, 'key')
+    if not chosen:
+        return
+    added = {row[0] for row in actions}
+    unused = set(RAGE_BUTTONS) if rage else {'rage'}  # the rows the table does not send
+    taken = {(chosen.get(row[0]) or default_input(row, 'key')).strip().casefold()
+             for row in table_rows('key') if row[1] and row[0] not in added | unused}
+    controls['key'].update({button: 'None' for button, default, _pad in actions if default.casefold() in taken})
+
+
 def migrate_controls(saved):
-    """Settings saved before the keyboard & mouse table (CONTROLS_LAYOUT). A player who saved keys
-    in Keyboard Mapping keeps the whole layout they had (the game's keys for the rest); one who
-    used Native Translation keeps that table. A new action whose default input is already taken
-    stays without one."""
+    """Settings saved before the current keyboard & mouse table (CONTROLS_LAYOUT). A player who
+    saved keys in Keyboard Mapping keeps the whole layout they had (the game's keys for the rest);
+    one who used Native Translation keeps that table; one on layout 2 keeps theirs and only gets
+    the weapon cycle. A new action whose default input is already taken stays without one."""
     if not isinstance(saved, dict) or not saved or saved.get('controls_layout') == CONTROLS_LAYOUT:
         return saved
+    layout_two = saved.get('controls_layout') == 2
     saved = dict(saved)
     controls = dict(saved['controls']) if isinstance(saved.get('controls'), dict) else {}
     native = controls.pop('native', None)
-    if saved.pop('native_input', False) and isinstance(native, dict):
+    if layout_two:
+        if isinstance(controls.get('key'), dict):
+            controls['key'] = dict(controls['key'])
+            claim_new_actions(controls, saved.get('rage_one_input', True), WEAPON_ROWS)
+    elif saved.pop('native_input', False) and isinstance(native, dict):
         controls['key'] = dict(native)  # its defaults are the new ones
+        claim_new_actions(controls, saved.get('native_rage', True), WEAPON_ROWS)
     elif controls.get('key'):
         kept = control_values(controls, 'key')
         layout = {button: kept.get(button) or key for button, key, _pad in CONTROLS if key}
@@ -2431,6 +2453,8 @@ class Launcher:
                 button_icons.draw(game_icon, button_icons.GAME_BUTTONS[button], 'playstation', size)
             elif button in ('rage', 'grab'):  # two buttons together
                 button_icons.draw(game_icon, 'label:L3+R3' if button == 'rage' else 'label:L1+O', 'playstation', size)
+            elif button in ('weapon_next', 'weapon_prev'):  # a d-pad button, whichever weapon is next
+                button_icons.draw(game_icon, 'label:D-PAD', 'playstation', size)
             else:  # an action of the right stick (dodge): the stick icon labelled RS
                 button_icons.draw(game_icon, 'rightstick', 'xbox', size)
             title = _(PS_BUTTON_NAMES.get(button) or ACTION_NAMES[button])

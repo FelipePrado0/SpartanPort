@@ -8,6 +8,8 @@ int spartanportgpu_vibration_percent(void) { return 100; }
 int spartanportgpu_mouse_prompt_distance(void) { return 48; }
 static int pause_keys;
 void spartanportgpu_mouse_pause_key(void) { ++pause_keys; }
+static int pause_menu_up;
+int spartanportgpu_mouse_paused(void) { return pause_menu_up; }
 static int aim_style;
 int spartanportgpu_mouse_aim_style(void) { return aim_style; }
 static int aim_sensitivity=100;
@@ -214,6 +216,94 @@ int main(void) {
     p.buttons=0; p.right_x=p.right_y=128; p.timestamp+=1000;
     apply_dodge(&p);
     assert(p.right_x==128 && p.right_y==128);
+
+    /* Weapon cycle: the wheel is a host-only action that walks the d-pad weapons clockwise. */
+    ButtonMap wheel=key_map;
+    assert(apply_button_map(&wheel,"weapon_next=Wheel Up,weapon_prev=Wheel Down",true)==2);
+    assert(pressed_by(&wheel,WHEEL_UP)==WEAPON_NEXT && pressed_by(&wheel,WHEEL_DOWN)==WEAPON_PREV);
+    PadData w={0};
+    uint64_t wheel_time=5000000;
+    const uint32_t clockwise[]={BTN_UP,BTN_RIGHT,BTN_DOWN,BTN_LEFT};
+    #define WEAPON_READ(bits) (w.buttons=(bits), w.timestamp=(wheel_time+=10000), apply_weapon_cycle(&w), w.buttons)
+    #define WEAPON_RELEASE() do { WEAPON_READ(0); wheel_time+=WEAPON_MIN_US; WEAPON_READ(0); } while (0)
+    assert(WEAPON_READ(WEAPON_NEXT)==BTN_RIGHT);               /* starts at UP: next is RIGHT */
+    WEAPON_RELEASE();
+    for (int i=2;i<6;++i) {                                    /* RIGHT, DOWN, LEFT, UP, RIGHT */
+        assert(WEAPON_READ(WEAPON_NEXT)==clockwise[i%4]);
+        WEAPON_RELEASE();
+    }
+    assert(WEAPON_READ(WEAPON_PREV)==BTN_UP);                  /* back from RIGHT */
+    WEAPON_RELEASE();
+    assert(WEAPON_READ(WEAPON_PREV)==BTN_LEFT);                /* wraps below UP */
+    WEAPON_RELEASE();
+    assert(WEAPON_READ(WEAPON_PREV)==BTN_DOWN);
+    WEAPON_RELEASE();
+
+    /* A pulse lasts several reads but is one step. */
+    assert(WEAPON_READ(WEAPON_NEXT)==BTN_LEFT);
+    for (int i=0;i<10;++i) assert(WEAPON_READ(WEAPON_NEXT)==BTN_LEFT);
+    WEAPON_RELEASE();
+    assert(WEAPON_READ(0)==0);
+
+    /* Pressed from another source, the d-pad button becomes the current weapon. */
+    assert(WEAPON_READ(BTN_DOWN)==BTN_DOWN);                   /* key 3, say */
+    assert(WEAPON_READ(0)==0);
+    assert(WEAPON_READ(WEAPON_NEXT)==BTN_LEFT);
+    WEAPON_RELEASE();
+    assert(WEAPON_READ(BTN_RIGHT)==BTN_RIGHT);
+    assert(WEAPON_READ(0)==0);
+    assert(WEAPON_READ(WEAPON_PREV)==BTN_UP);
+    WEAPON_RELEASE();
+    assert(WEAPON_READ(BTN_UP|BTN_DOWN)==(BTN_UP|BTN_DOWN));   /* two at once: no resync */
+    assert(WEAPON_READ(0)==0);
+    assert(WEAPON_READ(WEAPON_NEXT)==BTN_RIGHT);               /* still from UP */
+    WEAPON_RELEASE();
+
+    /* The host-only bits never reach the game, and other buttons pass through. */
+    w.buttons=WEAPON_NEXT|WEAPON_PREV|BTN_CROSS; w.timestamp=(wheel_time+=10000);
+    apply_weapon_cycle(&w);
+    assert(!(w.buttons & (WEAPON_NEXT|WEAPON_PREV)) && (w.buttons & BTN_CROSS));
+    WEAPON_RELEASE();
+
+    /* A quick tap is held to the minimum; the button goes once it has passed. */
+    const uint64_t tap_start=wheel_time+10000;
+    assert(WEAPON_READ(WEAPON_NEXT)!=0 && WEAPON_READ(0)!=0);
+    w.buttons=0; w.timestamp=tap_start+WEAPON_MIN_US-1; apply_weapon_cycle(&w);
+    assert(w.buttons!=0);
+    w.buttons=0; w.timestamp=tap_start+WEAPON_MIN_US; apply_weapon_cycle(&w);
+    assert(w.buttons==0);
+    wheel_time=w.timestamp;
+
+    /* A real d-pad press during the hold cancels ours instead of pressing two buttons. */
+    assert(WEAPON_READ(WEAPON_NEXT)!=0);
+    assert(WEAPON_READ(BTN_UP)==BTN_UP);
+    assert(WEAPON_READ(0)==0);
+    wheel_time+=WEAPON_MIN_US;
+
+    /* The menu opening drops the edges and the hold but keeps the weapon. */
+    assert(WEAPON_READ(BTN_RIGHT)==BTN_RIGHT);
+    assert(WEAPON_READ(WEAPON_NEXT)==BTN_DOWN);
+    reset_weapon_cycle();
+    assert(WEAPON_READ(0)==0);                                 /* hold gone */
+    assert(WEAPON_READ(WEAPON_NEXT)==BTN_LEFT);                /* a held action counts as a new press */
+    WEAPON_RELEASE();
+
+    /* With the pause menu up the wheel moves the selection up and down and keeps the weapon. */
+    pause_menu_up=1;
+    assert(WEAPON_READ(WEAPON_NEXT)==BTN_UP);
+    WEAPON_RELEASE();
+    assert(WEAPON_READ(WEAPON_PREV)==BTN_DOWN);
+    WEAPON_RELEASE();
+    assert(WEAPON_READ(WEAPON_PREV)==BTN_DOWN);                /* never RIGHT or LEFT in a list */
+    WEAPON_RELEASE();
+    assert(WEAPON_READ(BTN_RIGHT)==BTN_RIGHT);                 /* a d-pad press in the menu is no weapon */
+    assert(WEAPON_READ(0)==0);
+    pause_menu_up=0;
+    assert(WEAPON_READ(WEAPON_NEXT)==BTN_UP);                  /* back in play, from LEFT */
+    WEAPON_RELEASE();
+    #undef WEAPON_READ
+    #undef WEAPON_RELEASE
+
     /* Keyboard rotation minigame: a prompt is up while the update hook counts frames. */
     _putenv("SPARTAN_STICK_PROMPTS=keyboard");
     _putenv("SPARTAN_QTE_SEQUENCES=360ccw=Q>E, up180cw = D > S > A ,bogus=W,down180cw=D>Mouse Left");
