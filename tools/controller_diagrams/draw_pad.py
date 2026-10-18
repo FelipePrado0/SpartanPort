@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Draw the pause-menu controller diagram (R_UI TXCE352DC5, 1024x512 DXT5) for another pad.
 
+Controller drawings and renderer by Kristian Andreev, adapted from PR #234.
+
     draw_pad.py --sketch controllers.sketch --out art/CE352DC5.png [--scale 2]   # Xbox
     draw_pad.py --svg switch_pro.svg       --out art/CE352DC5.png [--scale 2]   # Nintendo
 
@@ -22,7 +24,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-FONT = next(p for p in (Path(__file__).resolve().parent / 'gowfont.ttf', Path(__file__).resolve().parent.parent.parent / 'launcher' / 'gowfont.ttf') if p.is_file())
+FONT = Path(__file__).resolve().parents[2] / 'launcher' / 'Cinzel-Black.ttf'
 LINE = (222, 85, 66)
 BODY = (10, 2, 2)
 WISP = (96, 16, 12)

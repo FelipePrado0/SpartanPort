@@ -15,9 +15,12 @@ from pathlib import Path
 import shutil
 import struct
 
-VERSION = 3  # of the drawing: a change redraws the cached copies
+VERSION = 4  # of the drawing: a change redraws the cached copies
 WADS = ('EXEC/WAD/PS4_LE/R_UI.WAD', 'EXEC/WAD/PS4_LE/R_PERM.WAD')
 FONT = Path(__file__).resolve().parent.parent / 'launcher' / 'Cinzel-Black.ttf'
+CONTROLLER_TEXTURE = 'TXCE352DC5'
+# GPL-2.0-or-later controller drawings by Kristian Andreev, adapted from PR #234.
+CONTROLLER_ART = Path(__file__).resolve().parent.parent / 'scripts' / 'controller_diagrams'
 
 # Texture (the first hash of its name) -> how it is drawn and the game button(s) it shows.
 # inline: the 64 px icons inside text; qte: the large prompt on black; atlas: two QTE labels,
@@ -258,6 +261,9 @@ def draw_prompt(label, color, width, height, cap=False):
 def render(form, buttons, style, faces, pad_map, width, height, key_map=''):
     """The picture that replaces a texture of TEXTURES, at its size."""
     from PIL import Image
+    if form == 'controller':
+        with Image.open(CONTROLLER_ART / f'{style}.png') as image:
+            return image.convert('RGBA').resize((width, height), Image.Resampling.LANCZOS)
     keyboard = style == 'keyboard'
     hosts = key_buttons(key_map) if keyboard else pad_buttons(pad_map)
     if form == 'atlas':
@@ -277,9 +283,12 @@ def encode(image, fourcc, length):
     image = image.convert('RGBA' if fourcc == 'DXT5' else 'RGB')
     pixels = b''
     while len(pixels) < length:
-        level = io.BytesIO()
-        image.save(level, 'DDS', pixel_format=fourcc)
-        pixels += level.getvalue()[128:]
+        # Pillow 11.2.1's BC encoder ignores its output buffer size. Independent block rows
+        # keep the controller diagram below that limit without changing the encoded format.
+        for y in range(0, image.height, 4):
+            level = io.BytesIO()
+            image.crop((0, y, image.width, min(y + 4, image.height))).save(level, 'DDS', pixel_format=fourcc)
+            pixels += level.getvalue()[128:]
         if image.size == (1, 1):
             break
         image = image.resize((max(1, image.width // 2), max(1, image.height // 2)))
@@ -297,7 +306,8 @@ def patch(data, style, faces=None, pad_map='', key_map=''):
     """Replaces the glyph textures inside the WAD in `data` (a bytearray); returns how many."""
     count, drawn = 0, textures(style)
     for offset, size, name in entries(data):
-        if not name.endswith('.dds') or name[:10] not in drawn:
+        controller = name[:10] == CONTROLLER_TEXTURE and style in ('xbox', 'nintendo')
+        if not name.endswith('.dds') or (name[:10] not in drawn and not controller):
             continue
         end = offset + 0x40 + size
         dds = data.find(b'DDS ', offset + 0x40, end)
@@ -306,11 +316,11 @@ def patch(data, style, faces=None, pad_map='', key_map=''):
             print(f'Glyphs: {name}: not a DXT texture, left as it is', flush=True)
             continue
         height, width = struct.unpack_from('<II', data, dds + 12)
-        form, buttons = drawn[name[:10]]
+        form, buttons = ('controller', None) if controller else drawn[name[:10]]
         try:
             data[dds + 128:end] = encode(render(form, buttons, style, faces, pad_map, width, height, key_map),
                                          fourcc, end - dds - 128)
-        except ValueError as error:
+        except (OSError, ValueError) as error:
             print(f'Glyphs: {name}: {error}, left as it is', flush=True)
             continue
         count += 1
@@ -330,7 +340,9 @@ def build(game, out, style, faces=None, pad_map='', key_map=''):
     else:
         key_map = ''
     sources = [(name, Path(game) / name) for name in WADS if (Path(game) / name).is_file()]
+    art = CONTROLLER_ART / f'{style}.png'
     stamp = json.dumps([VERSION, style, faces, pad_map, *([key_map] if key_map else []),
+                        art.stat().st_mtime_ns if style in ('xbox', 'nintendo') and art.is_file() else None,
                         [(name, path.stat().st_size, path.stat().st_mtime_ns) for name, path in sources]])
     stamp_file = target / 'stamp.json'
     made = sorted(path.name for path in target.glob('*.WAD')) if target.is_dir() else []

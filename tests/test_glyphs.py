@@ -26,13 +26,15 @@ def entry(name, payload=b'', tag=1):
 def texture(name, width, height, fourcc, levels=1, length=0):
     """A texture entry as the game stores it: a 0x4C prefix and a DDS with `levels` mip levels
     (or `length` bytes of pixels)."""
-    image = Image.new('RGBA', (width, height), (255, 0, 255, 255))
+    image = Image.new('RGBA', (4, 4), (255, 0, 255, 255))
     header = io.BytesIO()
     image.save(header, 'DDS', pixel_format=fourcc)
+    dds = bytearray(header.getvalue()[:128])
+    struct.pack_into('<II', dds, 12, height, width)
     for level in range(0 if length else levels):
         blocks = -(-max(1, width >> level) // 4) * -(-max(1, height >> level) // 4)
         length += blocks * (16 if fourcc == 'DXT5' else 8)
-    return entry(name, b'\7\0\1\0' + name.encode().ljust(0x48, b'\0') + header.getvalue()[:128] + b'\xee' * length)
+    return entry(name, b'\7\0\1\0' + name.encode().ljust(0x48, b'\0') + dds + b'\xee' * length)
 
 
 def wad():
@@ -160,6 +162,48 @@ class GlyphPatchTest(unittest.TestCase):
             glyphs.patch(data, style, None, pad_map, key_map)
             drawn.append(bytes(data))
         self.assertEqual(len(set(drawn)), 5)
+
+    def test_controller_diagram_follows_the_gamepad_style(self):
+        original = texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5', 3)
+        copies = []
+        for style in ('xbox', 'nintendo'):
+            data = bytearray(original)
+            self.assertEqual(glyphs.patch(data, style), 1)
+            self.assertEqual(list(glyphs.entries(data)), list(glyphs.entries(original)))
+            pixels = original.find(b'DDS ') + 128
+            self.assertEqual(data[:pixels], original[:pixels])
+            self.assertNotEqual(data[pixels:], original[pixels:])
+            image = Image.open(io.BytesIO(bytes(data[pixels - 128:])))
+            image.load()
+            self.assertEqual(image.size, (1024, 512))
+            copies.append(bytes(data))
+        self.assertNotEqual(*copies)
+
+    def test_keyboard_keeps_the_original_controller_diagram(self):
+        original = texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5')
+        data = bytearray(original)
+        self.assertEqual(glyphs.patch(data, 'keyboard'), 0)
+        self.assertEqual(data, original)
+
+    def test_diagram_is_mounted_and_the_original_is_untouched(self):
+        original = texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5')
+        self.source.write_bytes(original)
+        for style in ('xbox', 'nintendo'):
+            copies = glyphs.build(self.game, self.out, style)
+            self.assertNotEqual(copies['/app0/EXEC/WAD/PS4_LE/R_UI.WAD'].read_bytes(), original)
+            self.assertEqual(self.source.read_bytes(), original)
+        self.assertEqual(glyphs.build(self.game, self.out, 'playstation'), {})
+
+    def test_missing_diagram_art_keeps_the_prompts_and_is_retried_when_restored(self):
+        original = wad() + texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5')
+        self.source.write_bytes(original)
+        with mock.patch.object(glyphs, 'CONTROLLER_ART', self.out / 'missing-art'):
+            copies = glyphs.build(self.game, self.out, 'xbox')
+            incomplete = copies['/app0/EXEC/WAD/PS4_LE/R_UI.WAD'].read_bytes()
+        copies = glyphs.build(self.game, self.out, 'xbox')
+        self.assertNotEqual(copies['/app0/EXEC/WAD/PS4_LE/R_UI.WAD'].read_bytes(), incomplete)
+        self.assertNotEqual(incomplete, original)
+        self.assertEqual(self.source.read_bytes(), original)
 
     def test_the_keyboard_follows_only_the_key_map(self):
         copy = glyphs.build(self.game, self.out, 'keyboard')['/app0/EXEC/WAD/PS4_LE/R_UI.WAD']

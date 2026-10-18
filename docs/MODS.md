@@ -33,8 +33,8 @@ mods/
     PORTUGUESE/SOUNDS/...
 ```
 
-Pastas de outras regi?es, como `JAPANESE/`, tamb?m s?o reconhecidas quando existem na raiz do
-jogo selecionado. Isso vale tanto para a lista do launcher quanto para a aplica??o dos mods.
+Pastas de outras regiões, como `JAPANESE/`, também são reconhecidas quando existem na raiz do
+jogo selecionado. Isso vale tanto para a lista do launcher quanto para a aplicação dos mods.
 
 Também são aceitos:
 
@@ -121,6 +121,19 @@ the built-in patches (signatures, `Pattern`/`At`). They apply while the mod is e
 built-in ones (a patch with the same name replaces it). A patch named `Resolution Patch - <width>x<height>`
 becomes a **Render resolution** choice in the launcher and the in-game menu (Insert). See the
 [Ultrawide mod](ultrawide.md).
+## Ícones e imagem do controle
+
+A opção de ícones em **Controls** já prepara os prompts e a imagem do controle no menu de pausa
+ao escolher Xbox ou Nintendo (ou detectar um desses controles em automático). Não precisa instalar
+um mod. O estilo PlayStation mantém os arquivos originais; o estilo de teclado mantém o desenho
+original do controle. As cópias são criadas no cache local, sem modificar o dump do jogador.
+
+Os desenhos e a ferramenta em `tools/controller_diagrams/` vieram da contribuição de Kristian
+Andreev na [PR #234](https://github.com/FelipePrado0/gow3_pc/pull/234), sob GPL-2.0-or-later.
+`scripts/controller_diagrams/*.png` contém apenas esses desenhos, sem arquivos do jogo. Para
+regenerá-los, a ferramenta usa Pillow, NumPy e scikit-image, com a fonte Cinzel distribuída no
+projeto (OFL). Essas dependências de desenho não são necessárias para usar os PNGs no launcher.
+
 # Patches de terceiros (XML do shadPS4)
 
 Pasta `patches/` no diretório de dados (no launcher, grupo **Third-party patches**, onde também
