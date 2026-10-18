@@ -33,6 +33,8 @@
             <Line Type="bytes" Address="0x005ff769" Value="56030000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
             <Line Type="bytes" Address="0x005ff76f" Value="e0010000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
             <Line Type="bytes" Address="0x007cd918" Value="00000090" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="ab010000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="f0000000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
         </PatchList>
     </Metadata>
     <Metadata Title="God of War III Remastered" Name="Resolution Patch - 720p" Note="Decreases game output resolution to 1280x720 and increases Video Arena to 2.25 GiB. Requires setting DMEM to 2048 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="kvicken + cuesta4" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
@@ -46,6 +48,8 @@
             <Line Type="bytes" Address="0x005ff769" Value="00050000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
             <Line Type="bytes" Address="0x005ff76f" Value="d0020000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
             <Line Type="bytes" Address="0x007cd918" Value="00000090" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="80020000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="68010000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
         </PatchList>
     </Metadata>
     <Metadata Title="God of War III Remastered" Name="Resolution Patch - 900p" Note="Decreases game output resolution to 1600x900 and increases Video Arena to 2.25 GiB. Requires setting DMEM to 2048 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="kvicken + cuesta4 (900p: gow3_pc)" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
@@ -59,6 +63,8 @@
             <Line Type="bytes" Address="0x005ff769" Value="40060000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="6"/>
             <Line Type="bytes" Address="0x005ff76f" Value="84030000" Pattern="bf 00 01 00 00 b9 80 07 00 00 41 b8 38 04 00 00" At="12"/>
             <Line Type="bytes" Address="0x007cd918" Value="00000090" Pattern="00 00 00 43 00 00 80 3f 00 00 00 50 00 00 00 00 00 04 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a3c" Value="20030000" Pattern="00 00 00 00 0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00" At="8"/>
+            <Line Type="bytes" Address="0x007f2a40" Value="c2010000" Pattern="0a e0 f2 00 c0 03 00 00 1c 02 00 00 01 00 00 00 00 00 00 00" At="8"/>
         </PatchList>
     </Metadata>
     <Metadata Title="God of War III Remastered" Name="Resolution Patch - 1440p" Note="Increases game output resolution to 2560x1440 and Video Arena to 2.75 GiB. Requires setting DMEM to 3072 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="kvicken + cuesta4" PatchVer="1.1" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">

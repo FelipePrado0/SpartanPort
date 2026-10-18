@@ -388,5 +388,21 @@ class ModPatchTests(unittest.TestCase):
         self.assertEqual(default_enabled([ULTRAWIDE], '01.02'), [])
 
 
+
+class HalfResolutionTests(unittest.TestCase):
+    """The half-resolution post-processing buffer (a 960x540 table at 0x7f2a3c) must be half of the
+    patched output, or a smaller output gets a larger buffer and overexposed lights (#390)."""
+
+    def test_every_resolution_patch_halves_the_output(self):
+        size = lambda value: int.from_bytes(bytes.fromhex(value), 'little')
+        for meta in ET.parse(GOW3).getroot().iter('Metadata'):
+            if not meta.get('Name').startswith('Resolution Patch'):
+                continue
+            lines = {line.get('Address'): line.get('Value') for line in meta.iter('Line')}
+            width, height = size(lines['0x005f0b3b']), size(lines['0x005f0b43'])
+            half = (lines.get('0x007f2a3c'), lines.get('0x007f2a40'))
+            self.assertTrue(all(half), meta.get('Name'))
+            self.assertEqual((size(half[0]), size(half[1])), (width // 2, height // 2), meta.get('Name'))
+
 if __name__ == '__main__':
     unittest.main()
