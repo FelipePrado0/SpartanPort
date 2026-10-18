@@ -119,8 +119,11 @@ def entry(image, text, reference_lines, width, height, fov=None):
     aspect = width / height
     k = fov if fov else aspect / REFERENCE_ASPECT
     area = width * height
+    # The Video Arena grows with the pixel count: 2.75, 3.25 and 3.75 GiB up to 4K's area, then the largest value the
+    # 32-bit field can hold (3.98 GiB). Only 5120x2160 has been played with that last tier (issue #505).
     arena, dmem, gib = (('000000b0', 3072, '2.75') if area <= 2560 * 1440 else
-                        ('000000d0', 4608, '3.25') if area <= 3200 * 1800 else ('000000f0', 6144, '3.75'))
+                        ('000000d0', 4608, '3.25') if area <= 3200 * 1800 else
+                        ('000000f0', 6144, '3.75') if area <= 3840 * 2160 else ('000000ff', 6144, '3.98'))
     values = {0x5f0b3b: struct.pack('<I', width), 0x5f0b43: struct.pack('<I', height),
               0x5f0b4c: struct.pack('<H', width), 0x5f0b53: struct.pack('<H', height),
               0x5643f3: struct.pack('<I', height), 0x564400: struct.pack('<I', width),
@@ -261,7 +264,7 @@ def main():
     a.mod.parent.mkdir(parents=True, exist_ok=True)
     a.mod.write_text(xml.replace('</Patch>', result + '</Patch>'), encoding='utf-8')
     print(f'{name}: written to {a.mod} (aspect {aspect:.5f}, '
-          + (f'field of view x{k:.5f})' if camera_sites else 'field of view unchanged)'))
+          + (f'field of view x{k:.5f})' if a.fov or k > 1.0001 else 'field of view unchanged)'))
 
 
 if __name__ == '__main__':

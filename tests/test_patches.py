@@ -333,6 +333,7 @@ class ModPatchTests(unittest.TestCase):
         (3440, 1440): (4608, (3440 / 1440) / (16 / 9)),
         (3840, 1600): (6144, (3840 / 1600) / (16 / 9)),
         (5120, 1440): (6144, 2.0),
+        (5120, 2160): (6144, (5120 / 2160) / (16 / 9)),
     }
 
     # 16:10, taller than 16:9: only the resolution and the aspect ratio (the camera's fixed horizontal view
@@ -344,7 +345,7 @@ class ModPatchTests(unittest.TestCase):
     def test_the_ultrawide_mod_lists_its_resolutions_and_memory_needs(self):
         self.assertEqual(resolution_names([ULTRAWIDE]), ['1280x800', '1360x768', '1280x960', '1440x900', '1440x1080', '1920x1200',
                                                          '1920x1440', '2560x1080', '2048x1536', '2560x1600', '2560x1920', '3440x1440',
-                                                         '3840x1600', '5120x1440'])
+                                                         '3840x1600', '5120x1440', '5120x2160'])
         for (width, height), dmem in self.TALLER.items():
             name = f'Resolution Patch - {width}x{height}'
             self.assertEqual(patch_requirements(ULTRAWIDE, [name], '01.02'), (5056 + dmem, None), name)
