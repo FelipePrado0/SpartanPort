@@ -22,7 +22,7 @@ TESTED_RESOLUTIONS = ('1280x800', '1440x900', '1360x768', '1280x960')
 BETA_RESOLUTIONS = tuple(r for r in RESOLUTIONS[7:] if r not in TESTED_RESOLUTIONS)
 SIZES = {'native': (1920, 1080), '480p': (854, 480), '720p': (1280, 720), '900p': (1600, 900),
          '1440p': (2560, 1440), '1800p': (3200, 1800), '4K': (3840, 2160)}
-ASPECTS = (('16:9', 16 / 9), ('16:10', 16 / 10), ('21:9', 2.37), ('32:9', 32 / 9))
+ASPECTS = (('16:9', 16 / 9), ('16:10', 16 / 10), ('21:9', 2.37), ('32:9', 32 / 9), ('4:3', 4 / 3))
 ENGINE_FPS = (60, 100, 120, 240)
 DEFAULTS = {'render_resolution': 'native', 'engine_fps': '120', 'deferred_readback': '1',
             'stale_readback': '1', 'async_shaders': '1'}
@@ -78,15 +78,55 @@ def aspect_name(width, height):
     return f'{width // divisor}:{height // divisor}'
 
 
-def resolution_label(name):
+
+def resolution_size(name):
+    """(width, height) of a built-in name or a mod's "<width>x<height>"; None for anything else."""
+    try:
+        width, height = SIZES.get(name) or map(int, name.split('x'))
+    except ValueError:
+        return None
+    return width, height
+
+
+def aspect_of(name):
+    """The aspect ratio a render resolution belongs to ('16:9', '21:9', a mod's '5:4'), None if unknown."""
+    size = resolution_size(name)
+    return aspect_name(*size) if size else None
+
+
+def aspects(names):
+    """The aspect ratios of these resolutions: the named ones in ASPECTS order, then the others."""
+    present = {aspect_of(n) for n in names} - {None}
+    order = [a for a, _r in ASPECTS]
+    return [a for a in order if a in present] + sorted(present - set(order))
+
+
+def resolutions_for(aspect, names):
+    """The resolutions of one aspect ratio, smallest first, with native on top of its list."""
+    chosen = [n for n in names if aspect_of(n) == aspect]
+    pixels = lambda n: (n != 'native', resolution_size(n)[0] * resolution_size(n)[1])
+    return sorted(chosen, key=pixels)
+
+
+def closest_resolution(aspect, current, names):
+    """The resolution of `aspect` nearest to `current` in pixels (`current` itself when it is of it)."""
+    chosen = resolutions_for(aspect, names)
+    if current in chosen or not chosen:
+        return current if current in chosen else None
+    size = resolution_size(current) or SIZES['native']
+    return min(chosen, key=lambda n: abs(resolution_size(n)[0] * resolution_size(n)[1] - size[0] * size[1]))
+
+
+def resolution_label(name, aspect=True):
     """What the lists show for a render resolution: '1440p · 2560 × 1440 · 16:9', '3440 × 1440 · 21:9 (beta)'.
-    `name` is a built-in name or a mod's "<width>x<height>"; anything else is shown as it is."""
+    `name` is a built-in name or a mod's "<width>x<height>"; anything else is shown as it is. Without
+    `aspect` the ratio is left out (the launcher's list beside the Aspect ratio filter)."""
     try:
         width, height = SIZES.get(name) or map(int, name.split('x'))
     except ValueError:
         return name
     title = 'Native' if name == 'native' else name if name in SIZES else None
-    label = ' · '.join(p for p in (title, f'{width} × {height}', aspect_name(width, height)) if p)
+    label = ' · '.join(p for p in (title, f'{width} × {height}', aspect and aspect_name(width, height)) if p)
     return label + (' (beta)' if name in BETA_RESOLUTIONS else '')
 
 

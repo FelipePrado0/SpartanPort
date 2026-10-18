@@ -250,5 +250,37 @@ class WindowSizeTest(unittest.TestCase):
         self.assertEqual(found, g.SIZES)
 
 
+
+class AspectRatioTest(unittest.TestCase):
+    """The launcher's Aspect ratio filter: the render resolutions of one aspect ratio."""
+
+    def test_aspect_of_a_resolution(self):
+        self.assertEqual([g.aspect_of(r) for r in ('native', '720p', '1360x768', '1280x800', '3440x1440',
+                                                   '5120x1440', '1280x960', '5120x2160')],
+                         ['16:9', '16:9', '16:9', '16:10', '21:9', '32:9', '4:3', '21:9'])
+        self.assertEqual(g.aspect_of('1280x1024'), '5:4')  # a mod's size outside the named ones
+
+    def test_aspects_in_a_fixed_order_with_the_others_last(self):
+        self.assertEqual(g.aspects(g.RESOLUTIONS), ['16:9', '16:10', '21:9', '32:9', '4:3'])
+        self.assertEqual(g.aspects(g.resolutions(('1280x1024',))), ['16:9', '16:10', '21:9', '32:9', '4:3', '5:4'])
+
+    def test_resolutions_of_an_aspect_smallest_first_native_on_top(self):
+        self.assertEqual(g.resolutions_for('16:9', g.RESOLUTIONS),
+                         ['native', '480p', '720p', '1360x768', '900p', '1440p', '1800p', '4K'])
+        self.assertEqual(g.resolutions_for('16:10', g.RESOLUTIONS), ['1280x800', '1440x900', '1920x1200', '2560x1600'])
+        self.assertEqual(g.resolutions_for('4:3', g.RESOLUTIONS),
+                         ['1280x960', '1440x1080', '1920x1440', '2048x1536', '2560x1920'])
+
+    def test_switching_aspect_keeps_the_closest_size(self):
+        self.assertEqual(g.closest_resolution('16:10', '1440p', g.RESOLUTIONS), '2560x1600')
+        self.assertEqual(g.closest_resolution('4:3', 'native', g.RESOLUTIONS), '1440x1080')
+        self.assertEqual(g.closest_resolution('16:9', '1280x800', g.RESOLUTIONS), '1360x768')
+        self.assertEqual(g.closest_resolution('16:10', '1440x900', g.RESOLUTIONS), '1440x900')  # already of it
+
+    def test_labels_without_the_aspect_ratio_for_the_filtered_list(self):
+        self.assertEqual(g.resolution_label('1800p', aspect=False), '1800p · 3200 × 1800')
+        self.assertEqual(g.resolution_label('3440x1440', aspect=False), '3440 × 1440 (beta)')
+        self.assertEqual(g.resolution_label('1800p'), '1800p · 3200 × 1800 · 16:9')  # elsewhere it stays
+
 if __name__ == '__main__':
     unittest.main()

@@ -1411,6 +1411,15 @@ EXTRA['es'].update({
         'Nativa · 1920 × 1080 · 16:9',
 })
 
+EXTRA['pt'].update({
+    'Aspect ratio': 'Proporção da tela',
+    'Shows the render resolutions of this shape only.': 'Mostra só as resoluções de render desta proporção.',
+})
+EXTRA['es'].update({
+    'Aspect ratio': 'Relación de aspecto',
+    'Shows the render resolutions of this shape only.': 'Muestra solo las resoluciones de render de esta proporción.',
+})
+
 _tables = {}
 
 

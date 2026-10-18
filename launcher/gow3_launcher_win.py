@@ -1413,6 +1413,40 @@ class Launcher:
         """The render resolutions to choose from: the built-in ones and those of the enabled mods."""
         return RESOLUTION_CHOICES + self.mod_resolutions()
 
+    def aspect_var(self):
+        """The Aspect ratio filter (Home and Performance): not saved, it follows the render resolution;
+        choosing another one moves the resolution to that aspect's closest size."""
+        if getattr(self, 'aspect', None) is None:
+            resolution = self.var('render_resolution', 'ini')
+            self.aspect = self.tk.StringVar(value=graphics_options.aspect_of(resolution.get()) or '16:9')
+
+            def aspect_chosen(*_a):
+                names = [v for v, _t in self.resolution_options()]
+                closest = graphics_options.closest_resolution(self.aspect.get(), resolution.get(), names)
+                if closest and closest != resolution.get():
+                    resolution.set(closest)
+
+            def resolution_chosen(*_a):
+                aspect = graphics_options.aspect_of(resolution.get())
+                if aspect and aspect != self.aspect.get():
+                    self.aspect.set(aspect)
+            self.aspect.trace_add('write', aspect_chosen)
+            resolution.trace_add('write', resolution_chosen)
+        return self.aspect
+
+    def aspect_options(self):
+        """The aspect ratios the render resolutions have (built-in and mods)."""
+        return [(a, (a,)) for a in graphics_options.aspects([v for v, _t in self.resolution_options()])]
+
+    def aspect_resolution_options(self):
+        """The render resolutions of the chosen aspect ratio, smallest first, without the ratio in the
+        label (the Aspect ratio box above says it)."""
+        options = dict(self.resolution_options())
+        names = graphics_options.resolutions_for(self.aspect_var().get(), list(options))
+        mod = ' (mod)'
+        return [(n, (graphics_options.resolution_label(n, aspect=False) + (mod if options[n][0].endswith(mod) else ''),))
+                for n in names]
+
     def next_row(self, parent):
         return parent.grid_size()[1]
 
@@ -1585,13 +1619,18 @@ class Launcher:
         ttk.Label(quick, text=_('Quick settings', 'Основное').upper(), style='Section.TLabel').grid(
             row=0, column=0, columnspan=4, sticky='w')
         tk.Frame(quick, bg=LINE, height=self.px(1)).grid(row=1, column=0, columnspan=4, sticky='we', pady=self.px((2, 6)))
-        items = ((_('Display mode'), 'display_mode', DISPLAY_MODES), (_('Frame rate limit'), 'fps_limit', FPS_LIMITS),
-                 (_('Render resolution'), 'render_resolution', self.resolution_options),
-                 (_('Engine frame rate'), 'engine_fps', ENGINE_FPS_CHOICES))
-        for index, (title, key, options) in enumerate(items):
-            r, c = 2 + index // 2, (index % 2) * 2
+        # Left: display and frame rate; right: Aspect ratio above the Render resolution it filters.
+        items = ((0, 0, _('Display mode'), 'display_mode', DISPLAY_MODES),
+                 (1, 0, _('Frame rate limit'), 'fps_limit', FPS_LIMITS),
+                 (2, 0, _('Engine frame rate'), 'engine_fps', ENGINE_FPS_CHOICES),
+                 (0, 2, _('Aspect ratio'), None, self.aspect_options),
+                 (1, 2, _('Render resolution'), 'render_resolution', self.aspect_resolution_options))
+        for row, c, title, key, options in items:
+            r = 2 + row
             ttk.Label(quick, text=title).grid(row=r, column=c, sticky='w', pady=self.px(6), padx=self.px((0, 12)))
-            self.choice(quick, key, 'ini', options, width=18).grid(row=r, column=c + 1, sticky='w', padx=self.px((0, 40)))
+            box = (self.choice(quick, key, 'ini', options, width=18) if key else
+                   self.choice(quick, None, None, options, width=18, var=self.aspect_var()))
+            box.grid(row=r, column=c + 1, sticky='w', padx=self.px((0, 40)))
 
     def draw_banner(self):
         """The cover art of the selected dump (sce_sys/pic1.png) under the title."""
@@ -1698,7 +1737,9 @@ class Launcher:
                  _('1 is the lowest input latency; more can raise FPS when the graphics card is the limit.'))
         self.row(f, _('Engine frame rate'), self.choice(f, 'engine_fps', 'ini', ENGINE_FPS_CHOICES),
                  _('The highest frame rate the game itself runs at (a game patch).'), restart=True)
-        self.row(f, _('Render resolution'), self.choice(f, 'render_resolution', 'ini', self.resolution_options),
+        self.row(f, _('Aspect ratio'), self.choice(f, None, None, self.aspect_options, var=self.aspect_var()),
+                 _('Shows the render resolutions of this shape only.'))
+        self.row(f, _('Render resolution'), self.choice(f, 'render_resolution', 'ini', self.aspect_resolution_options),
                  _('The size the game draws at; higher is sharper and slower. A resolution patch replaces the '
                    'texture fix and reserves the memory it needs.'), restart=True)
         self.section(f, _('Shaders'))
