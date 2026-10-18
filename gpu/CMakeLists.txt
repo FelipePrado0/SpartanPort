@@ -431,7 +431,8 @@ target_link_libraries(fsr4-bench PRIVATE ffx-vulkan::fsr4-v07-vulkan ffx-vulkan:
 add_executable(cheat-hook-test ../tests/test_cheat_hook.cpp)
 target_compile_options(cheat-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 
-add_executable(swapchain-focus-test EXCLUDE_FROM_ALL ../tests/test_swapchain_focus.cpp)
+add_executable(swapchain-focus-test EXCLUDE_FROM_ALL ../tests/test_swapchain_focus.cpp
+    shim/window.cpp shim/gow3_settings.cpp)
 target_include_directories(swapchain-focus-test PRIVATE shim shadps4)
-target_link_libraries(swapchain-focus-test PRIVATE PkgConfig::SDL3 Vulkan::Vulkan)
+target_link_libraries(swapchain-focus-test PRIVATE PkgConfig::SDL3 Vulkan::Vulkan fmt::fmt)
 target_compile_options(swapchain-focus-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)

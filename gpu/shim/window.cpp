@@ -202,12 +202,12 @@ bool WindowSDL::PollEvents() {
         case SDL_EVENT_WINDOW_MINIMIZED:
         case SDL_EVENT_WINDOW_HIDDEN:
         case SDL_EVENT_WINDOW_OCCLUDED:
-            is_minimized.store(true, std::memory_order_relaxed);
+            is_minimized.store(true, std::memory_order_release);
             break;
         case SDL_EVENT_WINDOW_RESTORED:
         case SDL_EVENT_WINDOW_SHOWN:
         case SDL_EVENT_WINDOW_EXPOSED: {
-            is_minimized.store(false, std::memory_order_relaxed);
+            is_minimized.store(false, std::memory_order_release);
             int w = 0, h = 0;
             SDL_GetWindowSizeInPixels(window, &w, &h);
             if (w > 0 && h > 0) {
@@ -225,6 +225,12 @@ bool WindowSDL::PollEvents() {
             break;
         default:
             break;
+        }
+    }
+    if (window) {
+        const SDL_WindowFlags flags = SDL_GetWindowFlags(window);
+        if (flags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN | SDL_WINDOW_OCCLUDED)) {
+            is_minimized.store(true, std::memory_order_release);
         }
     }
     // gow3: while the game has the mouse it stays in the window (relative mode: hidden, no edges,
@@ -246,14 +252,8 @@ bool WindowSDL::PollEvents() {
 }
 
 bool WindowSDL::IsMinimized() const {
-    if (is_minimized.load(std::memory_order_relaxed)) {
+    if (is_minimized.load(std::memory_order_acquire)) {
         return true;
-    }
-    if (window) {
-        const SDL_WindowFlags flags = SDL_GetWindowFlags(window);
-        if (flags & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN | SDL_WINDOW_OCCLUDED)) {
-            return true;
-        }
     }
     return width.load(std::memory_order_relaxed) <= 0 || height.load(std::memory_order_relaxed) <= 0;
 }

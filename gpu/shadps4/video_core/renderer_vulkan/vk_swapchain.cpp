@@ -124,9 +124,13 @@ void Swapchain::SetHDR(bool hdr) {
 }
 
 bool Swapchain::AcquireNextImage() {
-    if (!swapchain) {
+    if (!swapchain || image_acquired.empty()) {
         needs_recreation = true;
         return false;
+    }
+
+    if (frame_index >= image_acquired.size()) {
+        frame_index = 0;
     }
 
     vk::Device device = instance.GetDevice();
@@ -154,7 +158,7 @@ bool Swapchain::AcquireNextImage() {
 }
 
 bool Swapchain::Present() {
-    if (!swapchain) {
+    if (!swapchain || present_ready.empty() || image_index >= present_ready.size()) {
         needs_recreation = true;
         return false;
     }
@@ -178,6 +182,8 @@ bool Swapchain::Present() {
 
     if (image_count > 0) {
         frame_index = (frame_index + 1) % image_count;
+    } else {
+        frame_index = 0;
     }
 
     return !needs_recreation;
@@ -256,6 +262,7 @@ void Swapchain::UpdateVsync() {
 }
 
 void Swapchain::RecreateSurface() {
+    Destroy();
     if (surface) {
         instance.GetInstance().destroySurfaceKHR(surface);
         surface = nullptr;
@@ -348,6 +355,8 @@ void Swapchain::Destroy() {
     present_ready.clear();
     images.clear();
     image_count = 0;
+    frame_index = 0;
+    image_index = 0;
 }
 
 void Swapchain::RefreshSemaphores() {
