@@ -35,11 +35,18 @@ static SDL_DisplayID MonitorDisplay() {
     }
     int count = 0;
     SDL_DisplayID* displays = SDL_GetDisplays(&count);
-    const SDL_DisplayID chosen = displays && index < count ? displays[index] : 0;
+    if (!displays || count == 0) {
+        LOG_WARNING(Frontend, "No displays available; using the primary display");
+        return SDL_GetPrimaryDisplay();
+    }
+    if (index < 0 || index >= count) {
+        LOG_WARNING(Frontend, "GOW3_MONITOR {} is out of range for {} display(s); using the primary display", value, count);
+        SDL_free(displays);
+        return SDL_GetPrimaryDisplay();
+    }
+    const SDL_DisplayID chosen = displays[index];
     SDL_free(displays);
-    if (chosen) return chosen;
-    LOG_WARNING(Frontend, "GOW3_MONITOR {} is out of range for {} display(s); using the primary display", value, count);
-    return SDL_GetPrimaryDisplay();
+    return chosen;
 }
 
 // gow3: a window opens at the render resolution chosen in the launcher (or the in-game menu), fitted

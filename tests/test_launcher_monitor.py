@@ -15,8 +15,8 @@ sys.path.insert(0, str(ROOT / 'launcher'))
 import gow3_launcher_win as launcher  # noqa: E402
 
 # `gow3-probe --displays`: index, name, primary, x, y, width, height. The name keeps spaces and a quote.
-TWO_DISPLAYS = ('0\tAOC 24"\t1\t0\t0\t1920\t1080\n'
-                '1\tTela embutida\t0\t1920\t0\t2560\t1440\n')
+TWO_DISPLAYS = ('0\tMonitor A\t1\t0\t0\t1920\t1080\n'
+                '1\tMonitor B\t0\t1920\t0\t2560\t1440\n')
 
 
 def added(env):
@@ -39,8 +39,8 @@ def monitor_box(app, first_label='Primary (default)', page='graphics'):
 class DisplayParserTest(unittest.TestCase):
     def test_seven_columns_are_read(self):
         self.assertEqual(launcher.parse_display_list(TWO_DISPLAYS),
-                         [('0', 'AOC 24"', '1', 0, 0, 1920, 1080),
-                          ('1', 'Tela embutida', '0', 1920, 0, 2560, 1440)])
+                         [('0', 'Monitor A', '1', 0, 0, 1920, 1080),
+                          ('1', 'Monitor B', '0', 1920, 0, 2560, 1440)])
 
     def test_names_keep_spaces_quotes_and_utf8(self):
         name = 'Dell U2720Q «à esquerda» — 4K'
@@ -102,8 +102,8 @@ class MonitorOptionsTest(unittest.TestCase):
         options = launcher.monitor_options(launcher.parse_display_list(TWO_DISPLAYS))
         self.assertEqual([value for value, _text in options], ['', '0', '1'])
         self.assertEqual(options[0], ('', ('Primary (default)',)))
-        self.assertEqual(options[1][1], ('AOC 24" · 1920 × 1080',))
-        self.assertEqual(options[2][1], ('Tela embutida · 2560 × 1440 · (1920, 0)',))
+        self.assertEqual(options[1][1], ('Monitor A · 1920 × 1080',))
+        self.assertEqual(options[2][1], ('Monitor B · 2560 × 1440 · (1920, 0)',))
 
     def test_a_gap_in_the_indices_is_kept(self):
         options = launcher.monitor_options(launcher.parse_display_list('0\tA\t1\t0\t0\t1920\t1080\n'
@@ -607,7 +607,7 @@ class MonitorLauncherTest(unittest.TestCase):
         self.assertEqual(detect.call_args.args[0], 'auto')  # the saved backend, as the game uses it
         box = monitor_box(app)
         self.assertEqual(tuple(box['values']),
-                         ('Primary (default)', 'AOC 24" · 1920 × 1080', 'Tela embutida · 2560 × 1440 · (1920, 0)'))
+                         ('Primary (default)', 'Monitor A · 1920 × 1080', 'Monitor B · 2560 × 1440 · (1920, 0)'))
         self.assertEqual(app.vars['monitor'].get(), '')
         box.current(2)
         box.event_generate('<<ComboboxSelected>>')
@@ -726,7 +726,7 @@ class QuickSettingsMonitorTest(unittest.TestCase):
         app, detect = self.build()
         quick, graphics = self.boxes(app)
         self.assertEqual(tuple(quick['values']),
-                         ('Primary (default)', 'AOC 24" · 1920 × 1080', 'Tela embutida · 2560 × 1440 · (1920, 0)'))
+                         ('Primary (default)', 'Monitor A · 1920 × 1080', 'Monitor B · 2560 × 1440 · (1920, 0)'))
         self.assertEqual(tuple(quick['values']), tuple(graphics['values']))  # one list for the two rows
         self.assertEqual(app.vars['monitor'].get(), '')  # the primary default
         self.assertEqual(quick.current(), 0)

@@ -1269,8 +1269,8 @@ EXTRA['pt'].update({
         'Somente para o inicializador. Aplica-se após Salvar.',
     'Monitor': 'Monitor',
     'Primary (default)': 'Principal (padrão)',
-    'The screen the game opens its window on. Primary is the monitor Windows calls the main one.':
-        'A tela em que o jogo abre a sua janela. Principal é o monitor que o Windows considera o principal.',
+    'The screen the game opens its window on. Primary is the monitor the system considers the main one.':
+        'A tela em que o jogo abre a sua janela. Principal é o monitor que o sistema considera o principal.',
 })
 
 EXTRA['pt'].update({
@@ -1318,6 +1318,10 @@ EXTRA['es'].update({
     '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 archivo lo cambian dos mods. Gana {}.',
     '⚠ {} also in {}. {} wins.': '⚠ {} también en {}. Gana {}.',
     '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ {} archivos los cambian varios mods. Gana el que está más abajo.',
+    'Monitor': 'Monitor',
+    'Primary (default)': 'Principal (predeterminado)',
+    'The screen the game opens its window on. Primary is the monitor the system considers the main one.':
+        'La pantalla en la que el juego abre su ventana. Principal es el monitor que el sistema considera el principal.',
 })
 
 EXTRA['pt'].update({

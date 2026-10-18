@@ -1842,8 +1842,8 @@ class Launcher:
         # put in place is picked up without capturing the list once.
         self.monitor_box = self.choice(f, 'monitor', 'app', self.monitor_list, width=46)
         self.row(f, _('Monitor', 'Монитор'), self.monitor_box,
-                 _('The screen the game opens its window on. Primary is the monitor Windows calls the main one.',
-                   'Экран, на котором игра открывает своё окно. Основной — монитор, который Windows считает главным.'))
+                 _('The screen the game opens its window on. Primary is the monitor the system considers the main one.',
+                   'Экран, на котором игра открывает своё окно. Основной — монитор, который система считает главным.'))
         self.check(f, 'vsync', 'ini', _('VSync'), _('Off allows tearing for the lowest latency.'))
         self.check(f, 'hdr', 'app', _('Allow HDR output', 'Разрешить HDR'),
                    _('When HDR is on in Windows and the display supports it.',
