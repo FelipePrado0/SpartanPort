@@ -82,6 +82,23 @@ int main(void) {
     assert(trophy_unlock_state(1,1,NULL,&count)==TROPHY_INVALID && trophy_release(0)==TROPHY_INVALID);
 
     float ratio=0; assert(safe_area(&ratio)==0 && ratio==1.0f && safe_area(NULL)==SYSTEM_PARAMETER);
+
+    /* System parameter 1: language ID from GOW3_LANGUAGE (default 1 = English US, 16 = Polish) */
+    int32_t lang=0;
+    assert(system_param(1,&lang)==0 && lang==1);
+#ifdef _WIN32
+    _putenv("GOW3_LANGUAGE=16");
+#else
+    setenv("GOW3_LANGUAGE","16",1);
+#endif
+    assert(system_param(1,&lang)==0 && lang==16);
+#ifdef _WIN32
+    _putenv("GOW3_LANGUAGE=");
+#else
+    unsetenv("GOW3_LANGUAGE");
+#endif
+    assert(system_param(1,&lang)==0 && lang==1);
+
     puts("services test: ok");
     return 0;
 }

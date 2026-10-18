@@ -671,7 +671,9 @@ LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарт�
         ('1', ('On (change without restarting)', 'Включена (без перезапуска)'))]
 LANGUAGES = [('1', ('English', 'Английский')), ('8', ('Russian', 'Русский')), ('0', ('Japanese', 'Японский')),
              ('2', ('French', 'Французский')), ('3', ('Spanish', 'Испанский')), ('4', ('German', 'Немецкий')),
-             ('5', ('Italian', 'Итальянский'))]
+             ('5', ('Italian', 'Итальянский')),
+             # Polish (id 16, LANGS_BCES00510.TXT); see issue #493.
+             ('16', ('Polish', 'Польский'))]
 DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', ('On', 'Включён')),
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
