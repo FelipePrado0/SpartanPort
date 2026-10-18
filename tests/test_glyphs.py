@@ -83,8 +83,8 @@ class GlyphTableTest(unittest.TestCase):
         self.assertEqual((keys['cross'], keys['square'], keys['l2']), ('Q', 'Left Shift', 'G'))
         self.assertEqual(keys['circle'], 'Left Shift')  # empty: the default
         self.assertEqual(glyphs.key_buttons('l3=None')['l3'], 'Z')
-        self.assertEqual(glyphs.key_buttons(''), glyphs.DEFAULT_KEYS)
-        self.assertEqual(set(glyphs.DEFAULT_KEYS), set(glyphs.DEFAULT_MAP))
+        self.assertEqual(glyphs.key_buttons(''), {**glyphs.DEFAULT_KEYS, **glyphs.STICK_KEYS})
+        self.assertEqual(set(glyphs.DEFAULT_KEYS) - set(glyphs.DEFAULT_MAP), {'up'})  # the keyboard-only D-pad icon
 
     def test_rage_on_one_input_draws_its_key_on_l3_and_r3(self):
         keys = glyphs.key_buttons('l3=None,r3=None,rage=Mouse Middle,grab=C')
@@ -279,3 +279,28 @@ class RunGlyphsTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class KeyboardStickTest(unittest.TestCase):
+    """The keyboard style also draws the movement and camera keys on the game's stick icons and the
+    D-pad key on its D-pad icon; the gamepad styles leave those textures alone."""
+
+    def test_stick_and_dpad_textures_are_keyboard_only(self):
+        self.assertEqual({b for _f, b in glyphs.KEYBOARD_TEXTURES.values()}, {'lstick', 'rstick', 'up'})
+        self.assertFalse(set(glyphs.KEYBOARD_TEXTURES) & set(glyphs.TEXTURES))
+        self.assertEqual(glyphs.textures('xbox'), glyphs.TEXTURES)
+        self.assertEqual(glyphs.textures('keyboard'), {**glyphs.TEXTURES, **glyphs.KEYBOARD_TEXTURES})
+
+    def test_sticks_show_the_movement_and_camera_keys(self):
+        keys = glyphs.key_buttons('')
+        self.assertEqual(glyphs.glyph(keys['lstick'], 'keyboard')[:2], ('plate', 'WASD'))
+        self.assertEqual(glyphs.glyph(keys['rstick'], 'keyboard')[:2], ('key', 'arrows'))
+
+    def test_dpad_follows_the_weapon_key(self):
+        self.assertEqual(glyphs.key_buttons('')['up'], 'I')
+        self.assertEqual(glyphs.key_buttons('up=1')['up'], '1')
+
+    def test_arrows_render(self):
+        image = glyphs.render('inline', 'rstick', 'keyboard', None, '', 64, 64)
+        self.assertEqual(image.size, (64, 64))
+        self.assertGreater(len(set(image.getdata())), 4)
