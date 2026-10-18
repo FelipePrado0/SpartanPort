@@ -125,6 +125,81 @@ static void test_env_override_prevents_fallback(void) {
     putenv("SDL_AUDIO_DRIVER=");
     printf("SDL_AUDIO_DRIVER override test passed!\n");
 }
+
+static SDL_AudioStream *mock_fail_port8(SDL_AudioDeviceID dev, const SDL_AudioSpec *spec, SDL_AudioStreamCallback cb, void *user) {
+    if (ports[8].used && !ports[8].stream) {
+        SDL_SetError("WASAPI secondary port failure");
+        return NULL;
+    }
+    return SDL_OpenAudioDeviceStream(dev, spec, cb, user);
+}
+
+static void test_secondary_port_failure_leaves_active_stream_intact(void) {
+    printf("Testing secondary port failure leaves active primary stream intact...\n");
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER, "wasapi", SDL_HINT_OVERRIDE);
+    sdl_ready = -1;
+
+    int32_t h0 = audio_open(0, 0, 0, 256, 48000, 5);
+    assert(h0 > 0);
+    int id0 = h0 & 0xff;
+    assert(!strcmp(SDL_GetCurrentAudioDriver(), "wasapi"));
+    assert(ports[id0].stream != NULL);
+
+    test_open_stream = mock_fail_port8;
+
+    int32_t h8 = audio_open(0, 1, 0, 256, 48000, 5);
+    assert(h8 > 0);
+    int id8 = h8 & 0xff;
+
+    /* Backend must NOT be switched because port 0 has an active stream */
+    assert(!strcmp(SDL_GetCurrentAudioDriver(), "wasapi"));
+    assert(ports[id0].stream != NULL);
+    assert(ports[id8].stream == NULL);
+
+    float buffer[256 * 8] = {0};
+    assert(audio_output(h0, buffer) == 256 * 8);
+    assert(audio_output(h8, buffer) == 256 * 8);
+
+    assert(audio_close(h8) == 0);
+    assert(audio_close(h0) == 0);
+    test_open_stream = NULL;
+    printf("Secondary port failure test passed!\n");
+}
+
+static SDL_AudioStream *mock_fail_both_wasapi_and_ds(SDL_AudioDeviceID dev, const SDL_AudioSpec *spec, SDL_AudioStreamCallback cb, void *user) {
+    (void)dev; (void)spec; (void)cb; (void)user;
+    const char *driver = SDL_GetCurrentAudioDriver();
+    if (driver && !strcmp(driver, "wasapi")) {
+        SDL_SetError("WASAPI can't initialize audio client: ");
+    } else {
+        SDL_SetError("DirectSound device creation failed");
+    }
+    return NULL;
+}
+
+static void test_wasapi_and_directsound_both_fail_timer_sink(void) {
+    printf("Testing complete failure sequence (WASAPI fails, DirectSound fails -> timer sink)...\n");
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER, "wasapi", SDL_HINT_OVERRIDE);
+    sdl_ready = -1;
+
+    test_open_stream = mock_fail_both_wasapi_and_ds;
+
+    int32_t handle = audio_open(0, 0, 0, 256, 48000, 5);
+    assert(handle > 0);
+    int id = handle & 0xff;
+
+    assert(!strcmp(SDL_GetCurrentAudioDriver(), "directsound"));
+    assert(ports[id].stream == NULL);
+
+    float buffer[256 * 8] = {0};
+    assert(audio_output(handle, buffer) == 256 * 8);
+
+    assert(audio_close(handle) == 0);
+    test_open_stream = NULL;
+    printf("Complete failure sequence test passed!\n");
+}
 #endif
 
 static void test_complete_failure_timer_sink(void) {
@@ -189,6 +264,8 @@ int main(void) {
 #ifdef _WIN32
     test_wasapi_fallback();
     test_env_override_prevents_fallback();
+    test_secondary_port_failure_leaves_active_stream_intact();
+    test_wasapi_and_directsound_both_fail_timer_sink();
 #endif
     test_complete_failure_timer_sink();
 

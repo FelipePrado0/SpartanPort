@@ -144,15 +144,17 @@ static void try_audio_fallback(Port *p, int id) {
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
     SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER, "directsound", SDL_HINT_OVERRIDE);
     sdl_ready = SDL_InitSubSystem(SDL_INIT_AUDIO);
-    if (sdl_ready) {
-        printf("Runtime: audio backend %s (fallback from wasapi)\n", SDL_GetCurrentAudioDriver());
+    const char *new_driver = sdl_ready ? SDL_GetCurrentAudioDriver() : NULL;
+    if (sdl_ready && new_driver && !strcmp(new_driver, "directsound")) {
+        printf("Runtime: audio backend %s (fallback from wasapi)\n", new_driver);
         SDL_AudioSpec device; int device_frames;
         p->downmix = p->channels == 8 && SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &device, &device_frames)
                      && device.channels == 2;
         SDL_AudioSpec spec = {p->is_float ? SDL_AUDIO_F32 : SDL_AUDIO_S16, p->downmix ? 2 : p->channels, 48000};
         p->stream = OPEN_AUDIO_STREAM(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
     } else {
-        fprintf(stderr, "Runtime: failed to initialize directsound audio backend (%s) for port %d\n", SDL_GetError(), id);
+        fprintf(stderr, "Runtime: failed to initialize directsound audio backend (current: %s, error: %s) for port %d\n",
+                new_driver ? new_driver : "none", SDL_GetError(), id);
     }
 }
 #endif
