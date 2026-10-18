@@ -2169,6 +2169,8 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                 }
             } else if (desc.buffer_type == Shader::BufferType::BdaPagetable) {
                 const auto* bda_buffer = buffer_cache.GetBdaPageTableBuffer();
+                needs_barrier |= runtime.IsBufferAccessed(bda_buffer, 0, bda_buffer->SizeBytes());
+                bound_buffers.emplace_back(bda_buffer, 0, bda_buffer->SizeBytes(), false);
                 buffer_infos.emplace_back(bda_buffer->Handle(), 0, bda_buffer->SizeBytes());
             } else if (desc.buffer_type == Shader::BufferType::FaultBuffer) {
                 const auto* fault_buffer = buffer_cache.GetFaultBuffer();

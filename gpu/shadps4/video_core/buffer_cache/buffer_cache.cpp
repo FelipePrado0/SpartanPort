@@ -470,7 +470,11 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
     }
     Gow3Stats::Timer timer{Gow3Stats::t_resident};
 
+    const vk::MemoryAllocateFlagsInfo flags_info = {
+        .flags = vk::MemoryAllocateFlagBits::eDeviceAddress,
+    };
     const vk::MemoryAllocateInfo alloc_info = {
+        .pNext = &flags_info,
         .allocationSize = resident_blocks << block_shift,
         .memoryTypeIndex = arena_memory_type_index,
     };
@@ -512,6 +516,7 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
 
     staging.Flush();
     runtime.CopyBuffer(staging.buffer, bda_pagetable_buffer.get(), copies);
+    runtime.FlushBarriers();
 }
 
 bool BufferCache::SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 size,
