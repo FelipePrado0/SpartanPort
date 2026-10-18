@@ -20,4 +20,4 @@ class AspectFilterTest(unittest.TestCase):
             resolution.set('3440x1440')
             self.assertEqual(aspect.get(), '21:9')
             self.assertIn('4:3', [v for v, _t in app.aspect_options()])
-            self.assertEqual(dict(app.aspect_resolution_options())['3440x1440'], ('3440 × 1440 (beta)',))
+            self.assertEqual(dict(app.aspect_resolution_options())['3440x1440'], ('3440 × 1440',))  # confirmed in game: not beta

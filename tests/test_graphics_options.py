@@ -154,16 +154,18 @@ class GraphicsOptionsTest(unittest.TestCase):
         self.assertEqual(g.resolution_label('native'), 'Native · 1920 × 1080 · 16:9')
         self.assertEqual(g.resolution_label('480p'), '480p · 854 × 480 · 16:9')
         self.assertEqual(g.resolution_label('900p'), '900p · 1600 × 900 · 16:9')
-        self.assertEqual(g.resolution_label('3440x1440'), '3440 × 1440 · 21:9 (beta)')
-        self.assertEqual(g.resolution_label('5120x1440'), '5120 × 1440 · 32:9 (beta)')
-        self.assertEqual(g.resolution_label('2560x1600'), '2560 × 1600 · 16:10 (beta)')
+        self.assertEqual(g.resolution_label('3440x1440'), '3440 × 1440 · 21:9')  # confirmed in game: not beta
+        self.assertEqual(g.resolution_label('2560x1080'), '2560 × 1080 · 21:9 (beta)')
+        self.assertEqual(g.resolution_label('5120x1440'), '5120 × 1440 · 32:9')
+        self.assertEqual(g.resolution_label('2560x1600'), '2560 × 1600 · 16:10')
         self.assertEqual(g.resolution_label('1280x800'), '1280 × 800 · 16:10')  # the Steam Deck's screen, tested
         self.assertEqual(g.resolution_label('1280x960'), '1280 × 960 · 4:3')
-        self.assertEqual(g.resolution_label('1920x1440'), '1920 × 1440 · 4:3 (beta)')
+        self.assertEqual(g.resolution_label('1920x1440'), '1920 × 1440 · 4:3')
+        self.assertEqual(g.resolution_label('2048x1536'), '2048 × 1536 · 4:3 (beta)')
         self.assertEqual(g.resolution_label('3840x1080'), '3840 × 1080 · 32:9')  # a mod's size, not beta
         self.assertEqual(g.resolution_label('1600x1200'), '1600 × 1200 · 4:3')
         self.assertEqual(g.resolution_label('custom'), 'custom')
-        # Every ultrawide and 16:10 size is beta; the 16:9 ones are not.
+        # Only the sizes nobody has confirmed in game are beta; the 16:9 ones are not.
         self.assertEqual([r for r in g.RESOLUTIONS if g.resolution_label(r).endswith('(beta)')],
                          list(g.BETA_RESOLUTIONS))
 
@@ -285,7 +287,7 @@ class AspectRatioTest(unittest.TestCase):
 
     def test_labels_without_the_aspect_ratio_for_the_filtered_list(self):
         self.assertEqual(g.resolution_label('1800p', aspect=False), '1800p · 3200 × 1800')
-        self.assertEqual(g.resolution_label('3440x1440', aspect=False), '3440 × 1440 (beta)')
+        self.assertEqual(g.resolution_label('2560x1080', aspect=False), '2560 × 1080 (beta)')
         self.assertEqual(g.resolution_label('1800p'), '1800p · 3200 × 1800 · 16:9')  # elsewhere it stays
 
 if __name__ == '__main__':
