@@ -55,6 +55,13 @@ class GlyphTableTest(unittest.TestCase):
                          [(0, 5, 'A'), (0x50, 0, 'B'), (0x90, 16, 'C')])
         self.assertEqual([name for _o, _s, name in glyphs.entries(data[:-8])], ['A', 'B'])
 
+    def test_entity_count_marker_carries_no_data(self):
+        # level WADs: the marker's size field is a count; the next entry follows its header at once
+        data = entry('WAD_Oly150', b'\0' * 8, tag=0x14) + entry('EntityCount', tag=0)[:0x40]
+        data = bytearray(data[:-4] + struct.pack('<I', 86) + entry('SBP_OLY150', b'\1' * 40) + entry('GroupEnd', tag=3))
+        struct.pack_into('<I', data, 0x40 + 16 + 4, 86)  # the count where the size goes
+        self.assertEqual([name for _o, _s, name in glyphs.entries(data)], ['WAD_Oly150', 'EntityCount', 'SBP_OLY150', 'GroupEnd'])
+
     def test_glyph_of_each_style(self):
         self.assertEqual(glyphs.glyph('a', 'xbox'), ('disc', 'A', glyphs.STYLES['xbox']['colors']['a']))
         self.assertEqual(glyphs.glyph('a', 'nintendo')[:2], ('disc', 'B'))  # south on a Switch pad

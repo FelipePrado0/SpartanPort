@@ -7,7 +7,8 @@ keyboard keys of SPARTAN_KEY_MAP) drawn over the PlayStation ones, and returns t
 written: a texture keeps its size and format, so only its pixels change inside the copy.
 
 WAD (little-endian): entries of a 0x40 header (u16 tag, u16 flags, u32 size, name[56]) and `size`
-bytes padded to 16. A texture entry is named TX<hash>.<hash>.dds and holds a short prefix and a
+bytes padded to 16 (the EntityCount marker of level WADs, tag 0, carries a count in its size field
+and no data). A texture entry is named TX<hash>.<hash>.dds and holds a short prefix and a
 plain DDS file (DXT1 or DXT5), which the materials reference by that name."""
 import io
 import json
@@ -82,10 +83,13 @@ def entries(data):
     """(offset, size, name) of each WAD entry; stops at the first one that does not fit."""
     offset = 0
     while offset + 0x40 <= len(data):
-        size = struct.unpack_from('<I', data, offset + 4)[0]
+        tag, _flags, size = struct.unpack_from('<HHI', data, offset)
+        name = bytes(data[offset + 8:offset + 0x40]).split(b'\0')[0].decode('latin1')
+        if tag == 0 and name == 'EntityCount':
+            size = 0
         if offset + 0x40 + size > len(data):
             return
-        yield offset, size, bytes(data[offset + 8:offset + 0x40]).split(b'\0')[0].decode('latin1')
+        yield offset, size, name
         offset += 0x40 + ((size + 15) & ~15)
 
 
