@@ -196,7 +196,7 @@ para los cambios en descargas posteriores.
 ## Configuración
 
 Los ajustes se guardan en `gow3.ini` (el juego y el menú dentro del juego) y en
-`%APPDATA%\gow3-launcher\settings.json` (el launcher). Las partidas, la caché de shaders y
+`settings.json` (el launcher), en la carpeta del port. Las partidas, la caché de shaders y
 `last_run.log` van a la carpeta `user` del proyecto.
 
 En **Performance → GPU data → Stream buffer memory**, elegí **System RAM (cached, default)**,
