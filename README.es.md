@@ -244,7 +244,7 @@ Valores por defecto; cambialos en la página **Controls** del launcher, sección
 | Q y E | L1 y R1 |
 | R y el botón de avanzar del mouse | L2 y R2 |
 | Z y X | L3 y R3 |
-| Clic de la rueda | Rage of Sparta (L3 + R3) |
+| F | Rage of Sparta (L3 + R3) |
 | C | Agarre (L1 + Círculo) |
 | El botón de retroceder del mouse | Esquivar |
 | 1, 2, 3, 4 | cruceta: arriba, derecha, abajo, izquierda (armas) |

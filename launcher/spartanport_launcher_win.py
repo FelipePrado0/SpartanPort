@@ -640,7 +640,10 @@ KEY_DEFAULTS = {'cross': 'Space', 'circle': 'Left Shift', 'square': 'Mouse Left'
 # Actions of the keyboard map only (runtime_pad.c's host-only sources), as CONTROLS rows. Rage of
 # Sparta (L3 + R3 on one input) follows R3; it is used instead of L3 and R3 while 'rage_one_input'
 # is on. "None" leaves a row without an input. The wheel cycles the weapons on the d-pad.
-RAGE_ROW, GRAB_ROW, DODGE_ROW = ('rage', 'Mouse Middle', None), ('grab', 'C', None), ('dodge', 'Mouse Back', None)
+RAGE_ROW, GRAB_ROW, DODGE_ROW = ('rage', 'F', None), ('grab', 'C', None), ('dodge', 'Mouse Back', None)
+# Rage of Sparta was on the wheel click until the wheel cycled the weapons, where a scroll could set it
+# off. A saved table keeps it there (keep_saved_rage): nothing moves for a player who set up keys.
+RAGE_LEGACY_INPUT = 'Mouse Middle'
 WEAPON_ROWS = (('weapon_next', 'Wheel Up', None), ('weapon_prev', 'Wheel Down', None))
 KEY_ACTIONS = [RAGE_ROW, GRAB_ROW, DODGE_ROW, *WEAPON_ROWS]
 ACTION_NAMES = {'rage': 'Rage of Sparta', 'grab': 'Grab', 'dodge': 'Dodge',
@@ -720,6 +723,14 @@ def control_map(controls, kind):
                     if button in chosen and not set(chosen[button]) & set(',='))
 
 
+def inputs_in_use(chosen, rage, skipped):
+    """The inputs a keyboard table sends (saved or default), leaving out the `skipped` rows and the
+    rows the table does not send (L3 and R3 with Rage of Sparta on one input, else the rage row)."""
+    unused = set(RAGE_BUTTONS) if rage else {'rage'}
+    return {(chosen.get(row[0]) or default_input(row, 'key')).strip().casefold()
+            for row in table_rows('key') if row[1] and row[0] not in set(skipped) | unused}
+
+
 def claim_new_actions(controls, rage, actions):
     """Leaves the `actions` (rows) that a saved keyboard table predates without an input ('None')
     when their default one is already used by another row; the rest follow their defaults. A
@@ -727,18 +738,27 @@ def claim_new_actions(controls, rage, actions):
     chosen = control_values(controls, 'key')
     if not chosen:
         return
-    added = {row[0] for row in actions}
-    unused = set(RAGE_BUTTONS) if rage else {'rage'}  # the rows the table does not send
-    taken = {(chosen.get(row[0]) or default_input(row, 'key')).strip().casefold()
-             for row in table_rows('key') if row[1] and row[0] not in added | unused}
+    taken = inputs_in_use(chosen, rage, {row[0] for row in actions})
     controls['key'].update({button: 'None' for button, default, _pad in actions if default.casefold() in taken})
+
+
+def keep_saved_rage(controls, rage):
+    """A saved keyboard table that never moved Rage of Sparta keeps it on the wheel click it had
+    (RAGE_LEGACY_INPUT), unless another row of the table uses that input. A table with nothing
+    saved follows the new default."""
+    chosen = control_values(controls, 'key')
+    if not chosen or 'rage' in chosen:
+        return
+    if RAGE_LEGACY_INPUT.casefold() not in inputs_in_use(chosen, rage, {'rage'}):
+        controls['key']['rage'] = RAGE_LEGACY_INPUT
 
 
 def migrate_controls(saved):
     """Settings saved before the current keyboard & mouse table (CONTROLS_LAYOUT). A player who
     saved keys in Keyboard Mapping keeps the whole layout they had (the game's keys for the rest);
     one who used Native Translation keeps that table; one on layout 2 keeps theirs and only gets
-    the weapon cycle. A new action whose default input is already taken stays without one."""
+    the weapon cycle. A new action whose default input is already taken stays without one, and a
+    saved table keeps Rage of Sparta on the wheel click (keep_saved_rage)."""
     if not isinstance(saved, dict) or not saved or saved.get('controls_layout') == CONTROLS_LAYOUT:
         return saved
     layout_two = saved.get('controls_layout') == 2
@@ -748,9 +768,11 @@ def migrate_controls(saved):
     if layout_two:
         if isinstance(controls.get('key'), dict):
             controls['key'] = dict(controls['key'])
+            keep_saved_rage(controls, saved.get('rage_one_input', True))
             claim_new_actions(controls, saved.get('rage_one_input', True), WEAPON_ROWS)
     elif saved.pop('native_input', False) and isinstance(native, dict):
         controls['key'] = dict(native)  # its defaults are the new ones
+        keep_saved_rage(controls, saved.get('native_rage', True))
         claim_new_actions(controls, saved.get('native_rage', True), WEAPON_ROWS)
     elif controls.get('key'):
         kept = control_values(controls, 'key')
@@ -759,6 +781,7 @@ def migrate_controls(saved):
         taken = {value.strip().casefold() for button, value in layout.items()
                  if not (rage and button in RAGE_BUTTONS)}
         for button, default, _pad in KEY_ACTIONS:
+            default = RAGE_LEGACY_INPUT if button == 'rage' else default  # the one they had
             layout[button] = 'None' if default.casefold() in taken else default
         controls['key'] = layout
     if 'native_rage' in saved:
