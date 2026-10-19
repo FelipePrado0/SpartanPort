@@ -238,6 +238,12 @@ def main():
             env['DYLD_FALLBACK_LIBRARY_PATH'] = ':'.join(dyld_paths + ([current_dyld] if current_dyld else []))
             current_lib = env.get('DYLD_LIBRARY_PATH', '')
             env['DYLD_LIBRARY_PATH'] = ':'.join(dyld_paths + ([current_lib] if current_lib else []))
+        for candidate in (lib_dir / 'libmimalloc.dylib', PORT / 'bin/lib/libmimalloc.dylib', PORT / 'out/lib/libmimalloc.dylib'):
+            if candidate.is_file():
+                current_insert = env.get('DYLD_INSERT_LIBRARIES', '')
+                if str(candidate) not in current_insert:
+                    env['DYLD_INSERT_LIBRARIES'] = f"{candidate}:{current_insert}" if current_insert else str(candidate)
+                break
         if not env.get('VK_DRIVER_FILES') and not env.get('VK_ICD_FILENAMES'):
             if (lib_dir / 'MoltenVK_icd.json').is_file():
                 env['VK_DRIVER_FILES'] = str(lib_dir / 'MoltenVK_icd.json')
@@ -259,7 +265,9 @@ def main():
         env.setdefault('MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS', '1')
         env.setdefault('MVK_CONFIG_USE_COMMAND_POOLING', '1')
         env.setdefault('MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS', '0')
-        env.setdefault('MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS', '1')
+        env.setdefault('MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS', '3')
+        env.setdefault('MVK_CONFIG_MAX_ACTIVE_METAL_COMMAND_BUFFERS_PER_QUEUE', '64')
+        env.setdefault('MVK_CONFIG_ACTIVITY_PERFORMANCE_LOGGING_STYLE', '0')
         env.setdefault('MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION', '1')
         env.setdefault('MVK_CONFIG_ALLOW_METAL_EVENTS', '1')
         env.setdefault('MVK_CONFIG_ALLOW_METAL_FENCES', '1')

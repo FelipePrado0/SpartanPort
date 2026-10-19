@@ -161,6 +161,15 @@ if ! ninja -C out/gpu gow3gpu > out/gpu-build.log 2>&1; then
 fi
 # $ORIGIN/gpu on Linux, @loader_path/gpu and @executable_path/gpu on Darwin
 if [[ $is_darwin -eq 1 ]]; then
+    if [[ -f third_party/mimalloc/src/static.c ]]; then
+        mkdir -p out/lib bin/lib
+        if [[ ! -f out/lib/libmimalloc.dylib || -n $(find third_party/mimalloc -newer out/lib/libmimalloc.dylib 2>/dev/null) ]]; then
+            "$CC" -arch x86_64 -O3 -fno-math-errno -fPIC -dynamiclib -install_name @rpath/libmimalloc.dylib \
+                -Ithird_party/mimalloc/include -DMI_MALLOC_OVERRIDE=1 -DMI_OSX_ZONE=1 -DMI_OSX_INTERPOSE=1 \
+                third_party/mimalloc/src/static.c -o out/lib/libmimalloc.dylib
+            cp out/lib/libmimalloc.dylib bin/lib/ 2>/dev/null || true
+        fi
+    fi
     if [[ -d bin/lib ]]; then
         for f in bin/lib/lib*.*.dylib; do
             base=$(basename "$f")
@@ -173,7 +182,7 @@ if [[ $is_darwin -eq 1 ]]; then
     fi
     gpu=(-Lout/gpu -lgow3gpu -Wl,-rpath,'@loader_path/gpu' -Wl,-rpath,'@executable_path/gpu' -Wl,-rpath,'@loader_path/lib' -Wl,-rpath,'@executable_path/lib' -Wl,-rpath,'@loader_path/../bin/lib' -Wl,-rpath,'@loader_path/../bin/gpu' -Wl,-rpath,'@loader_path/../out/gpu' -Wl,-rpath,"$PWD/bin/lib" -Wl,-rpath,"$PWD/out/gpu" -Wl,-export_dynamic -framework Metal -framework Foundation -framework QuartzCore)
     probe_link_flags=(-Wl,-pie -Wl,-rpath,'@loader_path/lib' -Wl,-rpath,'@executable_path/lib' -Wl,-rpath,'@loader_path/../bin/lib' -Wl,-rpath,'@loader_path/../bin/gpu' -Wl,-rpath,'@loader_path/../out/gpu' -Wl,-rpath,"$PWD/bin/lib" -Wl,-rpath,"$PWD/out/gpu")
-    arch_flags=(-arch x86_64 -mavx -msse4.2 -mbmi -mlzcnt)
+    arch_flags=(-arch x86_64 -mavx -msse4.2 -mbmi -mlzcnt -fno-math-errno -fno-trapping-math)
 else
     gpu=(-Lout/gpu -lgow3gpu -Wl,-rpath,'$ORIGIN/gpu' -Wl,-rpath,"$PWD/out/gpu" -rdynamic)
     probe_link_flags=(-no-pie)
@@ -195,6 +204,9 @@ echo "Built $PWD/out/gow3-probe"
 "$CC" "${arch_flags[@]}" -std=c11 -O3 -Wall -Wextra -Werror "${probe_link_flags[@]}" "${includes[@]}" -Igpu/shadps4 tools/gpu_capabilities.c "${libraries[@]}" -o out/gow3-gpu-capabilities
 if [[ $is_darwin -eq 1 && -d bin ]]; then
     cp out/gow3-probe out/gow3-gpu-capabilities bin/ 2>/dev/null || true
+    if [[ -f out/lib/libmimalloc.dylib && -d bin/lib ]]; then
+        cp out/lib/libmimalloc.dylib bin/lib/ 2>/dev/null || true
+    fi
     if [[ -f out/gpu/libgow3gpu.dylib && -d bin/gpu ]]; then
         cp out/gpu/libgow3gpu.dylib bin/gpu/ 2>/dev/null || true
     fi
