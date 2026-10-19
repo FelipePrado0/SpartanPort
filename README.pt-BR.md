@@ -265,6 +265,13 @@ Em um controle sem touchpad (Xbox e outros), View abre o menu de pausa (o clique
 touchpad) e L1 + View abre o modo foto (o clique esquerdo). No DualSense o touchpad funciona
 como no PS4, e Share/Create funciona como View.
 
+**Ataques de troca com L1 + direcional e L1 + Xis** (desligado por padrão, tela Controls): L1 + uma
+direção do direcional troca para essa arma com o ataque de troca dela, e a arma que já está na mão de
+Kratos repete o ataque; L1 + Xis faz o ataque de troca da arma na mão em vez de passar para a próxima
+arma. O ataque de troca da mesma arma de novo espera 0,8 segundo depois do último (o de outra arma
+não espera). O direcional sozinho troca como antes. Os tutoriais de troca de arma passam a dizer isso em todos os idiomas
+(em cópias dos arquivos de idioma na pasta de dados do port). Sem o launcher, defina `SPARTAN_SWITCH_ATTACKS=1`.
+
 Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Controls do launcher, em
 *Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox*, *Nintendo* ou *Teclado*. Eles trocam os ícones
 PlayStation dos tutoriais, da lista de golpes, dos eventos rápidos e, nos estilos de controle, da lira das Musas

@@ -1033,6 +1033,9 @@ EXTRA = {
         'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
             'Como os eventos de girar o analógico são respondidos. Teclado: digite o giro, meias-voltas a partir de cima D S A (horário) ou A S D, a partir de baixo A W D ou D W A, voltas completas D S A W ou A S D W; uma tecla fora de ordem recomeça. Mouse adaptativo: desenhe o giro com o mouse.',
         'Joystick prompts': 'Prompts do analógico',
+        'Switch attacks on L1 + d-pad and L1 + Cross': 'Ataques de troca com L1 + direcional e L1 + X',
+        "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.":
+            "L1 + uma direção do direcional troca para essa arma com o ataque de troca dela (a arma que já está na mão de Kratos repete o ataque). L1 + X faz o ataque de troca da arma na mão em vez de passar para a próxima arma. O direcional sozinho troca como antes. Aplicado ao iniciar o jogo.",
         'Keep the mouse in the game window': 'Manter o mouse na janela do jogo',
         'Key not supported': 'Tecla não suportada',
         'Keyboard & Mouse Mapping': 'Mapeamento de teclado e mouse',
@@ -1319,6 +1322,9 @@ EXTRA = {
         'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
             'Cómo se responden los eventos de girar el stick. Teclado: escribe el giro, medias vueltas desde arriba D S A (horario) o A S D, desde abajo A W D o D W A, vueltas completas D S A W o A S D W; una tecla fuera de orden vuelve a empezar. Ratón adaptativo: dibuja el giro con el ratón.',
         'Joystick prompts': 'Eventos del stick',
+        'Switch attacks on L1 + d-pad and L1 + Cross': 'Ataques de cambio con L1 + cruceta y L1 + X',
+        "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.":
+            "L1 + una dirección de la cruceta cambia a esa arma con su ataque de cambio (el arma que Kratos ya tiene en la mano repite su ataque). L1 + X hace el ataque de cambio del arma en la mano en lugar de pasar a la siguiente arma. La cruceta sola cambia como antes. Se aplica al iniciar el juego.",
         'Keep the mouse in the game window': 'Mantener el ratón en la ventana del juego',
         'Key not supported': 'Tecla no compatible',
         'Keyboard & Mouse Mapping': 'Asignación de teclado y ratón',

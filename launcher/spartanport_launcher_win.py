@@ -500,7 +500,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
                 'rage_one_input': True, 'stick_prompts': 'keyboard', 'controls_layout': CONTROLS_LAYOUT,
-                'glyph_style': 'off'}
+                'switch_attacks': False, 'glyph_style': 'off'}
 
 # PS4 button, default key, default gamepad button (SDL names; src/runtime_pad.c). L2/R2 come
 # from the analog triggers and the left touchpad click (photo mode) from L1 + the right click's
@@ -1343,6 +1343,9 @@ def game_environment(s):
         env['SPARTAN_KEY_MAP'] = value
     if value := control_map(controls, 'pad'):
         env['SPARTAN_PAD_MAP'] = value
+    env.pop('SPARTAN_SWITCH_ATTACKS', None)
+    if s.get('switch_attacks'):
+        env['SPARTAN_SWITCH_ATTACKS'] = '1'
     env.pop('SPARTAN_STICK_PROMPTS', None)
     if s.get('stick_prompts') in dict(STICK_PROMPTS):
         env['SPARTAN_STICK_PROMPTS'] = s['stick_prompts']
@@ -2582,6 +2585,11 @@ class Launcher:
                  hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
                         'Works on a copy of up to three game files in the port\'s data folder (about 410 MB); your game folder '
                         'is never changed. Applied when the game starts.'))
+        self.check(page, 'switch_attacks', 'app', _('Switch attacks on L1 + d-pad and L1 + Cross'),
+                   _('L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos\' '
+                     'hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands '
+                     'instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the '
+                     'game starts.'))
         saved_device = self.app.get('controls_device')
         self.device = tk.StringVar(value=saved_device if saved_device in dict(CONTROL_DEVICES) else 'keyboard')
         self.device_chosen = saved_device in dict(CONTROL_DEVICES)
