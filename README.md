@@ -19,6 +19,12 @@ and Linux (experimental AppImage).
 > This project is not affiliated with or endorsed by Sony Interactive Entertainment or Santa Monica Studio.
 > God of War is a trademark of Sony Interactive Entertainment.
 
+> **Formerly gow3_pc.** Updating from 2.5.0 through the launcher keeps your saves and settings:
+> on the first start, the game settings (`gow3.ini`), the launcher settings and, on Linux, the data
+> folder (`~/.local/share/gow3`) are copied to their new names. The old files stay where they were,
+> and existing shortcuts keep working. On Linux, the AppImage is now `spartanport-x86_64.AppImage`:
+> update Steam launch options that use the old file name.
+
 ## Contents
 
 - [SpartanPort](#spartanport)
