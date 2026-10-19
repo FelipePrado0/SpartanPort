@@ -510,13 +510,15 @@ This project is a fork of Supermedo's Windows port, which builds on deadinside28
   native port.
 - **Supermedo** (Mohammed Albarghouthi): [bloodborne_pc for Windows](https://github.com/Supermedo/bloodborne_pc),
   the fork this project comes from.
-- **cuesta4**: [shadPS4 fork focused on SpartanPort](https://github.com/cuesta4/shadPS4/tree/eltutz)
+- **cuesta4**: [shadPS4 fork focused on this game](https://github.com/cuesta4/shadPS4/tree/eltutz)
   (branch `eltutz`). The game's rendering in this port depends on its fixes: the GNM blend
   rewrite, depth/stencil state and image aliasing. cuesta4 is also a co-author of the
   resolution, texture fix, 120 FPS and skip videos patches (below). If you play on shadPS4,
   this is the build to use for this game.
 - **shadPS4 team**: the [shadPS4](https://github.com/shadps4-emu/shadPS4) video core, which does
   all the GPU and shader translation to Vulkan in this port.
+- **[WilkPrintes](https://github.com/WilkPrintes)**: designed and built the
+  [SpartanPort website](https://spartanport.com/en). Special thanks for giving the project its home.
 
 Patches: kvicken and cuesta4 (resolution, texture fix, 120 FPS and skip videos, building on the
 PS3 patches by illusion0001), published for shadPS4 in

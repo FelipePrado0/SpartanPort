@@ -508,13 +508,15 @@ Este projeto é um fork do port para Windows de Supermedo, que parte do original
   original.
 - **Supermedo** (Mohammed Albarghouthi): [bloodborne_pc para Windows](https://github.com/Supermedo/bloodborne_pc),
   o fork de onde este projeto vem.
-- **cuesta4**: [fork do shadPS4 focado em SpartanPort](https://github.com/cuesta4/shadPS4/tree/eltutz)
+- **cuesta4**: [fork do shadPS4 focado neste jogo](https://github.com/cuesta4/shadPS4/tree/eltutz)
   (branch `eltutz`). A renderização do jogo neste port depende das correções dele: a regravação
   de blends da GNM, o estado de profundidade e stencil e as correções de imagens que
   compartilham memória. cuesta4 também é coautor dos patches de resolução, correção de texturas,
   120 FPS e pular vídeos (abaixo). Para jogar este jogo no shadPS4, este é o build indicado.
 - **Equipe do shadPS4**: o núcleo de vídeo do [shadPS4](https://github.com/shadps4-emu/shadPS4),
   que faz toda a tradução de GPU e shaders para Vulkan neste port.
+- **[WilkPrintes](https://github.com/WilkPrintes)**: criou o design e o
+  [site do SpartanPort](https://spartanport.com/pt). Agradecimento especial por dar uma casa ao projeto.
 
 Patches: kvicken e cuesta4 (resolução, correção de texturas, 120 FPS e pular vídeos, a partir
 dos patches de PS3 de illusion0001), publicados para o shadPS4 em
