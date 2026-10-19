@@ -47,17 +47,6 @@ while ((${#to_process[@]} > 0)); do
     done < <(otool -L "$item" | awk '/(\/usr\/local\/|\/opt\/homebrew\/|\/Cellar\/)/ {print $1}')
 done
 
-# Bundle libmimalloc.dylib if available (high-performance memory allocator for Rosetta 2)
-if [[ -f bin/lib/libmimalloc.dylib && ! -f "$dest/bin/lib/libmimalloc.dylib" ]]; then
-    cp -L bin/lib/libmimalloc.dylib "$dest/bin/lib/libmimalloc.dylib"
-    chmod u+w "$dest/bin/lib/libmimalloc.dylib"
-    strip -S "$dest/bin/lib/libmimalloc.dylib" 2>/dev/null || true
-elif [[ -f out/lib/libmimalloc.dylib && ! -f "$dest/bin/lib/libmimalloc.dylib" ]]; then
-    cp -L out/lib/libmimalloc.dylib "$dest/bin/lib/libmimalloc.dylib"
-    chmod u+w "$dest/bin/lib/libmimalloc.dylib"
-    strip -S "$dest/bin/lib/libmimalloc.dylib" 2>/dev/null || true
-fi
-
 # Also bundle libMoltenVK.dylib and MoltenVK_icd.json if available
 for mvk in /usr/local/lib/libMoltenVK.dylib /opt/homebrew/lib/libMoltenVK.dylib; do
     if [[ -f "$mvk" && ! -f "$dest/bin/lib/libMoltenVK.dylib" ]]; then

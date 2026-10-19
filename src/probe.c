@@ -18,10 +18,6 @@
 #if !defined(__x86_64__) || !defined(__GNUC__)
 #error This prototype requires x86-64 GCC or Clang (including MinGW).
 #endif
-#if defined(__x86_64__) || defined(_M_X64)
-#include <xmmintrin.h>
-#include <pmmintrin.h>
-#endif
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -890,10 +886,6 @@ int main(int argc, char **argv) {
      * TCB needs a TLS slot before other libraries take them. */
     runtime_memory_reserve();
     runtime_thread_tcb_offset();
-#endif
-#if defined(__x86_64__) || defined(_M_X64)
-    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 #endif
     int cpu_only = 0, strict_imports = 0, check_imports = 0;
     unsigned timeout_seconds = 10;

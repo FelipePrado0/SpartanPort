@@ -24,10 +24,6 @@
 #include <sys/mman.h>
 #include <asm/prctl.h>
 #endif
-#if defined(__x86_64__) || defined(_M_X64)
-#include <xmmintrin.h>
-#include <pmmintrin.h>
-#endif
 #define ERR(n) ((int32_t)(UINT32_C(0x80020000)|(n)))
 #define ATTR_MAGIC UINT32_C(0x41545452)
 #define STACK_MARGIN (256*1024)
@@ -290,10 +286,6 @@ static void *host_start(void *p) {
     GuestThread *t=p;
     attach(t);
     set_host_name(t->name);
-#if defined(__x86_64__) || defined(_M_X64)
-    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
-#endif
 #ifdef __APPLE__
     qos_class_t qos = (t->attr.prio <= 300) ? QOS_CLASS_USER_INTERACTIVE
                     : (t->attr.prio <= 600) ? QOS_CLASS_USER_INITIATED
