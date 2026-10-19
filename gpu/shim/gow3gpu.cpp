@@ -371,6 +371,16 @@ extern "C" int gow3gpu_mouse_aim_sensitivity(void) {
     return Gow3Settings::Get().mouse_aim_sensitivity.load(std::memory_order_relaxed);
 }
 
+// The menu's Automatic QTE switch, read by the game's code through the QTE stubs (src/qte_hook.h).
+extern "C" uintptr_t gow3_auto_qte_flag(void) {
+    static_assert(sizeof(std::atomic<bool>) == 1, "the stubs compare one byte");
+    return reinterpret_cast<uintptr_t>(&Gow3Settings::Get().auto_qte);
+}
+
+extern "C" void gow3_qte_status(int supported) {
+    Gow3Settings::Get().qte_supported = supported != 0;
+}
+
 extern "C" void gow3gpu_mouse_pause_key(void) {
     Frontend::ToggleMousePause();
 }

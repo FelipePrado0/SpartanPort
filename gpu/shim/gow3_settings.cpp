@@ -135,6 +135,8 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.restart_unconfirmed = i != 0;
     } else if (key == "enemy_health_bar") {
         v.enemy_health_bar = i != 0;
+    } else if (key == "auto_qte") {
+        v.auto_qte = i != 0;
     } else if (key == "red_orb_multiplier") {
         v.red_orb_multiplier = Gow3Orbs::ClampMultiplier(f);
     } else if (key == "damage_dealt") {
@@ -203,6 +205,7 @@ void Load() {
         {"GOW3_ANISOTROPY", "anisotropy"},            {"GOW3_VIBRATION", "vibration"},
         {"GOW3_MOUSE_PROMPT_DISTANCE", "mouse_prompt_distance"}, {"GOW3_MOUSE_LOCK", "mouse_lock"},
         {"GOW3_MOUSE_AIM_STYLE", "mouse_aim_style"}, {"GOW3_MOUSE_AIM_SENSITIVITY", "mouse_aim_sensitivity"},
+        {"GOW3_AUTO_QTE", "auto_qte"},
     };
     for (const auto& [env, key] : env_keys) {
         if (const char* value = std::getenv(env); value && value[0]) {
@@ -345,6 +348,7 @@ void Save() {
                  int(v.cheats[3].load()), int(v.cheats[4].load()),
                  int(v.cheats[5].load()), int(v.cheats[6].load()));
     std::fprintf(file, "enemy_health_bar=%d\n", int(v.enemy_health_bar.load()));
+    std::fprintf(file, "auto_qte=%d\n", int(v.auto_qte.load()));
     std::fprintf(file,
                  "overlay_fps=%d\noverlay_frametime=%d\noverlay_upscaler=%d\noverlay_gpu=%d\n"
                  "overlay_cpu=%d\noverlay_ram=%d\noverlay_vram=%d\noverlay_scale=%d\noverlay_corner=%d\n"

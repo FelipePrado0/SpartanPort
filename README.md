@@ -159,7 +159,8 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   performance, game folder and save backups, patches, mods (order, presets and conflicts),
   controls with PlayStation or Xbox button icons, updates and diagnostics.
 - **In-game menu** (Insert on the keyboard, R3+L2 on the controller), with four tabs:
-  - **Game:** cheats (infinite health, magic, item meter, Rage of Sparta, max red orbs);
+  - **Game:** cheats (infinite health, magic, item meter, Rage of Sparta, max red orbs,
+    automatic QTE: button and stick-rotation prompts answer themselves);
     multipliers from 0.1x to 100x for red, green (health), blue (magic) and gold (Rage of
     Sparta) orbs and for damage dealt and taken; an enemy health bar.
   - **Image:** display mode (windowed, borderless, fullscreen), VSync and RCAS sharpening.

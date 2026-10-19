@@ -27,3 +27,5 @@ patches.json
 !launcher/gow3.png
 !scripts/controller_diagrams/xbox.png
 !scripts/controller_diagrams/nintendo.png
+/.vscode
+
