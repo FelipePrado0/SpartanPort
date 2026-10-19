@@ -64,9 +64,10 @@ LANGUAGE_ALIASES = {
     '17': 'pt', 17: 'pt',  # pt-BR (R_LANG_BR.WAD)
     '18': 'en', 18: 'en',  # en-GB (R_LANG_UK.WAD)
     '20': 'es', 20: 'es',  # es-419 (R_LANG_LA.WAD)
-    'br': 'pt',
-    'la': 'es',
-    'uk': 'en',
+    'br': 'pt', 'pt-br': 'pt', 'pt_br': 'pt',
+    'la': 'es', 'es-es': 'es', 'es_es': 'es', 'es-419': 'es', 'es_419': 'es',
+    'uk': 'en', 'en-us': 'en', 'en_us': 'en', 'en-gb': 'en', 'en_gb': 'en',
+    'zh-tw': 'zh', 'zh_tw': 'zh', 'zh-hant': 'zh', 'zh_hant': 'zh',
 }
 
 
@@ -75,7 +76,7 @@ def resolve_label(language=None):
     if language is None:
         language = os.environ.get('GOW3_LANGUAGE', '1')
     if isinstance(language, str):
-        language = language.strip()
+        language = language.strip().lower()
     key = LANGUAGE_ALIASES.get(language, language)
     if isinstance(key, str):
         key = key.lower()

@@ -59,13 +59,16 @@ class Labels(unittest.TestCase):
         self.assertEqual(pause_menu.resolve_label('JA'), (pause_menu.LABELS['ja'], 'ja'))
         self.assertEqual(pause_menu.resolve_label('zh'), (pause_menu.LABELS['zh'], 'zh'))
         self.assertEqual(pause_menu.resolve_label('ZH'), (pause_menu.LABELS['zh'], 'zh'))
+        self.assertEqual(pause_menu.resolve_label('zh-tw'), (pause_menu.LABELS['zh'], 'zh'))
         self.assertEqual(pause_menu.resolve_label('en'), (pause_menu.LABELS['en'], 'en'))
         self.assertEqual(pause_menu.resolve_label('es'), (pause_menu.LABELS['es'], 'es'))
+        self.assertEqual(pause_menu.resolve_label('es-419'), (pause_menu.LABELS['es'], 'es'))
         self.assertEqual(pause_menu.resolve_label('fr'), (pause_menu.LABELS['fr'], 'fr'))
         self.assertEqual(pause_menu.resolve_label('de'), (pause_menu.LABELS['de'], 'de'))
         self.assertEqual(pause_menu.resolve_label('it'), (pause_menu.LABELS['it'], 'it'))
         self.assertEqual(pause_menu.resolve_label('pl'), (pause_menu.LABELS['pl'], 'pl'))
         self.assertEqual(pause_menu.resolve_label('pt'), (pause_menu.LABELS['pt'], 'pt'))
+        self.assertEqual(pause_menu.resolve_label('pt-br'), (pause_menu.LABELS['pt'], 'pt'))
         self.assertEqual(pause_menu.resolve_label('ru'), (pause_menu.LABELS['ru'], 'ru'))
 
     def test_resolve_label_fallback(self):
