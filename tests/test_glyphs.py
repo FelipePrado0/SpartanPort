@@ -348,3 +348,37 @@ class KeyboardStickTest(unittest.TestCase):
         image = glyphs.render('inline', 'rstick', 'keyboard', None, '', 64, 64)
         self.assertEqual(image.size, (64, 64))
         self.assertGreater(len(set(image.getdata())), 4)
+
+
+@unittest.skipUnless(Image, 'needs Pillow')
+class AtlasAlignmentTest(unittest.TestCase):
+    """The shoulder-button atlas (TXFB91136E for L2/L1, TX0FFF3CCB for R2/R1) places its prompts
+    centered ~52 px from the midline (y=128), matching the in-game HUD quad mapping, rather than
+    in the center of each 128 px half (y=64, which puts them 64 px from the midline)."""
+
+    def test_atlas_prompts_are_centered_towards_midline(self):
+        for style in ('xbox', 'nintendo', 'keyboard'):
+            for pair in (('r2', 'r1'), ('l2', 'l1')):
+                img = glyphs.render('atlas', pair, style, None, '', 256, 256)
+                self.assertEqual(img.size, (256, 256))
+                w, _h = img.size
+                top_y = [y for y in range(128) if any(img.getpixel((x, y))[0] > 30 for x in range(w))]
+                bot_y = [y for y in range(128, 256) if any(img.getpixel((x, y))[0] > 30 for x in range(w))]
+                self.assertTrue(top_y, f"{style} {pair} top half should contain pixels")
+                self.assertTrue(bot_y, f"{style} {pair} bottom half should contain pixels")
+                top_center = (min(top_y) + max(top_y)) / 2
+                bot_center = (min(bot_y) + max(bot_y)) / 2
+                # In each half, the prompt should be ~52 px from midline (y=128), within 3 px tolerance.
+                # Without the offset, distance was 64 px, causing prompts to touch the HUD border.
+                self.assertAlmostEqual(128 - top_center, 52, delta=3)
+                self.assertAlmostEqual(bot_center - 128, 52, delta=3)
+
+    def test_qte_face_buttons_remain_centered(self):
+        img = glyphs.render('qte', 'cross', 'xbox', None, '', 128, 128)
+        self.assertEqual(img.size, (128, 128))
+        qw, qh = img.size
+        qx = [x for x in range(qw) if any(img.getpixel((x, y))[0] > 30 for y in range(qh))]
+        qy = [y for y in range(qh) if any(img.getpixel((x, y))[0] > 30 for x in range(qw))]
+        self.assertAlmostEqual((min(qx) + max(qx)) / 2, 63.5, delta=2)
+        self.assertAlmostEqual((min(qy) + max(qy)) / 2, 63.5, delta=2)
+

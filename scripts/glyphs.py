@@ -15,7 +15,7 @@ from pathlib import Path
 import shutil
 import struct
 
-VERSION = 4  # of the drawing: a change redraws the cached copies
+VERSION = 5  # of the drawing: a change redraws the cached copies
 WADS = ('EXEC/WAD/PS4_LE/R_UI.WAD', 'EXEC/WAD/PS4_LE/R_PERM.WAD')
 FONT = Path(__file__).resolve().parent.parent / 'launcher' / 'Cinzel-Black.ttf'
 CONTROLLER_TEXTURE = 'TXCE352DC5'
@@ -268,8 +268,13 @@ def render(form, buttons, style, faces, pad_map, width, height, key_map=''):
     hosts = key_buttons(key_map) if keyboard else pad_buttons(pad_map)
     if form == 'atlas':
         image = Image.new('RGBA', (width, height), (0, 0, 0, 255))
+        # In the shoulder-button atlas, prompts are centered ~52 px from the midline (y=128),
+        # not in the middle of each 128 px half (y=64), matching the game's HUD quad alignment.
+        offset = int(height * 12 / 256)
         for row, button in enumerate(buttons):
-            half = draw_prompt(glyph(hosts[button], style, faces)[1], INK, width, height // 2, keyboard)
+            half = Image.new('RGBA', (width, height // 2), (0, 0, 0, 255))
+            half.paste(draw_prompt(glyph(hosts[button], style, faces)[1], INK, width, height // 2, keyboard),
+                       (0, -offset))
             image.paste(half.rotate(180) if row == 0 else half, (0, row * (height // 2)))
         return image
     shape, label, color = glyph(hosts[buttons], style, faces)

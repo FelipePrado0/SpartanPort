@@ -5,7 +5,7 @@
 Every setting of the port in one window: the game folder and saves, spartanport.ini (upscaler,
 preset, output, effects), start-up options passed to run.py as environment variables
 (frame rate, presentation, HDR, ...), mods, third-party patches and controls.
-Launcher options live in %APPDATA%/spartanport-launcher/settings.json (~/.config/spartanport-launcher on Linux).
+Launcher options live in settings.json next to the executable (portable; migrated from AppData/XDG config).
 
 Frozen with PyInstaller (packaging/windows/package.sh) the same SpartanPort.exe also runs the
 game without the window (`--play`), run.py (`--run`) and the preparation scripts (`--script`),
@@ -52,9 +52,11 @@ from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
 from prepare import load_sfo  # noqa: E402  (scripts/)
 legacy.forward_environment()  # before the folders below are read from the environment
 DATA_DIR = Path(os.environ.get('SPARTAN_DATA_DIR', PORT_DIR))
-CONFIG_DIR = (Path(os.environ.get('APPDATA', Path.home())) if WINDOWS else
-              Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')) / 'spartanport-launcher'
+CONFIG_DIR = DATA_DIR
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
+LEGACY_CONFIG_DIR = (Path(os.environ.get('APPDATA', Path.home())) if WINDOWS else
+                     Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')) / 'gow3-launcher'
+LEGACY_CONFIG_FILE = LEGACY_CONFIG_DIR / 'settings.json'
 MOD_PRESETS = DATA_DIR / 'mods_presets.json'
 APP_NAME = 'SpartanPort'
 MAX_LOG_LINES = 6000
@@ -68,7 +70,7 @@ RELEASES_API = 'https://api.github.com/repos/FelipePrado0/SpartanPort/releases/l
 RELEASES_PAGE = 'https://github.com/FelipePrado0/SpartanPort/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'spartanport-update'
 # Never copied over an installation by an update (the package does not hold them either).
-USER_FILES = ('user', 'out', 'mods', 'spartanport.ini', 'mods.json', 'mods_presets.json', 'patches.json', 'last_run.log')
+USER_FILES = ('user', 'out', 'mods', 'spartanport.ini', 'settings.json', 'game_icon.ico', 'mods.json', 'mods_presets.json', 'patches.json', 'last_run.log')
 # The title face (Cinzel Black), next to spartanport.ico; main() registers it for this process only.
 FONT_FILE = PORT_DIR / 'launcher' / 'Cinzel-Black.ttf'
 FR_PRIVATE = 0x10
@@ -673,7 +675,9 @@ LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарт�
         ('1', ('On (change without restarting)', 'Включена (без перезапуска)'))]
 LANGUAGES = [('1', ('English', 'Английский')), ('8', ('Russian', 'Русский')), ('0', ('Japanese', 'Японский')),
              ('2', ('French', 'Французский')), ('3', ('Spanish', 'Испанский')), ('4', ('German', 'Немецкий')),
-             ('5', ('Italian', 'Итальянский'))]
+             ('5', ('Italian', 'Итальянский')),
+             # Polish (id 16, LANGS_BCES00510.TXT); see issue #493.
+             ('16', ('Polish', 'Польский'))]
 DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', ('On', 'Включён')),
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
@@ -703,6 +707,34 @@ def load_json(path, default):
         return json.loads(Path(path).read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return default
+
+
+def migrate_portable_settings(config_file=None, legacy_file=None):
+    """One-time migration: if settings.json does not exist in DATA_DIR, copy from legacy AppData/XDG."""
+    target = Path(config_file or CONFIG_FILE)
+    legacy = Path(legacy_file or LEGACY_CONFIG_FILE)
+    if target == legacy:
+        return
+    if not target.is_file() and legacy.is_file():
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(legacy, target)
+        except OSError:
+            pass
+    target_ico = target.parent / 'game_icon.ico'
+    legacy_ico = legacy.parent / 'game_icon.ico'
+    if not target_ico.is_file() and legacy_ico.is_file():
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(legacy_ico, target_ico)
+        except OSError:
+            pass
+
+
+def load_app_settings(config_file=None):
+    migrate_portable_settings(config_file)
+    target = config_file or CONFIG_FILE
+    return {**APP_DEFAULTS, **migrate_controls(load_json(target, {}))}
 
 
 def ini_path():
@@ -1205,7 +1237,7 @@ class Launcher:
     def __init__(self, root, tk, ttk, filedialog, messagebox):
         self.tk, self.ttk, self.filedialog, self.messagebox = tk, ttk, filedialog, messagebox
         self.root = root
-        self.app = {**APP_DEFAULTS, **migrate_controls(load_json(CONFIG_FILE, {}))}
+        self.app = load_app_settings()
         self.ini, self.ini_lines = load_ini()
         self.vars = {}
         self.process = self.job = None
@@ -3338,7 +3370,7 @@ def main():
         sys.exit(run_role(args))
     if args[:1] != ['--install-update']:  # that copy runs from the download, not from the player's folder
         move_from_legacy_name()
-    settings = {**APP_DEFAULTS, **migrate_controls(load_json(CONFIG_FILE, {}))}
+    settings = load_app_settings()
     LANG = settings.get('ui_language') or windows_language()
     if not WINDOWS:
         integrate_desktop(settings.get('desktop_integration', True), os.environ.get('APPIMAGE'),

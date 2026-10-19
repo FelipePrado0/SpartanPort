@@ -164,7 +164,8 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   performance, game folder and save backups, patches, mods (order, presets and conflicts),
   controls with PlayStation or Xbox button icons, updates and diagnostics.
 - **In-game menu** (Insert on the keyboard, R3+L2 on the controller), with four tabs:
-  - **Game:** cheats (infinite health, magic, item meter, Rage of Sparta, max red orbs);
+  - **Game:** cheats (infinite health, magic, item meter, Rage of Sparta, max red orbs,
+    automatic QTE: button and stick-rotation prompts answer themselves);
     multipliers from 0.1x to 100x for red, green (health), blue (magic) and gold (Rage of
     Sparta) orbs and for damage dealt and taken; an enemy health bar.
   - **Image:** display mode (windowed, borderless, fullscreen), VSync and RCAS sharpening.
@@ -194,7 +195,7 @@ packages can use different source revisions. Check the release notes for changes
 ## Settings
 
 Settings are kept in `spartanport.ini` (the game and the in-game menu) and in
-`%APPDATA%\spartanport-launcher\settings.json` (the launcher). Saves, the shader cache and
+`settings.json` (the launcher), in the port folder. Saves, the shader cache and
 `last_run.log` go to the project's `user` folder.
 
 **GUI Scale:** choose **Auto**, **1x** or **2x** under **Advanced → Launcher**,
@@ -203,8 +204,7 @@ game resolution. Auto follows the desktop scale reported by Tk, with X11/XWaylan
 font DPI and window-scale fallbacks on Linux. On macOS, Retina scaling stays with
 the operating system. Manual 1x/2x sets the launcher's logical size, including text,
 icons, controls, scrollbars and spacing. Screen resolution alone does not select
-a scale. The choice is saved in
-`~/.config/spartanport-launcher/settings.json` (or `$XDG_CONFIG_HOME/spartanport-launcher/settings.json`).
+a scale. The choice is saved in `settings.json`.
 
 On **Performance → GPU data → Stream buffer memory**, choose **System RAM (cached, default)**,
 **System RAM (uncached)** or **GPU memory (previous behavior)**. System RAM can improve frame

@@ -167,7 +167,7 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
   ser os do seu controle, Xbox ou Nintendo, ou as teclas do teclado com que você joga (tela Game, seção Controls).
 - **Menu dentro do jogo** (Insert no teclado, R3+L2 no controle), com quatro abas:
   - **Game:** trapaças (vida, magia, item e Fúria de Esparta infinitos, orbes vermelhos no
-    máximo); multiplicadores de 0,1x a 100x para orbes vermelhos, verdes (vida), azuis (magia)
+    máximo, QTE automático: prompts de botão e de giro do analógico se resolvem sozinhos); multiplicadores de 0,1x a 100x para orbes vermelhos, verdes (vida), azuis (magia)
     e dourados (Fúria de Esparta) e para dano causado e recebido; barra de vida do inimigo.
   - **Image:** modo de tela (janela, sem borda, tela cheia), VSync e nitidez RCAS.
   - **Performance:** limite de FPS (de 30 a ilimitado), quadros na fila, compilação de shaders
@@ -197,7 +197,7 @@ mudanças em downloads posteriores.
 ## Configurações
 
 As configurações ficam em `spartanport.ini` (o jogo e o menu do jogo) e em
-`%APPDATA%\spartanport-launcher\settings.json` (o launcher). Saves, cache de shaders e `last_run.log`
+`settings.json` (o launcher), na pasta do port. Saves, cache de shaders e `last_run.log`
 ficam na pasta `user` do projeto.
 
 Em **Performance → GPU data → Stream buffer memory**, escolha **System RAM (cached, default)**,

@@ -1420,6 +1420,13 @@ EXTRA['es'].update({
     'Shows the render resolutions of this shape only.': 'Muestra solo las resoluciones de render de esta proporción.',
 })
 
+EXTRA['pt'].update({'Polish': 'Polonês'})
+EXTRA['es'].update({'Polish': 'Polaco'})
+for _lang, _text in (('pl', 'Polski'), ('fr', 'Polonais'), ('de', 'Polnisch'),
+                     ('it', 'Polacco'), ('tr', 'Lehçe'), ('ar', 'البولندية'),
+                     ('zh', '波兰语'), ('ja', 'ポーランド語'), ('ko', '폴란드어')):
+    EXTRA.setdefault(_lang, {})['Polish'] = _text
+
 _tables = {}
 
 

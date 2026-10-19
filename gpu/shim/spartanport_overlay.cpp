@@ -325,6 +325,12 @@ void GameTab() {
             CheckRow(names[cheat], s.cheats[cheat], available ? helps[cheat] : Unsupported);
             ImGui::EndDisabled();
         }
+        ImGui::BeginDisabled(!s.qte_supported.load());
+        CheckRow("Automatic QTE", s.auto_qte,
+                 s.qte_supported.load() ? "Quick-time prompts answer themselves: single presses, repeated "
+                                          "presses, holds and stick rotations."
+                                        : Unsupported);
+        ImGui::EndDisabled();
         ImGui::EndTable();
     }
 
@@ -566,6 +572,7 @@ void OverlayTab() {
         add(s.orb_pickup_supported.load(), "orb pickups");
         add(s.damage_supported.load(), "damage");
         add(s.actor_watch_supported.load(), "enemy health");
+        add(s.qte_supported.load(), "QTE prompts");
         InfoRow("Game hooks", hooks.empty() ? "none" : hooks.c_str());
         ImGui::EndTable();
     }
