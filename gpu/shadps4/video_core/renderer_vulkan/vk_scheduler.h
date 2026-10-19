@@ -66,20 +66,22 @@ struct RenderState {
 static_assert(std::has_unique_object_representations_v<RenderState>);
 
 struct SubmitInfo {
-    std::array<vk::Semaphore, 4> wait_semas;
-    std::array<u64, 4> wait_ticks;
-    std::array<vk::Semaphore, 4> signal_semas;
-    std::array<u64, 4> signal_ticks;
+    std::array<vk::Semaphore, 8> wait_semas;
+    std::array<u64, 8> wait_ticks;
+    std::array<vk::Semaphore, 8> signal_semas;
+    std::array<u64, 8> signal_ticks;
     vk::Fence fence;
     u32 num_wait_semas;
     u32 num_signal_semas;
 
     void AddWait(vk::Semaphore semaphore, u64 tick = 1) {
+        ASSERT_MSG(num_wait_semas < wait_semas.size(), "Too many wait semaphores in SubmitInfo");
         wait_semas[num_wait_semas] = semaphore;
         wait_ticks[num_wait_semas++] = tick;
     }
 
     void AddSignal(vk::Semaphore semaphore, u64 tick = 1) {
+        ASSERT_MSG(num_signal_semas < signal_semas.size(), "Too many signal semaphores in SubmitInfo");
         signal_semas[num_signal_semas] = semaphore;
         signal_ticks[num_signal_semas++] = tick;
     }

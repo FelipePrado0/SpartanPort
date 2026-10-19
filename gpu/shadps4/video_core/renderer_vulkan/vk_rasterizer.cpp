@@ -1732,7 +1732,7 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
     }
 
     if (uses_dma) {
-        buffer_cache.SynchronizeDmaBuffers();
+        needs_barrier |= buffer_cache.SynchronizeDmaBuffers();
         fault_process_pending = true;
     }
 

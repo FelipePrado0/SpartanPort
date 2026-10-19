@@ -102,7 +102,14 @@ BufferCache::BufferCache(const Vulkan::Instance& instance_, Vulkan::Scheduler& s
     runtime.FillBuffer(bda_pagetable_buffer.get(), 0u, bda_pagetable_size, 0u);
 }
 
-BufferCache::~BufferCache() = default;
+BufferCache::~BufferCache() {
+    const auto device = instance.GetDevice();
+    for (const auto mem : allocated_device_memories) {
+        if (mem) {
+            device.freeMemory(mem);
+        }
+    }
+}
 
 void BufferCache::InvalidateMemory(VAddr device_addr, u64 size, bool assume_locks) {
     memory_tracker->InvalidateRegion(device_addr, size, [this, device_addr, size, assume_locks] {
@@ -394,13 +401,18 @@ void BufferCache::ProcessFaultBuffer() {
     fault_manager->ProcessFaultBuffer();
 }
 
-void BufferCache::SynchronizeDmaBuffers() {
+bool BufferCache::SynchronizeDmaBuffers() {
+    bool uploaded = false;
     for (const auto& range : resident_ranges) {
         const u64 page = range.start >> (arena_page_bits - block_shift);
         const VAddr device_addr = range.start << block_shift;
         const u64 size = (range.end - range.start) << block_shift;
-        SynchronizeMemory(address_space[page], device_addr, size, false, false);
+        uploaded |= SynchronizeMemory(address_space[page], device_addr, size, false, false);
     }
+    if (uploaded) {
+        runtime.FlushBarriers();
+    }
+    return uploaded;
 }
 
 const Buffer* BufferCache::GetArena(u64 first_block, u64 last_block) {
@@ -446,6 +458,40 @@ const Buffer* BufferCache::GetArena(u64 first_block, u64 last_block) {
         });
     });
 
+    // Synchronize BDA page table entries when arenas migrate during heavy asset streaming transitions
+    u32 migrated_blocks{};
+    resident_ranges.ForEachInRange(base_block, end_block, [&](const Backing& backing) {
+        const u64 start = std::max(base_block, backing.start);
+        const u64 end = std::min(end_block, backing.end);
+        migrated_blocks += static_cast<u32>(end - start);
+    });
+
+    if (migrated_blocks > 0) {
+        boost::container::small_vector<vk::BufferCopy, 16> copies;
+        const auto staging = staging_pool.Request(migrated_blocks * sizeof(vk::DeviceAddress),
+                                                  MemoryType::HostUncached);
+        auto* bda_addrs = reinterpret_cast<vk::DeviceAddress*>(staging.mapped);
+        u64 offset = staging.offset;
+
+        resident_ranges.ForEachInRange(base_block, end_block, [&](const Backing& backing) {
+            const u64 start = std::max(base_block, backing.start);
+            const u64 end = std::min(end_block, backing.end);
+            const u64 resource_offset = (start - base_block) << block_shift;
+            const u64 range_size = (end - start) << block_shift;
+
+            for (u64 blk_offset = 0; blk_offset < range_size; blk_offset += block_size) {
+                *(bda_addrs++) = new_arena->BufferDeviceAddress() + resource_offset + blk_offset;
+            }
+            const u64 copy_size = (end - start) * sizeof(vk::DeviceAddress);
+            copies.emplace_back(offset, start * sizeof(vk::DeviceAddress), copy_size);
+            offset += copy_size;
+        });
+
+        staging.Flush();
+        runtime.CopyBuffer(staging.buffer, bda_pagetable_buffer.get(), copies);
+        runtime.FlushBarriers();
+    }
+
     u64 base_page = first_addr >> arena_page_bits;
     for (u32 page = 0; page < (first_size >> arena_page_bits); ++page) {
         address_space[base_page + page] = new_arena;
@@ -470,21 +516,52 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
     }
     Gow3Stats::Timer timer{Gow3Stats::t_resident};
 
+    // Sub-allocate sparse backing memory from pools to avoid driver allocation count exhaustion in asset-heavy areas
+    constexpr u64 POOL_CHUNK_SIZE = 16_MB;
+    const u64 requested_bytes = resident_blocks << block_shift;
+    vk::DeviceMemory device_memory{};
+    u64 base_memory_offset = 0;
+
     const vk::MemoryAllocateFlagsInfo flags_info = {
         .flags = vk::MemoryAllocateFlagBits::eDeviceAddress,
     };
-    const vk::MemoryAllocateInfo alloc_info = {
-        .pNext = &flags_info,
-        .allocationSize = resident_blocks << block_shift,
-        .memoryTypeIndex = arena_memory_type_index,
-    };
-    const auto device_memory = Vulkan::Check(instance.GetDevice().allocateMemory(alloc_info));
+
+    if (current_pool_chunk.memory &&
+        (current_pool_chunk.size - current_pool_chunk.used) >= requested_bytes) {
+        device_memory = current_pool_chunk.memory;
+        base_memory_offset = current_pool_chunk.used;
+        current_pool_chunk.used += requested_bytes;
+    } else if (requested_bytes >= POOL_CHUNK_SIZE) {
+        const u64 alloc_size = Common::AlignUp(requested_bytes, block_size);
+        const vk::MemoryAllocateInfo alloc_info = {
+            .pNext = &flags_info,
+            .allocationSize = alloc_size,
+            .memoryTypeIndex = arena_memory_type_index,
+        };
+        device_memory = Vulkan::Check(instance.GetDevice().allocateMemory(alloc_info));
+        allocated_device_memories.push_back(device_memory);
+        base_memory_offset = 0;
+    } else {
+        const vk::MemoryAllocateInfo alloc_info = {
+            .pNext = &flags_info,
+            .allocationSize = POOL_CHUNK_SIZE,
+            .memoryTypeIndex = arena_memory_type_index,
+        };
+        device_memory = Vulkan::Check(instance.GetDevice().allocateMemory(alloc_info));
+        allocated_device_memories.push_back(device_memory);
+        current_pool_chunk = {
+            .memory = device_memory,
+            .size = POOL_CHUNK_SIZE,
+            .used = requested_bytes,
+        };
+        base_memory_offset = 0;
+    }
 
     boost::container::small_vector<vk::BufferCopy, 8> copies;
     const auto staging =
         staging_pool.Request(resident_blocks * sizeof(vk::DeviceAddress), MemoryType::HostUncached);
 
-    u64 memory_offset{};
+    u64 memory_offset = base_memory_offset;
     ArenaBinds* binds = BindsForArena(arena);
     auto* bda_addrs = reinterpret_cast<vk::DeviceAddress*>(staging.mapped);
     u64 offset = staging.offset;
@@ -532,13 +609,15 @@ bool BufferCache::SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 
         },
         [&] { src_buffer = UploadCopies(arena, copies, total_size_bytes); });
 
+    bool uploaded = false;
     if (src_buffer) {
         runtime.CopyBuffer(src_buffer, arena, copies);
+        uploaded = true;
     }
     if (is_texel_buffer && !is_written) {
-        return SynchronizeMemoryFromImage(arena, device_addr, size);
+        return SynchronizeMemoryFromImage(arena, device_addr, size) || uploaded;
     }
-    return false;
+    return uploaded;
 }
 
 const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::BufferCopy> copies,
