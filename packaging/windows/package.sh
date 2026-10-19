@@ -85,7 +85,7 @@ if [[ ${running:-0} != 0 ]]; then
 else
     mkdir -p "$play"
     find "$play" -mindepth 1 -maxdepth 1 ! -name user ! -name mods ! -name gow3.ini \
-        ! -name mods.json ! -name patches.json -exec rm -rf {} +
+        ! -name mods.json ! -name patches.json ! -name gamecontrollerdb.txt -exec rm -rf {} +
     cp -r "$dest/." "$play/"
 fi
 du -sh "$dest" dist/gow3-windows.zip

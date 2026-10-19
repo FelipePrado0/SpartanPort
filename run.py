@@ -177,6 +177,8 @@ def main():
         env.pop(key, None)
     derived = []
     sys.path.insert(0, str(PORT / 'scripts'))
+    import controller_mappings
+    controller_mappings.configure_environment(env, data)
     import graphics_options
     try:
         import discord_presence
