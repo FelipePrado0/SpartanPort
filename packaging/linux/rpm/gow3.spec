@@ -39,7 +39,7 @@ BuildRequires:  pkgconfig(libswscale)
 BuildRequires:  pkgconfig(libswresample)
 BuildRequires:  cmake(fmt)
 BuildRequires:  boost-devel
-BuildRequires:  zydis-devel
+BuildRequires:  pkgconfig(zydis)
 BuildRequires:  cmake(tsl-robin-map)
 BuildRequires:  cmake(miniz)
 BuildRequires:  glslang
@@ -115,10 +115,18 @@ sed -n '1,22p' gpu/third_party/vk_mem_alloc.h > rpm-licenses/LICENSE-VMA
 
 %build
 %set_build_flags
+# Fedora's Zydis package ships pkg-config metadata, not ZydisConfig.cmake.
+mkdir -p rpm-cmake
+cat > rpm-cmake/FindZydis.cmake <<'CMAKE'
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(Zydis REQUIRED IMPORTED_TARGET zydis)
+add_library(Zydis::Zydis ALIAS PkgConfig::Zydis)
+CMAKE
 # Follow build.sh's native targets directly: the archived build.sh assumes Git.
 # Fedora flags provide LTO; avoid enabling an additional CMake IPO configuration.
 # Disable VMA package discovery so this snapshot uses its verified VMA header.
 cmake -S gpu -B out/gpu -G Ninja \
+    -DCMAKE_MODULE_PATH="$PWD/rpm-cmake" \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DCMAKE_C_FLAGS_RELWITHDEBINFO=-DNDEBUG \
     -DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-DNDEBUG \
