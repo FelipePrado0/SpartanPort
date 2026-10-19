@@ -5,7 +5,7 @@
 Every setting of the port in one window: the game folder and saves, gow3.ini (upscaler,
 preset, output, effects), start-up options passed to run.py as environment variables
 (frame rate, presentation, HDR, ...), mods, third-party patches and controls.
-Launcher options live in %APPDATA%/gow3-launcher/settings.json (~/.config/gow3-launcher on Linux).
+Launcher options live in settings.json next to the executable (portable; migrated from AppData/XDG config).
 
 Frozen with PyInstaller (packaging/windows/package.sh) the same God of War III.exe also runs the
 game without the window (`--play`), run.py (`--run`) and the preparation scripts (`--script`),
@@ -13,6 +13,7 @@ so a packaged port needs no Python installation.
 """
 import contextlib
 import glob
+import importlib.util
 import json
 import math
 import os
@@ -50,13 +51,12 @@ import steam_shortcut  # noqa: E402  (scripts/)
 from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
 from prepare import load_sfo  # noqa: E402  (scripts/)
 DATA_DIR = Path(os.environ.get('GOW3_DATA_DIR', PORT_DIR))
-if WINDOWS:
-    CONFIG_DIR = Path(os.environ.get('APPDATA', Path.home())) / 'gow3-launcher'
-elif MACOS:
-    CONFIG_DIR = Path.home() / 'Library' / 'Application Support' / 'gow3-launcher'
-else:
-    CONFIG_DIR = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'gow3-launcher'
+CONFIG_DIR = DATA_DIR
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
+LEGACY_CONFIG_DIR = (Path.home() / 'Library' / 'Application Support' / 'gow3-launcher' if MACOS else
+                     Path(os.environ.get('APPDATA', Path.home())) if WINDOWS else
+                     Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')) / 'gow3-launcher'
+LEGACY_CONFIG_FILE = LEGACY_CONFIG_DIR / 'settings.json'
 MOD_PRESETS = DATA_DIR / 'mods_presets.json'
 APP_NAME = 'God of War III'
 MAX_LOG_LINES = 6000
@@ -65,12 +65,12 @@ NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 NEW_GROUP = {} if WINDOWS else {'start_new_session': True}
 UI_FONT, MONO_FONT, SERIF_FONT = 'Segoe UI', 'Consolas', 'Georgia'
 # This build; GitHub release tags are windows-v<VERSION>.
-VERSION = '2.4.1'
+VERSION = '2.5.0'
 RELEASES_API = 'https://api.github.com/repos/FelipePrado0/gow3_pc/releases/latest'
 RELEASES_PAGE = 'https://github.com/FelipePrado0/gow3_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'gow3-update'
 # Never copied over an installation by an update (the package does not hold them either).
-USER_FILES = ('user', 'out', 'mods', 'gow3.ini', 'mods.json', 'mods_presets.json', 'patches.json', 'last_run.log')
+USER_FILES = ('user', 'out', 'mods', 'gow3.ini', 'settings.json', 'game_icon.ico', 'mods.json', 'mods_presets.json', 'patches.json', 'last_run.log')
 # The title face (Cinzel Black), next to gow3.ico; main() registers it for this process only.
 FONT_FILE = PORT_DIR / 'launcher' / 'Cinzel-Black.ttf'
 FR_PRIVATE = 0x10
@@ -98,6 +98,29 @@ def attach_stdio():
         setattr(sys, name, stream or open(os.devnull, 'w'))
 
 
+def load_mods():
+    """Use the disk loader in every role; PyInstaller's importer otherwise wins over sys.path.
+    Adapted from Kristian Andreev's PR #234."""
+    path = PORT_DIR / 'scripts' / 'mods.py'
+    if not FROZEN or not path.is_file():
+        return importlib.import_module('mods')
+    previous = sys.modules.get('mods')
+    if previous and getattr(previous, '__file__', None) == str(path):
+        return previous
+    spec = importlib.util.spec_from_file_location('mods', path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules['mods'] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        if previous is None:
+            sys.modules.pop('mods', None)
+        else:
+            sys.modules['mods'] = previous
+        raise RuntimeError('Could not load scripts/mods.py. Reinstall the complete port update.') from None
+    return module
+
+
 def run_role(argv):
     """--run [args]: run.py; --script <file> [args]: a preparation script. Returns an exit code."""
     attach_stdio()
@@ -111,6 +134,12 @@ def run_role(argv):
     else:
         path = str(PORT_DIR / 'run.py')
         sys.argv = [path, *argv[1:]]
+    if argv[0] == '--run':
+        try:
+            load_mods()
+        except RuntimeError as error:
+            print(str(error), file=sys.stderr, flush=True)
+            return 1
     try:
         runpy.run_path(path, run_name='__main__')
     except SystemExit as stop:
@@ -373,13 +402,14 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
                 'render_resolution': 'native', 'engine_fps': '120',
                 'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
-                'anisotropy': '0', 'vibration': '100'}
+                'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1',
+                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
-FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
+FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('100', ('100',)), ('120', ('120',)), ('240', ('240',)), ('0', ('Unlimited',))]
 # The sidebar's pages, top to bottom, and the methods that refresh a page's lists when it is shown.
-PAGES = ('home', 'graphics', 'performance', 'game', 'advanced')
-PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_lists', 'refresh_game_patches')}
+PAGES = ('home', 'graphics', 'performance', 'game', 'controls', 'mods', 'advanced')
+PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_game_patches',), 'mods': ('refresh_lists',)}
 UI_SCALES = [('auto', ('Auto',)), ('1', ('1x',)), ('2', ('2x',))]
 APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.get('GOW3_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
@@ -389,6 +419,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
+                'rage_one_input': True, 'stick_prompts': 'keyboard', 'controls_layout': 2,
                 'glyph_style': 'off'}
 
 # PS4 button, default key, default gamepad button (SDL names; src/runtime_pad.c). L2/R2 come
@@ -415,39 +446,226 @@ PAD_STYLES = {
              'leftstick': 'LS (left stick click)', 'rightstick': 'RS (right stick click)', 'start': 'Menu',
              'back': 'View', 'touchpad': 'Touchpad click', 'guide': 'Xbox button', 'dpup': 'D-pad up',
              'dpdown': 'D-pad down', 'dpleft': 'D-pad left', 'dpright': 'D-pad right', 'misc1': 'Share'},
+    # By position, as printed on a Nintendo controller: the south button is B, the east one A.
+    'nintendo': {'a': 'B', 'b': 'A', 'x': 'Y', 'y': 'X', 'leftshoulder': 'L', 'rightshoulder': 'R',
+                 'leftstick': 'Left stick click', 'rightstick': 'Right stick click', 'start': 'Plus (+)',
+                 'back': 'Minus (−)', 'touchpad': 'Touchpad click', 'guide': 'Home button', 'dpup': 'D-pad up',
+                 'dpdown': 'D-pad down', 'dpleft': 'D-pad left', 'dpright': 'D-pad right', 'misc1': 'Capture'},
 }
+PAD_STYLE_NAMES = {'playstation': 'PlayStation', 'xbox': 'Xbox', 'nintendo': 'Nintendo'}
+# The device whose table the Controls page shows; both keep working in the game.
+CONTROL_DEVICES = (('keyboard', 'Keyboard & mouse'), ('gamepad', 'Gamepad'))
 
 
+def connected_gamepad():
+    """Whether gow3-probe sees a gamepad now; None when the probe is missing or fails."""
+    name = 'gow3-probe.exe' if WINDOWS else 'gow3-probe'
+    probe = next((p for p in (PORT_DIR / 'bin' / name, PORT_DIR / 'out' / name) if p.is_file()), None)
+    if not probe:
+        return None
+    env = dict(os.environ)
+    # As run.py: a development build loads the MSYS2 CLANG64 DLLs (SDL3, FFmpeg); without them Windows
+    # would show a missing-DLL dialog, so the probe is not run at all.
+    if WINDOWS and not (probe.parent / 'SDL3.dll').is_file():
+        clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
+        if not (clang64 / 'SDL3.dll').is_file():
+            return None
+        env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
+    try:
+        out = subprocess.run([str(probe), '--gamepad'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, text=True, timeout=15, creationflags=NO_WINDOW,
+                             env=env).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return 'Gamepad: type=' in out
+
+
+# Keyboard & mouse: how the game's stick-rotation prompts (QTEs) are answered (runtime_pad.c).
+STICK_PROMPTS = [('keyboard', ('Keyboard (native)',)), ('mouse', ('Adaptive mouse (experimental)',))]
+# L2 aim with the mouse (Head of Helios, Bow of Apollo): gow3.ini mouse_aim_style.
+AIM_STYLES = [('0', ('Relative',)), ('1', ('Absolute',))]
 GLYPH_STYLES = [('off', ('Original (default)',)), ('auto', ('Match my controller',)), ('xbox', ('Xbox',)),
                 ('nintendo', ('Nintendo',)), ('keyboard', ('Keyboard',))]
 
 
+# Keyboard capture on the Controls page: the Tk keysym of a pressed key and the SDL scancode
+# name the game reads (key_source in runtime_pad.c). Letters, digits and F1-F24 map to themselves.
+# Comma and = are saved as Comma and Equals: their own names separate GOW3_KEY_MAP entries. The
+# numpad with Num Lock off reports its other names; SDL sees the same keypad keys.
+TK_TO_SDL_KEYS = {
+    'space': 'Space', 'Return': 'Return', 'Tab': 'Tab', 'BackSpace': 'Backspace', 'Delete': 'Delete',
+    'Escape': 'Escape', 'Home': 'Home', 'End': 'End', 'Prior': 'PageUp', 'Next': 'PageDown',
+    'Caps_Lock': 'CapsLock', 'Num_Lock': 'Numlock', 'Scroll_Lock': 'ScrollLock', 'Pause': 'Pause',
+    'App': 'Application', 'Menu': 'Application',
+    'Up': 'Up', 'Down': 'Down', 'Left': 'Left', 'Right': 'Right',
+    'Shift_L': 'Left Shift', 'Shift_R': 'Right Shift', 'Control_L': 'Left Ctrl', 'Control_R': 'Right Ctrl',
+    'Alt_L': 'Left Alt', 'Alt_R': 'Right Alt',
+    'minus': '-', 'equal': 'Equals', 'comma': 'Comma', 'bracketleft': '[', 'bracketright': ']',
+    'backslash': '\\', 'semicolon': ';', 'apostrophe': "'", 'period': '.', 'slash': '/', 'grave': '`',
+    'KP_Enter': 'Keypad Enter', 'KP_Add': 'Keypad +', 'KP_Subtract': 'Keypad -',
+    'KP_Multiply': 'Keypad *', 'KP_Divide': 'Keypad /', 'KP_Decimal': 'Keypad .',
+    **{f'KP_{d}': f'Keypad {d}' for d in range(10)},
+    'KP_Insert': 'Keypad 0', 'KP_End': 'Keypad 1', 'KP_Down': 'Keypad 2', 'KP_Next': 'Keypad 3',
+    'KP_Left': 'Keypad 4', 'KP_Begin': 'Keypad 5', 'KP_Right': 'Keypad 6', 'KP_Home': 'Keypad 7',
+    'KP_Up': 'Keypad 8', 'KP_Prior': 'Keypad 9', 'KP_Delete': 'Keypad .',
+}
+# Keys that never reach the game as a button: shown in the box when pressed.
+RESERVED_KEYS = {'Insert': 'Insert opens the port\'s menu',
+                 'Win_L': 'The Windows key opens the Start menu', 'Win_R': 'The Windows key opens the Start menu',
+                 'Super_L': 'The Windows key opens the Start menu', 'Super_R': 'The Windows key opens the Start menu',
+                 'Print': 'Windows keeps Print Screen'}
+CAPTURE_SECONDS = 5  # a waiting key box gives up after this long
+
+# Tk mouse button numbers while a key box waits: 1 left, 2 middle, 3 right; on Windows 4 and 5 are
+# the side buttons (XButton1 back, XButton2 forward). The wheel arrives as <MouseWheel> deltas.
+TK_TO_MOUSE = {1: 'Mouse Left', 2: 'Mouse Middle', 3: 'Mouse Right', 4: 'Mouse Back', 5: 'Mouse Forward'}
+
+
+def mouse_name(button=None, wheel_delta=0):
+    """Name of a mouse button (Tk number) or of a wheel turn (delta: up > 0), or None."""
+    if wheel_delta:
+        return 'Wheel Up' if wheel_delta > 0 else 'Wheel Down'
+    return TK_TO_MOUSE.get(button)
+
+
+def sdl_key_name(keysym):
+    """SDL name of a Tk keysym, or None when the key cannot be bound."""
+    if keysym in TK_TO_SDL_KEYS:
+        return TK_TO_SDL_KEYS[keysym]
+    if len(keysym) == 1 and keysym.isascii() and keysym.isalnum():
+        return keysym.upper()
+    if keysym[:1] == 'F' and keysym[1:].isdigit() and 1 <= int(keysym[1:]) <= 24:
+        return keysym
+    return None
+
+
+def bind_key(bindings, button, name):
+    """Gives `name` to `button` in {button: key name}; a button that had it takes the old key of
+    `button`, so no key presses two buttons. Returns the button that swapped, or None."""
+    old = bindings.get(button, '')
+    other = next((b for b, k in bindings.items() if b != button and k.strip().lower() == name.lower()), None)
+    bindings[button] = name
+    if other:
+        bindings[other] = old
+    return other
+
+
+# The keyboard & mouse table: keys and mouse inputs for the PS4 buttons plus actions of their own.
+# Its defaults put the attacks and magic on the mouse, the shoulder buttons next to WASD and the
+# weapons on 1-4 (clockwise from up, the order they are acquired); CONTROLS keeps the game's own
+# keys (src/runtime_pad.c), so only what differs from them is sent.
+KEY_DEFAULTS = {'cross': 'Space', 'circle': 'Left Shift', 'square': 'Mouse Left', 'triangle': 'Mouse Right',
+                'l1': 'Q', 'r1': 'E', 'l2': 'R', 'r2': 'Mouse Forward', 'l3': 'Z', 'r3': 'X',
+                'options': 'Tab', 'touchpad_left': 'P', 'touchpad_right': 'Escape',
+                'up': '1', 'right': '2', 'down': '3', 'left': '4'}
+# Actions of the keyboard map only (runtime_pad.c's host-only sources), as CONTROLS rows. Rage of
+# Sparta (L3 + R3 on one input) follows R3; it is used instead of L3 and R3 while 'rage_one_input'
+# is on. "None" leaves a row without an input.
+RAGE_ROW, GRAB_ROW, DODGE_ROW = ('rage', 'Mouse Middle', None), ('grab', 'C', None), ('dodge', 'Mouse Back', None)
+KEY_ACTIONS = [RAGE_ROW, GRAB_ROW, DODGE_ROW]
+ACTION_NAMES = {'rage': 'Rage of Sparta', 'grab': 'Grab', 'dodge': 'Dodge'}
+RAGE_BUTTONS = ('l3', 'r3')
+CONTROLS_LAYOUT = 2  # settings layout: 2 = one keyboard & mouse table (migrate_controls)
+
+
+def table_rows(kind):
+    """CONTROLS rows of a table, in display order; the keyboard one adds its actions."""
+    if kind != 'key':
+        return CONTROLS
+    rows = []
+    for row in CONTROLS:
+        rows.append(row)
+        if row[0] == 'r3':
+            rows.append(RAGE_ROW)
+    return rows + [GRAB_ROW, DODGE_ROW]
+MOUSE_NAMES = {name.casefold() for name in (*TK_TO_MOUSE.values(), 'Wheel Up', 'Wheel Down')}
+
+
+def is_mouse_name(name):
+    return name.strip().casefold() in MOUSE_NAMES
+
+
+def default_input(row, kind):
+    """Default input of a table row for 'key' or 'pad' ('' or None when it has none)."""
+    button, key, pad = row
+    if kind == 'pad':
+        return pad
+    return KEY_DEFAULTS.get(button, key) if key else key
+
+
+def keyboard_map(controls, rage=True):
+    """GOW3_KEY_MAP of the keyboard & mouse table: each button on its chosen input, written where
+    that differs from the game's own key. With `rage` (one input for Rage of Sparta) L3 and R3 get
+    none and the Rage row is used; otherwise the Rage row is left out."""
+    chosen = control_values(controls, 'key')
+    entries = []
+    for row in table_rows('key'):
+        button, key, _pad = row
+        if not key or (button == 'rage' and not rage):
+            continue
+        if rage and button in RAGE_BUTTONS:
+            entries.append(f'{button}=None')
+            continue
+        value = (chosen.get(button) or default_input(row, 'key')).strip()
+        game_default = key if row in CONTROLS else ''  # the game has no key of its own for an action
+        if value.casefold() != game_default.casefold() and not set(value) & set(',='):
+            entries.append(f'{button}={value}')
+    return ','.join(entries)
+
+
 def control_changes(values, kind):
     """The buttons whose chosen key or SDL gamepad name differs from the default."""
-    column = 1 if kind == 'key' else 2
-    return {row[0]: values[row[0]].strip() for row in CONTROLS
-            if row[column] and values.get(row[0], '').strip()
-            and values[row[0]].strip().casefold() != row[column].casefold()}
+    return {row[0]: values[row[0]].strip() for row in table_rows(kind)
+            if default_input(row, kind) and values.get(row[0], '').strip()
+            and values[row[0]].strip().casefold() != default_input(row, kind).casefold()}
 
 
 def control_values(controls, kind):
-    """The saved keys ('key') or gamepad names ('pad') by game button, for the buttons that have
-    a box of that kind. 'touchpad', saved before the sides were split, is the left click."""
+    """The saved inputs ('key') or gamepad names ('pad') by game button, for the rows of that
+    table. 'touchpad', saved before the sides were split, is the left click."""
     chosen = controls.get(kind, {}) if isinstance(controls, dict) else {}
     if not isinstance(chosen, dict):
         return {}
     values = {button: value for button, value in chosen.items() if button != 'touchpad'}
     if 'touchpad' in chosen and 'touchpad_left' not in values:
         values['touchpad_left'] = chosen['touchpad']
-    return {button: values[button] for button, key, pad in CONTROLS
-            if (key if kind == 'key' else pad) and isinstance(values.get(button), str) and values[button].strip()}
+    return {button: values[button] for button, key, pad in table_rows(kind)
+            if (pad if kind == 'pad' else key) and isinstance(values.get(button), str) and values[button].strip()}
 
 
 def control_map(controls, kind):
-    """GOW3_KEY_MAP/GOW3_PAD_MAP value: 'cross=Q,circle=Left Shift' for the changed buttons."""
+    """GOW3_PAD_MAP value: 'cross=a,circle=b' for the changed buttons."""
     chosen = control_values(controls, kind)
     return ','.join(f'{button}={chosen[button].strip()}' for button, _key, _pad in CONTROLS
                     if button in chosen and not set(chosen[button]) & set(',='))
+
+
+def migrate_controls(saved):
+    """Settings saved before the keyboard & mouse table (CONTROLS_LAYOUT). A player who saved keys
+    in Keyboard Mapping keeps the whole layout they had (the game's keys for the rest); one who
+    used Native Translation keeps that table. A new action whose default input is already taken
+    stays without one."""
+    if not isinstance(saved, dict) or not saved or saved.get('controls_layout') == CONTROLS_LAYOUT:
+        return saved
+    saved = dict(saved)
+    controls = dict(saved['controls']) if isinstance(saved.get('controls'), dict) else {}
+    native = controls.pop('native', None)
+    if saved.pop('native_input', False) and isinstance(native, dict):
+        controls['key'] = dict(native)  # its defaults are the new ones
+    elif controls.get('key'):
+        kept = control_values(controls, 'key')
+        layout = {button: kept.get(button) or key for button, key, _pad in CONTROLS if key}
+        rage = saved.get('native_rage', True)
+        taken = {value.strip().casefold() for button, value in layout.items()
+                 if not (rage and button in RAGE_BUTTONS)}
+        for button, default, _pad in KEY_ACTIONS:
+            layout[button] = 'None' if default.casefold() in taken else default
+        controls['key'] = layout
+    if 'native_rage' in saved:
+        saved['rage_one_input'] = saved.pop('native_rage')
+    saved['controls'] = controls
+    saved['controls_layout'] = CONTROLS_LAYOUT
+    return saved
 
 UPSCALERS = [('fsr3', ('FSR 3.1 (every GPU)', 'FSR 3.1 (любая видеокарта)')),
              ('taa', ('TAA (native resolution anti-aliasing)', 'TAA (нативное сглаживание)')),
@@ -460,7 +678,9 @@ LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарт�
         ('1', ('On (change without restarting)', 'Включена (без перезапуска)'))]
 LANGUAGES = [('1', ('English', 'Английский')), ('8', ('Russian', 'Русский')), ('0', ('Japanese', 'Японский')),
              ('2', ('French', 'Французский')), ('3', ('Spanish', 'Испанский')), ('4', ('German', 'Немецкий')),
-             ('5', ('Italian', 'Итальянский'))]
+             ('5', ('Italian', 'Итальянский')),
+             # Polish (id 16, LANGS_BCES00510.TXT); see issue #493.
+             ('16', ('Polish', 'Польский'))]
 DRAW_PIPE = [('', ('Auto (8+ threads)', 'Авто (8+ потоков)')), ('1', ('On', 'Включён')),
              ('0', ('Off (more stable)', 'Выключен (стабильнее)'))]
 READBACKS = [('', ('Relaxed (default)', 'Relaxed (по умолчанию)')), ('0', ('Off', 'Выключены')),
@@ -490,6 +710,34 @@ def load_json(path, default):
         return json.loads(Path(path).read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return default
+
+
+def migrate_portable_settings(config_file=None, legacy_file=None):
+    """One-time migration: if settings.json does not exist in DATA_DIR, copy from legacy AppData/XDG."""
+    target = Path(config_file or CONFIG_FILE)
+    legacy = Path(legacy_file or LEGACY_CONFIG_FILE)
+    if target == legacy:
+        return
+    if not target.is_file() and legacy.is_file():
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(legacy, target)
+        except OSError:
+            pass
+    target_ico = target.parent / 'game_icon.ico'
+    legacy_ico = legacy.parent / 'game_icon.ico'
+    if not target_ico.is_file() and legacy_ico.is_file():
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(legacy_ico, target_ico)
+        except OSError:
+            pass
+
+
+def load_app_settings(config_file=None):
+    migrate_portable_settings(config_file)
+    target = config_file or CONFIG_FILE
+    return {**APP_DEFAULTS, **migrate_controls(load_json(target, {}))}
 
 
 def ini_path():
@@ -911,9 +1159,14 @@ def game_environment(s):
                       ('vk_validation', 'GOW3_VK_VALIDATION'), ('frame_capture_key', 'GOW3_FRAME_CAPTURE_KEY')):
         if s[key]:
             env[name] = '1'
-    for kind, name in (('key', 'GOW3_KEY_MAP'), ('pad', 'GOW3_PAD_MAP')):
-        if value := control_map(s.get('controls', {}), kind):
-            env[name] = value
+    controls = s.get('controls', {})
+    if value := keyboard_map(controls, bool(s.get('rage_one_input', True))):
+        env['GOW3_KEY_MAP'] = value
+    if value := control_map(controls, 'pad'):
+        env['GOW3_PAD_MAP'] = value
+    env.pop('GOW3_STICK_PROMPTS', None)
+    if s.get('stick_prompts') in dict(STICK_PROMPTS):
+        env['GOW3_STICK_PROMPTS'] = s['stick_prompts']
     glyph_style = s.get('glyph_style')
     env.pop('GOW3_GLYPH_STYLE', None)
     if glyph_style in ('auto', 'xbox', 'nintendo', 'keyboard'):
@@ -929,13 +1182,14 @@ def game_environment(s):
 # God of War III's own colors: near black, ash and blood red (no gold or orange).
 BG, PANEL, CARD, LINE = '#0d0b0b', '#161212', '#1d1717', '#2a2222'
 TEXT, MUTED, ACCENT, ACCENT_HI = '#e6e0d8', '#8a817a', '#a4161a', '#c81e25'
+CONFLICT = '#e0a0a0'
 def pad_labels(style):
     """SDL gamepad button name -> its label in this naming style, in the launcher's language."""
     return {name: _(label) for name, label in PAD_STYLES[style].items()}
 
 
 RESOLUTION_CHOICES = [(name, (graphics_options.resolution_label(name),)) for name in graphics_options.RESOLUTIONS]
-ENGINE_FPS_CHOICES = [('60', ('60 (original)',)), ('120', ('120',)), ('240', ('240',))]
+ENGINE_FPS_CHOICES = [('60', ('60 (original)',)), ('100', ('100',)), ('120', ('120',)), ('240', ('240',))]
 
 
 def window_icon(root, tk, game_icon, own_icon, ico_file):
@@ -972,7 +1226,7 @@ class Launcher:
     def __init__(self, root, tk, ttk, filedialog, messagebox):
         self.tk, self.ttk, self.filedialog, self.messagebox = tk, ttk, filedialog, messagebox
         self.root = root
-        self.app = {**APP_DEFAULTS, **load_json(CONFIG_FILE, {})}
+        self.app = load_app_settings()
         self.ini, self.ini_lines = load_ini()
         self.vars = {}
         self.process = self.job = None
@@ -980,6 +1234,8 @@ class Launcher:
         self.banner_source = self.banner_image = None
         self.ui_calls = queue.Queue()  # work for the Tk thread from helper threads
         self.mod_order, self.mod_vars, self.patch_vars = [], {}, {}
+        self.selected_mod, self.mod_rows, self.mod_conflicts, self.conflicts_open = None, {}, [], False
+        self.mod_details_shown, self.mod_picture_key, self.mod_photo = False, None, None
         self.pending_update = None  # (version, url, page) once offered
         root.title(f'{APP_NAME} (PC)')
         if sys.platform == 'win32':
@@ -999,7 +1255,7 @@ class Launcher:
         self.style()
         self.build()
         self.show('home')
-        self.refresh_lists()  # the Game page's lists now, so the first visit does not count as a change
+        self.refresh_lists()  # the Mods page's lists now, so the first visit does not count as a change
         self.refresh_game_patches()
         self.saved = self.gather()
         root.protocol('WM_DELETE_WINDOW', self.close)
@@ -1123,6 +1379,10 @@ class Launcher:
         s.configure('Section.TLabel', background=PANEL, foreground=ACCENT_HI, font=self.heading_font(12))
         s.configure('TCheckbutton', background=PANEL, foreground=TEXT, padding=self.px((0, 3)))
         s.map('TCheckbutton', background=[('active', PANEL)], foreground=[('disabled', MUTED)])
+        for name, color in (('Card', CARD), ('Picked', LINE)):  # check boxes on the Mods page's rows
+            s.configure(f'{name}.TCheckbutton', background=color, padding=0)
+            s.map(f'{name}.TCheckbutton', background=[('active', color)])
+        s.configure('Conflict.TLabel', background=PANEL, foreground=CONFLICT)
         s.configure('TRadiobutton', background=PANEL, foreground=TEXT, indicatorcolor=CARD,
                     indicatorsize=self.px(12), indicatormargin=self.px((1, 1, 4, 1)))
         s.map('TRadiobutton', background=[('active', PANEL)], indicatorcolor=[('selected', ACCENT)])
@@ -1135,6 +1395,10 @@ class Launcher:
                     arrowsize=self.px(10))
         s.configure('TButton', background=CARD, foreground=TEXT, padding=self.px((12, 6)), borderwidth=self.px(1))
         s.map('TButton', background=[('active', LINE), ('disabled', PANEL)], foreground=[('disabled', MUTED)])
+        s.configure('Small.TButton', padding=self.px((4, 1)))
+        s.configure('Link.TButton', background=PANEL, foreground=MUTED, borderwidth=0, padding=self.px((2, 1)),
+                    font=self.font(UI_FONT, 9, 'underline'))
+        s.map('Link.TButton', background=[('active', PANEL)], foreground=[('active', TEXT)])
         s.configure('Play.TButton', background=ACCENT, foreground='#f4ece0', font=self.heading_font(15, bold=True),
                     padding=self.px((36, 10)), borderwidth=0)
         s.map('Play.TButton', background=[('active', ACCENT_HI), ('disabled', '#2e1c1c')],
@@ -1207,7 +1471,7 @@ class Launcher:
             return []
         root = Path(self.var('mods_dir', 'app').get() or DATA_DIR / 'mods')
         names = ([n for n in self.mod_order if self.mod_vars.get(n) is None or self.mod_vars[n].get()]
-                 if getattr(self, 'mod_vars', None) else selected(root, DATA_DIR / 'mods.json'))
+                 if getattr(self, 'mod_vars', None) else selected(root, DATA_DIR / 'mods.json', self.var('game_dir', 'app').get()))
         files = [f for n in names for f in patch_files(root / n)]
         return [(size, (graphics_options.resolution_label(size) + ' (mod)',)) for size in resolution_names(files)
                 if size not in graphics_options.RESOLUTIONS]
@@ -1215,6 +1479,40 @@ class Launcher:
     def resolution_options(self):
         """The render resolutions to choose from: the built-in ones and those of the enabled mods."""
         return RESOLUTION_CHOICES + self.mod_resolutions()
+
+    def aspect_var(self):
+        """The Aspect ratio filter (Home and Performance): not saved, it follows the render resolution;
+        choosing another one moves the resolution to that aspect's closest size."""
+        if getattr(self, 'aspect', None) is None:
+            resolution = self.var('render_resolution', 'ini')
+            self.aspect = self.tk.StringVar(value=graphics_options.aspect_of(resolution.get()) or '16:9')
+
+            def aspect_chosen(*_a):
+                names = [v for v, _t in self.resolution_options()]
+                closest = graphics_options.closest_resolution(self.aspect.get(), resolution.get(), names)
+                if closest and closest != resolution.get():
+                    resolution.set(closest)
+
+            def resolution_chosen(*_a):
+                aspect = graphics_options.aspect_of(resolution.get())
+                if aspect and aspect != self.aspect.get():
+                    self.aspect.set(aspect)
+            self.aspect.trace_add('write', aspect_chosen)
+            resolution.trace_add('write', resolution_chosen)
+        return self.aspect
+
+    def aspect_options(self):
+        """The aspect ratios the render resolutions have (built-in and mods)."""
+        return [(a, (a,)) for a in graphics_options.aspects([v for v, _t in self.resolution_options()])]
+
+    def aspect_resolution_options(self):
+        """The render resolutions of the chosen aspect ratio, smallest first, without the ratio in the
+        label (the Aspect ratio box above says it)."""
+        options = dict(self.resolution_options())
+        names = graphics_options.resolutions_for(self.aspect_var().get(), list(options))
+        mod = ' (mod)'
+        return [(n, (graphics_options.resolution_label(n, aspect=False) + (mod if options[n][0].endswith(mod) else ''),))
+                for n in names]
 
     def next_row(self, parent):
         return parent.grid_size()[1]
@@ -1246,6 +1544,7 @@ class Launcher:
             row=self.next_row(parent), column=0, columnspan=2, sticky='w', pady=self.px((top, 0)))
 
     def section(self, parent, title, top=20):
+        """A section heading with a line under it."""
         r = self.next_row(parent)
         self.ttk.Label(parent, text=title.upper(), style='Section.TLabel').grid(
             row=r, column=0, columnspan=2, sticky='w', pady=self.px((top, 0)))
@@ -1287,6 +1586,12 @@ class Launcher:
         bar.pack(side='right', fill='y')
         canvas.pack(side='left', fill='both', expand=True)
         outer.scroll = lambda units: canvas.yview_scroll(units, 'units') if inner.winfo_height() > canvas.winfo_height() else None
+
+        def fit():  # after a section is hidden: the shorter content, kept in view
+            canvas.update_idletasks()
+            canvas.configure(scrollregion=(0, 0, canvas.winfo_width(), inner.winfo_reqheight()))
+            canvas.yview_moveto(min(canvas.yview()[0], max(0.0, 1 - canvas.winfo_height() / max(1, inner.winfo_reqheight()))))
+        outer.fit = fit
         self.pages[name] = outer
         return inner
 
@@ -1303,7 +1608,7 @@ class Launcher:
         self.side = side
         self.nav, self.current_page = {}, None
         titles = {'home': _('Home'), 'graphics': _('Graphics', 'Графика'), 'performance': _('Performance'),
-                  'game': _('Game', 'Игра'), 'advanced': _('Advanced', 'Дополнительно')}
+                  'game': _('Game', 'Игра'), 'controls': _('Controls', 'Управление'), 'mods': _('Mods', 'Моды'), 'advanced': _('Advanced', 'Дополнительно')}
         for name in PAGES:
             item = tk.Label(side, text='    ' + titles[name], bg=BG, fg=TEXT, anchor='w',
                             font=self.heading_font(11, UI_FONT),
@@ -1340,6 +1645,8 @@ class Launcher:
         self.build_graphics()
         self.build_performance()
         self.build_game()
+        self.build_controls()
+        self.build_mods_page()
         self.build_advanced()
         self.root.bind_all('<MouseWheel>', self.wheel)
         if not WINDOWS:  # X11 (Tk 8.6): the wheel arrives as buttons 4 and 5; on Windows those are side buttons
@@ -1348,6 +1655,8 @@ class Launcher:
         self.game_changed()
 
     def wheel(self, event):
+        if self.capture_wheel:
+            return self.capture_wheel(event)
         page = self.pages.get(self.current_page)
         if hasattr(page, 'scroll') and not isinstance(event.widget, (self.tk.Text, self.ttk.Combobox)) \
                 and 'popdown' not in str(event.widget):
@@ -1377,13 +1686,18 @@ class Launcher:
         ttk.Label(quick, text=_('Quick settings', 'Основное').upper(), style='Section.TLabel').grid(
             row=0, column=0, columnspan=4, sticky='w')
         tk.Frame(quick, bg=LINE, height=self.px(1)).grid(row=1, column=0, columnspan=4, sticky='we', pady=self.px((2, 6)))
-        items = ((_('Display mode'), 'display_mode', DISPLAY_MODES), (_('Frame rate limit'), 'fps_limit', FPS_LIMITS),
-                 (_('Render resolution'), 'render_resolution', self.resolution_options),
-                 (_('Engine frame rate'), 'engine_fps', ENGINE_FPS_CHOICES))
-        for index, (title, key, options) in enumerate(items):
-            r, c = 2 + index // 2, (index % 2) * 2
+        # Left: display and frame rate; right: Aspect ratio above the Render resolution it filters.
+        items = ((0, 0, _('Display mode'), 'display_mode', DISPLAY_MODES),
+                 (1, 0, _('Frame rate limit'), 'fps_limit', FPS_LIMITS),
+                 (2, 0, _('Engine frame rate'), 'engine_fps', ENGINE_FPS_CHOICES),
+                 (0, 2, _('Aspect ratio'), None, self.aspect_options),
+                 (1, 2, _('Render resolution'), 'render_resolution', self.aspect_resolution_options))
+        for row, c, title, key, options in items:
+            r = 2 + row
             ttk.Label(quick, text=title).grid(row=r, column=c, sticky='w', pady=self.px(6), padx=self.px((0, 12)))
-            self.choice(quick, key, 'ini', options, width=18).grid(row=r, column=c + 1, sticky='w', padx=self.px((0, 40)))
+            box = (self.choice(quick, key, 'ini', options, width=18) if key else
+                   self.choice(quick, None, None, options, width=18, var=self.aspect_var()))
+            box.grid(row=r, column=c + 1, sticky='w', padx=self.px((0, 40)))
 
     def draw_banner(self):
         """The cover art of the selected dump (sce_sys/pic1.png) under the title."""
@@ -1489,8 +1803,10 @@ class Launcher:
         self.row(f, _('Frames queued'), self.choice(f, 'frames_queued', 'ini', FRAMES_QUEUED),
                  _('1 is the lowest input latency; more can raise FPS when the graphics card is the limit.'))
         self.row(f, _('Engine frame rate'), self.choice(f, 'engine_fps', 'ini', ENGINE_FPS_CHOICES),
-                 _('The highest frame rate the game itself runs at (a game patch).'), restart=True)
-        self.row(f, _('Render resolution'), self.choice(f, 'render_resolution', 'ini', self.resolution_options),
+                 _('The highest frame rate the game itself runs at (a game patch).'))
+        self.row(f, _('Aspect ratio'), self.choice(f, None, None, self.aspect_options, var=self.aspect_var()),
+                 _('Shows the render resolutions of this shape only.'))
+        self.row(f, _('Render resolution'), self.choice(f, 'render_resolution', 'ini', self.aspect_resolution_options),
                  _('The size the game draws at; higher is sharper and slower. A resolution patch replaces the '
                    'texture fix and reserves the memory it needs.'), restart=True)
         self.section(f, _('Shaders'))
@@ -1567,8 +1883,6 @@ class Launcher:
         self.section(f, _('Language'))
         self.row(f, _('Game language', 'Язык игры'), self.choice(f, 'language', 'app', LANGUAGES))
         self.build_patches(f)
-        self.build_mods(f)
-        self.build_controls(f)
 
     def user_dir(self):
         return Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user')
@@ -1612,21 +1926,18 @@ class Launcher:
                                  (_(' Previous saves: {}.').format(safety.name) if safety else ''))
 
     def build_patches(self, f):
-        """Community patches of the selected game's built-in XML and third-party patch files, on the
-        Game page. Resolution and frame rate patches follow Performance (gow3.ini; run.py adds them)."""
+        """Community patches of the selected game's built-in XML, on the Game page. Resolution and
+        frame rate patches follow Performance (gow3.ini; run.py adds them)."""
         self.section(f, _('Game patches', 'Патчи игры'))
         self.game_patch_frame = self.ttk.Frame(f)
         self.game_patch_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we')
         self.game_patch_title, self.game_patch_vars = None, {}
-        self.section(f, _('Third-party patches', 'Сторонние патчи'))
-        self.folder(f, 'patches_dir', _('Patches folder', 'Папка патчей'), _('Choose the patches folder', 'Выберите папку патчей'),
-                    _('shadPS4/GoldHEN XML patch files for this game version. Empty: {}',
-                      'XML-патчи shadPS4/GoldHEN для этой версии игры. Пусто: {}').format(DATA_DIR / 'patches'),
-                    on_change=self.refresh_lists)
+
+    def build_third_party_patches(self, f):
+        """shadPS4/GoldHEN patch files the player adds, on the Mods page."""
+        self.section(f, _('Third-party patches', 'Сторонние патчи'), top=28)
         self.patches_frame = self.ttk.Frame(f)
-        self.patches_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=self.px((8, 0)))
-        self.ttk.Button(f, text=_('Refresh', 'Обновить'), command=self.refresh_lists).grid(
-            row=self.next_row(f), column=0, sticky='w', pady=self.px((14, 0)))
+        self.patches_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=self.px((6, 0)))
 
     def refresh_game_patches(self):
         import xml.etree.ElementTree as ET
@@ -1668,71 +1979,200 @@ class Launcher:
         self.app.setdefault('game_patches', {})[self.game_patch_title] = \
             [n for n, v in self.game_patch_vars.items() if v.get()]
 
-    def build_mods(self, f):
-        """Loose-file mods layered over the game at start, on the Game page."""
-        self.section(f, _('Mods', 'Моды'))
-        self.check(f, 'mods_enabled', 'app', _('Load mods', 'Загружать моды'),
-                   _('Loose-file mods, each in its own folder with dvdroot_ps4.',
-                     'Моды из файлов, каждый в своей папке с dvdroot_ps4.'))
-        self.folder(f, 'mods_dir', _('Mods folder', 'Папка модов'), _('Choose the mods folder', 'Выберите папку модов'),
-                    _('Empty: {}', 'Пусто: {}').format(DATA_DIR / 'mods'), on_change=self.refresh_lists)
-        self.mods_frame = self.ttk.Frame(f)
-        self.mods_frame.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=self.px((8, 0)))
-        self.ttk.Button(f, text=_('Refresh', 'Обновить'), command=self.refresh_lists).grid(
-            row=self.next_row(f), column=0, sticky='w', pady=self.px((14, 0)))
-
-    def build_controls(self, f):
-        """Remapping of the PS4 buttons, on the Game page (run.py passes GOW3_KEY_MAP and
-        GOW3_PAD_MAP to the game)."""
+    def build_mods_page(self):
+        """Loose-file mods layered over the game at start: the switch, the load order with a details
+        panel for the selected mod, presets, third-party patches and the folders."""
         tk, ttk = self.tk, self.ttk
-        self.section(f, _('Controls', 'Управление'))
-        self.note(f, _('Which key or gamepad button presses each button of the game.'), top=4)
+        f = self.scrolled_page('mods', _('Mods', 'Моды'),
+                               _('Change textures, sounds and text. Your game files stay untouched.', 'Меняйте текстуры, звуки и тексты. Файлы игры не изменяются.'))
+        top = ttk.Frame(f)
+        top.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=self.px((14, 0)))
+        ttk.Checkbutton(top, text=_('Load mods', 'Загружать моды'), variable=self.var('mods_enabled', 'app')).pack(side='left')
+        self.mods_count = ttk.Label(top, text='', style='Muted.TLabel')
+        self.mods_count.pack(side='left', padx=self.px((18, 0)))
+        ttk.Button(top, text=_('Open folder', 'Открыть папку'), command=lambda: self.open_path(self.var('mods_dir', 'app').get(), 'mods_dir')
+                   ).pack(side='right')
+        head = ttk.Frame(f)
+        head.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we', pady=self.px((24, 0)))
+        ttk.Label(head, text=_('Load order', 'Порядок загрузки').upper(), style='Section.TLabel').pack(side='left')
+        ttk.Button(head, text=_('Refresh', 'Обновить'), style='Link.TButton', command=self.refresh_lists).pack(side='right')
+        ttk.Label(head, text=_('Lower in the list wins', 'Побеждает нижний в списке'), style='Muted.TLabel').pack(side='right', padx=self.px((0, 10)))
+        tk.Frame(f, bg=LINE, height=self.px(1)).grid(row=self.next_row(f), column=0, columnspan=2, sticky='we',
+                                                     pady=self.px((2, 10)))
+        self.mods_body = ttk.Frame(f)
+        self.mods_body.grid(row=self.next_row(f), column=0, columnspan=2, sticky='we')
+        self.mods_body.columnconfigure(0, weight=1)
+        left = ttk.Frame(self.mods_body)
+        left.grid(row=0, column=0, sticky='new')
+        self.mods_frame = tk.Frame(left, bg=CARD)
+        self.mods_frame.pack(fill='x')
+        conflicts = ttk.Frame(left)
+        conflicts.pack(fill='x', pady=self.px((10, 0)))
+        self.conflict_label = ttk.Label(conflicts, text='', style='Conflict.TLabel')
+        self.conflict_label.pack(side='left')
+        self.conflict_toggle = ttk.Button(conflicts, text='', style='Link.TButton', command=self.toggle_conflicts)
+        self.conflict_list = ttk.Label(left, text='', style='Muted.TLabel', justify='left')
+        self.conflict_list.pack(anchor='w')
+        self.mod_details = tk.Frame(self.mods_body, bg=CARD, padx=self.px(16), pady=self.px(16))
+        self.mods_body.bind('<Configure>', lambda _e: self.place_mod_details())
+        self.section(f, _('Presets', 'Пресеты'), top=28)
+        presets = ttk.Frame(f)
+        presets.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((8, 0)))
+        self.preset_choice = ttk.Combobox(presets, values=sorted(load_json(MOD_PRESETS, {})), width=24)
+        self.preset_choice.pack(side='left')
+        for text, command in ((_('Load', 'Загрузить'), self.load_mod_preset), (_('Save', 'Сохранить'), self.save_mod_preset),
+                              (_('Delete', 'Удалить'), self.delete_mod_preset)):
+            ttk.Button(presets, text=text, command=command).pack(side='left', padx=self.px((6, 0)))
+        self.build_third_party_patches(f)
+        self.section(f, _('Folders'), top=28)
+        self.folder(f, 'mods_dir', _('Mods folder', 'Папка модов'), _('Choose the mods folder', 'Выберите папку модов'),
+                    on_change=self.refresh_lists)
+        self.folder(f, 'patches_dir', _('Patches folder', 'Папка патчей'), _('Choose the patches folder', 'Выберите папку патчей'),
+                    on_change=self.refresh_lists)
+
+    def build_controls(self):
+        """The Controls page: the keyboard & mouse table, button icons and the gamepad remapping of
+        the PS4 buttons (run.py passes GOW3_KEY_MAP and GOW3_PAD_MAP to the game)."""
+        tk, ttk = self.tk, self.ttk
+        f = self.scrolled_page('controls', _('Controls', 'Управление'),
+                               _('Keyboard and mouse, button icons and gamepad mapping.'))
         saved = {kind: control_values(self.app.get('controls'), kind) for kind in ('key', 'pad')}
         style = self.app.get('pad_style') if self.app.get('pad_style') in PAD_STYLES else 'playstation'
         self.pad_style = tk.StringVar(value=style)
-        names = ttk.Frame(f)
-        for value, label in (('playstation', 'PlayStation'), ('xbox', 'Xbox')):
-            ttk.Radiobutton(names, text=label, value=value, variable=self.pad_style,
-                            command=self.relabel_pad_controls).pack(side='left', padx=self.px((0, 14)))
-        self.row(f, _('Gamepad names'), names)
-        self.row(f, _('In-game button icons'), self.choice(f, 'glyph_style', 'app', GLYPH_STYLES),
-                 hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
-                        'Works on a copy of two game files in the port\'s data folder (about 70 MB); your game folder '
-                        'is never changed. Applied when the game starts.'))
-        holder = ttk.Frame(f)
-        strength = self.var('vibration', 'ini')
-        tk.Scale(holder, from_=0, to=100, orient='horizontal', variable=strength, showvalue=False, length=self.px(260),
-                 width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD, activebackground=ACCENT_HI,
-                 highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
-        value = ttk.Label(holder, width=5)
-        value.pack(side='left', padx=self.px(10))
-        show = lambda *_a: value.configure(text=f'{strength.get()}%')
-        strength.trace_add('write', show)
-        show()
-        self.row(f, _('Vibration'), holder, _("Strength of the gamepad's vibration; 0% turns it off."))
-        table = ttk.Frame(f)
-        table.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((16, 0)))
-        for column, span, title in ((0, 2, _('GAME BUTTON')), (2, 1, _('KEYBOARD')), (3, 2, _('GAMEPAD'))):
-            ttk.Label(table, text=title, style='Section.TLabel').grid(row=0, column=column, columnspan=span, sticky='w')
         self.control_vars, self.pad_boxes, self.pad_icons = {'key': {}, 'pad': {}}, {}, {}
+        self.key_rows = {}  # keyboard button: (input box, reset arrow)
+        self.capturing_key = self.capture_wheel = None  # the key box waiting for an input
         size = self.px(28)
         labels = pad_labels(style)
 
         def icon_canvas(parent):
             return tk.Canvas(parent, width=size, height=size, bg=PANEL, highlightthickness=0, bd=0)
-        for r, (button, key, pad) in enumerate(CONTROLS, start=1):
+
+        def mapping_table(parent=None):
+            parent = parent or f
+            table = ttk.Frame(parent)
+            table.grid(row=self.next_row(parent), column=0, columnspan=2, sticky='w', pady=self.px((12, 0)))
+            return table
+
+        def game_button(table, r, button):
             game_icon = icon_canvas(table)
             game_icon.grid(row=r, column=0, sticky='w', pady=self.px(3))
-            button_icons.draw(game_icon, button_icons.GAME_BUTTONS[button], 'playstation', size)
-            ttk.Label(table, text=_(PS_BUTTON_NAMES[button]), width=-14).grid(row=r, column=1, sticky='w', padx=self.px((0, 12)))
-            key_var = tk.StringVar(value=saved.get('key', {}).get(button) or key)
-            self.control_vars['key'][button] = key_var
-            ttk.Entry(table, textvariable=key_var, width=16).grid(row=r, column=2, sticky='w', padx=self.px((0, 18)))
-            pad_name = saved.get('pad', {}).get(button) or pad
+            if button in button_icons.GAME_BUTTONS:
+                button_icons.draw(game_icon, button_icons.GAME_BUTTONS[button], 'playstation', size)
+            elif button in ('rage', 'grab'):  # two buttons together
+                button_icons.draw(game_icon, 'label:L3+R3' if button == 'rage' else 'label:L1+O', 'playstation', size)
+            else:  # an action of the right stick (dodge): the stick icon labelled RS
+                button_icons.draw(game_icon, 'rightstick', 'xbox', size)
+            title = _(PS_BUTTON_NAMES.get(button) or ACTION_NAMES[button])
+            ttk.Label(table, text=title, width=-14).grid(row=r, column=1, sticky='w', padx=self.px((0, 12)))
+
+        def slider(key, low, high, unit, parent=None):
+            holder = ttk.Frame(parent or f)
+            amount = self.var(key, 'ini')
+            tk.Scale(holder, from_=low, to=high, orient='horizontal', variable=amount, showvalue=False,
+                     length=self.px(260), width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD,
+                     activebackground=ACCENT_HI, highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
+            value = ttk.Label(holder, width=7)
+            value.pack(side='left', padx=self.px(10))
+            show = lambda *_a: value.configure(text=f'{amount.get()}{unit}')
+            amount.trace_add('write', show)
+            show()
+            return holder
+
+        # The in-game icons first, then the device: its section is shown, the other hidden (show_device).
+        page = f
+        self.row(page, _('In-game button icons'), self.choice(page, 'glyph_style', 'app', GLYPH_STYLES),
+                 hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
+                        'Works on a copy of two game files in the port\'s data folder (about 70 MB); your game folder '
+                        'is never changed. Applied when the game starts.'))
+        saved_device = self.app.get('controls_device')
+        self.device = tk.StringVar(value=saved_device if saved_device in dict(CONTROL_DEVICES) else 'keyboard')
+        self.device_chosen = saved_device in dict(CONTROL_DEVICES)
+
+        def choose_device():
+            self.device_chosen = True
+            self.show_device()
+        devices = ttk.Frame(page)
+        for value, label in CONTROL_DEVICES:
+            ttk.Radiobutton(devices, text=_(label), value=value, variable=self.device,
+                            command=choose_device).pack(side='left', padx=self.px((0, 18)))
+        self.row(page, _('Device'), devices)
+
+        # Keyboard & mouse: one table for the keys and the mouse, with its own actions.
+        f = self.key_section = ttk.Frame(page)
+        f.grid(row=self.next_row(page), column=0, columnspan=2, sticky='we')
+        f.columnconfigure(1, weight=1)
+        self.section(f, _('Keyboard & Mouse Mapping'), top=12)
+        self.note(f, _('Which key or mouse input presses each button of the game.'), top=4)
+        table = mapping_table()
+        r = 0
+        for row in table_rows('key'):
+            button = row[0]
+            r += 1
+            if button == 'rage':
+                ttk.Checkbutton(table, text=_('Rage of Sparta on one input (L3 + R3 together)'),
+                                variable=self.var('rage_one_input', 'app')).grid(
+                    row=r, column=0, columnspan=4, sticky='w', pady=self.px((6, 6)))
+                r += 1
+            default = default_input(row, 'key')
+            game_button(table, r, button)
+            var = tk.StringVar(value=saved['key'].get(button) or default)
+            self.control_vars['key'][button] = var
+            box = self.key_binder(table, 'key', button, var)
+            box.grid(row=r, column=2, sticky='w')
+            arrow = ttk.Button(table, text='\u21a9', width=3, takefocus=False,
+                               command=lambda b=button, d=default: self.assign_key('key', b, d))
+            arrow.grid(row=r, column=3, sticky='w', padx=self.px((6, 0)))
+            self.key_rows[button] = (box, arrow)
+        self.var('rage_one_input', 'app').trace_add('write', lambda *_a: self.grey_rage_rows())
+        self.grey_rage_rows()
+        self.note(f, _('Click a box, then press a key, click a mouse button or turn the wheel (it gives up after '
+                       '{} seconds). An input already used by another button swaps with it; the arrow puts one '
+                       'button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above '
+                       'it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the '
+                       'way you are moving (WASD), or back when standing still. Touchpad right opens the game\'s '
+                       'pause menu. Insert always opens the port\'s menu and cannot be bound. Applied when the '
+                       'game starts.').format(CAPTURE_SECONDS))
+        ttk.Button(f, text=_('Reset keyboard & mouse to defaults'), command=lambda: self.reset_controls('key')).grid(
+            row=self.next_row(f), column=0, sticky='w', pady=self.px((14, 0)))
+        self.row(f, _('Joystick prompts'), self.choice(f, 'stick_prompts', 'app', STICK_PROMPTS),
+                 hint=_('How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns '
+                        'from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W '
+                        'or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.'))
+        self.row(f, _('Mouse prompt distance'), slider('mouse_prompt_distance', 16, 200, ' px'),
+                 _('Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.'))
+        self.row(f, _('Right stick style'), self.choice(f, 'mouse_aim_style', 'ini', AIM_STYLES),
+                 hint=_('Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick '
+                        'follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse '
+                        'was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in '
+                        'the in-game menu.'))
+        self.row(f, _('Right stick sensitivity'), slider('mouse_aim_sensitivity', 10, 200, '%'),
+                 _('Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, '
+                   'higher less. Also in the in-game menu.'))
+        self.check(f, 'mouse_lock', 'ini', _('Keep the mouse in the game window'),
+                   _('While you play, the mouse stays in the game window, so a click cannot land on another monitor '
+                     'or app. The in-game menu and switching windows get it back. Also in the in-game menu.'))
+
+        # Gamepad: the controller type names its buttons, then the vibration and the table.
+        f = self.pad_section = ttk.Frame(page)
+        f.grid(row=self.next_row(page), column=0, columnspan=2, sticky='we')
+        f.columnconfigure(1, weight=1)
+        self.section(f, _('Gamepad Mapping'), top=12)
+        self.note(f, _('Which gamepad button presses each button of the game.'), top=4)
+        names = ttk.Frame(f)
+        for value in PAD_STYLES:
+            ttk.Radiobutton(names, text=PAD_STYLE_NAMES[value], value=value, variable=self.pad_style,
+                            command=self.relabel_pad_controls).pack(side='left', padx=self.px((0, 14)))
+        self.row(f, _('Controller type'), names)
+        self.row(f, _('Vibration'), slider('vibration', 0, 100, '%', f), _("Strength of the gamepad's vibration; 0% turns it off."))
+        table = mapping_table(f)
+        for r, (button, _key, pad) in enumerate(CONTROLS, start=1):
+            game_button(table, r, button)
+            pad_name = saved['pad'].get(button) or pad
             pad_var = tk.StringVar(value=pad_name or '')
             self.control_vars['pad'][button] = pad_var
             pad_icon = icon_canvas(table)
-            pad_icon.grid(row=r, column=3, sticky='w', padx=self.px((0, 6)))
+            pad_icon.grid(row=r, column=2, sticky='w', padx=self.px((0, 6)))
             self.pad_icons[button] = pad_icon
             if pad:
                 box = ttk.Combobox(table, state='readonly', values=list(labels.values()),
@@ -1748,15 +2188,102 @@ class Launcher:
                 fixed = (_('L1 + Touchpad right') if button == 'touchpad_left'
                          else _('{} trigger').format(_(PS_BUTTON_NAMES[button])))
                 box = ttk.Label(table, text=fixed, style='Muted.TLabel')
-            box.grid(row=r, column=4, sticky='w')
+            box.grid(row=r, column=3, sticky='w')
             self.draw_pad_icon(button)
-        self.note(f, _('Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, '
-                       'Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default '
-                       '(the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the '
-                       'game\'s pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert '
-                       'and R3+L2 always open the port\'s menu. Applied when the game starts.'))
-        self.ttk.Button(f, text=_('Reset to defaults'), command=self.reset_controls).grid(
+        self.note(f, _('L2/R2 stay on the triggers. Touchpad right opens the game\'s pause menu; Touchpad left '
+                       '(photo mode) is L1 + Touchpad right. R3+L2 always opens the port\'s menu. '
+                       'Applied when the game starts.'))
+        ttk.Button(f, text=_('Reset gamepad to defaults'), command=lambda: self.reset_controls('pad')).grid(
             row=self.next_row(f), column=0, sticky='w', pady=self.px((14, 0)))
+        self.show_device(fit=False)
+        if not self.device_chosen:  # first time: the gamepad if one is connected
+            def detect():
+                if connected_gamepad():
+                    self.ui_calls.put(lambda: (self.device.set('gamepad'), self.show_device()))
+            threading.Thread(target=detect, daemon=True).start()
+
+    def key_binder(self, parent, kind, button, var):
+        """An input box of the keyboard & mouse table: click it, then press a key, click a mouse
+        button or turn the wheel."""
+        box = self.ttk.Button(parent, width=16, takefocus=False)
+        mouse = kind == 'key'
+        countdown = None
+
+        def show(*_a):
+            box.configure(text=_('(none)') if var.get() in ('', 'None') else var.get())
+        var.trace_add('write', show)
+        show()
+
+        def finish(_e=None):
+            nonlocal countdown
+            for sequence in ('<KeyPress>', '<FocusOut>', '<ButtonPress>'):
+                box.unbind(sequence)
+            box.grab_release()
+            if countdown:
+                box.after_cancel(countdown)
+                countdown = None
+            if self.capturing_key is box:
+                self.capturing_key = self.capture_wheel = None
+            show()
+            return 'break'
+
+        def bind(name):
+            self.assign_key(kind, button, name)
+            return finish()
+
+        def pressed(event):
+            name = sdl_key_name(event.keysym)
+            if name is None:
+                reason = RESERVED_KEYS.get(event.keysym)
+                box.configure(text=_(reason) if reason else _('Key not supported'))
+                return 'break'
+            return bind(name)
+
+        def clicked(event):
+            name = mouse_name(event.num) if mouse else None
+            return bind(name) if name else finish()
+
+        def wheeled(event):
+            return bind(mouse_name(wheel_delta=event.delta or {4: 1, 5: -1}.get(event.num, 0))) if mouse else finish()
+
+        def capture():
+            if self.capturing_key not in (None, box):
+                self.capturing_key.event_generate('<FocusOut>')
+            self.capturing_key, self.capture_wheel = box, wheeled
+            prompt = _('Press a key or mouse') if mouse else _('Press a key')
+
+            def tick(left):
+                nonlocal countdown
+                if left <= 0:
+                    finish()
+                    return
+                box.configure(text=f'{prompt} ({left})')
+                countdown = box.after(1000, tick, left - 1)
+            tick(CAPTURE_SECONDS)
+            box.bind('<KeyPress>', pressed)
+            box.bind('<ButtonPress>', clicked)
+            box.bind('<FocusOut>', finish)
+            box.focus_set()
+            box.grab_set()  # clicks anywhere in the window come to the box
+        box.configure(command=capture)
+        return box
+
+    def grey_rage_rows(self):
+        """Rage of Sparta on one input greys L3 and R3; off, it greys the Rage row."""
+        combined = bool(self.var('rage_one_input', 'app').get())
+        for button in (*RAGE_BUTTONS, 'rage'):
+            enabled = combined if button == 'rage' else not combined
+            for widget in self.key_rows.get(button, ()):
+                widget.state(['!disabled'] if enabled else ['disabled'])
+
+    def assign_key(self, kind, button, name):
+        """Binds `name` to `button` in a table; a button that had it takes the old one (bind_key)."""
+        table = self.control_vars[kind]
+        bindings = {b: v.get() for b, v in table.items()}
+        other = bind_key(bindings, button, name)
+        if other:
+            table[other].set(bindings[other])
+        table[button].set(name)
 
     def draw_pad_icon(self, button):
         """The gamepad column's icon of a game button, in the chosen style (L2/R2: the triggers)."""
@@ -1770,16 +2297,26 @@ class Launcher:
     def relabel_pad_controls(self):
         labels = pad_labels(self.pad_style.get())
         for button, box in self.pad_boxes.items():
-            box.configure(values=list(labels.values()))
+            box.configure(values=list(labels.values()), width=max(22, *(len(l) + 2 for l in labels.values())))
             name = self.control_vars['pad'][button].get()
             box.set(labels.get(name, name))
         for button in self.pad_icons:
             self.draw_pad_icon(button)
 
-    def reset_controls(self):
-        for button, key, pad in CONTROLS:
-            self.control_vars['key'][button].set(key)
-            self.control_vars['pad'][button].set(pad or '')
+    def show_device(self, fit=True):
+        """Shows the chosen device's section of the Controls page and hides the other."""
+        gamepad = self.device.get() == 'gamepad'
+        (self.pad_section if gamepad else self.key_section).grid()
+        (self.key_section if gamepad else self.pad_section).grid_remove()
+        if fit:
+            self.pages['controls'].fit()
+
+    def reset_controls(self, kind=None):
+        """Puts one table ('key' or 'pad') or both (None) back on the defaults."""
+        for table in ('key', 'pad'):
+            for row in table_rows(table):
+                if kind in (None, table) and row[0] in self.control_vars.get(table, {}):
+                    self.control_vars[table][row[0]].set(default_input(row, table) or '')
         self.relabel_pad_controls()
 
     def build_linux_options(self, f):
@@ -1929,49 +2466,50 @@ class Launcher:
         if not hasattr(self, 'patches_frame'):
             return
         tk, ttk = self.tk, self.ttk
-        from mods import discover, patch_files
+        from mods import discover, mod_info
         from patches import external_patches
         for holder in (self.mods_frame, self.patches_frame):
             for widget in holder.winfo_children():
                 widget.destroy()
         root = Path(self.var('mods_dir', 'app').get() or DATA_DIR / 'mods')
         profile = load_json(DATA_DIR / 'mods.json', {})
-        available = discover(root)
+        game = self.var('game_dir', 'app').get()
+        available = discover(root, game)
         if set(self.mod_order) != set(available):
             known = [n for n in profile.get('order', []) if n in available]
             self.mod_order = known + [n for n in available if n not in known]
+        if self.selected_mod not in available:
+            self.selected_mod = None
         old = {n: v.get() for n, v in self.mod_vars.items()}
-        self.mod_vars = {}
+        self.mod_vars, self.mod_rows = {}, {}
         if not available:
-            ttk.Label(self.mods_frame, text=_('No mods in {} yet.', 'В {} пока нет модов.').format(root),
-                      style='Muted.TLabel').pack(anchor='w')
+            self.empty_mods(root)
         for index, name in enumerate(self.mod_order):
-            line = ttk.Frame(self.mods_frame)
-            line.pack(fill='x', pady=self.px(1))
+            if index:
+                tk.Frame(self.mods_frame, bg=LINE, height=self.px(1)).pack(fill='x')
+            chosen = name == self.selected_mod
+            bg = LINE if chosen else CARD
+            line = tk.Frame(self.mods_frame, bg=bg, padx=self.px(12), pady=self.px(5))
+            line.pack(fill='x')
             var = tk.BooleanVar(value=old.get(name, name not in profile.get('disabled', [])))
             self.mod_vars[name] = var
-            ttk.Button(line, text='▲', width=3, command=lambda i=index: self.move_mod(i, -1)).pack(side='left')
-            ttk.Button(line, text='▼', width=3, command=lambda i=index: self.move_mod(i, 1)).pack(side='left', padx=self.px((2, 10)))
-            has_patches = bool(patch_files(root / name))
-            ttk.Checkbutton(line, text=f'{index + 1}.  {name}' + (_('   (game patches)') if has_patches else ''),
-                            variable=var, command=self.refresh_conflicts).pack(side='left')
-        if len(self.mod_order) > 1:
-            ttk.Label(self.mods_frame, text=_('Lower in the list loads later and wins conflicts.',
-                                              'Ниже в списке — загружается позже и перекрывает.'),
-                      style='Muted.TLabel').pack(anchor='w', pady=self.px((4, 0)))
-        self.conflict_label = ttk.Label(self.mods_frame, text='', justify='left', foreground='#e08080',
-                                        wraplength=self.px(680))
-        self.conflict_label.pack(anchor='w', pady=self.px((4, 0)))
+            ttk.Checkbutton(line, variable=var, style=('Picked' if chosen else 'Card') + '.TCheckbutton',
+                            command=self.refresh_conflicts).pack(side='left')
+            tk.Label(line, text=str(index + 1), bg=bg, fg=MUTED, font=self.font(UI_FONT, 9), width=2, anchor='e').pack(
+                side='left', padx=self.px((4, 10)))
+            label = tk.Label(line, text=mod_info(root / name, game)['name'], bg=bg, anchor='w', cursor='hand2',
+                             font=self.font(UI_FONT, 10, *(('bold',) if chosen else ())))
+            label.pack(side='left', fill='x', expand=True)
+            for widget in (line, label):
+                widget.bind('<Button-1>', lambda _e, n=name: self.select_mod(n))
+            ttk.Button(line, text='▼', width=2, style='Small.TButton', command=lambda i=index: self.move_mod(i, 1)).pack(side='right')
+            ttk.Button(line, text='▲', width=2, style='Small.TButton', command=lambda i=index: self.move_mod(i, -1)).pack(
+                side='right', padx=self.px((0, 4)))
+            mark = tk.Label(line, text='', bg=bg, fg=CONFLICT, font=self.font(UI_FONT, 10))
+            mark.pack(side='right', padx=self.px((0, 12)))
+            self.mod_rows[name] = (label, mark, chosen)
         self.refresh_conflicts()
-        if available:
-            presets = ttk.Frame(self.mods_frame)
-            presets.pack(anchor='w', pady=self.px((8, 0)))
-            ttk.Label(presets, text=_('Preset', 'Пресет')).pack(side='left', padx=self.px((0, 6)))
-            self.preset_choice = ttk.Combobox(presets, values=sorted(load_json(MOD_PRESETS, {})), width=24)
-            self.preset_choice.pack(side='left')
-            ttk.Button(presets, text=_('Load', 'Загрузить'), command=self.load_mod_preset).pack(side='left', padx=self.px((6, 0)))
-            ttk.Button(presets, text=_('Save', 'Сохранить'), command=self.save_mod_preset).pack(side='left', padx=self.px((6, 0)))
-            ttk.Button(presets, text=_('Delete', 'Удалить'), command=self.delete_mod_preset).pack(side='left', padx=self.px((6, 0)))
+        self.preset_choice.configure(values=sorted(load_json(MOD_PRESETS, {})))
         chosen = load_json(DATA_DIR / 'patches.json', {})
         _title_id, game = game_profile_of(self.meta_dir())
         found = external_patches(Path(self.var('patches_dir', 'app').get() or DATA_DIR / 'patches'),
@@ -1987,19 +2525,136 @@ class Launcher:
             var = tk.BooleanVar(value=old.get(key, on))
             self.patch_vars[key] = var
             author = meta.get('Author')
-            ttk.Checkbutton(self.patches_frame, text=key + (f'  —  {author}' if author else ''), variable=var).pack(anchor='w')
+            ttk.Checkbutton(self.patches_frame, text=key + (f'  ·  {author}' if author else ''), variable=var).pack(anchor='w')
+
+    def empty_mods(self, root):
+        """The list's place when the folder has no mod yet: where to put one."""
+        tk, ttk = self.tk, self.ttk
+        box = tk.Frame(self.mods_frame, bg=CARD, pady=self.px(28))
+        box.pack(fill='x')
+        tk.Label(box, text=_('No mods yet', 'Модов пока нет'), bg=CARD, fg=TEXT, font=self.heading_font(13)).pack()
+        tk.Label(box, text=_('Drop a mod folder or .zip in the mods folder.', 'Положите папку или .zip мода в папку модов.'), bg=CARD, fg=MUTED,
+                 font=self.font(UI_FONT, 10)).pack(pady=self.px((4, 14)))
+        ttk.Button(box, text=_('Open mods folder', 'Открыть папку модов'), command=lambda: self.open_path(str(root), 'mods_dir')).pack()
 
     def refresh_conflicts(self):
+        """The count of active mods, the conflict summary and marks, and the details panel."""
         from mods import conflicts
         if not getattr(self, 'conflict_label', None) or not self.conflict_label.winfo_exists():
             return
         root = Path(self.var('mods_dir', 'app').get() or DATA_DIR / 'mods')
-        found = conflicts(root, [n for n in self.mod_order if self.mod_vars[n].get()])
-        lines = [_('⚠ {} file(s) replaced by more than one mod (the last one wins):').format(len(found))] if found else []
-        lines += [f'   {path}: {" > ".join(owners)}' for path, owners in found[:12]]
+        active = [n for n in self.mod_order if self.mod_vars[n].get()]
+        found = conflicts(root, active, self.var('game_dir', 'app').get())
+        self.mod_conflicts = found
+        self.mods_count.configure(text=_('{} of {} active', 'активно {} из {}').format(len(active), len(self.mod_order)) if self.mod_order else '')
+        involved = {name for _path, owners in found for name in owners}
+        for name, (label, mark, chosen) in self.mod_rows.items():
+            label.configure(fg=ACCENT_HI if chosen else TEXT if self.mod_vars[name].get() else MUTED)
+            mark.configure(text='⚠' if name in involved else '')
+        if not found:
+            summary = ''
+        elif len(found) == 1:
+            summary = _('⚠ 1 file is changed by two mods. {} wins.', '⚠ 1 файл меняют два мода. Побеждает {}.').format(found[0][1][-1])
+        else:
+            summary = _('⚠ {} files are changed by more than one mod. The lower one in the list wins.', '⚠ {} файлов меняют несколько модов. Побеждает нижний в списке.').format(len(found))
+        self.conflict_label.configure(text=summary)
+        lines = [f'{path}: {" > ".join(owners)}' for path, owners in found[:12]]
         if len(found) > 12:
-            lines.append(_('   … and {} more').format(len(found) - 12))
-        self.conflict_label.configure(text='\n'.join(lines))
+            lines.append(_('… and {} more', '… и ещё {}').format(len(found) - 12))
+        self.conflict_list.configure(text='\n'.join(lines) if self.conflicts_open and found else '')
+        if found:
+            self.conflict_toggle.configure(text=_('Hide', 'Скрыть') if self.conflicts_open else _('Details', 'Подробнее'))
+            self.conflict_toggle.pack(side='left', padx=self.px((10, 0)))
+        else:
+            self.conflict_toggle.pack_forget()
+        self.show_mod_details()
+
+    def toggle_conflicts(self):
+        self.conflicts_open = not self.conflicts_open
+        self.refresh_conflicts()
+
+    def select_mod(self, name):
+        """Clicking a mod's name shows its details; clicking it again closes them."""
+        self.selected_mod = None if name == self.selected_mod else name
+        self.refresh_lists()
+
+    def show_mod_details(self):
+        """The selected mod's picture, name, author, description, files and conflicts; hidden when
+        nothing is selected or the mod has nothing but its name."""
+        from mods import mod_files, mod_info, patch_files
+        tk, ttk, panel = self.tk, self.ttk, self.mod_details
+        for widget in panel.winfo_children():
+            widget.destroy()
+        name = self.selected_mod
+        root = Path(self.var('mods_dir', 'app').get() or DATA_DIR / 'mods')
+        game = self.var('game_dir', 'app').get()
+        info = mod_info(root / name, game) if name else None
+        if not info or not any(info[k] for k in ('image', 'description', 'author', 'version', 'url')):
+            self.mod_details_shown = False
+            self.place_mod_details()
+            return
+        width = self.px(268)
+        picture = self.mod_picture(info['image'], width) if info['image'] else None
+        if picture:
+            tk.Label(panel, image=picture, bg=CARD, bd=0).pack(anchor='w', pady=self.px((0, 12)))
+        tk.Label(panel, text=info['name'], bg=CARD, fg=TEXT, font=self.heading_font(13), wraplength=width,
+                 justify='left').pack(anchor='w')
+        byline = '  ·  '.join(filter(None, (info['author'] and _('by {}', 'автор: {}').format(info['author']),
+                                            info['version'] and 'v' + info['version'])))
+        if byline:
+            tk.Label(panel, text=byline, bg=CARD, fg=MUTED, font=self.font(UI_FONT, 9)).pack(anchor='w', pady=self.px((2, 0)))
+        if info['description']:
+            tk.Label(panel, text=info['description'], bg=CARD, fg=TEXT, font=self.font(UI_FONT, 10), wraplength=width,
+                     justify='left').pack(anchor='w', pady=self.px((10, 0)))
+        try:
+            count = sum(1 for _file in mod_files(root / name, game))
+        except (OSError, ValueError):
+            count = 0
+        facts = (_('1 file', '1 файл') if count == 1 else _('{} files', 'файлов: {}').format(count)) + ('  ·  ' + _('game patches', 'патчи игры') if patch_files(root / name) else '')
+        tk.Label(panel, text=facts, bg=CARD, fg=MUTED, font=self.font(UI_FONT, 9)).pack(anchor='w', pady=self.px((10, 0)))
+        for path, owners in [c for c in self.mod_conflicts if name in c[1]][:4]:
+            others = ', '.join(o for o in owners if o != name)
+            tk.Label(panel, text=_('⚠ {} also in {}. {} wins.', '⚠ {} также в {}. Побеждает {}.').format(Path(path).name, others, owners[-1]), bg=CARD,
+                     fg=CONFLICT, font=self.font(UI_FONT, 9), wraplength=width, justify='left').pack(anchor='w', pady=self.px((4, 0)))
+        buttons = tk.Frame(panel, bg=CARD)
+        buttons.pack(anchor='w', pady=self.px((14, 0)))
+        ttk.Button(buttons, text=_('Open mod folder', 'Открыть папку мода'), command=lambda: self.open_path(str(root / name))).pack(side='left')
+        if info['url']:
+            import webbrowser
+            ttk.Button(buttons, text=_('Website', 'Сайт'), command=lambda: webbrowser.open(info['url'])).pack(side='left', padx=self.px((6, 0)))
+        self.mod_details_shown = True
+        self.place_mod_details()
+
+    def mod_picture(self, path, width):
+        """A mod's preview scaled to `width` (at most 4:3 tall), or None when it cannot be read."""
+        key = (str(path), width)
+        if self.mod_picture_key != key:
+            self.mod_picture_key, self.mod_photo = key, None
+            try:
+                from PIL import Image, ImageTk
+                with Image.open(path) as image:
+                    image = image.convert('RGB')
+                    image.thumbnail((width, width * 3 // 4), Image.LANCZOS)
+                    self.mod_photo = ImageTk.PhotoImage(image)
+            except (ImportError, OSError, ValueError):
+                try:
+                    photo = self.tk.PhotoImage(file=str(path))
+                    factor = max(1, -(-photo.width() // width))
+                    self.mod_photo = photo.subsample(factor) if factor > 1 else photo
+                except (self.tk.TclError, OSError):
+                    pass
+        return self.mod_photo
+
+    def place_mod_details(self):
+        """The details panel beside the list, or under it when the page is narrow."""
+        panel = self.mod_details
+        panel.grid_forget()
+        if not self.mod_details_shown:
+            return
+        if self.mods_body.winfo_width() >= self.px(720):
+            panel.grid(row=0, column=1, sticky='n', padx=self.px((16, 0)))
+        else:
+            panel.grid(row=1, column=0, sticky='we', pady=self.px((12, 0)))
 
     def save_mod_preset(self):
         name = self.preset_choice.get().strip()
@@ -2056,6 +2711,8 @@ class Launcher:
         app['controls'] = {kind: control_changes({b: v.get() for b, v in vars_.items()}, kind)
                            for kind, vars_ in self.control_vars.items()}
         app['pad_style'] = self.pad_style.get()
+        if getattr(self, 'device_chosen', False):  # an untouched first choice stays automatic
+            app['controls_device'] = self.device.get()
         mods = {'order': list(self.mod_order),
                 'disabled': [n for n, v in self.mod_vars.items() if not v.get()]} if self.mod_order else None
         patches = {'enabled': sorted(k for k, v in self.patch_vars.items() if v.get()),
@@ -2678,7 +3335,7 @@ def main():
     args = sys.argv[1:]
     if args and args[0] in ('--run', '--script'):
         sys.exit(run_role(args))
-    settings = {**APP_DEFAULTS, **load_json(CONFIG_FILE, {})}
+    settings = load_app_settings()
     LANG = settings.get('ui_language') or windows_language()
     if not WINDOWS:
         integrate_desktop(settings.get('desktop_integration', True), os.environ.get('APPIMAGE'),
@@ -2704,6 +3361,12 @@ def main():
         for window in ('Toplevel', 'Dialog', 'TkFDialog', 'TkChooseDir'):  # dialogs: tk_messageBox, file pickers
             root.option_add(f'*{window}.cursor', ARROW)
     pick_fonts(font.families(root))
+    try:
+        load_mods()
+    except RuntimeError as error:
+        messagebox.showerror(APP_NAME, str(error), parent=root)
+        root.destroy()
+        return 1
     Launcher(root, tk, ttk, filedialog, messagebox)
     root.mainloop()
 

@@ -13,10 +13,15 @@ proportions and you see more to the sides.
 | 3440x1440 | 21:9 | **Tested in game** |
 | 3840x1600 | 21:9 | **Tested in game** |
 | 5120x1440 | 32:9 | **Tested in game** |
+| 5120x2160 | 21:9 | **Tested in game** by two players (issue #505); largest Video Arena (3.98 GiB) |
 | 1920x1200 | 16:10 | **Tested in game** (taller than 16:9: see Notes) |
 | 2560x1600 | 16:10 | **Tested in game** (taller than 16:9: see Notes) |
+| 1280x800 | 16:10 | Not tested (the Steam Deck's screen) |
+| 1280x960, 1440x1080, 1920x1440, 2048x1536, 2560x1920 | 4:3 | 1280x960 and 1920x1440 tested (menu and gameplay; 1920x1440 by a player on a 4:3 CRT); the others are not |
+| 1440x900 | 16:10 | Not tested |
+| 1360x768 | 16:9 | Not tested (the shape of the original picture) |
 
-Every size was tested in game. Thanks to the players who tested them in issue #180. Since 2.4.0 these sizes are
+Every size but 1280x800, 1440x900, 1360x768, 1440x1080, 2048x1536 and 2560x1920 was tested in game. Thanks to the players who tested them in issue #180. Since 2.4.0 these sizes are
 built in (Render resolution); the mod is for older versions. If something looks wrong on your screen, please say
 how it looks (resolution, and whether anything is cropped, stretched or missing at the edges) in an issue.
 
@@ -61,7 +66,7 @@ is changed.
   background of a menu does not reach the sides (the top and bottom at 16:10).
 - **16:10 (taller than 16:9).** The game's camera keeps the horizontal view, so a taller picture simply shows
   more at the top and bottom, without distortion. These entries only set the resolution and the aspect ratio
-  (no field of view change). 4:3 is not included.
+  (no field of view change). 4:3: the game letterboxes its picture to 16:9 when its second aspect float is exactly 4/3, so the 4:3 entries write it one unit above.
 - At 32:9 the horizontal field of view is doubled, so objects at the very edges look stretched, as in any
   game with a very wide field of view.
 - It needs extra direct memory (the Video Arena grows with the pixel count); the launcher sets that from the
@@ -101,8 +106,8 @@ tecla Insert). O **Engine frame rate** (60, 120 ou 240) é uma escolha à parte 
 **As cutscenes continuam com bordas:** são vídeos 16:9 pré-renderizados, então tocam com barras pretas dos
 lados (em cima e embaixo no 16:10); as builds anteriores à de teste deixavam o último frame do jogo nessas
 barras. **Os menus são 16:9:** o fundo escurecido de um menu não chega aos lados (nem em cima e embaixo no
-16:10). O 3440x1440 foi testado por quem fez; 5120x1440, 1920x1200 e 2560x1600 foram testados por outros jogadores
-e funcionam; 2560x1080 e 3840x1600 ainda não. Se testar, conte como ficou numa issue do projeto.
+16:10). O 3440x1440 foi testado por quem fez; 5120x1440, 5120x2160, 1920x1200, 2560x1600 e 1920x1440 foram testados por outros jogadores
+e funcionam, e 2560x1080 e 3840x1600 foram validados pelo mantenedor. Se testar, conte como ficou numa issue do projeto.
 Os tamanhos 16:10 (1920x1200 e 2560x1600) só mudam a resolução e o aspect ratio: como a câmera mantém o campo
 horizontal, uma imagem mais alta mostra mais em cima e embaixo, sem deformar.
 

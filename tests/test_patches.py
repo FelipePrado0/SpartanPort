@@ -216,7 +216,7 @@ class SignatureTests(unittest.TestCase):
         moved = image[:0x1f0000] + bytes(0x120) + image[0x1f0000:0x210000] + image[0x210120:]
         self.assertEqual(len(moved), len(image))
         shift = lambda at: at + 0x120 if 0x1f0000 <= at < 0x210000 else at
-        for name in ('Resolution Patch - 4K', 'Skip Intro'):
+        for name in ('Resolution Patch - 4K', 'Resolution Patch - 8K', 'Skip Intro'):
             reference = compile_patches(GOW3, [name], None, segments, image, {})
             found = compile_patches(GOW3, [name], None, segments, moved, {})
             self.assertEqual([at for at, _ in found], [shift(at) for at, _ in reference], name)
@@ -261,6 +261,22 @@ class SignatureTests(unittest.TestCase):
         for offset, value in original.items():
             at = text['offset'] + offset - text['vaddr']
             self.assertEqual(bytes(elf[at:at + len(value) // 2]).hex(), value, hex(offset))
+
+    def test_8k_patch_dimensions_and_memory(self):
+        name = 'Resolution Patch - 8K'
+        writes = dict(compile_patches(GOW3, [name], '01.02', SEGMENTS))
+        expected = {0x55a876: (0x9090, 2),
+                    0x5f0b3b: (7680, 4), 0x5f0b43: (4320, 4),
+                    0x5f0b4c: (7680, 2), 0x5f0b53: (4320, 2),
+                    0x5643f3: (4320, 4), 0x564400: (7680, 4),
+                    0x5ff769: (7680, 4), 0x5ff76f: (4320, 4),
+                    0x7c46b4: (7680, 4), 0x7c46b8: (4320, 4),
+                    0x56bb82: (4320, 4), 0x60953d: (4320, 4),
+                    0x7f2a3c: (3840, 4), 0x7f2a40: (2160, 4),
+                    0x7cd918: (0xff000000, 4)}
+        self.assertEqual(writes, {address - 0x400000: value.to_bytes(size, 'little')
+                                  for address, (value, size) in expected.items()})
+        self.assertEqual(patch_requirements(GOW3, [name], '01.02'), (5056 + 6144, None))
 
     def test_requirements_from_patch_notes(self):
         # Notes ask for extra direct memory (shadPS4 "DMEM") and a VBlank rate.
@@ -333,15 +349,19 @@ class ModPatchTests(unittest.TestCase):
         (3440, 1440): (4608, (3440 / 1440) / (16 / 9)),
         (3840, 1600): (6144, (3840 / 1600) / (16 / 9)),
         (5120, 1440): (6144, 2.0),
+        (5120, 2160): (6144, (5120 / 2160) / (16 / 9)),
     }
 
     # 16:10, taller than 16:9: only the resolution and the aspect ratio (the camera's fixed horizontal view
     # already shows more at the top and bottom), so no field of view change.
-    TALLER = {(1920, 1200): 3072, (2560, 1600): 4608}
+    TALLER = {(1920, 1200): 3072, (2560, 1600): 4608, (1280, 800): 3072,
+              (1440, 900): 3072, (1360, 768): 3072,
+              (1280, 960): 3072, (1440, 1080): 3072, (1920, 1440): 3072, (2048, 1536): 3072, (2560, 1920): 4608}
 
     def test_the_ultrawide_mod_lists_its_resolutions_and_memory_needs(self):
-        self.assertEqual(resolution_names([ULTRAWIDE]), ['1920x1200', '2560x1080', '2560x1600', '3440x1440',
-                                                         '3840x1600', '5120x1440'])
+        self.assertEqual(resolution_names([ULTRAWIDE]), ['1280x800', '1360x768', '1280x960', '1440x900', '1440x1080', '1920x1200',
+                                                         '1920x1440', '2560x1080', '2048x1536', '2560x1600', '2560x1920', '3440x1440',
+                                                         '3840x1600', '5120x1440', '5120x2160'])
         for (width, height), dmem in self.TALLER.items():
             name = f'Resolution Patch - {width}x{height}'
             self.assertEqual(patch_requirements(ULTRAWIDE, [name], '01.02'), (5056 + dmem, None), name)
@@ -376,7 +396,11 @@ class ModPatchTests(unittest.TestCase):
     def test_taller_than_16_9_changes_no_camera(self):
         for (width, height) in self.TALLER:
             writes = dict(compile_patches(ULTRAWIDE, [f'Resolution Patch - {width}x{height}'], '01.02', SEGMENTS))
-            self.assertEqual(writes[0x1f0c77], struct.pack('<f', width / height) * 2)  # the aspect ratio
+            aspect = struct.pack('<f', width / height)
+            # the aspect ratio, twice; for 4:3 the second float is one unit above 4/3, which the game's letterbox
+            # test (function at 0x56fc60, "== 4/3") does not match
+            second = struct.pack('<I', struct.unpack('<I', aspect)[0] + 1) if aspect == struct.pack('<f', 4 / 3) else aspect
+            self.assertEqual(writes[0x1f0c77], aspect + second)
             # the resolution (these lines keep the built-in entries' Address values, the reference build's)
             self.assertEqual(writes[0x1f0b3b], struct.pack('<I', width))
             self.assertEqual(writes[0x1f0b43], struct.pack('<I', height))
@@ -387,6 +411,22 @@ class ModPatchTests(unittest.TestCase):
     def test_the_ultrawide_mod_is_off_until_a_resolution_is_chosen(self):
         self.assertEqual(default_enabled([ULTRAWIDE], '01.02'), [])
 
+
+
+class HalfResolutionTests(unittest.TestCase):
+    """The half-resolution post-processing buffer (a 960x540 table at 0x7f2a3c) must be half of the
+    patched output, or a smaller output gets a larger buffer and overexposed lights (#390)."""
+
+    def test_every_resolution_patch_halves_the_output(self):
+        size = lambda value: int.from_bytes(bytes.fromhex(value), 'little')
+        for meta in ET.parse(GOW3).getroot().iter('Metadata'):
+            if not meta.get('Name').startswith('Resolution Patch'):
+                continue
+            lines = {line.get('Address'): line.get('Value') for line in meta.iter('Line')}
+            width, height = size(lines['0x005f0b3b']), size(lines['0x005f0b43'])
+            half = (lines.get('0x007f2a3c'), lines.get('0x007f2a40'))
+            self.assertTrue(all(half), meta.get('Name'))
+            self.assertEqual((size(half[0]), size(half[1])), (width // 2, height // 2), meta.get('Name'))
 
 if __name__ == '__main__':
     unittest.main()

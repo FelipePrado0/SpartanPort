@@ -15,9 +15,12 @@ from pathlib import Path
 import shutil
 import struct
 
-VERSION = 2  # of the drawing: a change redraws the cached copies
+VERSION = 5  # of the drawing: a change redraws the cached copies
 WADS = ('EXEC/WAD/PS4_LE/R_UI.WAD', 'EXEC/WAD/PS4_LE/R_PERM.WAD')
 FONT = Path(__file__).resolve().parent.parent / 'launcher' / 'Cinzel-Black.ttf'
+CONTROLLER_TEXTURE = 'TXCE352DC5'
+# GPL-2.0-or-later controller drawings by Kristian Andreev, adapted from PR #234.
+CONTROLLER_ART = Path(__file__).resolve().parent.parent / 'scripts' / 'controller_diagrams'
 
 # Texture (the first hash of its name) -> how it is drawn and the game button(s) it shows.
 # inline: the 64 px icons inside text; qte: the large prompt on black; atlas: two QTE labels,
@@ -33,13 +36,23 @@ TEXTURES = {
     'TX1F5FC983': ('qte', 'square'), 'TXE8889579': ('qte', 'triangle'),
     'TXFB91136E': ('atlas', ('l2', 'l1')), 'TX0FFF3CCB': ('atlas', ('r2', 'r1')),
 }
+# Drawn only with the keyboard style: the stick icons (the left one also unlettered) and the D-pad
+# icon, whose gamepad look already fits every controller.
+KEYBOARD_TEXTURES = {
+    'TXDCA1B818': ('inline', 'lstick'), 'TXE2BB1428': ('inline', 'lstick'),
+    'TX77AAD542': ('inline', 'rstick'), 'TXBF2035D0': ('inline', 'up'),
+}
 # The gamepad button (SDL name) that presses each game button (src/runtime_pad.c pad_map).
 DEFAULT_MAP = {'cross': 'a', 'circle': 'b', 'square': 'x', 'triangle': 'y', 'l1': 'leftshoulder',
                'r1': 'rightshoulder', 'l2': 'lefttrigger', 'r2': 'righttrigger', 'l3': 'leftstick',
                'r3': 'rightstick', 'options': 'start', 'touchpad_right': 'back'}
 # The key (SDL scancode name) that presses each game button (src/runtime_pad.c key_map).
 DEFAULT_KEYS = {'cross': 'Space', 'circle': 'Left Shift', 'square': 'E', 'triangle': 'Q', 'l1': '1', 'r1': '3',
-                'l2': 'R', 'r2': 'F', 'l3': 'Z', 'r3': 'C', 'options': 'Return', 'touchpad_right': 'Backspace'}
+                'l2': 'R', 'r2': 'F', 'l3': 'Z', 'r3': 'C', 'options': 'Return', 'touchpad_right': 'Backspace',
+                'up': 'I'}
+# The keys that move the sticks (src/runtime_pad.c key_axis). ponytail: fixed, as in the runtime;
+# read them from GOW3_KEY_MAP once movement can be remapped.
+STICK_KEYS = {'lstick': 'WASD', 'rstick': 'Arrows'}
 # Key caps for the longer SDL key names (casefolded); the others print their name in capitals.
 KEY_LABELS = {'space': 'SPACE', 'left shift': 'SHIFT', 'right shift': 'R SHIFT', 'left ctrl': 'CTRL',
               'right ctrl': 'R CTRL', 'left alt': 'ALT', 'right alt': 'ALT GR', 'left gui': 'WIN',
@@ -48,7 +61,7 @@ KEY_LABELS = {'space': 'SPACE', 'left shift': 'SHIFT', 'right shift': 'R SHIFT',
               'insert': 'INS', 'pageup': 'PG UP', 'pagedown': 'PG DN', 'home': 'HOME', 'end': 'END',
               'up': 'dpup', 'down': 'dpdown', 'left': 'dpleft', 'right': 'dpright',
               'mouse left': 'LMB', 'mouse right': 'RMB', 'mouse middle': 'MMB', 'mouse back': 'M4',
-              'mouse forward': 'M5', 'wheel up': 'WH UP', 'wheel down': 'WH DN'}
+              'mouse forward': 'M5', 'wheel up': 'WH UP', 'wheel down': 'WH DN', 'arrows': 'arrows'}
 POSITIONS = {'a': 'south', 'b': 'east', 'x': 'west', 'y': 'north'}  # SDL names are positions
 STYLES = {
     'xbox': {'faces': {'south': 'a', 'east': 'b', 'west': 'x', 'north': 'y'},
@@ -60,7 +73,7 @@ STYLES = {
                             'leftstick': 'LS', 'rightstick': 'RS', 'start': 'plus', 'back': 'minus'}},
     'keyboard': {'faces': {}, 'colors': {}, 'labels': {}},  # key caps: see key_label
 }
-ICONS = {'menu', 'view', 'plus', 'minus', 'dpup', 'dpdown', 'dpleft', 'dpright'}
+ICONS = {'menu', 'view', 'plus', 'minus', 'dpup', 'dpdown', 'dpleft', 'dpright', 'arrows'}
 INK = (240, 240, 240)
 SCALE = 6  # drawn this many times larger, then reduced
 
@@ -89,13 +102,20 @@ def pad_buttons(pad_map):
 
 def key_buttons(key_map):
     """Game button -> keyboard key, with a GOW3_KEY_MAP value ('cross=Q,circle=Left Shift') applied.
-    Unlike the gamepad, L2/R2 are keys too. 'None' (a button left without a key) keeps the default."""
-    buttons = dict(DEFAULT_KEYS)
+    Unlike the gamepad, L2/R2 are keys too. 'None' (a button left without a key) keeps the default,
+    except L3/R3 with Rage of Sparta on one input: they show the rage key, which presses both."""
+    buttons, unbound, rage = {**DEFAULT_KEYS, **STICK_KEYS}, set(), ''
     for entry in (key_map or '').split(','):
         game, _, host = (part.strip() for part in entry.partition('='))
         game = game.casefold()
-        if game in buttons and host and host.casefold() != 'none':
+        if game == 'rage':
+            rage = host if host.casefold() != 'none' else ''
+        elif game in buttons and host.casefold() == 'none':
+            unbound.add(game)
+        elif game in buttons and host:
             buttons[game] = host
+    for game in unbound & {'l3', 'r3'} if rage else ():
+        buttons[game] = rage
     return buttons
 
 
@@ -167,10 +187,14 @@ def draw_label(image, box, label, color):
         for dx, dy in ((-0.25, -0.2), (0.25, 0.2)):
             draw.rectangle((cx + (dx - 0.55) * r, cy + (dy - 0.45) * r, cx + (dx + 0.55) * r, cy + (dy + 0.45) * r),
                            outline=color, width=int(t * 0.7))
-    elif label in ICONS:  # a d-pad direction: an arrow head
-        ax, ay = {'dpup': (0, -1), 'dpdown': (0, 1), 'dpleft': (-1, 0), 'dpright': (1, 0)}[label]
-        draw.polygon([(cx + ax * r * 0.8, cy + ay * r * 0.8), (cx - ax * r * 0.5 - ay * r * 0.7, cy - ay * r * 0.5 - ax * r * 0.7),
-                      (cx - ax * r * 0.5 + ay * r * 0.7, cy - ay * r * 0.5 + ax * r * 0.7)], fill=color)
+    elif label in ICONS:  # a d-pad direction: an arrow head; arrows: the four of them, small
+        heads = ([(a, 0.5) for a in ('dpup', 'dpdown', 'dpleft', 'dpright')] if label == 'arrows' else [(label, 1)])
+        for name, k in heads:
+            ax, ay = {'dpup': (0, -1), 'dpdown': (0, 1), 'dpleft': (-1, 0), 'dpright': (1, 0)}[name]
+            ox, oy = cx + ax * r * (1 - k), cy + ay * r * (1 - k)
+            draw.polygon([(ox + ax * r * 0.8 * k, oy + ay * r * 0.8 * k),
+                          (ox - ax * r * 0.5 * k - ay * r * 0.7 * k, oy - ay * r * 0.5 * k - ax * r * 0.7 * k),
+                          (ox - ax * r * 0.5 * k + ay * r * 0.7 * k, oy - ay * r * 0.5 * k + ax * r * 0.7 * k)], fill=color)
     else:
         size = int(y1 - y0)
         while True:
@@ -237,12 +261,20 @@ def draw_prompt(label, color, width, height, cap=False):
 def render(form, buttons, style, faces, pad_map, width, height, key_map=''):
     """The picture that replaces a texture of TEXTURES, at its size."""
     from PIL import Image
+    if form == 'controller':
+        with Image.open(CONTROLLER_ART / f'{style}.png') as image:
+            return image.convert('RGBA').resize((width, height), Image.Resampling.LANCZOS)
     keyboard = style == 'keyboard'
     hosts = key_buttons(key_map) if keyboard else pad_buttons(pad_map)
     if form == 'atlas':
         image = Image.new('RGBA', (width, height), (0, 0, 0, 255))
+        # In the shoulder-button atlas, prompts are centered ~52 px from the midline (y=128),
+        # not in the middle of each 128 px half (y=64), matching the game's HUD quad alignment.
+        offset = int(height * 12 / 256)
         for row, button in enumerate(buttons):
-            half = draw_prompt(glyph(hosts[button], style, faces)[1], INK, width, height // 2, keyboard)
+            half = Image.new('RGBA', (width, height // 2), (0, 0, 0, 255))
+            half.paste(draw_prompt(glyph(hosts[button], style, faces)[1], INK, width, height // 2, keyboard),
+                       (0, -offset))
             image.paste(half.rotate(180) if row == 0 else half, (0, row * (height // 2)))
         return image
     shape, label, color = glyph(hosts[buttons], style, faces)
@@ -256,9 +288,12 @@ def encode(image, fourcc, length):
     image = image.convert('RGBA' if fourcc == 'DXT5' else 'RGB')
     pixels = b''
     while len(pixels) < length:
-        level = io.BytesIO()
-        image.save(level, 'DDS', pixel_format=fourcc)
-        pixels += level.getvalue()[128:]
+        # Pillow 11.2.1's BC encoder ignores its output buffer size. Independent block rows
+        # keep the controller diagram below that limit without changing the encoded format.
+        for y in range(0, image.height, 4):
+            level = io.BytesIO()
+            image.crop((0, y, image.width, min(y + 4, image.height))).save(level, 'DDS', pixel_format=fourcc)
+            pixels += level.getvalue()[128:]
         if image.size == (1, 1):
             break
         image = image.resize((max(1, image.width // 2), max(1, image.height // 2)))
@@ -267,11 +302,17 @@ def encode(image, fourcc, length):
     return pixels
 
 
+def textures(style):
+    """The textures a style draws: the keyboard adds the stick and D-pad icons."""
+    return {**TEXTURES, **KEYBOARD_TEXTURES} if style == 'keyboard' else TEXTURES
+
+
 def patch(data, style, faces=None, pad_map='', key_map=''):
     """Replaces the glyph textures inside the WAD in `data` (a bytearray); returns how many."""
-    count = 0
+    count, drawn = 0, textures(style)
     for offset, size, name in entries(data):
-        if not name.endswith('.dds') or name[:10] not in TEXTURES:
+        controller = name[:10] == CONTROLLER_TEXTURE and style in ('xbox', 'nintendo')
+        if not name.endswith('.dds') or (name[:10] not in drawn and not controller):
             continue
         end = offset + 0x40 + size
         dds = data.find(b'DDS ', offset + 0x40, end)
@@ -280,11 +321,11 @@ def patch(data, style, faces=None, pad_map='', key_map=''):
             print(f'Glyphs: {name}: not a DXT texture, left as it is', flush=True)
             continue
         height, width = struct.unpack_from('<II', data, dds + 12)
-        form, buttons = TEXTURES[name[:10]]
+        form, buttons = ('controller', None) if controller else drawn[name[:10]]
         try:
             data[dds + 128:end] = encode(render(form, buttons, style, faces, pad_map, width, height, key_map),
                                          fourcc, end - dds - 128)
-        except ValueError as error:
+        except (OSError, ValueError) as error:
             print(f'Glyphs: {name}: {error}, left as it is', flush=True)
             continue
         count += 1
@@ -304,7 +345,9 @@ def build(game, out, style, faces=None, pad_map='', key_map=''):
     else:
         key_map = ''
     sources = [(name, Path(game) / name) for name in WADS if (Path(game) / name).is_file()]
+    art = CONTROLLER_ART / f'{style}.png'
     stamp = json.dumps([VERSION, style, faces, pad_map, *([key_map] if key_map else []),
+                        art.stat().st_mtime_ns if style in ('xbox', 'nintendo') and art.is_file() else None,
                         [(name, path.stat().st_size, path.stat().st_mtime_ns) for name, path in sources]])
     stamp_file = target / 'stamp.json'
     made = sorted(path.name for path in target.glob('*.WAD')) if target.is_dir() else []

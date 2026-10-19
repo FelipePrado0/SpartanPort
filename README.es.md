@@ -145,7 +145,7 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
   autoguardado también funciona. El launcher hace una copia de seguridad de las partidas antes de
   cada inicio.
 - Parches: resolución de render de 480p, 720p, 900p, 1440p, 1800p o 4K, corrección de texturas corruptas
-  y saltar videos con el botón X (comunidad); tasa de cuadros del motor de 120 FPS (kvicken) o 240
+  y saltar videos con el botón X (comunidad); tasa de cuadros del motor de 120 FPS (kvicken), 100 FPS (para pantallas de 100 Hz) o 240
   FPS (adaptado por Felipe Prado).
 - **Ultrawide (beta):** resoluciones 21:9, 32:9 y 16:10 (3440x1440 probada) con un campo de visión más ancho en
   lugar de una imagen con zoom, ya incluidas: elige una en **Resolución de render**, donde cada opción muestra la
@@ -166,7 +166,7 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
   actualizaciones y diagnóstico.
 - **Menú dentro del juego** (Insert en el teclado, R3+L2 en el control), con cuatro pestañas:
   - **Game:** trucos (vida infinita, magia, medidor de objeto, Furia de Esparta, máximo de orbes
-    rojos); multiplicadores de 0,1x a 100x para los orbes rojos, verdes (vida), azules (magia) y
+    rojos, QTE automático: los avisos de botón y de giro del stick se resuelven solos); multiplicadores de 0,1x a 100x para los orbes rojos, verdes (vida), azules (magia) y
     dorados (Furia de Esparta) y para el daño causado y recibido; una barra de vida de enemigos.
   - **Image:** modo de pantalla (ventana, sin bordes, pantalla completa), VSync y nitidez RCAS.
   - **Performance:** límite de cuadros por segundo (30 a ilimitado), cuadros en cola, compilación de
@@ -196,7 +196,7 @@ para los cambios en descargas posteriores.
 ## Configuración
 
 Los ajustes se guardan en `gow3.ini` (el juego y el menú dentro del juego) y en
-`%APPDATA%\gow3-launcher\settings.json` (el launcher). Las partidas, la caché de shaders y
+`settings.json` (el launcher), en la carpeta del port. Las partidas, la caché de shaders y
 `last_run.log` van a la carpeta `user` del proyecto.
 
 En **Performance → GPU data → Stream buffer memory**, elegí **System RAM (cached, default)**,
@@ -220,7 +220,7 @@ Automatic deja pasar un `GOW3_NO_MSAA` heredado. Se aplica en el próximo inicio
 
 ## Controles de teclado
 
-Valores por defecto; cambialos en la página **Game** del launcher, sección **Controls**.
+Valores por defecto; cambialos en la página **Controls** del launcher, sección **Keyboard & Mouse Mapping**.
 
 | Tecla | Botón |
 |---|---|
@@ -228,22 +228,36 @@ Valores por defecto; cambialos en la página **Game** del launcher, sección **C
 | Flechas | stick derecho (cámara) |
 | Espacio | Cruz (X) |
 | Shift izquierdo | Círculo |
-| E | Cuadrado |
-| Q | Triángulo |
-| 1 y 3 | L1 y R1 |
-| R y F | L2 y R2 |
-| Z y C | L3 y R3 |
-| I, K, J, L | cruceta |
-| Enter | Options |
-| Tab | clic del touchpad izquierdo (modo foto) |
-| Retroceso | clic del touchpad derecho (menú de pausa) |
+| Clic izquierdo | Cuadrado |
+| Clic derecho | Triángulo |
+| Q y E | L1 y R1 |
+| R y el botón de avanzar del mouse | L2 y R2 |
+| Z y X | L3 y R3 |
+| Clic de la rueda | Rage of Sparta (L3 + R3) |
+| C | Agarre (L1 + Círculo) |
+| El botón de retroceder del mouse | Esquivar |
+| 1, 2, 3, 4 | cruceta: arriba, derecha, abajo, izquierda (armas) |
+| Tab | Options |
+| P | clic del touchpad izquierdo (modo foto) |
+| Esc | clic del touchpad derecho (menú de pausa) |
 | Insert | el menú del port (R3+L2 en el control) |
+
+**Rage of Sparta en una tecla** (activado por defecto) deja Z y X sin uso. Los **Joystick prompts**
+responden a los quick-time events de girar el stick sin stick: escribí el giro (medias vueltas D S
+A, A S D, A W D o D W A; vueltas completas D S A W o A S D W) o, con *Adaptive mouse*, dibujalo con
+el mouse. Mientras jugás, el mouse queda dentro de la ventana del juego; el menú del juego, la tecla
+de pausa (Esc) y otras ventanas lo liberan, y Esc de nuevo o un clic en la ventana lo vuelve a
+tomar. Con L2 apretado (R), el mouse apunta con el stick derecho, para la Cabeza de Helios o el Arco
+de Apolo: *Relative* sigue el movimiento, *Absolute* apunta desde donde estaba el mouse al apretar
+L2, y *Right stick sensitivity* define cuánto mouse hace falta. Sin el launcher, el juego usa sus
+propias teclas: E y Q para Cuadrado y Triángulo, 1 y 3 para L1 y R1, F para R2, C para R3, I, K, J,
+L para la cruceta, Enter para Options, Tab y Retroceso para el touchpad.
 
 En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic del touchpad derecho)
 y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad funciona como en la
 PS4, y Share/Create funciona como View.
 
-Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Game del launcher, sección Controls, en
+Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls del launcher, en
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* o *Keyboard*. Reemplazan los íconos de
 PlayStation en los tutoriales, la lista de movimientos y las indicaciones de quick-time events; el
 dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* muestra la tecla que
@@ -478,7 +492,7 @@ Es un fork del [port para Windows de Supermedo](https://github.com/Supermedo/blo
 | Parches | `patches/God_of_War_III_Remastered.xml`, `scripts/patches.py` | Se aplican en memoria al iniciar, sin modificar los archivos del juego |
 | Launcher | `launcher/gow3_launcher_win.py` | Ajustes, parches, mods, controles y el botón de jugar |
 
-Más documentación: [mods](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/MODS.md), [mapa de cuadros e historial de investigación de escaladores](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/upscaler.md)
+Más documentación: [mods](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/MODS.es.md), [parches](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/PATCHES.es.md), [mapa de cuadros e historial de investigación de escaladores](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/upscaler.md)
 y [trabajo paralelo de GPU](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/parallel_gpu.md).
 
 ## Créditos
@@ -501,7 +515,8 @@ deadinside28:
 Parches: kvicken y cuesta4 (resolución, corrección de texturas, 120 FPS y saltar videos, sobre los
 parches de PS3 de illusion0001), publicados para shadPS4 en
 [shadps4-emu/ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145) y adaptados a este
-ejecutable. El parche de 240 FPS fue adaptado por Felipe Prado a partir del de 120 FPS.
+ejecutable. El parche de 240 FPS fue adaptado por Felipe Prado a partir del de 120 FPS; el de 100 FPS es el mismo
+parche con 100.
 Trucos: adaptados de los [GoldHEN cheats](https://github.com/GoldHEN/GoldHEN_Cheat_Repository) de
 Celogamez.
 

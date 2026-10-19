@@ -661,13 +661,18 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
 
     // gow3: frame limit (see EmulatorSettings::GetFrameLimit). A request waits in the queue
     // until its slot; slots advance by one period (no drift) but never lag behind by more.
-    // gow3: the in-game menu changes the limit live (Gow3Settings::fps_limit); GOW3_FPS_LIMIT
-    // and the uncapped presets keep their fixed limit.
-    const bool fixed_limit = std::getenv("GOW3_FPS_LIMIT") || EmulatorSettings.GetVblankFrequency() == 480;
+    // gow3: the in-game menu changes the limit and the engine rate live (Gow3Settings::fps_limit,
+    // engine_fps); the uncapped presets keep their fixed limit, still capped by the engine rate.
+    // GOW3_FPS_LIMIT (measurements) is used as given.
+    const bool measured_limit = std::getenv("GOW3_FPS_LIMIT") != nullptr;
+    const int vblank_hz = int(EmulatorSettings.GetVblankFrequency());
     const auto current_limit = [&] {
-        const auto& s = Gow3Settings::Get();
-        return fixed_limit ? EmulatorSettings.GetFrameLimit()
-                           : u32(Gow3Graphics::PresentLimit(s.fps_limit, s.applied_engine_fps));
+        if (measured_limit) {
+            return EmulatorSettings.GetFrameLimit();
+        }
+        const int limit = vblank_hz == 480 ? int(EmulatorSettings.GetFrameLimit())
+                                           : Gow3Settings::Get().fps_limit.load();
+        return u32(Gow3Graphics::PresentLimit(limit, Gow3Settings::EngineFpsNow(), vblank_hz));
     };
     u32 frame_limit = current_limit();
     auto frame_period = frame_limit ? std::chrono::nanoseconds(1000000000 / frame_limit)
@@ -691,6 +696,7 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
     bool immediate_flips = frame_limit != 0;
 
     while (!token.stop_requested()) {
+        Gow3Settings::SyncEngineFps();
         if (const u32 limit = current_limit(); limit != frame_limit) {
             frame_limit = limit;
             frame_period = limit ? std::chrono::nanoseconds(1000000000 / limit) : std::chrono::nanoseconds(0);

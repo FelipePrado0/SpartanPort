@@ -26,13 +26,15 @@ def entry(name, payload=b'', tag=1):
 def texture(name, width, height, fourcc, levels=1, length=0):
     """A texture entry as the game stores it: a 0x4C prefix and a DDS with `levels` mip levels
     (or `length` bytes of pixels)."""
-    image = Image.new('RGBA', (width, height), (255, 0, 255, 255))
+    image = Image.new('RGBA', (4, 4), (255, 0, 255, 255))
     header = io.BytesIO()
     image.save(header, 'DDS', pixel_format=fourcc)
+    dds = bytearray(header.getvalue()[:128])
+    struct.pack_into('<II', dds, 12, height, width)
     for level in range(0 if length else levels):
         blocks = -(-max(1, width >> level) // 4) * -(-max(1, height >> level) // 4)
         length += blocks * (16 if fourcc == 'DXT5' else 8)
-    return entry(name, b'\7\0\1\0' + name.encode().ljust(0x48, b'\0') + header.getvalue()[:128] + b'\xee' * length)
+    return entry(name, b'\7\0\1\0' + name.encode().ljust(0x48, b'\0') + dds + b'\xee' * length)
 
 
 def wad():
@@ -83,8 +85,14 @@ class GlyphTableTest(unittest.TestCase):
         self.assertEqual((keys['cross'], keys['square'], keys['l2']), ('Q', 'Left Shift', 'G'))
         self.assertEqual(keys['circle'], 'Left Shift')  # empty: the default
         self.assertEqual(glyphs.key_buttons('l3=None')['l3'], 'Z')
-        self.assertEqual(glyphs.key_buttons(''), glyphs.DEFAULT_KEYS)
-        self.assertEqual(set(glyphs.DEFAULT_KEYS), set(glyphs.DEFAULT_MAP))
+        self.assertEqual(glyphs.key_buttons(''), {**glyphs.DEFAULT_KEYS, **glyphs.STICK_KEYS})
+        self.assertEqual(set(glyphs.DEFAULT_KEYS) - set(glyphs.DEFAULT_MAP), {'up'})  # the keyboard-only D-pad icon
+
+    def test_rage_on_one_input_draws_its_key_on_l3_and_r3(self):
+        keys = glyphs.key_buttons('l3=None,r3=None,rage=Mouse Middle,grab=C')
+        self.assertEqual((keys['l3'], keys['r3']), ('Mouse Middle', 'Mouse Middle'))
+        keys = glyphs.key_buttons('l3=None,r3=V')  # no rage key: an unbound L3 keeps the default
+        self.assertEqual((keys['l3'], keys['r3']), ('Z', 'V'))
 
     def test_key_caps(self):
         self.assertEqual(glyphs.glyph('Space', 'keyboard'), ('plate', 'SPACE', glyphs.INK))
@@ -154,6 +162,48 @@ class GlyphPatchTest(unittest.TestCase):
             glyphs.patch(data, style, None, pad_map, key_map)
             drawn.append(bytes(data))
         self.assertEqual(len(set(drawn)), 5)
+
+    def test_controller_diagram_follows_the_gamepad_style(self):
+        original = texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5', 3)
+        copies = []
+        for style in ('xbox', 'nintendo'):
+            data = bytearray(original)
+            self.assertEqual(glyphs.patch(data, style), 1)
+            self.assertEqual(list(glyphs.entries(data)), list(glyphs.entries(original)))
+            pixels = original.find(b'DDS ') + 128
+            self.assertEqual(data[:pixels], original[:pixels])
+            self.assertNotEqual(data[pixels:], original[pixels:])
+            image = Image.open(io.BytesIO(bytes(data[pixels - 128:])))
+            image.load()
+            self.assertEqual(image.size, (1024, 512))
+            copies.append(bytes(data))
+        self.assertNotEqual(*copies)
+
+    def test_keyboard_keeps_the_original_controller_diagram(self):
+        original = texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5')
+        data = bytearray(original)
+        self.assertEqual(glyphs.patch(data, 'keyboard'), 0)
+        self.assertEqual(data, original)
+
+    def test_diagram_is_mounted_and_the_original_is_untouched(self):
+        original = texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5')
+        self.source.write_bytes(original)
+        for style in ('xbox', 'nintendo'):
+            copies = glyphs.build(self.game, self.out, style)
+            self.assertNotEqual(copies['/app0/EXEC/WAD/PS4_LE/R_UI.WAD'].read_bytes(), original)
+            self.assertEqual(self.source.read_bytes(), original)
+        self.assertEqual(glyphs.build(self.game, self.out, 'playstation'), {})
+
+    def test_missing_diagram_art_keeps_the_prompts_and_is_retried_when_restored(self):
+        original = wad() + texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5')
+        self.source.write_bytes(original)
+        with mock.patch.object(glyphs, 'CONTROLLER_ART', self.out / 'missing-art'):
+            copies = glyphs.build(self.game, self.out, 'xbox')
+            incomplete = copies['/app0/EXEC/WAD/PS4_LE/R_UI.WAD'].read_bytes()
+        copies = glyphs.build(self.game, self.out, 'xbox')
+        self.assertNotEqual(copies['/app0/EXEC/WAD/PS4_LE/R_UI.WAD'].read_bytes(), incomplete)
+        self.assertNotEqual(incomplete, original)
+        self.assertEqual(self.source.read_bytes(), original)
 
     def test_the_keyboard_follows_only_the_key_map(self):
         copy = glyphs.build(self.game, self.out, 'keyboard')['/app0/EXEC/WAD/PS4_LE/R_UI.WAD']
@@ -273,3 +323,62 @@ class RunGlyphsTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class KeyboardStickTest(unittest.TestCase):
+    """The keyboard style also draws the movement and camera keys on the game's stick icons and the
+    D-pad key on its D-pad icon; the gamepad styles leave those textures alone."""
+
+    def test_stick_and_dpad_textures_are_keyboard_only(self):
+        self.assertEqual({b for _f, b in glyphs.KEYBOARD_TEXTURES.values()}, {'lstick', 'rstick', 'up'})
+        self.assertFalse(set(glyphs.KEYBOARD_TEXTURES) & set(glyphs.TEXTURES))
+        self.assertEqual(glyphs.textures('xbox'), glyphs.TEXTURES)
+        self.assertEqual(glyphs.textures('keyboard'), {**glyphs.TEXTURES, **glyphs.KEYBOARD_TEXTURES})
+
+    def test_sticks_show_the_movement_and_camera_keys(self):
+        keys = glyphs.key_buttons('')
+        self.assertEqual(glyphs.glyph(keys['lstick'], 'keyboard')[:2], ('plate', 'WASD'))
+        self.assertEqual(glyphs.glyph(keys['rstick'], 'keyboard')[:2], ('key', 'arrows'))
+
+    def test_dpad_follows_the_weapon_key(self):
+        self.assertEqual(glyphs.key_buttons('')['up'], 'I')
+        self.assertEqual(glyphs.key_buttons('up=1')['up'], '1')
+
+    def test_arrows_render(self):
+        image = glyphs.render('inline', 'rstick', 'keyboard', None, '', 64, 64)
+        self.assertEqual(image.size, (64, 64))
+        self.assertGreater(len(set(image.getdata())), 4)
+
+
+@unittest.skipUnless(Image, 'needs Pillow')
+class AtlasAlignmentTest(unittest.TestCase):
+    """The shoulder-button atlas (TXFB91136E for L2/L1, TX0FFF3CCB for R2/R1) places its prompts
+    centered ~52 px from the midline (y=128), matching the in-game HUD quad mapping, rather than
+    in the center of each 128 px half (y=64, which puts them 64 px from the midline)."""
+
+    def test_atlas_prompts_are_centered_towards_midline(self):
+        for style in ('xbox', 'nintendo', 'keyboard'):
+            for pair in (('r2', 'r1'), ('l2', 'l1')):
+                img = glyphs.render('atlas', pair, style, None, '', 256, 256)
+                self.assertEqual(img.size, (256, 256))
+                w, _h = img.size
+                top_y = [y for y in range(128) if any(img.getpixel((x, y))[0] > 30 for x in range(w))]
+                bot_y = [y for y in range(128, 256) if any(img.getpixel((x, y))[0] > 30 for x in range(w))]
+                self.assertTrue(top_y, f"{style} {pair} top half should contain pixels")
+                self.assertTrue(bot_y, f"{style} {pair} bottom half should contain pixels")
+                top_center = (min(top_y) + max(top_y)) / 2
+                bot_center = (min(bot_y) + max(bot_y)) / 2
+                # In each half, the prompt should be ~52 px from midline (y=128), within 3 px tolerance.
+                # Without the offset, distance was 64 px, causing prompts to touch the HUD border.
+                self.assertAlmostEqual(128 - top_center, 52, delta=3)
+                self.assertAlmostEqual(bot_center - 128, 52, delta=3)
+
+    def test_qte_face_buttons_remain_centered(self):
+        img = glyphs.render('qte', 'cross', 'xbox', None, '', 128, 128)
+        self.assertEqual(img.size, (128, 128))
+        qw, qh = img.size
+        qx = [x for x in range(qw) if any(img.getpixel((x, y))[0] > 30 for y in range(qh))]
+        qy = [y for y in range(qh) if any(img.getpixel((x, y))[0] > 30 for x in range(qw))]
+        self.assertAlmostEqual((min(qx) + max(qx)) / 2, 63.5, delta=2)
+        self.assertAlmostEqual((min(qy) + max(qy)) / 2, 63.5, delta=2)
+

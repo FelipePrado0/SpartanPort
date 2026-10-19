@@ -21,13 +21,17 @@ inline constexpr std::array<const char*, DisplayModeCount> DisplayModeNames = {
     "Windowed", "Borderless", "Fullscreen"};
 
 /// Present rate limits; 0 = unlimited.
-inline constexpr std::array<int, 5> FpsLimits = {30, 60, 120, 240, 0};
+inline constexpr std::array<int, 6> FpsLimits = {30, 60, 100, 120, 240, 0};
 
 /// Game patch suffixes ("Resolution Patch - <name>"); "native" is no resolution patch.
-/// The last six are the Ultrawide mod's sizes (#202), built in as beta (scripts/graphics_options.py).
-inline constexpr std::array<std::string_view, 13> Resolutions = {
+/// The ones after 900p are the Ultrawide mod's sizes (#202) and the 16:10 and 4:3 ones, built in as beta
+/// (scripts/graphics_options.py).
+inline constexpr std::array<std::string_view, 23> Resolutions = {
     "native", "480p", "720p", "900p", "1440p", "1800p", "4K",
-    "2560x1080", "3440x1440", "3840x1600", "5120x1440", "1920x1200", "2560x1600"};
+    "2560x1080", "3440x1440", "3840x1600", "5120x1440", "1920x1200", "2560x1600", "1280x800",
+    "1440x900", "1360x768",
+    "1280x960", "1440x1080", "1920x1440", "2048x1536", "2560x1920",
+    "5120x2160", "8K"};
 /// The resolutions to choose from: the built-in ones, then those of the enabled mods' patch files
 /// (GOW3_EXTRA_RESOLUTIONS, ";"-separated sizes such as "3440x1440"; run.py sets it at every start).
 inline std::vector<std::string> ResolutionNames() {
@@ -43,9 +47,10 @@ inline std::vector<std::string> ResolutionNames() {
 }
 /// The size in pixels of a resolution name: the built-in ones (as scripts/graphics_options.py SIZES)
 /// or a mod's "<width>x<height>"; anything else is native.
-inline constexpr std::array<std::pair<std::string_view, std::pair<int, int>>, 7> ResolutionSizes = {{
+inline constexpr std::array<std::pair<std::string_view, std::pair<int, int>>, 8> ResolutionSizes = {{
     {"native", {1920, 1080}}, {"480p", {854, 480}}, {"720p", {1280, 720}},
-    {"900p", {1600, 900}}, {"1440p", {2560, 1440}}, {"1800p", {3200, 1800}}, {"4K", {3840, 2160}}}};
+    {"900p", {1600, 900}}, {"1440p", {2560, 1440}}, {"1800p", {3200, 1800}}, {"4K", {3840, 2160}},
+    {"8K", {7680, 4320}}}};
 inline std::pair<int, int> ResolutionSize(std::string_view name) {
     for (const auto& [key, size] : ResolutionSizes) {
         if (key == name) return size;
@@ -58,8 +63,9 @@ inline std::pair<int, int> ResolutionSize(std::string_view name) {
     }
     return ResolutionSizes[0].second;
 }
-/// Engine frame rate ceilings: 60 is the game's own, 120 and 240 are frame rate patches.
-inline constexpr std::array<int, 3> EngineFps = {60, 120, 240};
+/// Engine frame rates: 60 is the game's own (59.94). The launch takes the 240 FPS patch and the
+/// rate is written live (Gow3Settings::SyncEngineFps); 100 fits 100 Hz displays.
+inline constexpr std::array<int, 4> EngineFps = {60, 100, 120, 240};
 
 template <typename T, std::size_t N>
 constexpr int IndexOf(const std::array<T, N>& values, const T& value, int fallback) {
@@ -120,10 +126,22 @@ inline int EffectiveFps(int limit, int engine_fps) {
     return limit == 0 || limit > engine_fps ? engine_fps : limit;
 }
 
-/// The present thread's frame limit: never above the engine rate the patches applied, since the
-/// engine steps a fixed time per frame and faster flips speed the game up. 0 stays vblank paced.
-inline int PresentLimit(int limit, int engine_fps) {
-    return limit == 0 ? 0 : EffectiveFps(limit, engine_fps);
+/// The present thread's frame limit: never above the engine rate, since the engine steps a fixed
+/// time per frame and faster flips speed the game up. 0 stays vblank paced while the vblank is
+/// the engine rate; a live rate below it (the vblank runs at the highest one) caps it.
+inline int PresentLimit(int limit, int engine_fps, int vblank_hz) {
+    return limit == 0 && vblank_hz <= engine_fps ? 0 : EffectiveFps(limit, engine_fps);
+}
+
+/// R3 + L1 + R1 / F9: the engine rate after `current`, up to `highest` (this launch's patch);
+/// back to the first after the last.
+inline int NextEngineFps(int current, int highest) {
+    for (const int fps : EngineFps) {
+        if (fps > current && fps <= highest) {
+            return fps;
+        }
+    }
+    return EngineFps[0];
 }
 
 } // namespace Gow3Graphics

@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -122,10 +123,20 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.anisotropy = Gow3Graphics::ParseAnisotropy(i);
     } else if (key == "vibration") {
         v.vibration = value.empty() ? 100 : std::clamp(i, 0, 100);
+    } else if (key == "mouse_prompt_distance") {
+        v.mouse_prompt_distance = value.empty() ? 48 : std::clamp(i, 16, 200);
+    } else if (key == "mouse_lock") {
+        v.mouse_lock = value.empty() || i != 0;
+    } else if (key == "mouse_aim_style") {
+        v.mouse_aim_style = std::clamp(i, 0, 1);
+    } else if (key == "mouse_aim_sensitivity") {
+        v.mouse_aim_sensitivity = value.empty() ? 100 : std::clamp(i, 10, 200);
     } else if (key == "restart_unconfirmed") {
         v.restart_unconfirmed = i != 0;
     } else if (key == "enemy_health_bar") {
         v.enemy_health_bar = i != 0;
+    } else if (key == "auto_qte") {
+        v.auto_qte = i != 0;
     } else if (key == "red_orb_multiplier") {
         v.red_orb_multiplier = Gow3Orbs::ClampMultiplier(f);
     } else if (key == "damage_dealt") {
@@ -192,6 +203,9 @@ void Load() {
         {"GOW3_STALE_READBACK", "stale_readback"},     {"GOW3_FSR1", "fsr1"},
         {"GOW3_RCAS", "rcas"},                        {"GOW3_FRAMES_AHEAD", "frames_queued"},
         {"GOW3_ANISOTROPY", "anisotropy"},            {"GOW3_VIBRATION", "vibration"},
+        {"GOW3_MOUSE_PROMPT_DISTANCE", "mouse_prompt_distance"}, {"GOW3_MOUSE_LOCK", "mouse_lock"},
+        {"GOW3_MOUSE_AIM_STYLE", "mouse_aim_style"}, {"GOW3_MOUSE_AIM_SENSITIVITY", "mouse_aim_sensitivity"},
+        {"GOW3_AUTO_QTE", "auto_qte"},
     };
     for (const auto& [env, key] : env_keys) {
         if (const char* value = std::getenv(env); value && value[0]) {
@@ -204,7 +218,6 @@ void Load() {
     v.startup_output_res = v.output_res;
     v.startup_live_resolution = v.live_resolution;
     v.startup_render_resolution = v.render_resolution;
-    v.startup_engine_fps = v.engine_fps;
     const char* applied = std::getenv("GOW3_ENGINE_FPS");
     v.applied_engine_fps = applied && applied[0] ? Gow3Graphics::ParseEngineFps(std::atoi(applied))
                                                  : v.engine_fps.load();
@@ -213,10 +226,43 @@ void Load() {
     v.startup_anisotropy = v.anisotropy;
 }
 
+int EngineFpsNow() {
+    const auto& v = Get();
+    return std::min(v.engine_fps.load(), v.applied_engine_fps.load());
+}
+
+void SyncEngineFps() {
+    const auto& v = Get();
+    volatile float* fps = v.engine_fps_global.load();
+    volatile int32_t* rounded = v.engine_fps_int_global.load();
+    // 0 until the game's setter ran; 60 when no frame rate patch applied (nothing to change).
+    if (!fps || !rounded || *fps <= 0.0f || v.applied_engine_fps <= 60) {
+        return;
+    }
+    const int now = EngineFpsNow();
+    const float value = now == 60 ? 59.94f : float(now); // 59.94: the game's own constant
+    if (*fps == value) {
+        return;
+    }
+    // The game's frame timing reads both every frame (rounded: int(fps + 0.5), as its setter).
+    *fps = value;
+    *rounded = int32_t(value + 0.5f);
+    std::printf("Engine FPS: %d\n", now);
+}
+
+int CycleEngineFps() {
+    auto& v = Get();
+    if (!v.engine_fps_global || v.applied_engine_fps <= 60) {
+        return 0;
+    }
+    v.engine_fps = Gow3Graphics::NextEngineFps(EngineFpsNow(), v.applied_engine_fps);
+    Save();
+    return v.engine_fps;
+}
+
 bool GraphicsNeedRestart() {
     const auto& v = Get();
     return v.render_resolution != v.startup_render_resolution ||
-           v.engine_fps != v.startup_engine_fps ||
            v.deferred_readback != v.startup_deferred_readback ||
            v.stale_readback != v.startup_stale_readback ||
            v.anisotropy != v.startup_anisotropy;
@@ -270,6 +316,8 @@ bool ResolutionNeedsRestart() {
 }
 
 void Save() {
+    static std::mutex mutex; // the menu and the pad thread (CycleEngineFps)
+    std::scoped_lock lock{mutex};
     const auto& v = Get();
     FILE* file = std::fopen(Path(), "w");
     if (!file) {
@@ -300,6 +348,7 @@ void Save() {
                  int(v.cheats[3].load()), int(v.cheats[4].load()),
                  int(v.cheats[5].load()), int(v.cheats[6].load()));
     std::fprintf(file, "enemy_health_bar=%d\n", int(v.enemy_health_bar.load()));
+    std::fprintf(file, "auto_qte=%d\n", int(v.auto_qte.load()));
     std::fprintf(file,
                  "overlay_fps=%d\noverlay_frametime=%d\noverlay_upscaler=%d\noverlay_gpu=%d\n"
                  "overlay_cpu=%d\noverlay_ram=%d\noverlay_vram=%d\noverlay_scale=%d\noverlay_corner=%d\n"
@@ -320,7 +369,10 @@ void Save() {
                  resolution_names[std::clamp(v.render_resolution.load(), 0, int(resolution_names.size()) - 1)].c_str(),
                  v.engine_fps.load(), int(v.deferred_readback.load()), int(v.stale_readback.load()),
                  int(v.restart_unconfirmed.load()));
-    std::fprintf(file, "anisotropy=%d\nvibration=%d\n", v.anisotropy.load(), v.vibration.load());
+    std::fprintf(file, "anisotropy=%d\nvibration=%d\nmouse_prompt_distance=%d\nmouse_lock=%d\nmouse_aim_style=%d\n"
+                       "mouse_aim_sensitivity=%d\n",
+                 v.anisotropy.load(), v.vibration.load(), v.mouse_prompt_distance.load(), int(v.mouse_lock.load()),
+                 v.mouse_aim_style.load(), v.mouse_aim_sensitivity.load());
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");

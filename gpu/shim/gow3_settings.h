@@ -58,6 +58,9 @@ struct Values {
     /// Damage hook (src/actor_hook.h): enemy health bar, off by default.
     std::atomic<bool> enemy_health_bar{false};
     std::atomic<bool> actor_watch_supported{false};
+    /// QTE prompts answered in the game's own checks (src/qte_hook.h), off by default. Live.
+    std::atomic<bool> auto_qte{false};
+    std::atomic<bool> qte_supported{false};
     // Graphics (gow3_graphics.h). Live: applied on the next frame.
     std::atomic<int> display_mode{0};
     std::atomic<bool> vsync{true};
@@ -74,6 +77,14 @@ struct Values {
     std::atomic<int> frames_queued{1};
     /// Controller vibration strength in percent; 0 turns it off (runtime_pad.c). Live.
     std::atomic<int> vibration{100};
+    /// Mouse movement in px that counts as one step of a stick prompt (runtime_pad.c). Live.
+    std::atomic<int> mouse_prompt_distance{48};
+    /// Keep the mouse in the game window while the game has it (window.cpp). Live.
+    std::atomic<bool> mouse_lock{true};
+    /// L2 aim with the mouse (runtime_pad.c): 0 relative (follows movement), 1 absolute. Live.
+    std::atomic<int> mouse_aim_style{0};
+    /// L2 aim sensitivity in percent, 10 to 200: lower needs more mouse for the same stick. Live.
+    std::atomic<int> mouse_aim_sensitivity{100};
     // Startup: run.py turns them into patches and environment variables; "Apply and restart".
     std::atomic<int> render_resolution{0};
     std::atomic<int> engine_fps{120};
@@ -85,10 +96,14 @@ struct Values {
     /// Set before an "Apply and restart"; cleared once the new launch shows the game. run.py
     /// restores the previous startup options when a launch never cleared it.
     std::atomic<bool> restart_unconfirmed{false};
-    int startup_render_resolution = 0, startup_engine_fps = 120;
+    int startup_render_resolution = 0;
     /// The engine rate this launch really runs at (run.py's GOW3_ENGINE_FPS): 60 when the frame
     /// rate patch does not apply to this game build.
     std::atomic<int> applied_engine_fps{120};
+    /// The game's maximum frame rate, read every frame (src/probe.c finds it): as a float and
+    /// rounded. Null when this eboot.bin's code does not match. engine_fps is written there live.
+    std::atomic<float*> engine_fps_global{nullptr};
+    std::atomic<int32_t*> engine_fps_int_global{nullptr};
     bool startup_deferred_readback = true, startup_stale_readback = true;
     // FSR 4 checks (menu): the provider's auto exposure, the jitter sign it is given.
     std::atomic<bool> fsr4_auto_exposure{true};
@@ -127,6 +142,13 @@ int RenderPreset();
 bool ResolutionNeedsRestart();
 /// A startup graphics option differs from the one this launch started with.
 bool GraphicsNeedRestart();
+/// The engine rate in effect: engine_fps, up to what this launch's patch allows.
+int EngineFpsNow();
+/// Present thread, every vblank: writes EngineFpsNow() into the game once the game has set its
+/// own rate (a frame rate patch applied), when they differ.
+void SyncEngineFps();
+/// R3 + L1 + R1 / F9: the next engine rate (saved); 0 when this launch cannot change it.
+int CycleEngineFps();
 /// Writes the file (menu changes).
 void Save();
 

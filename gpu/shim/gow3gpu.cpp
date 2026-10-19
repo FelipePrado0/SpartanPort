@@ -380,8 +380,45 @@ extern "C" void gow3gpu_movie_picture(void) {
     Vulkan::MovieBars::Cutscenes().NotePicture(Vulkan::MovieBars::NowMs());
 }
 
+extern "C" int gow3gpu_mouse_prompt_distance(void) {
+    return Gow3Settings::Get().mouse_prompt_distance.load(std::memory_order_relaxed);
+}
+
+extern "C" int gow3gpu_mouse_aim_style(void) {
+    return Gow3Settings::Get().mouse_aim_style.load(std::memory_order_relaxed);
+}
+
+extern "C" int gow3gpu_mouse_aim_sensitivity(void) {
+    return Gow3Settings::Get().mouse_aim_sensitivity.load(std::memory_order_relaxed);
+}
+
+// The menu's Automatic QTE switch, read by the game's code through the QTE stubs (src/qte_hook.h).
+extern "C" uintptr_t gow3_auto_qte_flag(void) {
+    static_assert(sizeof(std::atomic<bool>) == 1, "the stubs compare one byte");
+    return reinterpret_cast<uintptr_t>(&Gow3Settings::Get().auto_qte);
+}
+
+extern "C" void gow3_qte_status(int supported) {
+    Gow3Settings::Get().qte_supported = supported != 0;
+}
+
+extern "C" void gow3gpu_mouse_pause_key(void) {
+    Frontend::ToggleMousePause();
+}
+
 extern "C" int gow3gpu_overlay_captures_input(void) {
     return Gow3Overlay::CapturesInput() ? 1 : 0;
+}
+
+extern "C" void gow3gpu_engine_fps_cycle(void) {
+    Gow3Overlay::CycleEngineFps();
+}
+
+// src/probe.c: the game's maximum frame rate globals (Gow3Settings::SyncEngineFps writes them).
+extern "C" void gow3_engine_fps_globals(uintptr_t fps, uintptr_t rounded) {
+    auto& s = Gow3Settings::Get();
+    s.engine_fps_int_global = reinterpret_cast<int32_t*>(rounded);
+    s.engine_fps_global = reinterpret_cast<float*>(fps);
 }
 
 extern "C" int gow3gpu_text_input_begin(const char* initial, const char* prompt) {

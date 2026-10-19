@@ -336,6 +336,12 @@ void GameTab() {
             CheckRow(names[cheat], s.cheats[cheat], available ? helps[cheat] : Unsupported);
             ImGui::EndDisabled();
         }
+        ImGui::BeginDisabled(!s.qte_supported.load());
+        CheckRow("Automatic QTE", s.auto_qte,
+                 s.qte_supported.load() ? "Quick-time prompts answer themselves: single presses, repeated "
+                                          "presses, holds and stick rotations."
+                                        : Unsupported);
+        ImGui::EndDisabled();
         ImGui::EndTable();
     }
 
@@ -343,6 +349,17 @@ void GameTab() {
     if (BeginRows("##controller")) {
         SliderRow("Vibration", s.vibration, 0, 100, "%d%%",
                   "Strength of the controller's vibration. 0% turns it off.");
+        SliderRow("Mouse prompt distance", s.mouse_prompt_distance, 16, 200, "%d px",
+                  "With Joystick prompts on Adaptive mouse: how far the mouse moves for one step of a rotation.");
+        static const char* const aim_styles[] = {"Relative", "Absolute"};
+        ChoiceRow("Right stick style", s.mouse_aim_style, aim_styles, nullptr, 2,
+                  "L2 aim with the mouse (Head of Helios, Bow of Apollo). Relative: the stick follows the "
+                  "movement and goes back to neutral when the mouse stops. Absolute: the stick points from "
+                  "where the mouse was when L2 was pressed to where it is.");
+        SliderRow("Right stick sensitivity", s.mouse_aim_sensitivity, 10, 200, "%d%%",
+                  "L2 aim with the mouse: lower needs more mouse movement for the same stick, higher less.");
+        CheckRow("Keep mouse in window", s.mouse_lock,
+                 "While you play, the mouse stays in the game window; this menu and other windows get it back.");
         ImGui::EndTable();
     }
 
@@ -442,16 +459,21 @@ void PerformanceTab() {
     auto& s = Gow3Settings::Get();
     ImGui::SeparatorText("Live");
     if (BeginRows("##live")) {
-        static const char* const fps_labels[] = {"30", "60", "120", "240", "Unlimited"};
+        static const char* const fps_labels[] = {"30", "60", "100", "120", "240", "Unlimited"};
         ChoiceRow("Frame rate limit", s.fps_limit, fps_labels, G::FpsLimits.data(), int(G::FpsLimits.size()),
                   "Caps the frame rate. The engine frame rate (below) is the highest it can go.");
-        const int effective = G::EffectiveFps(s.fps_limit, s.applied_engine_fps);
+        static const char* const engine_labels[] = {"60 (original)", "100", "120", "240"};
+        static_assert(std::size(engine_labels) == G::EngineFps.size());
+        ChoiceRow("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()),
+                  "The highest frame rate the game itself runs at. 60 for spots that break above it (a ledge "
+                  "Kratos cannot cross, a button-mash prompt). R3 + L1 + R1 or F9 go through the list.");
+        const int effective = G::EffectiveFps(s.fps_limit, Gow3Settings::EngineFpsNow());
         if (s.fps_limit == 0 || effective < s.fps_limit) {
             char text[48];
             std::snprintf(text, sizeof(text), "%d FPS (engine frame rate)", effective);
             InfoRow("Effective limit", text);
         }
-        if (s.applied_engine_fps < s.startup_engine_fps) {
+        if (s.applied_engine_fps <= 60 && s.engine_fps > 60) {
             InfoRow("Engine frame rate", "60 FPS: the frame rate patch is not available for this game build");
         }
         static const char* const queued_labels[] = {"1 (lowest latency)", "2", "Unlimited"};
@@ -472,7 +494,12 @@ void PerformanceTab() {
             "1800p · 3200 × 1800 · 16:9", "4K · 3840 × 2160 · 16:9",
             "2560 × 1080 · 21:9 (beta)", "3440 × 1440 · 21:9 (beta)",
             "3840 × 1600 · 21:9 (beta)", "5120 × 1440 · 32:9 (beta)",
-            "1920 × 1200 · 16:10 (beta)", "2560 × 1600 · 16:10 (beta)"};
+            "1920 × 1200 · 16:10 (beta)", "2560 × 1600 · 16:10 (beta)",
+            "1280 × 800 · 16:10", "1440 × 900 · 16:10",
+            "1360 × 768 · 16:9",
+            "1280 × 960 · 4:3", "1440 × 1080 · 4:3 (beta)", "1920 × 1440 · 4:3 (beta)",
+            "2048 × 1536 · 4:3 (beta)", "2560 × 1920 · 4:3 (beta)", "5120 × 2160 · 21:9 (beta)",
+            "8K · 7680 × 4320 · 16:9 (beta)"};
         static_assert(std::size(builtin_labels) == G::Resolutions.size());
         const std::vector<std::string> resolution_names = G::ResolutionNames();
         std::vector<const char*> resolution_labels;
@@ -481,9 +508,6 @@ void PerformanceTab() {
         }
         ChoiceRow("Render resolution", s.render_resolution, resolution_labels.data(), nullptr,
                   int(resolution_labels.size()), "The resolution the game draws at. Higher is sharper and slower.");
-        static const char* const engine_labels[] = {"60 (original)", "120", "240"};
-        ChoiceRow("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()),
-                  "The highest frame rate the game itself runs at.");
         CheckRow("Game reads GPU data without waiting", s.stale_readback,
                  "Big FPS gain. Switch it off if lighting or objects look wrong.");
         CheckRow("Deferred GPU readbacks", s.deferred_readback,
@@ -559,6 +583,7 @@ void OverlayTab() {
         add(s.orb_pickup_supported.load(), "orb pickups");
         add(s.damage_supported.load(), "damage");
         add(s.actor_watch_supported.load(), "enemy health");
+        add(s.qte_supported.load(), "QTE prompts");
         InfoRow("Game hooks", hooks.empty() ? "none" : hooks.c_str());
         ImGui::EndTable();
     }
@@ -567,7 +592,7 @@ void OverlayTab() {
 // Startup options changed since this launch (applied by "Apply and restart").
 int RestartChanges() {
     const auto& s = Gow3Settings::Get();
-    return (s.render_resolution != s.startup_render_resolution) + (s.engine_fps != s.startup_engine_fps) +
+    return (s.render_resolution != s.startup_render_resolution) +
            (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
            (s.anisotropy != s.startup_anisotropy);
 }
@@ -894,6 +919,12 @@ void ShowNotice(const std::string& text, int milliseconds) {
     notice_until.store(NowMs() + milliseconds, std::memory_order_relaxed);
 }
 
+void CycleEngineFps() {
+    const int fps = Gow3Settings::CycleEngineFps();
+    ShowNotice(fps ? "Engine frame rate: " + std::to_string(fps) + " FPS"
+                   : std::string("Engine frame rate: 60 FPS only (no frame rate patch for this game build)"));
+}
+
 void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) {
     std::scoped_lock lock{imgui_mutex};
     if (initialized) {
@@ -1059,6 +1090,12 @@ bool HandleEvent(const SDL_Event& event) {
             const char* env = std::getenv("GOW3_FRAME_CAPTURE_KEY");
             return env && *env == '1';
         }();
+        if (event.key.key == SDLK_F9) {
+            if (down && !event.key.repeat) {
+                CycleEngineFps();
+            }
+            return true;
+        }
         if (event.key.key == SDLK_F12) {
             if (down && !event.key.repeat) {
                 VideoCore::RequestScreenshot(VideoCore::ScreenshotRequest::GameOnly);
