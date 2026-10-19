@@ -19,6 +19,7 @@ LEGACY_DESKTOP_MARKER = 'X-GOW3-Integration=true'
 LEGACY_CONFIG_DIR = f'{LEGACY_NAME}-launcher'  # the launcher's settings, in AppData or ~/.config
 NEW_NAME, NEW_ENV = 'spartanport', 'SPARTAN_'
 MARKER = 'legacy-migrated'
+DATA_SKIP = ('user/cache', 'out')
 # Old binaries an update leaves behind, with the file that replaced each one.
 LEFTOVERS = {
     f'bin/{LEGACY_NAME}-probe.exe': f'bin/{NEW_NAME}-probe.exe',
@@ -48,11 +49,15 @@ def _appimage_data_dir(env):
         return None
 
 
-def _merge(old, new):
-    """Copies the files of folder `old` into `new` that `new` does not have yet."""
+def _merge(old, new, skip=()):
+    """Copies the files of folder `old` into `new` that `new` does not have yet, leaving out the
+    folders in `skip` (relative to `old`)."""
     copied = 0
     for source in old.rglob('*'):
-        target = new / source.relative_to(old)
+        relative = source.relative_to(old)
+        if any(relative == Path(s) or Path(s) in relative.parents for s in skip):
+            continue
+        target = new / relative
         if source.is_dir():
             target.mkdir(parents=True, exist_ok=True)
         elif not target.exists():
@@ -86,7 +91,9 @@ def migrate(data_dir, home=None, windows=os.name == 'nt'):
     done = []
     old_data = data_dir.parent / LEGACY_NAME
     if data_dir.name == NEW_NAME and old_data.is_dir():
-        done.append(f'data: {_merge(old_data, data_dir)} files from {old_data}')
+        # The GPU caches (rebuilt while playing, can be gigabytes) and the run views in out/ (links
+        # into the game dump) stay behind: copying them would stall the first start.
+        done.append(f'data: {_merge(old_data, data_dir, DATA_SKIP)} files from {old_data}')
     old_ini = data_dir / f'{LEGACY_NAME}.ini'
     if copy_game_settings(data_dir):
         done.append(f'game settings: {old_ini} copied to {NEW_NAME}.ini')

@@ -47,6 +47,23 @@ class LegacyTest(unittest.TestCase):
         self.assertEqual((new / 'spartanport.ini').read_text(encoding='utf-8'), 'engine_fps=60\n')
         self.assertTrue((old / 'user' / 'savedata' / '1' / 'slot0.bin').is_file())
 
+    def test_linux_data_copy_leaves_caches_and_run_folders(self):
+        share = self.root / 'share'
+        old = share / OLD
+        (old / 'user' / 'cache' / 'shaders').mkdir(parents=True)
+        (old / 'user' / 'cache' / 'shaders' / 'pipelines.bin').write_bytes(b'cache')
+        (old / 'out' / 'mod-game-abc').mkdir(parents=True)
+        (old / 'out' / 'mod-game-abc' / 'eboot.bin').write_bytes(b'overlay')
+        (old / 'user' / 'savedata').mkdir(parents=True)
+        (old / 'user' / 'savedata' / 'slot0.bin').write_bytes(b'save')
+        new = share / 'spartanport'
+        new.mkdir(parents=True)
+        self.migrate(data=new)
+        self.assertEqual((new / 'user' / 'savedata' / 'slot0.bin').read_bytes(), b'save')
+        self.assertFalse((new / 'user' / 'cache').exists())
+        self.assertFalse((new / 'out').exists())
+        self.assertTrue((old / 'user' / 'cache' / 'shaders' / 'pipelines.bin').is_file())
+
     def test_linux_data_copy_keeps_newer_files(self):
         share = self.root / 'share'
         (share / OLD / 'user').mkdir(parents=True)
