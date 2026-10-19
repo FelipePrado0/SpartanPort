@@ -1,0 +1,140 @@
+# Linux RPM: build the Fedora package on every PR/branch and attach it to releases.
+# The spec and the source-tarball generator are the existing ones under
+# packaging/linux/rpm/. The tarball is regenerated for the checked-out commit, so the
+# spec's pinned commit/hash defaults are overridden with rpmbuild --define.
+# Run by hand (Actions > Linux RPM > Run workflow) to keep artifacts only, or with a
+# tag to attach the RPM to an existing release.
+name: Linux RPM
+
+on:
+  pull_request:
+  push:
+    branches: ['**']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to attach the RPM to; empty only builds and tests.
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-rpm-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container: fedora:44
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install checkout prerequisites
+        run: dnf -y install git tar gzip coreutils
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag != '' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          submodules: true
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install build dependencies
+        run: |
+          dnf -y install rpm-build dnf5-plugins curl ca-certificates patch findutils shadow-utils util-linux
+          dnf -y builddep packaging/linux/rpm/gow3.spec
+      - name: Generate source tarball
+        id: source
+        run: |
+          set -euo pipefail
+          COMMIT=$(git rev-parse HEAD)
+          short=${COMMIT:0:7}
+          date=$(git show -s --format=%cd --date=format:%Y%m%d "$COMMIT")
+          source_version="0.0.0-git${short}"
+          snapshot_version="0^${date}git${short}"
+          topdir="$PWD/out/rpmbuild"
+          mkdir -p "$topdir/SOURCES"
+
+          vma=/tmp/vk_mem_alloc.h
+          vma_sha=f063056705f2cd0ddd8d9da034f673b09814ca96aa45a958e9e687bf9f3fed15
+          curl --fail --location --proto '=https' --proto-redir '=https' \
+            --output "$vma" \
+            https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/v3.1.0/include/vk_mem_alloc.h
+          echo "$vma_sha  $vma" | sha256sum --check -
+
+          VMA_HEADER=$vma VMA_SHA256=$vma_sha \
+            bash packaging/linux/rpm/make-tarball.sh \
+              "$source_version" "$COMMIT" "$topdir/SOURCES/gow3-$source_version.tar.gz"
+
+          source_sha=$(sha256sum "$topdir/SOURCES/gow3-$source_version.tar.gz" | awk '{print $1}')
+          {
+            echo "topdir=$topdir"
+            echo "source_version=$source_version"
+            echo "snapshot_version=$snapshot_version"
+            echo "source_sha=$source_sha"
+            echo "vma_sha=$vma_sha"
+            echo "commit=$COMMIT"
+          } >> "$GITHUB_OUTPUT"
+      - name: Build RPM and SRPM
+        run: |
+          set -euo pipefail
+          topdir='${{ steps.source.outputs.topdir }}'
+          useradd --create-home rpmbuilder
+          chown -R rpmbuilder:rpmbuilder "$topdir"
+          runuser -u rpmbuilder -- rpmbuild -ba packaging/linux/rpm/gow3.spec \
+            --define "_topdir $topdir" \
+            --define "commit ${{ steps.source.outputs.commit }}" \
+            --define "source_version ${{ steps.source.outputs.source_version }}" \
+            --define "snapshot_version ${{ steps.source.outputs.snapshot_version }}" \
+            --define "source_sha256 ${{ steps.source.outputs.source_sha }}" \
+            --define "vma_sha256 ${{ steps.source.outputs.vma_sha }}"
+          mkdir -p dist
+          cp "$topdir"/RPMS/x86_64/*.rpm "$topdir"/SRPMS/*.rpm dist/
+          (cd dist && sha256sum -- *.rpm > SHA256SUMS)
+          ls -l dist
+      - name: Smoke-test the package
+        run: |
+          set -euo pipefail
+          rpmfile=$(find dist -maxdepth 1 -name 'gow3-*.x86_64.rpm' \
+            ! -name '*-debuginfo-*' ! -name '*-debugsource-*' | head -1)
+          test -n "$rpmfile"
+          dnf -y install --setopt=install_weak_deps=False "$rpmfile"
+          test -x /usr/bin/gow3
+          test -f /usr/libexec/gow3/bin/gpu/libgow3gpu.so
+          test -f /usr/share/applications/gow3.desktop
+          # Exit 20 means this CPU needs the (optional) ISA rewrite; both 0 and 20
+          # prove the loader starts without game files.
+          status=0
+          /usr/libexec/gow3/bin/gow3-probe --cpu-features || status=$?
+          test "$status" -eq 0 -o "$status" -eq 20
+          rpm -qp --requires "$rpmfile"
+          rpm -qp --recommends "$rpmfile" | grep -F 'python3dist(iced-x86)'
+          ! rpm -qp --requires "$rpmfile" | grep -F 'python3dist(iced-x86)'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gow3-rpm
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gow3-rpm
+          path: dist
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" dist/*.rpm dist/SHA256SUMS --clobber
