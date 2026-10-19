@@ -106,8 +106,8 @@ public:
     /// Processes the fault buffer.
     void ProcessFaultBuffer();
 
-    /// Synchronizes all buffers needed for DMA.
-    void SynchronizeDmaBuffers();
+    /// Synchronizes all buffers needed for DMA. Returns true if uploads occurred.
+    bool SynchronizeDmaBuffers();
 
     /// Commits pending sparse buffer memory binds. Must be called before every scheduler submit.
     void SubmitPendingArenaBinds(Vulkan::SubmitInfo& info);
@@ -177,12 +177,14 @@ private:
 
     struct Backing : public Interval {
         vk::DeviceMemory memory;
-        u64 offset;
+        u64 offset{};
+        u32 block_shift{};
         constexpr bool CanMergeWith(const Backing& other) const noexcept {
-            return memory == other.memory && offset + (end - start) == other.offset;
+            return memory == other.memory &&
+                   offset + ((end - start) << block_shift) == other.offset;
         }
         constexpr Backing SubRange(u64 a, u64 b) const noexcept {
-            return {{a, b}, memory, offset + (a - start)};
+            return {{a, b}, memory, offset + ((a - start) << block_shift), block_shift};
         }
     };
     IntervalList<Backing> resident_ranges;
@@ -192,6 +194,14 @@ private:
     u32 block_shift{};
     u32 blocks_per_arena_page{};
     u32 blocks_per_arena_page_shift{};
+
+    struct MemoryPoolChunk {
+        vk::DeviceMemory memory{};
+        u64 size = 0;
+        u64 used = 0;
+    };
+    MemoryPoolChunk current_pool_chunk{};
+    std::vector<vk::DeviceMemory> allocated_device_memories;
 };
 
 } // namespace VideoCore
