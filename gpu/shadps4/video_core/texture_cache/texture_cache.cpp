@@ -1643,10 +1643,16 @@ void TextureCache::GarbageCollectImages() {
     u64 ticks_to_destroy = 0;
     size_t num_deletions = 0;
 
+    struct PendingEvictionDownload {
+        ImageId image_id;
+        PendingDownload download;
+    };
+    boost::container::small_vector<PendingEvictionDownload, 16> pending_downloads;
+
     const auto configure = [&](bool allow_aggressive) {
         pressured = total_used_memory >= pressure_gc_memory;
         aggresive = allow_aggressive && total_used_memory >= critical_gc_memory;
-        ticks_to_destroy = aggresive ? 160 : pressured ? 80 : 16;
+        ticks_to_destroy = aggresive ? 16 : pressured ? 64 : 160;
         ticks_to_destroy = std::min(ticks_to_destroy, gc_tick);
         num_deletions = aggresive ? 40 : pressured ? 20 : 10;
     };
@@ -1668,14 +1674,18 @@ void TextureCache::GarbageCollectImages() {
             return false;
         }
         if (download) {
-            // gow3: synchronously, while the image still protects its pages. A deferred
-            // write-back landed after FreeImage had unprotected them, over whatever the game
-            // had meanwhile stored there (e.g. its heap after unloading an area).
-            DownloadImageMemory(image_id, true);
-            ++gc_downloads;
+            // gow3: record image downloads and batch the GPU wait at the end of the pass.
+            // Guest pages remain protected until TryWriteBacking finishes before FreeImage unprotects them.
+            if (auto rec = RecordImageDownload(image_id)) {
+                pending_downloads.push_back({image_id, std::move(*rec)});
+            } else {
+                ++gc_evictions;
+                FreeImage(image_id);
+            }
+        } else {
+            ++gc_evictions;
+            FreeImage(image_id);
         }
-        ++gc_evictions;
-        FreeImage(image_id);
         if (total_used_memory < critical_gc_memory) {
             if (aggresive) {
                 num_deletions >>= 2;
@@ -1690,14 +1700,34 @@ void TextureCache::GarbageCollectImages() {
         return false;
     };
 
+    const auto flush_pending_downloads = [&] {
+        if (pending_downloads.empty()) {
+            return;
+        }
+        scheduler.Finish();
+        for (const auto& item : pending_downloads) {
+            item.download.staging.Invalidate();
+            Core::Memory::Instance()->TryWriteBacking(
+                std::bit_cast<u8*>(item.download.guest_address),
+                item.download.staging.mapped, item.download.size);
+            runtime.GetStagingPool().FreeDeferred(item.download.staging);
+            ++gc_downloads;
+            ++gc_evictions;
+            FreeImage(item.image_id);
+        }
+        pending_downloads.clear();
+    };
+
     // Try to remove anything old enough and not high priority.
     configure(false);
     lru_cache.ForEachItemBelow(gc_tick - ticks_to_destroy, clean_up);
+    flush_pending_downloads();
 
     if (total_used_memory >= critical_gc_memory) {
         // If we are still over the critical limit, run an aggressive GC
         configure(true);
         lru_cache.ForEachItemBelow(gc_tick - ticks_to_destroy, clean_up);
+        flush_pending_downloads();
     }
     // gow3: evictions under memory pressure, at most every 5 s (GOW3_FRAME_STATS or not).
     if (pressured || gc_downloads != 0) {
@@ -1729,7 +1759,7 @@ void TextureCache::GarbageCollectSamplers() {
     const auto configure = [&](bool allow_aggressive) {
         pressured = total_used_samplers >= pressure_gc_samplers;
         aggresive = allow_aggressive && total_used_samplers >= critical_gc_samplers;
-        ticks_to_destroy = aggresive ? 160 : pressured ? 80 : 16;
+        ticks_to_destroy = aggresive ? 16 : pressured ? 64 : 160;
         ticks_to_destroy = std::min(ticks_to_destroy, gc_tick);
         num_deletions = aggresive ? 40 : pressured ? 20 : 10;
     };

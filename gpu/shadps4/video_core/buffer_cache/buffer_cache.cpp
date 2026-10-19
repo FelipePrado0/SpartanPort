@@ -815,26 +815,43 @@ void BufferCache::SubmitPendingArenaBinds(Vulkan::SubmitInfo& info) {
         return;
     }
 
-    const u64 signal_tick = memory_semaphore.NextTick();
-    const auto signal_sema = memory_semaphore.Handle();
+    const bool separate_queues = instance.GetSparseQueue() != instance.GetGraphicsQueue();
 
-    const vk::TimelineSemaphoreSubmitInfo timeline_si = {
-        .signalSemaphoreValueCount = 1u,
-        .pSignalSemaphoreValues = &signal_tick,
-    };
+    if (separate_queues) {
+        const u64 signal_tick = memory_semaphore.NextTick();
+        const auto signal_sema = memory_semaphore.Handle();
 
-    const vk::BindSparseInfo sparse_info = {
-        .pNext = &timeline_si,
-        .bufferBindCount = static_cast<u32>(buffer_binds.size()),
-        .pBufferBinds = buffer_binds.data(),
-        .signalSemaphoreCount = 1u,
-        .pSignalSemaphores = &signal_sema,
-    };
+        const vk::TimelineSemaphoreSubmitInfo timeline_si = {
+            .signalSemaphoreValueCount = 1u,
+            .pSignalSemaphoreValues = &signal_tick,
+        };
 
-    info.AddWait(signal_sema, signal_tick);
-    auto submit_result = instance.GetSparseQueue().bindSparse(sparse_info);
-    ASSERT_MSG(submit_result == vk::Result::eSuccess, "Failed to bind sparse memory: {}",
-               vk::to_string(submit_result));
+        const vk::BindSparseInfo sparse_info = {
+            .pNext = &timeline_si,
+            .bufferBindCount = static_cast<u32>(buffer_binds.size()),
+            .pBufferBinds = buffer_binds.data(),
+            .signalSemaphoreCount = 1u,
+            .pSignalSemaphores = &signal_sema,
+        };
+
+        info.AddWait(signal_sema, signal_tick);
+        auto submit_result = instance.GetSparseQueue().bindSparse(sparse_info);
+        ASSERT_MSG(submit_result == vk::Result::eSuccess, "Failed to bind sparse memory: {}",
+                   vk::to_string(submit_result));
+    } else {
+        // On single-queue hardware (such as integrated GPUs), sparse memory binding and graphics
+        // command submission share the exact same VkQueue. Vulkan guarantees FIFO submission order
+        // on a single queue. Omitting the self-referential timeline semaphore wait prevents driver
+        // queue serialization deadlocks and watchdog resets during burst asset streaming transitions.
+        const vk::BindSparseInfo sparse_info = {
+            .bufferBindCount = static_cast<u32>(buffer_binds.size()),
+            .pBufferBinds = buffer_binds.data(),
+        };
+
+        auto submit_result = instance.GetSparseQueue().bindSparse(sparse_info);
+        ASSERT_MSG(submit_result == vk::Result::eSuccess, "Failed to bind sparse memory: {}",
+                   vk::to_string(submit_result));
+    }
 
     pending_binds.clear();
 }
