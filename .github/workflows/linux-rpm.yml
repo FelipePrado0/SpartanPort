@@ -50,6 +50,8 @@ jobs:
         id: source
         run: |
           set -euo pipefail
+          # checkout runs with runner-owned files; Git in this container runs as root.
+          chown -R "$(id -u):$(id -g)" "$PWD"
           COMMIT=$(git rev-parse HEAD)
           short=${COMMIT:0:7}
           date=$(git show -s --format=%cd --date=format:%Y%m%d "$COMMIT")
