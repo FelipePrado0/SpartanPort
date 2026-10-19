@@ -483,7 +483,14 @@ const Buffer* BufferCache::GetArena(u64 first_block, u64 last_block) {
                 *(bda_addrs++) = new_arena->BufferDeviceAddress() + resource_offset + blk_offset;
             }
             const u64 copy_size = (end - start) * sizeof(vk::DeviceAddress);
-            copies.emplace_back(offset, start * sizeof(vk::DeviceAddress), copy_size);
+            const u64 dst_offset = start * sizeof(vk::DeviceAddress);
+            if (!copies.empty() &&
+                copies.back().srcOffset + copies.back().size == offset &&
+                copies.back().dstOffset + copies.back().size == dst_offset) {
+                copies.back().size += copy_size;
+            } else {
+                copies.emplace_back(offset, dst_offset, copy_size);
+            }
             offset += copy_size;
         });
 
@@ -492,13 +499,12 @@ const Buffer* BufferCache::GetArena(u64 first_block, u64 last_block) {
         runtime.FlushBarriers();
     }
 
-    u64 base_page = first_addr >> arena_page_bits;
-    for (u32 page = 0; page < (first_size >> arena_page_bits); ++page) {
-        address_space[base_page + page] = new_arena;
-    }
-    base_page = last_page;
-    for (u32 page = 0; page < (last_size >> arena_page_bits); ++page) {
-        address_space[base_page + page] = new_arena;
+    const u64 start_page = first_addr >> arena_page_bits;
+    const u64 num_total_pages = total_size >> arena_page_bits;
+    ASSERT_MSG(start_page + num_total_pages <= address_space.size(),
+               "Arena pages exceed address space");
+    for (u32 page = 0; page < num_total_pages; ++page) {
+        address_space[start_page + page] = new_arena;
     }
     return new_arena;
 }
@@ -517,7 +523,7 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
     Gow3Stats::Timer timer{Gow3Stats::t_resident};
 
     // Sub-allocate sparse backing memory from pools to avoid driver allocation count exhaustion in asset-heavy areas
-    constexpr u64 POOL_CHUNK_SIZE = 16_MB;
+    constexpr u64 POOL_CHUNK_SIZE = 32_MB;
     const u64 requested_bytes = resident_blocks << block_shift;
     vk::DeviceMemory device_memory{};
     u64 base_memory_offset = 0;
@@ -571,6 +577,7 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
         backing.end = range.end;
         backing.memory = device_memory;
         backing.offset = memory_offset;
+        backing.block_shift = block_shift;
         resident_ranges.Add(backing);
 
         LOG_INFO(Render, "Making range start={}, end={} resident", backing.start, backing.end);
@@ -587,7 +594,14 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
             *(bda_addrs++) = arena->BufferDeviceAddress() + bind.resourceOffset + block;
         }
         const u64 copy_size = (backing.end - backing.start) * sizeof(vk::DeviceAddress);
-        copies.emplace_back(offset, backing.start * sizeof(vk::DeviceAddress), copy_size);
+        const u64 dst_offset = backing.start * sizeof(vk::DeviceAddress);
+        if (!copies.empty() &&
+            copies.back().srcOffset + copies.back().size == offset &&
+            copies.back().dstOffset + copies.back().size == dst_offset) {
+            copies.back().size += copy_size;
+        } else {
+            copies.emplace_back(offset, dst_offset, copy_size);
+        }
         offset += copy_size;
     }
 
@@ -772,11 +786,18 @@ void BufferCache::SubmitPendingArenaBinds(Vulkan::SubmitInfo& info) {
     buffer_binds.reserve(pending_binds.size());
 
     for (const auto& binds : pending_binds) {
-        buffer_binds.emplace_back(vk::SparseBufferMemoryBindInfo{
-            .buffer = binds.arena->Handle(),
-            .bindCount = static_cast<u32>(binds.binds.size()),
-            .pBinds = binds.binds.data(),
-        });
+        if (!binds.binds.empty()) {
+            buffer_binds.emplace_back(vk::SparseBufferMemoryBindInfo{
+                .buffer = binds.arena->Handle(),
+                .bindCount = static_cast<u32>(binds.binds.size()),
+                .pBinds = binds.binds.data(),
+            });
+        }
+    }
+
+    if (buffer_binds.empty()) {
+        pending_binds.clear();
+        return;
     }
 
     const u64 signal_tick = memory_semaphore.NextTick();
@@ -797,7 +818,8 @@ void BufferCache::SubmitPendingArenaBinds(Vulkan::SubmitInfo& info) {
 
     info.AddWait(signal_sema, signal_tick);
     auto submit_result = instance.GetSparseQueue().bindSparse(sparse_info);
-    ASSERT_MSG(submit_result != vk::Result::eErrorDeviceLost, "Device lost during submit");
+    ASSERT_MSG(submit_result == vk::Result::eSuccess, "Failed to bind sparse memory: {}",
+               vk::to_string(submit_result));
 
     pending_binds.clear();
 }

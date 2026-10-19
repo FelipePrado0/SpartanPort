@@ -177,12 +177,14 @@ private:
 
     struct Backing : public Interval {
         vk::DeviceMemory memory;
-        u64 offset;
+        u64 offset{};
+        u32 block_shift{};
         constexpr bool CanMergeWith(const Backing& other) const noexcept {
-            return memory == other.memory && offset + (end - start) == other.offset;
+            return memory == other.memory &&
+                   offset + ((end - start) << block_shift) == other.offset;
         }
         constexpr Backing SubRange(u64 a, u64 b) const noexcept {
-            return {{a, b}, memory, offset + (a - start)};
+            return {{a, b}, memory, offset + ((a - start) << block_shift), block_shift};
         }
     };
     IntervalList<Backing> resident_ranges;
