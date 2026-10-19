@@ -18,6 +18,9 @@ import time
 WINDOWS = sys.platform == 'win32'
 MACOS = sys.platform == 'darwin'
 EXE_SUFFIX = '.exe' if WINDOWS else ''
+if MACOS:
+    # Ensure DYLD_INSERT_LIBRARIES is not inherited by child utility scripts
+    os.environ.pop('DYLD_INSERT_LIBRARIES', None)
 if WINDOWS:
     import ctypes
 
@@ -77,6 +80,7 @@ def run_script(name, *args, capture=False, check=True):
     script = ['--script'] if getattr(sys, 'frozen', False) else []
     command = [sys.executable, *script, str(PORT / 'scripts' / name), *map(str, args)]
     env = {**os.environ, 'PYTHONIOENCODING': 'utf-8'}
+    env.pop('DYLD_INSERT_LIBRARIES', None)
     if capture:
         result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, text=True,
                                 encoding='utf-8', env=env, creationflags=no_console())
@@ -240,10 +244,23 @@ def main():
             env['DYLD_LIBRARY_PATH'] = ':'.join(dyld_paths + ([current_lib] if current_lib else []))
         for candidate in (lib_dir / 'libmimalloc.dylib', PORT / 'bin/lib/libmimalloc.dylib', PORT / 'out/lib/libmimalloc.dylib'):
             if candidate.is_file():
-                current_insert = env.get('DYLD_INSERT_LIBRARIES', '')
-                if str(candidate) not in current_insert:
-                    env['DYLD_INSERT_LIBRARIES'] = f"{candidate}:{current_insert}" if current_insert else str(candidate)
-                break
+                compatible = False
+                try:
+                    with open(candidate, 'rb') as f:
+                        hdr = f.read(8)
+                        magic_be = int.from_bytes(hdr[:4], 'big')
+                        if magic_be in (0xcafebabe, 0xcafebabf):
+                            compatible = True
+                        elif int.from_bytes(hdr[:4], 'little') == 0xfeedfacf:
+                            cputype = int.from_bytes(hdr[4:8], 'little')
+                            compatible = (cputype == 0x0100000C) if is_arm64_probe else (cputype == 0x01000007)
+                except Exception:
+                    pass
+                if compatible:
+                    current_insert = env.get('DYLD_INSERT_LIBRARIES', '')
+                    if str(candidate) not in current_insert:
+                        env['DYLD_INSERT_LIBRARIES'] = f"{candidate}:{current_insert}" if current_insert else str(candidate)
+                    break
         if not env.get('VK_DRIVER_FILES') and not env.get('VK_ICD_FILENAMES'):
             if (lib_dir / 'MoltenVK_icd.json').is_file():
                 env['VK_DRIVER_FILES'] = str(lib_dir / 'MoltenVK_icd.json')

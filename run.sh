@@ -51,12 +51,7 @@ if [[ $(uname -s) == Darwin ]]; then
             if [[ -f $candidate ]]; then export VK_DRIVER_FILES=$candidate; break; fi
         done
     fi
-    # Performance optimizations for MoltenVK and memory allocation on Apple Silicon / macOS
-    if [[ -f bin/lib/libmimalloc.dylib ]]; then
-        export DYLD_INSERT_LIBRARIES="$PWD/bin/lib/libmimalloc.dylib${DYLD_INSERT_LIBRARIES:+:$DYLD_INSERT_LIBRARIES}"
-    elif [[ -f out/lib/libmimalloc.dylib ]]; then
-        export DYLD_INSERT_LIBRARIES="$PWD/out/lib/libmimalloc.dylib${DYLD_INSERT_LIBRARIES:+:$DYLD_INSERT_LIBRARIES}"
-    fi
+    # Performance optimizations for MoltenVK on Apple Silicon / macOS
     export MVK_CONFIG_FAST_MATH_ENABLED="${MVK_CONFIG_FAST_MATH_ENABLED:-0}"
     export MVK_CONFIG_RESUME_LOST_DEVICE="${MVK_CONFIG_RESUME_LOST_DEVICE:-1}"
     export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS="${MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS:-1}"

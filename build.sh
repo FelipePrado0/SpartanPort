@@ -164,7 +164,11 @@ if [[ $is_darwin -eq 1 ]]; then
     if [[ -f third_party/mimalloc/src/static.c ]]; then
         mkdir -p out/lib bin/lib
         if [[ ! -f out/lib/libmimalloc.dylib || -n $(find third_party/mimalloc -newer out/lib/libmimalloc.dylib 2>/dev/null) ]]; then
-            "$CC" -arch x86_64 -O3 -fno-math-errno -fPIC -dynamiclib -install_name @rpath/libmimalloc.dylib \
+            mimalloc_arch=(-arch x86_64)
+            if "$CC" -arch arm64 -dM -E - < /dev/null >/dev/null 2>&1; then
+                mimalloc_arch+=(-arch arm64)
+            fi
+            "$CC" "${mimalloc_arch[@]}" -O3 -fno-math-errno -fPIC -dynamiclib -install_name @rpath/libmimalloc.dylib \
                 -Ithird_party/mimalloc/include -DMI_MALLOC_OVERRIDE=1 -DMI_OSX_ZONE=1 -DMI_OSX_INTERPOSE=1 \
                 third_party/mimalloc/src/static.c -o out/lib/libmimalloc.dylib
             cp out/lib/libmimalloc.dylib bin/lib/ 2>/dev/null || true
