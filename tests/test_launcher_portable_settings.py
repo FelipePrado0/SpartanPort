@@ -35,7 +35,7 @@ class PortableSettingsMigrationTest(unittest.TestCase):
         self.legacy = self.legacy_dir / 'settings.json'
 
     def test_copies_legacy_config_and_icon_when_portable_missing(self):
-        self.legacy.write_text('{"game_dir": "D:/Games/GoW3", "ui_scale": "2"}', encoding='utf-8')
+        self.legacy.write_text('{"game_dir": "D:/Games/SpartanPort", "ui_scale": "2"}', encoding='utf-8')
         legacy_icon = self.legacy_dir / 'game_icon.ico'
         legacy_icon.write_bytes(b'synthetic icon data')
 
@@ -43,7 +43,7 @@ class PortableSettingsMigrationTest(unittest.TestCase):
 
         self.assertTrue(self.target.is_file())
         self.assertEqual(json.loads(self.target.read_text(encoding='utf-8')),
-                         {'game_dir': 'D:/Games/GoW3', 'ui_scale': '2'})
+                         {'game_dir': 'D:/Games/SpartanPort', 'ui_scale': '2'})
         target_icon = self.data_dir / 'game_icon.ico'
         self.assertTrue(target_icon.is_file())
         self.assertEqual(target_icon.read_bytes(), b'synthetic icon data')
@@ -62,12 +62,12 @@ class PortableSettingsMigrationTest(unittest.TestCase):
         self.assertFalse(self.target.is_file())
 
     def test_load_app_settings_migrates_and_merges_defaults(self):
-        self.legacy.write_text('{"game_dir": "C:/Games/GoW3"}', encoding='utf-8')
+        self.legacy.write_text('{"game_dir": "C:/Games/SpartanPort"}', encoding='utf-8')
         with mock.patch.object(launcher, 'CONFIG_FILE', self.target), \
                 mock.patch.object(launcher, 'LEGACY_CONFIG_FILE', self.legacy):
             settings = launcher.load_app_settings(self.target)
 
-        self.assertEqual(settings['game_dir'], 'C:/Games/GoW3')
+        self.assertEqual(settings['game_dir'], 'C:/Games/SpartanPort')
         self.assertEqual(settings['ui_scale'], launcher.APP_DEFAULTS['ui_scale'])
         self.assertTrue(self.target.is_file())
 
