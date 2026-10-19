@@ -48,6 +48,13 @@ podman run --rm -it -v "$PWD:/src:ro" -v "$PWD/out-rpm:/rpm" fedora:44 bash -lc 
     https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/v3.1.0/include/vk_mem_alloc.h
   vma_sha=f063056705f2cd0ddd8d9da034f673b09814ca96aa45a958e9e687bf9f3fed15
   echo "$vma_sha  /tmp/vk_mem_alloc.h" | sha256sum --check -
+  # Fedora 44 ships Vulkan-Headers 1.4.341; FSR 4.1.1 needs the extension added in
+  # 1.4.344. Build against the headers the AppImage CI pins (build-time only).
+  vk_headers=vulkan-headers-1.4.357.0.tar.gz
+  vk_headers_sha=e87dce08116151f6b6d7de6b6faf41498e87e6cf848ff16fa3bd5402190ad4a3
+  curl -fsSL -o "$topdir/SOURCES/$vk_headers" \
+    https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/vulkan-sdk-1.4.357.0.tar.gz
+  echo "$vk_headers_sha  $topdir/SOURCES/$vk_headers" | sha256sum --check -
   VMA_HEADER=/tmp/vk_mem_alloc.h VMA_SHA256=$vma_sha \
     bash packaging/linux/rpm/make-tarball.sh "$source_version" HEAD "$topdir/SOURCES/gow3-$source_version.tar.gz"
   source_sha=$(sha256sum "$topdir/SOURCES/gow3-$source_version.tar.gz" | cut -d" " -f1)
@@ -65,8 +72,21 @@ podman run --rm -it -v "$PWD:/src:ro" -v "$PWD/out-rpm:/rpm" fedora:44 bash -lc 
 ```
 
 The tarball build refuses a dirty checkout and uninitialized/divergent submodules. It
-never applies a patch twice and makes no network access; the only downloads are the VMA
-header and the submodules fetched by `git`.
+never applies a patch twice and makes no network access. Provisioning downloads the
+Fedora build/runtime packages, VMA header, Vulkan-Headers archive and submodules;
+these downloads occur outside `rpmbuild` and the tarball generator.
+
+## Vulkan headers
+
+Fedora 44 provides `vulkan-headers` 1.4.341, which does not define
+`VK_VALVE_shader_mixed_float_dot_product`; the extension was added in Vulkan 1.4.344 and
+is required by FSR 4.1.1 (`gpu/shadps4/video_core/renderer_vulkan/vk_instance.cpp`).
+Instead of disabling FSR or patching the source, the RPM builds against the same pinned
+Vulkan-Headers tag the AppImage CI uses (`vulkan-sdk-1.4.357.0`, `Source1`, SHA-256
+verified in `%prep` and in this workflow). The headers are build-time only: the binaries
+still load the system Vulkan loader and drivers at runtime, and a driver without the
+extension keeps FSR 4.1.1 unavailable through the existing feature check. Windows and
+AppImage builds are untouched.
 
 ## Dependencies and `iced-x86`
 

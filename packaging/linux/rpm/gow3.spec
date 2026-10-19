@@ -6,6 +6,11 @@
 %{!?source_sha256: %global source_sha256 1bcd617332614ce452a2733d10a81b36b356d848e7255046d47f01ee00630288}
 %{!?vma_sha256: %global vma_sha256 f063056705f2cd0ddd8d9da034f673b09814ca96aa45a958e9e687bf9f3fed15}
 %{!?snapshot_version: %global snapshot_version 0^20261019git41e9473}
+# Fedora 44 ships Vulkan-Headers 1.4.341, which predates
+# VK_VALVE_shader_mixed_float_dot_product (added in 1.4.344) used by FSR 4.1.1.
+# Build against the same headers the AppImage CI pins; they are build-time only.
+%global vulkan_headers_version 1.4.357.0
+%global vulkan_headers_sha256 e87dce08116151f6b6d7de6b6faf41498e87e6cf848ff16fa3bd5402190ad4a3
 
 Name:           gow3
 Version:        %{snapshot_version}
@@ -18,6 +23,7 @@ URL:            https://github.com/FelipePrado0/gow3_pc
 # It contains the six pinned submodules, pre-applied FSR patches and VMA v3.1.0.
 # It does NOT contain the uncommitted build.sh/CMake changes in the working tree.
 Source0:        gow3-%{source_version}.tar.gz
+Source1:        vulkan-headers-%{vulkan_headers_version}.tar.gz
 ExclusiveArch:  x86_64
 
 BuildRequires:  gcc
@@ -44,6 +50,7 @@ BuildRequires:  cmake(tsl-robin-map)
 BuildRequires:  cmake(miniz)
 BuildRequires:  glslang
 BuildRequires:  patch
+BuildRequires:  grep
 BuildRequires:  python3
 BuildRequires:  desktop-file-utils
 
@@ -79,7 +86,16 @@ included, and codec availability depends on the system FFmpeg libraries.
 
 %prep
 printf '%%s  %%s\n' '%{source_sha256}' '%{SOURCE0}' | sha256sum --check -
+printf '%%s  %%s\n' '%{vulkan_headers_sha256}' '%{SOURCE1}' | sha256sum --check -
 %setup -q -n gow3-%{source_version}
+# Build-only Vulkan headers: needed for VK_VALVE_shader_mixed_float_dot_product
+# (FSR 4.1.1). The extension definitions are compiled into the binaries; the runtime
+# still uses the system Vulkan loader and drivers.
+tar -xf '%{SOURCE1}'
+vh="Vulkan-Headers-vulkan-sdk-%{vulkan_headers_version}/include/vulkan"
+test -f "$vh/vulkan_core.h"
+grep -q VK_VALVE_SHADER_MIXED_FLOAT_DOT_PRODUCT_EXTENSION_NAME "$vh/vulkan_core.h"
+grep -q PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE "$vh/vulkan.hpp"
 printf '%%s  %%s\n' '%{vma_sha256}' gpu/third_party/vk_mem_alloc.h | sha256sum --check -
 # The archive is already patched: validate, never apply these patches again.
 for p in gpu/patches/fsr-vulkan/*.patch; do
@@ -112,6 +128,11 @@ for f in LICENSE launcher/OFL-Cinzel.txt \
 done
 # The VMA MIT notice is the initial comment of this verified single header.
 sed -n '1,22p' gpu/third_party/vk_mem_alloc.h > rpm-licenses/LICENSE-VMA
+# Vulkan-Hpp contributes inline code; retain the Khronos notice and MIT terms.
+install -Dpm0644 Vulkan-Headers-vulkan-sdk-%{vulkan_headers_version}/LICENSE.md \
+    rpm-licenses/vulkan-headers/LICENSE.md
+install -Dpm0644 Vulkan-Headers-vulkan-sdk-%{vulkan_headers_version}/LICENSES/MIT.txt \
+    rpm-licenses/vulkan-headers/MIT.txt
 
 %build
 %set_build_flags
@@ -133,6 +154,7 @@ cmake -S gpu -B out/gpu -G Ninja \
     -DGOW3_PGO=off -DGOW3_LTO=OFF \
     -DCMAKE_DISABLE_FIND_PACKAGE_VulkanMemoryAllocator=ON \
     -DVMA_INCLUDE_DIR="$PWD/gpu/third_party" \
+    -DVulkan_INCLUDE_DIR="$PWD/Vulkan-Headers-vulkan-sdk-%{vulkan_headers_version}/include" \
     -DCMAKE_DISABLE_FIND_PACKAGE_magic_enum=ON
 cmake --build out/gpu --target gow3gpu --parallel %{_smp_build_ncpus}
 

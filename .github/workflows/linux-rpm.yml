@@ -67,6 +67,16 @@ jobs:
             https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/v3.1.0/include/vk_mem_alloc.h
           echo "$vma_sha  $vma" | sha256sum --check -
 
+          # Fedora 44 has Vulkan-Headers 1.4.341, older than the
+          # VK_VALVE_shader_mixed_float_dot_product used by FSR 4.1.1 (1.4.344).
+          # Build against the same headers the AppImage CI pins.
+          vk_headers=vulkan-headers-1.4.357.0.tar.gz
+          vk_headers_sha=e87dce08116151f6b6d7de6b6faf41498e87e6cf848ff16fa3bd5402190ad4a3
+          curl --fail --location --proto '=https' --proto-redir '=https' \
+            --output "$topdir/SOURCES/$vk_headers" \
+            https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/vulkan-sdk-1.4.357.0.tar.gz
+          echo "$vk_headers_sha  $topdir/SOURCES/$vk_headers" | sha256sum --check -
+
           VMA_HEADER=$vma VMA_SHA256=$vma_sha \
             bash packaging/linux/rpm/make-tarball.sh \
               "$source_version" "$COMMIT" "$topdir/SOURCES/gow3-$source_version.tar.gz"
