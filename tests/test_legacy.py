@@ -16,30 +16,11 @@ class LegacyTest(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.config_root = self.root / 'appdata'
-        self.config = self.config_root / 'spartanport-launcher'
         self.data = self.root / 'port'
         self.data.mkdir()
 
     def migrate(self, data=None, home=None):
-        return legacy.migrate(self.config, data or self.data, home=home or self.root / 'home', windows=False)
-
-    def test_launcher_settings_are_copied_and_kept(self):
-        old = self.config_root / f'{OLD}-launcher'
-        old.mkdir(parents=True)
-        (old / 'settings.json').write_text('{"game_dir": "E:/game"}', encoding='utf-8')
-        self.migrate()
-        self.assertEqual((self.config / 'settings.json').read_text(encoding='utf-8'), '{"game_dir": "E:/game"}')
-        self.assertTrue((old / 'settings.json').is_file())  # the old folder stays
-
-    def test_existing_new_settings_are_never_overwritten(self):
-        old = self.config_root / f'{OLD}-launcher'
-        old.mkdir(parents=True)
-        (old / 'settings.json').write_text('old', encoding='utf-8')
-        self.config.mkdir(parents=True)
-        (self.config / 'settings.json').write_text('new', encoding='utf-8')
-        self.migrate()
-        self.assertEqual((self.config / 'settings.json').read_text(encoding='utf-8'), 'new')
+        return legacy.migrate(data or self.data, home=home or self.root / 'home', windows=False)
 
     def test_game_settings_file_is_copied_and_kept(self):
         (self.data / f'{OLD}.ini').write_text('display_mode=borderless\n', encoding='utf-8')
@@ -86,7 +67,7 @@ class LegacyTest(unittest.TestCase):
 
     def test_nothing_to_move_is_quiet(self):
         self.assertEqual(self.migrate(), [])
-        self.assertFalse(self.config.exists())
+        self.assertFalse((self.data / legacy.MARKER).exists())
 
     def test_old_menu_entry_of_ours_is_removed_and_a_hand_made_one_kept(self):
         home = self.root / 'home'
@@ -97,7 +78,7 @@ class LegacyTest(unittest.TestCase):
         self.migrate(home=home)
         self.assertFalse(ours.exists())
         ours.write_text('[Desktop Entry]\nExec=by hand\n', encoding='utf-8')
-        self.config.joinpath(legacy.MARKER).unlink()
+        self.data.joinpath(legacy.MARKER).unlink()
         self.migrate(home=home)
         self.assertTrue(ours.exists())
 
@@ -133,6 +114,83 @@ class LegacyTest(unittest.TestCase):
         (port / 'SpartanPort.exe').write_bytes(b'launcher')
         legacy.remove_leftovers(port)
         self.assertTrue((port / legacy.LEGACY_EXE).exists())
+
+
+class UpgradeFromFormerNameTest(unittest.TestCase):
+    """A player of the last release under the former name starts SpartanPort: the launcher settings
+    (then in AppData or ~/.config) land next to the game settings, and saves stay or are copied."""
+
+    def setUp(self):
+        import sys
+        sys.path.insert(0, str(ROOT / 'launcher'))
+        import spartanport_launcher_win as launcher
+        self.launcher = launcher
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.old_config = self.root / 'config' / f'{OLD}-launcher'
+        self.old_config.mkdir(parents=True)
+        (self.old_config / 'settings.json').write_text('{"game_dir": "E:/game"}', encoding='utf-8')
+        (self.old_config / 'game_icon.ico').write_bytes(b'icon')
+
+    def start(self, data, windows):
+        from unittest import mock
+        with mock.patch.multiple(self.launcher, DATA_DIR=data, CONFIG_DIR=data, CONFIG_FILE=data / 'settings.json',
+                                 LEGACY_CONFIG_FILE=self.old_config / 'settings.json', WINDOWS=windows,
+                                 FROZEN=False):
+            self.launcher.move_from_legacy_name()
+            return self.launcher.load_app_settings()
+
+    def test_the_old_settings_folder_name_is_the_former_one(self):
+        self.assertEqual(self.launcher.LEGACY_CONFIG_FILE.parent.name, f'{OLD}-launcher')
+
+    def test_windows_settings_move_and_saves_stay(self):
+        port = self.root / 'port'  # the data folder is the port folder; an update keeps it
+        (port / 'user' / 'savedata').mkdir(parents=True)
+        (port / 'user' / 'savedata' / 'slot0.bin').write_bytes(b'save')
+        (port / f'{OLD}.ini').write_text('engine_fps=60\n', encoding='utf-8')
+        settings = self.start(port, windows=True)
+        self.assertEqual(settings['game_dir'], 'E:/game')
+        self.assertEqual((port / 'game_icon.ico').read_bytes(), b'icon')
+        self.assertEqual((port / 'spartanport.ini').read_text(encoding='utf-8'), 'engine_fps=60\n')
+        self.assertEqual((port / 'user' / 'savedata' / 'slot0.bin').read_bytes(), b'save')
+        self.assertTrue((self.old_config / 'settings.json').is_file())
+
+    def test_linux_appimage_settings_and_saves_are_copied(self):
+        share = self.root / 'share'
+        old = share / OLD
+        (old / 'user' / 'savedata').mkdir(parents=True)
+        (old / 'user' / 'savedata' / 'slot0.bin').write_bytes(b'save')
+        (old / f'{OLD}.ini').write_text('engine_fps=60\n', encoding='utf-8')
+        new = share / 'spartanport'
+        new.mkdir()  # AppRun makes it
+        settings = self.start(new, windows=False)
+        self.assertEqual(settings['game_dir'], 'E:/game')
+        self.assertEqual((new / 'game_icon.ico').read_bytes(), b'icon')
+        self.assertEqual((new / 'user' / 'savedata' / 'slot0.bin').read_bytes(), b'save')
+        self.assertEqual((new / 'spartanport.ini').read_text(encoding='utf-8'), 'engine_fps=60\n')
+        self.assertTrue((old / 'user' / 'savedata' / 'slot0.bin').is_file())
+
+    def test_settings_already_in_the_old_data_folder_win(self):
+        """A build between the release and the rename kept settings.json in the data folder: it is
+        newer than the one in ~/.config."""
+        share = self.root / 'share'
+        (share / OLD).mkdir(parents=True)
+        (share / OLD / 'settings.json').write_text('{"game_dir": "/newer"}', encoding='utf-8')
+        new = share / 'spartanport'
+        new.mkdir()
+        self.assertEqual(self.start(new, windows=False)['game_dir'], '/newer')
+
+    def test_start_moves_before_reading_settings(self):
+        import sys
+        from unittest import mock
+        calls = []
+        with mock.patch.object(self.launcher, 'move_from_legacy_name', lambda: calls.append('move')), \
+                mock.patch.object(self.launcher, 'load_app_settings',
+                                  side_effect=lambda: calls.append('load') or sys.exit(0)), \
+                mock.patch.object(sys, 'argv', ['launcher']), self.assertRaises(SystemExit):
+            self.launcher.main()
+        self.assertEqual(calls, ['move', 'load'])
 
 
 class LauncherStartTest(unittest.TestCase):

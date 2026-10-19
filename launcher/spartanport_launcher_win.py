@@ -55,7 +55,7 @@ DATA_DIR = Path(os.environ.get('SPARTAN_DATA_DIR', PORT_DIR))
 CONFIG_DIR = DATA_DIR
 CONFIG_FILE = CONFIG_DIR / 'settings.json'
 LEGACY_CONFIG_DIR = (Path(os.environ.get('APPDATA', Path.home())) if WINDOWS else
-                     Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')) / 'gow3-launcher'
+                     Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')) / legacy.LEGACY_CONFIG_DIR
 LEGACY_CONFIG_FILE = LEGACY_CONFIG_DIR / 'settings.json'
 MOD_PRESETS = DATA_DIR / 'mods_presets.json'
 APP_NAME = 'SpartanPort'
@@ -3354,7 +3354,7 @@ def move_from_legacy_name():
     """Settings, saves and shortcuts from before the rename (scripts/legacy.py). Never stops the
     launcher: a failed copy is tried again at the next start."""
     try:
-        for line in legacy.migrate(CONFIG_DIR, DATA_DIR, windows=WINDOWS):
+        for line in legacy.migrate(DATA_DIR, windows=WINDOWS):
             print(f'Rename: {line}', flush=True)
         if WINDOWS and FROZEN and UPDATE_DIR not in PORT_DIR.parents:
             legacy.remove_leftovers(PORT_DIR)
@@ -3369,7 +3369,7 @@ def main():
     if args and args[0] in ('--run', '--script'):
         sys.exit(run_role(args))
     if args[:1] != ['--install-update']:  # that copy runs from the download, not from the player's folder
-        move_from_legacy_name()
+        move_from_legacy_name()  # before load_app_settings: its copy must not mask the old data folder's
     settings = load_app_settings()
     LANG = settings.get('ui_language') or windows_language()
     if not WINDOWS:

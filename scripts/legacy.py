@@ -16,6 +16,7 @@ LEGACY_PLAY_EXE = f'Play {LEGACY_TITLE}.exe'     # the windowless start that sho
 LEGACY_ENV = 'GOW3_'
 LEGACY_PATCH_FILE = 'God_of_War_III_Remastered.xml'  # an older build's patches, left in patches/ by an update
 LEGACY_DESKTOP_MARKER = 'X-GOW3-Integration=true'
+LEGACY_CONFIG_DIR = f'{LEGACY_NAME}-launcher'  # the launcher's settings, in AppData or ~/.config
 NEW_NAME, NEW_ENV = 'spartanport', 'SPARTAN_'
 MARKER = 'legacy-migrated'
 # Old binaries an update leaves behind, with the file that replaced each one.
@@ -74,17 +75,15 @@ def copy_game_settings(data_dir):
     return False
 
 
-def migrate(config_dir, data_dir, home=None, windows=os.name == 'nt'):
-    """Copies the launcher's settings folder, the data folder (Linux) and the game settings file from
-    their old names. Returns what was done, as text lines for the log."""
-    config_dir, data_dir = Path(config_dir), Path(data_dir)
+def migrate(data_dir, home=None, windows=os.name == 'nt'):
+    """Copies the data folder (Linux) and the game settings file from their old names. The launcher's
+    settings come from LEGACY_CONFIG_DIR afterwards (migrate_portable_settings in the launcher).
+    Returns what was done, as text lines for the log."""
+    data_dir = Path(data_dir)
     home = Path(home or Path.home())
-    if (config_dir / MARKER).is_file():
+    if (data_dir / MARKER).is_file():
         return []
     done = []
-    old_config = config_dir.parent / f'{LEGACY_NAME}-launcher'
-    if old_config.is_dir():
-        done.append(f'settings: {_merge(old_config, config_dir)} files from {old_config}')
     old_data = data_dir.parent / LEGACY_NAME
     if data_dir.name == NEW_NAME and old_data.is_dir():
         done.append(f'data: {_merge(old_data, data_dir)} files from {old_data}')
@@ -99,9 +98,9 @@ def migrate(config_dir, data_dir, home=None, windows=os.name == 'nt'):
                 done.append(f'menu: removed {entry}')
         except OSError:
             pass
-    if done or old_config.is_dir() or old_data.is_dir() or old_ini.is_file():
-        config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / MARKER).write_text('\n'.join(done) + '\n', encoding='utf-8')
+    if done or old_data.is_dir() or old_ini.is_file():
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (data_dir / MARKER).write_text('\n'.join(done) + '\n', encoding='utf-8')
     return done
 
 
