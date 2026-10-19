@@ -438,24 +438,32 @@ const Buffer* BufferCache::GetArena(u64 first_block, u64 last_block) {
 
     LOG_WARNING(Render, "Migrating arena");
 
-    const u64 first_addr = first_arena ? first_arena->cpu_addr : (first_page << arena_page_bits);
-    const u64 first_size = first_arena ? first_arena->size_bytes : arena_page_size;
-    const u64 last_size = last_arena ? last_arena->size_bytes : arena_page_size;
-
-    const u64 base_block = first_addr >> block_shift;
-    const u64 total_size = first_size + last_size;
-    const u64 end_block = (first_addr + total_size) >> block_shift;
+    const u64 num_pages = last_page - first_page + 1;
+    const u64 first_addr = first_page << arena_page_bits;
+    const u64 total_size = num_pages << arena_page_bits;
+    const u64 base_block = first_page << blocks_per_arena_page_shift;
+    const u64 end_block = (first_page + num_pages) << blocks_per_arena_page_shift;
     auto* new_arena = &arenas.emplace_back(instance, first_addr, total_size, MemoryType::Sparse);
     auto* bind = BindsForArena(new_arena);
     resident_ranges.ForEachInRange(base_block, end_block, [&](const Backing& backing) {
         const u64 start = std::max(base_block, backing.start);
         const u64 end = std::min(end_block, backing.end);
-        bind->binds.push_back(vk::SparseMemoryBind{
-            .resourceOffset = (start - base_block) << block_shift,
-            .size = (end - start) << block_shift,
-            .memory = backing.memory,
-            .memoryOffset = backing.offset + ((start - backing.start) << block_shift),
-        });
+        const u64 res_offset = (start - base_block) << block_shift;
+        const u64 bind_size = (end - start) << block_shift;
+        const u64 mem_offset = backing.offset + ((start - backing.start) << block_shift);
+        if (!bind->binds.empty() &&
+            bind->binds.back().memory == backing.memory &&
+            bind->binds.back().resourceOffset + bind->binds.back().size == res_offset &&
+            bind->binds.back().memoryOffset + bind->binds.back().size == mem_offset) {
+            bind->binds.back().size += bind_size;
+        } else {
+            bind->binds.push_back(vk::SparseMemoryBind{
+                .resourceOffset = res_offset,
+                .size = bind_size,
+                .memory = backing.memory,
+                .memoryOffset = mem_offset,
+            });
+        }
     });
 
     // Synchronize BDA page table entries when arenas migrate during heavy asset streaming transitions
@@ -499,12 +507,10 @@ const Buffer* BufferCache::GetArena(u64 first_block, u64 last_block) {
         runtime.FlushBarriers();
     }
 
-    const u64 start_page = first_addr >> arena_page_bits;
-    const u64 num_total_pages = total_size >> arena_page_bits;
-    ASSERT_MSG(start_page + num_total_pages <= address_space.size(),
+    ASSERT_MSG(first_page + num_pages <= address_space.size(),
                "Arena pages exceed address space");
-    for (u32 page = 0; page < num_total_pages; ++page) {
-        address_space[start_page + page] = new_arena;
+    for (u32 page = 0; page < num_pages; ++page) {
+        address_space[first_page + page] = new_arena;
     }
     return new_arena;
 }
@@ -582,16 +588,25 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
 
         LOG_INFO(Render, "Making range start={}, end={} resident", backing.start, backing.end);
 
-        const auto& bind = binds->binds.emplace_back(vk::SparseMemoryBind{
-            .resourceOffset = (range.start << block_shift) - arena->cpu_addr,
-            .size = (range.end - range.start) << block_shift,
-            .memory = device_memory,
-            .memoryOffset = memory_offset,
-        });
-        memory_offset += bind.size;
+        const u64 res_offset = (range.start << block_shift) - arena->cpu_addr;
+        const u64 bind_size = (range.end - range.start) << block_shift;
+        if (!binds->binds.empty() &&
+            binds->binds.back().memory == device_memory &&
+            binds->binds.back().resourceOffset + binds->binds.back().size == res_offset &&
+            binds->binds.back().memoryOffset + binds->binds.back().size == memory_offset) {
+            binds->binds.back().size += bind_size;
+        } else {
+            binds->binds.emplace_back(vk::SparseMemoryBind{
+                .resourceOffset = res_offset,
+                .size = bind_size,
+                .memory = device_memory,
+                .memoryOffset = memory_offset,
+            });
+        }
+        memory_offset += bind_size;
 
-        for (u32 block = 0; block < bind.size; block += block_size) {
-            *(bda_addrs++) = arena->BufferDeviceAddress() + bind.resourceOffset + block;
+        for (u64 block = 0; block < bind_size; block += block_size) {
+            *(bda_addrs++) = arena->BufferDeviceAddress() + res_offset + block;
         }
         const u64 copy_size = (backing.end - backing.start) * sizeof(vk::DeviceAddress);
         const u64 dst_offset = backing.start * sizeof(vk::DeviceAddress);
