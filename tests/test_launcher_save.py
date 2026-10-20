@@ -1,4 +1,5 @@
 """The Save button: inactive until a setting differs from what the files hold; writes them on click."""
+import json
 import os
 import shutil
 import sys
@@ -18,7 +19,7 @@ except ImportError:  # pragma: no cover
     tk = None
 
 
-@unittest.skipUnless(sys.platform == 'win32' and tk, 'needs Windows and Tk')
+@unittest.skipUnless(tk, 'needs Tk')
 class LauncherOverTemporaryFiles(unittest.TestCase):
     """A real launcher window over a temporary settings folder: the user's files are never touched."""
     INI = None  # spartanport.ini the launcher opens over, when a test needs one
@@ -138,6 +139,7 @@ class SaveButtonTest(LauncherOverTemporaryFiles):
         self.app.show('graphics')
         self.app.var('ui_language', 'app').set('ru')
         self.app.save()
+        self.root.update_idletasks()
         self.assertEqual(launcher.LANG, 'ru')
         self.assertEqual(str(self.app.play_button['text']), 'ИГРАТЬ')
         self.assertFalse(self.app.var('vsync', 'ini').get())  # the settings stay
@@ -150,8 +152,47 @@ class SaveButtonTest(LauncherOverTemporaryFiles):
         self.app.status.configure(text='The game is running.', fg=launcher.TEXT)
         self.app.var('ui_language', 'app').set('ru')
         self.app.save()
+        self.root.update_idletasks()
         self.assertEqual(str(self.app.status['text']), 'The game is running.')
         self.assertEqual(str(self.app.status['fg']), launcher.TEXT)
+
+    def test_saving_without_language_or_scale_change_does_not_rebuild(self):
+        with mock.patch.object(self.app, 'rebuild') as mock_rebuild:
+            self.app.var('vsync', 'ini').set(False)
+            self.app.save()
+            self.root.update_idletasks()
+            mock_rebuild.assert_not_called()
+
+    def test_repeated_language_switching_preserves_page_and_cleans_traces(self):
+        self.app.show('advanced')
+        expected_play_texts = {'pt': 'JOGAR', 'ru': 'ИГРАТЬ', 'zh': '开始游戏', 'en': 'PLAY'}
+        for target_lang in ('pt', 'ru', 'zh', 'en'):
+            self.app.var('ui_language', 'app').set(target_lang)
+            self.assertEqual(self.save_state(), 'normal')
+            self.app.save()
+            self.root.update_idletasks()
+            self.assertEqual(launcher.LANG, target_lang)
+            self.assertEqual(self.app.current_page, 'advanced')
+            self.assertEqual(str(self.app.play_button['text']), expected_play_texts[target_lang])
+            self.assertEqual(self.save_state(), 'disabled')
+
+            config = json.loads(launcher.CONFIG_FILE.read_text(encoding='utf-8'))
+            self.assertEqual(config.get('ui_language'), target_lang)
+
+            for kind in self.app.control_vars.values():
+                for var in kind.values():
+                    self.assertLessEqual(len(var.trace_info()), 1)
+
+    def test_save_button_event_generates_clean_language_rebuild(self):
+        self.app.show('advanced')
+        self.app.var('ui_language', 'app').set('pt')
+        self.assertEqual(self.save_state(), 'normal')
+        self.app.save_button.state(['pressed'])
+        self.app.save_button.event_generate('<ButtonRelease-1>')
+        self.root.update()
+        self.assertEqual(launcher.LANG, 'pt')
+        self.assertEqual(self.app.current_page, 'advanced')
+        self.assertEqual(str(self.app.play_button['text']), 'JOGAR')
 
     def test_nothing_is_written_before_saving(self):
         self.app.var('vsync', 'ini').set(False)
@@ -178,11 +219,12 @@ class HiddenUpscalingTest(LauncherOverTemporaryFiles):
                 self.assertEqual(after[key], before[key], key)
         self.app.var('ui_language', 'app').set('ru')
         self.app.save()
+        self.root.update_idletasks()
         self.assertNotIn('upscaler', self.app.vars)
         self.assertEqual(launcher.load_ini()[0]['upscaler'], 'fsr4')
 
 
-@unittest.skipUnless(sys.platform == 'win32' and tk, 'needs Windows and Tk')
+@unittest.skipUnless(tk, 'needs Tk')
 class EverySettingSavesTest(LauncherOverTemporaryFiles):
     """Every option in the window: a change lights Save, saving stores it, a reopened launcher shows it."""
     def setUp(self):
