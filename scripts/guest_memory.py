@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Memory check for the guest memory pool (src/runtime_memory.c) before the game starts.
 
-On Windows the pool is one SEC_COMMIT section of GOW3_DMEM_MB plus the 1 GiB flexible span,
+On Windows the pool is one SEC_COMMIT section of SPARTAN_DMEM_MB plus the 1 GiB flexible span,
 charged in full at start. The 4K patch asks for about 11 GiB of direct memory: on a 16 GB PC
 with a small system managed page file the start then depends on Windows growing the page file
 in time, and the game closes ("cannot create ... MiB of guest memory (error 1450)") when it
@@ -22,7 +22,7 @@ HEADROOM_MB = {'device': 2048, 'cached': 4096, 'host': 4096}
 
 
 def pool_mb(dmem_mb):
-    """The section runtime_memory.c commits for GOW3_DMEM_MB (out of range: the retail size)."""
+    """The section runtime_memory.c commits for SPARTAN_DMEM_MB (out of range: the retail size)."""
     try:
         mb = int(dmem_mb) if dmem_mb else 0
     except ValueError:

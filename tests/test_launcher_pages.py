@@ -4,7 +4,7 @@ import unittest
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
-import gow3_launcher_win as launcher  # noqa: E402
+import spartanport_launcher_win as launcher  # noqa: E402
 
 
 class PagesTest(unittest.TestCase):

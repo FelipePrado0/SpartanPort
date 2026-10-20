@@ -9,7 +9,7 @@
 #include <vector>
 #include "../src/damage_hook.h"
 #include "../src/orb_hook.h"
-#include "gow3_settings.h"
+#include "spartanport_settings.h"
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -49,7 +49,7 @@ static float Damage(bool player, float health, float damage, float taken, float 
     std::memcpy(code, entry, sizeof(entry));
     const uintptr_t stub = Address(code + 64), exit = Address(code + 512);
     std::memcpy(code + sizeof(entry), &stub, 8);
-    assert(gow3_damage_build_stub(code + 64, Address(&taken), Address(&dealt), exit) < 448);
+    assert(spartanport_damage_build_stub(code + 64, Address(&taken), Address(&dealt), exit) < 448);
     const unsigned char leave[] = {0xc5,0xfa,0x11,0x45,0x98, 0x41,0x5d, 0x5d, 0xc3};
     std::memcpy(code + 512, leave, sizeof(leave));
     Seal(code);
@@ -74,7 +74,7 @@ struct Amounts {
 // the prologue the stub replayed.
 static Amounts Pickup(Amounts in, float green, float blue, float gold) {
     unsigned char* code = Executable();
-    assert(gow3_orb_pickup_build_stub(code, Address(&green), Address(&blue), Address(&gold),
+    assert(spartanport_orb_pickup_build_stub(code, Address(&green), Address(&blue), Address(&gold),
                                       Address(code + 512)) < 512);
     const unsigned char leave[] = {0xc5,0xfa,0x11,0x07, 0xc5,0xfa,0x11,0x4f,0x04, 0xc5,0xfa,0x11,0x57,0x08,
                                    0x48,0x83,0xc4,0x18, 0x5b, 0x5d, 0xc3};
@@ -94,15 +94,15 @@ static std::string Read(const char* path) {
 }
 
 int main(int argc, char** argv) {
-    assert(gow3_damage_signature_match(gow3_damage_original, GOW3_DAMAGE_HOOK_LENGTH));
-    assert(!gow3_damage_signature_match(gow3_damage_original, GOW3_DAMAGE_HOOK_LENGTH - 1));
-    assert(gow3_orb_pickup_signature_match(gow3_orb_pickup_original, GOW3_ORB_PICKUP_LENGTH));
+    assert(spartanport_damage_signature_match(spartanport_damage_original, SPARTAN_DAMAGE_HOOK_LENGTH));
+    assert(!spartanport_damage_signature_match(spartanport_damage_original, SPARTAN_DAMAGE_HOOK_LENGTH - 1));
+    assert(spartanport_orb_pickup_signature_match(spartanport_orb_pickup_original, SPARTAN_ORB_PICKUP_LENGTH));
     if (argc > 1) {
         std::ifstream file(argv[1], std::ios::binary);
         std::vector<unsigned char> image((std::istreambuf_iterator<char>(file)), {});
-        assert(image.size() > 0x4000 + GOW3_ORB_PICKUP_OFFSET + GOW3_ORB_PICKUP_LENGTH);
-        assert(gow3_damage_signature_match(image.data() + 0x4000 + GOW3_DAMAGE_HOOK_OFFSET, GOW3_DAMAGE_HOOK_LENGTH));
-        assert(gow3_orb_pickup_signature_match(image.data() + 0x4000 + GOW3_ORB_PICKUP_OFFSET, GOW3_ORB_PICKUP_LENGTH));
+        assert(image.size() > 0x4000 + SPARTAN_ORB_PICKUP_OFFSET + SPARTAN_ORB_PICKUP_LENGTH);
+        assert(spartanport_damage_signature_match(image.data() + 0x4000 + SPARTAN_DAMAGE_HOOK_OFFSET, SPARTAN_DAMAGE_HOOK_LENGTH));
+        assert(spartanport_orb_pickup_signature_match(image.data() + 0x4000 + SPARTAN_ORB_PICKUP_OFFSET, SPARTAN_ORB_PICKUP_LENGTH));
     }
 
     float left;
@@ -127,16 +127,16 @@ int main(int argc, char** argv) {
                "blue_orb_multiplier=1000\ngold_orb_multiplier=0\n";
     }
 #ifdef _WIN32
-    _putenv_s("GOW3_CONFIG", path);
+    _putenv_s("SPARTAN_CONFIG", path);
 #else
-    setenv("GOW3_CONFIG", path, 1);
+    setenv("SPARTAN_CONFIG", path, 1);
 #endif
-    auto& v = Gow3Settings::Get();
-    Gow3Settings::Load();
+    auto& v = SpartanSettings::Get();
+    SpartanSettings::Load();
     assert(v.damage_dealt == 2.5f && v.damage_taken == 0.5f && v.green_orb_multiplier == 3.0f);
     assert(v.blue_orb_multiplier == 100.0f && v.gold_orb_multiplier == 0.1f);
     v.gold_orb_multiplier = 4.0f;
-    Gow3Settings::Save();
+    SpartanSettings::Save();
     const std::string saved = Read(path);
     for (const char* line : {"damage_dealt=2.500\n", "damage_taken=0.500\n", "green_orb_multiplier=3.000\n",
                              "blue_orb_multiplier=100.000\n", "gold_orb_multiplier=4.000\n"}) {

@@ -158,10 +158,10 @@ share mods: it only layers the mods in your own mods folder over your own copy o
 
 ## How to lay out a mod
 
-The default folder is `mods/` in the data folder: on Windows, next to `God of War III.exe`; on
-Linux (AppImage), in `~/.local/share/gow3`. **Folders → Mods folder** chooses another one.
+The default folder is `mods/` in the data folder: on Windows, next to `SpartanPort.exe`; on
+Linux (AppImage), in `~/.local/share/spartanport`. **Folders → Mods folder** chooses another one.
 
-Each mod has its own folder that mirrors the game's tree. In GOW3PC the data is in `EXEC/` and in
+Each mod has its own folder that mirrors the game's tree. In this game the data is in `EXEC/` and in
 one folder per language (`ENGLISH/`, `PORTUGUESE/`, ...):
 
 ```text
@@ -283,7 +283,7 @@ The order and the disabled mods are kept in `mods.json` in the data folder:
 ```
 
 New folders are enabled and added at the end of the list, in alphabetical order.
-`GOW3_MODS_CONFIG` changes the path of that file.
+`SPARTAN_MODS_CONFIG` changes the path of that file.
 
 The presets of the Mods page are kept in `mods_presets.json`, one entry per name, with the same two
 lists:
@@ -297,8 +297,8 @@ lists:
 From a terminal:
 
 ```sh
-GOW3_GAME_DIR=/path/CUSA01623 GOW3_MODS_DIR=/path/mods python run.py
-GOW3_GAME_DIR=/path/CUSA01623 GOW3_MODS_ENABLED=0 python run.py
+SPARTAN_GAME_DIR=/path/CUSA01623 SPARTAN_MODS_DIR=/path/mods python run.py
+SPARTAN_GAME_DIR=/path/CUSA01623 SPARTAN_MODS_ENABLED=0 python run.py
 ```
 
 ## Mods with game patches
@@ -326,7 +326,7 @@ be installed. The PlayStation style keeps the original files; the keyboard style
 controller drawing. The copies are made in the local cache, without changing the player's dump.
 
 The drawings and the tool in `tools/controller_diagrams/` come from Kristian Andreev's contribution
-in [PR #234](https://github.com/FelipePrado0/gow3_pc/pull/234), under GPL-2.0-or-later.
+in [PR #234](https://github.com/FelipePrado0/SpartanPort/pull/234), under GPL-2.0-or-later.
 `scripts/controller_diagrams/*.png` contains only those drawings, with no game files. To regenerate
 them, the tool uses Pillow, NumPy and scikit-image, with the Cinzel font shipped with the project
 (OFL). Those drawing dependencies are not needed to use the PNGs in the launcher.

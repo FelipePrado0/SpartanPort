@@ -15,19 +15,19 @@ sounds or text instead, see the [mods guide](MODS.md).
 
 ## Built-in patches
 
-The built-in patches are in `patches/God_of_War_III_Remastered.xml`. They are for CUSA01623 and
+The built-in patches are in `patches/CUSA01623.xml`. They are for CUSA01623 and
 CUSA01715, version 01.02, and they find their sites by **signature** (the original bytes around
 each site), so they also work on other builds whose code matches.
 
 | Patch | What it does | Who turns it on | Author |
 |---|---|---|---|
-| **Bug Fix - Startup Black Screen** | Fixes the black screen at start with the FPS counter running: the frame pacing index starts at 2 instead of 0 | Always applied; not shown in the launcher | gow3_pc |
+| **Bug Fix - Startup Black Screen** | Fixes the black screen at start with the FPS counter running: the frame pacing index starts at 2 instead of 0 | Always applied; not shown in the launcher | SpartanPort |
 | **Bug Fix - Texture Corruption Fix** | Fixes corrupted textures by giving the game a larger video arena (more video memory) | Applied whenever the render resolution is **Native**; a resolution patch replaces it | cuesta4 |
 | **Skip Any Video With X Button** | Lets you skip any cinematic with Cross | **Game** page, on by default | cuesta4 |
 | **Skip Intro** | Skips the logos at start | **Game** page, off by default | cuesta4 |
-| **Resolution Patch - &lt;size&gt;** (21 sizes, from 480p to 5120 × 2160) | Sets the render resolution and the video arena; the ultrawide sizes also widen the field of view (Hor+) | **Render resolution** (launcher **Performance** page, or the in-game menu); one at a time | kvicken + cuesta4 (480p, 720p, 1440p, 1800p, 4K); gow3_pc (900p and the ultrawide, 16:10 and 4:3 sizes) |
-| **Frame Rate Patch - 240 FPS** | Raises the engine's frame rate limit and corrects the swing energy so it matches the original 60 Hz simulation | Applied on every start; the chosen **Engine frame rate** (60, 100, 120 or 240) is then written live | kvicken, gow3_pc |
-| Frame Rate Patch - 120 FPS / 100 FPS | The same patch with a limit of 120 or 100 | Not used by the launcher any more; kept for other uses of the file | kvicken / kvicken, gow3_pc |
+| **Resolution Patch - &lt;size&gt;** (21 sizes, from 480p to 5120 × 2160) | Sets the render resolution and the video arena; the ultrawide sizes also widen the field of view (Hor+) | **Render resolution** (launcher **Performance** page, or the in-game menu); one at a time | kvicken + cuesta4 (480p, 720p, 1440p, 1800p, 4K); SpartanPort (900p and the ultrawide, 16:10 and 4:3 sizes) |
+| **Frame Rate Patch - 240 FPS** | Raises the engine's frame rate limit and corrects the swing energy so it matches the original 60 Hz simulation | Applied on every start; the chosen **Engine frame rate** (60, 100, 120, 144, 180 or 240) is then written live | kvicken, SpartanPort |
+| Frame Rate Patch - 120 FPS / 144 FPS / 100 FPS | The same patch with a limit of 120, 144 or 100 | Not used by the launcher any more; kept for other uses of the file | kvicken / kvicken, SpartanPort |
 
 Notes:
 
@@ -38,6 +38,7 @@ Notes:
   much more direct memory, on top of the 5056 MB the retail game has. Nothing has to be set by hand.
 - **Frame rate.** The engine rate changes while the game runs (in-game menu, **R3 + L1 + R1** or
   **F9**): every start takes the 240 FPS patch and the port writes the chosen rate into the game.
+  144 FPS is intended for 144 Hz displays; with VSync, it keeps presentation aligned with that refresh rate.
   If the 240 FPS patch is not found in your `eboot.bin`, the highest frame rate patch that is found
   is used; if none is found, the engine stays at the original 60 FPS.
 
@@ -94,7 +95,7 @@ Engine frame rate: 120 FPS, live up to 240
 | `signature found more than once` | The pattern is not unique in your build | A patch author has to make the pattern longer |
 | The 240 FPS patch is skipped and the engine stays at 60 FPS | No frame rate patch matches your build | Report the sha256 from the log |
 | A third-party patch does nothing | Third-party patches only apply to the reference build (below) | Check the sha256 line in the log |
-| The game does not start and the log says `choose one resolution patch, not [...]` | `GOW3_PATCHES` (terminal) names two resolution patches | Name only one; the launcher always passes the one chosen in **Render resolution** |
+| The game does not start and the log says `choose one resolution patch, not [...]` | `SPARTAN_PATCHES` (terminal) names two resolution patches | Name only one; the launcher always passes the one chosen in **Render resolution** |
 | The game crashes at start after adding a patch | The patch writes the wrong bytes for your build | Disable it; patches with signatures are safer than fixed addresses |
 
 ## Writing a patch
@@ -109,7 +110,7 @@ per patch:
         <ID>CUSA01623</ID>
         <ID>CUSA01715</ID>
     </TitleID>
-    <Metadata Title="GOW3PC" Name="Skip Any Video With X Button" Note="Allows skipping any cinematic with Cross." Author="cuesta4" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
+    <Metadata Title="SpartanPort" Name="Skip Any Video With X Button" Note="Allows skipping any cinematic with Cross." Author="cuesta4" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
         <PatchList>
             <Line Type="bytes" Address="0x0041b2a3" Value="7542" Pattern="e8 ?? ?? ?? ?? 31 c9 80 3d ?? ?? ?? ?? 00 75 4a" At="14"/>
             <Line Type="bytes" Address="0x0041b2e7" Value="b901000000909090" Pattern="8b 00 eb 05 e8 ?? ?? ?? ?? 85 c0 0f 95 c0 0f b6 c8" At="9"/>
@@ -207,7 +208,7 @@ page, **Third-party patches** lists them and **Folders → Patches folder** choo
 - Accepted line types: `bytes`, `bytes16/32/64`, `float32/64`, `utf8`, `utf16`. A patch with a `mask`
   line or an address outside the `eboot.bin` is left out whole, with a note in the log.
 - They are applied after the built-in ones: where both write, the third-party one wins.
-- From a terminal: `GOW3_PATCHES_DIR=/path GOW3_PATCHES_CONFIG=/path/patches.json python run.py`.
+- From a terminal: `SPARTAN_PATCHES_DIR=/path SPARTAN_PATCHES_CONFIG=/path/patches.json python run.py`.
 
 To use a third-party patch on any build, port it to the built-in format with signatures and ship it
 in a mod ([Patches in mods](#patches-in-mods)).
@@ -216,6 +217,6 @@ in a mod ([Patches in mods](#patches-in-mods)).
 
 - **kvicken** and **cuesta4**: the resolution, texture fix, 120 FPS and skip video patches,
   published for shadPS4, building on the PS3 patches by **illusion0001**.
-- **gow3_pc** (Felipe Prado): the port of those patches to this build and to signatures, the 100 and
-  240 FPS versions, the startup black screen fix and the ultrawide, 16:10 and 4:3 sizes
+- **SpartanPort** (Felipe Prado): the port of those patches to this build and to signatures, the 100 and
+  144 and 240 FPS versions, the startup black screen fix and the ultrawide, 16:10 and 4:3 sizes
   (`tools/make_ultrawide_patch.py`).

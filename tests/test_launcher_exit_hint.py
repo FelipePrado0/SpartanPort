@@ -7,7 +7,7 @@ from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
-import gow3_launcher_win as launcher  # noqa: E402
+import spartanport_launcher_win as launcher  # noqa: E402
 
 
 class ExitHintTest(unittest.TestCase):
@@ -52,7 +52,7 @@ class HybridGpuTest(unittest.TestCase):
     def test_a_value_set_by_the_player_is_kept(self):
         env = {**os.environ, 'VK_LOADER_LAYERS_DISABLE': 'VK_LAYER_custom'}
         code = (f'import sys; sys.path.insert(0, {str(ROOT / "launcher")!r})\n'
-                'import os, gow3_launcher_win\n'
+                'import os, spartanport_launcher_win\n'
                 'print(os.environ["VK_LOADER_LAYERS_DISABLE"])')
         done = subprocess.run([sys.executable, '-c', code], env=env, capture_output=True, text=True)
         self.assertEqual(done.stdout.strip().splitlines()[-1], 'VK_LAYER_custom')

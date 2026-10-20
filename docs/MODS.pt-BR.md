@@ -159,10 +159,10 @@ sua própria cópia do jogo.
 
 ## Como montar um mod
 
-A pasta padrão é `mods/` no diretório de dados: no Windows, ao lado do `God of War III.exe`; no
-Linux (AppImage), em `~/.local/share/gow3`. **Pastas → Pasta de mods** (*Folders → Mods folder*) escolhe outra.
+A pasta padrão é `mods/` no diretório de dados: no Windows, ao lado do `SpartanPort.exe`; no
+Linux (AppImage), em `~/.local/share/spartanport`. **Pastas → Pasta de mods** (*Folders → Mods folder*) escolhe outra.
 
-Cada mod fica na sua própria pasta e espelha a árvore do jogo. No GOW3PC os dados ficam em `EXEC/`
+Cada mod fica na sua própria pasta e espelha a árvore do jogo. Neste jogo os dados ficam em `EXEC/`
 e numa pasta por idioma (`ENGLISH/`, `PORTUGUESE/`, ...):
 
 ```text
@@ -282,7 +282,7 @@ Ordem e desativações ficam em `mods.json` no diretório de dados:
 {"order": ["Primeiro", "Segundo"], "disabled": ["Primeiro"]}
 ```
 
-Pastas novas entram ativadas, no fim da lista, em ordem alfabética. `GOW3_MODS_CONFIG` muda o
+Pastas novas entram ativadas, no fim da lista, em ordem alfabética. `SPARTAN_MODS_CONFIG` muda o
 caminho desse arquivo.
 
 Os presets da página Mods ficam em `mods_presets.json`, um item por nome, com as mesmas duas listas:
@@ -296,8 +296,8 @@ Os presets da página Mods ficam em `mods_presets.json`, um item por nome, com a
 Pelo terminal:
 
 ```sh
-GOW3_GAME_DIR=/caminho/CUSA01623 GOW3_MODS_DIR=/caminho/mods python run.py
-GOW3_GAME_DIR=/caminho/CUSA01623 GOW3_MODS_ENABLED=0 python run.py
+SPARTAN_GAME_DIR=/caminho/CUSA01623 SPARTAN_MODS_DIR=/caminho/mods python run.py
+SPARTAN_GAME_DIR=/caminho/CUSA01623 SPARTAN_MODS_ENABLED=0 python run.py
 ```
 
 ## Mods com patches de jogo
@@ -326,7 +326,7 @@ mod. O estilo PlayStation mantém os arquivos originais; o estilo de teclado man
 original do controle. As cópias são criadas no cache local, sem modificar o dump do jogador.
 
 Os desenhos e a ferramenta em `tools/controller_diagrams/` vieram da contribuição de Kristian
-Andreev na [PR #234](https://github.com/FelipePrado0/gow3_pc/pull/234), sob GPL-2.0-or-later.
+Andreev na [PR #234](https://github.com/FelipePrado0/SpartanPort/pull/234), sob GPL-2.0-or-later.
 `scripts/controller_diagrams/*.png` contém apenas esses desenhos, sem arquivos do jogo. Para
 regenerá-los, a ferramenta usa Pillow, NumPy e scikit-image, com a fonte Cinzel distribuída no
 projeto (OFL). Essas dependências de desenho não são necessárias para usar os PNGs no launcher.

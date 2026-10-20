@@ -166,10 +166,10 @@ copia del juego.
 ## Cómo armar un mod
 
 La carpeta predeterminada es `mods/` en la carpeta de datos: en Windows, junto a
-`God of War III.exe`; en Linux (AppImage), en `~/.local/share/gow3`. **Carpetas → Carpeta de mods**
+`SpartanPort.exe`; en Linux (AppImage), en `~/.local/share/spartanport`. **Carpetas → Carpeta de mods**
 (*Folders → Mods folder*) elige otra.
 
-Cada mod tiene su propia carpeta, que replica el árbol del juego. En GOW3PC los datos están en `EXEC/`
+Cada mod tiene su propia carpeta, que replica el árbol del juego. En SpartanPort los datos están en `EXEC/`
 y en una carpeta por idioma (`ENGLISH/`, `SPANISH/`, ...):
 
 ```text
@@ -295,7 +295,7 @@ El orden y los mods desactivados se guardan en `mods.json` en la carpeta de dato
 ```
 
 Las carpetas nuevas entran activadas, al final de la lista, en orden alfabético.
-`GOW3_MODS_CONFIG` cambia la ruta de ese archivo.
+`SPARTAN_MODS_CONFIG` cambia la ruta de ese archivo.
 
 Los preajustes de la página Mods se guardan en `mods_presets.json`, una entrada por nombre, con las
 mismas dos listas:
@@ -309,8 +309,8 @@ mismas dos listas:
 Desde un terminal:
 
 ```sh
-GOW3_GAME_DIR=/ruta/CUSA01623 GOW3_MODS_DIR=/ruta/mods python run.py
-GOW3_GAME_DIR=/ruta/CUSA01623 GOW3_MODS_ENABLED=0 python run.py
+SPARTAN_GAME_DIR=/ruta/CUSA01623 SPARTAN_MODS_DIR=/ruta/mods python run.py
+SPARTAN_GAME_DIR=/ruta/CUSA01623 SPARTAN_MODS_ENABLED=0 python run.py
 ```
 
 ## Mods con parches del juego
@@ -340,7 +340,7 @@ teclado mantiene el dibujo original del mando. Las copias se crean en la caché 
 el dump del jugador.
 
 Los dibujos y la herramienta de `tools/controller_diagrams/` vienen de la contribución de Kristian
-Andreev en la [PR #234](https://github.com/FelipePrado0/gow3_pc/pull/234), bajo GPL-2.0-or-later.
+Andreev en la [PR #234](https://github.com/FelipePrado0/SpartanPort/pull/234), bajo GPL-2.0-or-later.
 `scripts/controller_diagrams/*.png` contiene solo esos dibujos, sin archivos del juego. Para
 regenerarlos, la herramienta usa Pillow, NumPy y scikit-image, con la fuente Cinzel incluida en el
 proyecto (OFL). Esas dependencias de dibujo no hacen falta para usar los PNG en el launcher.

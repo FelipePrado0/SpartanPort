@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SpartanPort
+Comment=Unofficial PC port (bring your own game dump)
+Exec=AppRun
+Icon=spartanport
+Categories=Game;
+Terminal=false
+StartupWMClass=spartanport

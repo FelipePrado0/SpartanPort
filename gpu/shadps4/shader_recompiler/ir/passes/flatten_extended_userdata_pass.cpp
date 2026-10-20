@@ -30,7 +30,7 @@ using namespace Xbyak::util;
 
 static Xbyak::CodeGenerator g_srt_codegen(32_MB);
 static const u8* g_srt_codegen_start = nullptr;
-// gow3: the shader compiler and the background cache warm-up append walkers from different
+// spartanport: the shader compiler and the background cache warm-up append walkers from different
 // threads.
 static std::mutex g_srt_codegen_mutex;
 

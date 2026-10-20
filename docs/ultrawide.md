@@ -49,7 +49,7 @@ They come from the game, which is built for 16:9, and are already known; they wi
 Choose a size in **Render resolution** (launcher, **Home** and **Performance**) or in the in-game menu (Insert or
 R3+L2 → Performance → Render resolution). Each one shows its exact size and aspect ratio, for example
 `3440 × 1440 · 21:9 (beta)`. Pick one and **PLAY** (in the game menu: "Apply and restart"). The **Engine frame
-rate** (60, 100, 120 or 240) is a separate choice that works with any resolution.
+rate** (60, 100, 120, 144, 180 or 240) is a separate choice that works with any resolution.
 
 **Older versions (before 2.4.0):** put `Ultrawide.zip` (made with `python tools/zip_mod.py extras/mods/Ultrawide`)
 or the `Ultrawide` folder in the mods folder; a zip is unpacked by itself when the launcher or the game starts. The
@@ -100,13 +100,13 @@ python tools/make_ultrawide_patch.py path/to/eboot.bin 3840 1080 --mod extras/mo
 
 The two numbers are the width and the height. A new size is marked "not tested" in the patch note until it
 is added to `TESTED_IN_GAME` in the tool. A mod's resolutions are listed by the launcher and the game menu from
-its patch file; to make a size built in, also add its entry to `patches/God_of_War_III_Remastered.xml` and its
-name to the resolution lists (`scripts/graphics_options.py`, `gpu/shim/gow3_graphics.h`, `gow3_overlay.cpp`).
+its patch file; to make a size built in, also add its entry to `patches/CUSA01623.xml` and its
+name to the resolution lists (`scripts/graphics_options.py`, `gpu/shim/spartanport_graphics.h`, `spartanport_overlay.cpp`).
 
 ## Reference build addresses
 
 The `Address` attributes the tool writes are addresses in the `6e72…` build. The signatures are what is used.
-The built-in entries in `patches/God_of_War_III_Remastered.xml` were rebased to the reference build
+The built-in entries in `patches/CUSA01623.xml` were rebased to the reference build
 (`d85c8135…`); to do the same for a new entry, run with that build's `eboot.bin`, once per size:
 
 ```
@@ -139,7 +139,7 @@ embaixo, então essas entradas mudam apenas a resolução e o aspect ratio.
 **Como usar:** escolha um tamanho em **Resolução de renderização** (launcher, páginas **Início** e
 **Desempenho**) ou no menu do jogo (Insert ou R3+L2 → Performance → Render resolution). Cada opção mostra a
 resolução exata e a proporção, por exemplo `3440 × 1440 · 21:9 (beta)`. Escolha e clique em **JOGAR**. A **Taxa
-de quadros do motor** (60, 100, 120 ou 240) é uma escolha à parte e vale com qualquer resolução. **Versões antigas
+de quadros do motor** (60, 100, 120, 144, 180 ou 240) é uma escolha à parte e vale com qualquer resolução. **Versões antigas
 (antes da 2.4.0):** coloque o `Ultrawide.zip` (gerado com `python tools/zip_mod.py extras/mods/Ultrawide`) ou a
 pasta `Ultrawide` na pasta de mods; o zip é extraído sozinho ao abrir o launcher ou o jogo.
 

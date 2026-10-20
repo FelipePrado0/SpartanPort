@@ -1,8 +1,8 @@
 /* The guest code (eboot.bin, libc.prx) is compiled for the PS4's Jaguar CPU and runs on the host
  * CPU as it is. A host without one of Jaguar's instruction sets stops with an illegal
  * instruction somewhere inside the game (#33, #66); this check names the missing sets at start. */
-#ifndef GOW3_CPU_CHECK_H
-#define GOW3_CPU_CHECK_H
+#ifndef SPARTAN_CPU_CHECK_H
+#define SPARTAN_CPU_CHECK_H
 #include <stddef.h>
 #include <stdint.h>
 

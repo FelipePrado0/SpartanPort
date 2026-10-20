@@ -9,7 +9,7 @@ from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
-import gow3_launcher_win as launcher  # noqa: E402
+import spartanport_launcher_win as launcher  # noqa: E402
 
 
 class DesktopIntegrationTest(unittest.TestCase):
@@ -19,9 +19,9 @@ class DesktopIntegrationTest(unittest.TestCase):
         self.icon = self.home / 'source.png'
         self.icon.write_bytes(b'png one')
         self.data = self.home / 'data'
-        self.entry = self.home / '.local' / 'share' / 'applications' / 'gow3.desktop'
+        self.entry = self.home / '.local' / 'share' / 'applications' / 'spartanport.desktop'
 
-    def integrate(self, enabled=True, appimage='/games/gow3.AppImage', environment=None):
+    def integrate(self, enabled=True, appimage='/games/spartanport.AppImage', environment=None):
         # The environment is ours, not the shell's: DESKTOPINTEGRATION in the real one must not decide a test.
         return launcher.integrate_desktop(enabled, appimage, self.icon, self.data, home=self.home,
                                           environment={} if environment is None else environment)
@@ -29,17 +29,17 @@ class DesktopIntegrationTest(unittest.TestCase):
     def test_entry_names_the_appimage_the_icon_and_the_window_class(self):
         self.assertEqual(self.integrate(), self.entry)
         text = self.entry.read_text()
-        self.assertIn('Exec="/games/gow3.AppImage"', text)
-        self.assertIn(f'Icon={self.data / "gow3.png"}', text)
-        self.assertIn('StartupWMClass=gow3', text)
-        self.assertEqual((self.data / 'gow3.png').read_bytes(), b'png one')
+        self.assertIn('Exec="/games/spartanport.AppImage"', text)
+        self.assertIn(f'Icon={self.data / "spartanport.png"}', text)
+        self.assertIn('StartupWMClass=spartanport', text)
+        self.assertEqual((self.data / 'spartanport.png').read_bytes(), b'png one')
 
     def test_a_moved_appimage_or_a_new_icon_updates_the_entry(self):
         self.integrate()
         self.icon.write_bytes(b'png two')
-        self.integrate(appimage='/elsewhere/gow3.AppImage')
-        self.assertIn('Exec="/elsewhere/gow3.AppImage"', self.entry.read_text())
-        self.assertEqual((self.data / 'gow3.png').read_bytes(), b'png two')
+        self.integrate(appimage='/elsewhere/spartanport.AppImage')
+        self.assertIn('Exec="/elsewhere/spartanport.AppImage"', self.entry.read_text())
+        self.assertEqual((self.data / 'spartanport.png').read_bytes(), b'png two')
 
     def test_turning_it_off_removes_only_our_entry(self):
         self.integrate()
@@ -58,12 +58,12 @@ class DesktopIntegrationTest(unittest.TestCase):
     def other_entry(self, text, name='gearlever.desktop'):
         path = self.home / '.local' / 'share' / 'applications' / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text('[Desktop Entry]\nName=God of War III Remastered\n' + text)
+        path.write_text('[Desktop Entry]\nName=SpartanPort\n' + text)
         return path
 
     def test_an_entry_of_another_tool_for_the_same_file_means_none_of_ours(self):
-        for exec_line in ('Exec=env DESKTOPINTEGRATION=1 /games/gow3.AppImage',
-                          'Exec="/games/gow3.AppImage" %U', 'TryExec=/games/gow3.AppImage'):
+        for exec_line in ('Exec=env DESKTOPINTEGRATION=1 /games/spartanport.AppImage',
+                          'Exec="/games/spartanport.AppImage" %U', 'TryExec=/games/spartanport.AppImage'):
             with self.subTest(exec_line):
                 other = self.other_entry(exec_line)
                 self.assertIsNone(self.integrate())
@@ -73,7 +73,7 @@ class DesktopIntegrationTest(unittest.TestCase):
     def test_our_entry_is_removed_once_another_tool_integrates_the_file(self):
         self.integrate()
         self.assertTrue(self.entry.exists())
-        self.other_entry('Exec=env DESKTOPINTEGRATION=1 /games/gow3.AppImage')
+        self.other_entry('Exec=env DESKTOPINTEGRATION=1 /games/spartanport.AppImage')
         self.assertIsNone(self.integrate())
         self.assertFalse(self.entry.exists())
 
@@ -94,7 +94,7 @@ class DesktopIntegrationTest(unittest.TestCase):
 
     def test_without_the_environment_argument_the_real_one_is_read(self):
         with mock.patch.dict(os.environ, {'DESKTOPINTEGRATION': '1'}):
-            self.assertIsNone(launcher.integrate_desktop(True, '/games/gow3.AppImage', self.icon, self.data,
+            self.assertIsNone(launcher.integrate_desktop(True, '/games/spartanport.AppImage', self.icon, self.data,
                                                          home=self.home))
         self.assertFalse(self.entry.exists())
 
@@ -107,16 +107,16 @@ class DesktopIntegrationTest(unittest.TestCase):
     def test_a_nul_byte_in_another_entry_is_ignored(self):
         for key in ('Exec', 'TryExec'):
             with self.subTest(key):
-                broken = self.other_bytes(f'[Desktop Entry]\n{key}=/games/\x00gow3.AppImage\n'.encode())
+                broken = self.other_bytes(f'[Desktop Entry]\n{key}=/games/\x00spartanport.AppImage\n'.encode())
                 self.assertEqual(self.integrate(), self.entry)
-                self.assertEqual(launcher.other_desktop_entries(self.entry.parent, '/games/gow3.AppImage'), [])
+                self.assertEqual(launcher.other_desktop_entries(self.entry.parent, '/games/spartanport.AppImage'), [])
                 self.entry.unlink()
                 broken.unlink()
 
     def test_a_broken_entry_does_not_hide_a_good_one(self):
         self.other_bytes(b'[Desktop Entry]\nExec=/a/\x00b\n', 'a-broken.desktop')
-        good = self.other_entry('Exec=env DESKTOPINTEGRATION=1 /games/gow3.AppImage', 'z-good.desktop')
-        self.assertEqual(launcher.other_desktop_entries(self.entry.parent, '/games/gow3.AppImage'), [good])
+        good = self.other_entry('Exec=env DESKTOPINTEGRATION=1 /games/spartanport.AppImage', 'z-good.desktop')
+        self.assertEqual(launcher.other_desktop_entries(self.entry.parent, '/games/spartanport.AppImage'), [good])
         self.assertIsNone(self.integrate())
 
     def test_entries_that_are_not_text_or_not_files_are_ignored(self):
@@ -136,22 +136,22 @@ class DesktopIntegrationTest(unittest.TestCase):
         self.assertEqual(self.integrate(), self.entry)
 
     def test_lines_that_do_not_parse_are_ignored(self):
-        for line in ('Exec="/games/gow3.AppImage', 'Exec=', 'Exec=env', 'Exec=env A=1 B=2', 'Exec', 'TryExec=   ',
+        for line in ('Exec="/games/spartanport.AppImage', 'Exec=', 'Exec=env', 'Exec=env A=1 B=2', 'Exec', 'TryExec=   ',
                      "Exec='unbalanced", 'Exec=%U'):
             with self.subTest(line):
                 self.other_entry(line, 'odd.desktop')
-                self.assertEqual(launcher.other_desktop_entries(self.entry.parent, '/games/gow3.AppImage'), [])
+                self.assertEqual(launcher.other_desktop_entries(self.entry.parent, '/games/spartanport.AppImage'), [])
         self.assertEqual(self.integrate(), self.entry)
 
     def test_a_path_with_spaces_counts(self):
-        real = self.home / 'My Games' / 'gow3.AppImage'
+        real = self.home / 'My Games' / 'spartanport.AppImage'
         real.parent.mkdir()
         real.write_bytes(b'x')
         self.other_entry(f'Exec=env DESKTOPINTEGRATION=1 "{real}" %U', 'spaces.desktop')
         self.assertIsNone(self.integrate(appimage=str(real)))
 
     def test_a_symlink_to_the_file_counts(self):
-        real = self.home / 'My Games' / 'gow3.AppImage'
+        real = self.home / 'My Games' / 'spartanport.AppImage'
         real.parent.mkdir()
         real.write_bytes(b'x')
         link = self.home / 'link.AppImage'
@@ -167,13 +167,13 @@ class DesktopIntegrationTest(unittest.TestCase):
 
     def test_our_own_entry_never_counts_as_another_tool(self):
         self.integrate()
-        self.assertEqual(launcher.other_desktop_entries(self.entry.parent, '/games/gow3.AppImage'), [])
+        self.assertEqual(launcher.other_desktop_entries(self.entry.parent, '/games/spartanport.AppImage'), [])
         self.assertEqual(self.integrate(), self.entry)
 
     def test_a_missing_or_unreadable_applications_folder_means_no_other_tool(self):
-        self.assertEqual(launcher.other_desktop_entries(self.home / 'nowhere', '/games/gow3.AppImage'), [])
+        self.assertEqual(launcher.other_desktop_entries(self.home / 'nowhere', '/games/spartanport.AppImage'), [])
         with mock.patch.object(Path, 'glob', side_effect=PermissionError):
-            self.assertEqual(launcher.other_desktop_entries(self.entry.parent, '/games/gow3.AppImage'), [])
+            self.assertEqual(launcher.other_desktop_entries(self.entry.parent, '/games/spartanport.AppImage'), [])
 
     def test_a_broken_file_never_stops_the_start(self):
         self.other_bytes(b'[Desktop Entry]\nExec=/a/\x00b\n')
@@ -199,7 +199,7 @@ class LinuxShortcutTest(unittest.TestCase):
         self.icon.write_bytes(b'png')
         self.desktop = self.home / 'Desktop'
         self.applications = self.home / '.local' / 'share' / 'applications'
-        self.appimage = '/games/gow3.AppImage'
+        self.appimage = '/games/spartanport.AppImage'
 
     def click(self, environment=None):
         return launcher.write_linux_shortcut(f'"{self.appimage}"', self.appimage, self.icon, self.desktop,
@@ -209,35 +209,35 @@ class LinuxShortcutTest(unittest.TestCase):
         self.desktop.mkdir()
         for _ in range(2):
             created = self.click()
-            self.assertEqual(created, [str(self.applications / 'gow3.desktop'), str(self.desktop / 'God of War III.desktop')])
+            self.assertEqual(created, [str(self.applications / 'spartanport.desktop'), str(self.desktop / 'SpartanPort.desktop')])
             shutil.rmtree(self.applications)
-            (self.desktop / 'God of War III.desktop').unlink()
-        self.assertTrue((self.home / '.local' / 'share' / 'icons' / 'gow3.png').is_file())
+            (self.desktop / 'SpartanPort.desktop').unlink()
+        self.assertTrue((self.home / '.local' / 'share' / 'icons' / 'spartanport.png').is_file())
 
     def test_the_desktop_folder_is_not_made_when_it_does_not_exist(self):
-        self.assertEqual(self.click(), [str(self.applications / 'gow3.desktop')])
+        self.assertEqual(self.click(), [str(self.applications / 'spartanport.desktop')])
         self.assertFalse(self.desktop.exists())
 
     def test_another_tools_entry_keeps_the_menu_free_of_a_duplicate(self):
         self.applications.mkdir(parents=True)
         (self.applications / 'tool.desktop').write_text(f'[Desktop Entry]\nExec=env DESKTOPINTEGRATION=1 {self.appimage}\n')
         self.desktop.mkdir()
-        self.assertEqual(self.click(), [str(self.desktop / 'God of War III.desktop')])
-        self.assertFalse((self.applications / 'gow3.desktop').exists())
+        self.assertEqual(self.click(), [str(self.desktop / 'SpartanPort.desktop')])
+        self.assertFalse((self.applications / 'spartanport.desktop').exists())
 
     def test_a_broken_entry_of_another_program_does_not_stop_the_button(self):
         self.applications.mkdir(parents=True)
         (self.applications / 'broken.desktop').write_bytes(b'[Desktop Entry]\nExec=/a/\x00b\n')
         self.desktop.mkdir()
-        self.assertEqual(self.click(), [str(self.applications / 'gow3.desktop'), str(self.desktop / 'God of War III.desktop')])
+        self.assertEqual(self.click(), [str(self.applications / 'spartanport.desktop'), str(self.desktop / 'SpartanPort.desktop')])
 
     def test_the_files_run_the_appimage_with_its_icon(self):
         self.desktop.mkdir()
         for path in self.click():
             text = Path(path).read_text()
             self.assertIn(f'Exec="{self.appimage}"', text)
-            self.assertIn(f'Icon={self.home / ".local" / "share" / "icons" / "gow3.png"}', text)
-            self.assertIn('StartupWMClass=gow3', text)
+            self.assertIn(f'Icon={self.home / ".local" / "share" / "icons" / "spartanport.png"}', text)
+            self.assertIn('StartupWMClass=spartanport', text)
             self.assertNotIn(launcher.DESKTOP_MARKER, text)
 
     @unittest.skipUnless(sys.platform.startswith('linux'), 'Linux executable permissions')
@@ -249,7 +249,7 @@ class LinuxShortcutTest(unittest.TestCase):
     def test_a_missing_icon_falls_back_to_the_theme_name(self):
         self.icon.unlink()
         created = self.click()
-        self.assertIn('Icon=gow3\n', Path(created[0]).read_text())
+        self.assertIn('Icon=spartanport\n', Path(created[0]).read_text())
 
     def test_clicking_again_rewrites_the_same_files(self):
         self.desktop.mkdir()
@@ -258,12 +258,12 @@ class LinuxShortcutTest(unittest.TestCase):
 
     def test_the_shells_variable_is_not_read_when_the_environment_is_given(self):
         with mock.patch.dict(os.environ, {'DESKTOPINTEGRATION': '1'}):
-            self.assertEqual(self.click(), [str(self.applications / 'gow3.desktop')])
+            self.assertEqual(self.click(), [str(self.applications / 'spartanport.desktop')])
 
     def test_the_environment_variable_of_gear_lever_does_the_same(self):
-        self.assertEqual(self.click({'DESKTOPINTEGRATION': '1'}), [str(self.desktop / 'God of War III.desktop')])
+        self.assertEqual(self.click({'DESKTOPINTEGRATION': '1'}), [str(self.desktop / 'SpartanPort.desktop')])
         self.assertTrue(self.desktop.is_dir())
-        self.assertFalse((self.applications / 'gow3.desktop').exists())
+        self.assertFalse((self.applications / 'spartanport.desktop').exists())
 
 
 if __name__ == '__main__':

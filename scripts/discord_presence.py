@@ -174,8 +174,8 @@ class Presence:
         self.stop = threading.Event()
         self.started = time.time()
         self.pid = os.getpid() if pid is None else pid
-        self.client_id = client_id or os.environ.get('GOW3_DISCORD_ID') or CLIENT_ID
-        if not self.client_id or os.environ.get('GOW3_DISCORD') == '0':
+        self.client_id = client_id or os.environ.get('SPARTAN_DISCORD_ID') or CLIENT_ID
+        if not self.client_id or os.environ.get('SPARTAN_DISCORD') == '0':
             return
         self.thread = threading.Thread(target=self.run, name='discord-presence', daemon=True)
         self.thread.start()
