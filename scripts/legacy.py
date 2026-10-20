@@ -138,8 +138,8 @@ def _windows_desktop():
 
 def retarget_desktop_shortcut(port_dir, desktop=None, data_dir=None):
     """Windows: the desktop shortcut the old launcher made (named after the old title, pointing to
-    God of War III.exe with no arguments) is renamed SpartanPort.lnk and pointed at SpartanPort.exe.
-    User-created, renamed, or customized shortcuts are preserved. Runs once."""
+    God of War III.exe with no arguments) is migrated non-destructively by creating SpartanPort.lnk
+    pointing to SpartanPort.exe. User-created, renamed, or customized shortcuts are preserved. Runs once."""
     if os.name != 'nt':
         return False
     port_dir = Path(port_dir)
@@ -175,7 +175,7 @@ def retarget_desktop_shortcut(port_dir, desktop=None, data_dir=None):
         '    $n.WorkingDirectory = $env:SP_PORT;'
         '    $n.IconLocation = $env:SP_TARGET + ",0";'
         '    $n.Save();'
-        '    Remove-Item -LiteralPath $env:SP_OLD;'
+        '    if (!(Test-Path -LiteralPath $env:SP_NEW)) { exit 1; }'
         '  }'
         '}'
     )
@@ -188,18 +188,20 @@ def retarget_desktop_shortcut(port_dir, desktop=None, data_dir=None):
         'SP_LEGACY': str(legacy_target.resolve()),
     }
     try:
-        subprocess.run(
+        proc = subprocess.run(
             ['powershell', '-NoProfile', '-NonInteractive', '-Command', script],
             env=env,
             capture_output=True,
             timeout=20,
             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
         )
-        try:
-            data_dir.mkdir(parents=True, exist_ok=True)
-            marker.write_text('', encoding='utf-8')
-        except OSError:
-            pass
     except (OSError, subprocess.SubprocessError):
         return False
+    if proc.returncode != 0:
+        return False
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        marker.write_text('', encoding='utf-8')
+    except OSError:
+        pass
     return new.is_file()

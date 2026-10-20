@@ -237,6 +237,10 @@ class CrossPlatformShortcutMarkerTest(unittest.TestCase):
         (self.root / legacy.SHORTCUT_MARKER).write_text('', encoding='utf-8')
         self.assertFalse(legacy.retarget_desktop_shortcut(self.root))
 
+    def test_shortcut_migration_returns_false_on_non_windows(self):
+        if os.name != 'nt':
+            self.assertFalse(legacy.retarget_desktop_shortcut(self.root))
+
 
 @unittest.skipUnless(os.name == 'nt', 'Windows shortcuts require Windows and PowerShell')
 class WindowsDesktopShortcutTest(unittest.TestCase):
@@ -309,11 +313,10 @@ class WindowsDesktopShortcutTest(unittest.TestCase):
         self.create_shortcut(old, self.port / legacy.LEGACY_EXE, working_dir=str(self.port.resolve()))
         self.assertTrue(legacy.retarget_desktop_shortcut(self.port, desktop=self.desktop))
         self.assertTrue((self.desktop / 'SpartanPort.lnk').is_file())
-        self.assertFalse(old.exists())
+        self.assertTrue(old.is_file(), 'Original shortcut must be preserved non-destructively')
 
-        # Player deletes SpartanPort.lnk and creates God of War III.lnk
+        # Player deletes SpartanPort.lnk
         (self.desktop / 'SpartanPort.lnk').unlink()
-        self.create_shortcut(old, self.port / legacy.LEGACY_EXE, working_dir=str(self.port.resolve()))
 
         # Subsequent starts: migration is a no-op, user's shortcut stays untouched
         self.assertFalse(legacy.retarget_desktop_shortcut(self.port, desktop=self.desktop))
@@ -324,8 +327,54 @@ class WindowsDesktopShortcutTest(unittest.TestCase):
         old = self.desktop / f'{legacy.LEGACY_TITLE}.lnk'
         self.create_shortcut(old, self.port / legacy.LEGACY_EXE, working_dir=str(self.port.resolve()))
         self.assertTrue(legacy.retarget_desktop_shortcut(self.port, desktop=self.desktop))
-        self.assertFalse(old.exists())
+        self.assertTrue(old.is_file(), 'Original shortcut must be preserved non-destructively')
         self.assertTrue((self.desktop / 'SpartanPort.lnk').is_file())
+
+    def test_ambiguous_ownership_preserves_existing_shortcut(self):
+        # A shortcut manually created with the exact same target, arguments and working dir
+        # as the legacy launcher shortcut cannot be conclusively distinguished.
+        # It must be migrated non-destructively: SpartanPort.lnk is created, but God of War III.lnk is kept.
+        old = self.desktop / f'{legacy.LEGACY_TITLE}.lnk'
+        self.create_shortcut(old, self.port / legacy.LEGACY_EXE, arguments="", working_dir=str(self.port.resolve()))
+        res = legacy.retarget_desktop_shortcut(self.port, desktop=self.desktop)
+        self.assertTrue(res)
+        self.assertTrue(old.is_file(), "Ambiguous shortcut must never be deleted")
+        self.assertTrue((self.desktop / 'SpartanPort.lnk').is_file())
+        self.assertTrue((self.port / legacy.SHORTCUT_MARKER).is_file())
+
+    def test_failed_shortcut_creation_preserves_old_shortcut_and_does_not_write_marker(self):
+        from unittest import mock
+        import subprocess
+        old = self.desktop / f'{legacy.LEGACY_TITLE}.lnk'
+        self.create_shortcut(old, self.port / legacy.LEGACY_EXE, working_dir=str(self.port.resolve()))
+        # Simulate PowerShell failing to create the new shortcut (Test-Path fails -> exit 1)
+        failed_proc = subprocess.CompletedProcess(args=['powershell'], returncode=1, stdout=b'', stderr=b'Save failed')
+        with mock.patch('subprocess.run', return_value=failed_proc):
+            res = legacy.retarget_desktop_shortcut(self.port, desktop=self.desktop)
+        self.assertFalse(res)
+        self.assertTrue(old.is_file(), "Old shortcut must be preserved when shortcut creation fails")
+        self.assertFalse((self.desktop / 'SpartanPort.lnk').exists())
+        self.assertFalse((self.port / legacy.SHORTCUT_MARKER).exists(), "Marker must not be written on failed creation")
+
+    def test_powershell_error_does_not_write_marker_and_allows_recovery(self):
+        from unittest import mock
+        import subprocess
+        old = self.desktop / f'{legacy.LEGACY_TITLE}.lnk'
+        self.create_shortcut(old, self.port / legacy.LEGACY_EXE, working_dir=str(self.port.resolve()))
+        # Step 1: PowerShell fails with error
+        error_proc = subprocess.CompletedProcess(args=['powershell'], returncode=127, stdout=b'', stderr=b'Crash')
+        with mock.patch('subprocess.run', return_value=error_proc):
+            res1 = legacy.retarget_desktop_shortcut(self.port, desktop=self.desktop)
+        self.assertFalse(res1)
+        self.assertTrue(old.is_file())
+        self.assertFalse((self.port / legacy.SHORTCUT_MARKER).exists(), "Marker must not be written on PowerShell error")
+
+        # Step 2: Recovery run without error succeeds
+        res2 = legacy.retarget_desktop_shortcut(self.port, desktop=self.desktop)
+        self.assertTrue(res2)
+        self.assertTrue((self.desktop / 'SpartanPort.lnk').is_file())
+        self.assertTrue(old.is_file(), "Old shortcut still preserved")
+        self.assertTrue((self.port / legacy.SHORTCUT_MARKER).is_file())
 
     def test_shortcut_targeting_unrelated_executable(self):
         unrelated = self.root / 'other' / 'tool.exe'
@@ -361,7 +410,7 @@ class WindowsDesktopShortcutTest(unittest.TestCase):
         old = space_desktop / f'{legacy.LEGACY_TITLE}.lnk'
         self.create_shortcut(old, space_port / legacy.LEGACY_EXE, working_dir=str(space_port.resolve()))
         self.assertTrue(legacy.retarget_desktop_shortcut(space_port, desktop=space_desktop))
-        self.assertFalse(old.exists())
+        self.assertTrue(old.is_file(), 'Old shortcut must be preserved non-destructively')
         self.assertTrue((space_desktop / 'SpartanPort.lnk').is_file())
 
     def test_launcher_move_from_legacy_name_integration(self):
