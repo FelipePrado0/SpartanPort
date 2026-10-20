@@ -53,6 +53,7 @@ podman run --rm -it -v "$PWD:/src:ro" -v "$PWD/out-rpm:/rpm" fedora:44 bash -lc 
   source_version=$release_version-git$short
   snapshot_version="$release_version^$(git show -s --format=%cd --date=format:%Y%m%d)git$short"
   topdir=/rpm/rpmbuild; mkdir -p "$topdir/SOURCES"
+  cp packaging/linux/rpm/*.patch "$topdir/SOURCES/"
   curl -fsSL -o /tmp/vk_mem_alloc.h \
     https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/v3.1.0/include/vk_mem_alloc.h
   vma_sha=f063056705f2cd0ddd8d9da034f673b09814ca96aa45a958e9e687bf9f3fed15
@@ -117,6 +118,11 @@ Consequences:
   all regular and weak dependencies satisfiable in Fedora).
 
 ## Limitations
+
+- The RPM applies `0001-size-proc-task-path-for-dirent.patch` to size the Linux
+  CPU-report path buffer for `dirent.d_name`. This fixes the GCC 16
+  `-Werror=format-truncation` build failure without disabling warnings or changing
+  AppImage/Windows sources.
 
 - Built against Fedora 44 libraries; install on older Fedora/openSUSE is not guaranteed
   because ELF `Requires` are generated from the build host.

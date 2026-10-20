@@ -24,6 +24,7 @@ URL:            https://github.com/FelipePrado0/SpartanPort
 # It does NOT contain the uncommitted build.sh/CMake changes in the working tree.
 Source0:        spartanport-%{source_version}.tar.gz
 Source1:        vulkan-headers-%{vulkan_headers_version}.tar.gz
+Patch0:         0001-size-proc-task-path-for-dirent.patch
 ExclusiveArch:  x86_64
 
 BuildRequires:  gcc
@@ -88,6 +89,7 @@ included, and codec availability depends on the system FFmpeg libraries.
 printf '%%s  %%s\n' '%{source_sha256}' '%{SOURCE0}' | sha256sum --check -
 printf '%%s  %%s\n' '%{vulkan_headers_sha256}' '%{SOURCE1}' | sha256sum --check -
 %setup -q -n spartanport-%{source_version}
+%patch -P 0 -p1
 # Build-only Vulkan headers: needed for VK_VALVE_shader_mixed_float_dot_product
 # (FSR 4.1.1). The extension definitions are compiled into the binaries; the runtime
 # still uses the system Vulkan loader and drivers.

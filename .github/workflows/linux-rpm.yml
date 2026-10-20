@@ -61,6 +61,7 @@ jobs:
           snapshot_version="${release_version}^${date}git${short}"
           topdir="$PWD/out/rpmbuild"
           mkdir -p "$topdir/SOURCES"
+          cp packaging/linux/rpm/*.patch "$topdir/SOURCES/"
 
           vma=/tmp/vk_mem_alloc.h
           vma_sha=f063056705f2cd0ddd8d9da034f673b09814ca96aa45a958e9e687bf9f3fed15
