@@ -35,7 +35,7 @@ game stays at its usual resolution.
    **Open**; create the folder if it is not there). Do not unzip it: the game does that by itself.
 2. Open the launcher. The mod is listed on the Mods page, ticked, with "(game patches)".
 3. In **Render resolution** (Home or Performance) pick `3440x1440 (mod)` or another size, then **PLAY**. The
-   in-game menu (Insert → Performance) lists them too. The **Engine frame rate** (60, 100, 120, 144 or 240) is a
+   in-game menu (Insert → Performance) lists them too. The **Engine frame rate** (60, 100, 120, 144, 180 or 240) is a
    separate choice that works with any resolution.
 4. Use a display or window of the same size (borderless is the easy way).
 
@@ -101,7 +101,7 @@ lados.
 `Ultrawide-installer.zip` (anexado ao pull request #202), extraia, dê dois cliques no **`INSTALL.bat`**, cole
 a pasta do jogo, escolha a resolução no menu e inicie o jogo pelo **`Play SpartanPort.exe`** (não pelo
 launcher). Para desfazer: **`UNINSTALL.bat`**. Em **Render resolution** aparecem `3440x1440 (mod)` e os outros tamanhos (e no menu do jogo,
-tecla Insert). O **Engine frame rate** (60, 100, 120, 144 ou 240) é uma escolha à parte e vale com qualquer resolução.
+tecla Insert). O **Engine frame rate** (60, 100, 120, 144, 180 ou 240) é uma escolha à parte e vale com qualquer resolução.
 
 **As cutscenes continuam com bordas:** são vídeos 16:9 pré-renderizados, então tocam com barras pretas dos
 lados (em cima e embaixo no 16:10); as builds anteriores à de teste deixavam o último frame do jogo nessas

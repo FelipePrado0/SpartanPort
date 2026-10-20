@@ -26,7 +26,7 @@ each site), so they also work on other builds whose code matches.
 | **Skip Any Video With X Button** | Lets you skip any cinematic with Cross | **Game** page, on by default | cuesta4 |
 | **Skip Intro** | Skips the logos at start | **Game** page, off by default | cuesta4 |
 | **Resolution Patch - &lt;size&gt;** (21 sizes, from 480p to 5120 × 2160) | Sets the render resolution and the video arena; the ultrawide sizes also widen the field of view (Hor+) | **Render resolution** (launcher **Performance** page, or the in-game menu); one at a time | kvicken + cuesta4 (480p, 720p, 1440p, 1800p, 4K); SpartanPort (900p and the ultrawide, 16:10 and 4:3 sizes) |
-| **Frame Rate Patch - 240 FPS** | Raises the engine's frame rate limit and corrects the swing energy so it matches the original 60 Hz simulation | Applied on every start; the chosen **Engine frame rate** (60, 100, 120, 144 or 240) is then written live | kvicken, SpartanPort |
+| **Frame Rate Patch - 240 FPS** | Raises the engine's frame rate limit and corrects the swing energy so it matches the original 60 Hz simulation | Applied on every start; the chosen **Engine frame rate** (60, 100, 120, 144, 180 or 240) is then written live | kvicken, SpartanPort |
 | Frame Rate Patch - 120 FPS / 144 FPS / 100 FPS | The same patch with a limit of 120, 144 or 100 | Not used by the launcher any more; kept for other uses of the file | kvicken / kvicken, SpartanPort |
 
 Notes:

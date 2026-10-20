@@ -21,7 +21,7 @@ inline constexpr std::array<const char*, DisplayModeCount> DisplayModeNames = {
     "Windowed", "Borderless", "Fullscreen"};
 
 /// Present rate limits; 0 = unlimited.
-inline constexpr std::array<int, 7> FpsLimits = {30, 60, 100, 120, 144, 240, 0};
+inline constexpr std::array<int, 8> FpsLimits = {30, 60, 100, 120, 144, 180, 240, 0};
 
 /// Game patch suffixes ("Resolution Patch - <name>"); "native" is no resolution patch.
 /// The ones after 900p are the Ultrawide mod's sizes (#202) and the 16:10 and 4:3 ones, built in as beta
@@ -64,8 +64,8 @@ inline std::pair<int, int> ResolutionSize(std::string_view name) {
     return ResolutionSizes[0].second;
 }
 /// Engine frame rates: 60 is the game's own (59.94). The launch takes the 240 FPS patch and the
-/// rate is written live (SpartanSettings::SyncEngineFps); 100 and 144 fit common high-refresh displays.
-inline constexpr std::array<int, 5> EngineFps = {60, 100, 120, 144, 240};
+/// rate is written live (SpartanSettings::SyncEngineFps); 100, 144 and 180 fit common high-refresh displays.
+inline constexpr std::array<int, 6> EngineFps = {60, 100, 120, 144, 180, 240};
 
 template <typename T, std::size_t N>
 constexpr int IndexOf(const std::array<T, N>& values, const T& value, int fallback) {

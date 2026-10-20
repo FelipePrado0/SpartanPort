@@ -29,7 +29,7 @@ então também funcionam em outros builds cujo código bate.
 | **Skip Any Video With X Button** | Permite pular qualquer cinemática com o X | Página **Jogo**, ligado por padrão | cuesta4 |
 | **Skip Intro** | Pula os logos ao abrir | Página **Jogo**, desligado por padrão | cuesta4 |
 | **Resolution Patch - &lt;tamanho&gt;** (21 tamanhos, de 480p a 5120 × 2160) | Define a resolução de renderização e a video arena; os tamanhos ultrawide também alargam o campo de visão (Hor+) | **Resolução de renderização** (página **Desempenho** do launcher, ou o menu do jogo); um por vez | kvicken + cuesta4 (480p, 720p, 1440p, 1800p, 4K); SpartanPort (900p e os tamanhos ultrawide, 16:10 e 4:3) |
-| **Frame Rate Patch - 240 FPS** | Sobe o limite de quadros do motor e corrige a swing energy para bater com a simulação original de 60 Hz | Aplicado em toda abertura; a **Taxa de quadros do motor** escolhida (60, 100, 120, 144 ou 240) é escrita ao vivo | kvicken, SpartanPort |
+| **Frame Rate Patch - 240 FPS** | Sobe o limite de quadros do motor e corrige a swing energy para bater com a simulação original de 60 Hz | Aplicado em toda abertura; a **Taxa de quadros do motor** escolhida (60, 100, 120, 144, 180 ou 240) é escrita ao vivo | kvicken, SpartanPort |
 | Frame Rate Patch - 120 FPS / 144 FPS / 100 FPS | O mesmo patch com limite de 120, 144 ou 100 | O launcher não usa mais; ficam no arquivo para outros usos | kvicken / kvicken, SpartanPort |
 
 Observações:
