@@ -450,7 +450,7 @@ def register_font(path):
 
 # The heading face (Cinzel Black, SIL OFL 1.1, launcher/OFL-Cinzel.txt) covers the Latin-script
 # languages; the other scripts keep the launcher's usual families.
-LATIN_UI_LANGUAGES = ('en', 'es', 'pt', 'fr', 'de', 'it', 'pl', 'tr')
+LATIN_UI_LANGUAGES = ('en', 'es', 'pt', 'fr', 'de', 'it', 'pl', 'tr', 'id')
 
 
 def heading_face(every_language=False):

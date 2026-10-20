@@ -734,16 +734,80 @@ TRANSLATIONS = {
         '업데이트를 확인할 수 없습니다: {}', '업데이트를 설치할 수 없습니다. 릴리스 페이지에서 다운로드하세요.', '', '', '', '', '', '', '',
         '', '', '',
     ],
+    'id': [
+        'Main', 'Grafis', 'Tampilan & FPS', 'Game & efek', 'Mod & patch', 'Lanjutan', 'Log',
+        'MAIN', 'Berhenti', 'Port PC · Windows', "Dalam game: Insert atau R3+L2\nmembuka menu port.",
+        'Pemeriksaan kesiapan', 'Pengaturan cepat', 'Frame rate', 'Upscaler', 'Layar penuh', '{} · versi game {}',
+        'Folder game belum diatur', 'Pilih folder game Anda (Game & efek)',
+        '✗ Tidak ada eboot.bin di folder game (Game & efek)', '✓ Simpanan ditemukan di {}',
+        '• Belum ada simpanan: game akan membuatnya di {}', '✓ Kartu grafis: {}',
+        '• Kartu grafis: belum diperiksa', '• Memeriksa kartu grafis…',
+        '✗ Tidak ditemukan kartu grafis Vulkan 1.3 (perbarui driver)', 'Pilih folder game terlebih dahulu.',
+        'Menyiapkan game; game akan terbuka di jendelanya sendiri…', 'Game sedang berjalan.',
+        'Memulai ulang dengan pengaturan baru…', '\nGame ditutup (kode {}).\n', 'Tidak dapat memulai: {}',
+        'Pilih folder game dengan eboot.bin (CUSA01623).',
+        'Tersimpan di spartanport.ini; menu dalam game (Insert atau R3+L2) mengubah nilai yang sama.',
+        'Upscaling',
+        "Temporal upscaling dengan vektor gerak game itu sendiri. FSR 4 memerlukan asetnya (di bawah) dan GPU dengan INT8 dot product; jika tidak, game akan otomatis beralih ke FSR 3.1.",
+        'Preset kualitas', 'Skala render per sumbu: Kualitas merender pada 1/1,5 dari ukuran output.',
+        'Resolusi output', 'Hasil yang dihasilkan upscaler; HUD juga digambar pada ukuran ini.',
+        'Perubahan resolusi langsung',
+        'Mati: output selain 1080p diatur oleh patch saat mulai (tercepat; mengubahnya dalam game akan memulai ulang game). Nyala: ubah output dan preset dalam game tanpa mulai ulang, dengan sedikit penurunan performa.',
+        'Penajaman (RCAS)', 'Ketajaman', 'Vektor gerak objek',
+        'Mengurangi efek ghosting pada karakter, pakaian, dan senjata; memakan sekitar 10% FPS.',
+        'Aset FSR 4', 'Unduh aset FSR 4',
+        "Dari FireBurn/Q2RTX di GitHub (dibuat dari kode sumber AMD FidelityFX berlisensi MIT), sekitar 30 MB, ke dalam folder fsr4_shaders port.",
+        'Terinstal: {} file di {}.', '{} dari {} file hilang di {}.', 'Pengunduhan gagal: {}',
+        'Tampilkan penghitung FPS', 'FSR 4 (kualitas terbaik)', 'FSR 4.1.1 (memerlukan aset fsr4_411)',
+        'FSR 3.1 (semua GPU)', 'TAA (anti-aliasing resolusi asli)', 'Mati', 'Otomatis (berdasarkan kartu grafis)',
+        'Mati (lebih cepat)', 'Nyala (ubah tanpa mulai ulang)', 'Diterapkan saat game dimulai.',
+        'Frame mendahului GPU',
+        '1 menjaga frame pacing tetap merata; lebih banyak dapat meningkatkan FPS saat kartu grafis menjadi batas performa.',
+        'Jendela', 'Presentasi', 'Izinkan output HDR', 'Saat HDR aktif di Windows dan layar mendukungnya.',
+        'Otomatis: refresh layar, maks 120 (disarankan)', 'Tanpa batas', 'Mailbox (latensi rendah, tanpa tearing)',
+        'Immediate (dengan tearing)', '1 (default)', 'Tak terbatas', 'Dump game, simpanan, dan patch game Anda.', 'Game',
+        'Folder game', 'Pilih folder dengan eboot.bin', 'Folder simpanan', 'Pilih folder simpanan',
+        'Kosong: {} (cache shader juga disimpan di sana).', 'Bahasa game',
+        'Inggris', 'Rusia', 'Jepang',
+        'Prancis', 'Spanyol', 'Jerman', 'Italia',
+        'File game tidak pernah diubah: mod diterapkan di atasnya saat mulai.', 'Mod',
+        'Muat mod', 'Folder mod', 'Pilih folder mod', 'Kosong: {}', 'Patch pihak ketiga',
+        'Folder patch', 'Pilih folder patch', 'Segarkan', 'Belum ada mod di {}.',
+        'Yang lebih bawah dalam daftar dimuat lebih akhir dan menang jika konflik.',
+        'Opsi launcher, sakelar performa, dan diagnostik.', 'Launcher', 'Bahasa launcher',
+        'Berlaku saat launcher dibuka kembali.', 'Tutup launcher saat game dimulai', 'Pintasan desktop',
+        'Folder port', 'Pintasan dibuat di desktop.', 'Performa', 'Pipeline GPU dua tahap',
+        '20–30% lebih cepat; matikan jika game tidak stabil.', 'Otomatis (8+ thread)', 'Nyala',
+        'Mati (lebih stabil)', 'Readback GPU',
+        'Seberapa tepat data yang ditulis GPU disalin kembali untuk game.', 'Relaxed (default)', 'Diagnostik',
+        'Statistik frame di log (setiap 5 d)', 'Waktu GPU per pass di log',
+        'Vulkan validation layers (memerlukan Vulkan SDK; jauh lebih lambat)', 'Variabel tambahan',
+        'Pasangan NAMA=nilai dipisahkan dengan spasi (daftar ada di README).', 'Sistem', 'Salin', 'Bersihkan',
+        'Jelajahi…', 'Buka', 'Hapus cache shader',
+        'Jika game hanya menampilkan layar hitam, ini biasanya membantu.',
+        'Cache shader telah dihapus. Startup berikutnya akan stutter selama beberapa menit saat cache dibuat ulang.',
+        'Versi {} telah tersedia.', 'Pembaruan', 'Apa yang baru',
+        'Instal versi {} sekarang? Launcher akan ditutup, menginstalnya, lalu terbuka kembali. Simpanan dan pengaturan tetap tersimpan.',
+        'Mengunduh versi {}… {}%', 'Pembaruan gagal: {}', 'Tutup game sebelum memperbarui.',
+        'Periksa pembaruan saat launcher dibuka', 'Periksa pembaruan', 'Anda memiliki versi terbaru ({}).',
+        'Tidak dapat memeriksa pembaruan: {}',
+        'Tidak dapat menginstal pembaruan. Unduh dari halaman rilis.', 'Patch game',
+        'Patch komunitas untuk game yang dipilih, diterapkan saat mulai.', '{} · versi {} · {}',
+        'Asli (1920 × 1080)', 'Resolusi',
+        'Game merender pada ukuran ini; patch resolusi menggantikan perbaikan tekstur dan memesan memori yang dibutuhkannya.',
+        'Patch', '✓ Versi game {}: patch game diterapkan',
+        '⚠ Versi game {}: patch game memerlukan {}; tidak ada yang diterapkan', '{} · {} patch lainnya',
+    ],
 }
 
 LANGUAGE_NAMES = [('', ('System', 'Как в системе')), ('en', ('English',)), ('ru', ('Русский',)),
                   ('ar', ('العربية',)), ('es', ('Español',)), ('pt', ('Português (Brasil)',)),
                   ('fr', ('Français',)), ('de', ('Deutsch',)), ('it', ('Italiano',)),
                   ('pl', ('Polski',)), ('tr', ('Türkçe',)), ('zh', ('简体中文',)), ('ja', ('日本語',)),
-                  ('ko', ('한국어',))]
+                  ('ko', ('한국어',)), ('id', ('Bahasa Indonesia',))]
 # Windows primary language ids (GetUserDefaultUILanguage() & 0x3ff) -> launcher language.
 WINDOWS_LANGUAGES = {0x19: 'ru', 0x01: 'ar', 0x0a: 'es', 0x16: 'pt', 0x0c: 'fr', 0x07: 'de', 0x10: 'it',
-                     0x15: 'pl', 0x1f: 'tr', 0x04: 'zh', 0x11: 'ja', 0x12: 'ko'}
+                     0x15: 'pl', 0x1f: 'tr', 0x04: 'zh', 0x11: 'ja', 0x12: 'ko', 0x21: 'id'}
 
 # Texts added after the KEYS tables were written, looked up by English text (positional tables
 # need every language updated at once). Portuguese (the port's own language) and Spanish: the
@@ -1434,7 +1498,8 @@ EXTRA['pt'].update({'Polish': 'Polonês'})
 EXTRA['es'].update({'Polish': 'Polaco'})
 for _lang, _text in (('pl', 'Polski'), ('fr', 'Polonais'), ('de', 'Polnisch'),
                      ('it', 'Polacco'), ('tr', 'Lehçe'), ('ar', 'البولندية'),
-                     ('zh', '波兰语'), ('ja', 'ポーランド語'), ('ko', '폴란드어')):
+                     ('zh', '波兰语'), ('ja', 'ポーランド語'), ('ko', '폴란드어'),
+                     ('id', 'Polandia')):
     EXTRA.setdefault(_lang, {})['Polish'] = _text
 
 # Simplified Chinese: current launcher pages, controls and diagnostics.
@@ -1936,6 +2001,41 @@ for _language, _text in {
 }.items():
     EXTRA.setdefault(_language, {})[_GAME_LANGUAGE_NOTE] = _text
 
+
+EXTRA['id'] = {
+    'Polish': 'Polandia',
+    'Portuguese (Brazil)': 'Portugis (Brasil)',
+    'Aspect ratio': 'Rasio aspek',
+    'Shows the render resolutions of this shape only.': 'Hanya menampilkan resolusi render dari rasio ini.',
+    'Left stick click': 'Klik stik kiri',
+    'Right stick click': 'Klik stik kanan',
+    'Plus (+)': 'Plus (+)',
+    'Minus (−)': 'Minus (−)',
+    'Home button': 'Tombol Home',
+    'Capture': 'Tangkapan',
+    'Device': 'Perangkat',
+    'Keyboard & mouse': 'Keyboard & mouse',
+    'Gamepad': 'Gamepad',
+    'Controller type': 'Tipe controller',
+    'Show Discord Rich Presence': 'Tampilkan Discord Rich Presence',
+    'Shows only the game name and the time played on your Discord profile.': 'Hanya menampilkan nama game dan lama waktu bermain di profil Discord Anda.',
+    'Game multisampling': 'Multisampling game',
+    'Automatic ({}: off)': 'Otomatis ({}: mati)',
+    'Automatic ({}: on)': 'Otomatis ({}: nyala)',
+    'Off (fixes black lines)': 'Mati (memperbaiki garis hitam)',
+    'Display': 'Layar',
+    'How the game appears on your screen.': 'Bagaimana game tampil di layar Anda.',
+    'Display mode': 'Mode tampilan',
+    'Borderless covers the screen without changing the display mode.': 'Tanpa batas (borderless) memenuhi layar tanpa mengubah mode tampilan.',
+    'VSync': 'VSync',
+    'Off allows tearing for the lowest latency.': 'Mati mengizinkan screen tearing untuk latensi terendah.',
+    'Overlay': 'Overlay',
+    'Show performance overlay': 'Tampilkan overlay performa',
+    'Frame rate limit': 'Batas frame rate',
+    'Engine frame rate': 'Frame rate engine',
+    'Render resolution': 'Resolusi render',
+    'Shaders': 'Shader',
+}
 
 _tables = {}
 

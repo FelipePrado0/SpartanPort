@@ -21,6 +21,7 @@ class GameLanguageTest(unittest.TestCase):
     def test_brazilian_portuguese_label_is_translated_in_portuguese_and_spanish(self):
         self.assertEqual(spartanport_lang.EXTRA['pt']['Portuguese (Brazil)'], 'Português (Brasil)')
         self.assertEqual(spartanport_lang.EXTRA['es']['Portuguese (Brazil)'], 'Portugués (Brasil)')
+        self.assertEqual(spartanport_lang.EXTRA['id']['Portuguese (Brazil)'], 'Portugis (Brasil)')
 
 
 class GameLanguageNoteTest(unittest.TestCase):
