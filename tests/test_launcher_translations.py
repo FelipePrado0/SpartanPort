@@ -78,5 +78,16 @@ class ChineseTest(PortugueseTest):
         self.assertEqual(env['SPARTAN_UI_LANGUAGE'], 'zh')
         self.assertEqual(env['SPARTAN_LANGUAGE'], '1')
 
+
+class IndonesianTest(PortugueseTest):
+    """Indonesian covers the same texts as Brazilian Portuguese."""
+
+    def setUp(self):
+        self.pt = spartanport_lang.table('id')
+
+    def test_resolution_labels(self):
+        self.assertEqual(self.pt[launcher.RESOLUTION_CHOICES[0][1][0]], 'Asli · 1920 × 1080 · 16:9')
+
+
 if __name__ == '__main__':
     unittest.main()

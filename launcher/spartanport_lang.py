@@ -1998,11 +1998,12 @@ for _language, _text in {
     'tr': 'Oyunun ilk açılışında kullanılır. Sonrasında oyun kendi metin ve konuşma dillerini ayar kaydında tutar: bunları oyunda, Seçenekler → Oyun Ayarları → Oyun Metni ve Seçenekler → Ses → Konuşma bölümünden değiştirin.',
     'ja': 'ゲームの初回起動時に使われます。その後は、ゲームが設定セーブにテキストと台詞の言語を保存します。ゲーム内の オプション → ゲーム設定 → テキスト表示 と オプション → 音声設定 → 台詞 で変更してください。',
     'ko': '게임을 처음 시작할 때 사용됩니다. 그 후에는 게임이 설정 저장 데이터에 텍스트와 음성 언어를 저장합니다. 게임 안의 옵션 → 게임 설정 → 게임 텍스트 및 옵션 → 오디오 → 음성에서 변경하세요.',
+    'id': 'Digunakan pada saat pertama kali game dimulai. Setelah itu, game menyimpan bahasa teks dan suaranya sendiri di penyimpanan pengaturan: ubah di dalam game, di Options → Game Settings → Game Text dan Options → Audio → Speech.',
 }.items():
     EXTRA.setdefault(_language, {})[_GAME_LANGUAGE_NOTE] = _text
 
 
-EXTRA['id'] = {
+EXTRA.setdefault('id', {}).update({
     'Polish': 'Polandia',
     'Portuguese (Brazil)': 'Portugis (Brasil)',
     'Aspect ratio': 'Rasio aspek',
@@ -2013,29 +2014,340 @@ EXTRA['id'] = {
     'Minus (−)': 'Minus (−)',
     'Home button': 'Tombol Home',
     'Capture': 'Tangkapan',
+    'Circle': 'Lingkaran',
+    'Cross': 'Silang (X)',
+    'Square': 'Kotak',
+    'Triangle': 'Segitiga',
+    'D-pad down': 'D-pad bawah',
+    'D-pad left': 'D-pad kiri',
+    'D-pad right': 'D-pad kanan',
+    'D-pad up': 'D-pad atas',
+    'Touchpad click': 'Klik touchpad',
+    'Touchpad left': 'Touchpad kiri',
+    'Touchpad right': 'Touchpad kanan',
+    'L1 + Touchpad right': 'L1 + Touchpad kanan',
+    'LS (left stick click)': 'LS (klik stik kiri)',
+    'RS (right stick click)': 'RS (klik stik kanan)',
+    'Mute button': 'Tombol bisu',
+    'PS button': 'Tombol PS',
+    'Xbox button': 'Tombol Xbox',
+    'Match my controller': 'Sesuaikan controller saya',
     'Device': 'Perangkat',
     'Keyboard & mouse': 'Keyboard & mouse',
     'Gamepad': 'Gamepad',
     'Controller type': 'Tipe controller',
+    'Reset gamepad to defaults': 'Atur ulang gamepad ke default',
+    'Reset keyboard & mouse to defaults': 'Atur ulang keyboard & mouse ke default',
+    'Reset to defaults': 'Atur ulang ke default',
+    'Which gamepad button presses each button of the game.': 'Tombol gamepad mana yang menekan setiap tombol game.',
+    'Which key or gamepad button presses each button of the game.': 'Tombol keyboard atau gamepad mana yang menekan setiap tombol game.',
+    'Which key or mouse input presses each button of the game.': 'Tombol keyboard atau input mouse mana yang menekan setiap tombol game.',
+    'Keyboard and mouse, button icons and gamepad mapping.': 'Keyboard dan mouse, ikon tombol, dan pemetaan gamepad.',
+    "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Insert and R3+L2 always open the port's menu. Applied when the game starts.":
+        "Tombol menggunakan nama SDL: huruf, angka, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Atas, Bawah, Kiri, Kanan, F1 hingga F12. Nama yang tidak dikenali game tetap memakai default (dicatat di log). L2/R2 pada gamepad tetap pada trigger. Insert dan R3+L2 selalu membuka menu port. Diterapkan saat game dimulai.",
+    "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert and R3+L2 always open the port's menu. Applied when the game starts.":
+        "Tombol menggunakan nama SDL: huruf, angka, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Atas, Bawah, Kiri, Kanan, F1 hingga F12. Nama yang tidak dikenali game tetap memakai default (dicatat di log). L2/R2 pada gamepad tetap pada trigger. Touchpad kanan membuka menu jeda game; Touchpad kiri (mode foto) adalah L1 + Touchpad kanan pada gamepad. Insert dan R3+L2 selalu membuka menu port. Diterapkan saat game dimulai.",
+    "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.":
+        "L2/R2 tetap pada trigger. Touchpad kanan membuka menu jeda game; Touchpad kiri (mode foto) adalah L1 + Touchpad kanan. R3+L2 selalu membuka menu port. Diterapkan saat game dimulai.",
+    "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of up to three game files in the port's data folder (about 410 MB); your game folder is never changed. Applied when the game starts.":
+        "Mengganti ikon tombol PlayStation di dalam game dengan ikon controller Anda. Bekerja pada salinan hingga tiga file game di folder data port (sekitar 410 MB); folder game Anda tidak pernah diubah. Diterapkan saat game dimulai.",
+    'Monitor': 'Monitor',
+    'Primary (default)': 'Utama (default)',
+    'The screen the game opens its window on. Primary is the monitor the system considers the main one.':
+        'Layar tempat jendela game dibuka. Utama adalah monitor yang dianggap sistem sebagai yang utama.',
+    "Strength of the gamepad's vibration; 0% turns it off.":
+        "Kekuatan getaran gamepad; 0% mematikannya.",
+    'Vibration': 'Getaran',
+    'Press a key': 'Tekan tombol',
+    'Press a key or mouse': 'Tekan tombol atau mouse',
+    'Mouse prompt distance': 'Jarak petunjuk mouse',
+    'Right stick sensitivity': 'Sensitivitas stik kanan',
+    'Right stick style': 'Gaya stik kanan',
+    'Absolute': 'Absolut',
+    'Relative': 'Relatif',
+    'Grab': 'Tangkap',
+    'Dodge': 'Menghindar',
+    '{} trigger': 'Trigger {}',
+    'Textures': 'Tekstur',
+    'Anisotropic filtering': 'Penyaringan anisotropik',
+    'Game default': 'Default game',
+    'Sharper floors and walls seen at an angle, at little cost on most graphics cards.':
+        'Lantai dan dinding lebih tajam saat dilihat dari sudut miring, dengan sedikit beban pada sebagian besar kartu grafis.',
+    'restart': 'mulai ulang',
+    'Overlay': 'Overlay',
+    'Show performance overlay': 'Tampilkan overlay performa',
+    'Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.':
+        'Item, ukuran, dan sudut posisi: menu dalam game (Insert / R3+L2) > Overlay.',
+    'Screenshots': 'Tangkapan layar',
+    'F12 in the game': 'F12 di dalam game',
+    'Open the screenshots folder': 'Buka folder tangkapan layar',
+    "Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves.":
+        "Menyimpan gambar game, tanpa overlay, sebagai file PNG di folder screenshots pada folder simpanan.",
+    'Display': 'Layar',
+    'How the game appears on your screen.': 'Bagaimana game tampil di layar Anda.',
+    'Display mode': 'Mode tampilan',
+    'Borderless covers the screen without changing the display mode.':
+        'Tanpa batas (borderless) menutupi layar tanpa mengubah mode tampilan.',
+    'VSync': 'VSync',
+    'Off allows tearing for the lowest latency.': 'Mati mengizinkan screen tearing untuk latensi terendah.',
+    'Native (1080p)': 'Asli (1080p)',
+    'Native AA (×1.0)': 'AA Asli (×1.0)',
+    'Native · 1920 × 1080 · 16:9': 'Asli · 1920 × 1080 · 16:9',
+    'Quality (×1.5)': 'Kualitas (×1.5)',
+    'Balanced (×1.7)': 'Seimbang (×1.7)',
+    'Performance (×2)': 'Performa (×2)',
+    'Ultra Performance (×3)': 'Ultra Performa (×3)',
+    'Original (default)': 'Asli (default)',
     'Show Discord Rich Presence': 'Tampilkan Discord Rich Presence',
-    'Shows only the game name and the time played on your Discord profile.': 'Hanya menampilkan nama game dan lama waktu bermain di profil Discord Anda.',
+    'Shows only the game name and the time played on your Discord profile.':
+        'Hanya menampilkan nama game dan lama waktu bermain di profil Discord Anda.',
     'Game multisampling': 'Multisampling game',
     'Automatic ({}: off)': 'Otomatis ({}: mati)',
     'Automatic ({}: on)': 'Otomatis ({}: nyala)',
     'Off (fixes black lines)': 'Mati (memperbaiki garis hitam)',
-    'Display': 'Layar',
-    'How the game appears on your screen.': 'Bagaimana game tampil di layar Anda.',
-    'Display mode': 'Mode tampilan',
-    'Borderless covers the screen without changing the display mode.': 'Tanpa batas (borderless) memenuhi layar tanpa mengubah mode tampilan.',
-    'VSync': 'VSync',
-    'Off allows tearing for the lowest latency.': 'Mati mengizinkan screen tearing untuk latensi terendah.',
-    'Overlay': 'Overlay',
-    'Show performance overlay': 'Tampilkan overlay performa',
+    "The game's 2-sample depth buffer, read as a texture by its lighting. AMD's and Intel's Windows drivers read it wrong and the lighting shows black lines, so Automatic turns multisampling off on those cards (Radeon, Arc) and keeps it on elsewhere (NVIDIA). Off and On force the choice on any card.":
+        "Buffer kedalaman 2-sampel game dibaca sebagai tekstur oleh pencahayaannya. Driver Windows AMD dan Intel salah membacanya sehingga pencahayaan menampilkan garis hitam; Otomatis mematikan multisampling pada kartu tersebut (Radeon, Arc) dan menyalakannya pada kartu lain (NVIDIA). Mati dan Nyala memaksa pilihan pada kartu grafis apa pun.",
+    'GUI Scale': 'Skala Antarmuka',
+    'For launcher only. Applies after Save.': 'Hanya untuk launcher. Berlaku setelah Disimpan.',
+    'Windowed': 'Berjendela',
+    'Window system': 'Sistem jendela',
+    'No Wayland session detected.': 'Tidak ada sesi Wayland yang terdeteksi.',
+    'MangoHud overlay': 'Overlay MangoHud',
+    'Shows MangoHud (FPS, frame times, temperatures) through its Vulkan layer.':
+        'Menampilkan MangoHud (FPS, frame time, suhu) melalui lapisan Vulkan-nya.',
+    'Records how the next frame is drawn into the captures folder.':
+        'Merekam bagaimana frame berikutnya digambar ke dalam folder captures.',
+    'Shows where the frame waits for the GPU and which reads cause it. For performance tests.':
+        'Menunjukkan di mana frame menunggu GPU dan pembacaan mana yang menyebabkannya. Untuk uji performa.',
+    'Enlarges a smaller game image to the window. With Render resolution 720p (Performance) it raises the FPS; at the size of the window it does nothing.':
+        'Memperbesar gambar game yang lebih kecil ke ukuran jendela. Dengan Resolusi render 720p (Performa) ini meningkatkan FPS; pada ukuran jendela yang sama tidak ada efeknya.',
+    'Off (default): the game runs without temporal upscaling. These upscalers are not calibrated for this game yet: expect ghosting or flicker. FSR 3.1 needs nothing else; FSR 4 needs the assets below, and without them the game uses FSR 3.1. The options on this page only take effect with this switch on.':
+        'Mati (default): game berjalan tanpa temporal upscaling. Upscaler ini belum dikalibrasi untuk game ini: kemungkinan ada efek ghosting atau flicker. FSR 3.1 tidak memerlukan apa pun lagi; FSR 4 memerlukan aset di bawah, dan tanpanya game akan menggunakan FSR 3.1. Opsi pada halaman ini hanya berlaku jika sakelar ini aktif.',
+    'Frame rate and speed options.': 'Opsi frame rate dan kecepatan.',
     'Frame rate limit': 'Batas frame rate',
+    'The engine frame rate (below) is the highest it can go.':
+        'Frame rate engine (di bawah) adalah batas tertinggi yang dapat dicapai.',
+    'Frames queued': 'Frame dalam antrean',
+    '1 (lowest latency)': '1 (latensi terendah)',
+    'Unlimited': 'Tak terbatas',
+    '1 is the lowest input latency; more can raise FPS when the graphics card is the limit.':
+        '1 memberikan latensi input terendah; lebih banyak dapat menaikkan FPS saat kartu grafis menjadi batas performa.',
     'Engine frame rate': 'Frame rate engine',
+    'The highest frame rate the game itself runs at (a game patch).':
+        'Frame rate tertinggi tempat game itu sendiri berjalan (sebuah patch game).',
     'Render resolution': 'Resolusi render',
+    'The size the game draws at; higher is sharper and slower. A resolution patch replaces the texture fix and reserves the memory it needs.':
+        'Ukuran resolusi gambar game; semakin tinggi semakin tajam dan berat. Patch resolusi menggantikan perbaikan tekstur dan memesan memori yang dibutuhkannya.',
     'Shaders': 'Shader',
-}
+    'Use pipeline binary cache (A/B test)': 'Gunakan cache biner pipeline (uji A/B)',
+    'Reuse saved Vulkan pipelines. Disable to compare FPS with normal compilation. Takes effect on the next launch; saved caches are preserved.':
+        'Gunakan kembali pipeline Vulkan yang tersimpan. Nonaktifkan untuk membandingkan FPS dengan kompilasi normal. Berlaku pada peluncuran berikutnya; cache tersimpan tetap dipertahankan.',
+    'Load shader cache in the background': 'Muat cache shader di latar belakang',
+    'The game opens at once and the saved shaders load while you play; a small note in the corner shows the progress. Switch it off to wait on the loading screen instead.':
+        'Game langsung terbuka dan shader tersimpan dimuat saat Anda bermain; catatan kecil di sudut menunjukkan prosesnya. Matikan jika ingin menunggu di layar pemuatan (loading screen).',
+    'Compile new shaders in the background': 'Kompilasi shader baru di latar belakang',
+    'Fewer stutters in new areas: the game keeps running while new shaders compile. An object or effect may appear a moment later. Switch it off if something stays missing.':
+        'Mengurangi stutter di area baru: game terus berjalan saat shader baru dikompilasi. Objek atau efek mungkin muncul sesaat kemudian. Matikan jika ada yang hilang terus-menerus.',
+    'Fast shader cache loading (parallel)': 'Pemuatan cache shader cepat (paralel)',
+    'Loading screen only: builds the cached pipelines on several CPU threads.':
+        'Hanya di layar pemuatan: membangun pipeline yang di-cache pada beberapa thread CPU.',
+    'GPU data': 'Data GPU',
+    'Graphics card': 'Kartu grafis',
+    'The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.':
+        'GPU tempat game berjalan. Pilih kartu diskrit (dedicated) jika game menggunakan kartu grafis terintegrasi.',
+    'Stream buffer memory': 'Memori stream buffer',
+    'GPU memory (previous behavior)': 'Memori GPU (perilaku sebelumnya)',
+    'System RAM (cached, default)': 'RAM Sistem (di-cache, default)',
+    'System RAM (uncached)': 'RAM Sistem (tidak di-cache)',
+    'System RAM can improve FPS on NVIDIA laptops. Choose GPU memory to restore the previous behavior. Applies on the next game launch.':
+        'RAM Sistem dapat meningkatkan FPS pada laptop NVIDIA. Pilih memori GPU untuk mengembalikan perilaku sebelumnya. Berlaku pada peluncuran game berikutnya.',
+    'Game reads GPU data without waiting (big FPS gain)':
+        'Game membaca data GPU tanpa menunggu (peningkatan FPS besar)',
+    'About 40 to 66 FPS in a heavy scene. Needs deferred GPU readbacks. Switch it off if lighting or objects look wrong.':
+        'Sekitar 40 hingga 66 FPS pada adegan berat. Memerlukan readback GPU yang ditangguhkan. Matikan jika pencahayaan atau objek terlihat salah.',
+    'Deferred GPU readbacks': 'Readback GPU ditangguhkan',
+    'Fewer waits for the GPU. Switch it off if textures or shadows look wrong.':
+        'Lebih sedikit waktu tunggu untuk GPU. Matikan jika tekstur atau bayangan terlihat salah.',
+    'Fast screen effects (Rage of Sparta, weapons)':
+        'Efek layar cepat (Rage of Sparta, senjata)',
+    'Keeps powers and weapon effects at full FPS. Switch it off if a screen effect (blur, distortion, the color change of a power) looks stretched, shifted or wrong.':
+        'Menjaga kekuatan dan efek senjata tetap pada FPS penuh. Matikan jika efek layar (blur, distorsi, perubahan warna kekuatan) terlihat melar, bergeser, atau salah.',
+    'Precise': 'Tepat (Precise)',
+    'Cheats': 'Cheat',
+    'Infinite Double Jumps': 'Lompatan Ganda Tak Terbatas',
+    'Repeat air jumps without landing. Also available in the in-game Cheats menu.':
+        'Ulangi lompatan di udara tanpa harus mendarat. Juga tersedia di menu Cheat dalam game.',
+    'Rage of Sparta on one input (L3 + R3 together)':
+        'Rage of Sparta dalam satu input (L3 + R3 bersamaan)',
+    'Unlock Very Hard': 'Buka Tingkat Kesulitan Sangat Sulit',
+    'Select Very Hard without completing the game. Does not change existing save difficulty. In-game: enable before opening New Game.':
+        'Pilih tingkat Sangat Sulit tanpa menamatkan game. Tidak mengubah kesulitan simpanan yang sudah ada. Dalam game: aktifkan sebelum membuka Game Baru.',
+    'Folders': 'Folder',
+    'Your game dump, saves and language.': 'Dump game, simpanan, dan bahasa Anda.',
+    'Your own dump of the game (eboot.bin, sce_module, sce_sys): SpartanPort, any region and version.':
+        'Dump game milik Anda sendiri (eboot.bin, sce_module, sce_sys): SpartanPort, wilayah dan versi apa pun.',
+    'Your own dump of the game (eboot.bin, sce_module, sce_sys); SpartanPort: CUSA01623, version 01.02 for the community patches.':
+        'Dump game milik Anda sendiri (eboot.bin, sce_module, sce_sys); SpartanPort: CUSA01623, versi 01.02 untuk patch komunitas.',
+    'Update folder (optional)': 'Folder pembaruan (opsional)',
+    'Only if the update is dumped apart from the game: it is laid over the game folder without changing either. Leave empty when the game folder already has the update.':
+        'Hanya jika pembaruan di-dump terpisah dari game: pembaruan akan diterapkan di atas folder game tanpa mengubah keduanya. Biarkan kosong jika folder game sudah memiliki pembaruan.',
+    'The update folder {} is incomplete. Missing or empty files:\n\n{}\n\nChoose the folder of the update (eboot.bin, sce_sys), or leave it empty.':
+        'Folder pembaruan {} tidak lengkap. File hilang atau kosong:\n\n{}\n\nPilih folder pembaruan (eboot.bin, sce_sys), atau biarkan kosong.',
+    'The game dump is incomplete. Missing or empty files:\n\n{}\n\nDump the game again, or copy these files from a complete dump.':
+        'Dump game tidak lengkap. File hilang atau kosong:\n\n{}\n\nDump game kembali, atau salin file-file ini dari dump yang lengkap.',
+    'The files in {} look like a PKG extraction: the system files (param.sfo, icon0.png, pic1.png and the rest) are in\n\n{}\n\nCopy all of them into its sce_sys folder now? Files already there are kept.':
+        'File dalam {} terlihat seperti ekstraksi PKG: file sistem (param.sfo, icon0.png, pic1.png dan lainnya) berada di\n\n{}\n\nSalin semuanya ke dalam folder sce_sys sekarang? File yang sudah ada tetap dipertahankan.',
+    'The game folder has no sce_sys/pic1.png for the pictures.':
+        'Folder game tidak memiliki sce_sys/pic1.png untuk gambar latar.',
+    'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.':
+        'Game berhenti saat membaca file-filenya: dump game mungkin tidak lengkap. Ekstrak pkg kembali dan pastikan folder game berukuran sekitar 40 GB.',
+    'Saves': 'Simpanan',
+    'Save backups': 'Cadangan simpanan',
+    'Restore': 'Pulihkan',
+    'Save': 'Simpan',
+    'Made before every start, newest first; the last {} are kept. Restoring backs up the current saves first.':
+        'Dibuat sebelum setiap peluncuran, yang terbaru di awal; {} terakhir disimpan. Memulihkan akan mencadangkan simpanan saat ini terlebih dahulu.',
+    'Replace the current saves with the backup {}? The current saves are backed up first.':
+        'Ganti simpanan saat ini dengan cadangan {}? Simpanan saat ini akan dicadangkan terlebih dahulu.',
+    'Saves restored from {}.': 'Simpanan dipulihkan dari {}.',
+    'RUNNING': 'BERJALAN',
+    'Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.':
+        'Memperbaiki tekstur yang rusak dalam game dengan meningkatkan ukuran Video Arena, memungkinkan game menggunakan lebih banyak memori video untuk tekstur dan efek. Memerlukan pengaturan DMEM ke 2048 MB atau lebih, jika tidak game akan crash. Aktifkan patch ini atau salah satu patch resolusi, jangan keduanya.',
+    'Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+        'Melewati logo pembuka. Terima kasih kepada illusion0001 alias illusionyy atas patch PS3 yang membuat ini sangat mudah.',
+    'Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+        'Mengizinkan melewati sinematik apa pun secara manual dengan tombol X. Terima kasih kepada illusion0001 alias illusionyy atas patch PS3 yang membuat ini sangat mudah.',
+    'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.':
+        'Memperbaiki layar hitam saat startup dengan penghitung FPS berjalan: indeks frame pacing dimulai dari 2, bukan 0, sehingga frame kedua tidak lagi menunggu flip yang hanya bisa dipicu olehnya.',
+    'No built-in patches for this game.': 'Tidak ada patch bawaan untuk game ini.',
+    'No patch files for this game version yet.': 'Belum ada file patch untuk versi game ini.',
+    'shadPS4/GoldHEN XML patch files for this game version. Empty: {}':
+        'File patch XML shadPS4/GoldHEN untuk versi game ini. Kosong: {}',
+    '{} · 60 FPS engine · no patches for this game': '{} · engine 60 FPS · tidak ada patch untuk game ini',
+    '{} · 60 FPS engine · patches not available for this game build':
+        '{} · engine 60 FPS · patch tidak tersedia untuk build game ini',
+    '{} · version {}': '{} · versi {}',
+    '{} · version {} · {}. Resolution and frame rate patches follow Performance.':
+        '{} · versi {} · {}. Patch resolusi dan frame rate mengikuti Performa.',
+    '{} · {} FPS engine · {} patches': '{} · engine {} FPS · {} patch',
+    'game patches': 'patch game',
+    'Loose-file mods, each in its own folder with dvdroot_ps4.':
+        'Mod file lepas, masing-masing dalam foldernya sendiri dengan dvdroot_ps4.',
+    'Change textures, sounds and text. Your game files stay untouched.':
+        'Ubah tekstur, suara, dan teks. File game Anda tetap tidak tersentuh.',
+    'Drop a mod folder or .zip in the mods folder.': 'Tarik folder mod atau file .zip ke dalam folder mods.',
+    'No mods yet': 'Belum ada mod',
+    'Details': 'Detail',
+    'Hide': 'Sembunyikan',
+    'Load order': 'Urutan muat',
+    'Lower in the list wins': 'Yang lebih bawah dalam daftar menang',
+    'Open folder': 'Buka folder',
+    'Open mod folder': 'Buka folder mod',
+    'Open mods folder': 'Buka folder mod',
+    'Presets': 'Preset',
+    'Preset': 'Preset',
+    'Type a name for the preset first.': 'Ketik nama untuk preset terlebih dahulu.',
+    'Website': 'Situs web',
+    'by {}': 'oleh {}',
+    '{} files': '{} file',
+    '{} of {} active': '{} dari {} aktif',
+    '… and {} more': '… dan {} lainnya',
+    '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 file diubah oleh dua mod. {} menang.',
+    '⚠ {} also in {}. {} wins.': '⚠ {} juga ada di {}. {} menang.',
+    '⚠ {} file(s) replaced by more than one mod (the last one wins):':
+        '⚠ {} file digantikan oleh lebih dari satu mod (yang terakhir menang):',
+    '⚠ {} files are changed by more than one mod. The lower one in the list wins.':
+        '⚠ {} file diubah oleh lebih dari satu mod. Yang lebih bawah dalam daftar menang.',
+    '1 file': '1 file',
+    'Load': 'Muat',
+    'Launcher options, files and diagnostics.': 'Opsi launcher, file, dan diagnostik.',
+    'Language': 'Bahasa',
+    'Linux': 'Linux',
+    'Menu entry and icon (AppImage)': 'Entri menu dan ikon (AppImage)',
+    'Not installed.': 'Belum terinstal.',
+    'Steam is open. Close it completely (Steam > Exit) and click again: Steam rewrites its shortcuts when it closes.':
+        'Steam sedang terbuka. Tutup sepenuhnya (Steam > Keluar) dan klik lagi: Steam menulis ulang pintasannya saat ditutup.',
+    'Steam was not found for this user.': 'Steam tidak ditemukan untuk pengguna ini.',
+    'Shortcut created:': 'Pintasan dibuat:',
+    'The shortcut "{}" was added to Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.':
+        'Pintasan "{}" telah ditambahkan ke Steam (akun: {}), dengan ikon, kapsul, latar belakang, dan logonya. Buka Steam untuk melihatnya di perpustakaan.',
+    'The shortcut "{}" was updated in Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.':
+        'Pintasan "{}" telah diperbarui di Steam (akun: {}), dengan ikon, kapsul, latar belakang, dan logonya. Buka Steam untuk melihatnya di perpustakaan.',
+    'While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.':
+        'Saat Anda bermain, mouse tetap berada di dalam jendela game, sehingga klik tidak akan mengenai monitor atau aplikasi lain. Menu dalam game dan berpindah jendela akan mengembalikannya. Juga ada di menu dalam game.',
+    'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
+        'Windows tidak dapat memesan memori yang dibutuhkan game. Tutup program lain, atau perbesar pagefile Windows (misalnya 16384 MB awal, 32768 MB maksimum), lalu mulai kembali.',
+    '{} (a folder, not a file)': '{} (sebuah folder, bukan file)',
+    '{} (empty)': '{} (kosong)',
+    '{} (not a param.sfo)': '{} (bukan param.sfo)',
+    '{} (unreadable)': '{} (tidak dapat dibaca)',
+    '{} not found in this eboot.bin at the last start (see Log)':
+        '{} tidak ditemukan di eboot.bin ini pada peluncuran terakhir (lihat Log)',
+    '   (game patches)': '   (patch game)',
+    '   … and {} more': '   … dan {} lainnya',
+    ' Previous saves: {}.': ' Simpanan sebelumnya: {}.',
+    '(none)': '(tidak ada)',
+    'Adaptive mouse (experimental)': 'Mouse adaptif (eksperimental)',
+    'Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.':
+        'Mouse adaptif: seberapa jauh mouse bergerak untuk satu langkah putaran. Juga ada di menu dalam game.',
+    'Add to Steam': 'Tambahkan ke Steam',
+    'Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.':
+        'Membidik dengan mouse saat L2 ditahan (Head of Helios, Bow of Apollo). Relatif: stik mengikuti gerakan dan kembali ke netral saat mouse berhenti. Absolut: posisi mouse saat L2 ditekan menjadi titik tengah, dan stik mengarah darinya ke mouse. Juga ada di menu dalam game.',
+    'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
+        'Membidik dengan mouse saat L2 ditahan: nilai lebih rendah memerlukan lebih banyak gerakan mouse untuk pergerakan stik yang sama, lebih tinggi lebih sedikit. Juga ada di menu dalam game.',
+    'Asks GameMode (gamemoderun) for the performance governor while the game runs.':
+        'Meminta GameMode (gamemoderun) untuk pengatur performa saat game berjalan.',
+    'Auto': 'Otomatis',
+    'Automatic': 'Otomatis',
+    'Automatic lets SDL choose. Pick X11 if the window misbehaves on Wayland (it runs through XWayland).':
+        'Otomatis membiarkan SDL memilih. Pilih X11 jika jendela bermasalah di Wayland (berjalan melalui XWayland).',
+    'Borderless': 'Tanpa batas',
+    'Changes applied to the game code at start.': 'Perubahan yang diterapkan ke kode game saat mulai.',
+    'Choose the folder of the update (eboot.bin, sce_sys)': 'Pilih folder pembaruan (eboot.bin, sce_sys)',
+    'Choose the game folder': 'Pilih folder game',
+    'Choose two separate folders for the game and its update, or leave the update folder empty.':
+        'Pilih dua folder terpisah untuk game dan pembaruannya, atau biarkan folder pembaruan kosong.',
+    'Choose your game folder to play.': 'Pilih folder game Anda untuk bermain.',
+    "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+        "Klik kotak, lalu tekan tombol, klik tombol mouse, atau putar roda mouse (waktu habis setelah {} detik). Input yang sudah digunakan oleh tombol lain akan ditukar; panah mengembalikan tombol ke default-nya. Rage of Sparta menekan L3 dan R3 bersamaan: centang kotak di atasnya untuk memakai satu input saja. Grab menekan L1 dan Lingkaran bersamaan. Dodge menghindar ke arah gerakan Anda (WASD), atau mundur jika diam. Touchpad kanan membuka menu jeda game. Insert selalu membuka menu port dan tidak dapat diubah. Diterapkan saat game dimulai.",
+    'Close the game before restoring saves.': 'Tutup game sebelum memulihkan simpanan.',
+    'Controls': 'Kontrol',
+    'Copying the system files…': 'Menyalin file sistem…',
+    'Could not copy the files: {}': 'Tidak dapat menyalin file: {}',
+    'Could not restore: {}': 'Tidak dapat memulihkan: {}',
+    'Could not save all settings. Check write permissions and free disk space, then try again.':
+        'Tidak dapat menyimpan semua pengaturan. Periksa izin penulisan dan ruang disk yang kosong, lalu coba lagi.',
+    'Creates spartanport.desktop in ~/.local/share/applications so the launcher and the game show their icon in the dock and the menu. Turning it off removes the entry.':
+        'Membuat spartanport.desktop di ~/.local/share/applications agar launcher dan game menampilkan ikon di dock dan menu. Mematikannya akan menghapus entri ini.',
+    'Delete': 'Hapus',
+    'Diagnostics (for development)': 'Diagnostik (untuk pengembangan)',
+    'Enable the upscaler (experimental)': 'Aktifkan upscaler (eksperimental)',
+    'Experimental': 'Eksperimental',
+    'F11 captures a frame for analysis': 'F11 menangkap satu frame untuk analisis',
+    'Files': 'File',
+    'Files layered over the game at start; the game files are never changed.':
+        'File yang diterapkan di atas game saat mulai; file game tidak pernah diubah.',
+    'GAME BUTTON': 'TOMBOL GAME',
+    'GAMEPAD': 'GAMEPAD',
+    'GPU wait and readback report in the log (every 5 s)':
+        'Laporan tunggu dan readback GPU di log (setiap 5 detik)',
+    'GameMode': 'GameMode',
+    'Gamepad Mapping': 'Pemetaan Gamepad',
+    'Gamepad names': 'Nama gamepad',
+    'General': 'Umum',
+    'Graphics (experimental)': 'Grafis (eksperimental)',
+    'Home': 'Beranda',
+    'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
+        'Bagaimana petunjuk putaran stik dijawab. Keyboard: tekan arah putarannya, setengah putaran dari atas D S A (searah jarum jam) atau A S D, dari bawah A W D atau D W A, putaran penuh D S A W atau A S D W; tombol yang salah mengulang dari awal. Mouse adaptif: gambar putaran menggunakan mouse.',
+    'In-game button icons': 'Ikon tombol dalam game',
+    'Joystick prompts': 'Petunjuk joystick',
+    'KEYBOARD': 'KEYBOARD',
+    'Keep the mouse in the game window': 'Kunci mouse di dalam jendela game',
+    'Key not supported': 'Tombol tidak didukung',
+    'Keyboard': 'Keyboard',
+    'Keyboard & Mouse Mapping': 'Pemetaan Keyboard & Mouse',
+    'Keyboard (native)': 'Keyboard (asli)',
+})
 
 _tables = {}
 
