@@ -105,6 +105,10 @@ jobs:
             --define "vma_sha256 ${{ steps.source.outputs.vma_sha }}"
           mkdir -p dist
           cp "$topdir"/RPMS/x86_64/*.rpm "$topdir"/SRPMS/*.rpm dist/
+          # GitHub release assets replace '^' with '.'; checksum the final names.
+          for rpm in dist/*.rpm; do
+            if [[ $rpm == *'^'* ]]; then mv -- "$rpm" "${rpm//^/.}"; fi
+          done
           (cd dist && sha256sum -- *.rpm > SHA256SUMS)
           ls -l dist
       - name: Smoke-test the package
