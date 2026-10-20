@@ -45,6 +45,12 @@ int spartanportgpu_enemy_health_bar(int toggle);
 /* Native Cheats: f00+i query/f10+i toggle (8 cheats); f20+i text/f30+i decrease/f40+i increase/
  * f50+i slider position (6 multipliers); f60 resets multipliers. Text results are stable pointers. */
 uint64_t spartanportgpu_native_setting(unsigned function);
+/* Master volume of the game's audio set in the menu, 0 to 200 percent (100: the game's own mix;
+ * more is boosted behind a soft limiter). Read for every audio buffer. */
+int spartanportgpu_audio_volume_percent(void);
+/* Speaker layout for the game's 7.1 audio, set in the menu or spartanport.ini (audio_channels):
+ * 0 automatic (the device's), 1 stereo, 2 5.1, 3 7.1. Read when an audio port is opened. */
+int spartanportgpu_audio_channels(void);
 /* R3 + L1 + R1 (pad) or F9: the next engine frame rate (60, 100, 120, 144, 180, 240), applied live. */
 void spartanportgpu_engine_fps_cycle(void);
 /* The video decoder handed the game a picture: a cutscene is on screen (the presenter draws

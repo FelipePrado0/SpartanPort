@@ -480,8 +480,11 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'render_resolution': graphics_options.DEFAULTS['render_resolution'], 'engine_fps': '120',
                 'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
                 'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1',
-                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100'}
+                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100',
+                'master_volume': '100', 'audio_channels': 'auto'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
+AUDIO_CHANNELS = [('auto', ('Automatic',)), ('stereo', ('Stereo',)), ('5.1', ('5.1 surround',)),
+                  ('7.1', ('7.1 surround',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('100', ('100',)), ('120', ('120',)), ('144', ('144',)), ('180', ('180',)), ('240', ('240',)), ('0', ('Unlimited',))]
 # The sidebar's pages, top to bottom, and the methods that refresh a page's lists when it is shown.
@@ -1665,6 +1668,21 @@ class Launcher:
             self.ttk.Label(cell, text=_('restart'), style='Restart.TLabel').pack(side='left', padx=self.px((8, 0)))
         return cell
 
+    def ini_slider(self, parent, key, low, high, unit):
+        """A slider over an integer spartanport.ini setting, with its value and `unit` beside it."""
+        tk = self.tk
+        holder = self.ttk.Frame(parent)
+        amount = self.var(key, 'ini')
+        tk.Scale(holder, from_=low, to=high, orient='horizontal', variable=amount, showvalue=False,
+                 length=self.px(260), width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD,
+                 activebackground=ACCENT_HI, highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
+        value = self.ttk.Label(holder, width=7)
+        value.pack(side='left', padx=self.px(10))
+        show = lambda *_a: value.configure(text=f'{amount.get()}{unit}')
+        amount.trace_add('write', show)
+        show()
+        return holder
+
     def row(self, parent, title, widget, hint=None, restart=False):
         """Name on the left, control on the right, an optional note below."""
         r = self.next_row(parent)
@@ -2129,6 +2147,13 @@ class Launcher:
                    'Действует при первом запуске игры. Потом игра хранит язык текста и речи в своём '
                    'сохранении настроек: меняйте их в игре, в Настройки → Параметры игры → Текст и '
                    'Настройки → Аудио → Речь.'))
+        self.section(f, _('Audio'))
+        self.row(f, _('Volume'), self.ini_slider(f, 'master_volume', 0, 200, '%'),
+                 _("Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft "
+                   "limiter so loud scenes do not clip. Also in the in-game menu."))
+        self.row(f, _('Speakers'), self.choice(f, 'audio_channels', 'ini', AUDIO_CHANNELS),
+                 _("Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. "
+                   "Applied when the game starts."), restart=True)
         self.build_patches(f)
 
     def user_dir(self):
@@ -2437,17 +2462,7 @@ class Launcher:
             ttk.Label(table, text=title, width=-14).grid(row=r, column=1, sticky='w', padx=self.px((0, 12)))
 
         def slider(key, low, high, unit, parent=None):
-            holder = ttk.Frame(parent or f)
-            amount = self.var(key, 'ini')
-            tk.Scale(holder, from_=low, to=high, orient='horizontal', variable=amount, showvalue=False,
-                     length=self.px(260), width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD,
-                     activebackground=ACCENT_HI, highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
-            value = ttk.Label(holder, width=7)
-            value.pack(side='left', padx=self.px(10))
-            show = lambda *_a: value.configure(text=f'{amount.get()}{unit}')
-            amount.trace_add('write', show)
-            show()
-            return holder
+            return self.ini_slider(parent or f, key, low, high, unit)
 
         # The in-game icons first, then the device: its section is shown, the other hidden (show_device).
         page = f

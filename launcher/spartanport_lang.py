@@ -1528,6 +1528,31 @@ EXTRA['es'].update({
     'Shows the render resolutions of this shape only.': 'Muestra solo las resoluciones de render de esta proporción.',
 })
 
+EXTRA['pt'].update({
+    'Audio': 'Áudio',
+    'Volume': 'Volume',
+    'Speakers': 'Alto-falantes',
+    'Stereo': 'Estéreo',
+    '5.1 surround': 'Surround 5.1',
+    '7.1 surround': 'Surround 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volume geral do áudio do jogo. 100% é a mixagem original do jogo; mais é mais alto, com um limitador suave para que cenas altas não distorçam. Também no menu do jogo.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Formato em que a mixagem 7.1 do jogo é enviada. Automático segue o seu dispositivo de som: estéreo, 5.1 ou 7.1. Aplicado quando o jogo inicia.',
+})
+EXTRA['es'].update({
+    'Audio': 'Audio',
+    'Volume': 'Volumen',
+    'Speakers': 'Altavoces',
+    'Stereo': 'Estéreo',
+    '5.1 surround': 'Envolvente 5.1',
+    '7.1 surround': 'Envolvente 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volumen general del audio del juego. 100% es la mezcla original del juego; más es más alto, con un limitador suave para que las escenas fuertes no distorsionen. También en el menú del juego.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Formato en que se envía la mezcla 7.1 del juego. Automático sigue tu dispositivo de sonido: estéreo, 5.1 o 7.1. Se aplica al iniciar el juego.',
+})
+
 EXTRA['pt'].update({'Polish': 'Polonês'})
 EXTRA['es'].update({'Polish': 'Polaco'})
 for _lang, _text in (('pl', 'Polski'), ('fr', 'Polonais'), ('de', 'Polnisch'),
@@ -2424,6 +2449,32 @@ EXTRA['id'].update({
     'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?': 'Launcher tidak dapat menulis ke {}, sehingga tidak dapat mengganti dirinya di sana. Buka halaman rilis untuk mengunduh versi baru secara manual?',
     'The shader cache is already empty.': 'Cache shader sudah kosong.',
     'Version {} is out, but it has no Linux build yet.': 'Versi {} telah tersedia, tetapi belum memiliki build Linux.',
+})
+
+EXTRA['zh'].update({
+    'Audio': '音频',
+    'Volume': '音量',
+    'Speakers': '扬声器',
+    'Stereo': '立体声',
+    '5.1 surround': '5.1 环绕声',
+    '7.1 surround': '7.1 环绕声',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        '游戏音频的主音量。100% 为游戏自带的混音；调高会更响亮，并带有软限幅，避免嘈杂场景出现削波失真。游戏内菜单中也有此选项。',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        '游戏的 7.1 混音输出所用的声道布局。“自动”会跟随你的声音设备：立体声、5.1 或 7.1。游戏启动时生效。',
+})
+
+EXTRA['id'].update({
+    'Audio': 'Audio',
+    'Volume': 'Volume',
+    'Speakers': 'Speaker',
+    'Stereo': 'Stereo',
+    '5.1 surround': 'Surround 5.1',
+    '7.1 surround': 'Surround 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volume utama audio game. 100% adalah campuran asli game; lebih tinggi berarti lebih keras, dengan pembatas lembut agar adegan yang keras tidak terpotong (clipping). Tersedia juga di menu dalam game.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Tata letak saluran untuk campuran 7.1 game. Otomatis mengikuti perangkat suara Anda: stereo, 5.1, atau 7.1. Diterapkan saat game dimulai.',
 })
 
 _tables = {}
