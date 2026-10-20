@@ -4,14 +4,14 @@
 #include <assert.h>
 
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *nid) { (void)table; (void)count; (void)nid; return 0; }
-int gow3gpu_text_input_begin(const char *text, const char *prompt) { (void)text; (void)prompt; return 0; }
-int gow3gpu_text_input_poll(char *text, uint64_t size) { (void)text; (void)size; return 0; }
+int spartanportgpu_text_input_begin(const char *text, const char *prompt) { (void)text; (void)prompt; return 0; }
+int spartanportgpu_text_input_poll(char *text, uint64_t size) { (void)text; (void)size; return 0; }
 int64_t runtime_file_open(const char *path, int flags, int mode) { (void)path; (void)flags; (void)mode; return -1; }
 int64_t runtime_file_read(int fd, void *buffer, uint64_t size) { (void)fd; (void)buffer; (void)size; return -1; }
 int64_t runtime_file_close(int fd) { (void)fd; return 0; }
 static int choice_next=-1;
-int gow3gpu_choice_begin(const char *title, const char *const *items, const char *const *images, int count, int focus) { (void)title; (void)items; (void)images; (void)focus; return count>0; }
-int gow3gpu_choice_poll(void) { return choice_next; }
+int spartanportgpu_choice_begin(const char *title, const char *const *items, const char *const *images, int count, int focus) { (void)title; (void)items; (void)images; (void)focus; return count>0; }
+int spartanportgpu_choice_poll(void) { return choice_next; }
 int runtime_savedata_param(int32_t user, const char *dir, void *param) { (void)user; (void)dir; (void)param; return -1; }
 int runtime_savedata_icon(int32_t user, const char *dir, char *out, size_t size) { (void)user; (void)dir; (void)out; (void)size; return -1; }
 
@@ -83,19 +83,19 @@ int main(void) {
 
     float ratio=0; assert(safe_area(&ratio)==0 && ratio==1.0f && safe_area(NULL)==SYSTEM_PARAMETER);
 
-    /* System parameter 1: language ID from GOW3_LANGUAGE (default 1 = English US, 16 = Polish) */
+    /* System parameter 1: language ID from SPARTAN_LANGUAGE (default 1 = English US, 16 = Polish) */
     int32_t lang=0;
     assert(system_param(1,&lang)==0 && lang==1);
 #ifdef _WIN32
-    _putenv("GOW3_LANGUAGE=16");
+    _putenv("SPARTAN_LANGUAGE=16");
 #else
-    setenv("GOW3_LANGUAGE","16",1);
+    setenv("SPARTAN_LANGUAGE","16",1);
 #endif
     assert(system_param(1,&lang)==0 && lang==16);
 #ifdef _WIN32
-    _putenv("GOW3_LANGUAGE=");
+    _putenv("SPARTAN_LANGUAGE=");
 #else
-    unsetenv("GOW3_LANGUAGE");
+    unsetenv("SPARTAN_LANGUAGE");
 #endif
     assert(system_param(1,&lang)==0 && lang==1);
 

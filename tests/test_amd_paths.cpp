@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// GOW3_AMD_PATHS_OFF=mixed,shaderext (vk_amd_paths.h): runs the shared core without the device
+// SPARTAN_AMD_PATHS_OFF=mixed,shaderext (vk_amd_paths.h): runs the shared core without the device
 // extensions only AMD exposes, so a tester can tell an AMD-only code path from the driver.
 // No game or Vulkan device required.
 #include <cassert>

@@ -115,7 +115,7 @@ class GlyphTableTest(unittest.TestCase):
         self.assertEqual(glyphs.parse_gamepad('Gamepad: type=switchpro south=b east=a west=y north=x name=Pro')[0], 'nintendo')
         self.assertEqual(glyphs.parse_gamepad('Gamepad: type=standard south=a east=b west=x north=y name=')[0], 'xbox')
         self.assertIsNone(glyphs.parse_gamepad('Gamepad: none\n'))
-        self.assertIsNone(glyphs.parse_gamepad('Usage: gow3-probe boot.bin\n'))  # a probe without --gamepad
+        self.assertIsNone(glyphs.parse_gamepad('Usage: spartanport-probe boot.bin\n'))  # a probe without --gamepad
 
     def test_resolve(self):
         pad = 'Gamepad: type=switchpro south=b east=a west=y north=x name=Pro Controller'
@@ -261,7 +261,7 @@ class GlyphPatchTest(unittest.TestCase):
 
 
 class RunGlyphsTest(unittest.TestCase):
-    """run.py: the option is off unless GOW3_GLYPH_STYLE asks for it."""
+    """run.py: the option is off unless SPARTAN_GLYPH_STYLE asks for it."""
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -271,7 +271,7 @@ class RunGlyphsTest(unittest.TestCase):
         (self.out / 'glyphs/R_UI.WAD').write_bytes(b'old')
 
     def test_off_runs_nothing_and_removes_old_copies(self):
-        for env in ({}, {'GOW3_GLYPH_STYLE': 'off'}, {'GOW3_GLYPH_STYLE': 'playstation'}):
+        for env in ({}, {'SPARTAN_GLYPH_STYLE': 'off'}, {'SPARTAN_GLYPH_STYLE': 'playstation'}):
             (self.out / 'glyphs').mkdir(exist_ok=True)
             with mock.patch.object(run.subprocess, 'run') as started, mock.patch.object(glyphs, 'build') as build:
                 self.assertEqual(run.glyph_mounts(env, Path('probe'), Path('game'), self.out), ([], None))
@@ -282,7 +282,7 @@ class RunGlyphsTest(unittest.TestCase):
     def test_auto_asks_the_probe_and_mounts_the_copies(self):
         pad = mock.Mock(stdout='Gamepad: type=xboxone south=a east=b west=x north=y name=Xbox Controller\n')
         copies = {'/app0/EXEC/WAD/PS4_LE/R_UI.WAD': self.out / 'glyphs/R_UI.WAD'}
-        env = {'GOW3_GLYPH_STYLE': 'auto', 'GOW3_PAD_MAP': 'cross=b'}
+        env = {'SPARTAN_GLYPH_STYLE': 'auto', 'SPARTAN_PAD_MAP': 'cross=b'}
         with mock.patch.object(run.subprocess, 'run', return_value=pad) as started, \
                 mock.patch.object(glyphs, 'build', return_value=copies) as build:
             arguments, style = run.glyph_mounts(env, Path('probe'), Path('game'), self.out)
@@ -293,13 +293,13 @@ class RunGlyphsTest(unittest.TestCase):
 
     def test_a_chosen_style_does_not_ask_the_probe(self):
         with mock.patch.object(run.subprocess, 'run') as started, mock.patch.object(glyphs, 'build', return_value={}) as build:
-            self.assertEqual(run.glyph_mounts({'GOW3_GLYPH_STYLE': 'nintendo'}, Path('probe'), Path('game'), self.out), ([], None))
+            self.assertEqual(run.glyph_mounts({'SPARTAN_GLYPH_STYLE': 'nintendo'}, Path('probe'), Path('game'), self.out), ([], None))
         started.assert_not_called()
         self.assertEqual(build.call_args.args[2:], ('nintendo', None, '', ''))
 
     def test_keyboard_passes_the_key_map(self):
         copies = {'/app0/EXEC/WAD/PS4_LE/R_UI.WAD': self.out / 'glyphs/R_UI.WAD'}
-        env = {'GOW3_GLYPH_STYLE': 'keyboard', 'GOW3_KEY_MAP': 'cross=Q'}
+        env = {'SPARTAN_GLYPH_STYLE': 'keyboard', 'SPARTAN_KEY_MAP': 'cross=Q'}
         with mock.patch.object(run.subprocess, 'run') as started, \
                 mock.patch.object(glyphs, 'build', return_value=copies) as build:
             self.assertEqual(run.glyph_mounts(env, Path('probe'), Path('game'), self.out)[1], 'keyboard')
@@ -310,15 +310,15 @@ class RunGlyphsTest(unittest.TestCase):
         pad = mock.Mock(stdout='Gamepad: none\n')
         with mock.patch.object(run.subprocess, 'run', return_value=pad), \
                 mock.patch.object(glyphs, 'build', return_value={'/app0/x': self.out / 'x'}) as build:
-            self.assertEqual(run.glyph_mounts({'GOW3_GLYPH_STYLE': 'auto', 'GOW3_KEY_MAP': 'square=G'}, Path('probe'),
+            self.assertEqual(run.glyph_mounts({'SPARTAN_GLYPH_STYLE': 'auto', 'SPARTAN_KEY_MAP': 'square=G'}, Path('probe'),
                                               Path('game'), self.out)[1], 'keyboard')
         self.assertEqual(build.call_args.args[2:], ('keyboard', None, '', 'square=G'))
 
     def test_a_failure_starts_the_game_with_its_own_glyphs(self):
         with mock.patch.object(run.subprocess, 'run', side_effect=OSError('no probe')):
-            self.assertEqual(run.glyph_mounts({'GOW3_GLYPH_STYLE': 'auto'}, Path('probe'), Path('game'), self.out), ([], None))
+            self.assertEqual(run.glyph_mounts({'SPARTAN_GLYPH_STYLE': 'auto'}, Path('probe'), Path('game'), self.out), ([], None))
         with mock.patch.object(glyphs, 'build', side_effect=ValueError('bad WAD')):
-            self.assertEqual(run.glyph_mounts({'GOW3_GLYPH_STYLE': 'xbox'}, Path('probe'), Path('game'), self.out), ([], None))
+            self.assertEqual(run.glyph_mounts({'SPARTAN_GLYPH_STYLE': 'xbox'}, Path('probe'), Path('game'), self.out), ([], None))
 
 
 if __name__ == '__main__':

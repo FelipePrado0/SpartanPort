@@ -3,7 +3,7 @@
 
 The prompts are DDS textures in R_UI.WAD (one more copy of the QTE circle in R_PERM.WAD). build()
 writes patched copies of those WADs, with the glyphs of an Xbox or Nintendo controller (or the
-keyboard keys of GOW3_KEY_MAP) drawn over the PlayStation ones, and returns the guest paths run.py mounts them on. The game folder is never
+keyboard keys of SPARTAN_KEY_MAP) drawn over the PlayStation ones, and returns the guest paths run.py mounts them on. The game folder is never
 written: a texture keeps its size and format, so only its pixels change inside the copy.
 
 WAD (little-endian): entries of a 0x40 header (u16 tag, u16 flags, u32 size, name[56]) and `size`
@@ -51,7 +51,7 @@ DEFAULT_KEYS = {'cross': 'Space', 'circle': 'Left Shift', 'square': 'E', 'triang
                 'l2': 'R', 'r2': 'F', 'l3': 'Z', 'r3': 'C', 'options': 'Return', 'touchpad_right': 'Backspace',
                 'up': 'I'}
 # The keys that move the sticks (src/runtime_pad.c key_axis). ponytail: fixed, as in the runtime;
-# read them from GOW3_KEY_MAP once movement can be remapped.
+# read them from SPARTAN_KEY_MAP once movement can be remapped.
 STICK_KEYS = {'lstick': 'WASD', 'rstick': 'Arrows'}
 # Key caps for the longer SDL key names (casefolded); the others print their name in capitals.
 KEY_LABELS = {'space': 'SPACE', 'left shift': 'SHIFT', 'right shift': 'R SHIFT', 'left ctrl': 'CTRL',
@@ -90,7 +90,7 @@ def entries(data):
 
 
 def pad_buttons(pad_map):
-    """Game button -> gamepad button, with a GOW3_PAD_MAP value ('cross=b,circle=a') applied.
+    """Game button -> gamepad button, with a SPARTAN_PAD_MAP value ('cross=b,circle=a') applied.
     L2/R2 stay on the triggers, as in the runtime."""
     buttons = dict(DEFAULT_MAP)
     for entry in (pad_map or '').split(','):
@@ -101,7 +101,7 @@ def pad_buttons(pad_map):
 
 
 def key_buttons(key_map):
-    """Game button -> keyboard key, with a GOW3_KEY_MAP value ('cross=Q,circle=Left Shift') applied.
+    """Game button -> keyboard key, with a SPARTAN_KEY_MAP value ('cross=Q,circle=Left Shift') applied.
     Unlike the gamepad, L2/R2 are keys too. 'None' (a button left without a key) keeps the default,
     except L3/R3 with Rage of Sparta on one input: they show the rage key, which presses both."""
     buttons, unbound, rage = {**DEFAULT_KEYS, **STICK_KEYS}, set(), ''
@@ -149,7 +149,7 @@ def glyph(host, style, faces=None):
 
 
 def parse_gamepad(output):
-    """(style, faces, name) from the line `gow3-probe --gamepad` prints, None without a gamepad."""
+    """(style, faces, name) from the line `spartanport-probe --gamepad` prints, None without a gamepad."""
     for line in output.splitlines():
         if line.startswith('Gamepad: type='):
             fields, _, name = line[len('Gamepad: '):].partition(' name=')
@@ -162,7 +162,7 @@ def parse_gamepad(output):
 
 
 def resolve(choice, probe_output=''):
-    """(style, faces, controller name) for a GOW3_GLYPH_STYLE value. 'auto' follows the connected
+    """(style, faces, controller name) for a SPARTAN_GLYPH_STYLE value. 'auto' follows the connected
     gamepad (the keyboard keys without one); a chosen style uses its own letters."""
     if choice in STYLES:
         return choice, None, ''

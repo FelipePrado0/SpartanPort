@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# gow3: rewrites the FSR 4.1.1 postpass (spirv-dis text of dxil-spirv output) so that its image
+# spartanport: rewrites the FSR 4.1.1 postpass (spirv-dis text of dxil-spirv output) so that its image
 # stores go through workgroup memory, like tools/fsr4_post_lds.pl does for FSR 4 v07.
 #
 #   postpass_lds.py < postpass.spvasm > postpass_lds.spvasm   (then spirv-as --target-env spv1.3)
@@ -55,41 +55,41 @@ n = [0]
 
 def new(prefix):
     n[0] += 1
-    return f'%gow3_{prefix}{n[0]}'
+    return f'%spartanport_{prefix}{n[0]}'
 
 decl = [
-    '%gow3_u5 = OpConstant %uint 5', '%gow3_u31 = OpConstant %uint 31', '%gow3_u32 = OpConstant %uint 32',
-    '%gow3_u10 = OpConstant %uint 10', '%gow3_u256 = OpConstant %uint 256', '%gow3_u2 = OpConstant %uint 2',
-    '%gow3_u264 = OpConstant %uint 264', '%gow3_u10240 = OpConstant %uint 10240',
-] + [f'%gow3_c{c} = OpConstant %uint {c}' for c in range(10)] + [
-    '%gow3_arr = OpTypeArray %float %gow3_u10240',
-    '%gow3_ptr_arr = OpTypePointer Workgroup %gow3_arr',
-    '%gow3_ptr_f = OpTypePointer Workgroup %float',
-    '%gow3_lds = OpVariable %gow3_ptr_arr Workgroup',
+    '%spartanport_u5 = OpConstant %uint 5', '%spartanport_u31 = OpConstant %uint 31', '%spartanport_u32 = OpConstant %uint 32',
+    '%spartanport_u10 = OpConstant %uint 10', '%spartanport_u256 = OpConstant %uint 256', '%spartanport_u2 = OpConstant %uint 2',
+    '%spartanport_u264 = OpConstant %uint 264', '%spartanport_u10240 = OpConstant %uint 10240',
+] + [f'%spartanport_c{c} = OpConstant %uint {c}' for c in range(10)] + [
+    '%spartanport_arr = OpTypeArray %float %spartanport_u10240',
+    '%spartanport_ptr_arr = OpTypePointer Workgroup %spartanport_arr',
+    '%spartanport_ptr_f = OpTypePointer Workgroup %float',
+    '%spartanport_lds = OpVariable %spartanport_ptr_arr Workgroup',
 ]
 preamble = [
-    '%gow3_wgx_p = OpAccessChain %_ptr_Input_uint %gl_WorkGroupID %uint_0',
-    '%gow3_wgx = OpLoad %uint %gow3_wgx_p',
-    '%gow3_wgy_p = OpAccessChain %_ptr_Input_uint %gl_WorkGroupID %uint_1',
-    '%gow3_wgy = OpLoad %uint %gow3_wgy_p',
-    '%gow3_lid_p = OpAccessChain %_ptr_Input_uint %gl_LocalInvocationID %uint_0',
-    '%gow3_lid = OpLoad %uint %gow3_lid_p',
-    '%gow3_x0 = OpShiftLeftLogical %uint %gow3_wgx %gow3_u5',
-    '%gow3_y0 = OpShiftLeftLogical %uint %gow3_wgy %gow3_u5',
+    '%spartanport_wgx_p = OpAccessChain %_ptr_Input_uint %gl_WorkGroupID %uint_0',
+    '%spartanport_wgx = OpLoad %uint %spartanport_wgx_p',
+    '%spartanport_wgy_p = OpAccessChain %_ptr_Input_uint %gl_WorkGroupID %uint_1',
+    '%spartanport_wgy = OpLoad %uint %spartanport_wgy_p',
+    '%spartanport_lid_p = OpAccessChain %_ptr_Input_uint %gl_LocalInvocationID %uint_0',
+    '%spartanport_lid = OpLoad %uint %spartanport_lid_p',
+    '%spartanport_x0 = OpShiftLeftLogical %uint %spartanport_wgx %spartanport_u5',
+    '%spartanport_y0 = OpShiftLeftLogical %uint %spartanport_wgy %spartanport_u5',
 ]
 
 def flush():
-    code = ['OpControlBarrier %gow3_u2 %gow3_u2 %gow3_u264']
+    code = ['OpControlBarrier %spartanport_u2 %spartanport_u2 %spartanport_u264']
     for k in range(4):
         i, lx, ly, px, py = new('i'), new('lx'), new('ly'), new('px'), new('py')
         kk = new('k')
         code += [
             f'{kk} = OpConstant %uint {256 * k}' if False else '',
-            f'{i} = OpIAdd %uint %gow3_lid %gow3_k{k}',
-            f'{lx} = OpBitwiseAnd %uint {i} %gow3_u31',
-            f'{ly} = OpShiftRightLogical %uint {i} %gow3_u5',
-            f'{px} = OpIAdd %uint %gow3_x0 {lx}',
-            f'{py} = OpIAdd %uint %gow3_y0 {ly}',
+            f'{i} = OpIAdd %uint %spartanport_lid %spartanport_k{k}',
+            f'{lx} = OpBitwiseAnd %uint {i} %spartanport_u31',
+            f'{ly} = OpShiftRightLogical %uint {i} %spartanport_u5',
+            f'{px} = OpIAdd %uint %spartanport_x0 {lx}',
+            f'{py} = OpIAdd %uint %spartanport_y0 {ly}',
         ]
         tx, ty, cx, cy, c = new('tx'), new('ty'), new('cx'), new('cy'), new('c')
         code += [
@@ -99,14 +99,14 @@ def flush():
             f'{cy} = OpULessThan %bool {ty} {h2}',
             f'{c} = OpLogicalAnd %bool {cx} {cy}',
         ]
-        then, done = f'%gow3_then{k}', f'%gow3_done{k}'
+        then, done = f'%spartanport_then{k}', f'%spartanport_done{k}'
         code += [f'OpSelectionMerge {done} None', f'OpBranchConditional {c} {then} {done}', f'{then} = OpLabel']
         base = new('base')
-        code.append(f'{base} = OpIMul %uint {i} %gow3_u10')
+        code.append(f'{base} = OpIMul %uint {i} %spartanport_u10')
         vals = []
         for comp in range(10):
             e, p, v = new('e'), new('p'), new('v')
-            code += [f'{e} = OpIAdd %uint {base} %gow3_c{comp}', f'{p} = OpAccessChain %gow3_ptr_f %gow3_lds {e}',
+            code += [f'{e} = OpIAdd %uint {base} %spartanport_c{comp}', f'{p} = OpAccessChain %spartanport_ptr_f %spartanport_lds {e}',
                      f'{v} = OpLoad %float {p}']
             vals.append(v)
         coord = new('coord')
@@ -124,7 +124,7 @@ def flush():
         code += [f'OpBranch {done}', f'{done} = OpLabel']
     return [c for c in code if c]
 
-decl += [f'%gow3_k{k} = OpConstant %uint {256 * k}' for k in range(4)]
+decl += [f'%spartanport_k{k} = OpConstant %uint {256 * k}' for k in range(4)]
 
 stores = 0
 in_main = False
@@ -165,14 +165,14 @@ for idx, line in enumerate(lines):
             comps = [t[1], t[2], t[3]]
         lx, ly, row, pix, base = new('slx'), new('sly'), new('srow'), new('spix'), new('sbase')
         out += ['               ' + c for c in [
-            f'{lx} = OpISub %uint {x} %gow3_x0', f'{ly} = OpISub %uint {y} %gow3_y0',
-            f'{row} = OpShiftLeftLogical %uint {ly} %gow3_u5', f'{pix} = OpIAdd %uint {row} {lx}',
-            f'{base} = OpIMul %uint {pix} %gow3_u10']]
+            f'{lx} = OpISub %uint {x} %spartanport_x0', f'{ly} = OpISub %uint {y} %spartanport_y0',
+            f'{row} = OpShiftLeftLogical %uint {ly} %spartanport_u5', f'{pix} = OpIAdd %uint {row} {lx}',
+            f'{base} = OpIMul %uint {pix} %spartanport_u10']]
         for c, v in enumerate(comps):
             e, p = new('se'), new('sp')
             out += ['               ' + q for q in [
-                f'{e} = OpIAdd %uint {base} %gow3_c{SLOT[var] + c}',
-                f'{p} = OpAccessChain %gow3_ptr_f %gow3_lds {e}', f'OpStore {p} {v}']]
+                f'{e} = OpIAdd %uint {base} %spartanport_c{SLOT[var] + c}',
+                f'{p} = OpAccessChain %spartanport_ptr_f %spartanport_lds {e}', f'OpStore {p} {v}']]
         stores += 1
         continue
     if in_main and s == f'{merge} = OpLabel':

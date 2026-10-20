@@ -8,7 +8,7 @@
       (the build shadPS4's patches target): the sites below are addresses in it. Every site, cave and
       constant is then found in any build by a signature (Pattern/At) that is unique in that eboot.bin,
       like the built-in patches. The render resolution sites come from the built-in
-      patches/God_of_War_III_Remastered.xml (--xml to use another file).
+      patches/CUSA01623.xml (--xml to use another file).
 
   python tools/make_ultrawide_patch.py --rebase EBOOT_D85C WIDTH HEIGHT --mod FILE
       Rewrites the Address attributes of that entry to the addresses of the reference build
@@ -187,8 +187,8 @@ def entry(image, text, reference_lines, width, height, fov=None):
     note = (f'{what} and sets the Video Arena to {gib} GiB. Requires setting DMEM to {dmem} MB or more. Only leave '
             f'one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix.'
             + ('' if (width, height) in TESTED_IN_GAME else ' Not tested in game yet: please report how it looks.'))
-    out = [f'    <Metadata Title="God of War III Remastered" Name="Resolution Patch - {width}x{height}" Note="{note}" '
-           f'Author="gow3_pc ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">',
+    out = [f'    <Metadata Title="SpartanPort" Name="Resolution Patch - {width}x{height}" Note="{note}" '
+           f'Author="SpartanPort ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">',
            '        <PatchList>']
     out += [f'            <Line Type="bytes" Address="{a}" Value="{v}" Pattern="{p}" At="{t}"/>' for a, v, p, t in lines]
     out.append('        </PatchList>')
@@ -223,7 +223,7 @@ def rebase(xml_path, eboot, width, height):
 
 
 MOD_HEADER = """<?xml version="1.0"?>
-<!-- Ultrawide mod for God of War III Remastered (gow3_pc): "Resolution Patch - <width>x<height>" entries that
+<!-- Ultrawide mod for SpartanPort (SpartanPort): "Resolution Patch - <width>x<height>" entries that
      set the render resolution and widen the field of view (Hor+). Written by tools/make_ultrawide_patch.py.
      The Address attributes are addresses in the eboot.bin with sha256 6e72330e...; the signatures
      (Pattern/At) are what finds the sites. -->
@@ -242,7 +242,7 @@ def main():
     p.add_argument('width', type=int)
     p.add_argument('height', type=int)
     p.add_argument('--mod', type=Path, help='the mod\'s patch file to write (or to rebase with --rebase)')
-    p.add_argument('--xml', type=Path, default=Path(__file__).resolve().parent.parent / 'patches/God_of_War_III_Remastered.xml',
+    p.add_argument('--xml', type=Path, default=Path(__file__).resolve().parent.parent / 'patches/CUSA01623.xml',
                    help='the built-in patch file (the render resolution sites)')
     p.add_argument('--rebase', action='store_true')
     p.add_argument('--fov', type=float, default=None,

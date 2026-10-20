@@ -318,13 +318,13 @@ class ModTests(unittest.TestCase):
         probe = self.root / 'probe'
         probe.write_text(f'#!{sys.executable}\nimport json,sys,os\nfrom pathlib import Path\n'
             'game=Path(sys.argv[sys.argv.index("--app0")+1])\n'
-            'Path(os.environ["GOW3_DATA_DIR"],"mounted.json").write_text(json.dumps({\n'
+            'Path(os.environ["SPARTAN_DATA_DIR"],"mounted.json").write_text(json.dumps({\n'
             '"path":str(game),"content":(game/"dvdroot_ps4/data/a.wad").read_text()}))\n'
             'sys.exit(7)\n')
         probe.chmod(0o755)
-        env = dict(os.environ, GOW3_PROBE=str(probe),
-            GOW3_DATA_DIR=str(self.root), GOW3_GAME_DIR=str(self.game),
-            GOW3_MODS_DIR=str(self.moddir), GOW3_MODS_ENABLED='1', GOW3_MODS_CONFIG=str(self.root/'mods.json'))
+        env = dict(os.environ, SPARTAN_PROBE=str(probe),
+            SPARTAN_DATA_DIR=str(self.root), SPARTAN_GAME_DIR=str(self.game),
+            SPARTAN_MODS_DIR=str(self.moddir), SPARTAN_MODS_ENABLED='1', SPARTAN_MODS_CONFIG=str(self.root/'mods.json'))
         result = subprocess.run([sys.executable, 'run.py'], cwd=port, env=env, capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 7, result.stderr)
         mounted = json.loads((self.root / 'mounted.json').read_text())
@@ -333,8 +333,8 @@ class ModTests(unittest.TestCase):
         self.assertEqual((self.assets/'a.wad').read_bytes(), b'original')
 
 
-class GodOfWarLayout(unittest.TestCase):
-    """The GOW3PC game keeps its data in EXEC and one folder per language at the game root, with
+class GameLayout(unittest.TestCase):
+    """The game keeps its data in EXEC and one folder per language at the game root, with
     no dvdroot_ps4 folder (#473, #574)."""
 
     def setUp(self):

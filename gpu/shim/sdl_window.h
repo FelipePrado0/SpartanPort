@@ -1,4 +1,4 @@
-// gow3: the game window. Created by the VideoOut driver on first open; the
+// spartanport: the game window. Created by the VideoOut driver on first open; the
 // event pump runs on the port's window thread (see window.cpp).
 #pragma once
 #include <atomic>
@@ -44,7 +44,7 @@ private:
     std::atomic<bool> is_open{true};
     std::mutex text_mutex;
     bool text_requested{}, text_active{};
-    int display_mode = -1; ///< applied Gow3Settings display mode (window thread)
+    int display_mode = -1; ///< applied SpartanSettings display mode (window thread)
     bool mouse_locked = false; ///< relative mouse mode on (window thread)
     bool cursor_shown = false; ///< the system cursor is visible (window thread)
     void ApplyDisplayMode(int mode);

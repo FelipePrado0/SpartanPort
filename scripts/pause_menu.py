@@ -35,19 +35,19 @@ import struct
 
 from glyphs import entries
 
-VERSION = 7  # of the patch: a change rebuilds the cached copy
+VERSION = 8  # of the patch: a change rebuilds the cached copy
 WAD = 'EXEC/WAD/PS4_LE/R_UI.WAD'
 LABELS = {
     'en': b'Exit to Desktop',
-    'ja': 'デスクトップに戻る'.encode('utf-8'),
-    'zh': '返回桌面'.encode('utf-8'),
+    'ja': b'Exit to Desktop',
+    'zh': b'Exit to Desktop',
     'es': 'Salir al escritorio'.encode('utf-8'),
     'fr': 'Quitter vers le bureau'.encode('utf-8'),
     'de': 'Zurück zum Desktop'.encode('utf-8'),
     'it': 'Esci al desktop'.encode('utf-8'),
     'pl': 'Wyjdź do pulpitu'.encode('utf-8'),
     'pt': 'Sair para a área de trabalho'.encode('utf-8'),
-    'ru': 'Выход на рабочий стол'.encode('utf-8'),
+    'ru': b'Exit to Desktop',
 }
 LABEL = LABELS['en']
 LANGUAGE_ALIASES = {
@@ -72,9 +72,9 @@ LANGUAGE_ALIASES = {
 
 
 def resolve_label(language=None):
-    """(bytes, str) of (label_bytes, lang_key) for the given language (id or code, or GOW3_LANGUAGE)."""
+    """(bytes, str) of (label_bytes, lang_key) for the given language (id or code, or SPARTAN_LANGUAGE)."""
     if language is None:
-        language = os.environ.get('GOW3_LANGUAGE', '1')
+        language = os.environ.get('SPARTAN_LANGUAGE', '1')
     if isinstance(language, str):
         language = language.strip().lower()
     key = LANGUAGE_ALIASES.get(language, language)

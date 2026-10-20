@@ -70,7 +70,7 @@ static uint32_t call_charged(unsigned char* stub, void* pad) {
 }
 
 int main(int argc, char** argv) {
-    alignas(64) static Gow3QteState state;
+    alignas(64) static SpartanQteState state;
     static bool automatic;
     auto* code = static_cast<unsigned char*>(
         VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
@@ -82,14 +82,14 @@ int main(int argc, char** argv) {
     unsigned char* charged = code + 512;
     unsigned char* circle = code + 640;
     const auto flag = reinterpret_cast<uintptr_t>(&automatic);
-    assert(gow3_qte_build_update_stub(update, reinterpret_cast<uintptr_t>(&state.heartbeat),
+    assert(spartanport_qte_build_update_stub(update, reinterpret_cast<uintptr_t>(&state.heartbeat),
                                       reinterpret_cast<uintptr_t>(&qte_update_return)) < 128);
-    assert(gow3_qte_build_rotation_stub(rotation, reinterpret_cast<uintptr_t>(&state.pass), flag,
+    assert(spartanport_qte_build_rotation_stub(rotation, reinterpret_cast<uintptr_t>(&state.pass), flag,
                                         reinterpret_cast<uintptr_t>(&qte_rotation_return)) < 128);
-    assert(gow3_qte_build_timed_stub(timed, flag, reinterpret_cast<uintptr_t>(&qte_timed_return)) < 128);
-    assert(gow3_qte_build_repeat_stub(repeat, flag, reinterpret_cast<uintptr_t>(&qte_repeat_original)) < 128);
-    assert(gow3_qte_build_charged_stub(charged, flag, reinterpret_cast<uintptr_t>(&qte_charged_return)) < 128);
-    assert(gow3_qte_build_circle_stub(circle, flag, reinterpret_cast<uintptr_t>(&qte_circle_pressed),
+    assert(spartanport_qte_build_timed_stub(timed, flag, reinterpret_cast<uintptr_t>(&qte_timed_return)) < 128);
+    assert(spartanport_qte_build_repeat_stub(repeat, flag, reinterpret_cast<uintptr_t>(&qte_repeat_original)) < 128);
+    assert(spartanport_qte_build_charged_stub(charged, flag, reinterpret_cast<uintptr_t>(&qte_charged_return)) < 128);
+    assert(spartanport_qte_build_circle_stub(circle, flag, reinterpret_cast<uintptr_t>(&qte_circle_pressed),
                                       reinterpret_cast<uintptr_t>(&qte_circle_skip)) < 128);
     FlushInstructionCache(GetCurrentProcess(), code, 4096);
 
@@ -114,11 +114,11 @@ int main(int argc, char** argv) {
     std::memcpy(pad + 0x94, &held, 4);
     std::memcpy(pad + 0x98, &before, 4);
     alignas(8) uint8_t block[0x20] = {};
-    block[GOW3_QTE_TYPE_OFFSET] = 0;  // triangle
+    block[SPARTAN_QTE_TYPE_OFFSET] = 0;  // triangle
     assert(call_timed(timed, block, pad) == 0x40);
     automatic = true;
     assert(call_timed(timed, block, pad) == 0x10);
-    block[GOW3_QTE_TYPE_OFFSET] = 3;  // square
+    block[SPARTAN_QTE_TYPE_OFFSET] = 3;  // square
     assert(call_timed(timed, block, pad) == 0x80);
     automatic = false;
 
@@ -152,12 +152,12 @@ int main(int argc, char** argv) {
     automatic = false;
 
     // The state block from the rotation check's lea r8,[rip+disp], a call's target from its rel32.
-    unsigned char lea[GOW3_QTE_BLOCK_NEXT] = {};
+    unsigned char lea[SPARTAN_QTE_BLOCK_NEXT] = {};
     const int32_t displacement = 0x33940d;
-    std::memcpy(lea + GOW3_QTE_BLOCK_DISPLACEMENT, &displacement, 4);
-    assert(gow3_qte_block(lea, 0x12c280) == 0x4656b0);
+    std::memcpy(lea + SPARTAN_QTE_BLOCK_DISPLACEMENT, &displacement, 4);
+    assert(spartanport_qte_block(lea, 0x12c280) == 0x4656b0);
     const unsigned char call[5] = {0xe8, 0x5b, 0x77, 0xf4, 0xff};
-    assert(gow3_qte_call_target(call, 0x12b750) == 0x72eb0);
+    assert(spartanport_qte_call_target(call, 0x12b750) == 0x72eb0);
 
     if (argc > 1) {
         // The code segment starts at file offset 0x4000 (image offset 0).
@@ -166,20 +166,20 @@ int main(int argc, char** argv) {
         assert(data.size() > 0x4000);
         const unsigned char* image = data.data() + 0x4000;
         const uint64_t size = data.size() - 0x4000;
-        const uint64_t update_at = gow3_signature_find(image, size, &gow3_qte_update_site);
-        const uint64_t rotation_at = gow3_signature_find(image, size, &gow3_qte_rotation_site);
+        const uint64_t update_at = spartanport_signature_find(image, size, &spartanport_qte_update_site);
+        const uint64_t rotation_at = spartanport_signature_find(image, size, &spartanport_qte_rotation_site);
         assert(update_at != UINT64_MAX && rotation_at != UINT64_MAX);
-        assert(!std::memcmp(image + update_at, gow3_qte_update_original, GOW3_QTE_HOOK_LENGTH));
-        assert(!std::memcmp(image + rotation_at, gow3_qte_rotation_original, GOW3_QTE_HOOK_LENGTH));
-        const uint64_t block_at = gow3_qte_block(image + rotation_at, rotation_at);
+        assert(!std::memcmp(image + update_at, spartanport_qte_update_original, SPARTAN_QTE_HOOK_LENGTH));
+        assert(!std::memcmp(image + rotation_at, spartanport_qte_rotation_original, SPARTAN_QTE_HOOK_LENGTH));
+        const uint64_t block_at = spartanport_qte_block(image + rotation_at, rotation_at);
         assert(block_at > update_at && block_at % 8 == 0);
-        const uint64_t timed_at = gow3_signature_find(image, size, &gow3_qte_timed_site);
-        const uint64_t repeat_at = gow3_signature_find(image, size, &gow3_qte_repeat_site);
-        const uint64_t charged_at = gow3_signature_find(image, size, &gow3_qte_charged_site);
-        const uint64_t circle_at = gow3_signature_find(image, size, &gow3_qte_circle_site);
+        const uint64_t timed_at = spartanport_signature_find(image, size, &spartanport_qte_timed_site);
+        const uint64_t repeat_at = spartanport_signature_find(image, size, &spartanport_qte_repeat_site);
+        const uint64_t charged_at = spartanport_signature_find(image, size, &spartanport_qte_charged_site);
+        const uint64_t circle_at = spartanport_signature_find(image, size, &spartanport_qte_circle_site);
         assert(timed_at != UINT64_MAX && repeat_at != UINT64_MAX && charged_at != UINT64_MAX);
-        assert(circle_at != UINT64_MAX && image[circle_at + GOW3_QTE_CIRCLE_LENGTH] == 0xc4 &&  // vmovss
-               image[circle_at + GOW3_QTE_CIRCLE_SKIP] == 0x4b);                              // lea
+        assert(circle_at != UINT64_MAX && image[circle_at + SPARTAN_QTE_CIRCLE_LENGTH] == 0xc4 &&  // vmovss
+               image[circle_at + SPARTAN_QTE_CIRCLE_SKIP] == 0x4b);                              // lea
         assert(timed_at > update_at && timed_at < update_at + 0x200);  // inside the timed update
         assert(image[repeat_at] == 0xe8);
         std::printf("QTE sites: update 0x%llx, rotation 0x%llx, state block 0x%llx, timed 0x%llx, "
@@ -187,7 +187,7 @@ int main(int argc, char** argv) {
                     static_cast<unsigned long long>(update_at), static_cast<unsigned long long>(rotation_at),
                     static_cast<unsigned long long>(block_at), static_cast<unsigned long long>(timed_at),
                     static_cast<unsigned long long>(repeat_at),
-                    static_cast<unsigned long long>(gow3_qte_call_target(image + repeat_at, repeat_at)),
+                    static_cast<unsigned long long>(spartanport_qte_call_target(image + repeat_at, repeat_at)),
                     static_cast<unsigned long long>(charged_at), static_cast<unsigned long long>(circle_at));
     }
     VirtualFree(code, 0, MEM_RELEASE);

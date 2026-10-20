@@ -1,22 +1,33 @@
-# God of War III Remastered for PC 
+<p align="center">
+  <img src="packaging/icon/monogram.png" alt="SP" width="160"><br>
+  <img src="docs/images/spartanport-logo.png" alt="SpartanPort" width="600">
+</p>
+
+# SpartanPort
 
 <div align="center">
-  <a href="https://trendshift.io/repositories/299469?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-299469" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/299469/daily?language=C%2B%2B" alt="FelipePrado0%2Fgow3_pc | Trendshift" width="250" height="55"/></a>
+  <a href="https://trendshift.io/repositories/299469?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-299469" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/299469/daily?language=C%2B%2B" alt="FelipePrado0%2FSpartanPort | Trendshift" width="250" height="55"/></a>
 </div>
 
-[English](https://github.com/FelipePrado0/gow3_pc/blob/main/README.md) | [Português (Brasil)](https://github.com/FelipePrado0/gow3_pc/blob/main/README.pt-BR.md) | **Español**
+[English](https://github.com/FelipePrado0/SpartanPort/blob/main/README.md) | [Português (Brasil)](https://github.com/FelipePrado0/SpartanPort/blob/main/README.pt-BR.md) | **Español**
 
-Port para PC de **God of War III Remastered** (PlayStation 4) para Windows 10/11 y Linux
-(AppImage experimental).
+**SpartanPort** es un port no oficial para PC de **God of War III Remastered** (PlayStation 4) para Windows 10/11
+y Linux (AppImage experimental).
 
 > **No se incluyen archivos del juego.** Necesitás un dump de tu propia PS4 (probados: CUSA01623 y
 > CUSA01715, versiones 01.00 y 01.02).
-> Este proyecto no está afiliado a Sony Interactive Entertainment ni a Santa Monica Studio.
+> Este proyecto no está afiliado a Sony Interactive Entertainment ni a Santa Monica Studio, ni cuenta con su respaldo.
 > God of War es una marca registrada de Sony Interactive Entertainment.
+
+> **Antes gow3_pc.** Actualizar desde la 2.5.0 con el launcher conserva tus partidas y ajustes: en el
+> primer inicio, los ajustes del juego (`gow3.ini`), los del launcher y, en Linux, la carpeta de datos
+> (`~/.local/share/gow3`) se copian a sus nombres nuevos. Los archivos viejos quedan donde estaban y
+> los accesos directos existentes siguen funcionando. En Linux, el AppImage ahora es
+> `spartanport-x86_64.AppImage`: actualizá las opciones de inicio de Steam que usan el nombre viejo.
 
 ## Índice
 
-- [God of War III Remastered for PC](#god-of-war-iii-remastered-for-pc)
+- [SpartanPort](#spartanport)
   - [Índice](#índice)
   - [Descargar y jugar](#descargar-y-jugar)
   - [Linux (AppImage, experimental)](#linux-appimage-experimental)
@@ -54,11 +65,11 @@ Port para PC de **God of War III Remastered** (PlayStation 4) para Windows 10/11
 
 **Pasos**
 
-1. Descargá `gow3-windows.zip` desde la
-   [página de Releases](https://github.com/FelipePrado0/gow3_pc/releases/latest).
-2. Extraelo en una carpeta a tu elección, por ejemplo `C:\Games\gow3-windows`. No lo ejecutes
+1. Descargá `spartanport-windows.zip` desde la
+   [página de Releases](https://github.com/FelipePrado0/SpartanPort/releases/latest).
+2. Extraelo en una carpeta a tu elección, por ejemplo `C:\Games\spartanport-windows`. No lo ejecutes
    desde dentro del zip.
-3. Abrí **`God of War III.exe`**. Si Windows muestra "Windows protegió su PC", hacé clic en
+3. Abrí **`SpartanPort.exe`**. Si Windows muestra "Windows protegió su PC", hacé clic en
    **Más información** y después en **Ejecutar de todas formas**: el programa no está firmado
    digitalmente.
 4. Hacé clic en **Choose the game folder**. Te lleva a la página **Game**. Junto a **Game folder**,
@@ -86,10 +97,10 @@ resolución reemplaza la corrección de texturas.
 
 **La próxima vez**
 
-- **`Play God of War III.exe`** inicia el juego directamente con tus ajustes guardados. Podés crear
+- **`Play SpartanPort.exe`** inicia el juego directamente con tus ajustes guardados. Podés crear
   un acceso directo en el escritorio o agregarlo a Steam con **Agregar un juego que no es de Steam**.
 - Tus partidas, la caché de shaders y el log están en la carpeta `user`, junto a
-  `God of War III.exe`. Conservá esa carpeta cuando actualices.
+  `SpartanPort.exe`. Conservá esa carpeta cuando actualices.
 - **Advanced → Check for updates** descarga e instala una versión nueva. Tus partidas y ajustes se
   conservan.
 
@@ -104,12 +115,12 @@ Fedora 42, Arch y openSUSE Tumbleweed; esto no comprueba gameplay en todas las G
 
 **Descargar y ejecutar**
 
-1. Descargá `gow3-x86_64.AppImage` desde la
-   [página de Releases](https://github.com/FelipePrado0/gow3_pc/releases/latest).
+1. Descargá `spartanport-x86_64.AppImage` desde la
+   [página de Releases](https://github.com/FelipePrado0/SpartanPort/releases/latest).
 2. En la carpeta del archivo, ejecutá:
    ```bash
-   chmod +x gow3-x86_64.AppImage
-   ./gow3-x86_64.AppImage
+   chmod +x spartanport-x86_64.AppImage
+   ./spartanport-x86_64.AppImage
    ```
 3. Elegí la carpeta del juego, guardá los ajustes y presioná **PLAY**.
 
@@ -118,19 +129,19 @@ El actualizador de Windows no está disponible en Linux; descargá un AppImage n
 La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 2.2.0 publicado.
 
 - **Archivos:** las partidas, los ajustes, la caché de shaders y el log están en
-  `~/.local/share/gow3`; los ajustes propios del launcher en `~/.config/gow3-launcher`.
+  `~/.local/share/spartanport`; los ajustes propios del launcher en `~/.config/spartanport-launcher`.
 - **Carpeta de actualización:** si la actualización se volcó por separado del juego, elegila en
   **Game → Update folder**. Se superpone a la carpeta del juego sin modificar ninguna de las dos.
 - **Advanced → Linux:** sistema de ventanas (automático, Wayland o X11), GameMode y MangoHud. Solo se
   pueden activar las herramientas instaladas en el sistema.
-- **Steam:** **Advanced → Add to Steam** agrega "God of War III Remastered" como juego que no es de
+- **Steam:** **Advanced → Add to Steam** agrega "SpartanPort" como juego que no es de
   Steam, con el ícono, las cápsulas vertical y horizontal, el fondo de la biblioteca y el logo hechos
   a partir de las imágenes del dump. Cerrá Steam primero (reescribe sus accesos directos al salir).
   El botón también está en el launcher de Windows (aún no probado ahí).
 - **Steam Deck / SteamOS (Gaming Mode):** si Steam intenta ejecutar el AppImage con Proton, abrí
   **Propiedades → Compatibilidad** del acceso directo y seleccioná **Steam Linux Runtime** en lugar de Proton.
   El AppImage es una aplicación nativa de Linux.
-- **Entrada de menú:** el AppImage escribe `~/.local/share/applications/gow3.desktop` al iniciar,
+- **Entrada de menú:** el AppImage escribe `~/.local/share/applications/spartanport.desktop` al iniciar,
   para que el launcher y la ventana del juego muestren su ícono en el dock; **Advanced → Linux** lo
   desactiva y elimina la entrada.
 
@@ -145,14 +156,14 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
   autoguardado también funciona. El launcher hace una copia de seguridad de las partidas antes de
   cada inicio.
 - Parches: resolución de render de 480p, 720p, 900p, 1440p, 1800p o 4K, corrección de texturas corruptas
-  y saltar videos con el botón X (comunidad); tasa de cuadros del motor de 120 FPS (kvicken), 100 FPS (para pantallas de 100 Hz) o 240
-  FPS (adaptado por Felipe Prado).
+  y saltar videos con el botón X (comunidad); tasa de cuadros del motor de 120 FPS (kvicken), 100 FPS (para pantallas de 100 Hz),
+  144 FPS (para pantallas de 144 Hz) o 240 FPS (adaptado por Felipe Prado).
 - **Ultrawide (beta):** resoluciones 21:9, 32:9 y 16:10 (3440x1440 probada) con un campo de visión más ancho en
   lugar de una imagen con zoom, ya incluidas: elige una en **Resolución de render**, donde cada opción muestra la
   resolución exacta y la relación de aspecto. Las escenas de vídeo mantienen sus bordes 16:9 (ver
   [docs/ultrawide.md](docs/ultrawide.md)). Los mods también pueden incluir parches del juego; el
   [mod Ultrawide](extras/mods/Ultrawide) es lo mismo para versiones anteriores.
-  **Cómo instalar un mod:** pon su `.zip` (sin descomprimir) en la carpeta `mods`, junto a `God of War III.exe`; el
+  **Cómo instalar un mod:** pon su `.zip` (sin descomprimir) en la carpeta `mods`, junto a `SpartanPort.exe`; el
   juego lo descomprime solo. El mod Ultrawide y un instalador de un clic para la 2.2.0 se explican en
   [extras/mods/Ultrawide](extras/mods/Ultrawide/README.md).
 - **Compilación de shaders en segundo plano:** los pipelines guardados se cargan y compilan
@@ -178,7 +189,7 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
 
 ## Disponibilidad de funciones
 
-Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/gow3_pc/releases/tag/windows-v2.2.0) y en el código el 14 de octubre de 2026.
+Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/SpartanPort/releases/tag/windows-v2.2.0) y en el código el 14 de octubre de 2026.
 
 | Función | Paquetes 2.2.0 publicados | Código actual |
 |---|---|---|
@@ -195,15 +206,15 @@ para los cambios en descargas posteriores.
 
 ## Configuración
 
-Los ajustes se guardan en `gow3.ini` (el juego y el menú dentro del juego) y en
+Los ajustes se guardan en `spartanport.ini` (el juego y el menú dentro del juego) y en
 `settings.json` (el launcher), en la carpeta del port. Las partidas, la caché de shaders y
 `last_run.log` van a la carpeta `user` del proyecto.
 
 En **Performance → GPU data → Stream buffer memory**, elegí **System RAM (cached, default)**,
 **System RAM (uncached)** o **GPU memory (previous behavior)**. La RAM del sistema puede mejorar los
 cuadros por segundo en notebooks con NVIDIA. La elección se guarda y se aplica en el próximo inicio
-del juego, incluso al usar `Play God of War III.exe` o `--play`. Elegí GPU memory para restaurar el
-comportamiento de asignación anterior. Para inicios directos sin el launcher, `GOW3_STREAM_MEMORY`
+del juego, incluso al usar `Play SpartanPort.exe` o `--play`. Elegí GPU memory para restaurar el
+comportamiento de asignación anterior. Para inicios directos sin el launcher, `SPARTAN_STREAM_MEMORY`
 acepta `cached`, `host` o `device`; la elección guardada por el launcher tiene prioridad cuando se
 usa.
 
@@ -215,8 +226,8 @@ multimuestreadas en el resto (NVIDIA). La etiqueta nombra la placa y la decisió
 "Automatic (Intel(R) Arc(TM) A750 Graphics: off)", y sigue la elección de **Graphics card**. La regla
 cubre toda GPU con esos dos drivers, incluidas las integradas; la línea del log del juego `GPU: guest
 multisampling off` u `on` indica lo que se aplicó. Elegí **Off** si las líneas aparecen en otra placa
-y **On** para mantener el multimuestreo de todas formas. Off y On establecen `GOW3_NO_MSAA=1` o `0`;
-Automatic deja pasar un `GOW3_NO_MSAA` heredado. Se aplica en el próximo inicio del juego.
+y **On** para mantener el multimuestreo de todas formas. Off y On establecen `SPARTAN_NO_MSAA=1` o `0`;
+Automatic deja pasar un `SPARTAN_NO_MSAA` heredado. Se aplica en el próximo inicio del juego.
 
 ## Controles de teclado
 
@@ -264,7 +275,7 @@ dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* 
 presiona cada botón, según tu mapeo del teclado (una tecla cambiada aparece en el próximo inicio);
 *Match my controller* también muestra las teclas cuando no hay un control conectado. El launcher escribe una copia
 parcheada de dos archivos del juego en la carpeta de datos del port y nunca modifica tu carpeta del
-juego. Un control nuevo se detecta después de reiniciar. Sin el launcher, definí `GOW3_GLYPH_STYLE`
+juego. Un control nuevo se detecta después de reiniciar. Sin el launcher, definí `SPARTAN_GLYPH_STYLE`
 como `auto`, `xbox`, `nintendo` o `keyboard` antes de iniciar `run.py`.
 
 En el menú: L1/R1 o Q/E cambian de pestaña. En la lista de partidas: las flechas o la cruceta eligen,
@@ -272,14 +283,14 @@ Enter o Cruz confirman, Esc o Círculo cancelan.
 
 ## Importar partidas de shadPS4
 
-Solo son compatibles las **partidas de shadPS4 de God of War III Remastered**. Las partidas de RPCS3
+Solo son compatibles las **partidas de shadPS4 de este juego**. Las partidas de RPCS3
 son del juego de PS3 y no funcionan. Usá el mismo ID de título (este ejemplo usa `CUSA01623`).
 
 1. Cerrá el juego y shadPS4. Hacé una copia de seguridad de ambas carpetas de partidas.
 2. Buscá el origen en la carpeta de datos de shadPS4: `user\savedata\1\CUSA01623\` en versiones
    anteriores, o `home\<user-id>\savedata\CUSA01623\` en versiones más nuevas.
-3. El destino es **`user\savedata\1\CUSA01623\` junto a `God of War III.exe`**.
-   Ejemplo: `C:\Games\gow3-windows\user\savedata\1\CUSA01623\`. Con una **Saves folder**
+3. El destino es **`user\savedata\1\CUSA01623\` junto a `SpartanPort.exe`**.
+   Ejemplo: `C:\Games\spartanport-windows\user\savedata\1\CUSA01623\`. Con una **Saves folder**
    personalizada en el launcher, usá `<carpeta personalizada>\savedata\1\CUSA01623\`.
 4. Copiá cada carpeta de slot allí, conservando su nombre y los archivos del juego. No anides otra
    carpeta `CUSA01623`. Excluí la carpeta interna `sce_sys` del slot de los datos del juego.
@@ -297,8 +308,8 @@ restaurá la configuración anterior de Saves folder después de probar.
 
 ## Overlays de terceros (Windows)
 
-El proceso del juego es **`bin\gow3-probe.exe`**, no `God of War III.exe` (las builds desde el código
-fuente usan `out\gow3-probe.exe`). Agregá ese ejecutable a RTSS y activá la visualización en pantalla
+El proceso del juego es **`bin\spartanport-probe.exe`**, no `SpartanPort.exe` (las builds desde el código
+fuente usan `out\spartanport-probe.exe`). Agregá ese ejecutable a RTSS y activá la visualización en pantalla
 de Afterburner. En el instalador de ReShade, seleccioná ese mismo ejecutable y la API **Vulkan**.
 
 Si el overlay sigue sin aparecer, informá las versiones del port y del overlay, la última versión del
@@ -319,8 +330,8 @@ para todas las configuraciones de overlay.
 - Texturas amarillas/naranjas/blancas o iluminación incorrecta: probá desactivar **Performance →
   GPU data → Deferred GPU readbacks** y reiniciar el juego. Esta alternativa puede causar tirones.
 - Los fallos gráficos por GPU, cierres, problemas de audio y bloqueos de progreso siguen bajo
-  investigación. Revisá las [notas de la release](https://github.com/FelipePrado0/gow3_pc/releases/latest)
-  y los [issues](https://github.com/FelipePrado0/gow3_pc/issues) antes de reportar; cuando corresponda,
+  investigación. Revisá las [notas de la release](https://github.com/FelipePrado0/SpartanPort/releases/latest)
+  y los [issues](https://github.com/FelipePrado0/SpartanPort/issues) antes de reportar; cuando corresponda,
   incluí una partida guardada anterior al problema.
 
 ## Rendimiento y compatibilidad
@@ -347,23 +358,23 @@ python -m pip install pillow iced-x86==1.21.0
 Los comandos de compilación siguientes usan MSYS2 CLANG64; los comandos del launcher marcados
 como PowerShell usan la instalación de Python para Windows.
 
-El desarrollo ocurre en la rama `gow3`; `main` recibe merges ya probados.
+El desarrollo ocurre en la rama `spartanport`; `main` recibe merges ya probados.
 
 1. Instalá MSYS2 (`winget install MSYS2.MSYS2`) y, en la consola **MSYS2 CLANG64**, los paquetes
-   listados en [packaging/windows/README.md](https://github.com/FelipePrado0/gow3_pc/blob/main/packaging/windows/README.md).
+   listados en [packaging/windows/README.md](https://github.com/FelipePrado0/SpartanPort/blob/main/packaging/windows/README.md).
 2. Cloná el repositorio con sus submódulos y compilá:
 
    ```bash
-   git clone --recursive https://github.com/FelipePrado0/gow3_pc
-   cd gow3_pc
-   git checkout gow3   # development branch; omit to build main
+   git clone --recursive https://github.com/FelipePrado0/SpartanPort
+   cd SpartanPort
+   git checkout spartanport   # development branch; omit to build main
    bash build.sh
    ```
 
 3. Iniciá el launcher (en PowerShell, en la carpeta del proyecto):
 
    ```powershell
-   python launcher/gow3_launcher_win.py
+   python launcher/spartanport_launcher_win.py
    ```
 
 4. En **Game**, elegí la carpeta del juego y los parches. Ajustá **Graphics** y **Performance**,
@@ -373,13 +384,13 @@ Para jugar con los ajustes guardados sin abrir la ventana del launcher (para un 
 Steam):
 
 ```powershell
-python launcher/gow3_launcher_win.py --play
+python launcher/spartanport_launcher_win.py --play
 ```
 
 O sin el launcher:
 
 ```powershell
-$env:GOW3_GAME_DIR = 'D:\ruta\CUSA01623'
+$env:SPARTAN_GAME_DIR = 'D:\ruta\CUSA01623'
 python run.py
 ```
 
@@ -392,24 +403,24 @@ predeterminado y crea `out/venv` con PyInstaller, Pillow e iced-x86. Está desti
 del repositorio y omití los dos primeros comandos.
 
 ```bash
-git clone --recursive https://github.com/FelipePrado0/gow3_pc
-cd gow3_pc
+git clone --recursive https://github.com/FelipePrado0/SpartanPort
+cd SpartanPort
 bash packaging/linux/ci-deps.sh
 bash build.sh
-out/venv/bin/python launcher/gow3_launcher_win.py
+out/venv/bin/python launcher/spartanport_launcher_win.py
 ```
 
 Para generar un AppImage después de compilar:
 
 ```bash
 PATH="$PWD/out/venv/bin:$PATH" bash packaging/linux/build.sh
-./dist/gow3-x86_64.AppImage
+./dist/spartanport-x86_64.AppImage
 ```
 
 El entorno de compilación se crea antes del comando de empaquetado. Compilar en una distribución
 más nueva puede requerir una glibc más nueva; las builds públicas usan Ubuntu 24.04. En la carpeta
-del repositorio, usá `out/venv/bin/python launcher/gow3_launcher_win.py --play` para los ajustes
-guardados del launcher, o `GOW3_GAME_DIR=/ruta/a/CUSA01623 out/venv/bin/python run.py` para
+del repositorio, usá `out/venv/bin/python launcher/spartanport_launcher_win.py --play` para los ajustes
+guardados del launcher, o `SPARTAN_GAME_DIR=/ruta/a/CUSA01623 out/venv/bin/python run.py` para
 iniciar directamente.
 
 ## Tests
@@ -455,12 +466,12 @@ la carpeta de tu juego:
 ```bash
 ninja -C out/gpu stat-multipliers-test
 out/gpu/stat-multipliers-test.exe out/eboot.elf
-out/gow3-probe.exe out/boot-linked.bin --app0 "D:/Games/CUSA01623" --check-imports
+out/spartanport-probe.exe out/boot-linked.bin --app0 "D:/Games/CUSA01623" --check-imports
 ```
 
-En Linux, usá `out/gpu/stat-multipliers-test` y `out/gow3-probe`, sin `.exe`, y una ruta Linux
+En Linux, usá `out/gpu/stat-multipliers-test` y `out/spartanport-probe`, sin `.exe`, y una ruta Linux
 para el juego. `--check-imports` verifica los imports del sistema y termina sin iniciar el
-gameplay. Hay más targets en [gpu/CMakeLists.txt](https://github.com/FelipePrado0/gow3_pc/blob/main/gpu/CMakeLists.txt).
+gameplay. Hay más targets en [gpu/CMakeLists.txt](https://github.com/FelipePrado0/SpartanPort/blob/main/gpu/CMakeLists.txt).
 
 ## Cómo funciona
 
@@ -468,7 +479,7 @@ La parte de la CPU es nativa: el ejecutable original del juego corre directament
 de la PC (la PS4 usa la misma arquitectura x86-64), y un runtime escrito para este juego reemplaza
 las bibliotecas del sistema de la PS4, sin emulación de CPU. Los gráficos se traducen: corren
 sobre el video core de [shadPS4](https://github.com/shadps4-emu/shadPS4), que convierte los
-comandos y shaders de la GPU de la PS4 a Vulkan, con las correcciones de renderizado de God of War
+comandos y shaders de la GPU de la PS4 a Vulkan, con las correcciones de renderizado del juego
 III de la [rama `eltutz` de cuesta4](https://github.com/cuesta4/shadPS4/tree/eltutz). Ejecutar el
 código del juego directamente en la CPU es también como funciona shadPS4; lo que este proyecto
 cambia es la capa del sistema y el trabajo específico del juego (parches, caché de shaders en
@@ -487,13 +498,13 @@ Es un fork del [port para Windows de Supermedo](https://github.com/Supermedo/blo
 | Preparación | `scripts/` | Lee `eboot.bin`, aplica sus relocaciones y enlaza las `libc` y `libSceFios2` propias del juego en una sola imagen |
 | Loader | `src/probe.c` | Carga la imagen, instala los hooks validados (trucos, multiplicadores, barra de vida) e inicia el código original del juego |
 | Runtime | `src/runtime_*.c` | Reimplementa las funciones del sistema de la PS4: memoria, hilos, archivos, audio, video, control, partidas y servicios |
-| GPU | `gpu/shadps4/` | El video core de shadPS4, que traduce los comandos y shaders de la GPU de la PS4 a Vulkan, con las correcciones de God of War III de cuesta4 (rama `eltutz`) y el trabajo de velocidad de este port (caché de shaders en segundo plano, lecturas diferidas) |
-| Menú dentro del juego | `gpu/shim/gow3_overlay.cpp` | El menú Dear ImGui y el overlay de rendimiento; ajustes en `gpu/shim/gow3_settings.cpp` |
-| Parches | `patches/God_of_War_III_Remastered.xml`, `scripts/patches.py` | Se aplican en memoria al iniciar, sin modificar los archivos del juego |
-| Launcher | `launcher/gow3_launcher_win.py` | Ajustes, parches, mods, controles y el botón de jugar |
+| GPU | `gpu/shadps4/` | El video core de shadPS4, que traduce los comandos y shaders de la GPU de la PS4 a Vulkan, con las correcciones de cuesta4 para este juego (rama `eltutz`) y el trabajo de velocidad de este port (caché de shaders en segundo plano, lecturas diferidas) |
+| Menú dentro del juego | `gpu/shim/spartanport_overlay.cpp` | El menú Dear ImGui y el overlay de rendimiento; ajustes en `gpu/shim/spartanport_settings.cpp` |
+| Parches | `patches/CUSA01623.xml`, `scripts/patches.py` | Se aplican en memoria al iniciar, sin modificar los archivos del juego |
+| Launcher | `launcher/spartanport_launcher_win.py` | Ajustes, parches, mods, controles y el botón de jugar |
 
-Más documentación: [mods](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/MODS.es.md), [parches](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/PATCHES.es.md), [mapa de cuadros e historial de investigación de escaladores](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/upscaler.md)
-y [trabajo paralelo de GPU](https://github.com/FelipePrado0/gow3_pc/blob/main/docs/parallel_gpu.md).
+Más documentación: [mods](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/MODS.es.md), [parches](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/PATCHES.es.md), [mapa de cuadros e historial de investigación de escaladores](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/upscaler.md)
+y [trabajo paralelo de GPU](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/parallel_gpu.md).
 
 ## Créditos
 
@@ -504,19 +515,21 @@ deadinside28:
   original.
 - **Supermedo** (Mohammed Albarghouthi): [bloodborne_pc para Windows](https://github.com/Supermedo/bloodborne_pc),
   el fork del que proviene este proyecto.
-- **cuesta4**: [fork de shadPS4 enfocado en God of War III Remastered](https://github.com/cuesta4/shadPS4/tree/eltutz)
+- **cuesta4**: [fork de shadPS4 enfocado en este juego](https://github.com/cuesta4/shadPS4/tree/eltutz)
   (rama `eltutz`). El renderizado del juego en este port depende de sus correcciones: la reescritura
   del blend GNM, el estado de depth/stencil y el aliasing de imágenes. cuesta4 también es coautor de
   los parches de resolución, corrección de texturas, 120 FPS y saltar videos (abajo). Si jugás en
-  shadPS4, esta es la build a usar para God of War III.
+  shadPS4, esta es la build a usar para este juego.
 - **Equipo de shadPS4**: el video core de [shadPS4](https://github.com/shadps4-emu/shadPS4), que
   hace toda la traducción de GPU y shaders a Vulkan en este port.
+- **[WilkPrintes](https://github.com/WilkPrintes)**: diseñó y construyó el
+  [sitio de SpartanPort](https://spartanport.com/es). Un agradecimiento especial por darle un hogar al proyecto.
 
 Parches: kvicken y cuesta4 (resolución, corrección de texturas, 120 FPS y saltar videos, sobre los
 parches de PS3 de illusion0001), publicados para shadPS4 en
 [shadps4-emu/ps4_cheats#145](https://github.com/shadps4-emu/ps4_cheats/pull/145) y adaptados a este
-ejecutable. El parche de 240 FPS fue adaptado por Felipe Prado a partir del de 120 FPS; el de 100 FPS es el mismo
-parche con 100.
+ejecutable. Los parches de 144 y 240 FPS fueron adaptados por Felipe Prado a partir del de 120 FPS; el de 100 FPS es
+el mismo parche con 100.
 Trucos: adaptados de los [GoldHEN cheats](https://github.com/GoldHEN/GoldHEN_Cheat_Repository) de
 Celogamez.
 
@@ -530,5 +543,5 @@ También se usan: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmp
 
 ## Licencia
 
-GNU GPL v2 o posterior ([LICENSE](https://github.com/FelipePrado0/gow3_pc/blob/main/LICENSE)). Los componentes de terceros conservan sus propias
+GNU GPL v2 o posterior ([LICENSE](https://github.com/FelipePrado0/SpartanPort/blob/main/LICENSE)). Los componentes de terceros conservan sus propias
 licencias.

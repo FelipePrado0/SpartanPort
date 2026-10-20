@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// GOW3_NO_MSAA (video_core/amdgpu/gow3_msaa.h): guest multisampled images created and sampled
-// as single-sampled ones on AMD's and Intel's Windows drivers (gow3_msaa_default.h), while
+// SPARTAN_NO_MSAA (video_core/amdgpu/spartanport_msaa.h): guest multisampled images created and sampled
+// as single-sampled ones on AMD's and Intel's Windows drivers (spartanport_msaa_default.h), while
 // every size in guest memory keeps the real sample count. No game or Vulkan device required.
 #include <cassert>
 #include <cstdio>
@@ -9,8 +9,8 @@
 #include <string_view>
 
 #include "common/logging/log.h"
-#include "video_core/amdgpu/gow3_msaa.h"
-#include "video_core/amdgpu/gow3_msaa_default.h"
+#include "video_core/amdgpu/spartanport_msaa.h"
+#include "video_core/amdgpu/spartanport_msaa_default.h"
 #include "video_core/amdgpu/regs_color.h"
 #include "video_core/amdgpu/regs_depth.h"
 #include "video_core/amdgpu/regs_primitive.h"
@@ -84,15 +84,15 @@ int main() {
     assert(depth.GetDepthSliceSize() == depth_slice);
     no_msaa.store(false);
 
-    // The default per Vulkan driver, shared by vk_instance.cpp and gow3-gpu-capabilities --list:
+    // The default per Vulkan driver, shared by vk_instance.cpp and spartanport-gpu-capabilities --list:
     // off where the 2-sample depth fetch is wrong (#65 RX 6600, #28 Arc), on elsewhere.
-    assert(gow3_no_msaa_default(VK_DRIVER_ID_AMD_PROPRIETARY));
-    assert(gow3_no_msaa_default(VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS));
+    assert(spartanport_no_msaa_default(VK_DRIVER_ID_AMD_PROPRIETARY));
+    assert(spartanport_no_msaa_default(VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS));
     for (const VkDriverId keeps_msaa :
          {VK_DRIVER_ID_NVIDIA_PROPRIETARY, VK_DRIVER_ID_MESA_RADV, VK_DRIVER_ID_AMD_OPEN_SOURCE,
           VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA, VK_DRIVER_ID_MOLTENVK, VK_DRIVER_ID_MESA_LLVMPIPE,
           static_cast<VkDriverId>(0)}) {
-        assert(!gow3_no_msaa_default(keeps_msaa));
+        assert(!spartanport_no_msaa_default(keeps_msaa));
     }
 
     std::puts("no msaa OK");

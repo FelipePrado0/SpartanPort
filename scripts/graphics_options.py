@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Startup graphics options of gow3.ini (gpu/shim/gow3_graphics.h) for run.py.
+"""Startup graphics options of spartanport.ini (gpu/shim/spartanport_graphics.h) for run.py.
 
 The in-game menu and the launcher write them; run.py turns them into game patches and
 environment variables at every start, so "Apply and restart" uses the new values. After a
@@ -23,7 +23,7 @@ BETA_RESOLUTIONS = tuple(r for r in RESOLUTIONS[7:] if r not in TESTED_RESOLUTIO
 SIZES = {'native': (1920, 1080), '480p': (854, 480), '720p': (1280, 720), '900p': (1600, 900),
          '1440p': (2560, 1440), '1800p': (3200, 1800), '4K': (3840, 2160), '8K': (7680, 4320)}
 ASPECTS = (('16:9', 16 / 9), ('16:10', 16 / 10), ('21:9', 2.37), ('32:9', 32 / 9), ('4:3', 4 / 3))
-ENGINE_FPS = (60, 100, 120, 240)
+ENGINE_FPS = (60, 100, 120, 144, 180, 240)
 DEFAULTS = {'render_resolution': 'native', 'engine_fps': '120', 'deferred_readback': '1',
             'stale_readback': '1', 'async_shaders': '1'}
 RESOLUTION_PREFIX = 'Resolution Patch'
@@ -50,7 +50,7 @@ def write_keys(path, updates):
     try:
         lines = path.read_text(encoding='utf-8').splitlines()
     except OSError:
-        lines = ['# gow3 settings (in-game menu: Insert / R3+L2)']
+        lines = ['# spartanport settings (in-game menu: Insert / R3+L2)']
     done, out = set(), []
     for line in lines:
         key = line.split('=', 1)[0].strip() if '=' in line and not line.lstrip().startswith('#') else None
@@ -176,7 +176,7 @@ def patch_names(names, options, texture_fix_available=True):
         names = [n for n in names if n != TEXTURE_FIX] + [f'{RESOLUTION_PREFIX} - {resolution}']
     elif texture_fix_available and TEXTURE_FIX not in names:
         names.insert(0, TEXTURE_FIX)
-    # The engine rate is chosen live (gow3_settings.cpp SyncEngineFps): the highest patch gives
+    # The engine rate is chosen live (spartanport_settings.cpp SyncEngineFps): the highest patch gives
     # the swing energy fix and a vblank every lower rate fits in.
     names.append(f'{FPS_PREFIX} - {max(ENGINE_FPS)} FPS')
     return names
@@ -207,6 +207,6 @@ def applied_engine_fps(names):
 
 
 def environment(options):
-    return {'GOW3_DEFERRED_READBACK': options['deferred_readback'],
-            'GOW3_STALE_READBACK': options['stale_readback'],
-            'GOW3_ASYNC_SHADERS': options['async_shaders']}
+    return {'SPARTAN_DEFERRED_READBACK': options['deferred_readback'],
+            'SPARTAN_STALE_READBACK': options['stale_readback'],
+            'SPARTAN_ASYNC_SHADERS': options['async_shaders']}

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-#ifndef GOW3_QTE_HOOK_H
-#define GOW3_QTE_HOOK_H
+#ifndef SPARTAN_QTE_HOOK_H
+#define SPARTAN_QTE_HOOK_H
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -16,17 +16,17 @@
  * once when the port has set pass. Both sites are the functions' first three instructions
  * (push rbp; mov rbp,rsp; push r15 or r14), where rax and the flags are free. The state block's
  * address is read from the rotation check's lea r8,[rip+disp] (site +0x1c). */
-enum { GOW3_QTE_HOOK_LENGTH = 6, GOW3_QTE_TYPE_OFFSET = 0x10,
-       GOW3_QTE_BLOCK_DISPLACEMENT = 0x1f, GOW3_QTE_BLOCK_NEXT = 0x23 };
-static const unsigned char gow3_qte_update_original[GOW3_QTE_HOOK_LENGTH] = {
+enum { SPARTAN_QTE_HOOK_LENGTH = 6, SPARTAN_QTE_TYPE_OFFSET = 0x10,
+       SPARTAN_QTE_BLOCK_DISPLACEMENT = 0x1f, SPARTAN_QTE_BLOCK_NEXT = 0x23 };
+static const unsigned char spartanport_qte_update_original[SPARTAN_QTE_HOOK_LENGTH] = {
     0x55, 0x48,0x89,0xe5, 0x41,0x57  /* push rbp; mov rbp,rsp; push r15 */
 };
-static const unsigned char gow3_qte_rotation_original[GOW3_QTE_HOOK_LENGTH] = {
+static const unsigned char spartanport_qte_rotation_original[SPARTAN_QTE_HOOK_LENGTH] = {
     0x55, 0x48,0x89,0xe5, 0x41,0x56  /* push rbp; mov rbp,rsp; push r14 */
 };
-static const Gow3Signature gow3_qte_update_site = {
+static const SpartanSignature spartanport_qte_update_site = {
     "55 48 89 e5 41 57 41 56 41 55 41 54 53 50 49 89 ff 49 8b 87 b0 00 00 00 a8 07 0f 85 ?? ?? ?? ?? 48 8d 0d", 0};
-static const Gow3Signature gow3_qte_rotation_site = {
+static const SpartanSignature spartanport_qte_rotation_site = {
     "55 48 89 e5 41 56 53 49 89 fe c5 fa 10 05 ?? ?? ?? ?? 31 ff 4c 89 f6 e8 ?? ?? ?? ?? 4c 8d 05 ?? ?? ?? ?? "
     "49 8b 58 10 0f b7 d3", 0};
 
@@ -37,43 +37,43 @@ typedef struct {
     uint8_t pass;        /* set by the pad; the rotation stub answers 1 once and clears it */
     uint8_t pad[3];
     uint64_t block;
-} Gow3QteState;
+} SpartanQteState;
 #ifdef __cplusplus
-static_assert(offsetof(Gow3QteState, pass) == 4, "stubs address the fields directly");
+static_assert(offsetof(SpartanQteState, pass) == 4, "stubs address the fields directly");
 #else
-_Static_assert(offsetof(Gow3QteState, pass) == 4, "stubs address the fields directly");
+_Static_assert(offsetof(SpartanQteState, pass) == 4, "stubs address the fields directly");
 #endif
 
 /* The state block's image offset, read from the rotation check at its signature site. */
-static inline uint64_t gow3_qte_block(const unsigned char *code, uint64_t site) {
+static inline uint64_t spartanport_qte_block(const unsigned char *code, uint64_t site) {
     int32_t displacement;
-    memcpy(&displacement, code + GOW3_QTE_BLOCK_DISPLACEMENT, 4);
-    return site + GOW3_QTE_BLOCK_NEXT + (int64_t)displacement;
+    memcpy(&displacement, code + SPARTAN_QTE_BLOCK_DISPLACEMENT, 4);
+    return site + SPARTAN_QTE_BLOCK_NEXT + (int64_t)displacement;
 }
 
-static inline unsigned gow3_qte_finish_stub(unsigned char *out, unsigned n, const unsigned char *original,
+static inline unsigned spartanport_qte_finish_stub(unsigned char *out, unsigned n, const unsigned char *original,
                                             uintptr_t resume) {
     static const unsigned char jump[] = {0xff,0x25,0,0,0,0}; /* jmp [rip+0] */
-    memcpy(out + n, original, GOW3_QTE_HOOK_LENGTH);
-    n += GOW3_QTE_HOOK_LENGTH;
+    memcpy(out + n, original, SPARTAN_QTE_HOOK_LENGTH);
+    n += SPARTAN_QTE_HOOK_LENGTH;
     memcpy(out + n, jump, sizeof(jump));
     n += sizeof(jump);
     memcpy(out + n, &resume, 8);
     return n + 8;
 }
 
-static inline unsigned gow3_qte_build_update_stub(unsigned char *out, uintptr_t heartbeat, uintptr_t resume) {
+static inline unsigned spartanport_qte_build_update_stub(unsigned char *out, uintptr_t heartbeat, uintptr_t resume) {
     static const unsigned char body[] = {
         0x48,0xb8, 0,0,0,0,0,0,0,0,  /* movabs rax, heartbeat */
         0xf0,0xff,0x00,              /* lock inc dword [rax] */
     };
     memcpy(out, body, sizeof(body));
     memcpy(out + 2, &heartbeat, 8);
-    return gow3_qte_finish_stub(out, sizeof(body), gow3_qte_update_original, resume);
+    return spartanport_qte_finish_stub(out, sizeof(body), spartanport_qte_update_original, resume);
 }
 
 /* auto: the menu's Automatic QTE byte; while it is set every turn is finished at once. */
-static inline unsigned gow3_qte_build_rotation_stub(unsigned char *out, uintptr_t pass, uintptr_t automatic,
+static inline unsigned spartanport_qte_build_rotation_stub(unsigned char *out, uintptr_t pass, uintptr_t automatic,
                                                     uintptr_t resume) {
     static const unsigned char body[] = {
         0x48,0xb8, 0,0,0,0,0,0,0,0,  /* movabs rax, auto */
@@ -89,10 +89,10 @@ static inline unsigned gow3_qte_build_rotation_stub(unsigned char *out, uintptr_
     memcpy(out, body, sizeof(body));
     memcpy(out + 2, &automatic, 8);
     memcpy(out + 17, &pass, 8);
-    return gow3_qte_finish_stub(out, sizeof(body), gow3_qte_rotation_original, resume);
+    return spartanport_qte_finish_stub(out, sizeof(body), spartanport_qte_rotation_original, resume);
 }
 
-static inline unsigned gow3_qte_jump(unsigned char *out, unsigned n, uintptr_t resume) {
+static inline unsigned spartanport_qte_jump(unsigned char *out, unsigned n, uintptr_t resume) {
     static const unsigned char jump[] = {0xff,0x25,0,0,0,0}; /* jmp [rip+0] */
     memcpy(out + n, jump, sizeof(jump));
     memcpy(out + n + sizeof(jump), &resume, 8);
@@ -107,10 +107,10 @@ static inline unsigned gow3_qte_jump(unsigned char *out, unsigned n, uintptr_t r
  * the player's pad (andn ecx, [pad+0x98], [pad+0x94]) and passes when bit type+4 is set; another
  * face button fails the prompt. With the byte set, ecx is that one bit. Site: 15 bytes after the
  * type check, the two instructions moved into the stub (rbx: the state block, rdi: the pad). */
-enum { GOW3_QTE_TIMED_LENGTH = 15, GOW3_QTE_CHARGED_LENGTH = 7 };
-static const Gow3Signature gow3_qte_timed_site = {
+enum { SPARTAN_QTE_TIMED_LENGTH = 15, SPARTAN_QTE_CHARGED_LENGTH = 7 };
+static const SpartanSignature spartanport_qte_timed_site = {
     "66 83 7b 10 03 77 ?? 8b 87 98 00 00 00 c4 e2 78 f2 8f 94 00 00 00 8b 53 10 8d 72 04", 7};
-static inline unsigned gow3_qte_build_timed_stub(unsigned char *out, uintptr_t automatic, uintptr_t resume) {
+static inline unsigned spartanport_qte_build_timed_stub(unsigned char *out, uintptr_t automatic, uintptr_t resume) {
     static const unsigned char body[] = {
         0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, auto */
         0x80,0x38,0x00,                           /* cmp byte [rax], 0 */
@@ -126,7 +126,7 @@ static inline unsigned gow3_qte_build_timed_stub(unsigned char *out, uintptr_t a
     };
     memcpy(out, body, sizeof(body));
     memcpy(out + 2, &automatic, 8);
-    return gow3_qte_jump(out, sizeof(body), resume);
+    return spartanport_qte_jump(out, sizeof(body), resume);
 }
 
 /* Repeat press (mash): the update asks 0x72eb0(pad, button, &pressure) whether the prompt's button
@@ -135,9 +135,9 @@ static inline unsigned gow3_qte_build_timed_stub(unsigned char *out, uintptr_t a
  * on frames without one. With the byte set the stub presses every frame with that frame's credit:
  * [state+8] = the frame time ([rbp-0x3c] in the update), the most any mashing gets, with no drain.
  * (rbx: the state.) Site: the call, which becomes a call to the stub. */
-static const Gow3Signature gow3_qte_repeat_site = {
+static const SpartanSignature spartanport_qte_repeat_site = {
     "41 0f b6 77 2c 48 8d 55 cc 48 8b 7d b8 e8 ?? ?? ?? ?? 41 89 c4 45 85 e4", 13};
-static inline unsigned gow3_qte_build_repeat_stub(unsigned char *out, uintptr_t automatic, uintptr_t original) {
+static inline unsigned spartanport_qte_build_repeat_stub(unsigned char *out, uintptr_t automatic, uintptr_t original) {
     static const unsigned char body[] = {
         0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, auto */
         0x80,0x38,0x00,                           /* cmp byte [rax], 0 */
@@ -149,10 +149,10 @@ static inline unsigned gow3_qte_build_repeat_stub(unsigned char *out, uintptr_t 
     };
     memcpy(out, body, sizeof(body));
     memcpy(out + 2, &automatic, 8);
-    return gow3_qte_jump(out, sizeof(body), original);  /* original: the game's own answer */
+    return spartanport_qte_jump(out, sizeof(body), original);  /* original: the game's own answer */
 }
 /* The call's target, from its rel32. */
-static inline uint64_t gow3_qte_call_target(const unsigned char *code, uint64_t site) {
+static inline uint64_t spartanport_qte_call_target(const unsigned char *code, uint64_t site) {
     int32_t relative;
     memcpy(&relative, code + 1, 4);
     return site + 5 + (int64_t)relative;
@@ -160,9 +160,9 @@ static inline uint64_t gow3_qte_call_target(const unsigned char *code, uint64_t 
 
 /* Charged press (hold): the update loads the held buttons (mov r9d, [r14+0x94]) and fills the bar
  * while bit button+2 is set. With the byte set every button is held. */
-static const Gow3Signature gow3_qte_charged_site = {
+static const SpartanSignature spartanport_qte_charged_site = {
     "83 c0 02 45 8b 8e 94 00 00 00 44 20 c2 31 f6 41 0f a3 c1", 3};
-static inline unsigned gow3_qte_build_charged_stub(unsigned char *out, uintptr_t automatic, uintptr_t resume) {
+static inline unsigned spartanport_qte_build_charged_stub(unsigned char *out, uintptr_t automatic, uintptr_t resume) {
     static const unsigned char body[] = {
         0x49,0xb9, 0,0,0,0,0,0,0,0,               /* movabs r9, auto */
         0x41,0x80,0x39,0x00,                      /* cmp byte [r9], 0 */
@@ -172,16 +172,16 @@ static inline unsigned gow3_qte_build_charged_stub(unsigned char *out, uintptr_t
     };
     memcpy(out, body, sizeof(body));
     memcpy(out + 2, &automatic, 8);
-    return gow3_qte_jump(out, sizeof(body), resume);
+    return spartanport_qte_jump(out, sizeof(body), resume);
 }
 
 /* Circle struggle (SCR_ExplosiveRain): its own bar, drained every frame and raised by each new
  * Circle press (test [pad+0x94] and not [pad+0x98], bit 0x20). With the byte set every frame is a
  * press. Site: the two tests and their branches (rax: the pad; rcx is free here). */
-enum { GOW3_QTE_CIRCLE_LENGTH = 18, GOW3_QTE_CIRCLE_SKIP = 0x26 };
-static const Gow3Signature gow3_qte_circle_site = {
+enum { SPARTAN_QTE_CIRCLE_LENGTH = 18, SPARTAN_QTE_CIRCLE_SKIP = 0x26 };
+static const SpartanSignature spartanport_qte_circle_site = {
     "48 8b 40 10 48 8b 40 08 f6 80 94 00 00 00 20 74 1d f6 80 98 00 00 00 20 75 14 c4 c1 7a 10 04 24", 8};
-static inline unsigned gow3_qte_build_circle_stub(unsigned char *out, uintptr_t automatic, uintptr_t pressed,
+static inline unsigned spartanport_qte_build_circle_stub(unsigned char *out, uintptr_t automatic, uintptr_t pressed,
                                                   uintptr_t skip) {
     static const unsigned char body[] = {
         0x48,0xb9, 0,0,0,0,0,0,0,0,               /* movabs rcx, auto */
@@ -194,7 +194,7 @@ static inline unsigned gow3_qte_build_circle_stub(unsigned char *out, uintptr_t 
     };
     memcpy(out, body, sizeof(body));
     memcpy(out + 2, &automatic, 8);
-    unsigned n = gow3_qte_jump(out, sizeof(body), pressed);
-    return gow3_qte_jump(out, n, skip);
+    unsigned n = spartanport_qte_jump(out, sizeof(body), pressed);
+    return spartanport_qte_jump(out, n, skip);
 }
 #endif

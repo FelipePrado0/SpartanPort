@@ -1,54 +1,54 @@
 #include <cassert>
 #include <cmath>
 #include <limits>
-#include "gow3_orbs.h"
+#include "spartanport_orbs.h"
 #include "../src/orb_hook.h"
 #include <vector>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
-#include "gow3_settings.h"
+#include "spartanport_settings.h"
 #ifdef _WIN32
 #include <windows.h>
 #else
 #include <sys/mman.h>
 #endif
 
-extern "C" float __attribute__((sysv_abi)) gow3_orbs_gain(void*, float);
-extern "C" void gow3_orbs_status(int);
-extern "C" void gow3_cheat_status(unsigned);
+extern "C" float __attribute__((sysv_abi)) spartanport_orbs_gain(void*, float);
+extern "C" void spartanport_orbs_status(int);
+extern "C" void spartanport_cheat_status(unsigned);
 static void __attribute__((sysv_abi)) Setter(void* player, float balance) {
     balance = std::min(balance, 999999.0f);
     std::memcpy(static_cast<unsigned char*>(player) + 0x1e8, &balance, 4);
 }
 
 int main(int argc, char** argv) {
-    assert(Gow3Orbs::Scale(100, 110, 2) == 120);
-    assert(Gow3Orbs::Scale(100, 90, 100) == 90);
-    assert(Gow3Orbs::Scale(100, 100, 100) == 100);
-    assert(Gow3Orbs::Scale(100, 110, 1) == 110);
-    assert(Gow3Orbs::Scale(0, 1, 100) == 100);
+    assert(SpartanOrbs::Scale(100, 110, 2) == 120);
+    assert(SpartanOrbs::Scale(100, 90, 100) == 90);
+    assert(SpartanOrbs::Scale(100, 100, 100) == 100);
+    assert(SpartanOrbs::Scale(100, 110, 1) == 110);
+    assert(SpartanOrbs::Scale(0, 1, 100) == 100);
     float balance = 0;
-    for (int i = 0; i < 10; ++i) balance = Gow3Orbs::Scale(balance, balance + 1, 0.1f);
+    for (int i = 0; i < 10; ++i) balance = SpartanOrbs::Scale(balance, balance + 1, 0.1f);
     assert(std::abs(balance - 1) < 0.00001f);
-    assert(Gow3Orbs::Scale(balance, balance + 2, 2) == balance + 4);
-    assert(Gow3Orbs::Scale(100, 110, std::numeric_limits<float>::quiet_NaN()) == 110);
-    assert(Gow3Orbs::ClampMultiplier(0) == 0.1f);
-    assert(Gow3Orbs::ClampMultiplier(101) == 100);
-    assert(Gow3Orbs::ClampMultiplier(std::numeric_limits<float>::infinity()) == 1);
+    assert(SpartanOrbs::Scale(balance, balance + 2, 2) == balance + 4);
+    assert(SpartanOrbs::Scale(100, 110, std::numeric_limits<float>::quiet_NaN()) == 110);
+    assert(SpartanOrbs::ClampMultiplier(0) == 0.1f);
+    assert(SpartanOrbs::ClampMultiplier(101) == 100);
+    assert(SpartanOrbs::ClampMultiplier(std::numeric_limits<float>::infinity()) == 1);
     std::vector<unsigned char> image(0x6fbdc);
     uint64_t calls[3];
-    assert(gow3_orb_find(image.data(), image.size(), calls) == UINT64_MAX);
-    assert(gow3_orb_find(image.data(), 1, calls) == UINT64_MAX);
+    assert(spartanport_orb_find(image.data(), image.size(), calls) == UINT64_MAX);
+    assert(spartanport_orb_find(image.data(), 1, calls) == UINT64_MAX);
     if (argc > 1) {
         FILE* file = std::fopen(argv[1], "rb");
         assert(file && !std::fseek(file, 0x4000, SEEK_SET));
         assert(std::fread(image.data(), 1, image.size(), file) == image.size());
         std::fclose(file);
-        assert(gow3_orb_find(image.data(), image.size(), calls) == 0x6a9f0);
+        assert(spartanport_orb_find(image.data(), image.size(), calls) == 0x6a9f0);
         image[calls[1] + 1] ^= 1;
-        assert(gow3_orb_find(image.data(), image.size(), calls) == UINT64_MAX);
+        assert(spartanport_orb_find(image.data(), image.size(), calls) == UINT64_MAX);
     }
 #ifdef _WIN32
     auto* stub = static_cast<unsigned char*>(VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
     assert(stub != MAP_FAILED);
 #endif
     assert(stub);
-    gow3_orb_build_stub(stub, reinterpret_cast<uintptr_t>(gow3_orbs_gain), reinterpret_cast<uintptr_t>(Setter));
+    spartanport_orb_build_stub(stub, reinterpret_cast<uintptr_t>(spartanport_orbs_gain), reinterpret_cast<uintptr_t>(Setter));
 #ifdef _WIN32
     DWORD previous;
     assert(VirtualProtect(stub, 4096, PAGE_EXECUTE_READ, &previous));
@@ -70,17 +70,17 @@ int main(int argc, char** argv) {
     std::array<unsigned char, 0x200> player{};
     balance = 100;
     std::memcpy(player.data() + 0x1e8, &balance, 4);
-    auto& settings = Gow3Settings::Get();
+    auto& settings = SpartanSettings::Get();
     settings.red_orb_multiplier = 2;
     hook(player.data(), 110);
     std::memcpy(&balance, player.data() + 0x1e8, 4);
     assert(balance == 120);
     settings.cheats[4] = true;
-    assert(gow3_orbs_gain(player.data(), 130) == 140);
-    gow3_cheat_status(4);
-    assert(gow3_orbs_gain(player.data(), 130) == 130);
+    assert(spartanport_orbs_gain(player.data(), 130) == 140);
+    spartanport_cheat_status(4);
+    assert(spartanport_orbs_gain(player.data(), 130) == 130);
     settings.cheats[4] = false;
-    assert(gow3_orbs_gain(player.data(), 130) == 140);
+    assert(spartanport_orbs_gain(player.data(), 130) == 140);
     settings.red_orb_multiplier = 100;
     hook(player.data(), 90);
     std::memcpy(&balance, player.data() + 0x1e8, 4);
@@ -88,25 +88,25 @@ int main(int argc, char** argv) {
     hook(player.data(), 100000);
     std::memcpy(&balance, player.data() + 0x1e8, 4);
     assert(balance == 999999);
-    gow3_orbs_status(1);
+    spartanport_orbs_status(1);
     assert(settings.red_orbs_supported);
-    gow3_orbs_status(0);
+    spartanport_orbs_status(0);
     assert(!settings.red_orbs_supported);
-    auto config = std::filesystem::temp_directory_path() / "gow3-orb-multiplier-test.ini";
+    auto config = std::filesystem::temp_directory_path() / "spartanport-orb-multiplier-test.ini";
     assert(!std::filesystem::exists(config));
 #ifdef _WIN32
-    _putenv_s("GOW3_CONFIG", config.string().c_str());
+    _putenv_s("SPARTAN_CONFIG", config.string().c_str());
 #else
-    setenv("GOW3_CONFIG", config.string().c_str(), 1);
+    setenv("SPARTAN_CONFIG", config.string().c_str(), 1);
 #endif
     settings.red_orb_multiplier = 0.125f;
     settings.cheats[0] = true;
     settings.cheats[2] = true;
-    Gow3Settings::Save();
+    SpartanSettings::Save();
     settings.red_orb_multiplier = 1;
     settings.cheats[0] = false;
     settings.cheats[2] = false;
-    Gow3Settings::Load();
+    SpartanSettings::Load();
     assert(settings.red_orb_multiplier == 0.125f);
     assert(settings.cheats[0] && settings.cheats[2] && !settings.cheats[1] && !settings.cheats[4]);
     assert(std::filesystem::remove(config));

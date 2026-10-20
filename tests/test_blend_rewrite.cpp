@@ -24,7 +24,7 @@ int main() {
         BlendEquation mm{F::One, Fn::Min, F::One};
         assert(Rewrite(mm) == BlendRewriteResult::Native && mm.function == Fn::Min);
     }
-    // MIN/MAX(s*s, d*d): native operation, squared by a second draw (God of War III shadows).
+    // MIN/MAX(s*s, d*d): native operation, squared by a second draw (SpartanPort shadows).
     {
         BlendEquation eq{F::SrcColor, Fn::Min, F::DstColor};
         assert(Rewrite(eq) == BlendRewriteResult::Squared && eq.function == Fn::Min);

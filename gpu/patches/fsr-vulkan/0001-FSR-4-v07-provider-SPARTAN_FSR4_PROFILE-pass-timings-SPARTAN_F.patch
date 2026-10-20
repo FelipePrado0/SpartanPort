@@ -1,0 +1,210 @@
+From 707fe318eec1f9912b0e1fa700655a2e1679cd79 Mon Sep 17 00:00:00 2001
+From: deadinside <aa1372944@gmail.com>
+Date: Thu, 1 Oct 2026 05:31:00 +0300
+Subject: [PATCH] FSR 4 v07 provider: SPARTAN_FSR4_PROFILE pass timings,
+ SPARTAN_FSR4_STATS driver statistics
+
+spartanport: GPU timestamps around each dispatch, read when the frame retires and
+printed every 300 frames; pipelines created with CAPTURE_STATISTICS print
+the driver's register/instruction statistics (the device must enable
+pipelineExecutableInfo).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/ffx_vk_fsr4_v07.c | 109 ++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 109 insertions(+)
+
+diff --git a/src/ffx_vk_fsr4_v07.c b/src/ffx_vk_fsr4_v07.c
+index c30f7cf..eb42c16 100644
+--- a/src/ffx_vk_fsr4_v07.c
++++ b/src/ffx_vk_fsr4_v07.c
+@@ -35,6 +35,7 @@
+ #define NUM_POOL_FRAMES       3   /* maximum unretired host dispatches */
+ #define MAX_STAGING          32
+ #define MAX_EXTERNAL_IMAGES   8   /* color, depth, motion, output + host slack */
++#define PROF_MAX_JOBS        32   /* timestamped dispatches per frame */
+ #define CBUF_FRAME_BYTES   (512 * 1024)
+ #define CBUF_RING_BYTES    (CBUF_FRAME_BYTES * NUM_POOL_FRAMES)
+ 
+@@ -182,6 +183,16 @@ struct FfxFsr4VkContext {
+     VkBool32  int8Supported;
+     VkBool32  dotProductSupported;
+     VkBool32  computeDerivativesSupported;
++
++    /* spartanport: SPARTAN_FSR4_PROFILE=1 — GPU time per pass (timestamps around each
++     * dispatch, read back when the frame retires, printed every 300 frames). */
++    VkQueryPool profPool;
++    float       profPeriodNs;
++    uint32_t    profCount[NUM_POOL_FRAMES];
++    uint32_t    profPass[NUM_POOL_FRAMES][PROF_MAX_JOBS];
++    double      profMs[MAX_PIPELINES];
++    uint32_t    profCalls[MAX_PIPELINES];
++    uint64_t    profFrames;
+ };
+ 
+ static FfxErrorCode restoreExternalImages(FfxFsr4VkContext* c,
+@@ -625,6 +636,36 @@ static VkFormat toVkFmt(FfxSurfaceFormat f)
+ 
+ // ── pipeline creation ─────────────────────────────────────────────────────────
+ 
++/* spartanport: SPARTAN_FSR4_STATS=1 (the device must enable pipelineExecutableInfo) prints the
++ * driver's statistics of each pass: registers, spills, instruction counts. */
++static void printPipelineStats(FfxFsr4VkContext* c, uint32_t passIdx, VkPipeline pipeline)
++{
++    PFN_vkGetPipelineExecutableStatisticsKHR getStats =
++        (PFN_vkGetPipelineExecutableStatisticsKHR)vkGetDeviceProcAddr(
++            c->dev, "vkGetPipelineExecutableStatisticsKHR");
++    if (!getStats) return;
++    VkPipelineExecutableInfoKHR info;
++    memset(&info, 0, sizeof(info));
++    info.sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INFO_KHR;
++    info.pipeline = pipeline;
++    uint32_t count = 0;
++    if (getStats(c->dev, &info, &count, NULL) != VK_SUCCESS || count == 0) return;
++    VkPipelineExecutableStatisticKHR* s = calloc(count, sizeof(*s));
++    if (!s) return;
++    for (uint32_t i = 0; i < count; ++i) s[i].sType = VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_STATISTIC_KHR;
++    if (getStats(c->dev, &info, &count, s) == VK_SUCCESS) {
++        printf("FSR 4 pass %u:", passIdx);
++        for (uint32_t i = 0; i < count; ++i) {
++            if (s[i].format == VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_UINT64_KHR)
++                printf(" %s=%llu", s[i].name, (unsigned long long)s[i].value.u64);
++            else if (s[i].format == VK_PIPELINE_EXECUTABLE_STATISTIC_FORMAT_BOOL32_KHR)
++                printf(" %s=%u", s[i].name, s[i].value.b32);
++        }
++        printf("\n");
++    }
++    free(s);
++}
++
+ static VkResult mkPipeline(FfxFsr4VkContext* c, uint32_t passIdx, VkPipe* out)
+ {
+     if (!c || !out || passIdx >= FFX_FSR4_VK_PASS_COUNT)
+@@ -709,7 +750,11 @@ static VkResult mkPipeline(FfxFsr4VkContext* c, uint32_t passIdx, VkPipe* out)
+     cpci.stage.pName=blob->entryPoint ? blob->entryPoint : "main";
+     cpci.layout=out->layout;
+ 
++    const char* statsEnv = getenv("SPARTAN_FSR4_STATS");
++    const int stats = statsEnv && statsEnv[0] == '1';
++    if (stats) cpci.flags |= VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR;
+     r = vkCreateComputePipelines(c->dev, VK_NULL_HANDLE, 1, &cpci, c->alloc, &out->pipeline);
++    if (stats && r == VK_SUCCESS) printPipelineStats(c, passIdx, out->pipeline);
+     vkDestroyShaderModule(c->dev, sm, c->alloc);
+     if (r) {
+         vkDestroyPipelineLayout(c->dev, out->layout, c->alloc);
+@@ -1433,6 +1478,38 @@ static FfxErrorCode writeFullDs(FfxFsr4VkContext* c, const VkPipe* pipe, VkDescr
+ 
+ // ── execute all queued jobs ───────────────────────────────────────────────────
+ 
++static void profCollect(FfxFsr4VkContext* c, uint32_t slot)
++{
++    const uint32_t count = c->profCount[slot];
++    if (!c->profPool || count == 0) return;
++    c->profCount[slot] = 0;
++    uint64_t ts[PROF_MAX_JOBS + 1];
++    if (vkGetQueryPoolResults(c->dev, c->profPool, slot * (PROF_MAX_JOBS + 1), count + 1,
++                              sizeof(ts), ts, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT) != VK_SUCCESS)
++        return;
++    for (uint32_t j = 0; j < count; ++j) {
++        const uint32_t pass = c->profPass[slot][j];
++        c->profMs[pass] += (double)(ts[j + 1] - ts[j]) * c->profPeriodNs * 1e-6;
++        c->profCalls[pass]++;
++    }
++    if (++c->profFrames % 300 != 0) return;
++    static const char* names[] = {"pre", "model 1", "model 2", "model 3", "model 4",
++        "model 5", "model 6", "model 7", "model 8", "model 9", "model 10", "model 11",
++        "model 12", "post", "rcas", "spd auto exposure"};
++    double total = 0.0;
++    for (uint32_t p = 0; p < MAX_PIPELINES; ++p) total += c->profMs[p];
++    printf("FSR 4 profile: %.3f ms/frame over %llu frames\n", total / 300.0,
++           (unsigned long long)300);
++    for (uint32_t p = 0; p < MAX_PIPELINES; ++p) {
++        if (!c->profCalls[p]) continue;
++        printf("  %6.3f ms/frame  %s\n", c->profMs[p] / 300.0,
++               p < sizeof(names) / sizeof(names[0]) ? names[p] : "?");
++        c->profMs[p] = 0.0;
++        c->profCalls[p] = 0;
++    }
++    fflush(stdout);
++}
++
+ static FfxErrorCode cbExecuteJobs(FfxInterface* I, FfxCommandList cl, FfxUInt32 id) {
+     (void)id;
+     if (!I || !I->device) return FFX_ERROR_INVALID_POINTER;
+@@ -1503,6 +1580,12 @@ static FfxErrorCode cbExecuteJobs(FfxInterface* I, FfxCommandList cl, FfxUInt32
+      * Move them to the provider's GENERAL compute ABI only after all resource
+      * registration has succeeded, then restore them during unregister. */
+     transitionExternalImagesToCompute(c, cmd);
++    const uint32_t profBase = cur * (PROF_MAX_JOBS + 1);
++    uint32_t profJobs = 0;
++    if (c->profPool) {
++        vkCmdResetQueryPool(cmd, c->profPool, profBase, PROF_MAX_JOBS + 1);
++        vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, c->profPool, profBase);
++    }
+ 
+     for (uint32_t ji=0; ji<c->jobCount; ji++) {
+         FfxGpuJobDescription* job=&c->jobs[ji].d;
+@@ -1582,6 +1665,11 @@ static FfxErrorCode cbExecuteJobs(FfxInterface* I, FfxCommandList cl, FfxUInt32
+                 bp->layout,0,1,&ds,0,NULL);
+ 
+             vkCmdDispatch(cmd,cj->dimensions[0],cj->dimensions[1],cj->dimensions[2]);
++            if (c->profPool && profJobs < PROF_MAX_JOBS) {
++                vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, c->profPool,
++                                    profBase + 1 + profJobs);
++                c->profPass[cur][profJobs++] = passIdx;
++            }
+ 
+             // Memory barrier between compute passes — ensures writes from this
+             // dispatch are visible to the next dispatch (pre→model→post chain).
+@@ -1610,6 +1698,7 @@ static FfxErrorCode cbExecuteJobs(FfxInterface* I, FfxCommandList cl, FfxUInt32
+         } else EXECUTE_FAIL(FFX_ERROR_INVALID_ENUM);
+     }
+ 
++    c->profCount[cur] = profJobs;
+     c->jobCount=0;
+     c->recordingFrame = UINT32_MAX;
+ #undef EXECUTE_FAIL
+@@ -1694,6 +1783,21 @@ VkResult ffxFsr4VkCreateContext(const FfxFsr4VkCreateInfo* ci, FfxInterface* out
+     sci.addressModeU=sci.addressModeV=sci.addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+     sci.maxLod=VK_LOD_CLAMP_NONE;
+     r=vkCreateSampler(c->dev,&sci,c->alloc,&c->linearSampler);
++    {
++        const char* prof = getenv("SPARTAN_FSR4_PROFILE");
++        if (r == VK_SUCCESS && prof && prof[0] == '1') {
++            VkPhysicalDeviceProperties props;
++            vkGetPhysicalDeviceProperties(c->phys, &props);
++            c->profPeriodNs = props.limits.timestampPeriod;
++            VkQueryPoolCreateInfo qci;
++            memset(&qci, 0, sizeof(qci));
++            qci.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
++            qci.queryType = VK_QUERY_TYPE_TIMESTAMP;
++            qci.queryCount = NUM_POOL_FRAMES * (PROF_MAX_JOBS + 1);
++            if (vkCreateQueryPool(c->dev, &qci, c->alloc, &c->profPool) != VK_SUCCESS)
++                c->profPool = VK_NULL_HANDLE;
++        }
++    }
+     if (r) goto fail;
+ 
+     // cbuffer ring buffer (host-visible, persistently mapped)
+@@ -1809,6 +1913,10 @@ void ffxFsr4VkDestroyContext(FfxFsr4VkContext* c)
+     }
+     memset(c->frame, 0, sizeof(c->frame));
+     c->recordingFrame = UINT32_MAX;
++    if (c->profPool) {
++        vkDestroyQueryPool(c->dev, c->profPool, c->alloc);
++        c->profPool = VK_NULL_HANDLE;
++    }
+     if (c->linearSampler) {
+         vkDestroySampler(c->dev,c->linearSampler,c->alloc);
+         c->linearSampler = VK_NULL_HANDLE;
+@@ -1853,6 +1961,7 @@ VkResult ffxFsr4VkRetireFrame(FfxInterface* iface, uint64_t completedFrameId)
+     for (uint32_t i = 0; i < NUM_POOL_FRAMES; ++i) {
+         FrameLifetime* frame = &c->frame[i];
+         if (!frame->inUse || frame->frameId > completedFrameId) continue;
++        profCollect(c, i);
+         if (vkResetDescriptorPool(c->dev, c->pool[i], 0) != VK_SUCCESS)
+             return VK_ERROR_DEVICE_LOST;
+         memset(frame, 0, sizeof(*frame));
+-- 
+2.55.0
+

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// gow3: one state line per render pass in the frame analyzer's capture (vk_frame_capture.cpp):
+// spartanport: one state line per render pass in the frame analyzer's capture (vk_frame_capture.cpp):
 // guest colour and depth sample counts, the host sample count and the sample path the pipeline
 // cache chose (vk_pipeline_cache.cpp), sample shading, stencil test/write/clear, the depth clear
 // source, the depth layout, the attachment feedback loop and the render area against the depth

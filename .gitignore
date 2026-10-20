@@ -2,7 +2,7 @@ out/
 __pycache__/
 user/
 *.mp4
-gow3.ini
+/*.ini
 fsr4_shaders/
 pgo/
 *.png
@@ -24,8 +24,10 @@ perf.data
 /docs/route_run.log
 mods.json
 patches.json
-!launcher/gow3.png
+!launcher/spartanport.png
 !scripts/controller_diagrams/xbox.png
 !scripts/controller_diagrams/nintendo.png
+!launcher/logo.png
+!packaging/icon/monogram.png
 /.vscode
 

@@ -32,7 +32,7 @@ public:
         return opened;
     }
     void FinishPreload();
-    /// gow3: removes every cached blob (an incompatible cache is rebuilt, not ignored).
+    /// spartanport: removes every cached blob (an incompatible cache is rebuilt, not ignored).
     void Clear();
 
     bool Save(BlobType type, const std::string& name, std::vector<u8>&& data);
@@ -41,13 +41,13 @@ public:
     void Load(BlobType type, const std::string& name, std::vector<u8>& data);
     void Load(BlobType type, const std::string& name, std::vector<u32>& data);
 
-    /// gow3: `stop` returning true ends the walk early (background warm-up at exit).
+    /// spartanport: `stop` returning true ends the walk early (background warm-up at exit).
     void ForEachBlob(BlobType type, const std::function<void(std::vector<u8>&& data)>& func,
                      const std::function<bool()>& stop = {});
-    /// gow3: blobs are plain files written beside and renamed into place, so other threads
+    /// spartanport: blobs are plain files written beside and renamed into place, so other threads
     /// may read them while the IO thread saves (the zip archive cannot).
     [[nodiscard]] bool ConcurrentReads() const;
-    /// gow3: number of blobs ForEachBlob visits (the loading screen's total).
+    /// spartanport: number of blobs ForEachBlob visits (the loading screen's total).
     size_t CountBlobs(BlobType type);
 
 private:

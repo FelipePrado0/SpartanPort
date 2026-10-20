@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// gow3: GOW3_LIGHTING_TEST=shading,msdepth,dref,bias (or `all`). The four changes of the
+// spartanport: SPARTAN_LIGHTING_TEST=shading,msdepth,dref,bias (or `all`). The four changes of the
 // KrachDev/shadPS4_GOW3 build "God of War III Remastered - Lighting, Scanline & AMD Fix" (commit
 // eaa1027f), which its author reports removes the black scanlines on an RX 6600, each behind its
 // own token so a tester can bisect them on the RDNA2 black-lines issue (#65):
@@ -97,10 +97,10 @@ inline std::uint32_t ShaderBinaryVersion(std::uint32_t base, std::uint32_t salt)
     return base + 16u * salt;
 }
 
-/// GOW3_LIGHTING_TEST, read once; the marker goes to stdout (last_run.log) the first time.
+/// SPARTAN_LIGHTING_TEST, read once; the marker goes to stdout (last_run.log) the first time.
 inline Flags Current() {
     static const Flags flags = [] {
-        const Flags parsed = Parse(std::getenv("GOW3_LIGHTING_TEST"));
+        const Flags parsed = Parse(std::getenv("SPARTAN_LIGHTING_TEST"));
         if (parsed.Any()) {
             std::printf("%s\n", Marker(parsed).c_str());
         }
