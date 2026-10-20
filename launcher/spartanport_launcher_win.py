@@ -3361,7 +3361,7 @@ def move_from_legacy_name():
             print(f'Rename: {line}', flush=True)
         if WINDOWS and FROZEN and UPDATE_DIR not in PORT_DIR.parents:
             legacy.remove_leftovers(PORT_DIR)
-            legacy.retarget_desktop_shortcut(PORT_DIR)
+            legacy.retarget_desktop_shortcut(PORT_DIR, data_dir=DATA_DIR)
     except OSError as error:
         print(f'Rename: {error}', flush=True)
 
