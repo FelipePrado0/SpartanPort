@@ -9,7 +9,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "gow3_toggles.h"
+#include "spartanport_toggles.h"
 #include "common/debug.h"
 #include "common/types.h"
 #include "core/emulator_settings.h"
@@ -53,7 +53,7 @@ public:
                             });
     }
 
-    /// gow3: see RegionManager::ExtendWriteFault.
+    /// spartanport: see RegionManager::ExtendWriteFault.
     void ExtendWriteFault(VAddr window_addr, u64 size) {
         IteratePages<false>(window_addr, size,
                             [](RegionManager* manager, u64 offset, size_t size) {
@@ -101,12 +101,12 @@ public:
                             auto&& on_upload) {
         IteratePages<true>(query_cpu_range, query_size,
                            [&func, is_written](RegionManager* manager, u64 offset, size_t size) {
-                               // gow3: read-only bindings skip the region lock when no page
+                               // spartanport: read-only bindings skip the region lock when no page
                                // in range is CPU-modified. A guest write sets its bit in the
                                // fault handler before the store, and the draw that uses the
                                // data reaches this thread through the submission queue lock.
                                if (!is_written &&
-                                   !Gow3Toggle::Disabled(Gow3Toggle::LockFreeUploadCheck) &&
+                                   !SpartanToggle::Disabled(SpartanToggle::LockFreeUploadCheck) &&
                                    !manager->template IsRegionModified<Type::CPU>(offset, size)) {
                                    return;
                                }

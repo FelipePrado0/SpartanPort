@@ -26,13 +26,15 @@ def entry(name, payload=b'', tag=1):
 def texture(name, width, height, fourcc, levels=1, length=0):
     """A texture entry as the game stores it: a 0x4C prefix and a DDS with `levels` mip levels
     (or `length` bytes of pixels)."""
-    image = Image.new('RGBA', (width, height), (255, 0, 255, 255))
+    image = Image.new('RGBA', (4, 4), (255, 0, 255, 255))
     header = io.BytesIO()
     image.save(header, 'DDS', pixel_format=fourcc)
+    dds = bytearray(header.getvalue()[:128])
+    struct.pack_into('<II', dds, 12, height, width)
     for level in range(0 if length else levels):
         blocks = -(-max(1, width >> level) // 4) * -(-max(1, height >> level) // 4)
         length += blocks * (16 if fourcc == 'DXT5' else 8)
-    return entry(name, b'\7\0\1\0' + name.encode().ljust(0x48, b'\0') + header.getvalue()[:128] + b'\xee' * length)
+    return entry(name, b'\7\0\1\0' + name.encode().ljust(0x48, b'\0') + dds + b'\xee' * length)
 
 
 def wad():
@@ -113,7 +115,7 @@ class GlyphTableTest(unittest.TestCase):
         self.assertEqual(glyphs.parse_gamepad('Gamepad: type=switchpro south=b east=a west=y north=x name=Pro')[0], 'nintendo')
         self.assertEqual(glyphs.parse_gamepad('Gamepad: type=standard south=a east=b west=x north=y name=')[0], 'xbox')
         self.assertIsNone(glyphs.parse_gamepad('Gamepad: none\n'))
-        self.assertIsNone(glyphs.parse_gamepad('Usage: gow3-probe boot.bin\n'))  # a probe without --gamepad
+        self.assertIsNone(glyphs.parse_gamepad('Usage: spartanport-probe boot.bin\n'))  # a probe without --gamepad
 
     def test_resolve(self):
         pad = 'Gamepad: type=switchpro south=b east=a west=y north=x name=Pro Controller'
@@ -160,6 +162,48 @@ class GlyphPatchTest(unittest.TestCase):
             glyphs.patch(data, style, None, pad_map, key_map)
             drawn.append(bytes(data))
         self.assertEqual(len(set(drawn)), 5)
+
+    def test_controller_diagram_follows_the_gamepad_style(self):
+        original = texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5', 3)
+        copies = []
+        for style in ('xbox', 'nintendo'):
+            data = bytearray(original)
+            self.assertEqual(glyphs.patch(data, style), 1)
+            self.assertEqual(list(glyphs.entries(data)), list(glyphs.entries(original)))
+            pixels = original.find(b'DDS ') + 128
+            self.assertEqual(data[:pixels], original[:pixels])
+            self.assertNotEqual(data[pixels:], original[pixels:])
+            image = Image.open(io.BytesIO(bytes(data[pixels - 128:])))
+            image.load()
+            self.assertEqual(image.size, (1024, 512))
+            copies.append(bytes(data))
+        self.assertNotEqual(*copies)
+
+    def test_keyboard_keeps_the_original_controller_diagram(self):
+        original = texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5')
+        data = bytearray(original)
+        self.assertEqual(glyphs.patch(data, 'keyboard'), 0)
+        self.assertEqual(data, original)
+
+    def test_diagram_is_mounted_and_the_original_is_untouched(self):
+        original = texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5')
+        self.source.write_bytes(original)
+        for style in ('xbox', 'nintendo'):
+            copies = glyphs.build(self.game, self.out, style)
+            self.assertNotEqual(copies['/app0/EXEC/WAD/PS4_LE/R_UI.WAD'].read_bytes(), original)
+            self.assertEqual(self.source.read_bytes(), original)
+        self.assertEqual(glyphs.build(self.game, self.out, 'playstation'), {})
+
+    def test_missing_diagram_art_keeps_the_prompts_and_is_retried_when_restored(self):
+        original = wad() + texture('TXCE352DC5.12345678.dds', 1024, 512, 'DXT5')
+        self.source.write_bytes(original)
+        with mock.patch.object(glyphs, 'CONTROLLER_ART', self.out / 'missing-art'):
+            copies = glyphs.build(self.game, self.out, 'xbox')
+            incomplete = copies['/app0/EXEC/WAD/PS4_LE/R_UI.WAD'].read_bytes()
+        copies = glyphs.build(self.game, self.out, 'xbox')
+        self.assertNotEqual(copies['/app0/EXEC/WAD/PS4_LE/R_UI.WAD'].read_bytes(), incomplete)
+        self.assertNotEqual(incomplete, original)
+        self.assertEqual(self.source.read_bytes(), original)
 
     def test_the_keyboard_follows_only_the_key_map(self):
         copy = glyphs.build(self.game, self.out, 'keyboard')['/app0/EXEC/WAD/PS4_LE/R_UI.WAD']
@@ -217,7 +261,7 @@ class GlyphPatchTest(unittest.TestCase):
 
 
 class RunGlyphsTest(unittest.TestCase):
-    """run.py: the option is off unless GOW3_GLYPH_STYLE asks for it."""
+    """run.py: the option is off unless SPARTAN_GLYPH_STYLE asks for it."""
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -227,7 +271,7 @@ class RunGlyphsTest(unittest.TestCase):
         (self.out / 'glyphs/R_UI.WAD').write_bytes(b'old')
 
     def test_off_runs_nothing_and_removes_old_copies(self):
-        for env in ({}, {'GOW3_GLYPH_STYLE': 'off'}, {'GOW3_GLYPH_STYLE': 'playstation'}):
+        for env in ({}, {'SPARTAN_GLYPH_STYLE': 'off'}, {'SPARTAN_GLYPH_STYLE': 'playstation'}):
             (self.out / 'glyphs').mkdir(exist_ok=True)
             with mock.patch.object(run.subprocess, 'run') as started, mock.patch.object(glyphs, 'build') as build:
                 self.assertEqual(run.glyph_mounts(env, Path('probe'), Path('game'), self.out), ([], None))
@@ -238,7 +282,7 @@ class RunGlyphsTest(unittest.TestCase):
     def test_auto_asks_the_probe_and_mounts_the_copies(self):
         pad = mock.Mock(stdout='Gamepad: type=xboxone south=a east=b west=x north=y name=Xbox Controller\n')
         copies = {'/app0/EXEC/WAD/PS4_LE/R_UI.WAD': self.out / 'glyphs/R_UI.WAD'}
-        env = {'GOW3_GLYPH_STYLE': 'auto', 'GOW3_PAD_MAP': 'cross=b'}
+        env = {'SPARTAN_GLYPH_STYLE': 'auto', 'SPARTAN_PAD_MAP': 'cross=b'}
         with mock.patch.object(run.subprocess, 'run', return_value=pad) as started, \
                 mock.patch.object(glyphs, 'build', return_value=copies) as build:
             arguments, style = run.glyph_mounts(env, Path('probe'), Path('game'), self.out)
@@ -249,13 +293,13 @@ class RunGlyphsTest(unittest.TestCase):
 
     def test_a_chosen_style_does_not_ask_the_probe(self):
         with mock.patch.object(run.subprocess, 'run') as started, mock.patch.object(glyphs, 'build', return_value={}) as build:
-            self.assertEqual(run.glyph_mounts({'GOW3_GLYPH_STYLE': 'nintendo'}, Path('probe'), Path('game'), self.out), ([], None))
+            self.assertEqual(run.glyph_mounts({'SPARTAN_GLYPH_STYLE': 'nintendo'}, Path('probe'), Path('game'), self.out), ([], None))
         started.assert_not_called()
         self.assertEqual(build.call_args.args[2:], ('nintendo', None, '', ''))
 
     def test_keyboard_passes_the_key_map(self):
         copies = {'/app0/EXEC/WAD/PS4_LE/R_UI.WAD': self.out / 'glyphs/R_UI.WAD'}
-        env = {'GOW3_GLYPH_STYLE': 'keyboard', 'GOW3_KEY_MAP': 'cross=Q'}
+        env = {'SPARTAN_GLYPH_STYLE': 'keyboard', 'SPARTAN_KEY_MAP': 'cross=Q'}
         with mock.patch.object(run.subprocess, 'run') as started, \
                 mock.patch.object(glyphs, 'build', return_value=copies) as build:
             self.assertEqual(run.glyph_mounts(env, Path('probe'), Path('game'), self.out)[1], 'keyboard')
@@ -266,15 +310,15 @@ class RunGlyphsTest(unittest.TestCase):
         pad = mock.Mock(stdout='Gamepad: none\n')
         with mock.patch.object(run.subprocess, 'run', return_value=pad), \
                 mock.patch.object(glyphs, 'build', return_value={'/app0/x': self.out / 'x'}) as build:
-            self.assertEqual(run.glyph_mounts({'GOW3_GLYPH_STYLE': 'auto', 'GOW3_KEY_MAP': 'square=G'}, Path('probe'),
+            self.assertEqual(run.glyph_mounts({'SPARTAN_GLYPH_STYLE': 'auto', 'SPARTAN_KEY_MAP': 'square=G'}, Path('probe'),
                                               Path('game'), self.out)[1], 'keyboard')
         self.assertEqual(build.call_args.args[2:], ('keyboard', None, '', 'square=G'))
 
     def test_a_failure_starts_the_game_with_its_own_glyphs(self):
         with mock.patch.object(run.subprocess, 'run', side_effect=OSError('no probe')):
-            self.assertEqual(run.glyph_mounts({'GOW3_GLYPH_STYLE': 'auto'}, Path('probe'), Path('game'), self.out), ([], None))
+            self.assertEqual(run.glyph_mounts({'SPARTAN_GLYPH_STYLE': 'auto'}, Path('probe'), Path('game'), self.out), ([], None))
         with mock.patch.object(glyphs, 'build', side_effect=ValueError('bad WAD')):
-            self.assertEqual(run.glyph_mounts({'GOW3_GLYPH_STYLE': 'xbox'}, Path('probe'), Path('game'), self.out), ([], None))
+            self.assertEqual(run.glyph_mounts({'SPARTAN_GLYPH_STYLE': 'xbox'}, Path('probe'), Path('game'), self.out), ([], None))
 
 
 if __name__ == '__main__':
@@ -304,3 +348,37 @@ class KeyboardStickTest(unittest.TestCase):
         image = glyphs.render('inline', 'rstick', 'keyboard', None, '', 64, 64)
         self.assertEqual(image.size, (64, 64))
         self.assertGreater(len(set(image.getdata())), 4)
+
+
+@unittest.skipUnless(Image, 'needs Pillow')
+class AtlasAlignmentTest(unittest.TestCase):
+    """The shoulder-button atlas (TXFB91136E for L2/L1, TX0FFF3CCB for R2/R1) places its prompts
+    centered ~52 px from the midline (y=128), matching the in-game HUD quad mapping, rather than
+    in the center of each 128 px half (y=64, which puts them 64 px from the midline)."""
+
+    def test_atlas_prompts_are_centered_towards_midline(self):
+        for style in ('xbox', 'nintendo', 'keyboard'):
+            for pair in (('r2', 'r1'), ('l2', 'l1')):
+                img = glyphs.render('atlas', pair, style, None, '', 256, 256)
+                self.assertEqual(img.size, (256, 256))
+                w, _h = img.size
+                top_y = [y for y in range(128) if any(img.getpixel((x, y))[0] > 30 for x in range(w))]
+                bot_y = [y for y in range(128, 256) if any(img.getpixel((x, y))[0] > 30 for x in range(w))]
+                self.assertTrue(top_y, f"{style} {pair} top half should contain pixels")
+                self.assertTrue(bot_y, f"{style} {pair} bottom half should contain pixels")
+                top_center = (min(top_y) + max(top_y)) / 2
+                bot_center = (min(bot_y) + max(bot_y)) / 2
+                # In each half, the prompt should be ~52 px from midline (y=128), within 3 px tolerance.
+                # Without the offset, distance was 64 px, causing prompts to touch the HUD border.
+                self.assertAlmostEqual(128 - top_center, 52, delta=3)
+                self.assertAlmostEqual(bot_center - 128, 52, delta=3)
+
+    def test_qte_face_buttons_remain_centered(self):
+        img = glyphs.render('qte', 'cross', 'xbox', None, '', 128, 128)
+        self.assertEqual(img.size, (128, 128))
+        qw, qh = img.size
+        qx = [x for x in range(qw) if any(img.getpixel((x, y))[0] > 30 for y in range(qh))]
+        qy = [y for y in range(qh) if any(img.getpixel((x, y))[0] > 30 for x in range(qw))]
+        self.assertAlmostEqual((min(qx) + max(qx)) / 2, 63.5, delta=2)
+        self.assertAlmostEqual((min(qy) + max(qy)) / 2, 63.5, delta=2)
+

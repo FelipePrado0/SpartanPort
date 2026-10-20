@@ -2,7 +2,7 @@
 
 **English** | [Português (Brasil)](#português-brasil)
 
-Makes God of War III Remastered fill an ultrawide screen **without the zoomed-in picture**. The game's
+Makes SpartanPort fill an ultrawide screen **without the zoomed-in picture**. The game's
 camera has a fixed horizontal field of view, so a plain resolution change only crops a 16:9 picture top
 and bottom. This mod adds render resolutions that also widen the field of view: the world keeps its
 proportions and you see more to the sides.
@@ -13,10 +13,15 @@ proportions and you see more to the sides.
 | 3440x1440 | 21:9 | **Tested in game** |
 | 3840x1600 | 21:9 | **Tested in game** |
 | 5120x1440 | 32:9 | **Tested in game** |
+| 5120x2160 | 21:9 | **Tested in game** by two players (issue #505); largest Video Arena (3.98 GiB) |
 | 1920x1200 | 16:10 | **Tested in game** (taller than 16:9: see Notes) |
 | 2560x1600 | 16:10 | **Tested in game** (taller than 16:9: see Notes) |
+| 1280x800 | 16:10 | Not tested (the Steam Deck's screen) |
+| 1280x960, 1440x1080, 1920x1440, 2048x1536, 2560x1920 | 4:3 | 1280x960 and 1920x1440 tested (menu and gameplay; 1920x1440 by a player on a 4:3 CRT); the others are not |
+| 1440x900 | 16:10 | Not tested |
+| 1360x768 | 16:9 | Not tested (the shape of the original picture) |
 
-Every size was tested in game. Thanks to the players who tested them in issue #180. Since 2.4.0 these sizes are
+Every size but 1280x800, 1440x900, 1360x768, 1440x1080, 2048x1536 and 2560x1920 was tested in game. Thanks to the players who tested them in issue #180. Since 2.4.0 these sizes are
 built in (Render resolution); the mod is for older versions. If something looks wrong on your screen, please say
 how it looks (resolution, and whether anything is cropped, stretched or missing at the edges) in an issue.
 
@@ -26,7 +31,7 @@ how it looks (resolution, and whether anything is cropped, stretched or missing 
 request #202 and the releases after it is merged. 2.2.0 and 2.3.0 do not: with them the zip is ignored and the
 game stays at its usual resolution.
 
-1. Put `Ultrawide.zip` into the `mods` folder, next to `God of War III.exe` (in the launcher: **Mods** →
+1. Put `Ultrawide.zip` into the `mods` folder, next to `SpartanPort.exe` (in the launcher: **Mods** →
    **Open**; create the folder if it is not there). Do not unzip it: the game does that by itself.
 2. Open the launcher. The mod is listed on the Mods page, ticked, with "(game patches)".
 3. In **Render resolution** (Home or Performance) pick `3440x1440 (mod)` or another size, then **PLAY**. The
@@ -38,9 +43,9 @@ game stays at its usual resolution.
 (attached to pull request #202).
 
 1. Close the game and the launcher. Unzip `Ultrawide-installer.zip` anywhere.
-2. Double-click **`INSTALL.bat`**. Paste the game folder when it asks (the one with `God of War III.exe`; if you
+2. Double-click **`INSTALL.bat`**. Paste the game folder when it asks (the one with `SpartanPort.exe`; if you
    unzipped inside that folder it finds it by itself), then pick a resolution from the menu.
-3. Start the game with **`Play God of War III.exe`**. Do not use the launcher on 2.2.0 or 2.3.0: it does not list the new
+3. Start the game with **`Play SpartanPort.exe`**. Do not use the launcher on 2.2.0 or 2.3.0: it does not list the new
    sizes and can reset the setting. To pick another size later, run `Ultrawide - choose resolution.bat` in the
    game folder.
 4. To undo everything: **`UNINSTALL.bat`** (it puts the original files back).
@@ -61,7 +66,7 @@ is changed.
   background of a menu does not reach the sides (the top and bottom at 16:10).
 - **16:10 (taller than 16:9).** The game's camera keeps the horizontal view, so a taller picture simply shows
   more at the top and bottom, without distortion. These entries only set the resolution and the aspect ratio
-  (no field of view change). 4:3 is not included.
+  (no field of view change). 4:3: the game letterboxes its picture to 16:9 when its second aspect float is exactly 4/3, so the 4:3 entries write it one unit above.
 - At 32:9 the horizontal field of view is doubled, so objects at the very edges look stretched, as in any
   game with a very wide field of view.
 - It needs extra direct memory (the Video Arena grows with the pixel count); the launcher sets that from the
@@ -84,25 +89,25 @@ Reported by testers; they come from the game, which is built for 16:9:
 
 ## Português (Brasil)
 
-Faz o God of War III Remastered encher uma tela ultrawide **sem a imagem com zoom**. A câmera do jogo tem
+Faz o SpartanPort encher uma tela ultrawide **sem a imagem com zoom**. A câmera do jogo tem
 campo de visão horizontal fixo, então só trocar a resolução corta a imagem de 16:9 em cima e embaixo. Este
 mod adiciona resoluções que também abrem o campo de visão: o mundo mantém as proporções e você vê mais dos
 lados.
 
 **Como instalar.** Nas versões **que leem mods em zip** (a build de teste do Ultrawide indicada no pull request
 #202 e as releases depois do merge; a 2.2.0 e a 2.3.0 não leem, e o jogo fica na resolução de sempre): coloque o
-`Ultrawide.zip` (sem extrair) na pasta `mods`, ao lado do `God of War III.exe` (no launcher: **Mods** →
+`Ultrawide.zip` (sem extrair) na pasta `mods`, ao lado do `SpartanPort.exe` (no launcher: **Mods** →
 **Open**), abra o launcher e escolha o tamanho em **Render resolution**. Na **2.2.0 ou 2.3.0 oficiais** (que ainda não leem mods em zip): baixe o instalador
 `Ultrawide-installer.zip` (anexado ao pull request #202), extraia, dê dois cliques no **`INSTALL.bat`**, cole
-a pasta do jogo, escolha a resolução no menu e inicie o jogo pelo **`Play God of War III.exe`** (não pelo
+a pasta do jogo, escolha a resolução no menu e inicie o jogo pelo **`Play SpartanPort.exe`** (não pelo
 launcher). Para desfazer: **`UNINSTALL.bat`**. Em **Render resolution** aparecem `3440x1440 (mod)` e os outros tamanhos (e no menu do jogo,
 tecla Insert). O **Engine frame rate** (60, 120 ou 240) é uma escolha à parte e vale com qualquer resolução.
 
 **As cutscenes continuam com bordas:** são vídeos 16:9 pré-renderizados, então tocam com barras pretas dos
 lados (em cima e embaixo no 16:10); as builds anteriores à de teste deixavam o último frame do jogo nessas
 barras. **Os menus são 16:9:** o fundo escurecido de um menu não chega aos lados (nem em cima e embaixo no
-16:10). O 3440x1440 foi testado por quem fez; 5120x1440, 1920x1200 e 2560x1600 foram testados por outros jogadores
-e funcionam; 2560x1080 e 3840x1600 ainda não. Se testar, conte como ficou numa issue do projeto.
+16:10). O 3440x1440 foi testado por quem fez; 5120x1440, 5120x2160, 1920x1200, 2560x1600 e 1920x1440 foram testados por outros jogadores
+e funcionam, e 2560x1080 e 3840x1600 foram validados pelo mantenedor. Se testar, conte como ficou numa issue do projeto.
 Os tamanhos 16:10 (1920x1200 e 2560x1600) só mudam a resolução e o aspect ratio: como a câmera mantém o campo
 horizontal, uma imagem mais alta mostra mais em cima e embaixo, sem deformar.
 

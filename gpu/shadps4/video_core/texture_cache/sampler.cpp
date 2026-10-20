@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
-#include "gow3_settings.h"
+#include "spartanport_settings.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/texture_cache/sampler.h"
@@ -14,9 +14,9 @@ Sampler::Sampler(const Vulkan::Instance& instance, const AmdGpu::Sampler& sample
     using namespace Vulkan;
     const bool game_anisotropy = AmdGpu::IsAnisoFilter(sampler.xy_mag_filter) ||
                                  AmdGpu::IsAnisoFilter(sampler.xy_min_filter);
-    // gow3: the menu's anisotropic filtering, on filtered and mipmapped textures (not on
+    // spartanport: the menu's anisotropic filtering, on filtered and mipmapped textures (not on
     // point-sampled lookups, unmipmapped render targets or depth compares).
-    const int forced = Gow3Settings::Get().startup_anisotropy;
+    const int forced = SpartanSettings::Get().startup_anisotropy;
     const bool force_anisotropy = forced > 1 && !is_depth &&
                                   sampler.xy_min_filter != AmdGpu::Filter::Point &&
                                   sampler.mip_filter != AmdGpu::MipFilter::None;

@@ -313,7 +313,7 @@ int main(int argc, char** argv) {
     assert(Encode(global, pipeline, 42, {}).empty());
     assert(Encode(global, pipeline, 42, std::vector<Binary>(MaxBinaries + 1, binaries[0])).empty());
     const auto root = std::filesystem::temp_directory_path() /
-                      ("gow3-binary-test-" +
+                      ("spartanport-binary-test-" +
                        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto file = root / "pipeline.bin";
     assert(!Load(file, global, pipeline, 42));

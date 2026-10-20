@@ -115,8 +115,8 @@ class PresenceLifecycle(unittest.TestCase):
     def setUp(self):
         self.env = mock.patch.dict(os.environ, {}, clear=False)
         self.env.start()
-        os.environ.pop('GOW3_DISCORD', None)
-        os.environ.pop('GOW3_DISCORD_ID', None)
+        os.environ.pop('SPARTAN_DISCORD', None)
+        os.environ.pop('SPARTAN_DISCORD_ID', None)
 
     def tearDown(self):
         self.env.stop()
@@ -129,7 +129,7 @@ class PresenceLifecycle(unittest.TestCase):
         self.assertIsNone(presence.thread)
 
     def test_disabled_by_switch(self):
-        os.environ['GOW3_DISCORD'] = '0'
+        os.environ['SPARTAN_DISCORD'] = '0'
         with mock.patch.object(dp, 'open_transport') as opened:
             presence = dp.Presence(client_id='123')
             presence.close()
@@ -250,8 +250,8 @@ class GameProcessPresence(unittest.TestCase):
         self.presence = mock.Mock()
         self.factory = self.enterContext(mock.patch.object(dp, 'Presence', return_value=self.presence))
         self.enterContext(mock.patch.dict(os.environ, {
-            'GOW3_GAME_DIR': str(game), 'GOW3_DATA_DIR': str(folder),
-            'GOW3_CONFIG': str(folder / 'gow3.ini'), 'GOW3_DISCORD': '1',
+            'SPARTAN_GAME_DIR': str(game), 'SPARTAN_DATA_DIR': str(folder),
+            'SPARTAN_CONFIG': str(folder / 'spartanport.ini'), 'SPARTAN_DISCORD': '1',
         }, clear=True))
         self.enterContext(mock.patch.object(run, 'PORT', folder))
         self.enterContext(mock.patch.object(run, 'find_executable', return_value=probe))
@@ -318,7 +318,7 @@ class SocketIntegration(unittest.TestCase):
                 return transport
 
             with ThreadPoolExecutor(max_workers=1) as executor, \
-                    mock.patch.dict(os.environ, {'GOW3_DISCORD': '1'}), \
+                    mock.patch.dict(os.environ, {'SPARTAN_DISCORD': '1'}), \
                     mock.patch.object(dp, 'open_transport', side_effect=connect), \
                     mock.patch.object(dp, 'RETRY_SECONDS', 0.01):
                 server = executor.submit(serve)
@@ -341,7 +341,7 @@ class WindowsPipeTransport(unittest.TestCase):
         self.ctypes = ctypes
         self.kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
         self.kernel32.CreateNamedPipeW.restype = ctypes.c_void_p
-        path = rf'\\.\pipe\gow3-rpc-test-{uuid.uuid4()}'
+        path = rf'\\.\pipe\spartanport-rpc-test-{uuid.uuid4()}'
         handle = self.kernel32.CreateNamedPipeW(ctypes.c_wchar_p(path), 3, 0, 1, 1024, 1024, 0, None)
         self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
         self.pipe = ctypes.c_void_p(handle)
@@ -370,7 +370,7 @@ class WindowsPipeTransport(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 1)
 
     def test_close_stops_worker_waiting_for_a_native_pipe_handshake(self):
-        with mock.patch.dict(os.environ, {'GOW3_DISCORD': '1'}), \
+        with mock.patch.dict(os.environ, {'SPARTAN_DISCORD': '1'}), \
                 mock.patch.object(dp, 'open_transport', return_value=self.transport) as opened:
             presence = dp.Presence(client_id='123')
             try:
@@ -395,7 +395,7 @@ class WindowsPipeTransport(unittest.TestCase):
 class LauncherSwitch(unittest.TestCase):
     def setUp(self):
         sys.path.insert(0, str(ROOT / 'launcher'))
-        import gow3_launcher_win as launcher
+        import spartanport_launcher_win as launcher
         self.launcher = launcher
 
     def environment(self, **settings):
@@ -405,19 +405,19 @@ class LauncherSwitch(unittest.TestCase):
 
     def test_off_by_default(self):
         self.assertFalse(self.launcher.APP_DEFAULTS['discord_rpc'])
-        self.assertEqual(self.environment()['GOW3_DISCORD'], '0')
+        self.assertEqual(self.environment()['SPARTAN_DISCORD'], '0')
 
     def test_checked_enables_it(self):
-        self.assertEqual(self.environment(discord_rpc=True)['GOW3_DISCORD'], '1')
+        self.assertEqual(self.environment(discord_rpc=True)['SPARTAN_DISCORD'], '1')
 
     def test_label_is_translated(self):
-        import gow3_lang
-        self.assertEqual(gow3_lang.table('es')['Show Discord Rich Presence'], 'Mostrar Discord Rich Presence')
-        self.assertIn('Discord', gow3_lang.table('pt')['Show Discord Rich Presence'])
-        self.assertEqual(gow3_lang.table('es')[
+        import spartanport_lang
+        self.assertEqual(spartanport_lang.table('es')['Show Discord Rich Presence'], 'Mostrar Discord Rich Presence')
+        self.assertIn('Discord', spartanport_lang.table('pt')['Show Discord Rich Presence'])
+        self.assertEqual(spartanport_lang.table('es')[
             'Shows only the game name and the time played on your Discord profile.'],
             'Muestra en tu perfil de Discord solo el nombre del juego y el tiempo jugado.')
-        self.assertEqual(gow3_lang.table('es')['Game multisampling'], 'Multisampling del juego')
+        self.assertEqual(spartanport_lang.table('es')['Game multisampling'], 'Multisampling del juego')
 
 
 if __name__ == '__main__':

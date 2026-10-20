@@ -33,7 +33,7 @@ class DiagnosticsLayoutTest(unittest.TestCase):
             for name, value in (('CONFIG_DIR', folder), ('CONFIG_FILE', config),
                                 ('DATA_DIR', folder), ('LANG', language)):
                 stack.enter_context(mock.patch.object(launcher, name, value))
-            stack.enter_context(mock.patch.dict(os.environ, {'GOW3_CONFIG': str(folder / 'gow3.ini')}))
+            stack.enter_context(mock.patch.dict(os.environ, {'SPARTAN_CONFIG': str(folder / 'spartanport.ini')}))
             stack.enter_context(mock.patch.object(launcher, 'list_gpus', return_value=[]))
             try:
                 root = tk.Tk()

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// gow3: helpers of the background pipeline cache warm-up (vk_pipeline_serialization.cpp).
+// spartanport: helpers of the background pipeline cache warm-up (vk_pipeline_serialization.cpp).
 
 #pragma once
 

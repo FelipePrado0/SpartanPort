@@ -1,7 +1,7 @@
-"""Launcher setting for the game's multisampling (GOW3_NO_MSAA): environment, page and texts.
+"""Launcher setting for the game's multisampling (SPARTAN_NO_MSAA): environment, page and texts.
 Automatic leaves the decision to the game (off on AMD's and Intel's Windows drivers,
-gow3_msaa_default.h) and names the chosen card and that decision, read from
-`gow3-gpu-capabilities --list`."""
+spartanport_msaa_default.h) and names the chosen card and that decision, read from
+`spartanport-gpu-capabilities --list`."""
 import os
 import sys
 import unittest
@@ -9,10 +9,10 @@ from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
-import gow3_lang  # noqa: E402
-import gow3_launcher_win as launcher  # noqa: E402
+import spartanport_lang  # noqa: E402
+import spartanport_launcher_win as launcher  # noqa: E402
 
-# `gow3-gpu-capabilities --list`: index, name, type, multisampling default, the game's pick.
+# `spartanport-gpu-capabilities --list`: index, name, type, multisampling default, the game's pick.
 ARC_LAPTOP = [('0', 'Intel(R) Arc(TM) Graphics', 'integrated', 'off', '0'),
               ('1', 'NVIDIA GeForce RTX 4060 Laptop GPU', 'discrete', 'on', '1')]
 OLD_TOOL = [('0', 'AMD Radeon RX 6600', 'discrete')]
@@ -25,22 +25,22 @@ def added(env):
 class NoMsaaEnvironmentTest(unittest.TestCase):
     def test_auto_leaves_the_game_default_and_keeps_an_inherited_value(self):
         self.assertEqual(launcher.APP_DEFAULTS['no_msaa'], '')
-        self.assertNotIn('GOW3_NO_MSAA', added(launcher.game_environment(dict(launcher.APP_DEFAULTS))))
-        # A GOW3_NO_MSAA set by a .bat before the launcher still reaches the game on Auto.
-        with mock.patch.dict(os.environ, {'GOW3_NO_MSAA': '1'}):
-            self.assertEqual(launcher.game_environment(dict(launcher.APP_DEFAULTS))['GOW3_NO_MSAA'], '1')
+        self.assertNotIn('SPARTAN_NO_MSAA', added(launcher.game_environment(dict(launcher.APP_DEFAULTS))))
+        # A SPARTAN_NO_MSAA set by a .bat before the launcher still reaches the game on Auto.
+        with mock.patch.dict(os.environ, {'SPARTAN_NO_MSAA': '1'}):
+            self.assertEqual(launcher.game_environment(dict(launcher.APP_DEFAULTS))['SPARTAN_NO_MSAA'], '1')
 
     def test_off_and_on_set_the_variable(self):
         for value in ('1', '0'):
             with self.subTest(value=value):
                 env = launcher.game_environment({**launcher.APP_DEFAULTS, 'no_msaa': value})
-                self.assertEqual(env['GOW3_NO_MSAA'], value)
+                self.assertEqual(env['SPARTAN_NO_MSAA'], value)
 
     def test_choices_and_legacy_settings(self):
         self.assertEqual([value for value, _text in launcher.NO_MSAA], ['', '1', '0'])
         legacy = dict(launcher.APP_DEFAULTS)
         legacy.pop('no_msaa')
-        self.assertNotIn('GOW3_NO_MSAA', added(launcher.game_environment(legacy)))
+        self.assertNotIn('SPARTAN_NO_MSAA', added(launcher.game_environment(legacy)))
 
 
 class ChosenGpuTest(unittest.TestCase):
@@ -72,7 +72,7 @@ class ChosenGpuTest(unittest.TestCase):
                              ('Automático (NVIDIA GeForce RTX 4060 Laptop GPU: ligado)',))
 
     def test_portuguese_texts(self):
-        table = gow3_lang.table('pt')
+        table = spartanport_lang.table('pt')
         texts = ('Game multisampling', 'Automatic ({}: off)', 'Automatic ({}: on)', launcher.NO_MSAA_HINT)
         for text in texts + tuple(text[0] for _value, text in launcher.NO_MSAA):
             with self.subTest(text=text[:40]):
@@ -93,7 +93,7 @@ class NoMsaaLauncherTest(unittest.TestCase):
         self.addCleanup(root.destroy)
 
         def build(language='en', gpu_id=''):
-            with mock.patch.dict(os.environ, {'GOW3_CONFIG': os.devnull}), \
+            with mock.patch.dict(os.environ, {'SPARTAN_CONFIG': os.devnull}), \
                     mock.patch.object(launcher, 'LANG', language), \
                     mock.patch.object(launcher, 'list_gpus', return_value=ARC_LAPTOP):
                 app = launcher.Launcher.__new__(launcher.Launcher)
@@ -141,7 +141,7 @@ class NoMsaaLauncherTest(unittest.TestCase):
         self.assertEqual(boxes[0]['values'][0], 'Automatic (Intel(R) Arc(TM) Graphics: off)')
 
         # The Portuguese page shows the translated title, label and hint.
-        table = gow3_lang.table('pt')
+        table = spartanport_lang.table('pt')
         app = build('pt')
         texts = {widget.cget('text') for widget in widgets(app.pages['performance'])
                  if isinstance(widget, ttk.Label)}
