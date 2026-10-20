@@ -1,5 +1,6 @@
 from paths import ROOT  # noqa: F401  (puts scripts/ on the path)
 import contextlib
+import os
 import shutil
 import sys
 import tempfile
@@ -24,7 +25,7 @@ def no_links_but_hard_links():
         Path(dst).mkdir()
         raise PermissionError(5, 'Access is denied')
     return (mock.patch.object(Path, 'symlink_to', side_effect=PermissionError(5, 'Access is denied')),
-            mock.patch('mods.os.name', 'nt'),
+            mock.patch('mods.os', types.SimpleNamespace(**{**vars(os), 'name': 'nt'})),
             mock.patch.dict(sys.modules, {'_winapi': types.SimpleNamespace(CreateJunction=create_junction)}))
 
 

@@ -41,6 +41,17 @@ asm(".section .rdata,\"dr\"\n"
     ".global spartanport_font_ttf_end\n"
     "spartanport_font_ttf_end:\n"
     ".text\n");
+#elif defined(__APPLE__)
+asm(".section __TEXT,__const\n"
+    ".p2align 4\n"
+    ".private_extern _spartanport_font_ttf\n"
+    ".globl _spartanport_font_ttf\n"
+    "_spartanport_font_ttf:\n"
+    ".incbin \"" SPARTAN_FONT_PATH "\"\n"
+    ".private_extern _spartanport_font_ttf_end\n"
+    ".globl _spartanport_font_ttf_end\n"
+    "_spartanport_font_ttf_end:\n"
+    ".text\n");
 #else
 asm(".section .rodata\n"
     ".balign 16\n"
@@ -1095,9 +1106,13 @@ bool HandleEvent(const SDL_Event& event) {
             Vulkan::FrameCapture::Request();
             return true;
         }
-        if (down && !event.key.repeat &&
-            (event.key.key == SDLK_INSERT || (is_open && event.key.key == SDLK_ESCAPE))) {
-            SetOpen(event.key.key == SDLK_INSERT ? !is_open : false);
+        const bool toggle = event.key.key == SDLK_INSERT
+#ifdef __APPLE__
+                            || event.key.scancode == SDL_SCANCODE_GRAVE
+#endif
+                            ;
+        if (down && !event.key.repeat && (toggle || (is_open && event.key.key == SDLK_ESCAPE))) {
+            SetOpen(toggle ? !is_open : false);
             return true;
         }
         if (!is_open) {

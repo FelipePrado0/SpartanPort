@@ -72,6 +72,12 @@ enum : std::uint64_t {
     /// A texture/storage request for the top rows of a cached image (same address and layout)
     /// uses that image, instead of creating and uploading a new one (texture_cache.cpp).
     PartialHeightViews = 1ull << 58,
+    /// Draws without targets or shader stores are dropped (vk_rasterizer.cpp DrawRecord).
+    SkipNoEffectDraws = 1ull << 61,
+    /// Rect-list depth/stencil clears are left to the render pass load op (DrawRecord).
+    SkipClearDraws = 1ull << 62,
+    /// Deferred depth/stencil clears become the next pass's load op (Scheduler::DeferDepthClear).
+    FoldClears = 1ull << 63,
     // Bits 20-29 are used as raw debug toggles by the camera/object motion and the upscaler.
 };
 inline bool Disabled(std::uint64_t bit) {
@@ -123,6 +129,11 @@ inline std::atomic<std::uint64_t> reduced_draws{0}, scene_draws{0};
 /// for host copies before a submission or fence, and for GPU ticks.
 inline std::atomic<std::uint64_t> sync_recording_ns{0}, host_copies_wait_ns{0}, tick_wait_ns{0},
     copy_threads_wait_ns{0}, host_copy_waits{0};
+/// Draws emulated with tessellation (rect/quad lists, patches), render passes begun, draws
+/// dropped as without effect, rect-list clears left to the load op and those folded into the
+/// next pass (SPARTAN_FRAME_STATS "Draw pipe" lines).
+inline std::atomic<std::uint64_t> tess_draws{0}, render_passes{0}, no_effect_draws{0},
+    clear_draws{0}, folded_clears{0};
 struct WaitTimer {
     std::atomic<std::uint64_t>& total;
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();

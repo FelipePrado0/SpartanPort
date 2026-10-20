@@ -5,12 +5,18 @@
 //
 // AMD's Windows driver: the RX 6600 family reads the 2-sample depth buffer wrong and the
 // lighting shows black lines (#65). Intel's Windows driver: the same lines on Arc A750, B580
-// and 140V (#28). NVIDIA, RADV, AMDVLK, Mesa ANV and MoltenVK read it correctly as far as
-// known and keep the game's multisampling.
+// and 140V (#28). Mesa's KosmicKrisp (macOS): the scene stays unlit and fully fogged in
+// gameplay, only silhouettes show (M1 Max, macOS 27). NVIDIA, RADV, AMDVLK, Mesa ANV and
+// MoltenVK read it correctly as far as known and keep the game's multisampling.
 #pragma once
 
 #include <vulkan/vulkan_core.h>
 
+static inline int spartanport_metal_rect_optimizations(VkDriverId driver) {
+    return driver == VK_DRIVER_ID_MESA_KOSMICKRISP;
+}
+
 static inline int spartanport_no_msaa_default(VkDriverId driver) {
-    return driver == VK_DRIVER_ID_AMD_PROPRIETARY || driver == VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS;
+    return driver == VK_DRIVER_ID_AMD_PROPRIETARY || driver == VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS ||
+           driver == VK_DRIVER_ID_MESA_KOSMICKRISP;
 }

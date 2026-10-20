@@ -4,7 +4,9 @@
  * keeps FS. Priorities/affinity are recorded, not enforced by a PS4 scheduler.
  * Windows: GS is the TEB and cannot be moved. The guest TCB lives in a TLS slot of the TEB
  * instead, and the loader rewrites the load to `mov rax, gs:[0x1480+8*slot]` (TlsSlots),
- * the same 9-byte instruction with another displacement. */
+ * the same 9-byte instruction with another displacement.
+ * macOS: GS is the pthread TSD array (gs:[8*key] is a key's value, also under Rosetta), so the
+ * guest TCB is the value of a pthread key and the load becomes `mov rax, gs:[8*key]`. */
 #define _GNU_SOURCE
 #include "runtime.h"
 #include <stdio.h>
@@ -19,6 +21,10 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <tlhelp32.h>
+#elif defined(__APPLE__)
+#include <sys/mman.h>
+#include <mach/mach.h>
+#include <pthread/qos.h>
 #else
 #include <dirent.h>
 #include <sys/resource.h>
@@ -87,6 +93,21 @@ static void set_gs(void *base) {
     if (!TlsSetValue(tls_slot,base)) { fprintf(stderr,"STOP: TlsSetValue failed (%lu)\n",GetLastError()); exit(21); }
 }
 #define tls_block_alloc(size) _aligned_malloc(size,64)
+#elif defined(__APPLE__)
+static pthread_key_t tcb_key;
+static int tcb_key_ready;
+uint32_t runtime_thread_tcb_offset(void) {
+    if (!tcb_key_ready) {
+        if (pthread_key_create(&tcb_key,NULL)) { fputs("STOP: no pthread key for the guest TCB\n",stderr); exit(21); }
+        tcb_key_ready=1;
+    }
+    return 8*(uint32_t)tcb_key;
+}
+static void set_gs(void *base) {
+    runtime_thread_tcb_offset();
+    if (pthread_setspecific(tcb_key,base)) { fputs("STOP: pthread_setspecific failed\n",stderr); exit(21); }
+}
+#define tls_block_alloc(size) aligned_alloc(64,size)
 #else
 static void set_gs(void *base) {
     if (syscall(SYS_arch_prctl,ARCH_SET_GS,(unsigned long)base)) { perror("STOP: arch_prctl(ARCH_SET_GS)"); exit(21); }
@@ -245,7 +266,7 @@ static ABI int32_t attr_set_guard(ThreadAttr **slot,uint64_t size) {
     a->guard=size; return 0;
 }
 
-/* Linux thread names hold 15 characters; longer ones would be rejected. */
+/* Linux thread names hold 15 characters; longer ones would be rejected (Darwin: 63). */
 static void set_host_name(const char *name) {
     char host[16]={0};
     memcpy(host,name,strnlen(name,sizeof(host)-1));
@@ -269,6 +290,8 @@ static void set_host_priority(const char *name,int guest_prio) {
 #ifdef _WIN32
     if (!SetThreadPriority(GetCurrentThread(),lower ? THREAD_PRIORITY_BELOW_NORMAL : THREAD_PRIORITY_ABOVE_NORMAL))
         printf("Runtime: cannot change the priority of '%s' (%lu)\n",name,GetLastError());
+#elif defined(__APPLE__)
+    pthread_set_qos_class_self_np(lower ? QOS_CLASS_UTILITY : QOS_CLASS_USER_INITIATED,0);
 #else
     /* Raising needs CAP_SYS_NICE; without it the thread keeps the normal priority. */
     if (setpriority(PRIO_PROCESS,(id_t)syscall(SYS_gettid),lower ? 5 : -5) && lower)
@@ -326,7 +349,7 @@ static int32_t create(GuestThread **out,ThreadAttr **attr_slot,GuestEntry entry,
     printf("Runtime: guest thread '%s' created (stack=%llu, prio=%d)\n",t->name,(unsigned long long)stack,t->attr.prio);
     return 0;
 }
-static ABI int32_t thread_create(GuestThread **out,ThreadAttr **attr,GuestEntry entry,void *argument,const char *name) {
+static ABI int32_t guest_thread_create(GuestThread **out,ThreadAttr **attr,GuestEntry entry,void *argument,const char *name) {
     return create(out,attr,entry,argument,name);
 }
 static ABI int32_t thread_join(GuestThread *t,void **result) {
@@ -405,7 +428,7 @@ uintptr_t runtime_thread_resolve(const char *name) {
         {"3qxgM4ezETA#libkernel",attr_set_affinity}, {"eXbUSpEaTsA#libkernel",attr_set_inherit},
         {"JaRMy+QcpeU#libkernel",attr_get_detach}, {"-fA+7ZlGDQs#libkernel",attr_get_stack},
         {"FXPWHNk8Of0#libkernel",attr_get_param}, {"El+cQ20DynU#libkernel",attr_set_guard},
-        {"6UgtwV+0zb4#libkernel",thread_create}, {"onNY9Byn-W8#libkernel",thread_join},
+        {"6UgtwV+0zb4#libkernel",guest_thread_create}, {"onNY9Byn-W8#libkernel",thread_join},
         {"4qGrR6eoP9Y#libkernel",thread_detach}, {"3kg7rT0NQIs#libkernel",thread_exit},
         {"T72hz6ffq08#libkernel",thread_yield}, {"1tKyG7RlMJo#libkernel",thread_get_prio},
         {"W0Hpm2X0uPE#libkernel",thread_set_prio}, {"bt3CTBKmGyI#libkernel",thread_set_affinity}, {"rcrVFJsQWRY#libkernel",thread_get_affinity},
@@ -465,6 +488,25 @@ static size_t live_thread_cpu(ThreadCpu *out,size_t max) {
         CloseHandle(h);
     }
     CloseHandle(snap);
+#elif defined(__APPLE__)
+    thread_act_array_t threads=NULL;
+    mach_msg_type_number_t count=0;
+    if (task_threads(mach_task_self(),&threads,&count)!=KERN_SUCCESS) return 0;
+    for (mach_msg_type_number_t i=0;i<count;++i) {
+        thread_basic_info_data_t info;
+        mach_msg_type_number_t size=THREAD_BASIC_INFO_COUNT;
+        if (n<max && thread_info(threads[i],THREAD_BASIC_INFO,(thread_info_t)&info,&size)==KERN_SUCCESS) {
+            ThreadCpu *t=&out[n++];
+            t->ms=(double)info.user_time.seconds*1000.0+info.user_time.microseconds/1000.0+
+                  (double)info.system_time.seconds*1000.0+info.system_time.microseconds/1000.0;
+            pthread_t host=pthread_from_mach_thread_np(threads[i]);
+            t->name[0]=0;
+            if (host) pthread_getname_np(host,t->name,sizeof(t->name));
+            if (!t->name[0]) snprintf(t->name,sizeof(t->name),"mach %u",threads[i]);
+        }
+        mach_port_deallocate(mach_task_self(),threads[i]);
+    }
+    vm_deallocate(mach_task_self(),(vm_address_t)threads,count*sizeof(*threads));
 #else
     DIR *dir=opendir("/proc/self/task");
     if (!dir) return 0;
@@ -500,6 +542,8 @@ static void cpu_report(void) {
 #ifdef _WIN32
     DWORD_PTR process_mask=0, system_mask=0;
     if (GetProcessAffinityMask(GetCurrentProcess(),&process_mask,&system_mask)) hw=__builtin_popcountll(process_mask);
+#elif defined(__APPLE__)
+    hw=sysconf(_SC_NPROCESSORS_ONLN);
 #else
     cpu_set_t set; CPU_ZERO(&set);
     if (!sched_getaffinity(0,sizeof(set),&set)) hw=CPU_COUNT(&set);

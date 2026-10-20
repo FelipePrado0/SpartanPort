@@ -30,7 +30,7 @@
 #define VOLUME_0DB 32768
 
 typedef struct {
-    int used, type, channels, is_float, frames, sample_bytes, std_layout, downmix;
+    int used, type, channels, is_float, frames, sample_bytes, std_layout, downmix, device_frames;
     int32_t volume[8];
     SDL_AudioStream *stream;
     uint64_t next_deadline_ns; /* next return of sceAudioOutOutput */
@@ -51,6 +51,18 @@ static int initialized, sdl_ready=-1;
 static size_t buffers_out, ports_opened;
 
 static uint64_t now_ns(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t); return (uint64_t)t.tv_sec*1000000000u+(uint64_t)t.tv_nsec; }
+/* CoreAudio consumes larger quanta than the guest's 256-frame buffers (#469). */
+#if defined(__APPLE__) || defined(SPARTAN_AUDIO_TEST)
+static inline int coreaudio_queue_target(int frames, int device_frames, int frame_bytes) {
+    int64_t target_frames=(int64_t)frames*4;
+    if ((int64_t)device_frames*2>target_frames) target_frames=(int64_t)device_frames*2;
+    int64_t bytes=target_frames*frame_bytes;
+    return bytes>65536 ? 65536 : (int)bytes;
+}
+static inline int coreaudio_prefill_bytes(int queued, int target) {
+    return queued==0 ? target : 0;
+}
+#endif
 static void sleep_until(uint64_t deadline) {
 #ifdef _WIN32
     /* winpthreads' clock_nanosleep only takes CLOCK_REALTIME (EINVAL otherwise). */
@@ -136,9 +148,10 @@ static ABI int32_t audio_open(int32_t user, int32_t type, int32_t index, uint32_
     p->sample_bytes=p->is_float ? 4 : 2; p->frames=(int)length; p->std_layout=format>=6;
     for (int c=0;c<8;++c) p->volume[c]=VOLUME_0DB;
     if (sdl_audio()) {
-        SDL_AudioSpec device; int device_frames;
-        p->downmix=p->channels==8 && SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&device,&device_frames)
-                   && device.channels==2;
+        SDL_AudioSpec device={0}; int device_frames=0;
+        int have_device=SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&device,&device_frames);
+        p->device_frames=have_device ? device_frames : 0;
+        p->downmix=p->channels==8 && have_device && device.channels==2;
         SDL_AudioSpec spec={p->is_float ? SDL_AUDIO_F32 : SDL_AUDIO_S16, p->downmix ? 2 : p->channels, 48000};
         p->stream=SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,NULL,NULL);
         if (p->stream) SDL_ResumeAudioStreamDevice(p->stream);
@@ -222,11 +235,20 @@ static int32_t output_port(int32_t handle, const void *data, int pace) {
             /* The device drains the queue in quanta (21 ms on PipeWire), so the level
                is a sawtooth: its minimum over ~32 buffers is what gets controlled. */
             int low=2*(int)bytes, queued=SDL_GetAudioStreamQueued(p->stream);
+#ifdef __APPLE__
+            low=coreaudio_queue_target(p->frames,p->device_frames,(p->downmix ? 2 : p->channels)*p->sample_bytes);
+            int fill=coreaudio_prefill_bytes(queued,low);
+            if (fill) {
+                static const unsigned char silence[65536];
+                if (SDL_PutAudioStreamData(p->stream,silence,fill)) queued=fill;
+            }
+#else
             if (queued<(int)bytes) {
                 static const unsigned char silence[2048*8*4];
                 SDL_PutAudioStreamData(p->stream,silence,low-queued<(int)bytes ? low-queued : (int)bytes);
                 queued=low;
             }
+#endif
             if (!p->window_count || queued<p->window_min) p->window_min=queued;
             if (++p->window_count==32) {
                 p->adjust_ns=p->window_min>low+2*(int)bytes ? (int64_t)(period/32) : p->window_min<low ? -(int64_t)(period/32) : 0;

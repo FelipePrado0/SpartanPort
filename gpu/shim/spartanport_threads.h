@@ -14,6 +14,7 @@
 #include <sched.h>
 #include <sys/resource.h>
 #include <unistd.h>
+#include <pthread.h>
 #endif
 
 namespace SpartanThreads {
@@ -30,6 +31,17 @@ inline unsigned Available() {
 /// The calling thread only runs when cores are otherwise idle (lowest Windows priority).
 inline void MakeBackground() {
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_IDLE);
+}
+#elif defined(__APPLE__)
+
+/// Hardware threads available to the process (Darwin has no affinity masks).
+inline unsigned Available() {
+    return std::max(1u, std::thread::hardware_concurrency());
+}
+
+/// The calling thread runs at utility QoS: below the game's threads, still on any core.
+inline void MakeBackground() {
+    pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);
 }
 #else
 

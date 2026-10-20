@@ -6,6 +6,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <optional>
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -701,6 +702,12 @@ public:
     /// Ends current rendering scope.
     void EndRendering();
 
+    /// spartanport: a render pass that only clears depth/stencil (load op) is begun by the next
+    /// BeginRendering on the same depth view and render area, as its load op, instead of
+    /// storing the cleared attachment and loading it again (tile-based GPUs pay for both).
+    /// Anything else that ends rendering first runs the clear as a pass of its own.
+    void DeferDepthClear(const RenderState& state);
+
     /// spartanport: SPARTAN_FULL_BARRIERS=1 records a full memory barrier around every render pass and
     /// every compute dispatch, to tell a missing barrier from everything else.
     static bool FullBarriers();
@@ -914,6 +921,7 @@ private:
     std::jthread priority_pending_ops_thread;
     RenderState render_state;
     bool is_rendering = false;
+    std::optional<RenderState> pending_clear;
     // spartanport: threaded recording
     std::unique_ptr<RecordChunk> record_chunk;
     std::vector<std::unique_ptr<RecordChunk>> full_chunks;

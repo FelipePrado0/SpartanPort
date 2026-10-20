@@ -19,9 +19,9 @@ and Linux (experimental AppImage).
 > This project is not affiliated with or endorsed by Sony Interactive Entertainment or Santa Monica Studio.
 > God of War is a trademark of Sony Interactive Entertainment.
 
-> **Formerly gow3_pc.** Updating from 2.5.0 through the launcher keeps your saves and settings:
-> on the first start, the game settings (`gow3.ini`), the launcher settings and, on Linux, the data
-> folder (`~/.local/share/gow3`) are copied to their new names. The old files stay where they were,
+> **Formerly spartanport_pc.** Updating from 2.5.0 through the launcher keeps your saves and settings:
+> on the first start, the game settings (`spartanport.ini`), the launcher settings and, on Linux, the data
+> folder (`~/.local/share/spartanport`) are copied to their new names. The old files stay where they were,
 > and existing shortcuts keep working. On Linux, the AppImage is now `spartanport-x86_64.AppImage`:
 > update Steam launch options that use the old file name.
 
@@ -31,6 +31,7 @@ and Linux (experimental AppImage).
   - [Contents](#contents)
   - [Download and play](#download-and-play)
   - [Linux (AppImage, experimental)](#linux-appimage-experimental)
+  - [macOS (Apple Silicon, experimental)](#macos-apple-silicon-experimental)
   - [What works](#what-works)
   - [Feature availability](#feature-availability)
   - [Settings](#settings)
@@ -42,6 +43,7 @@ and Linux (experimental AppImage).
   - [Building from source](#building-from-source)
     - [Windows](#windows)
     - [Linux (Ubuntu 24.04)](#linux-ubuntu-2404)
+    - [macOS (Apple Silicon)](#macos-apple-silicon)
   - [Tests](#tests)
     - [Python](#python)
     - [Windows C++ tests (MSYS2 CLANG64)](#windows-c-tests-msys2-clang64)
@@ -140,6 +142,31 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   the launcher and the game window show their icon in the dock; **Advanced → Linux** turns it off and
   removes the entry. When another tool (Gear Lever, AppImageLauncher…) already made an entry that
   starts the same file, it makes none and removes its own, so there are no duplicates.
+
+## macOS (Apple Silicon, experimental)
+
+The macOS integration targets Apple Silicon (M1 or newer), macOS 26 or newer and Rosetta 2.
+The x86-64 runtime runs under Rosetta; graphics use Mesa's KosmicKrisp Vulkan driver on Metal.
+Intel Macs are outside this experimental package's scope.
+
+The `macOS test package` workflow builds `spartanport-macos.dmg` with a self-contained
+`SpartanPort.app`. Players need their own compatible game dump, but no Homebrew, Python
+installation or compilation. Drag the app into Applications and select the game folder in
+the launcher. The package has an ad hoc signature, without Apple Developer ID notarization;
+see the included `README-macOS.txt` for first-open instructions and how to report results.
+
+Saves, settings, logs and caches live in `~/Library/Application Support/SpartanPort`, outside
+the application. Replacing the app preserves them. Start testing at 720p with a 60 FPS engine
+rate and frame limit. Insert, the key left of 1 (`), or R3 + L2 opens the in-game menu.
+Live render-scale changes are disabled on KosmicKrisp; startup resolution patches still apply.
+Guest multisampling is off by default on that driver pending further visual validation.
+
+This integration consolidates Fleurat's [#798](https://github.com/FelipePrado0/SpartanPort/pull/798),
+nizwar's [#510](https://github.com/FelipePrado0/SpartanPort/pull/510) and Incognito-Coder's
+[#469](https://github.com/FelipePrado0/SpartanPort/pull/469). The contributors reported early-game
+play on an M1 Max and an M4 Pro in their respective branches. Those reports do not validate the
+combined package: its Mac build, installation and gameplay must be checked before publication.
+MetalFX and the alternate MoltenVK/Intel path are deferred from this first package.
 
 ## What works
 
@@ -420,6 +447,38 @@ The build environment is created before the packaging command. Building on a new
 can require a newer glibc; public release builds use Ubuntu 24.04. From the repository, use
 `out/venv/bin/python launcher/spartanport_launcher_win.py --play` for saved launcher settings, or
 `SPARTAN_GAME_DIR=/path/to/CUSA01623 out/venv/bin/python run.py` for a direct launch.
+
+### macOS (Apple Silicon)
+
+The dependency script installs Homebrew packages (CMake, Ninja, glslang, pkgconf, Boost, LLVM,
+SPIRV tools) and builds the x86-64 libraries (SDL3, FFmpeg, Vulkan loader, KosmicKrisp and
+others) into `~/Library/Caches/spartanport-macos-deps`. Paths there have no spaces, which the FFmpeg and
+Mesa builds need.
+
+```bash
+git clone --recursive https://github.com/FelipePrado0/spartanport_pc
+cd spartanport_pc
+bash packaging/macos/build-deps.sh
+bash build.sh
+SPARTAN_GAME_DIR=/path/to/CUSA01623 bash run.sh
+```
+
+The launcher needs Tk for Homebrew's Python (`python-tk` matches the default `python3`; for
+another version, install `python-tk@3.X` for that one). Its PLAY button starts `run.py` as
+`run.sh` does, without rebuilding: run `bash build.sh` again after pulling changes.
+
+```bash
+brew install python-tk
+python3 launcher/spartanport_launcher_win.py
+```
+
+Without the launcher, `bash packaging/macos/make-app.sh` puts a `God of War III.app` on the
+desktop that asks for the render resolution (720p is about 60 FPS on an M1 Max, native 1080p
+about 40) and starts the game without Terminal. It runs this checkout as built: run
+`bash build.sh` again after pulling changes. If the game does not start, it shows the end of
+`out/launcher-app.log`.
+
+`bash build.sh --test` runs the C tests. `out/spartanport-probe --vulkan-only` checks the Vulkan driver.
 
 ## Tests
 

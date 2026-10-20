@@ -1,3 +1,6 @@
+#ifdef __APPLE__
+#include "../gpu/shim/spartanport_mac_compat.h"
+#endif
 /* Check whether native-size depth/stencil images can be blitted to reduced
  * renderer targets. The renderer needs both directions for live presets. */
 #include <stdio.h>
@@ -67,16 +70,31 @@ static int live_resolution_suits(VkPhysicalDevice device) {
 }
 
 int main(int argc, char **argv) {
+#ifdef __APPLE__
+    spartanport_macos_vulkan_driver();
+#endif
     const int live_mode = argc > 1 && !strcmp(argv[1], "--live-resolution");
     const VkApplicationInfo app = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = "spartanport scene scaling probe",
         .apiVersion = VK_API_VERSION_1_3,
     };
+#ifdef __APPLE__
+    /* MoltenVK is a portability driver: listed only with this extension and flag. */
+    const char *portability[] = {VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME};
+    const VkInstanceCreateInfo create = {
+        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
+        .pApplicationInfo = &app,
+        .enabledExtensionCount = 1,
+        .ppEnabledExtensionNames = portability,
+    };
+#else
     const VkInstanceCreateInfo create = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &app,
     };
+#endif
     VkInstance instance = VK_NULL_HANDLE;
     if (vkCreateInstance(&create, NULL, &instance) != VK_SUCCESS) {
         fputs("GPU scene scaling: cannot create Vulkan instance\n", stderr);

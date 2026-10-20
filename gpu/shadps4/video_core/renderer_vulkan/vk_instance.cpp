@@ -309,6 +309,10 @@ bool Instance::CreateDevice() {
         return false;
     };
 
+#ifdef __APPLE__
+    // spartanport: required by the spec whenever the device (MoltenVK) exposes it.
+    add_extension("VK_KHR_portability_subset");
+#endif
     // Required
     ASSERT_MSG(add_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME),
                "Required Vulkan extension unavailable: {}", VK_KHR_SWAPCHAIN_EXTENSION_NAME);

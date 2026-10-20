@@ -33,6 +33,12 @@ void Write(std::string_view, Level, const char*, int, const char*, std::string&&
 using namespace AmdGpu;
 
 int main() {
+    assert(spartanport_metal_rect_optimizations(VK_DRIVER_ID_MESA_KOSMICKRISP));
+    for (const auto driver : {VK_DRIVER_ID_NVIDIA_PROPRIETARY, VK_DRIVER_ID_AMD_PROPRIETARY,
+                              VK_DRIVER_ID_MESA_RADV, VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS,
+                              VK_DRIVER_ID_MOLTENVK}) {
+        assert(!spartanport_metal_rect_optimizations(driver));
+    }
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
 #endif

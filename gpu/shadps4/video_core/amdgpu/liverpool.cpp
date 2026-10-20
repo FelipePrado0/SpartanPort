@@ -104,15 +104,15 @@ void Liverpool::ProcessCommands() {
 
 void Liverpool::Process(std::stop_token stoken) {
     Common::SetCurrentThreadName("shadPS4:GpuCommandProcessor");
-#ifndef _WIN32
+#ifdef _WIN32
+    SpartanStats::gpu_thread_id.store(GetCurrentThreadId());
+#elif !defined(__APPLE__) // spartanport: Darwin has no per-thread CPU clock ids
     if (clockid_t clock; pthread_getcpuclockid(pthread_self(), &clock) == 0) {
         SpartanStats::gpu_thread_clock.store(static_cast<int>(clock));
     }
-#else
-    SpartanStats::gpu_thread_id.store(GetCurrentThreadId());
 #endif
     gpu_id = std::this_thread::get_id();
-#if defined(__linux__) || defined(_WIN32)
+#if defined(__linux__) || defined(_WIN32) || defined(__APPLE__)
     gpu_tid = gettid();
 #endif
 
@@ -1338,7 +1338,7 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
     }
     if (seq != NoSeq && SpartanStats::enabled) {
         SpartanStats::submissions.fetch_add(1, std::memory_order_relaxed);
-#ifndef _WIN32 // spartanport: per-thread rusage statistics are Linux-only
+#ifdef __linux__ // spartanport: per-thread rusage statistics are Linux-only
         if (rusage usage{}; getrusage(RUSAGE_THREAD, &usage) == 0) {
             SpartanStats::gpu_user_us.store(u64(usage.ru_utime.tv_sec) * 1000000 + usage.ru_utime.tv_usec,
                                        std::memory_order_relaxed);

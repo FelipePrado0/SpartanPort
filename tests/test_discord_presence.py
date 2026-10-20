@@ -255,6 +255,7 @@ class GameProcessPresence(unittest.TestCase):
         }, clear=True))
         self.enterContext(mock.patch.object(run, 'PORT', folder))
         self.enterContext(mock.patch.object(run, 'find_executable', return_value=probe))
+        self.enterContext(mock.patch.object(run, 'macos_runtime_error', return_value=None))
         self.enterContext(mock.patch.object(run, 'run_script', return_value=str(game)))
         self.enterContext(mock.patch.object(patches, 'game_profile_for', return_value=None))
         self.enterContext(mock.patch.object(run.subprocess, 'run', return_value=mock.Mock(

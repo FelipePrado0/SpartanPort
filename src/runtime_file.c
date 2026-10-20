@@ -191,6 +191,8 @@ static File *get(int fd) {
 }
 /* SPARTAN_AUDIO_TRACE=1: sound file opens and failed reads (missing game sounds). */
 static int audio_trace(void) { static int v=-1; if (v<0) { const char *e=getenv("SPARTAN_AUDIO_TRACE"); v=e && e[0]=='1'; } return v; }
+/* SPARTAN_FILE_TRACE=1: every open, read and pread with the sizes asked for and returned. */
+static int file_trace(void) { static int v=-1; if (v<0) { const char *e=getenv("SPARTAN_FILE_TRACE"); v=e && e[0]=='1'; } return v; }
 /* Game mounts (including linked mod overlays) are read-only. Saves use other mounts. */
 static int game_path(const char *p) {
     if (!p || !*p) return 0;
@@ -245,6 +247,7 @@ static int64_t do_open(const char *guest,int flags,int mode) {
     snprintf(files[fd].path,sizeof(files[fd].path),"%s",guest);
     ++opens;
     pthread_mutex_unlock(&lock);
+    if (file_trace()) printf("File trace: open(%s, %#x) -> fd %d, %lld bytes\n",guest,flags,fd,(long long)s.st_size);
     if (audio_trace() && strstr(guest,"sound/")) printf("Audio trace: open(%s) -> fd %d, %lld bytes\n",guest,fd,(long long)s.st_size);
     const char *mod_trace=getenv("SPARTAN_MOD_TRACE"), *mod_root=getenv("SPARTAN_MODS_DIR");
     if (mod_trace && mod_trace[0]=='1' && mod_root) {
@@ -279,9 +282,22 @@ static int host_fd(int fd) {
 /* The CRT reads and writes at most INT_MAX bytes per call. */
 static ssize_t host_read(int h,void *buffer,uint64_t size) { return read(h,buffer,(unsigned)(size>0x7ffff000 ? 0x7ffff000 : size)); }
 static ssize_t host_write(int h,const void *buffer,uint64_t size) { return write(h,buffer,(unsigned)(size>0x7ffff000 ? 0x7ffff000 : size)); }
+#define host_pread pread
+#define host_pwrite pwrite
+#elif defined(__APPLE__)
+/* Darwin fails reads and writes of more than INT_MAX bytes with EINVAL; Linux returns a short
+ * count, which the game relies on when it reads a whole file with a large size. */
+#define HOST_IO_MAX UINT64_C(0x7ffff000)
+static size_t io_size(uint64_t size) { return (size_t)(size>HOST_IO_MAX ? HOST_IO_MAX : size); }
+static ssize_t host_read(int h,void *buffer,uint64_t size) { return read(h,buffer,io_size(size)); }
+static ssize_t host_write(int h,const void *buffer,uint64_t size) { return write(h,buffer,io_size(size)); }
+static ssize_t host_pread(int h,void *buffer,uint64_t size,int64_t offset) { return pread(h,buffer,io_size(size),offset); }
+static ssize_t host_pwrite(int h,const void *buffer,uint64_t size,int64_t offset) { return pwrite(h,buffer,io_size(size),offset); }
 #else
 #define host_read read
 #define host_write write
+#define host_pread pread
+#define host_pwrite pwrite
 #endif
 /* Pages of the destination may be write-protected for GPU tracking: the kernel's copy then
  * fails with EFAULT instead of faulting to our handler. A user-mode write to each page first
@@ -299,6 +315,7 @@ static int64_t do_read(int fd,void *buffer,uint64_t size) {
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
     ssize_t n=host_read(h,buffer,size);
+    if (file_trace()) printf("File trace: read(fd %d, %p, %#llx) -> %lld\n",fd,buffer,(unsigned long long)size,(long long)(n<0 ? -errno : n));
     if (n<0) { if (audio_trace()) printf("Audio trace: read(fd %d, %llu) failed, errno %d\n",fd,(unsigned long long)size,errno); return -errno; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;
@@ -307,7 +324,8 @@ static int64_t do_pread(int fd,void *buffer,uint64_t size,int64_t offset) {
     int h=host_fd(fd);
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
-    ssize_t n=pread(h,buffer,size,offset);
+    ssize_t n=host_pread(h,buffer,size,offset);
+    if (file_trace()) printf("File trace: pread(fd %d, %p, %#llx @%#llx) -> %lld\n",fd,buffer,(unsigned long long)size,(unsigned long long)offset,(long long)(n<0 ? -errno : n));
     if (n<0) { if (audio_trace()) printf("Audio trace: pread(fd %d, %llu @%lld) failed, errno %d\n",fd,(unsigned long long)size,(long long)offset,errno); return -errno; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;
@@ -323,7 +341,7 @@ static int64_t do_write(int fd,const void *buffer,uint64_t size) {
 static int64_t do_pwrite(int fd,const void *buffer,uint64_t size,int64_t offset) {
     int h=host_fd(fd);
     if (h<0) return -EBADF;
-    ssize_t n=pwrite(h,buffer,size,offset);
+    ssize_t n=host_pwrite(h,buffer,size,offset);
     return n<0 ? -errno : n;
 }
 static int64_t do_lseek(int fd,int64_t offset,int whence) {

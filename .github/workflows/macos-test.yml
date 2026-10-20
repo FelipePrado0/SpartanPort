@@ -1,0 +1,76 @@
+name: macOS test package
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 180
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_UPGRADE: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      ROSETTA_ADVERTISE_AVX: '1'
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Install host tools and Rosetta
+        run: |
+          if ! arch -x86_64 /usr/bin/true; then softwareupdate --install-rosetta --agree-to-license; fi
+          brew install cmake ninja glslang pkgconf boost llvm spirv-tools spirv-llvm-translator python python-tk
+      - name: Restore x86-64 dependencies
+        id: dependency-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/Library/Caches/spartanport-macos-deps
+          key: macos-26-x86-deps-${{ hashFiles('packaging/macos/build-deps.sh', 'packaging/macos/kosmickrisp-spartanport.patch') }}
+      - name: Build x86-64 dependencies
+        run: bash packaging/macos/build-deps.sh
+      - name: Cache x86-64 dependencies
+        if: steps.dependency-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/Library/Caches/spartanport-macos-deps
+          key: ${{ steps.dependency-cache.outputs.cache-primary-key }}
+      - name: Build runtime and run native tests
+        run: |
+          bash build.sh --test
+          ninja -j2 -C out/gpu no-msaa-test
+          out/gpu/no-msaa-test
+      - name: Python tests
+        run: |
+          python3 -m venv out/test-venv
+          out/test-venv/bin/python -m pip install pillow iced-x86==1.21.0
+          out/test-venv/bin/python -m unittest discover -s tests -p 'test_*.py'
+      - name: Package application
+        run: bash packaging/macos/package.sh
+      - name: Record source and verify checksum
+        run: |
+          git rev-parse HEAD > dist/source-commit.txt
+          (cd dist && shasum -a 256 -c spartanport-macos.dmg.sha256)
+      - uses: actions/upload-artifact@v5
+        with:
+          name: spartanport-macos-test
+          path: |
+            dist/spartanport-macos.dmg
+            dist/spartanport-macos.dmg.sha256
+            dist/source-commit.txt
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: macos-build-logs
+          path: out/*.log
+          if-no-files-found: ignore

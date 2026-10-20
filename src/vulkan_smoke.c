@@ -1,3 +1,6 @@
+#ifdef __APPLE__
+#include "../gpu/shim/spartanport_mac_compat.h"
+#endif
 /* Independent backend smoke test: command submission and readback, no game graphics. */
 #include <vulkan/vulkan.h>
 #include <stdint.h>
@@ -7,8 +10,18 @@
     fprintf(stderr, "Vulkan: %s returned %d\n", #call, r); exit(1); } } while (0)
 
 int vulkan_smoke(void) {
+#ifdef __APPLE__
+    spartanport_macos_vulkan_driver();
+#endif
     VkApplicationInfo app = {.sType=VK_STRUCTURE_TYPE_APPLICATION_INFO, .pApplicationName="SpartanPort native probe", .apiVersion=VK_API_VERSION_1_0};
+#ifdef __APPLE__
+    /* MoltenVK is a portability driver: listed only with this extension and flag. */
+    const char *portability[] = {VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME};
+    VkInstanceCreateInfo ici = {.sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .flags=VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
+                                .pApplicationInfo=&app, .enabledExtensionCount=1, .ppEnabledExtensionNames=portability};
+#else
     VkInstanceCreateInfo ici = {.sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pApplicationInfo=&app};
+#endif
     VkInstance instance; CHECK(vkCreateInstance(&ici, NULL, &instance));
     uint32_t count = 0; CHECK(vkEnumeratePhysicalDevices(instance, &count, NULL));
     if (!count) { fprintf(stderr, "Vulkan: no physical devices\n"); vkDestroyInstance(instance, NULL); return 1; }

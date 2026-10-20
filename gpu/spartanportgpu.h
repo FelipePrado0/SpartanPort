@@ -18,6 +18,10 @@ typedef struct {
 void spartanportgpu_register_kernel(void);
 /* Creates window, Vulkan device, presenter and GPU command processor. */
 int spartanportgpu_init(const SpartanGpuConfig *config);
+/* macOS: Cocoa windows and their events belong to the process's main thread, so the loader runs
+ * the game on another thread and the main thread calls this. It creates the window once
+ * spartanportgpu_init asks for it and pumps its events; it returns only if the window closes. */
+void spartanportgpu_main_loop(void);
 /* Function for an imported NID ("NID#lib#mod"), or 0 when the GPU library does not provide it. */
 uintptr_t spartanportgpu_resolve(const char *scoped_nid);
 /* Called first by the loader's SIGSEGV handler: 1 when a GPU page-tracking fault was handled. */

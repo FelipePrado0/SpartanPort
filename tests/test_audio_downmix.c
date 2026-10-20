@@ -1,5 +1,6 @@
 /* 7.1 to stereo fold (src/runtime_audio.c). */
 #define _GNU_SOURCE
+#define SPARTAN_AUDIO_TEST
 #include <assert.h>
 #include <math.h>
 #include "../src/runtime_audio.c"
@@ -20,6 +21,12 @@ static void fold_one(const float in[8], float out[2]) {
 }
 
 int main(void) {
+    assert(coreaudio_queue_target(256, 1024, 8) == 16384);
+    assert(coreaudio_queue_target(256, 0, 8) == 8192);
+    assert(coreaudio_queue_target(2048, 32768, 32) == 65536);
+    assert(coreaudio_prefill_bytes(512, 16384) == 0);
+    assert(coreaudio_prefill_bytes(0, 16384) == 16384);
+    assert(coreaudio_prefill_bytes(-1, 16384) == 0);
     float lr[2];
     /* Front channels pass at full level (SDL kept only ~0.21 of them). */
     fold_one((const float[8]){0.5f,0,0,0,0,0,0,0},lr); assert(near(lr[0],0.5f) && near(lr[1],0));

@@ -61,7 +61,7 @@ class ModTests(unittest.TestCase):
             raise PermissionError(5, 'Access is denied')
         with contextlib.ExitStack() as stack:
             stack.enter_context(mock.patch.object(Path, 'symlink_to', side_effect=PermissionError(5, 'Access is denied')))
-            stack.enter_context(mock.patch.object(os, 'name', 'nt'))
+            stack.enter_context(mock.patch.object(mods, 'os', types.SimpleNamespace(**{**vars(os), 'name': 'nt'})))
             stack.enter_context(mock.patch.dict(sys.modules, {'_winapi': types.SimpleNamespace(CreateJunction=create_junction)}))
             result = mods.build_overlay(self.game, self.root / 'out', [('A', a)])
         folder = result / 'dvdroot_ps4' / 'data'

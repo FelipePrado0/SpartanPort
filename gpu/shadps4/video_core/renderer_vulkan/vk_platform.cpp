@@ -196,6 +196,10 @@ std::vector<const char*> GetInstanceExtensions(Frontend::WindowSystemType window
     if (window_type != Frontend::WindowSystemType::Headless) {
         extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
     }
+#ifdef __APPLE__
+    // spartanport: MoltenVK is a portability driver; the loader lists it only when asked to.
+    extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+#endif
 
     if (EmulatorSettings.IsHdrAllowed()) {
         extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
@@ -260,15 +264,7 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
     LOG_INFO(Render_Vulkan, "Creating vulkan instance");
 
 #if defined(__APPLE__)
-    // Initialize the environment with the path to the included ICD, so that the loader will
-    // find it.
-    static const auto icd_path = [] {
-        char path[PATH_MAX];
-        u32 length = PATH_MAX;
-        _NSGetExecutablePath(path, &length);
-        return std::filesystem::path(path).parent_path();
-    }();
-    setenv("VK_DRIVER_FILES", icd_path.c_str(), true);
+    spartanport_macos_vulkan_driver();
 #endif
 
     static vk::detail::DynamicLoader dl;
@@ -406,6 +402,9 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
 
     vk::StructureChain<vk::InstanceCreateInfo, vk::LayerSettingsCreateInfoEXT> instance_ci_chain = {
         vk::InstanceCreateInfo{
+#ifdef __APPLE__
+            .flags = vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR, // spartanport: MoltenVK
+#endif
             .pApplicationInfo = &application_info,
             .enabledLayerCount = static_cast<u32>(layers.size()),
             .ppEnabledLayerNames = layers.data(),

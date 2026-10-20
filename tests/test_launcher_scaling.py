@@ -175,6 +175,7 @@ class LauncherScalingTest(unittest.TestCase):
         return {'text': self.text_height(), 'checkbox': self.app.check_on.width(),
                 'heading': self.root.tk.call('font', 'metrics', self.app.side_title['font'], '-linespace'),
                 'sidebar': self.app.side.winfo_width(), 'scrollbar': scroll.winfo_reqwidth(),
+                'scrollbar_arrow': int(ttk.Style(self.root).lookup('TScrollbar', 'arrowsize')),
                 'combobox_height': combo.winfo_reqheight(), 'combobox_width': combo.winfo_reqwidth(),
                 'button_height': self.app.save_button.winfo_reqheight(),
                 'padding': self.root.tk.getint(self.app.side_title.pack_info()['padx'])}
@@ -191,6 +192,13 @@ class LauncherScalingTest(unittest.TestCase):
         self.assertEqual(self.app.dpi, 2)
         after_sizes = self.measurements()
         for key, size in before_sizes.items():
+            if key == 'scrollbar':
+                # Native scrollbar chrome adds fixed pixels; the arrow size below must double.
+                self.assertGreaterEqual(after_sizes[key], size * 1.5, msg=key)
+                continue
+            if key == 'scrollbar_arrow':
+                self.assertEqual(after_sizes[key], size * 2, msg=key)
+                continue
             # Fixed borders and per-character raster rounding aren't exact multiples.
             self.assertAlmostEqual(after_sizes[key], size * 2, delta=max(6, size * .12), msg=key)
         self.assertEqual(str(self.app.check_on), image_name)

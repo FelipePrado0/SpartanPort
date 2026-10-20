@@ -1,4 +1,4 @@
-// spartanport: SDL3 window for the Vulkan swapchain (X11 or Wayland).
+// spartanport: SDL3 window for the Vulkan swapchain (X11 or Wayland; Cocoa with a Metal layer on macOS).
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -71,6 +71,13 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     if (driver && !std::strcmp(driver, "windows")) {
         window_info.type = WindowSystemType::Windows;
         window_info.render_surface = SDL_GetPointerProperty(wp, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+    } else
+#endif
+#ifdef __APPLE__
+    if (driver && !std::strcmp(driver, "cocoa")) {
+        // MoltenVK renders into the CAMetalLayer of an SDL Metal view (VK_EXT_metal_surface).
+        window_info.type = WindowSystemType::Metal;
+        window_info.render_surface = SDL_Metal_GetLayer(SDL_Metal_CreateView(window));
     } else
 #endif
     if (driver && !std::strcmp(driver, "x11")) {

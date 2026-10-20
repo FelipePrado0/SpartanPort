@@ -6,7 +6,8 @@
 #include <setjmp.h>
 // Renderer tests have no guest process. Clock/host-thread services work; guest accesses abort.
 extern "C" {
-thread_local sigjmp_buf* runtime_fault_recover = nullptr;
+// __thread, as in runtime.h: a C++ thread_local is not exported on macOS.
+__thread sigjmp_buf* runtime_fault_recover = nullptr;
 uint32_t runtime_disabled_optimizations = 0;
 uint64_t runtime_tsc_frequency() { return 1000000000; }
 int runtime_file_translate(const char*, char*, size_t) { std::abort(); }
@@ -22,5 +23,6 @@ uint64_t runtime_process_time_counter() { return runtime_process_time_us() * 100
 uint64_t runtime_read_tsc() { return runtime_process_time_counter(); }
 int32_t* runtime_errno() { std::abort(); }
 int runtime_memory_write_backing(uintptr_t, const void*, uint64_t) { std::abort(); }
+void runtime_report() {} // macOS binds every import at load, called or not
 }
 

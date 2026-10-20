@@ -1,0 +1,56 @@
+diff --git a/src/kosmickrisp/vulkan/kk_cmd_draw.c b/src/kosmickrisp/vulkan/kk_cmd_draw.c
+index 24f05de..4c0dbad 100644
+--- a/src/kosmickrisp/vulkan/kk_cmd_draw.c
++++ b/src/kosmickrisp/vulkan/kk_cmd_draw.c
+@@ -439,7 +439,24 @@ kk_CmdBeginRendering(VkCommandBuffer commandBuffer,
+    /* Rendering with no attachments requires pushing the start of the render
+     * pass to first pipeline binding to know sample count. */
+    cmd->state.gfx.render_pass_descriptor = pass_descriptor;
+-   if (!no_framebuffer)
++   /* spartanport: without a clear, the encoder starts at the first draw. A pass whose first draw
++    * needs a compute pre-pass (tessellation, unroll) then does not end an empty encoder,
++    * storing every attachment, only to load them all again. */
++   bool any_clear = false;
++   for (uint32_t i = 0; i < pRenderingInfo->colorAttachmentCount; i++) {
++      if (pRenderingInfo->pColorAttachments[i].imageView != VK_NULL_HANDLE &&
++          pRenderingInfo->pColorAttachments[i].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
++         any_clear = true;
++   }
++   if (pRenderingInfo->pDepthAttachment &&
++       pRenderingInfo->pDepthAttachment->imageView != VK_NULL_HANDLE &&
++       pRenderingInfo->pDepthAttachment->loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
++      any_clear = true;
++   if (pRenderingInfo->pStencilAttachment &&
++       pRenderingInfo->pStencilAttachment->imageView != VK_NULL_HANDLE &&
++       pRenderingInfo->pStencilAttachment->loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
++      any_clear = true;
++   if (!no_framebuffer && any_clear)
+       cs_start_render(cmd);
+
+    /* Store descriptor in case we need to restart the pass at pipeline barrier,
+@@ -465,7 +482,7 @@ kk_CmdBeginRendering(VkCommandBuffer commandBuffer,
+       mtl_render_pass_attachment_descriptor_set_load_action(
+          attachment_descriptor, MTL_LOAD_ACTION_LOAD);
+    }
+-   cmd->state.gfx.need_to_start_render_pass = no_framebuffer;
++   cmd->state.gfx.need_to_start_render_pass = no_framebuffer || !any_clear;
+
+    kk_cmd_buffer_dirty_all_gfx(cmd);
+
+diff --git a/src/kosmickrisp/vulkan/kk_cmd_pool.h b/src/kosmickrisp/vulkan/kk_cmd_pool.h
+index 479e70e..8477d81 100644
+--- a/src/kosmickrisp/vulkan/kk_cmd_pool.h
++++ b/src/kosmickrisp/vulkan/kk_cmd_pool.h
+@@ -14,8 +14,10 @@
+
+ #include "util/u_dynarray.h"
+
+-#define KK_CMD_BO_SIZE     (1024 * 128)
+-#define KK_CMD_POOL_BO_MAX 32
++/* spartanport: per-draw descriptor uploads (~4 KiB a draw) used ~70 new 128 KiB Metal heaps a
++ * frame, each created, page-faulted and freed again: larger blocks, more of them kept. */
++#define KK_CMD_BO_SIZE     (1024 * 1024)
++#define KK_CMD_POOL_BO_MAX 64
+
+ /* Recyclable command buffer BO, used for both push buffers and upload */
+ struct kk_cmd_bo {

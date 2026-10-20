@@ -182,12 +182,51 @@ s32 PS4_SYSV_ABI sceKernelUsleep(u32 microseconds) {
 } // namespace Libraries::Kernel
 
 namespace {
-// SDL video must be driven from one thread: the window lives on its own host thread.
+// SDL video must be driven from one thread: the window lives on its own host thread (macOS: the
+// process's main thread, spartanportgpu_main_loop).
 std::thread g_window_thread;
 std::mutex g_window_mutex;
 std::condition_variable g_window_cv;
 bool g_window_ready;
+#ifdef __APPLE__
+bool g_window_wanted;
+std::string g_window_title;
+s32 g_window_width, g_window_height;
+#endif
+
+// Creates the window on the calling thread, publishes it and pumps its events until it closes.
+[[noreturn]] void RunWindow(const std::string& title, s32 width, s32 height) {
+    auto* window = new Frontend::WindowSDL(width, height, title.c_str());
+    {
+        std::scoped_lock lock{g_window_mutex};
+        g_window = window;
+        g_window_ready = true;
+    }
+    g_window_cv.notify_all();
+    while (window->PollEvents()) {
+        SDL_Delay(2);
+    }
+    LOG_INFO(Frontend, "Window closed by user");
+    runtime_report();
+    std::fflush(stdout);
+    std::_Exit(0);
+}
 } // namespace
+
+#ifdef __APPLE__
+extern "C" void spartanportgpu_main_loop(void) {
+    std::string title;
+    s32 width, height;
+    {
+        std::unique_lock lock{g_window_mutex};
+        g_window_cv.wait(lock, [] { return g_window_wanted; });
+        title = g_window_title;
+        width = g_window_width;
+        height = g_window_height;
+    }
+    RunWindow(title, width, height);
+}
+#endif
 
 u32 SpartanDisplayRefreshHz() {
     static const u32 hz = [] {
@@ -233,24 +272,22 @@ extern "C" int spartanportgpu_init(const SpartanGpuConfig* config) {
     // The window carries the project name; the dump's own title stays in ElfInfo (above).
     const std::string title = "SpartanPort";
     const s32 width = config->width, height = config->height;
+#ifdef __APPLE__
+    {
+        std::scoped_lock lock{g_window_mutex};
+        g_window_title = title;
+        g_window_width = width;
+        g_window_height = height;
+        g_window_wanted = true;
+    }
+    g_window_cv.notify_all();
+#else
     g_window_thread = std::thread([title, width, height] {
         Common::SetCurrentThreadName("spartanport:window");
-        auto* window = new Frontend::WindowSDL(width, height, title.c_str());
-        {
-            std::scoped_lock lock{g_window_mutex};
-            g_window = window;
-            g_window_ready = true;
-        }
-        g_window_cv.notify_all();
-        while (window->PollEvents()) {
-            SDL_Delay(2);
-        }
-        LOG_INFO(Frontend, "Window closed by user");
-        runtime_report();
-        std::fflush(stdout);
-        std::_Exit(0);
+        RunWindow(title, width, height);
     });
     g_window_thread.detach();
+#endif
     {
         std::unique_lock lock{g_window_mutex};
         g_window_cv.wait(lock, [] { return g_window_ready; });

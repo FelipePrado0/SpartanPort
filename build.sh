@@ -31,6 +31,86 @@ MINGW*|MSYS*)
     echo "Built $PWD/out/spartanport-probe.exe"
     exit 0
     ;;
+Darwin)
+    # macOS (Apple Silicon): everything is x86-64 and runs under Rosetta 2, like the game's code.
+    # Dependencies: packaging/macos/build-deps.sh (x86-64 SDL3, FFmpeg, Vulkan loader, KosmicKrisp).
+    deps=${SPARTAN_MACOS_DEPS:-$HOME/Library/Caches/spartanport-macos-deps}
+    if [[ ! -f $deps/.done-ffmpeg || ! -f $deps/.done-kosmickrisp ]]; then
+        echo "Need the x86-64 dependencies: run packaging/macos/build-deps.sh first." >&2; exit 1
+    fi
+    export PKG_CONFIG_PATH=$deps/lib/pkgconfig
+    CC=(clang -arch x86_64 -mmacosx-version-min=14.0)
+    if [[ ! -f gpu/third_party/fsr-vulkan/CMakeLists.txt || ! -f gpu/third_party/imgui/imgui.h ]]; then
+        git submodule update --init --recursive
+    fi
+    for patch in gpu/patches/fsr-vulkan/*.patch; do
+        if ! git -C gpu/third_party/fsr-vulkan apply --reverse --check "$PWD/$patch" 2>/dev/null; then
+            git -C gpu/third_party/fsr-vulkan apply "$PWD/$patch"
+        fi
+    done
+    cmake -S gpu -B out/gpu -G Ninja -Wno-deprecated -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+        -DCMAKE_SYSTEM_PROCESSOR=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+        -DCMAKE_PREFIX_PATH="$deps;$(brew --prefix boost)" -DCMAKE_SHARED_LINKER_FLAGS="-L$deps/lib" -DCMAKE_EXE_LINKER_FLAGS="-L$deps/lib" \
+        -DSPARTAN_PGO=off -DSPARTAN_LTO="${SPARTAN_LTO:-OFF}" >/dev/null # -L: Zydis links Zycore by its bare name
+    echo "GPU library: LTO ${SPARTAN_LTO:-OFF}"
+    if ! ninja -j"${CMAKE_BUILD_PARALLEL_LEVEL:-2}" -C out/gpu spartanportgpu > out/gpu-build.log 2>&1; then
+        grep -v '^\[' out/gpu-build.log | tail -40 >&2
+        echo 'GPU library build failed (full log: out/gpu-build.log)' >&2; exit 1
+    fi
+    read -r -a includes <<< "$(pkg-config --cflags vulkan sdl3 libavcodec libavutil libswscale)"
+    read -r -a libraries <<< "$(pkg-config --libs vulkan sdl3 libavcodec libavutil libswscale)"
+    # The runtime's symbols are exported from the executable; libspartanportgpu resolves them at load.
+    gpu=(-Lout/gpu -lspartanportgpu -Wl,-rpath,@executable_path/gpu -Wl,-rpath,"$PWD/out/gpu")
+    runtime=(src/runtime*.c src/compat_mac.c)
+    if [[ ! -f out/libatrac9.a || -n $(find third_party/LibAtrac9/C/src -newer out/libatrac9.a -name '*.c') ]]; then
+        rm -rf out/atrac9 && mkdir -p out/atrac9
+        for source in third_party/LibAtrac9/C/src/*.c; do
+            "${CC[@]}" -std=c99 -O2 -g -w -c "$source" -o "out/atrac9/$(basename "${source%.c}").o"
+        done
+        ar rcs out/libatrac9.a out/atrac9/*.o
+    fi
+    # isa_emulate runs inside guest code: no XMM/YMM.
+    "${CC[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -mgeneral-regs-only -c src/isa_emulate.c -o out/isa_emulate.o
+    "${CC[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${includes[@]}" -I. -Isrc src/probe.c "${runtime[@]}" \
+        src/cpu_check.c src/vulkan_smoke.c out/isa_emulate.o src/isa_rewrite.c out/libatrac9.a -lm "${gpu[@]}" \
+        "${libraries[@]}" -o out/spartanport-probe
+    # The renderer finds the Vulkan driver (KosmicKrisp) through the ICD manifest next to the
+    # executable (vk_platform.cpp).
+    rm -f out/MoltenVK_icd.json
+    sed "s|\"library_path\": *\"[^\"]*\"|\"library_path\": \"$deps/lib/libvulkan_kosmickrisp.dylib\"|" \
+        "$deps/share/vulkan/icd.d/kosmickrisp_mesa_icd.json" > out/kosmickrisp_mesa_icd.json
+    echo "Built $PWD/out/spartanport-probe"
+    "${CC[@]}" -std=c11 -O2 -Wall -Wextra -Werror -Igpu/shadps4 "${includes[@]}" tools/gpu_capabilities.c "${libraries[@]}" \
+        -o out/spartanport-gpu-capabilities
+    if [[ ${1:-} == --test ]]; then
+        export ROSETTA_ADVERTISE_AVX=1
+        cc=("${CC[@]}" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc)
+        "${cc[@]}" "${includes[@]}" tests/test_pad.c src/compat_mac.c "${libraries[@]}" -o out/pad-test
+        "${cc[@]}" "${includes[@]}" tests/test_runtime.c "${runtime[@]}" out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/runtime-test
+        "${cc[@]}" tests/test_file_mods.c src/compat_mac.c -o out/file-mods-test
+        "${cc[@]}" "${includes[@]}" tests/test_sema.c "${runtime[@]}" out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/sema-test
+        "${cc[@]}" -D_GNU_SOURCE tests/test_content.c src/runtime_content.c src/compat_mac.c -o out/content-test
+        "${cc[@]}" "${includes[@]}" tests/test_mp3.c src/runtime_mp3.c src/compat_mac.c out/libatrac9.a -lm "${libraries[@]}" -o out/mp3-test
+        "${cc[@]}" "${includes[@]}" tests/test_videodec.c src/compat_mac.c "${libraries[@]}" -o out/videodec-test
+        "${cc[@]}" tests/test_services.c src/compat_mac.c -o out/services-test
+        "${cc[@]}" tests/test_macos_low_heap.c src/compat_mac.c -o out/macos-low-heap-test
+        "${cc[@]}" "${includes[@]}" tests/test_audio_downmix.c src/compat_mac.c "${libraries[@]}" -o out/audio-downmix-test
+        "${cc[@]}" -mbmi -mlzcnt -mmovbe tests/test_isa_emulate.c out/isa_emulate.o -o out/isa-emulate-test
+        "${cc[@]}" -c src/isa_rewrite.c -o out/isa_rewrite.o
+        "${cc[@]}" -mbmi -mlzcnt tests/test_isa_stub.c out/isa_rewrite.o out/isa_emulate.o -o out/isa-stub-test
+        # Every test runs; the failed ones are named at the end.
+        failed=()
+        for test in pad-test runtime-test file-mods-test sema-test content-test "mp3-test tests/data/sine.mp3" \
+                    "videodec-test tests/data/tiny.h264" services-test macos-low-heap-test audio-downmix-test isa-emulate-test \
+                    "isa-stub-test tests/data/isa_fixture.bin"; do
+            read -r -a command <<< "$test"
+            if out/"${command[0]}" "${command[@]:1}" > "out/${command[0]}.log" 2>&1; then echo "PASS ${command[0]}"
+            else echo "FAIL ${command[0]} (out/${command[0]}.log)"; failed+=("${command[0]}"); fi
+        done
+        if (( ${#failed[@]} )); then echo "Failed: ${failed[*]}" >&2; exit 1; fi
+    fi
+    exit 0
+    ;;
 esac
 if [[ -z ${CC:-} ]]; then
     CC=$(command -v cc || command -v gcc || true)

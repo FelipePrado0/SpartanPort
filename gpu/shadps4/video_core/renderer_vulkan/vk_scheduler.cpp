@@ -82,13 +82,44 @@ void Scheduler::RecordFullBarrier(vk::CommandBuffer cmdbuf) {
     });
 }
 
+void Scheduler::DeferDepthClear(const RenderState& state) {
+    EndRendering(); // runs an earlier deferred clear
+    pending_clear = state;
+}
+
 void Scheduler::BeginRendering(const RenderState& new_state) {
     if (is_rendering && render_state == new_state) {
         return;
     }
-    EndRendering();
+    std::optional<RenderState> folded;
+    if (pending_clear) {
+        const auto& clear = pending_clear->depth_stencil_attachment;
+        const auto& db = new_state.depth_stencil_attachment;
+        if (db.image_view == clear.image_view && db.image_layout == clear.image_layout &&
+            db.has_depth == clear.has_depth && db.has_stencil == clear.has_stencil &&
+            new_state.width == pending_clear->width && new_state.height == pending_clear->height &&
+            new_state.num_layers == pending_clear->num_layers) {
+            folded = pending_clear;
+            pending_clear.reset();
+            SpartanStats::folded_clears.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+    EndRendering(); // also runs a deferred clear this pass does not take over
     is_rendering = true;
     render_state = new_state;
+    SpartanStats::render_passes.fetch_add(1, std::memory_order_relaxed);
+    auto db = render_state.depth_stencil_attachment;
+    if (folded) {
+        const auto& clear = folded->depth_stencil_attachment;
+        if (clear.depth_clear && !db.depth_clear) {
+            db.depth_clear = true;
+            db.clear_value[0] = clear.clear_value[0];
+        }
+        if (clear.stencil_clear && !db.stencil_clear) {
+            db.stencil_clear = true;
+            db.clear_value[1] = clear.clear_value[1];
+        }
+    }
 
     std::array<vk::RenderingAttachmentInfo, 8> color_attachments;
     for (u32 i = 0; i < render_state.num_color_attachments; ++i) {
@@ -102,7 +133,6 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
         };
     }
 
-    const auto& db = render_state.depth_stencil_attachment;
     const vk::RenderingAttachmentInfo depth_attachment = {
         .imageView = db.image_view,
         .imageLayout = db.image_layout,
@@ -159,6 +189,12 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
 }
 
 void Scheduler::EndRendering() {
+    if (!is_rendering && pending_clear) {
+        // A deferred clear nobody took over: run it before what follows.
+        auto clear = *pending_clear;
+        pending_clear.reset();
+        BeginRendering(clear);
+    }
     if (!is_rendering) {
         return;
     }

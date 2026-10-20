@@ -1,7 +1,21 @@
 #define _GNU_SOURCE
 #include <assert.h>
 #include <unistd.h>
+#include <time.h>
+#include "../src/runtime.h"
+
+/* Keep the 50 ms click windows independent of host timer coalescing and scheduling. */
+static uint64_t test_time_us=1000000;
+static int test_clock_gettime(clockid_t clock, struct timespec *time) {
+    assert(clock==CLOCK_MONOTONIC);
+    time->tv_sec=(time_t)(test_time_us/1000000);
+    time->tv_nsec=(long)(test_time_us%1000000)*1000;
+    return 0;
+}
+static void advance_time(uint64_t microseconds) { test_time_us+=microseconds; }
+#define clock_gettime test_clock_gettime
 #include "../src/runtime_pad.c"
+#undef clock_gettime
 #ifdef _WIN32
 #define setenv(name, value, overwrite) _putenv_s(name, value)
 #endif
@@ -34,7 +48,7 @@ static void inject(const char *path, const char *tokens) {
     assert(f);
     fputs(tokens,f);
     fclose(f);
-    usleep(25000);
+    advance_time(25000);
 }
 static PadData read_pad(void) {
     PadData d;
@@ -69,14 +83,14 @@ int main(void) {
     PadData data=read_pad();
     assert((data.buttons & (BTN_CROSS|BTN_L3))==(BTN_CROSS|BTN_L3));
     assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,480));
-    usleep(60000);
+    advance_time(60000);
     data=read_pad();
     assert((data.buttons & BTN_TOUCHPAD) && touch_at(&data,480));
-    usleep(60000);
+    advance_time(60000);
     inject(path,"");
     data=read_pad();
     assert(data.buttons==0 && touch_at(&data,480)); /* released: the finger lingers */
-    usleep(220000);
+    advance_time(220000);
     data=read_pad();
     assert(data.buttons==0 && data.touch_count==0);
 
@@ -87,13 +101,13 @@ int main(void) {
     inject(path,"");
     data=read_pad();
     assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
-    usleep(60000);
+    advance_time(60000);
     data=read_pad();
     assert((data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
-    usleep(60000);
+    advance_time(60000);
     data=read_pad();
     assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
-    usleep(220000);
+    advance_time(220000);
     data=read_pad();
     assert(data.buttons==0 && data.touch_count==0);
 
@@ -107,13 +121,13 @@ int main(void) {
     assert(!(data.buttons & BTN_L1) && touch_at(&data,480));
     inject(path,"");
     data=read_pad(); /* the release is seen here: the tail starts */
-    usleep(220000);
+    advance_time(220000);
     data=read_pad();
     assert(data.buttons==0 && data.touch_count==0);
 
     /* The settings menu takes the input and ends a click; the source starts a new one after. */
     inject(path,"touchpad_right");
-    usleep(60000);
+    advance_time(60000);
     data=read_pad();
     assert(touch_at(&data,1440));
     capture=1;
@@ -124,7 +138,7 @@ int main(void) {
     assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
     inject(path,"");
     data=read_pad(); /* the release is seen here: the tail starts */
-    usleep(220000);
+    advance_time(220000);
     data=read_pad();
     assert(data.buttons==0 && data.touch_count==0);
 
@@ -200,13 +214,13 @@ int main(void) {
     pump();
     data=read_pad();
     assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,480));
-    usleep(60000);
+    advance_time(60000);
     data=read_pad();
     assert((data.buttons & BTN_TOUCHPAD) && touch_at(&data,480));
     assert(SDL_SetJoystickVirtualButton(joystick,SDL_GAMEPAD_BUTTON_TOUCHPAD,false));
     pump();
     data=read_pad();
-    usleep(220000);
+    advance_time(220000);
     data=read_pad();
     assert(data.buttons==0 && data.touch_count==0);
     /* Back (Share, View) is the right click: the pause menu. With L1 it is the left click. */
@@ -214,26 +228,26 @@ int main(void) {
     pump();
     data=read_pad();
     assert(!(data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
-    usleep(60000);
+    advance_time(60000);
     data=read_pad();
     assert((data.buttons & BTN_TOUCHPAD) && touch_at(&data,1440));
     assert(SDL_SetJoystickVirtualButton(joystick,SDL_GAMEPAD_BUTTON_BACK,false));
     pump();
     data=read_pad();
-    usleep(220000);
+    advance_time(220000);
     assert(SDL_SetJoystickVirtualButton(joystick,SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,true));
     assert(SDL_SetJoystickVirtualButton(joystick,SDL_GAMEPAD_BUTTON_BACK,true));
     pump();
     data=read_pad();
     assert((data.buttons & BTN_L1) && !(data.buttons & BTN_TOUCHPAD) && touch_at(&data,480));
-    usleep(60000);
+    advance_time(60000);
     data=read_pad();
     assert((data.buttons & (BTN_L1|BTN_TOUCHPAD))==(BTN_L1|BTN_TOUCHPAD) && touch_at(&data,480));
     assert(SDL_SetJoystickVirtualButton(joystick,SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,false));
     assert(SDL_SetJoystickVirtualButton(joystick,SDL_GAMEPAD_BUTTON_BACK,false));
     pump();
     data=read_pad();
-    usleep(220000);
+    advance_time(220000);
     data=read_pad();
     assert(data.buttons==0 && data.touch_count==0);
     SDL_CloseJoystick(joystick);

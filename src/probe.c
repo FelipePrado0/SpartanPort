@@ -20,6 +20,19 @@
 #endif
 #ifdef _WIN32
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <sys/mman.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/ucontext.h>
+#include <fcntl.h>
+#include <dlfcn.h>
+#include <execinfo.h>
+#include <pthread.h>
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
+#include <stddef.h>
+#undef round_page /* <mach/vm_param.h>; probe.c has its own */
 #else
 #include <sys/mman.h>
 #include <malloc.h>
@@ -31,6 +44,20 @@
 #include <execinfo.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
+#endif
+#if defined(__APPLE__)
+/* Signal context registers: Darwin keeps them in uc_mcontext->__ss. */
+typedef uint64_t greg_t;
+#define UC_REG(uc, name) (*(greg_t *)&((ucontext_t *)(uc))->uc_mcontext->__ss.__##name)
+#define UC_RIP(uc) UC_REG(uc, rip)
+#define UC_RBP(uc) UC_REG(uc, rbp)
+#define UC_RDI(uc) UC_REG(uc, rdi)
+#define UC_EFL(uc) UC_REG(uc, rflags)
+#elif !defined(_WIN32)
+#define UC_RIP(uc) (((ucontext_t *)(uc))->uc_mcontext.gregs[REG_RIP])
+#define UC_RBP(uc) (((ucontext_t *)(uc))->uc_mcontext.gregs[REG_RBP])
+#define UC_RDI(uc) (((ucontext_t *)(uc))->uc_mcontext.gregs[REG_RDI])
+#define UC_EFL(uc) (((ucontext_t *)(uc))->uc_mcontext.gregs[REG_EFL])
 #endif
 
 typedef struct { uint64_t address, size, flags; } Segment;
@@ -52,7 +79,7 @@ static void loader_report_hook(void) {
 }
 int vulkan_smoke(void);
 
-static void fail(const char *message) { fprintf(stderr, "ERROR: %s\n", message); exit(1); }
+static __attribute__((noreturn)) void fail(const char *message) { fprintf(stderr, "ERROR: %s\n", message); exit(1); }
 static uint64_t read64(FILE *f) {
     unsigned char b[8];
     if (fread(b, 1, 8, f) != 8) fail("truncated boot file");
@@ -95,7 +122,7 @@ static ABI __attribute__((noreturn)) void unresolved(uint32_t id, uintptr_t argu
     uintptr_t caller=(uintptr_t)__builtin_return_address(0)-(uintptr_t)image;
     for (uint64_t m=0;m<module_count;++m)
         if (caller>=modules[m].base && caller-modules[m].base<modules[m].size)
-            printf("Caller in linked module %" PRIu64 " (%s): +0x%" PRIxPTR "\n",m,m==0 ? "libc.prx" : "system module",caller-modules[m].base);
+            printf("Caller in linked module %" PRIu64 " (%s): +0x%" PRIxPTR "\n",m,m==0 ? "libc.prx" : "system module",(uintptr_t)(caller-modules[m].base));
     runtime_report();
     puts(entered_game ? "Original guest entry instructions executed; game initialization is incomplete." :
                         "Native libc initialization is incomplete; game entry has not run.");
@@ -104,7 +131,7 @@ static ABI __attribute__((noreturn)) void unresolved(uint32_t id, uintptr_t argu
 }
 #ifndef _WIN32
 /* enter_on_stack(entry, arg0, arg1, stack_top): call entry(arg0,arg1) on a new stack. */
-void enter_on_stack(void *entry, void *arg0, void *arg1, void *top);
+void enter_on_stack(void *entry, void *arg0, void *arg1, void *top) __asm__("enter_on_stack");
 __asm__(".text\n.globl enter_on_stack\nenter_on_stack:\n"
         " push %rbp\n mov %rsp,%rbp\n and $-16,%rcx\n mov %rcx,%rsp\n"
         " mov %rdi,%rax\n mov %rsi,%rdi\n mov %rdx,%rsi\n call *%rax\n"
@@ -214,8 +241,11 @@ static LONG CALLBACK vectored_fault(EXCEPTION_POINTERS *info) {
     return EXCEPTION_CONTINUE_SEARCH;
 }
 static LONG WINAPI unhandled_fault(EXCEPTION_POINTERS *info) { return fatal_exception(info); }
+#endif
+#if defined(_WIN32) || defined(__APPLE__)
 /* Guest code reads its TCB with `mov rax, gs:[0]` (link_*.py rewrote fs:[0]); on Windows
- * the displacement becomes the TEB TLS slot that holds the guest TCB (runtime_thread.c). */
+ * the displacement becomes the TEB TLS slot that holds the guest TCB, on macOS the pthread
+ * TSD slot of its key (runtime_thread.c). */
 uint32_t runtime_thread_tcb_offset(void);
 static uint64_t patch_tcb_loads(const Segment *segments, uint64_t count) {
     static const unsigned char load[]={0x65,0x48,0x8b,0x04,0x25,0,0,0,0};
@@ -231,26 +261,42 @@ static uint64_t patch_tcb_loads(const Segment *segments, uint64_t count) {
 }
 #endif
 #ifndef _WIN32
-/* ucontext gregs of IsaRegs.gpr (x86 numbering). */
+/* Signal context register of IsaRegs.gpr[i] (x86 numbering). */
+#ifdef __APPLE__
+#define SS_OFFSET(name) offsetof(_STRUCT_X86_THREAD_STATE64, __##name)
+static const size_t isa_gregs[16]={SS_OFFSET(rax),SS_OFFSET(rcx),SS_OFFSET(rdx),SS_OFFSET(rbx),SS_OFFSET(rsp),SS_OFFSET(rbp),
+                                   SS_OFFSET(rsi),SS_OFFSET(rdi),SS_OFFSET(r8),SS_OFFSET(r9),SS_OFFSET(r10),SS_OFFSET(r11),
+                                   SS_OFFSET(r12),SS_OFFSET(r13),SS_OFFSET(r14),SS_OFFSET(r15)};
+static greg_t *isa_gpr(void *context, int i) {
+    return (greg_t *)((char *)&((ucontext_t *)context)->uc_mcontext->__ss + isa_gregs[i]);
+}
+#else
 static const int isa_gregs[16]={REG_RAX,REG_RCX,REG_RDX,REG_RBX,REG_RSP,REG_RBP,REG_RSI,REG_RDI,
                                 REG_R8,REG_R9,REG_R10,REG_R11,REG_R12,REG_R13,REG_R14,REG_R15};
+static greg_t *isa_gpr(void *context, int i) { return &((ucontext_t *)context)->uc_mcontext.gregs[isa_gregs[i]]; }
+#endif
+static int read_frame(uintptr_t rbp, uintptr_t frame[2]);
 static void fault(int sig, siginfo_t *info, void *context) {
     if (sig == SIGTRAP && isa_table) {
         /* An int3 ISA site (RIP is past the CC byte); any other trap ends in the report below. */
-        greg_t *g = ((ucontext_t *)context)->uc_mcontext.gregs;
         IsaRegs regs;
         uintptr_t rip;
-        for (int i = 0; i < 16; ++i) regs.gpr[i] = (uint64_t)g[isa_gregs[i]];
-        regs.rflags = (uint64_t)g[REG_EFL];
-        if (isa_rewrite_trap(isa_table, (uintptr_t)g[REG_RIP] - 1, &regs, &rip)) {
-            for (int i = 0; i < 16; ++i) g[isa_gregs[i]] = (greg_t)regs.gpr[i];
-            g[REG_EFL] = (greg_t)regs.rflags;
-            g[REG_RIP] = (greg_t)rip;
+        for (int i = 0; i < 16; ++i) regs.gpr[i] = (uint64_t)*isa_gpr(context, i);
+        regs.rflags = (uint64_t)UC_EFL(context);
+        if (isa_rewrite_trap(isa_table, (uintptr_t)UC_RIP(context) - 1, &regs, &rip)) {
+            for (int i = 0; i < 16; ++i) *isa_gpr(context, i) = (greg_t)regs.gpr[i];
+            UC_EFL(context) = (greg_t)regs.rflags;
+            UC_RIP(context) = (greg_t)rip;
             return;
         }
     }
-    /* GPU page tracking (write-protected guest pages) is resolved first. */
+    /* GPU page tracking (write-protected guest pages) is resolved first. macOS reports a write to
+     * a protected page as SIGBUS (SIGSEGV is for unmapped addresses). */
+#ifdef __APPLE__
+    if (gpu_enabled && (sig == SIGSEGV || sig == SIGBUS) && spartanportgpu_handle_fault(context, info->si_addr)) return;
+#else
     if (gpu_enabled && sig == SIGSEGV && spartanportgpu_handle_fault(context, info->si_addr)) return;
+#endif
     /* A speculative guest memory read (runtime_memory.c) failed: resume its recovery point. */
     if ((sig == SIGSEGV || sig == SIGBUS) && runtime_fault_recover) {
         sigjmp_buf *recover = runtime_fault_recover;
@@ -262,8 +308,7 @@ static void fault(int sig, siginfo_t *info, void *context) {
         siglongjmp(*recover, 1);
     }
     /* The process is terminating: dladdr/snprintf are acceptable here. */
-    ucontext_t *uc = context;
-    uintptr_t rip = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
+    uintptr_t rip = (uintptr_t)UC_RIP(context);
     char line[512];
     Dl_info where;
     int site = isa_table ? isa_rewrite_site_of_stub(isa_table, rip) : -1;
@@ -280,6 +325,41 @@ static void fault(int sig, siginfo_t *info, void *context) {
     else
         snprintf(line, sizeof(line), "Fault (signal %d) at RIP %p, address %p\n", sig, (void *)rip, info->si_addr);
     { ssize_t written_=write(2, line, strlen(line)); (void)written_; }
+    /* SPARTAN_FAULT_REGS=1: the registers and 256 bytes at each of rbx, rdi, rsi and rsp. */
+    if (getenv("SPARTAN_FAULT_REGS")) {
+        static const char *gpr_names[16]={"rax","rcx","rdx","rbx","rsp","rbp","rsi","rdi","r8","r9","r10","r11","r12","r13","r14","r15"};
+        for (int i = 0; i < 16; ++i) {
+            snprintf(line, sizeof(line), "  %s=%#llx\n", gpr_names[i], (unsigned long long)*isa_gpr(context, i));
+            ssize_t written_=write(2, line, strlen(line)); (void)written_;
+        }
+        const int dumped[4]={3,7,6,4};
+        for (int d = 0; d < 4; ++d) {
+            uintptr_t at=(uintptr_t)*isa_gpr(context, dumped[d]);
+            for (int row = 0; row < 16; ++row) {
+                uintptr_t words[2];
+                if (!read_frame(at+row*16, words)) break;
+                snprintf(line, sizeof(line), "  [%s+%#04x] %016llx %016llx\n", gpr_names[dumped[d]], row*16,
+                         (unsigned long long)words[0], (unsigned long long)words[1]);
+                ssize_t written_=write(2, line, strlen(line)); (void)written_;
+            }
+        }
+    }
+    /* SPARTAN_FAULT_DUMP=address:length (hex): that memory too, as bytes and text. */
+    if (getenv("SPARTAN_FAULT_DUMP")) {
+        char *colon=NULL;
+        uintptr_t at=(uintptr_t)strtoull(getenv("SPARTAN_FAULT_DUMP"),&colon,16);
+        uint64_t length=colon && *colon==':' ? strtoull(colon+1,NULL,16) : 0x100;
+        for (uint64_t row = 0; row < length; row += 16) {
+            unsigned char bytes[16];
+            if (!read_frame(at+row, (uintptr_t *)bytes)) break;
+            int n=snprintf(line, sizeof(line), "  %#llx:", (unsigned long long)(at+row));
+            for (int i = 0; i < 16; ++i) n+=snprintf(line+n, sizeof(line)-(size_t)n, " %02x", bytes[i]);
+            n+=snprintf(line+n, sizeof(line)-(size_t)n, "  ");
+            for (int i = 0; i < 16; ++i) line[n++]=bytes[i]>=32 && bytes[i]<127 ? (char)bytes[i] : '.';
+            line[n++]='\n'; line[n]=0;
+            ssize_t written_=write(2, line, (size_t)n); (void)written_;
+        }
+    }
     if (gpu_enabled) spartanportgpu_dump_guest_writes(context);
     /* Host call chain (frames with unwind info; guest frames end it). */
     void *frames[32];
@@ -304,20 +384,30 @@ static void write_hex(char *out, uint64_t v) {
     const char digits[] = "0123456789abcdef";
     for (int i = 0; i < 16; ++i) out[i] = digits[(v >> (60 - i * 4)) & 15];
 }
-static void dump_frames(ucontext_t *uc) {
+/* Reads two words without faulting on a bad frame pointer. */
+static int read_frame(uintptr_t rbp, uintptr_t frame[2]) {
+#ifdef __APPLE__
+    mach_vm_size_t got=0;
+    return mach_vm_read_overwrite(mach_task_self(),rbp,2*sizeof(uintptr_t),(mach_vm_address_t)frame,&got)==KERN_SUCCESS &&
+           got==2*sizeof(uintptr_t);
+#else
+    struct iovec local={frame,2*sizeof(uintptr_t)}, remote={(void *)rbp,2*sizeof(uintptr_t)};
+    return process_vm_readv(getpid(),&local,1,&remote,1,0)==(ssize_t)(2*sizeof(uintptr_t));
+#endif
+}
+static void dump_frames(void *uc) {
     char line[] = "  tid=0000000000000000 rip=0000000000000000 image-relative=0000000000000000 host-relative=0000000000000000\n";
-    uintptr_t rip=(uintptr_t)uc->uc_mcontext.gregs[REG_RIP], rbp=(uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
+    uintptr_t rip=(uintptr_t)UC_RIP(uc), rbp=(uintptr_t)UC_RBP(uc);
     uint64_t tid=(uint64_t)gettid();
     /* First argument register: the lock address when a thread waits on a futex. */
     char arg[]="  tid=0000000000000000 rdi=0000000000000000\n";
-    write_hex(arg+6,tid); write_hex(arg+27,(uint64_t)uc->uc_mcontext.gregs[REG_RDI]);
+    write_hex(arg+6,tid); write_hex(arg+27,(uint64_t)UC_RDI(uc));
     { ssize_t written_=write(2,arg,sizeof(arg)-1); (void)written_; }
     for (int depth=0; depth<24; ++depth) {
         write_hex(line+6,tid); write_hex(line+27,rip); write_hex(line+59,rip-(uintptr_t)image); write_hex(line+90,rip-exe_base);
         { ssize_t written_=write(2,line,sizeof(line)-1); (void)written_; }
         uintptr_t frame[2];
-        struct iovec local={frame,sizeof(frame)}, remote={(void *)rbp,sizeof(frame)};
-        if (!rbp || process_vm_readv(getpid(),&local,1,&remote,1,0)!=(ssize_t)sizeof(frame)) break;
+        if (!rbp || !read_frame(rbp,frame)) break;
         if (frame[0]<=rbp) break;
         rbp=frame[0]; rip=frame[1];
     }
@@ -328,6 +418,16 @@ static void watchdog(int sig, siginfo_t *info, void *context) {
     const char head[]="STOP: watchdog timeout; thread stacks:\n";
     { ssize_t written_=write(2,head,sizeof(head)-1); (void)written_; }
     dump_frames(context);
+#ifdef __APPLE__
+    /* Every other pthread dumps its own stack (thread_dump on SIGUSR2). */
+    thread_act_array_t list; mach_msg_type_number_t count=0;
+    mach_port_t self_port=mach_thread_self();
+    if (task_threads(mach_task_self(),&list,&count)==KERN_SUCCESS)
+        for (mach_msg_type_number_t i=0;i<count;++i) {
+            pthread_t thread=list[i]!=self_port ? pthread_from_mach_thread_np(list[i]) : NULL;
+            if (thread) { pthread_kill(thread,SIGUSR2); usleep(20000); }
+        }
+#else
     int dir=open("/proc/self/task",O_RDONLY|O_DIRECTORY);
     char buffer[4096];
     long n;
@@ -339,6 +439,7 @@ static void watchdog(int sig, siginfo_t *info, void *context) {
             if (tid>0 && tid!=self) { syscall(SYS_tgkill,getpid(),tid,SIGUSR2); usleep(20000); }
             at+=d->reclen;
         }
+#endif
     usleep(100000);
     _exit(128 + sig);
 }
@@ -747,7 +848,11 @@ void runtime_restart(void) {
     TerminateProcess(GetCurrentProcess(),0);
 #else
     const char *command = getenv("SPARTAN_RESTART_COMMAND");
+#ifdef __APPLE__
+    for (int fd = 3, limit = getdtablesize(); fd < limit; ++fd) close(fd);
+#else
     syscall(SYS_close_range, 3u, ~0u, 0u);
+#endif
     if (command && *command) {
         puts("Runtime: restarting through SPARTAN_RESTART_COMMAND");
         execl("/bin/sh", "sh", "-c", command, (char *)NULL);
@@ -777,11 +882,18 @@ static int cpu_supported(char *missing, size_t size) {
     return 1;
 }
 
+#ifdef __APPLE__
+/* macOS: the game runs on a host thread of its own; main (below) keeps the main thread for the
+ * window, which Cocoa requires (spartanportgpu_main_loop). */
+#define main probe_main
+static
+#endif
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
     /* Keep host heap objects handed to the guest (thread handles, TLS) in the
-       non-PIE brk heap, i.e. below 1 TiB: the guest packs pointers into 40 bits. */
+       non-PIE brk heap, i.e. below 1 TiB: the guest packs pointers into 40 bits.
+       macOS: the runtime allocates them from its low heap (compat_mac.c). */
     mallopt(M_ARENA_MAX,1);
     mallopt(M_MMAP_THRESHOLD,32*1024*1024);
 #endif
@@ -798,9 +910,10 @@ int main(int argc, char **argv) {
         runtime_pad_describe();
         return 0;
     }
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
     /* The PS4 user range must stay free of host allocations (GPU driver, heaps), and the guest
-     * TCB needs one of the 64 TEB TLS slots before DLLs (Vulkan drivers) take them. */
+     * TCB needs one of the 64 TEB TLS slots before DLLs (Vulkan drivers) take them (macOS: a
+     * pthread key). */
     runtime_memory_reserve();
     runtime_thread_tcb_offset();
 #endif
@@ -1080,6 +1193,8 @@ int main(int argc, char **argv) {
     if (gpu_enabled && pause_menu && app0) install_menu_exit(segments, ns, size, pause_menu);
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
+#elif defined(__APPLE__)
+    printf("Guest TCB loads redirected to the pthread TSD slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
 #endif
     if (isa_table) {
         IsaReport r = isa_rewrite_apply(isa_table, image, stubs, isa_sets);
@@ -1141,3 +1256,25 @@ int main(int argc, char **argv) {
 #endif
     fail("entry unexpectedly returned");
 }
+#ifdef __APPLE__
+#undef main
+typedef struct { int argc; char **argv; } ProbeArguments;
+static void *probe_thread(void *p) {
+    const ProbeArguments *arguments = p;
+    exit(probe_main(arguments->argc, arguments->argv));
+}
+int main(int argc, char **argv) {
+    static ProbeArguments arguments;
+    arguments = (ProbeArguments){argc, argv};
+    /* The loader's own frames (the guest main thread gets its own stack later) and the main
+     * thread's 8 MiB default alike. */
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 64u << 20);
+    pthread_t thread;
+    if (pthread_create(&thread, &attr, probe_thread, &arguments)) { fputs("ERROR: cannot start the game thread\n", stderr); return 1; }
+    pthread_attr_destroy(&attr);
+    spartanportgpu_main_loop(); /* returns only when the window closes; the game thread usually exits first */
+    return 0;
+}
+#endif

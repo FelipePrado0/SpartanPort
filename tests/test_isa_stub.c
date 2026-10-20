@@ -10,7 +10,12 @@
 #else
 #include <signal.h>
 #include <sys/mman.h>
+#ifdef __APPLE__
+#include <sys/ucontext.h>
+#include <stddef.h>
+#else
 #include <ucontext.h>
+#endif
 #endif
 #include "isa_rewrite.h"
 
@@ -264,6 +269,24 @@ static LONG WINAPI trap_handler(EXCEPTION_POINTERS *info) {
 }
 
 static void install_trap_handler(void) { assert(AddVectoredExceptionHandler(1, trap_handler) != NULL); }
+#elif defined(__APPLE__)
+#define SS(name) offsetof(_STRUCT_X86_THREAD_STATE64, __##name)
+static void trap_handler(int sig, siginfo_t *info, void *context) {
+    (void)sig;
+    (void)info;
+    char *ss = (char *)&((ucontext_t *)context)->uc_mcontext->__ss;
+    static const size_t offset[16] = {SS(rax), SS(rcx), SS(rdx), SS(rbx), SS(rsp), SS(rbp), SS(rsi), SS(rdi),
+                                      SS(r8),  SS(r9),  SS(r10), SS(r11), SS(r12), SS(r13), SS(r14), SS(r15)};
+    uint64_t *rflags = (uint64_t *)(ss + SS(rflags)), *rip_slot = (uint64_t *)(ss + SS(rip));
+    IsaRegs regs;
+    for (int i = 0; i < 16; i++) regs.gpr[i] = *(uint64_t *)(ss + offset[i]);
+    regs.rflags = *rflags;
+    uintptr_t rip;
+    if (!isa_rewrite_trap(trap_table, (uintptr_t)*rip_slot - 1, &regs, &rip)) abort();
+    for (int i = 0; i < 16; i++) *(uint64_t *)(ss + offset[i]) = regs.gpr[i];
+    *rflags = regs.rflags;
+    *rip_slot = rip;
+}
 #else
 static void trap_handler(int sig, siginfo_t *info, void *context) {
     (void)sig;
@@ -281,7 +304,8 @@ static void trap_handler(int sig, siginfo_t *info, void *context) {
     g[REG_EFL] = (greg_t)regs.rflags;
     g[REG_RIP] = (greg_t)rip;
 }
-
+#endif
+#ifndef _WIN32
 static void install_trap_handler(void) {
     struct sigaction sa;
     memset(&sa, 0, sizeof sa);

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Prepares the game image and starts spartanport-probe (Windows and Linux; run.sh wraps it on Linux).
+"""Prepares the game image and starts spartanport-probe (Windows, Linux and macOS; run.sh wraps it on Linux
+and macOS).
 
 Environment variables (SPARTAN_GAME_DIR, SPARTAN_DATA_DIR, SPARTAN_PATCHES, SPARTAN_MODS_*,
 SPARTAN_USER_DIR, ...). Extra arguments go to spartanport-probe.
@@ -8,6 +9,7 @@ The in-game "Apply and restart" runs this script again through SPARTAN_RESTART_C
 `--after PID` waits for the previous game process to end first (its GPU device and memory).
 """
 import os
+import platform
 from pathlib import Path
 import shlex
 import shutil
@@ -16,6 +18,7 @@ import sys
 import time
 
 WINDOWS = sys.platform == 'win32'
+MACOS = sys.platform == 'darwin'
 EXE_SUFFIX = '.exe' if WINDOWS else ''
 if WINDOWS:
     import ctypes
@@ -26,6 +29,24 @@ PORT = Path(__file__).resolve().parent
 def fail(message):
     print(message, file=sys.stderr)
     sys.exit(1)
+
+
+def macos_runtime_error():
+    version = platform.mac_ver()[0]
+    if not version or int(version.split('.')[0]) < 26:
+        return 'This experimental build requires macOS 26 or newer.'
+    try:
+        hardware = subprocess.run(['/usr/sbin/sysctl', '-n', 'hw.optional.arm64'],
+                                  capture_output=True, text=True, timeout=5)
+        if hardware.stdout.strip() != '1':
+            return 'This experimental build requires Apple Silicon (M1 or newer); Intel Macs are not supported.'
+        rosetta = subprocess.run(['/usr/bin/arch', '-x86_64', '/usr/bin/true'],
+                                 capture_output=True, timeout=5)
+        if rosetta.returncode:
+            return 'Rosetta 2 is required. Install it with: softwareupdate --install-rosetta --agree-to-license'
+    except (OSError, subprocess.TimeoutExpired):
+        return 'Unable to check the Mac runtime requirements. Verify macOS 26+, Apple Silicon and Rosetta 2.'
+    return None
 
 
 def wait_for(pid):
@@ -160,6 +181,8 @@ def pause_menu_args(game, out, mounts):
 
 
 def main():
+    if MACOS and (error := macos_runtime_error()):
+        fail(error)
     args = sys.argv[1:]
     if len(args) >= 2 and args[0] == '--after':
         wait_for(int(args[1]))
@@ -206,6 +229,15 @@ def main():
     probe = Path(env['SPARTAN_PROBE']) if env.get('SPARTAN_PROBE') else find_executable('spartanport-probe' + EXE_SUFFIX)
     if not probe or not probe.is_file():
         fail(f'spartanport-probe{EXE_SUFFIX} not found: build it with build.sh or use a packaged build.')
+    # macOS: the x86-64 probe runs under Rosetta 2, which executes AVX, F16C, BMI1, LZCNT and MOVBE
+    # but reports them in CPUID only when asked. The Vulkan driver (KosmicKrisp) is listed by the
+    # manifest build.sh writes next to the probe.
+    if MACOS:
+        env.setdefault('ROSETTA_ADVERTISE_AVX', '1')
+        for icd in (probe.parent / 'vulkan' / 'kosmickrisp_mesa_icd.json', probe.parent / 'kosmickrisp_mesa_icd.json'):
+            if icd.is_file():
+                env.setdefault('VK_DRIVER_FILES', str(icd))
+                break
     # Development builds run from the MSYS2 tree: its CLANG64 DLLs (SDL3, FFmpeg, ...).
     if WINDOWS and not (probe.parent / 'SDL3.dll').is_file():
         clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
