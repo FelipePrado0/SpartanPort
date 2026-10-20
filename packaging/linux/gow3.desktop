@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=God of War III Remastered
-Comment=PC port of God of War III Remastered (bring your own game dump)
-Exec=AppRun
-Icon=gow3
-Categories=Game;
-Terminal=false
-StartupWMClass=gow3

@@ -15,9 +15,13 @@
 #include <setjmp.h>
 #include <errno.h>
 #include <unistd.h>
+#include <time.h>
 #ifdef _WIN32
 #include <windows.h>
+#include <tlhelp32.h>
 #else
+#include <dirent.h>
+#include <sys/resource.h>
 #include <sys/syscall.h>
 #include <sys/mman.h>
 #include <asm/prctl.h>
@@ -47,7 +51,7 @@ typedef struct GuestThread {
     char name[32];
     int detached, finished, joined, host_owned;
 #ifdef _WIN32
-    gow3_jmp_buf exit_jump; /* no SEH unwinding through guest frames */
+    spartanport_jmp_buf exit_jump; /* no SEH unwinding through guest frames */
 #else
     jmp_buf exit_jump;
 #endif
@@ -66,6 +70,7 @@ static size_t created, joined_count, exited;
 void runtime_set_main_tls(const void *data,uint64_t filesz,uint64_t memsz,uint64_t align) {
     tls_template=data; tls_filesz=filesz; tls_memsz=memsz; tls_align=align ? align : 16;
 }
+static void set_host_name(const char *name);
 static uint64_t tls_offset(void) { return (tls_memsz+tls_align-1)&~(tls_align-1); }
 #ifdef _WIN32
 /* TEB TlsSlots[64] start at gs:0x1480; slots 64+ live elsewhere and cannot be used. */
@@ -134,6 +139,7 @@ void runtime_thread_attach_host(const char *name) {
 void runtime_thread_attach_main(void) {
     GuestThread *t=runtime_thread_current();
     snprintf(t->name,sizeof(t->name),"main");
+    set_host_name(t->name);
 }
 static GuestThread *find_thread(void *handle) {
     GuestThread *found=NULL;
@@ -244,10 +250,34 @@ static void set_host_name(const char *name) {
     char host[16]={0};
     memcpy(host,name,strnlen(name,sizeof(host)-1));
     pthread_setname_np(pthread_self(),host);
+#ifdef _WIN32
+    /* winpthreads only names the thread for an attached debugger; the CPU report reads this. */
+    wchar_t wide[32];
+    if (MultiByteToWideChar(CP_UTF8,0,name,-1,wide,32)) SetThreadDescription(GetCurrentThread(),wide);
+#endif
+}
+/* The game's job workers take their queue with a bare spinlock (0x5a57f0: lock cmpxchg, no pause
+ * or yield). On a 4-thread host the holder gets preempted and the others spin whole quanta,
+ * starving the GPU command processor (#209: GPU 17% -> 72% with the workers below normal).
+ * The game's own scePthreadSetprio (it raises them to 256) stays recorded only.
+ * Threads the game creates with a high PS4 priority (below 400: brbDriver, the sound driver at 306,
+ * and Fios I/O) run above normal, or the audio output starves on 4 threads (48 ms gaps). */
+enum { HIGH_GUEST_PRIO = 400 };
+static void set_host_priority(const char *name,int guest_prio) {
+    int lower=!strncmp(name,"WorkerThread",12);
+    if (!lower && guest_prio>=HIGH_GUEST_PRIO) return;
+#ifdef _WIN32
+    if (!SetThreadPriority(GetCurrentThread(),lower ? THREAD_PRIORITY_BELOW_NORMAL : THREAD_PRIORITY_ABOVE_NORMAL))
+        printf("Runtime: cannot change the priority of '%s' (%lu)\n",name,GetLastError());
+#else
+    /* Raising needs CAP_SYS_NICE; without it the thread keeps the normal priority. */
+    if (setpriority(PRIO_PROCESS,(id_t)syscall(SYS_gettid),lower ? 5 : -5) && lower)
+        printf("Runtime: cannot change the priority of '%s' (%d)\n",name,errno);
+#endif
 }
 #ifdef _WIN32
-#define exit_setjmp(t) gow3_setjmp((t)->exit_jump)
-#define exit_longjmp(t) gow3_longjmp((t)->exit_jump,1)
+#define exit_setjmp(t) spartanport_setjmp((t)->exit_jump)
+#define exit_longjmp(t) spartanport_longjmp((t)->exit_jump,1)
 #else
 #define exit_setjmp(t) setjmp((t)->exit_jump)
 #define exit_longjmp(t) longjmp((t)->exit_jump,1)
@@ -256,6 +286,7 @@ static void *host_start(void *p) {
     GuestThread *t=p;
     attach(t);
     set_host_name(t->name);
+    set_host_priority(t->name,t->attr.prio);
     if (!exit_setjmp(t)) t->result=t->entry(t->argument);
     runtime_thread_keys_cleanup();
     pthread_mutex_lock(&lock); t->finished=1; ++exited; pthread_mutex_unlock(&lock);
@@ -324,7 +355,7 @@ static ABI __attribute__((noreturn)) void thread_exit(void *value) {
     /* No host unwinder: guest frames have no registered FDEs. */
     exit_longjmp(t);
 }
-static ABI int32_t thread_yield(void) { sched_yield(); return 0; }
+static ABI int32_t thread_yield(void) { runtime_thread_count_yield(0); sched_yield(); return 0; }
 static ABI int32_t thread_get_prio(GuestThread *t,int *prio) {
     if (!find_thread(t)) return ERR(3);
     if (!prio) return ERR(22);
@@ -347,7 +378,7 @@ static ABI int32_t thread_rename(GuestThread *t,const char *name) {
     if (!find_thread(t)) return ERR(3);
     if (!name) return ERR(22);
     snprintf(t->name,sizeof(t->name),"%s",name);
-    if (t==current) set_host_name(t->name);
+    if (t==current) { set_host_name(t->name); set_host_priority(t->name,t->attr.prio); }
     return 0;
 }
 static ABI int32_t thread_equal(GuestThread *a,GuestThread *b) { return a==b; }
@@ -389,9 +420,102 @@ uintptr_t runtime_thread_resolve(const char *name) {
         if (!strcmp(name,table[i].nid)) return (uintptr_t)table[i].fn;
     return 0;
 }
+/* ---- CPU time per host thread (#209: which threads keep 4-thread CPUs at 100%) ---- */
+static uint64_t guest_yields, guest_zero_sleeps;
+void runtime_thread_count_yield(int zero_sleep) {
+    __atomic_fetch_add(zero_sleep ? &guest_zero_sleeps : &guest_yields,1,__ATOMIC_RELAXED);
+}
+static struct timespec session_start;
+__attribute__((constructor)) static void mark_session_start(void) { clock_gettime(CLOCK_MONOTONIC,&session_start); }
+static double seconds_since(const struct timespec *t) {
+    struct timespec now; clock_gettime(CLOCK_MONOTONIC,&now);
+    return (double)(now.tv_sec-t->tv_sec)+(double)(now.tv_nsec-t->tv_nsec)/1e9;
+}
+typedef struct { char name[32]; double ms; } ThreadCpu;
+enum { CPU_REPORT_MAX = 1024, CPU_REPORT_SHOWN = 15 };
+static int by_cpu_desc(const void *a,const void *b) {
+    double x=((const ThreadCpu *)a)->ms, y=((const ThreadCpu *)b)->ms;
+    return (x<y)-(x>y);
+}
+/* Live threads of this process with their CPU time; threads that already exited are not listed. */
+static size_t live_thread_cpu(ThreadCpu *out,size_t max) {
+    size_t n=0;
+#ifdef _WIN32
+    HANDLE snap=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,0);
+    if (snap==INVALID_HANDLE_VALUE) return 0;
+    THREADENTRY32 entry={.dwSize=sizeof(entry)};
+    DWORD pid=GetCurrentProcessId();
+    for (BOOL ok=Thread32First(snap,&entry);ok && n<max;ok=Thread32Next(snap,&entry)) {
+        if (entry.th32OwnerProcessID!=pid) continue;
+        HANDLE h=OpenThread(THREAD_QUERY_LIMITED_INFORMATION,FALSE,entry.th32ThreadID);
+        if (!h) continue;
+        FILETIME c,e,k,u;
+        if (GetThreadTimes(h,&c,&e,&k,&u)) {
+            ThreadCpu *t=&out[n++];
+            uint64_t ticks=(((uint64_t)k.dwHighDateTime<<32)|k.dwLowDateTime)+(((uint64_t)u.dwHighDateTime<<32)|u.dwLowDateTime);
+            t->ms=(double)ticks/1e4;
+            PWSTR wide=NULL;
+            t->name[0]=0;
+            if (SUCCEEDED(GetThreadDescription(h,&wide)) && wide) {
+                WideCharToMultiByte(CP_UTF8,0,wide,-1,t->name,sizeof(t->name),NULL,NULL);
+                LocalFree(wide);
+            }
+            if (!t->name[0]) snprintf(t->name,sizeof(t->name),"tid %lu",entry.th32ThreadID);
+        }
+        CloseHandle(h);
+    }
+    CloseHandle(snap);
+#else
+    DIR *dir=opendir("/proc/self/task");
+    if (!dir) return 0;
+    long hz=sysconf(_SC_CLK_TCK);
+    for (struct dirent *d;(d=readdir(dir)) && n<max;) {
+        if (d->d_name[0]=='.') continue;
+        char path[64], line[1024];
+        snprintf(path,sizeof(path),"/proc/self/task/%s/stat",d->d_name);
+        FILE *f=fopen(path,"r");
+        if (!f) continue;
+        size_t len=fread(line,1,sizeof(line)-1,f); fclose(f);
+        line[len]=0;
+        char *open=strchr(line,'('), *close=strrchr(line,')');
+        unsigned long utime, stime;
+        /* After "(comm)": state, then fields 4..13, then utime and stime (proc(5)). */
+        if (!open || !close || sscanf(close+2,"%*c %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %lu %lu",&utime,&stime)!=2) continue;
+        ThreadCpu *t=&out[n++];
+        t->ms=(double)(utime+stime)*1000.0/(double)(hz>0 ? hz : 100);
+        snprintf(t->name,sizeof(t->name),"%.*s",(int)(close-open-1),open+1);
+    }
+    closedir(dir);
+#endif
+    return n;
+}
+static void cpu_report(void) {
+    static ThreadCpu list[CPU_REPORT_MAX];
+    size_t n=live_thread_cpu(list,CPU_REPORT_MAX);
+    double wall=seconds_since(&session_start), total=0;
+    for (size_t i=0;i<n;++i) total+=list[i].ms;
+    qsort(list,n,sizeof(*list),by_cpu_desc);
+    /* The affinity mask, so `start /affinity F` or taskset emulating a 4-thread CPU shows 4. */
+    long hw=0;
+#ifdef _WIN32
+    DWORD_PTR process_mask=0, system_mask=0;
+    if (GetProcessAffinityMask(GetCurrentProcess(),&process_mask,&system_mask)) hw=__builtin_popcountll(process_mask);
+#else
+    cpu_set_t set; CPU_ZERO(&set);
+    if (!sched_getaffinity(0,sizeof(set),&set)) hw=CPU_COUNT(&set);
+#endif
+    printf("Runtime: CPU time by thread: session %.0f s, %zu live threads, %.0f s CPU (%.0f%% of %ld hardware threads)\n",
+           wall,n,total/1000.0,wall>0 && hw>0 ? total/10.0/wall/(double)hw : 0.0,hw);
+    for (size_t i=0;i<n && i<CPU_REPORT_SHOWN;++i)
+        printf("Runtime:   %-24s %9.0f ms (%5.1f%% of one thread)\n",list[i].name,list[i].ms,wall>0 ? list[i].ms/10.0/wall : 0.0);
+    printf("Runtime: yields guest=%llu, zero sleeps=%llu\n",
+           (unsigned long long)__atomic_load_n(&guest_yields,__ATOMIC_RELAXED),
+           (unsigned long long)__atomic_load_n(&guest_zero_sleeps,__ATOMIC_RELAXED));
+}
 void runtime_thread_report(void) {
     pthread_mutex_lock(&lock);
     printf("Runtime: guest threads created=%zu, exited=%zu, joined=%zu\n",created,exited,joined_count);
     pthread_mutex_unlock(&lock);
+    cpu_report();
 }
 

@@ -7,12 +7,12 @@ from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
-import gow3_launcher_win as launcher  # noqa: E402
+import spartanport_launcher_win as launcher  # noqa: E402
 
 
 class FontFileTest(unittest.TestCase):
     def test_font_file_is_a_launcher_asset_under_port_dir(self):
-        # Frozen builds find launcher assets next to the exe (PORT_DIR / 'launcher'), like gow3.ico.
+        # Frozen builds find launcher assets next to the exe (PORT_DIR / 'launcher'), like spartanport.ico.
         self.assertEqual(launcher.FONT_FILE, launcher.PORT_DIR / 'launcher' / 'Cinzel-Black.ttf')
         self.assertTrue(launcher.FONT_FILE.is_file())
 
@@ -116,10 +116,10 @@ class LatinHeadingsTest(unittest.TestCase):
             from fontTools.ttLib import TTFont
         except ImportError:
             self.skipTest('fontTools reads the face')
-        import gow3_lang
+        import spartanport_lang
         cmap = TTFont(launcher.FONT_FILE).getBestCmap()
         for lang in launcher.LATIN_UI_LANGUAGES:
-            text = ''.join(gow3_lang.table(lang).values()).upper()
+            text = ''.join(spartanport_lang.table(lang).values()).upper()
             missing = {c for c in text if c.isalpha() and ord(c) not in cmap}
             self.assertFalse(missing, lang)
 
