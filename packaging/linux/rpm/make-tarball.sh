@@ -70,7 +70,7 @@ output="$output_dir/$(basename -- "$output")"
 tmp=$(mktemp -d)
 tmp_archive="$output.tmp.$$"
 trap 'rm -rf -- "$tmp"; rm -f -- "$tmp_archive"' EXIT
-prefix="gow3-$version"
+prefix="spartanport-$version"
 mkdir -p "$tmp/tree/$prefix"
 
 git archive --format=tar "$commit" | tar -xf - -C "$tmp/tree/$prefix"

@@ -45,7 +45,7 @@ jobs:
       - name: Install build dependencies
         run: |
           dnf -y install rpm-build dnf5-plugins curl ca-certificates patch findutils shadow-utils util-linux
-          dnf -y builddep packaging/linux/rpm/gow3.spec
+          dnf -y builddep packaging/linux/rpm/spartanport.spec
       - name: Generate source tarball
         id: source
         run: |
@@ -55,8 +55,10 @@ jobs:
           COMMIT=$(git rev-parse HEAD)
           short=${COMMIT:0:7}
           date=$(git show -s --format=%cd --date=format:%Y%m%d "$COMMIT")
-          source_version="0.0.0-git${short}"
-          snapshot_version="0^${date}git${short}"
+          release_version=$(sed -n "s/^VERSION = '\([0-9][0-9.]*\)'$/\1/p" launcher/spartanport_launcher_win.py)
+          test -n "$release_version"
+          source_version="${release_version}-git${short}"
+          snapshot_version="${release_version}^${date}git${short}"
           topdir="$PWD/out/rpmbuild"
           mkdir -p "$topdir/SOURCES"
 
@@ -79,9 +81,9 @@ jobs:
 
           VMA_HEADER=$vma VMA_SHA256=$vma_sha \
             bash packaging/linux/rpm/make-tarball.sh \
-              "$source_version" "$COMMIT" "$topdir/SOURCES/gow3-$source_version.tar.gz"
+              "$source_version" "$COMMIT" "$topdir/SOURCES/spartanport-$source_version.tar.gz"
 
-          source_sha=$(sha256sum "$topdir/SOURCES/gow3-$source_version.tar.gz" | awk '{print $1}')
+          source_sha=$(sha256sum "$topdir/SOURCES/spartanport-$source_version.tar.gz" | awk '{print $1}')
           {
             echo "topdir=$topdir"
             echo "source_version=$source_version"
@@ -96,7 +98,7 @@ jobs:
           topdir='${{ steps.source.outputs.topdir }}'
           useradd --create-home rpmbuilder
           chown -R rpmbuilder:rpmbuilder "$topdir"
-          runuser -u rpmbuilder -- rpmbuild -ba packaging/linux/rpm/gow3.spec \
+          runuser -u rpmbuilder -- rpmbuild -ba packaging/linux/rpm/spartanport.spec \
             --define "_topdir $topdir" \
             --define "commit ${{ steps.source.outputs.commit }}" \
             --define "source_version ${{ steps.source.outputs.source_version }}" \
@@ -114,13 +116,13 @@ jobs:
       - name: Smoke-test the package
         run: |
           set -euo pipefail
-          rpmfile=$(find dist -maxdepth 1 -name 'gow3-*.x86_64.rpm' \
+          rpmfile=$(find dist -maxdepth 1 -name 'spartanport-*.x86_64.rpm' \
             ! -name '*-debuginfo-*' ! -name '*-debugsource-*' | head -1)
           test -n "$rpmfile"
           dnf -y install --setopt=install_weak_deps=False "$rpmfile"
-          test -x /usr/bin/gow3
-          test -f /usr/libexec/gow3/bin/gpu/libgow3gpu.so
-          test -f /usr/share/applications/gow3.desktop
+          test -x /usr/bin/spartanport
+          test -f /usr/libexec/spartanport/bin/gpu/libspartanportgpu.so
+          test -f /usr/share/applications/spartanport.desktop
           # Exit 20 means this CPU needs the (optional) ISA rewrite; both 0 and 20
           # prove the loader starts without game files.
           # Minimal containers have no ~/.local/share; the renderer expects an
@@ -128,14 +130,14 @@ jobs:
           export XDG_DATA_HOME
           XDG_DATA_HOME=$(mktemp -d)
           status=0
-          /usr/libexec/gow3/bin/gow3-probe --cpu-features || status=$?
+          /usr/libexec/spartanport/bin/spartanport-probe --cpu-features || status=$?
           test "$status" -eq 0 -o "$status" -eq 20
           rpm -qp --requires "$rpmfile"
           rpm -qp --recommends "$rpmfile" | grep -F 'python3dist(iced-x86)'
           ! rpm -qp --requires "$rpmfile" | grep -F 'python3dist(iced-x86)'
       - uses: actions/upload-artifact@v4
         with:
-          name: gow3-rpm
+          name: spartanport-rpm
           path: dist/*
           if-no-files-found: error
 
@@ -148,7 +150,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: gow3-rpm
+          name: spartanport-rpm
           path: dist
       - name: Attach to release
         env:
