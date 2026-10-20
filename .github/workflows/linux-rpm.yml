@@ -119,6 +119,10 @@ jobs:
           test -f /usr/share/applications/gow3.desktop
           # Exit 20 means this CPU needs the (optional) ISA rewrite; both 0 and 20
           # prove the loader starts without game files.
+          # Minimal containers have no ~/.local/share; the renderer expects an
+          # existing XDG data base before creating its own subdirectory.
+          export XDG_DATA_HOME
+          XDG_DATA_HOME=$(mktemp -d)
           status=0
           /usr/libexec/gow3/bin/gow3-probe --cpu-features || status=$?
           test "$status" -eq 0 -o "$status" -eq 20
