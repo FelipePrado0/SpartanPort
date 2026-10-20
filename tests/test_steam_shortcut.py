@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import legacy  # noqa: E402
 import steam_shortcut as steam
 
 try:
@@ -29,7 +30,7 @@ class VdfTests(unittest.TestCase):
         self.assertEqual(steam.dump_vdf({'shortcuts': {}}), b'\x00shortcuts\x00\x08\x08')
 
     def test_app_id_is_the_crc_of_exe_and_name_with_the_top_bit(self):
-        exe = '"/home/user/God of War III.AppImage"'
+        exe = '"/home/user/SpartanPort.AppImage"'
         expected = binascii.crc32((exe + steam.APP_NAME).encode()) | 0x80000000
         self.assertEqual(steam.shortcut_appid(exe, steam.APP_NAME), expected)
         self.assertGreaterEqual(expected, 0x80000000)
@@ -91,7 +92,7 @@ class AddToSteamTests(unittest.TestCase):
         (self.steam / 'userdata' / '0').mkdir()  # the anonymous account is skipped
         other = {'shortcuts': {'0': {'appid': 5, 'AppName': 'Other', 'Exe': '"/x"', 'tags': {'0': 'keep'}}}}
         (self.steam / 'userdata' / '2222' / 'config' / 'shortcuts.vdf').write_bytes(steam.dump_vdf(other))
-        self.command = ('/home/user/gow3.AppImage', '--play', '/home/user')
+        self.command = ('/home/user/spartanport.AppImage', '--play', '/home/user')
 
     def add(self, **kwargs):
         return steam.add_to_steam(self.game, self.command, self.icon, steam_root=self.steam, running=False, **kwargs)
@@ -105,7 +106,7 @@ class AddToSteamTests(unittest.TestCase):
         app_id = result['app_id']
         entry = next(iter(self.shortcuts('1111').values()))
         self.assertEqual((entry['AppName'], entry['Exe'], entry['LaunchOptions']),
-                         (steam.APP_NAME, '"/home/user/gow3.AppImage"', '--play'))
+                         (steam.APP_NAME, '"/home/user/spartanport.AppImage"', '--play'))
         self.assertEqual(entry['appid'], app_id)
         grid = self.steam / 'userdata' / '1111' / 'config' / 'grid'
         sizes = {f'{app_id}p.png': steam.CAPSULE, f'{app_id}.png': steam.WIDE, f'{app_id}_hero.png': steam.HERO}
@@ -123,15 +124,21 @@ class AddToSteamTests(unittest.TestCase):
         self.assertEqual(shortcuts['0']['AppName'], 'Other')
         self.assertEqual(shortcuts['0']['tags'], {'0': 'keep'})
         self.assertEqual(shortcuts['1']['AppName'], steam.APP_NAME)
-        self.assertTrue((self.steam / 'userdata' / '2222' / 'config' / 'shortcuts.vdf.gow3-backup').is_file())
+        self.assertTrue((self.steam / 'userdata' / '2222' / 'config' / 'shortcuts.vdf.spartanport-backup').is_file())
 
     def test_adding_again_updates_the_same_shortcut(self):
         self.add()
-        self.command = ('/home/user/gow3.AppImage', '--play', '/home/user')
+        self.command = ('/home/user/spartanport.AppImage', '--play', '/home/user')
         result = self.add()
         self.assertTrue(result['updated'])
         self.assertEqual(len([v for v in self.shortcuts('2222').values() if v['AppName'] == steam.APP_NAME]), 1)
 
+    def test_a_shortcut_from_before_the_rename_is_updated_not_doubled(self):
+        old = {'shortcuts': {'0': {'appid': 7, 'AppName': legacy.LEGACY_TITLE, 'Exe': '"/old"'}}}
+        (self.steam / 'userdata' / '1111' / 'config' / 'shortcuts.vdf').write_bytes(steam.dump_vdf(old))
+        self.add()
+        names = [v['AppName'] for v in self.shortcuts('1111').values()]
+        self.assertEqual(names, [steam.APP_NAME])
     def test_steam_open_and_steam_missing_are_refused(self):
         with self.assertRaises(steam.SteamError) as caught:
             steam.add_to_steam(self.game, self.command, self.icon, steam_root=self.steam, running=True)

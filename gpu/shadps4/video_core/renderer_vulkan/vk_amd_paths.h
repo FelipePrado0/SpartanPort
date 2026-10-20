@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// gow3: GOW3_AMD_PATHS_OFF=mixed,shaderext (or `all`). Runs the shared core without the device
+// spartanport: SPARTAN_AMD_PATHS_OFF=mixed,shaderext (or `all`). Runs the shared core without the device
 // extensions only AMD drivers expose, so a tester on an RDNA2 card (#65) can tell an AMD-only
 // code path of the port from the driver itself:
 //   mixed      VK_AMD_mixed_attachment_samples is not enabled: passes whose colour and depth
@@ -69,10 +69,10 @@ inline std::string Marker(Flags flags) {
     return line;
 }
 
-/// GOW3_AMD_PATHS_OFF, read once; the marker goes to stdout (last_run.log) the first time.
+/// SPARTAN_AMD_PATHS_OFF, read once; the marker goes to stdout (last_run.log) the first time.
 inline Flags Current() {
     static const Flags flags = [] {
-        const Flags parsed = Parse(std::getenv("GOW3_AMD_PATHS_OFF"));
+        const Flags parsed = Parse(std::getenv("SPARTAN_AMD_PATHS_OFF"));
         if (parsed.Any()) {
             std::printf("%s\n", Marker(parsed).c_str());
         }

@@ -1,5 +1,5 @@
 """Exit to Desktop rows (scripts/pause_menu.py). The script is the game's own, so the patch is
-checked on the dump's R_UI.WAD when GOW3_GAME_DIR points at one; the refusals need no files."""
+checked on the dump's R_UI.WAD when SPARTAN_GAME_DIR points at one; the refusals need no files."""
 import os
 import struct
 import tempfile
@@ -11,7 +11,7 @@ import pause_menu
 from pause_menu import Script, decode
 
 SEND = bytes([0x13, 0x00, 0x5e, 0x43])  # builtin 0x5e (send a message), then pop
-GAME = Path(os.environ.get('GOW3_GAME_DIR', '')) if os.environ.get('GOW3_GAME_DIR') else None
+GAME = Path(os.environ.get('SPARTAN_GAME_DIR', '')) if os.environ.get('SPARTAN_GAME_DIR') else None
 
 
 def wad(name, payload):
@@ -40,7 +40,7 @@ class Refusals(unittest.TestCase):
             self.assertFalse((Path(folder) / 'pause_menu' / 'R_UI.WAD').exists())
 
 
-@unittest.skipUnless(GAME and (GAME / pause_menu.WAD).is_file(), 'needs GOW3_GAME_DIR with the game')
+@unittest.skipUnless(GAME and (GAME / pause_menu.WAD).is_file(), 'needs SPARTAN_GAME_DIR with the game')
 class GameScript(unittest.TestCase):
     def setUp(self):
         self.original = (GAME / pause_menu.WAD).read_bytes()

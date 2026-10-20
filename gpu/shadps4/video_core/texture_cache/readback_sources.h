@@ -10,8 +10,8 @@
 
 namespace VideoCore {
 
-// gow3: who asked for a pending image readback to reach RAM. Only used by the
-// GOW3_PERF_DIAG report, to find the consumer behind the remaining readback waits.
+// spartanport: who asked for a pending image readback to reach RAM. Only used by the
+// SPARTAN_PERF_DIAG report, to find the consumer behind the remaining readback waits.
 enum class ReadbackSource : std::uint8_t {
     Unknown,
     BufferObtain,

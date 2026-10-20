@@ -1,18 +1,18 @@
 // Runs the damage-hook stub (src/actor_hook.h) on fake actors and checks what it records, then
-// the overlay's validity rules (gpu/shim/gow3_actors.h).
+// the overlay's validity rules (gpu/shim/spartanport_actors.h).
 #include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <windows.h>
 #include "../src/actor_hook.h"
-#include "gow3_actors.h"
+#include "spartanport_actors.h"
 
 // The stub ends with a jump to its resume address; here that is a `ret` back to the test.
 extern "C" void actor_hook_return();
 asm(".globl actor_hook_return\nactor_hook_return:\n    ret\n");
 
-alignas(64) static Gow3ActorSlot slots[2];
+alignas(64) static SpartanActorSlot slots[2];
 
 static void hit(unsigned char* stub, unsigned char* actor) {
     asm volatile("mov %0, %%r13\n\tcall *%1\n\t"
@@ -28,15 +28,15 @@ static void set_health(unsigned char* actor, float health, float max_health, boo
 }
 
 int main() {
-    assert(gow3_actor_signature_match(gow3_actor_original, GOW3_ACTOR_HOOK_LENGTH));
+    assert(spartanport_actor_signature_match(spartanport_actor_original, SPARTAN_ACTOR_HOOK_LENGTH));
     const unsigned char other[] = {0x49, 0x8b, 0x45, 0x00, 0x4c, 0x89, 0xee};
-    assert(!gow3_actor_signature_match(other, sizeof(other)));
-    assert(!gow3_actor_signature_match(gow3_actor_original, GOW3_ACTOR_HOOK_LENGTH - 1));
+    assert(!spartanport_actor_signature_match(other, sizeof(other)));
+    assert(!spartanport_actor_signature_match(spartanport_actor_original, SPARTAN_ACTOR_HOOK_LENGTH - 1));
 
     auto* stub = static_cast<unsigned char*>(
         VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
     assert(stub);
-    const unsigned n = gow3_actor_build_stub(stub, reinterpret_cast<uintptr_t>(slots),
+    const unsigned n = spartanport_actor_build_stub(stub, reinterpret_cast<uintptr_t>(slots),
                                              reinterpret_cast<uintptr_t>(&actor_hook_return));
     assert(n < 256);
 
@@ -53,9 +53,9 @@ int main() {
     hit(stub, enemy);
     assert(slots[1].health == 0.0f && slots[1].seq == 2 && slots[0].seq == 1);
 
-    assert(Gow3Actors::Valid(250.0f, 1000.0f) && Gow3Actors::Fraction(250.0f, 1000.0f) == 0.25f);
-    assert(!Gow3Actors::Valid(NAN, 100.0f) && !Gow3Actors::Valid(10.0f, 0.0f));
-    assert(!Gow3Actors::Valid(-1.0f, 100.0f) && !Gow3Actors::Valid(200.0f, 100.0f));
-    assert(!Gow3Actors::Valid(1.0f, 1e9f) && Gow3Actors::Fraction(NAN, 1.0f) == 0.0f);
+    assert(SpartanActors::Valid(250.0f, 1000.0f) && SpartanActors::Fraction(250.0f, 1000.0f) == 0.25f);
+    assert(!SpartanActors::Valid(NAN, 100.0f) && !SpartanActors::Valid(10.0f, 0.0f));
+    assert(!SpartanActors::Valid(-1.0f, 100.0f) && !SpartanActors::Valid(200.0f, 100.0f));
+    assert(!SpartanActors::Valid(1.0f, 1e9f) && SpartanActors::Fraction(NAN, 1.0f) == 0.0f);
     VirtualFree(stub, 0, MEM_RELEASE);
 }

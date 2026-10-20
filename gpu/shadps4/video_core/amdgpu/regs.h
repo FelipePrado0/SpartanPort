@@ -193,7 +193,7 @@ union Regs {
     void SetDefaults();
 };
 
-// gow3: register blocks written by a stretch of packets, and their values at its end. The
+// spartanport: register blocks written by a stretch of packets, and their values at its end. The
 // draw-preparation scanner records one per submission so a worker reaches the state at the
 // start of any later submission without replaying the packets in between.
 struct RegDirty {
