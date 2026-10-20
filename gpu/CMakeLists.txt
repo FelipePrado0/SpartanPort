@@ -394,6 +394,15 @@ add_executable(perf-overlay-test EXCLUDE_FROM_ALL ../tests/test_perf_overlay.cpp
     shim/spartanport_settings.cpp)
 target_include_directories(perf-overlay-test PRIVATE shim)
 target_compile_options(perf-overlay-test PRIVATE -UNDEBUG)
+add_executable(chinese-ui-test EXCLUDE_FROM_ALL ../tests/test_chinese_ui.cpp
+    third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp
+    third_party/imgui/imgui_tables.cpp third_party/imgui/imgui_widgets.cpp)
+target_include_directories(chinese-ui-test PRIVATE shim third_party/imgui)
+target_compile_options(chinese-ui-test PRIVATE -UNDEBUG)
+target_compile_definitions(chinese-ui-test PRIVATE IMGUI_DISABLE_SSE)
+if (WIN32)
+    target_link_libraries(chinese-ui-test PRIVATE user32 gdi32 imm32)
+endif()
 add_executable(cheat-hooks-test EXCLUDE_FROM_ALL ../tests/test_cheat_hooks.cpp)
 target_compile_options(cheat-hooks-test PRIVATE -UNDEBUG)
 add_executable(signatures-test EXCLUDE_FROM_ALL ../tests/test_signatures.cpp)

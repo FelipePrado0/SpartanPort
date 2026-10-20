@@ -233,9 +233,11 @@ def pick_fonts(families):
     # Registration can succeed in fontconfig even when Tk uses the X core font backend.
     FONT_LOADED = FONT_LOADED and bool({'Cinzel Black', 'Cinzel'} & available)
     pick = lambda names: next((name for name in names if name in available), names[-1])
-    UI_FONT = pick(('Segoe UI', 'Helvetica Neue', 'Noto Sans', 'DejaVu Sans', 'Helvetica'))
+    chinese = ('Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Noto Sans SC',
+               'Source Han Sans SC', 'PingFang SC', 'WenQuanYi Micro Hei') if LANG == 'zh' else ()
+    UI_FONT = pick(chinese + ('Segoe UI', 'Helvetica Neue', 'Noto Sans', 'DejaVu Sans', 'Helvetica'))
     MONO_FONT = pick(('Consolas', 'Menlo', 'Noto Sans Mono', 'DejaVu Sans Mono', 'Courier'))
-    SERIF_FONT = pick(('Georgia', 'Noto Serif', 'DejaVu Serif', 'Times'))
+    SERIF_FONT = UI_FONT if LANG == 'zh' else pick(('Georgia', 'Noto Serif', 'DejaVu Serif', 'Times'))
 
 
 def positive_number(value):
@@ -1137,6 +1139,8 @@ def game_environment(s):
     env['SPARTAN_PATCHES_DIR'] = s['patches_dir'] or str(DATA_DIR / 'patches')
     env['SPARTAN_PATCHES_CONFIG'] = str(DATA_DIR / 'patches.json')
     env['SPARTAN_LANGUAGE'] = s['language']
+    # Menu language is independent from the game's text and voice language.
+    env['SPARTAN_UI_LANGUAGE'] = s.get('ui_language') or windows_language()
     env['SPARTAN_DISCORD'] = '1' if s.get('discord_rpc') else '0'
     if s['hdr']:
         env['SPARTAN_HDR'] = '1'
@@ -1414,7 +1418,7 @@ class Launcher:
         s.configure('Link.TButton', background=PANEL, foreground=MUTED, borderwidth=0, padding=self.px((2, 1)),
                     font=self.font(UI_FONT, 9, 'underline'))
         s.map('Link.TButton', background=[('active', PANEL)], foreground=[('active', TEXT)])
-        s.configure('Play.TButton', background=ACCENT, foreground='#f4ece0', font=self.heading_font(15, bold=True),
+        s.configure('Play.TButton', background=ACCENT, foreground='#f4ece0', font=self.heading_font(11 if LANG == 'zh' else 15, bold=True),
                     padding=self.px((36, 10)), borderwidth=0)
         s.map('Play.TButton', background=[('active', ACCENT_HI), ('disabled', '#2e1c1c')],
               foreground=[('disabled', '#8a7a78')])

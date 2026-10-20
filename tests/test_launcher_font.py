@@ -63,6 +63,32 @@ class RegisterFontTest(unittest.TestCase):
             self.assertFalse(launcher.register_font(launcher.FONT_FILE))
 
 
+class ChineseFontTest(unittest.TestCase):
+    def setUp(self):
+        self.saved = launcher.LANG, launcher.UI_FONT, launcher.MONO_FONT, launcher.SERIF_FONT, launcher.FONT_LOADED
+
+    def tearDown(self):
+        launcher.LANG, launcher.UI_FONT, launcher.MONO_FONT, launcher.SERIF_FONT, launcher.FONT_LOADED = self.saved
+
+    def test_chinese_prefers_windows_cjk_font_for_body_and_headings(self):
+        launcher.LANG = 'zh'
+        launcher.pick_fonts(['Microsoft YaHei UI', 'Segoe UI', 'Georgia', 'Consolas'])
+        self.assertEqual(launcher.UI_FONT, 'Microsoft YaHei UI')
+        self.assertEqual(launcher.heading_font(12), ('Microsoft YaHei UI', 12))
+
+    def test_chinese_can_use_noto_on_linux(self):
+        launcher.LANG = 'zh'
+        launcher.pick_fonts(['Noto Sans CJK SC', 'DejaVu Sans', 'DejaVu Serif'])
+        self.assertEqual(launcher.UI_FONT, 'Noto Sans CJK SC')
+        self.assertEqual(launcher.SERIF_FONT, 'Noto Sans CJK SC')
+
+    def test_english_font_preferences_are_unchanged(self):
+        launcher.LANG = 'en'
+        launcher.pick_fonts(['Microsoft YaHei UI', 'Segoe UI', 'Georgia', 'Consolas'])
+        self.assertEqual(launcher.UI_FONT, 'Segoe UI')
+        self.assertEqual(launcher.SERIF_FONT, 'Georgia')
+
+
 class HeadingFontTest(unittest.TestCase):
     def setUp(self):
         self.saved = launcher.LANG, launcher.FONT_LOADED

@@ -230,6 +230,22 @@ multisampling off` or `on` is what was applied. Choose **Off** if the lines appe
 card and **On** to keep multisampling anyway. Off and On set `SPARTAN_NO_MSAA=1` or `0`; Automatic
 passes an inherited `SPARTAN_NO_MSAA` through. Applies on the next game launch.
 
+### Chinese interface
+
+Select **简体中文** under **Advanced → Launcher language** for the launcher and the
+Insert / R3+L2 menu. This does not change the game's text or voice language. Direct launches
+without the launcher can set `SPARTAN_UI_LANGUAGE=zh`.
+
+The launcher prefers an installed CJK font (Microsoft YaHei UI on Windows, Noto Sans CJK SC
+or another available CJK family elsewhere). The in-game menu merges an installed Chinese
+font with its embedded font: Windows YaHei/SimHei, common Linux Noto/WenQuanYi locations,
+or macOS PingFang. No additional font is distributed. If no usable CJK font is found, the
+in-game menu keeps English and logs the reason instead of displaying missing-glyph boxes.
+
+The headless `chinese-ui-test` CMake target checks translation fallback, printf arguments,
+font merging and Chinese glyphs without a game dump or Vulkan device. Its real glyph checks
+are skipped, with a message, on systems without an installed CJK font.
+
 ## Keyboard controls
 
 Defaults; change them on the launcher's **Controls** page, under **Keyboard & Mouse Mapping**.

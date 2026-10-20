@@ -1429,6 +1429,473 @@ for _lang, _text in (('pl', 'Polski'), ('fr', 'Polonais'), ('de', 'Polnisch'),
                      ('zh', '波兰语'), ('ja', 'ポーランド語'), ('ko', '폴란드어')):
     EXTRA.setdefault(_lang, {})['Polish'] = _text
 
+# Simplified Chinese: current launcher pages, controls and diagnostics.
+EXTRA.setdefault('zh', {})['Portuguese (Brazil)'] = '葡萄牙语（巴西）'
+EXTRA.setdefault('zh', {}).update({'   (game patches)': '   （游戏补丁）',
+ '   … and {} more': '   ……另有 {} 项',
+ ' Previous saves: {}.': ' 原存档备份：{}。',
+ '(none)': '（无）',
+ '1 (lowest latency)': '1（最低延迟）',
+ '1 file': '1 个文件',
+ '1 is the lowest input latency; more can raise FPS when the graphics card is the limit.': '1 '
+                                                                                           '的输入延迟最低；显卡成为性能瓶颈时，增加此值可能提高帧率。',
+ 'About 40 to 66 FPS in a heavy scene. Needs deferred GPU readbacks. Switch it off if lighting or objects look wrong.': '高负载场景约从 '
+                                                                                                                        '40 '
+                                                                                                                        '提升至 '
+                                                                                                                        '66 '
+                                                                                                                        '帧。需要延迟 '
+                                                                                                                        'GPU '
+                                                                                                                        '回读；若光照或物体异常，请关闭。',
+ 'Absolute': '绝对位置',
+ 'Adaptive mouse (experimental)': '自适应鼠标（实验性）',
+ 'Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.': '自适应鼠标：每次旋转步进所需的鼠标移动距离。也可在游戏内菜单调整。',
+ 'Add to Steam': '添加到 Steam',
+ 'Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.': '按住 '
+                                                                                                                                                                                                                                                                                                          'L2 '
+                                                                                                                                                                                                                                                                                                          '时用鼠标瞄准（赫利俄斯之首、阿波罗之弓）。相对模式：摇杆跟随鼠标移动，停止移动时回中。绝对模式：以按下 '
+                                                                                                                                                                                                                                                                                                          'L2 '
+                                                                                                                                                                                                                                                                                                          '时的鼠标位置为中心，按鼠标偏移控制摇杆。也可在游戏内菜单调整。',
+ 'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.': '按住 '
+                                                                                                                                       'L2 '
+                                                                                                                                       '用鼠标瞄准时，数值越低，所需移动距离越大；越高则越小。也可在游戏内菜单调整。',
+ 'Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.': '允许按 '
+                                                                                                                                                             'X '
+                                                                                                                                                             '键跳过过场动画。感谢 '
+                                                                                                                                                             'illusion0001（illusionyy）的 '
+                                                                                                                                                             'PS3 '
+                                                                                                                                                             '补丁为此提供便利。',
+ 'Anisotropic filtering': '各向异性过滤',
+ 'Asks GameMode (gamemoderun) for the performance governor while the game runs.': '游戏运行时请求 '
+                                                                                  'GameMode（gamemoderun）使用性能模式。',
+ 'Aspect ratio': '宽高比',
+ 'Auto': '自动',
+ 'Automatic': '自动',
+ 'Automatic ({}: off)': '自动（{}：关闭）',
+ 'Automatic ({}: on)': '自动（{}：开启）',
+ 'Automatic lets SDL choose. Pick X11 if the window misbehaves on Wayland (it runs through XWayland).': '自动由 '
+                                                                                                        'SDL '
+                                                                                                        '选择。Wayland '
+                                                                                                        '下窗口异常时可选择 '
+                                                                                                        'X11（通过 '
+                                                                                                        'XWayland '
+                                                                                                        '运行）。',
+ 'Balanced (×1.7)': '均衡（×1.7）',
+ 'Borderless': '无边框',
+ 'Borderless covers the screen without changing the display mode.': '无边框模式铺满屏幕，不改变显示模式。',
+ 'Capture': '截屏键',
+ 'Change textures, sounds and text. Your game files stay untouched.': '替换纹理、声音和文字，原始游戏文件保持不变。',
+ 'Changes applied to the game code at start.': '启动时应用到游戏代码的修改。',
+ 'Cheats': '作弊选项',
+ 'Choose the folder of the update (eboot.bin, sce_sys)': '选择更新目录（包含 eboot.bin、sce_sys）',
+ 'Choose the game folder': '选择游戏目录',
+ 'Choose two separate folders for the game and its update, or leave the update folder empty.': '游戏和更新请选择两个不同目录，或将更新目录留空。',
+ 'Choose your game folder to play.': '请选择游戏目录以开始游玩。',
+ 'Circle': '圆圈',
+ "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.": '点击输入框后按键、点击鼠标按钮或滚动滚轮（{} '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   '秒后自动取消）。已被使用的输入会与原绑定互换；箭头可单独恢复默认绑定。斯巴达之怒同时按下 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   'L3 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   '和 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   'R3：勾选上方选项可改用单个输入。抓取同时按下 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   'L1 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   '和圆圈。闪避沿移动方向（WASD）进行，站立时向后闪避。触摸板右侧打开暂停菜单。Insert '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   '固定打开移植版菜单，不能绑定。下次启动游戏生效。',
+ 'Close the game before restoring saves.': '恢复存档前请先退出游戏。',
+ 'Community patches of the selected game, applied at start.': '所选游戏的社区补丁，启动时应用。',
+ 'Compile new shaders in the background': '后台编译新着色器',
+ 'Controller type': '手柄类型',
+ 'Controls': '控制',
+ 'Copying the system files…': '正在复制系统文件……',
+ 'Could not copy the files: {}': '无法复制文件：{}',
+ 'Could not restore: {}': '无法恢复：{}',
+ 'Could not save all settings. Check write permissions and free disk space, then try again.': '部分设置保存失败。请检查写入权限和磁盘剩余空间后重试。',
+ 'Creates spartanport.desktop in ~/.local/share/applications so the launcher and the game show their icon in the dock and the menu. Turning it off removes the entry.': '在 '
+                                                                                                                                                                        '~/.local/share/applications '
+                                                                                                                                                                        '创建 '
+                                                                                                                                                                        'spartanport.desktop，使启动器和游戏在程序坞与菜单中显示图标。关闭时会删除该条目。',
+ 'Cross': '叉号',
+ 'D-pad down': '方向键下',
+ 'D-pad left': '方向键左',
+ 'D-pad right': '方向键右',
+ 'D-pad up': '方向键上',
+ 'Deferred GPU readbacks': '延迟 GPU 回读',
+ 'Delete': '删除',
+ 'Details': '详细信息',
+ 'Device': '设备',
+ 'Diagnostics (for development)': '诊断（开发用途）',
+ 'Display': '显示',
+ 'Display mode': '显示模式',
+ 'Dodge': '闪避',
+ 'Drop a mod folder or .zip in the mods folder.': '将模组文件夹或 .zip 放入模组目录。',
+ 'Enable the upscaler (experimental)': '启用超分辨率（实验性）',
+ 'Engine frame rate': '引擎帧率',
+ 'Enlarges a smaller game image to the window. With Render resolution 720p (Performance) it raises the FPS; at the size of the window it does nothing.': '将较低分辨率的游戏画面放大到窗口大小。渲染分辨率设为 '
+                                                                                                                                                         '720p '
+                                                                                                                                                         '时可提高帧率；与窗口大小相同时无作用。',
+ 'Experimental': '实验性',
+ 'F11 captures a frame for analysis': '按 F11 捕获一帧用于分析',
+ 'F12 in the game': '游戏中按 F12',
+ 'Fast screen effects (Rage of Sparta, weapons)': '快速屏幕特效（斯巴达之怒、武器）',
+ 'Fast shader cache loading (parallel)': '快速加载着色器缓存（并行）',
+ 'Fewer stutters in new areas: the game keeps running while new shaders compile. An object or effect may appear a moment later. Switch it off if something stays missing.': '进入新区域时减少卡顿：编译新着色器时游戏继续运行，物体或特效可能稍后出现。若内容持续缺失，请关闭。',
+ 'Fewer waits for the GPU. Switch it off if textures or shadows look wrong.': '减少等待 GPU；若纹理或阴影异常，请关闭。',
+ 'Files': '文件',
+ 'Files layered over the game at start; the game files are never changed.': '启动时覆盖加载的文件；原始游戏文件不会改变。',
+ 'Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.': '增大视频内存区，修复纹理损坏，让游戏使用更多显存存放纹理与特效。DMEM '
+                                                                                                                                                                                                                                                                               '需至少 '
+                                                                                                                                                                                                                                                                               '2048 '
+                                                                                                                                                                                                                                                                               'MB，否则会崩溃。此补丁与分辨率补丁只能启用其中一个。',
+ 'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.': '修复启动时帧率计数仍在运行但画面黑屏的问题：帧调度索引从 '
+                                                                                                                                                                                              '2 '
+                                                                                                                                                                                              '开始，避免第二帧等待只能由自身触发的翻转事件。',
+ 'Folders': '目录',
+ 'For launcher only. Applies after Save.': '仅影响启动器，保存后生效。',
+ 'Frame rate and speed options.': '帧率与运行速度选项。',
+ 'Frame rate limit': '帧率上限',
+ 'Frames queued': '排队帧数',
+ 'GAME BUTTON': '游戏按键',
+ 'GAMEPAD': '手柄',
+ 'GPU data': 'GPU 数据',
+ 'GPU memory (previous behavior)': '显存（旧版方式）',
+ 'GPU wait and readback report in the log (every 5 s)': '在日志中记录 GPU 等待与回读（每 5 秒）',
+ 'GUI Scale': '界面缩放',
+ 'Game default': '游戏默认',
+ 'Game multisampling': '游戏多重采样',
+ 'Game patches': '游戏补丁',
+ 'Game reads GPU data without waiting (big FPS gain)': '游戏读取 GPU 数据时不等待（大幅提高帧率）',
+ 'GameMode': 'GameMode',
+ 'Gamepad': '手柄',
+ 'Gamepad Mapping': '手柄映射',
+ 'Gamepad names': '手柄按键名称',
+ 'General': '常规',
+ 'Grab': '抓取',
+ 'Graphics (experimental)': '图形（实验性）',
+ 'Graphics card': '显卡',
+ 'Hide': '隐藏',
+ 'Home': '主页',
+ 'Home button': 'Home 键',
+ 'How the game appears on your screen.': '游戏在屏幕上的显示方式。',
+ 'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.': '旋转摇杆提示的输入方式。键盘模式：依次按键完成旋转。从上方开始半圈按 '
+                                                                                                                                                                                                                                                                                   'D '
+                                                                                                                                                                                                                                                                                   'S '
+                                                                                                                                                                                                                                                                                   'A（顺时针）或 '
+                                                                                                                                                                                                                                                                                   'A '
+                                                                                                                                                                                                                                                                                   'S '
+                                                                                                                                                                                                                                                                                   'D，从下方开始按 '
+                                                                                                                                                                                                                                                                                   'A '
+                                                                                                                                                                                                                                                                                   'W '
+                                                                                                                                                                                                                                                                                   'D '
+                                                                                                                                                                                                                                                                                   '或 '
+                                                                                                                                                                                                                                                                                   'D '
+                                                                                                                                                                                                                                                                                   'W '
+                                                                                                                                                                                                                                                                                   'A；整圈按 '
+                                                                                                                                                                                                                                                                                   'D '
+                                                                                                                                                                                                                                                                                   'S '
+                                                                                                                                                                                                                                                                                   'A '
+                                                                                                                                                                                                                                                                                   'W '
+                                                                                                                                                                                                                                                                                   '或 '
+                                                                                                                                                                                                                                                                                   'A '
+                                                                                                                                                                                                                                                                                   'S '
+                                                                                                                                                                                                                                                                                   'D '
+                                                                                                                                                                                                                                                                                   'W。顺序错误会重新开始。自适应鼠标模式则用鼠标画出旋转轨迹。',
+ 'In-game button icons': '游戏内按键图标',
+ 'Infinite Double Jumps': '无限空中跳跃',
+ 'Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.': '显示项目、大小和位置：游戏内菜单（Insert／R3+L2）→ 性能叠加层。',
+ 'Joystick prompts': '摇杆提示输入',
+ 'KEYBOARD': '键盘',
+ 'Keep the mouse in the game window': '将鼠标限制在游戏窗口内',
+ 'Keeps powers and weapon effects at full FPS. Switch it off if a screen effect (blur, distortion, the color change of a power) looks stretched, shifted or wrong.': '让技能和武器特效保持全帧率。如果模糊、扭曲、技能变色等屏幕特效拉伸、错位或异常，请关闭。',
+ 'Key not supported': '不支持此按键',
+ 'Keyboard': '键盘',
+ 'Keyboard & Mouse Mapping': '键鼠映射',
+ 'Keyboard & mouse': '键盘与鼠标',
+ 'Keyboard (native)': '键盘（原生）',
+ 'Keyboard and mouse, button icons and gamepad mapping.': '键鼠、按键图标与手柄映射。',
+ "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Insert and R3+L2 always open the port's menu. Applied when the game starts.": '按键使用 '
+                                                                                                                                                                                                                                                                                                                                        'SDL '
+                                                                                                                                                                                                                                                                                                                                        '名称：字母、数字、Space、Return、Tab、Left '
+                                                                                                                                                                                                                                                                                                                                        'Shift、Left '
+                                                                                                                                                                                                                                                                                                                                        'Ctrl、Left '
+                                                                                                                                                                                                                                                                                                                                        'Alt、Backspace、Up、Down、Left、Right、F1 '
+                                                                                                                                                                                                                                                                                                                                        '至 '
+                                                                                                                                                                                                                                                                                                                                        'F12。无法识别的名称会保留默认值，并记录到日志。手柄 '
+                                                                                                                                                                                                                                                                                                                                        'L2/R2 '
+                                                                                                                                                                                                                                                                                                                                        '保留为扳机。Insert '
+                                                                                                                                                                                                                                                                                                                                        '和 '
+                                                                                                                                                                                                                                                                                                                                        'R3+L2 '
+                                                                                                                                                                                                                                                                                                                                        '固定打开移植版菜单。下次启动游戏生效。',
+ "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert and R3+L2 always open the port's menu. Applied when the game starts.": '按键使用 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'SDL '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '名称：字母、数字、Space、Return、Tab、Left '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'Shift、Left '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'Ctrl、Left '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'Alt、Backspace、Up、Down、Left、Right、F1 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '至 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'F12。无法识别的名称会保留默认值，并记录到日志。手柄 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'L2/R2 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '保留为扳机。触摸板右侧打开暂停菜单；手柄按 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'L1 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '+ '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '触摸板右侧进入拍照模式。Insert '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '和 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'R3+L2 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '固定打开移植版菜单。下次启动游戏生效。',
+ 'L1 + Touchpad right': 'L1 + 触摸板右侧',
+ "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.": 'L2/R2 '
+                                                                                                                                                                                                 '保留为扳机。触摸板右侧打开暂停菜单；L1 '
+                                                                                                                                                                                                 '+ '
+                                                                                                                                                                                                 '触摸板右侧进入拍照模式。R3+L2 '
+                                                                                                                                                                                                 '固定打开移植版菜单。下次启动游戏生效。',
+ 'LS (left stick click)': 'LS（按下左摇杆）',
+ 'Language': '语言',
+ 'Launcher options, files and diagnostics.': '启动器选项、文件和诊断。',
+ 'Left stick click': '按下左摇杆',
+ 'Linux': 'Linux',
+ 'Load': '加载',
+ 'Load order': '加载顺序',
+ 'Load shader cache in the background': '后台加载着色器缓存',
+ 'Loading screen only: builds the cached pipelines on several CPU threads.': '仅在加载画面使用多个 CPU 线程构建缓存管线。',
+ 'Loose-file mods, each in its own folder with dvdroot_ps4.': '散装文件模组，每个模组独立放在包含 dvdroot_ps4 的文件夹中。',
+ 'Lower in the list wins': '列表下方优先',
+ 'Made before every start, newest first; the last {} are kept. Restoring backs up the current saves first.': '每次启动前备份，按新到旧排列；保留最近 '
+                                                                                                             '{} '
+                                                                                                             '份。恢复前会先备份当前存档。',
+ 'MangoHud overlay': 'MangoHud 性能叠加层',
+ 'Match my controller': '匹配当前手柄',
+ 'Menu entry and icon (AppImage)': '菜单条目和图标（AppImage）',
+ 'Minus (−)': '减号（−）',
+ 'Mouse prompt distance': '鼠标旋转提示距离',
+ 'Mute button': '静音键',
+ 'Native (1080p)': '原生（1080p）',
+ 'Native (1920 × 1080)': '原生（1920 × 1080）',
+ 'Native AA (×1.0)': '原生抗锯齿（×1.0）',
+ 'Native · 1920 × 1080 · 16:9': '原生 · 1920 × 1080 · 16:9',
+ 'No Wayland session detected.': '未检测到 Wayland 会话。',
+ 'No built-in patches for this game.': '此游戏没有内置补丁。',
+ 'No mods yet': '暂无模组',
+ 'No patch files for this game version yet.': '此游戏版本暂无补丁文件。',
+ 'Not installed.': '未安装。',
+ 'Off (default): the game runs without temporal upscaling. These upscalers are not calibrated for this game yet: expect ghosting or flicker. FSR 3.1 needs nothing else; FSR 4 needs the assets below, and without them the game uses FSR 3.1. The options on this page only take effect with this switch on.': '默认关闭，游戏不使用时域超分辨率。这些算法尚未针对本游戏校准，可能出现拖影或闪烁。FSR '
+                                                                                                                                                                                                                                                                                                                '3.1 '
+                                                                                                                                                                                                                                                                                                                '无需额外文件；FSR '
+                                                                                                                                                                                                                                                                                                                '4 '
+                                                                                                                                                                                                                                                                                                                '需要下方资源，缺失时会回退到 '
+                                                                                                                                                                                                                                                                                                                'FSR '
+                                                                                                                                                                                                                                                                                                                '3.1。本页选项仅在此开关开启时生效。',
+ 'Off (fixes black lines)': '关闭（修复黑线）',
+ 'Off allows tearing for the lowest latency.': '关闭可降低延迟，但可能出现画面撕裂。',
+ 'Only if the update is dumped apart from the game: it is laid over the game folder without changing either. Leave empty when the game folder already has the update.': '仅在更新与本体分开提取时填写：启动时覆盖加载，两个原始目录均不会改变。游戏目录已整合更新时请留空。',
+ 'Open folder': '打开目录',
+ 'Open mod folder': '打开模组目录',
+ 'Open mods folder': '打开模组目录',
+ 'Open the screenshots folder': '打开截图目录',
+ 'Original (default)': '原始图标（默认）',
+ 'Overlay': '性能叠加层',
+ 'PLAY': '开始游戏',
+ 'PS button': 'PS 键',
+ 'Patches': '补丁',
+ 'Performance (×2)': '性能（×2）',
+ 'Play': '开始游戏',
+ 'Plus (+)': '加号（+）',
+ 'Precise': '精确',
+ 'Preset': '预设',
+ 'Presets': '预设方案',
+ 'Press a key': '请按键',
+ 'Press a key or mouse': '请按键或点击鼠标',
+ 'Quality (×1.5)': '质量（×1.5）',
+ 'RS (right stick click)': 'RS（按下右摇杆）',
+ 'RUNNING': '运行中',
+ 'Rage of Sparta on one input (L3 + R3 together)': '单键释放斯巴达之怒（同时按下 L3 + R3）',
+ 'Records how the next frame is drawn into the captures folder.': '将下一帧的绘制过程记录到 captures 目录。',
+ 'Relative': '相对移动',
+ 'Render resolution': '渲染分辨率',
+ 'Repeat air jumps without landing. Also available in the in-game Cheats menu.': '可连续空中跳跃，无需落地。游戏内作弊菜单也可设置。',
+ 'Replace the current saves with the backup {}? The current saves are backed up first.': '用备份 {} '
+                                                                                         '替换当前存档？操作前会先备份当前存档。',
+ "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of two game files in the port's data folder (about 70 MB); your game folder is never changed. Applied when the game starts.": '将游戏内 '
+                                                                                                                                                                                                                                        'PlayStation '
+                                                                                                                                                                                                                                        '按键图标替换为所选手柄图标。在移植版 '
+                                                                                                                                                                                                                                        'data '
+                                                                                                                                                                                                                                        '目录生成两个游戏文件的副本（约 '
+                                                                                                                                                                                                                                        '70 '
+                                                                                                                                                                                                                                        'MB），不改变原始游戏目录。下次启动游戏生效。',
+ 'Reset gamepad to defaults': '恢复默认手柄绑定',
+ 'Reset keyboard & mouse to defaults': '恢复默认键鼠绑定',
+ 'Reset to defaults': '恢复默认',
+ 'Resolution': '分辨率',
+ 'Restore': '恢复',
+ 'Reuse saved Vulkan pipelines. Disable to compare FPS with normal compilation. Takes effect on the next launch; saved caches are preserved.': '复用已保存的 '
+                                                                                                                                               'Vulkan '
+                                                                                                                                               '管线。关闭可与常规编译方式对比帧率。下次启动生效，已有缓存会保留。',
+ 'Right stick click': '按下右摇杆',
+ 'Right stick sensitivity': '右摇杆灵敏度',
+ 'Right stick style': '右摇杆模式',
+ 'Save': '保存',
+ 'Save backups': '存档备份',
+ 'Saves': '存档',
+ 'Saves restored from {}.': '已从 {} 恢复存档。',
+ "Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves.": '将不含性能叠加层的游戏画面保存为 '
+                                                                                                  'PNG，位于用户存档目录中的 '
+                                                                                                  'screenshots '
+                                                                                                  '文件夹。',
+ 'Screenshots': '截图',
+ 'Select Very Hard without completing the game. Does not change existing save difficulty. In-game: enable before opening New Game.': '无需通关即可选择极难模式，不改变已有存档难度。请在打开“新游戏”前启用。',
+ 'Shaders': '着色器',
+ 'Sharper floors and walls seen at an angle, at little cost on most graphics cards.': '斜视地面和墙壁时纹理更清晰，多数显卡的性能开销很小。',
+ 'Shortcut created:': '已创建快捷方式：',
+ 'Show Discord Rich Presence': '显示 Discord 游玩状态',
+ 'Show performance overlay': '显示性能叠加层',
+ 'Shows MangoHud (FPS, frame times, temperatures) through its Vulkan layer.': '通过 Vulkan 图层显示 '
+                                                                              'MangoHud（帧率、帧时间、温度）。',
+ 'Shows only the game name and the time played on your Discord profile.': '仅在 Discord 个人资料中显示游戏名称与游玩时长。',
+ 'Shows the render resolutions of this shape only.': '只显示所选宽高比的渲染分辨率。',
+ 'Shows where the frame waits for the GPU and which reads cause it. For performance tests.': '记录每帧等待 GPU '
+                                                                                             '的位置及相关读取，供性能测试使用。',
+ 'Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.': '跳过开场标志。感谢 '
+                                                                                                                'illusion0001（illusionyy）的 '
+                                                                                                                'PS3 '
+                                                                                                                '补丁为此提供便利。',
+ 'Square': '方块',
+ 'Steam is open. Close it completely (Steam > Exit) and click again: Steam rewrites its shortcuts when it closes.': 'Steam '
+                                                                                                                    '正在运行。请完全退出（Steam '
+                                                                                                                    '→ '
+                                                                                                                    '退出）后重试；Steam '
+                                                                                                                    '关闭时会重写快捷方式。',
+ 'Steam was not found for this user.': '未找到当前用户的 Steam。',
+ 'Stream buffer memory': '流式缓冲区内存',
+ "Strength of the gamepad's vibration; 0% turns it off.": '手柄震动强度；0% 为关闭。',
+ 'System RAM (cached, default)': '系统内存（缓存，默认）',
+ 'System RAM (uncached)': '系统内存（不缓存）',
+ 'System RAM can improve FPS on NVIDIA laptops. Choose GPU memory to restore the previous behavior. Applies on the next game launch.': '使用系统内存可提高部分 '
+                                                                                                                                       'NVIDIA '
+                                                                                                                                       '笔记本的帧率。选择显存可恢复旧版方式。下次启动游戏生效。',
+ 'Textures': '纹理',
+ 'The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.': '运行游戏的显卡。若误用集成显卡，请选择独立显卡。',
+ 'The engine frame rate (below) is the highest it can go.': '最高不会超过下方设置的引擎帧率。',
+ 'The files in {} look like a PKG extraction: the system files (param.sfo, icon0.png, pic1.png and the rest) are in\n\n{}\n\nCopy all of them into its sce_sys folder now? Files already there are kept.': '{} '
+                                                                                                                                                                                                           '中的文件看起来来自 '
+                                                                                                                                                                                                           'PKG '
+                                                                                                                                                                                                           '提取，系统文件（param.sfo、icon0.png、pic1.png '
+                                                                                                                                                                                                           '等）位于\n'
+                                                                                                                                                                                                           '\n'
+                                                                                                                                                                                                           '{}\n'
+                                                                                                                                                                                                           '\n'
+                                                                                                                                                                                                           '现在将它们复制到 '
+                                                                                                                                                                                                           'sce_sys '
+                                                                                                                                                                                                           '目录？已有文件会保留。',
+ 'The game dump is incomplete. Missing or empty files:\n\n{}\n\nDump the game again, or copy these files from a complete dump.': '游戏文件不完整，以下文件缺失或为空：\n'
+                                                                                                                                 '\n'
+                                                                                                                                 '{}\n'
+                                                                                                                                 '\n'
+                                                                                                                                 '请重新提取游戏，或从完整游戏副本中复制这些文件。',
+ 'The game folder has no sce_sys/pic1.png for the pictures.': '游戏目录缺少 sce_sys/pic1.png，无法显示背景图。',
+ 'The game opens at once and the saved shaders load while you play; a small note in the corner shows the progress. Switch it off to wait on the loading screen instead.': '游戏立即打开，缓存着色器在游玩时加载，角落显示进度。关闭则在加载画面等待完成。',
+ 'The game renders at this size; a resolution patch replaces the texture fix and reserves the memory it needs.': '游戏按此尺寸渲染；分辨率补丁会替代纹理修复，并预留所需内存。',
+ 'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.': '读取游戏文件时停止运行，游戏文件可能不完整。请重新提取 '
+                                                                                                                                                    'PKG，并确认游戏目录约为 '
+                                                                                                                                                    '40 '
+                                                                                                                                                    'GB。',
+ "The game's 2-sample depth buffer, read as a texture by its lighting. AMD's and Intel's Windows drivers read it wrong and the lighting shows black lines, so Automatic turns multisampling off on those cards (Radeon, Arc) and keeps it on elsewhere (NVIDIA). Off and On force the choice on any card.": '游戏使用双重采样深度缓冲作为光照纹理。AMD '
+                                                                                                                                                                                                                                                                                                            '和 '
+                                                                                                                                                                                                                                                                                                            'Intel '
+                                                                                                                                                                                                                                                                                                            '的 '
+                                                                                                                                                                                                                                                                                                            'Windows '
+                                                                                                                                                                                                                                                                                                            '驱动可能读取错误并产生黑线；自动模式会在 '
+                                                                                                                                                                                                                                                                                                            'Radeon、Arc '
+                                                                                                                                                                                                                                                                                                            '显卡上关闭多重采样，在 '
+                                                                                                                                                                                                                                                                                                            'NVIDIA '
+                                                                                                                                                                                                                                                                                                            '上保留。也可手动强制开启或关闭。',
+ 'The highest frame rate the game itself runs at (a game patch).': '游戏引擎自身运行的最高帧率（通过游戏补丁实现）。',
+ 'The shortcut "{}" was added to Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.': '快捷方式“{}”已添加到 '
+                                                                                                                                            'Steam（账户：{}），包含图标、封面、背景和标志。打开 '
+                                                                                                                                            'Steam '
+                                                                                                                                            '即可在库中查看。',
+ 'The shortcut "{}" was updated in Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.': '快捷方式“{}”已在 '
+                                                                                                                                              'Steam '
+                                                                                                                                              '中更新（账户：{}），包含图标、封面、背景和标志。打开 '
+                                                                                                                                              'Steam '
+                                                                                                                                              '即可在库中查看。',
+ 'The size the game draws at; higher is sharper and slower. A resolution patch replaces the texture fix and reserves the memory it needs.': '游戏绘制画面的尺寸；越高越清晰，但性能开销越大。分辨率补丁会替代纹理修复，并预留所需内存。',
+ 'The update folder {} is incomplete. Missing or empty files:\n\n{}\n\nChoose the folder of the update (eboot.bin, sce_sys), or leave it empty.': '更新目录 '
+                                                                                                                                                  '{} '
+                                                                                                                                                  '不完整，以下文件缺失或为空：\n'
+                                                                                                                                                  '\n'
+                                                                                                                                                  '{}\n'
+                                                                                                                                                  '\n'
+                                                                                                                                                  '请选择包含 '
+                                                                                                                                                  'eboot.bin、sce_sys '
+                                                                                                                                                  '的更新目录，或留空。',
+ 'Touchpad click': '点击触摸板',
+ 'Touchpad left': '触摸板左侧',
+ 'Touchpad right': '触摸板右侧',
+ 'Triangle': '三角',
+ 'Type a name for the preset first.': '请先输入预设名称。',
+ 'Ultra Performance (×3)': '极致性能（×3）',
+ 'Unlimited': '无限制',
+ 'Unlock Very Hard': '解锁极难模式',
+ 'Update folder (optional)': '更新目录（可选）',
+ 'Use pipeline binary cache (A/B test)': '使用管线二进制缓存（对比测试）',
+ 'VSync': '垂直同步',
+ 'Vibration': '震动',
+ 'Website': '网站',
+ 'Which gamepad button presses each button of the game.': '选择触发各游戏动作的手柄按键。',
+ 'Which key or gamepad button presses each button of the game.': '选择触发各游戏动作的键盘或手柄按键。',
+ 'Which key or mouse input presses each button of the game.': '选择触发各游戏动作的键盘或鼠标输入。',
+ 'While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.': '游玩时将鼠标限制在游戏窗口，避免点到其他屏幕或程序。打开游戏内菜单或切换窗口时释放鼠标。也可在游戏内菜单调整。',
+ 'Window system': '窗口系统',
+ 'Windowed': '窗口化',
+ 'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.': 'Windows '
+                                                                                                                                                                                    '无法预留游戏所需内存。请关闭其他程序，或增大系统分页文件（例如初始 '
+                                                                                                                                                                                    '16384 '
+                                                                                                                                                                                    'MB、最大 '
+                                                                                                                                                                                    '32768 '
+                                                                                                                                                                                    'MB）后重试。',
+ 'Xbox button': 'Xbox 键',
+ 'Your game dump, saves and language.': '游戏文件、存档和语言。',
+ 'Your own dump of the game (eboot.bin, sce_module, sce_sys): God of War III Remastered, any region and version.': '你自己的游戏文件（eboot.bin、sce_module、sce_sys）；支持各地区和版本的战神 '
+                                                                                                                   '3 '
+                                                                                                                   '重制版。',
+ 'Your own dump of the game (eboot.bin, sce_module, sce_sys): SpartanPort, any region and version.': '你自己的战神 '
+                                                                                                     '3 '
+                                                                                                     '重制版游戏文件（eboot.bin、sce_module、sce_sys），支持各地区和版本。',
+ 'Your own dump of the game (eboot.bin, sce_module, sce_sys); God of War III Remastered: CUSA01623, version 01.02 for the community patches.': '你自己的游戏文件（eboot.bin、sce_module、sce_sys）；社区补丁要求战神 '
+                                                                                                                                               '3 '
+                                                                                                                                               '重制版 '
+                                                                                                                                               'CUSA01623、01.02 '
+                                                                                                                                               '版本。',
+ 'Your own dump of the game (eboot.bin, sce_module, sce_sys); SpartanPort: CUSA01623, version 01.02 for the community patches.': '你自己的战神 '
+                                                                                                                                 '3 '
+                                                                                                                                 '重制版游戏文件（eboot.bin、sce_module、sce_sys）；社区补丁要求 '
+                                                                                                                                 'CUSA01623、01.02 '
+                                                                                                                                 '版本。',
+ 'by {}': '作者：{}',
+ 'game patches': '游戏补丁',
+ 'restart': '需重启',
+ 'shadPS4/GoldHEN XML patch files for this game version. Empty: {}': '适用于此游戏版本的 shadPS4／GoldHEN XML '
+                                                                     '补丁。留空时使用：{}',
+ '{} (a folder, not a file)': '{}（应为文件夹，而非文件）',
+ '{} (empty)': '{}（为空）',
+ '{} (not a param.sfo)': '{}（不是 param.sfo）',
+ '{} (unreadable)': '{}（无法读取）',
+ '{} files': '{} 个文件',
+ '{} not found in this eboot.bin at the last start (see Log)': '上次启动时未在此 eboot.bin 中找到 {}（见日志）',
+ '{} of {} active': '已启用 {}／{}',
+ '{} trigger': '{} 扳机',
+ '{} · 60 FPS engine · no patches for this game': '{} · 60 帧引擎 · 此游戏无可用补丁',
+ '{} · 60 FPS engine · patches not available for this game build': '{} · 60 帧引擎 · 此游戏版本无可用补丁',
+ '{} · version {}': '{} · 版本 {}',
+ '{} · version {} · {}': '{} · 版本 {} · {}',
+ '{} · version {} · {}. Resolution and frame rate patches follow Performance.': '{} · 版本 {} · '
+                                                                                '{}。分辨率和帧率补丁以“性能”页为准。',
+ '{} · {} FPS engine · {} patches': '{} · {} 帧引擎 · {} 个补丁',
+ '{} · {} more patches': '{} · 另有 {} 个补丁',
+ '… and {} more': '……另有 {} 项',
+ '⚠ 1 file is changed by two mods. {} wins.': '⚠ 两个模组修改了同一个文件，{} 优先。',
+ '⚠ Game version {}: the game patches need {}; none applied': '⚠ 游戏版本 {}：补丁要求版本 {}，未应用任何补丁',
+ '⚠ {} also in {}. {} wins.': '⚠ {} 也存在于 {}，{} 优先。',
+ '⚠ {} file(s) replaced by more than one mod (the last one wins):': '⚠ 有 {} 个文件被多个模组替换（最后加载的优先）：',
+ '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ 有 {} 个文件被多个模组修改，列表下方的优先。',
+ '✓ Game version {}: the game patches apply': '✓ 游戏版本 {}：可应用游戏补丁'})
+
 _tables = {}
 
 
