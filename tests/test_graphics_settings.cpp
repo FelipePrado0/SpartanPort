@@ -158,6 +158,52 @@ int main() {
     assert(v.rcas_strength == 75 && v.frames_queued == 1);
     assert(v.async_shaders);
     {
+        // Audio (src/runtime_audio.c): the master volume is 0 to 200 percent, the speaker layout is
+        // named by key, anything unknown is automatic; both survive a save and the environment wins.
+        namespace S = SpartanSettings;
+        assert(S::ParseAudioChannels("auto") == S::AudioChannelsAuto && S::ParseAudioChannels("stereo") == S::AudioStereo);
+        assert(S::ParseAudioChannels("5.1") == S::Audio51 && S::ParseAudioChannels("7.1") == S::Audio71);
+        assert(S::ParseAudioChannels("2.0") == S::AudioStereo && S::ParseAudioChannels("6") == S::Audio51);
+        assert(S::ParseAudioChannels("8") == S::Audio71 && S::ParseAudioChannels("") == S::AudioChannelsAuto);
+        assert(S::ParseAudioChannels("bogus") == S::AudioChannelsAuto && S::ParseAudioChannels("7") == S::AudioChannelsAuto);
+        for (int c = 0; c < S::AudioChannelsCount; ++c) assert(S::ParseAudioChannels(S::AudioChannelKeys[c]) == c);
+        {
+            std::ofstream out(path);
+            out << "master_volume=150\naudio_channels=5.1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 150 && v.audio_channels == S::Audio51);
+        SpartanSettings::Save();
+        const std::string audio_ini = Read(path);
+        assert(audio_ini.find("master_volume=150\n") != std::string::npos);
+        assert(audio_ini.find("audio_channels=5.1\n") != std::string::npos);
+        {
+            std::ofstream out(path);
+            out << "master_volume=900\naudio_channels=7.1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 200 && v.audio_channels == S::Audio71);
+        {
+            std::ofstream out(path);
+            out << "master_volume=-5\naudio_channels=bogus\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 0 && v.audio_channels == S::AudioChannelsAuto);
+        {
+            std::ofstream out(path);
+            out << "master_volume=\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 100);
+        _putenv_s("SPARTAN_AUDIO_VOLUME", "80");
+        _putenv_s("SPARTAN_AUDIO_CHANNELS", "stereo");
+        SpartanSettings::Load();
+        assert(v.master_volume == 80 && v.audio_channels == S::AudioStereo);
+        _putenv_s("SPARTAN_AUDIO_VOLUME", "");
+        _putenv_s("SPARTAN_AUDIO_CHANNELS", "");
+    }
+
+    {
         std::ofstream out(path);
         out << "cheat_double_jumps=1\ncheat_very_hard=1\n";
     }

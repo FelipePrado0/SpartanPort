@@ -360,6 +360,14 @@ extern "C" int spartanportgpu_vibration_percent(void) {
     return SpartanSettings::Get().vibration.load(std::memory_order_relaxed);
 }
 
+extern "C" int spartanportgpu_audio_volume_percent(void) {
+    return SpartanSettings::Get().master_volume.load(std::memory_order_relaxed);
+}
+
+extern "C" int spartanportgpu_audio_channels(void) {
+    return SpartanSettings::Get().audio_channels.load(std::memory_order_relaxed);
+}
+
 extern "C" void spartanportgpu_movie_picture(void) {
     Vulkan::MovieBars::Cutscenes().NotePicture(Vulkan::MovieBars::NowMs());
 }

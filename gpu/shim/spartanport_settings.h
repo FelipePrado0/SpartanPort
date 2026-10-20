@@ -9,8 +9,25 @@
 
 #include <atomic>
 #include <cstdint>
+#include <string_view>
 
 namespace SpartanSettings {
+
+/// Speaker layout the game's 7.1 audio is mixed down to (src/runtime_audio.c): the playback
+/// device's own, stereo, 5.1 or 7.1. spartanport.ini and SPARTAN_AUDIO_CHANNELS name them as below.
+enum AudioChannels : int { AudioChannelsAuto = 0, AudioStereo, Audio51, Audio71, AudioChannelsCount };
+inline constexpr std::string_view AudioChannelKeys[AudioChannelsCount] = {"auto", "stereo", "5.1", "7.1"};
+/// A layout key (also "2.0", "6" and "8"); anything else is automatic.
+inline int ParseAudioChannels(std::string_view value) {
+    for (int c = 0; c < AudioChannelsCount; ++c) {
+        if (value == AudioChannelKeys[c]) return c;
+    }
+    if (value == "2.0" || value == "2") return AudioStereo;
+    if (value == "6") return Audio51;
+    if (value == "8") return Audio71;
+    return AudioChannelsAuto;
+}
+inline constexpr int MasterVolumeMin = 0, MasterVolumeMax = 200, MasterVolumeDefault = 100;
 
 enum Upscaler : int { UpscalerOff = 0, UpscalerFsr3 = 1, UpscalerFsr4 = 2, UpscalerFsr411 = 3,
                       UpscalerTaa = 4, UpscalerDlss = 5, UpscalerCount };
@@ -77,6 +94,12 @@ struct Values {
     std::atomic<int> frames_queued{1};
     /// Controller vibration strength in percent; 0 turns it off (runtime_pad.c). Live.
     std::atomic<int> vibration{100};
+    /// Master volume of the game's audio in percent, 0 to 200: above 100 boosts the mix behind a
+    /// soft limiter (src/runtime_audio.c). Live.
+    std::atomic<int> master_volume{MasterVolumeDefault};
+    /// Speaker layout of the game's 7.1 audio (AudioChannels). Read when the game opens its
+    /// audio ports, so a change applies from the next start.
+    std::atomic<int> audio_channels{AudioChannelsAuto};
     /// Mouse movement in px that counts as one step of a stick prompt (runtime_pad.c). Live.
     std::atomic<int> mouse_prompt_distance{48};
     /// Keep the mouse in the game window while the game has it (window.cpp). Live.

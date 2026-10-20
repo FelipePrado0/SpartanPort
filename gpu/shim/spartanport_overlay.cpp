@@ -366,6 +366,18 @@ void GameTab() {
         ImGui::EndTable();
     }
 
+    Separator("Audio");
+    if (BeginRows("##audio")) {
+        SliderRow("Volume", s.master_volume, SpartanSettings::MasterVolumeMin, SpartanSettings::MasterVolumeMax, "%d%%",
+                  "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft "
+                  "limiter so loud scenes do not clip.");
+        static const char* const speakers[] = {"Automatic", "Stereo", "5.1 surround", "7.1 surround"};
+        ChoiceRow("Speakers", s.audio_channels, speakers, nullptr, SpartanSettings::AudioChannelsCount,
+                  "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. "
+                  "Applies from the next start.");
+        ImGui::EndTable();
+    }
+
     Separator("Multipliers");
     if (Button("Reset all to 1x")) {
         for (auto* m : {&s.red_orb_multiplier, &s.green_orb_multiplier, &s.blue_orb_multiplier,
