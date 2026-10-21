@@ -28,15 +28,63 @@ src/menu_hook.h turns into the end of the process, instead of what Quit Game doe
 copy of their block with the few instructions added, written over WadChoose's dead code.
 """
 import json
+import os
 from pathlib import Path
 import shutil
 import struct
 
 from glyphs import entries
 
-VERSION = 6  # of the patch: a change rebuilds the cached copy
+VERSION = 8  # of the patch: a change rebuilds the cached copy
 WAD = 'EXEC/WAD/PS4_LE/R_UI.WAD'
-LABEL = b'Exit to Desktop'
+LABELS = {
+    'en': b'Exit to Desktop',
+    'ja': b'Exit to Desktop',
+    'zh': b'Exit to Desktop',
+    'es': 'Salir al escritorio'.encode('utf-8'),
+    'fr': 'Quitter vers le bureau'.encode('utf-8'),
+    'de': 'Zurück zum Desktop'.encode('utf-8'),
+    'it': 'Esci al desktop'.encode('utf-8'),
+    'pl': 'Wyjdź do pulpitu'.encode('utf-8'),
+    'pt': 'Sair para a área de trabalho'.encode('utf-8'),
+    'ru': b'Exit to Desktop',
+}
+LABEL = LABELS['en']
+LANGUAGE_ALIASES = {
+    '0': 'ja', 0: 'ja',
+    '1': 'en', 1: 'en',
+    '2': 'fr', 2: 'fr',
+    '3': 'es', 3: 'es',
+    '4': 'de', 4: 'de',
+    '5': 'it', 5: 'it',
+    '7': 'pt', 7: 'pt',
+    '8': 'ru', 8: 'ru',
+    '10': 'zh', 10: 'zh',
+    '16': 'pl', 16: 'pl',
+    '17': 'pt', 17: 'pt',  # pt-BR (R_LANG_BR.WAD)
+    '18': 'en', 18: 'en',  # en-GB (R_LANG_UK.WAD)
+    '20': 'es', 20: 'es',  # es-419 (R_LANG_LA.WAD)
+    'br': 'pt', 'pt-br': 'pt', 'pt_br': 'pt',
+    'la': 'es', 'es-es': 'es', 'es_es': 'es', 'es-419': 'es', 'es_419': 'es',
+    'uk': 'en', 'en-us': 'en', 'en_us': 'en', 'en-gb': 'en', 'en_gb': 'en',
+    'zh-tw': 'zh', 'zh_tw': 'zh', 'zh-hant': 'zh', 'zh_hant': 'zh',
+}
+
+
+def resolve_label(language=None):
+    """(bytes, str) of (label_bytes, lang_key) for the given language (id or code, or SPARTAN_LANGUAGE)."""
+    if language is None:
+        language = os.environ.get('SPARTAN_LANGUAGE', '1')
+    if isinstance(language, str):
+        language = language.strip().lower()
+    key = LANGUAGE_ALIASES.get(language, language)
+    if isinstance(key, str):
+        key = key.lower()
+    if key in LABELS:
+        return LABELS[key], key
+    return LABELS['en'], 'en'
+
+
 EXIT_CALL = b'\x13\x0f\xff\x43'  # builtin 0xfff (src/menu_hook.h), then pop
 UP, DOWN, CONFIRM, REPLY = [0xe0, 0xec], [0xe4, 0xf0], [0xe9], [0x4b]  # trigger ids: pad events and the dialog's answer
 ROW_SIZE = 0x3c  # of the row's state record
@@ -209,7 +257,13 @@ def row_code(s, quit_, start, up, down, slot, label=True):
     ask = ask.replace(request, b'\x01' + be(MARK) + b'\x01' + be(5) + b'\x13\x00\x5e\x43')
     sound = transition(s, quit_, UP) + 5 + struct.unpack('>i', arrow[1:5])[0]  # the menu move sound
 
-    code, pieces = bytearray(LABEL + b'\0' if label else b''), {}
+    if isinstance(label, (bytes, bytearray)):
+        prefix = bytes(label) + b'\0'
+    elif label:
+        prefix = LABEL + b'\0'
+    else:
+        prefix = b''
+    code, pieces = bytearray(prefix), {}
     for kind, body in (('entry', highlight[0]), ('update', highlight[1])):
         pieces[kind] = start + len(code)
         code += body.replace(old, new)
@@ -280,7 +334,7 @@ def blank_line(s, record, local):
     return s.base + s.lit + entry_ref + found[0] + 1
 
 
-def patch(data):
+def patch(data, language=None):
     """Adds the rows to the R_UI.WAD in `data` (a bytearray); ValueError when this is not the
     script the patch was made for (nothing is changed then).
 
@@ -328,7 +382,9 @@ def patch(data):
             target = i - base - s.lit + 5 + struct.unpack_from('>i', work, i + 1)[0]
             if start <= target < end:
                 raise ValueError('WadChoose code is called from elsewhere')
-    pause_code, pause_pieces = row_code(s, quit_, start, up=fref(quit_), down=fref(cont), slot=b'menuItem5Select')
+    label_bytes, _ = resolve_label(language)
+    pause_code, pause_pieces = row_code(s, quit_, start, up=fref(quit_), down=fref(cont),
+                                        slot=b'menuItem5Select', label=label_bytes)
     options_start = start + len(pause_code)
     options_code, options_pieces = row_code(s, quit_, options_start, up=fref(dsp), down=fref(ctl),
                                             slot=b'menuItem4Select', label=False)
@@ -386,23 +442,24 @@ def patch(data):
     data[:] = work
 
 
-def build(game, out, source=None):
+def build(game, out, source=None, language=None):
     """{guest path: patched copy} for run.py to mount, from `source` (another patched copy) or the
     game's own R_UI.WAD; {} when the script is not the one this patch knows. The copy in
-    out/pause_menu is kept until the source changes."""
+    out/pause_menu is kept until the source or language changes."""
     source = Path(source or Path(game) / WAD)
     target = Path(out) / 'pause_menu'
     copy = target / Path(WAD).name
     if not source.is_file():
         return {}
-    stamp = json.dumps([VERSION, str(source), source.stat().st_size, source.stat().st_mtime_ns])
+    _label_bytes, lang_key = resolve_label(language)
+    stamp = json.dumps([VERSION, str(source), source.stat().st_size, source.stat().st_mtime_ns, lang_key])
     stamp_file = target / 'stamp.json'
     if not (stamp_file.is_file() and stamp_file.read_text() == stamp):
         shutil.rmtree(target, ignore_errors=True)
         target.mkdir(parents=True)
         data = bytearray(source.read_bytes())
         try:
-            patch(data)
+            patch(data, language=lang_key)
         except ValueError as error:
             print(f'Pause menu: {error}; no Exit to Desktop row', flush=True)
             return {}

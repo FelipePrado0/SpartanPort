@@ -19,6 +19,7 @@ LEGACY_DESKTOP_MARKER = 'X-GOW3-Integration=true'
 LEGACY_CONFIG_DIR = f'{LEGACY_NAME}-launcher'  # the launcher's settings, in AppData or ~/.config
 NEW_NAME, NEW_ENV = 'spartanport', 'SPARTAN_'
 MARKER = 'legacy-migrated'
+SHORTCUT_MARKER = 'shortcut-migrated'
 DATA_SKIP = ('user/cache', 'out')
 # Old binaries an update leaves behind, with the file that replaced each one.
 LEFTOVERS = {
@@ -123,24 +124,84 @@ def remove_leftovers(port_dir):
             pass  # in use or read-only: tried again at the next start
 
 
-def retarget_desktop_shortcut(port_dir, desktop=None):
-    """Windows: the desktop shortcut the old launcher made (named after the old title) is renamed
-    SpartanPort.lnk and pointed at SpartanPort.exe, when it started this installation."""
-    desktop = Path(desktop or Path(os.environ.get('USERPROFILE', Path.home())) / 'Desktop')
-    old, new = desktop / f'{LEGACY_TITLE}.lnk', desktop / 'SpartanPort.lnk'
-    target = Path(port_dir) / 'SpartanPort.exe'
-    if not old.is_file() or new.exists() or not target.is_file():
-        return False
-    script = ('$w=New-Object -ComObject WScript.Shell;$s=$w.CreateShortcut($env:SP_OLD);'
-              'if ($s.TargetPath -like ($env:SP_PORT + "\\*")) {'
-              '$n=$w.CreateShortcut($env:SP_NEW);$n.TargetPath=$env:SP_TARGET;$n.Arguments=$s.Arguments;'
-              '$n.WorkingDirectory=$env:SP_PORT;$n.IconLocation=$env:SP_TARGET+",0";$n.Save();'
-              'Remove-Item -LiteralPath $env:SP_OLD}')
-    env = {**os.environ, 'SP_OLD': str(old), 'SP_NEW': str(new), 'SP_PORT': str(Path(port_dir)),
-           'SP_TARGET': str(target)}
+def _windows_desktop():
     try:
-        subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', script], env=env,
-                       capture_output=True, timeout=20, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        import ctypes.wintypes
+        buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+        ctypes.windll.shell32.SHGetFolderPathW(None, 0x0010, None, 0, buf)
+        if buf.value:
+            return Path(buf.value)
+    except (AttributeError, OSError):
+        pass
+    return Path(os.environ.get('USERPROFILE', Path.home())) / 'Desktop'
+
+
+def retarget_desktop_shortcut(port_dir, desktop=None, data_dir=None):
+    """Windows: the desktop shortcut the old launcher made (named after the old title, pointing to
+    God of War III.exe with no arguments) is migrated non-destructively by creating SpartanPort.lnk
+    pointing to SpartanPort.exe. User-created, renamed, or customized shortcuts are preserved. Runs once."""
+    if os.name != 'nt':
+        return False
+    port_dir = Path(port_dir)
+    data_dir = Path(data_dir or port_dir)
+    marker = data_dir / SHORTCUT_MARKER
+    if marker.is_file():
+        return False
+    desktop = Path(desktop or _windows_desktop())
+    old, new = desktop / f'{LEGACY_TITLE}.lnk', desktop / 'SpartanPort.lnk'
+    target = port_dir / 'SpartanPort.exe'
+    legacy_target = port_dir / LEGACY_EXE
+    if new.exists() or not old.is_file():
+        try:
+            data_dir.mkdir(parents=True, exist_ok=True)
+            marker.write_text('', encoding='utf-8')
+        except OSError:
+            pass
+        return False
+    if not target.is_file():
+        return False
+    script = (
+        '$w = New-Object -ComObject WScript.Shell;'
+        '$s = $w.CreateShortcut($env:SP_OLD);'
+        'if (![string]::IsNullOrWhiteSpace($s.TargetPath)) {'
+        '  $target = [System.IO.Path]::GetFullPath($s.TargetPath);'
+        '  $legacy = [System.IO.Path]::GetFullPath($env:SP_LEGACY);'
+        '  $port = [System.IO.Path]::GetFullPath($env:SP_PORT);'
+        '  $work = if ([string]::IsNullOrWhiteSpace($s.WorkingDirectory)) { $port } else { [System.IO.Path]::GetFullPath($s.WorkingDirectory) };'
+        '  $args = if ($s.Arguments) { $s.Arguments.Trim() } else { "" };'
+        '  if (($target -ieq $legacy) -and ($args -eq "") -and ($work -ieq $port)) {'
+        '    $n = $w.CreateShortcut($env:SP_NEW);'
+        '    $n.TargetPath = $env:SP_TARGET;'
+        '    $n.WorkingDirectory = $env:SP_PORT;'
+        '    $n.IconLocation = $env:SP_TARGET + ",0";'
+        '    $n.Save();'
+        '    if (!(Test-Path -LiteralPath $env:SP_NEW)) { exit 1; }'
+        '  }'
+        '}'
+    )
+    env = {
+        **os.environ,
+        'SP_OLD': str(old),
+        'SP_NEW': str(new),
+        'SP_PORT': str(port_dir.resolve()),
+        'SP_TARGET': str(target.resolve()),
+        'SP_LEGACY': str(legacy_target.resolve()),
+    }
+    try:
+        proc = subprocess.run(
+            ['powershell', '-NoProfile', '-NonInteractive', '-Command', script],
+            env=env,
+            capture_output=True,
+            timeout=20,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+        )
     except (OSError, subprocess.SubprocessError):
         return False
+    if proc.returncode != 0:
+        return False
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        marker.write_text('', encoding='utf-8')
+    except OSError:
+        pass
     return new.is_file()

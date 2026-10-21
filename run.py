@@ -144,7 +144,7 @@ def glyph_mounts(env, probe, game, out):
     return [part for guest, path in mounts.items() for part in ('--mount', f'{guest}={path}')], style
 
 
-def pause_menu_args(game, out, mounts):
+def pause_menu_args(game, out, mounts, language=None):
     """Probe arguments for the copy of R_UI.WAD with the pause menu's Exit to Desktop row
     (scripts/pause_menu.py), made from the glyphs' copy when `mounts` has one. The probe mounts it
     over both once its hook is in (src/menu_hook.h). The game folder is never written."""
@@ -152,7 +152,7 @@ def pause_menu_args(game, out, mounts):
     guest = '/app0/' + pause_menu.WAD
     source = next((part.split('=', 1)[1] for part in mounts if part.startswith(guest + '=')), None)
     try:
-        made = pause_menu.build(game, out, source)
+        made = pause_menu.build(game, out, source, language=language)
     except OSError as error:
         print(f'Pause menu: {error}; no Exit to Desktop row', flush=True)
         return []
@@ -316,7 +316,7 @@ def main():
         if glyph_style:  # the in-game menu names the buttons the same way
             env['SPARTAN_GLYPHS'] = glyph_style
             derived.append('SPARTAN_GLYPHS')
-        mount_args = glyph_args + pause_menu_args(game, out, glyph_args)
+        mount_args = glyph_args + pause_menu_args(game, out, glyph_args, env.get('SPARTAN_LANGUAGE'))
         env['SPARTAN_DERIVED'] = ','.join(derived)
         # The guest memory pool is committed in full at start: a resolution patch above 1080p
         # can need more than 16 GB of RAM, and the game then closes when the page file cannot grow.
