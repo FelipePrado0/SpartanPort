@@ -2386,6 +2386,23 @@ EXTRA['zh'].update({
     'The game image cannot be read. See the Log for the reason.':
         '无法读取游戏镜像。原因请查看日志。',
 })
+EXTRA['id'].update({
+    'Choose the game image (.zar)': 'Pilih image game (.zar)',
+    'ZArchive game image': 'Image game ZArchive',
+    'All files': 'Semua file',
+    'Image…': 'Image…',
+    'A .zar game image cannot take a separate update folder. Pack the updated game, or choose its unpacked folder and the update folder.':
+        'Image game .zar tidak dapat memakai folder pembaruan terpisah. Paket game yang sudah diperbarui, atau pilih folder yang belum dipaket beserta folder pembaruan.',
+    'The game image cannot be read. See the Log for the reason.':
+        'Image game tidak dapat dibaca. Lihat Log untuk alasannya.',
+})
+# The AppImage updating itself from the GitHub release (#707): the 'id' texts predate it.
+EXTRA['id'].update({
+    'Version {} is out, but it has no Linux build yet.':
+        'Versi {} sudah dirilis, tetapi belum ada build Linux-nya.',
+    'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?':
+        'Launcher tidak dapat menulis ke {}, jadi tidak bisa menggantikan dirinya di sana. Buka halaman rilis untuk mengunduh versi baru secara manual?',
+})
 
 _tables = {}
 
