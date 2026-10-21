@@ -23,7 +23,9 @@ int main() {
 
     ImGui::CreateContext();
     auto* atlas = ImGui::GetIO().Fonts;
-    atlas->AddFontDefault();
+    ImFontConfig base_config;
+    base_config.SizePixels = 18.0f;
+    atlas->AddFontDefault(&base_config);
     assert(!ConfigureChineseFont(atlas, "zh", {}));
     assert(!chinese && std::strcmp(Tr("Close"), "Close") == 0);
     const auto system_font = FindChineseFont();
