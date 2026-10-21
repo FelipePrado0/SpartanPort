@@ -983,6 +983,8 @@ EXTRA = {
         "Strength of the gamepad's vibration; 0% turns it off.": 'Força da vibração do controle; 0% desliga.',
         'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
             'O Windows não conseguiu reservar a memória que o jogo precisa. Feche outros programas, ou deixe o arquivo de paginação do Windows crescer (por exemplo 16384 MB inicial, 32768 MB máximo), e inicie de novo.',
+        'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.':
+            'O Linux não conseguiu alocar a memória que o jogo precisa. Feche outros programas, verifique a memória RAM disponível, swap ou /dev/shm, e inicie de novo.',
         'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.':
             'O jogo parou ao ler os próprios arquivos: o dump do jogo pode estar incompleto. Extraia o pkg de novo e confira se a pasta do jogo tem cerca de 40 GB.',
         'Native · 1920 × 1080 · 16:9': 'Nativa · 1920 × 1080 · 16:9',
@@ -1272,6 +1274,8 @@ EXTRA = {
             'Sustituye los iconos de botones de PlayStation dentro del juego por los de tu mando. Trabaja sobre una copia de hasta tres archivos del juego en la carpeta de datos del port (unos 410 MB); tu carpeta del juego nunca se modifica. Se aplica al iniciar el juego.',
         'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
             'Windows no pudo reservar la memoria que necesita el juego. Cierra otros programas, o deja que el archivo de paginación de Windows crezca (por ejemplo 16384 MB inicial, 32768 MB máximo), y vuelve a iniciarlo.',
+        'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.':
+            'Linux no pudo asignar la memoria que necesita el juego. Cierra otros programas, comprueba la memoria RAM disponible, swap o /dev/shm, y vuelve a iniciarlo.',
         'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.':
             'El juego se detuvo al leer sus archivos: el dump del juego puede estar incompleto. Extrae el pkg de nuevo y comprueba que la carpeta del juego ocupa unos 40 GB.',
         'Textures': 'Texturas',
@@ -1926,6 +1930,7 @@ EXTRA.setdefault('zh', {}).update({'   (game patches)': '   （游戏补丁）',
                                                                                                                                                                                     'MB、最大 '
                                                                                                                                                                                     '32768 '
                                                                                                                                                                                     'MB）后重试。',
+ 'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.': 'Linux 无法为游戏分配所需的内存。请关闭其他程序，检查可用的 RAM、swap 交换空间或 /dev/shm，然后重新启动。',
  'Xbox button': 'Xbox 键',
  'Your game dump, saves and language.': '游戏文件、存档和语言。',
  'Your own dump of the game (eboot.bin, sce_module, sce_sys): God of War III Remastered, any region and version.': '你自己的游戏文件（eboot.bin、sce_module、sce_sys）；支持各地区和版本的战神 '
@@ -2010,6 +2015,10 @@ for _language, _text in {
 
 
 EXTRA.setdefault('id', {}).update({
+    'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?':
+        'Peluncur tidak dapat menulis ke {}, sehingga tidak dapat mengganti dirinya sendiri di sana. Buka halaman rilis untuk mengunduh versi baru secara manual?',
+    'Version {} is out, but it has no Linux build yet.':
+        'Versi {} telah keluar, tetapi belum ada build Linux.',
     'Polish': 'Polandia',
     'Portuguese (Brazil)': 'Portugis (Brasil)',
     'Aspect ratio': 'Rasio aspek',
@@ -2283,6 +2292,8 @@ EXTRA.setdefault('id', {}).update({
         'Saat Anda bermain, mouse tetap berada di dalam jendela game, sehingga klik tidak akan mengenai monitor atau aplikasi lain. Menu dalam game dan berpindah jendela akan mengembalikannya. Juga ada di menu dalam game.',
     'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
         'Windows tidak dapat memesan memori yang dibutuhkan game. Tutup program lain, atau perbesar pagefile Windows (misalnya 16384 MB awal, 32768 MB maksimum), lalu mulai kembali.',
+    'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.':
+        'Linux tidak dapat mengalokasikan memori yang dibutuhkan game. Tutup program lain, periksa RAM yang tersedia, swap, atau /dev/shm, lalu mulai kembali.',
     '{} (a folder, not a file)': '{} (sebuah folder, bukan file)',
     '{} (empty)': '{} (kosong)',
     '{} (not a param.sfo)': '{} (bukan param.sfo)',

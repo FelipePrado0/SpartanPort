@@ -1729,6 +1729,7 @@ class Launcher:
             canvas.configure(scrollregion=(0, 0, canvas.winfo_width(), inner.winfo_reqheight()))
             canvas.yview_moveto(min(canvas.yview()[0], max(0.0, 1 - canvas.winfo_height() / max(1, inner.winfo_reqheight()))))
         outer.fit = fit
+        outer.canvas = canvas
         self.pages[name] = outer
         return inner
 
@@ -1812,6 +1813,23 @@ class Launcher:
             item.configure(bg=PANEL if n == name else BG, fg=ACCENT_HI if n == name else TEXT)
         for method in PAGE_REFRESH.get(name, ()):
             getattr(self, method)()
+
+    def show_log(self):
+        """Navigates to the Advanced page and brings the Log section into view."""
+        if hasattr(self, 'pages') and 'advanced' in self.pages:
+            self.show('advanced')
+            canvas = getattr(self.pages['advanced'], 'canvas', None)
+            if canvas:
+                try:
+                    canvas.update_idletasks()
+                    canvas.yview_moveto(1.0)
+                except Exception:
+                    pass
+        if getattr(self, 'log', None) and getattr(self.log, 'winfo_exists', lambda: False)():
+            try:
+                self.log.see('end')
+            except Exception:
+                pass
 
     def build_home(self):
         tk, ttk = self.tk, self.ttk
@@ -3291,12 +3309,17 @@ class Launcher:
                     self.append(_('\nThe game exited (code {}).\n', '\nИгра завершилась (код {}).\n').format(item[0]))
                     if getattr(self, 'exit_hint', None):
                         self.append(self.exit_hint + '\n')
+                        self.show_log()
                     self.process = None
                     if self.job:
                         self.job.close()
                     if getattr(self, 'hidden_for_game', False):
-                        self.root.destroy()
-                        return
+                        if getattr(self, 'exit_hint', None):
+                            self.hidden_for_game = False
+                            self.root.deiconify()
+                        else:
+                            self.root.destroy()
+                            return
                     self.refresh_status()
                 else:
                     self.exit_hint = exit_hint(item) or getattr(self, 'exit_hint', None)
@@ -3627,11 +3650,16 @@ def open_play_log(settings):
 
 def exit_hint(line):
     """Advice for an output line that explains why the game closed, or None."""
-    if 'of guest memory (error ' in line:
-        return _('Windows could not reserve the memory the game needs. Close other programs, or let the '
-                 'Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.',
-                 'Windows не смог выделить память для игры. Закройте другие программы или дайте файлу '
-                 'подкачки Windows расти (например, 16384 МБ исходный, 32768 МБ максимальный) и запустите снова.')
+    if 'of guest memory (error ' in line or 'of guest memory' in line:
+        if 'is the page file large enough?' in line or ('is /dev/shm or RAM large enough?' not in line and WINDOWS):
+            return _('Windows could not reserve the memory the game needs. Close other programs, or let the '
+                     'Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.',
+                     'Windows не смог выделить память для игры. Закройте другие программы или дайте файлу '
+                     'подкачки Windows расти (например, 16384 МБ исходный, 32768 МБ максимальный) и запустите снова.')
+        return _('Linux could not allocate the memory the game needs. Close other programs, check available '
+                 'RAM, swap space, or /dev/shm, and start again.',
+                 'Linux не смогла выделить память для игры. Закройте другие программы, проверьте доступную '
+                 'память RAM, swap или /dev/shm и запустите снова.')
     if 'guest raised debug exception code=0xa0020001' in line:
         return _('The game stopped while reading its files: the game dump may be incomplete. Extract the pkg '
                  'again and check that the game folder is about 40 GB.',
@@ -3651,18 +3679,28 @@ def play_without_window(settings):
     """--play: the game with the saved settings (shortcuts, Steam). Output goes to the console
     when there is one and to <saves folder>/last_run.log."""
     attach_stdio()
+    hint = None
     with open_run_log(settings) as log:
         process = subprocess.Popen(run_command(), cwd=PORT_DIR, env=game_environment(settings),
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
         for raw in iter(process.stdout.readline, b''):
             text = raw.decode('utf-8', errors='replace')
+            hint = exit_hint(text) or hint
             log.write(text)
             try:
                 sys.stdout.write(text)
             except (OSError, ValueError):
                 pass
-        return process.wait()
+        code = process.wait()
+        if code != 0 and hint:
+            try:
+                log.write('\n' + hint + '\n')
+            except (OSError, ValueError):
+                pass
+            if WINDOWS and not ctypes.windll.kernel32.GetConsoleWindow():
+                ctypes.windll.user32.MessageBoxW(0, hint, APP_NAME, 0x10)
+        return code
 
 
 def version_tuple(text):

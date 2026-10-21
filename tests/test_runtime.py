@@ -1,15 +1,18 @@
+import os
+import sys
 from paths import ROOT
 from pathlib import Path
 import subprocess
 import unittest
 
-EXE = ROOT / 'out/runtime-test'
+EXE = ROOT / ('out/runtime-test.exe' if sys.platform == 'win32' else 'out/runtime-test')
 
 
 @unittest.skipUnless(EXE.exists(), 'run bash build.sh --test first')
 class RuntimeTests(unittest.TestCase):
-    def run_case(self, *args):
-        return subprocess.run([str(EXE.resolve()), *args], capture_output=True, text=True, timeout=10)
+    def run_case(self, *args, env=None):
+        run_env = {**os.environ, **env} if env else None
+        return subprocess.run([str(EXE.resolve()), *args], capture_output=True, text=True, timeout=10, env=run_env)
 
     def test_runtime_contracts(self):
         r=self.run_case()
@@ -42,3 +45,13 @@ class RuntimeTests(unittest.TestCase):
     def test_rwlock_timeouts_use_orbis_errors(self):
         r=self.run_case('--rwlock-timeouts')
         self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+
+    def test_guest_memory_failure_exits_with_error(self):
+        r = self.run_case('--guest-memory-fail', env={'SPARTAN_FAIL_GUEST_MEMORY': '1450'})
+        self.assertEqual(r.returncode, 21)
+        self.assertIn('cannot create', r.stderr)
+        self.assertIn('error 1450', r.stderr)
+        if sys.platform == 'win32':
+            self.assertIn('is the page file large enough?', r.stderr)
+        else:
+            self.assertIn('is /dev/shm or RAM large enough?', r.stderr)
