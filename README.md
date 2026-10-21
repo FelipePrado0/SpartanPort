@@ -343,6 +343,10 @@ for every overlay configuration.
   If it persists, report your GPU, driver, game build and **Advanced → Log** output. Clearing
   the shader cache is not a general fix and requires rebuilding it on the next launch.
 - The game closes with "cannot create ... guest memory (error 1450)": Windows ran out of virtual memory to allocate the guest pool. Increase the page file: press **Win + R**, type `SystemPropertiesAdvanced`, go to **Performance** Settings → **Advanced** → **Virtual memory** Change, uncheck automatic management, select drive **C:**, set a custom size (e.g. 16384 MB initial, 24576 MB maximum), click **Set**, **OK**, and restart your PC.
+- **Game language** in the launcher has no effect: it is only used on the game's first start. After
+  that the game restores its own text and speech languages from its settings save, so change them in
+  the game: **Options → Game Settings → Game Text** and **Options → Audio → Speech** (for example,
+  Polish text with English voices).
 - The game does not open: check **Advanced → Log**, or send `user\last_run.log` with your report.
   With a custom **Saves folder**, `last_run.log` is in that folder instead.
 - Yellow/orange/white textures or wrong lighting: try disabling **Performance → GPU data →

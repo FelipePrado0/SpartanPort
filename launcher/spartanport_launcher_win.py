@@ -2062,7 +2062,15 @@ class Launcher:
         self.section(f, _('Saves'))
         self.build_save_backups(f)
         self.section(f, _('Language'))
-        self.row(f, _('Game language', 'Язык игры'), self.choice(f, 'language', 'app', LANGUAGES))
+        # The game saves its own text and speech languages (Options) and restores them over the
+        # system language at every start after the first one (#842).
+        self.row(f, _('Game language', 'Язык игры'), self.choice(f, 'language', 'app', LANGUAGES),
+                 _("Used on the game's first start. After that, the game keeps its own text and speech "
+                   'languages in its settings save: change them in the game, in Options → Game Settings → '
+                   'Game Text and Options → Audio → Speech.',
+                   'Действует при первом запуске игры. Потом игра хранит язык текста и речи в своём '
+                   'сохранении настроек: меняйте их в игре, в Настройки → Параметры игры → Текст и '
+                   'Настройки → Аудио → Речь.'))
         self.build_patches(f)
 
     def user_dir(self):

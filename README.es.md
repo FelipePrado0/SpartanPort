@@ -325,6 +325,10 @@ para todas las configuraciones de overlay.
   paginación de Windows. **Win + R** → `SystemPropertiesAdvanced` → configuración de
   **Rendimiento** → **Opciones avanzadas** → **Memoria virtual**. Podés usar un tamaño
   personalizado en C: (por ejemplo, 16384 MB inicial y 24576 MB máximo); aplicá y reiniciá el PC.
+- El **Idioma del juego** del launcher no cambia nada: solo se usa en el primer inicio del juego.
+  Después, el juego restaura sus propios idiomas de texto y de diálogos desde su partida de ajustes,
+  así que cambialos en el juego: **Opciones → Ajustes de juego → Texto del juego** y
+  **Opciones → Audio → Diálogos** (por ejemplo, texto en español con voces en inglés).
 - El juego no abre: revisá **Advanced → Log**, o enviá `user\last_run.log` junto con tu reporte.
   Con una **Saves folder** personalizada, `last_run.log` está en esa carpeta.
 - Texturas amarillas/naranjas/blancas o iluminación incorrecta: probá desactivar **Performance →
