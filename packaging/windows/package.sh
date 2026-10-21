@@ -59,6 +59,13 @@ ldd "$dest/bin/spartanport-probe.exe" "$dest/bin/spartanport-gpu-capabilities.ex
     awk '/\/clang64\/bin\// {print $3}' | sort -u | while read -r dll; do
         cp -u "$dll" "$dest/bin/"
     done
+# libzstd is loaded at run time for .zar game images (LoadLibrary), so ldd does not list it.
+zstd_dll=$(ls "${MSYS2_ROOT:-/c/msys64}/clang64/bin/"libzstd*.dll 2>/dev/null | head -1)
+if [[ -n $zstd_dll ]]; then
+    cp -u "$zstd_dll" "$dest/bin/"
+else
+    echo 'Warning: libzstd was not found: .zar game images will not open in this package' >&2
+fi
 cp -r scripts patches "$dest/"
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 find "$dest" -name __pycache__ -prune -exec rm -r {} +

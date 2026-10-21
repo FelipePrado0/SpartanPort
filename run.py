@@ -187,12 +187,15 @@ def main():
         discord_presence = None
     import mods
     import patches
+    import zarchive
+    selection = Path(env.get('SPARTAN_GAME_DIR', PORT.parent / 'CUSA01623'))
     # The enabled mods' patch files: their "Resolution Patch - <size>" entries are render resolutions too
-    # (the launcher and the in-game menu list them; SPARTAN_EXTRA_RESOLUTIONS tells the game).
+    # (the launcher and the in-game menu list them; SPARTAN_EXTRA_RESOLUTIONS tells the game). A
+    # .zar image has no folder to read the dump's layout from: the default roots are used.
     mod_patch_files = mods.enabled_patch_files(env.get('SPARTAN_MODS_DIR', data / 'mods'),
                                                env.get('SPARTAN_MODS_CONFIG', data / 'mods.json'),
                                                env.get('SPARTAN_MODS_ENABLED', '1') != '0',
-                                               env.get('SPARTAN_GAME_DIR', PORT.parent / 'CUSA01623'))
+                                               None if zarchive.is_archive(selection) else selection)
     extra_resolutions = [s for s in patches.resolution_names(mod_patch_files) if s not in graphics_options.RESOLUTIONS]
     env['SPARTAN_EXTRA_RESOLUTIONS'] = ';'.join(extra_resolutions)
     derived.append('SPARTAN_EXTRA_RESOLUTIONS')
@@ -220,9 +223,24 @@ def main():
         sys.exit(20)
     missing = parse_cpu_features(features.stdout)
 
-    game = Path(env.get('SPARTAN_GAME_DIR', PORT.parent / 'CUSA01623'))
-    if not (game / 'eboot.bin').is_file():
-        fail(f'No eboot.bin in {game} (set SPARTAN_GAME_DIR).')
+    # A .zar holds the game folder at its root and the runtime reads it in place (/app0); the
+    # preparation scripts work on the files they need, extracted once into out/zar.
+    archive = None
+    game = selection
+    if zarchive.is_archive(selection):
+        archive = selection.resolve()
+        if env.get('SPARTAN_PATCH_DIR'):
+            fail(f'A .zar game image cannot take a separate update folder ({env["SPARTAN_PATCH_DIR"]}): '
+                 'pack the updated game, or use its unpacked folder.')
+        try:
+            image_listing = zarchive.listing(archive, probe)
+            game = zarchive.view(archive, out / 'zar', probe, entries=image_listing)
+        except zarchive.ArchiveError as error:
+            fail(f'Cannot read the game image {archive}: {error}')
+        image_listing.write(out / 'zar-listing.json')
+        print(f'Game image: {archive} (read directly by the game; the preparation scripts use {game})', flush=True)
+    elif not (selection / 'eboot.bin').is_file():
+        fail(f'No eboot.bin in {selection} (set SPARTAN_GAME_DIR).')
     update_view = None
     if env.get('SPARTAN_PATCH_DIR'):
         import game_update
@@ -233,13 +251,19 @@ def main():
         game = update_view
         print(f'Game and update combined from {env["SPARTAN_PATCH_DIR"]}', flush=True)
     original_game = game.resolve()
-    game = Path(run_script('mods.py', game, '--out', out,
-                           '--mods-dir', env.get('SPARTAN_MODS_DIR', data / 'mods'),
-                           '--config', env.get('SPARTAN_MODS_CONFIG', data / 'mods.json'),
-                           '--enabled', env.get('SPARTAN_MODS_ENABLED', '1'), capture=True).strip())
-    mod_view = game if game.resolve() != original_game else None
+    mod_view = None
+    if archive:
+        # File mods replace files of the dump, which an image does not have; its patches still apply.
+        print('Mods: replacing game files needs an unpacked game folder; patches from mods still apply', flush=True)
+    else:
+        game = Path(run_script('mods.py', game, '--out', out,
+                               '--mods-dir', env.get('SPARTAN_MODS_DIR', data / 'mods'),
+                               '--config', env.get('SPARTAN_MODS_CONFIG', data / 'mods.json'),
+                               '--enabled', env.get('SPARTAN_MODS_ENABLED', '1'), capture=True).strip())
+        mod_view = game if game.resolve() != original_game else None
     try:
-        run_script('prepare.py', game, '--out', out)
+        run_script('prepare.py', game, '--out', out,
+                   *(['--listing', out / 'zar-listing.json'] if archive else []))
         run_script('link_libc.py', game, '--out', out)
         run_script('link_modules.py', game, '--out', out)
         # A failed rewrite prints its reason and the game starts without the table.
@@ -312,6 +336,16 @@ def main():
         print(f'Engine frame rate: {min(int(graphics["engine_fps"]), engine_fps)} FPS, live up to {engine_fps}'
               + ('' if engine_fps > 60 or graphics['engine_fps'] == '60' else
                  ' (the frame rate patch was not found in this eboot.bin)'), flush=True)
+        if archive:
+            # The WADs the pause menu and the glyphs patch, extracted from the image for this start.
+            style = env.get('SPARTAN_GLYPH_STYLE', 'off')
+            wanted = (zarchive.GLYPH_WADS if style in ('auto', 'xbox', 'nintendo', 'keyboard')
+                      else (zarchive.PAUSE_MENU_WAD,))
+            try:
+                zarchive.view(archive, out / 'zar', probe, extra=wanted)
+            except zarchive.ArchiveError as error:
+                print(f'Glyphs: {error}; the pause menu and the button icons stay the ones of the game',
+                      flush=True)
         glyph_args, glyph_style = glyph_mounts(env, probe, game, out)
         if glyph_style:  # the in-game menu names the buttons the same way
             env['SPARTAN_GLYPHS'] = glyph_style
@@ -343,7 +377,7 @@ def main():
         restart = [sys.executable, *this, *after, *args]
         env['SPARTAN_RESTART_COMMAND'] = subprocess.list2cmdline(restart) if WINDOWS else shlex.join(restart)
         command = [*launch_prefix(env), str(probe), str(out / 'boot-linked.bin'), '--content-profile', str(out / 'content.bin'),
-                   '--patches', str(out / 'patches.bin'), '--app0', str(game),
+                   '--patches', str(out / 'patches.bin'), '--app0', str(archive or game),
                    '--user', str(user_dir),
                    '--timeout', env.get('SPARTAN_TIMEOUT', '0'), *isa_args, *mount_args, *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.

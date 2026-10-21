@@ -50,6 +50,7 @@ import graphics_options  # noqa: E402  (scripts/)
 import legacy  # noqa: E402  (scripts/)
 import save_backup  # noqa: E402  (scripts/)
 import steam_shortcut  # noqa: E402  (scripts/)
+import zarchive  # noqa: E402  (scripts/)
 from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
 from prepare import load_sfo  # noqa: E402  (scripts/)
 legacy.forward_environment()  # before the folders below are read from the environment
@@ -871,10 +872,33 @@ def save_ini(values, lines):
     atomic_write(ini_path(), '\n'.join(out) + '\n')
 
 
+def game_image(selection):
+    """The .zar a game choice names, or None for a folder."""
+    return Path(selection) if selection and zarchive.is_archive(selection) else None
+
+
+def game_folder(selection):
+    """The folder the launcher reads a game choice through.
+
+    A .zar image holds the game at its root; the game reads it directly, while the launcher and
+    the preparation scripts read the image's eboot.bin, sce_module/ and sce_sys/, extracted once
+    into the cache (scripts/zarchive.py). None when the image cannot be read: the reason is in
+    the Log.
+    """
+    selection = Path(selection or '.')
+    if not zarchive.is_archive(selection):
+        return selection
+    try:
+        return zarchive.view(selection, DATA_DIR / 'out' / 'zar', zarchive.probe_executable(PORT_DIR))
+    except zarchive.ArchiveError as error:
+        print(f'Game image: {error}', file=sys.stderr, flush=True)
+        return None
+
+
 def game_info(folder):
-    """(title, app version) of a game folder, or None without eboot.bin."""
-    folder = Path(folder or '.')
-    if not (folder / 'eboot.bin').is_file():
+    """(title, app version) of a game folder or .zar image, or None without eboot.bin."""
+    folder = game_folder(folder)
+    if not folder or not (folder / 'eboot.bin').is_file():
         return None
     values = game_sfo(folder)
     return values.get('TITLE', APP_NAME).replace('™', '').replace('®', '').strip(), values.get('APP_VER', '?')
@@ -884,7 +908,7 @@ def meta_folder(game_dir, update_dir):
     """The folder the title, version and patches are read from: the update when there is one."""
     if update_dir and (Path(update_dir) / 'eboot.bin').is_file():
         return update_dir
-    return game_dir
+    return game_folder(game_dir)
 
 
 VIDEO_BACKENDS = [('auto', ('Automatic',)), ('wayland', ('Wayland',)), ('x11', ('X11 (XWayland)',))]
@@ -967,7 +991,8 @@ def ready_to_play(game_dir, update_dir=''):
     the Play button would refuse opens the launcher window instead."""
     if update_dir and same_folder(update_dir, game_dir or '.'):
         return False
-    return not (missing_game_files(game_dir)
+    folder = game_folder(game_dir)
+    return not (not folder or missing_game_files(folder)
                 or (update_dir and missing_game_files(update_dir, REQUIRED_UPDATE_FILES)))
 
 
@@ -1404,7 +1429,7 @@ class Launcher:
     def artwork_file(self, name):
         """Prefer an update's image, falling back to the base dump when it omits that file."""
         preferred = Path(self.meta_dir() or '.') / 'sce_sys' / name
-        base = self.var('game_dir', 'app').get()
+        base = game_folder(self.var('game_dir', 'app').get())
         if preferred.is_file() or not base:
             return preferred
         return Path(base) / 'sce_sys' / name
@@ -1686,7 +1711,7 @@ class Launcher:
             row=r, column=0, columnspan=2, sticky='w', pady=self.px((top, 0)))
         self.tk.Frame(parent, bg=LINE, height=self.px(1)).grid(row=r + 1, column=0, columnspan=2, sticky='we', pady=self.px((2, 2)))
 
-    def folder(self, parent, key, title, prompt, hint=None, on_change=None):
+    def folder(self, parent, key, title, prompt, hint=None, on_change=None, image=False):
         ttk = self.ttk
         var = self.var(key, 'app')
         holder = ttk.Frame(parent)
@@ -1697,6 +1722,17 @@ class Launcher:
             if chosen:
                 var.set(str(Path(chosen)))
         ttk.Button(holder, text=_('Browse…', 'Обзор…'), command=browse).pack(side='left', padx=self.px((6, 0)))
+        if image:
+            def browse_image():
+                chosen = self.filedialog.askopenfilename(
+                    title=_('Choose the game image (.zar)', 'Выберите образ игры (.zar)'),
+                    initialdir=var.get() or str(PORT_DIR),
+                    filetypes=[(_('ZArchive game image', 'Образ ZArchive'), '*.zar'),
+                               (_('All files', 'Все файлы'), '*.*')])
+                if chosen:
+                    var.set(str(Path(chosen)))
+            ttk.Button(holder, text=_('Image…', 'Образ…'), command=browse_image).pack(
+                side='left', padx=self.px((6, 0)))
         ttk.Button(holder, text=_('Open', 'Открыть'), command=lambda: self.open_path(var.get(), key)).pack(
             side='left', padx=self.px((6, 0)))
         if on_change:
@@ -2049,7 +2085,7 @@ class Launcher:
                     _('Your own dump of the game (eboot.bin, sce_module, sce_sys): SpartanPort, '
                       'any region and version.',
                       'Ваш дамп игры (eboot.bin, sce_module, sce_sys): SpartanPort, '
-                      'любой регион и версия.'), on_change=self.game_changed)
+                      'любой регион и версия.'), on_change=self.game_changed, image=True)
         self.folder(f, 'update_dir', _('Update folder (optional)'),
                     _('Choose the folder of the update (eboot.bin, sce_sys)'),
                     _('Only if the update is dumped apart from the game: it is laid over the game folder '
@@ -2116,9 +2152,9 @@ class Launcher:
         self.refresh_trophies()
 
     def trophy_package(self):
-        """The game's trophy00.trp: in the update folder when it has one, else in the game folder."""
-        for key in ('update_dir', 'game_dir'):
-            folder = self.var(key, 'app').get()
+        """The game's trophy00.trp: in the update folder when it has one, else in the game folder
+        (a .zar image through the view, whose sce_sys/ is extracted)."""
+        for folder in (self.var('update_dir', 'app').get(), game_folder(self.var('game_dir', 'app').get())):
             path = Path(folder) / 'sce_sys' / 'trophy' / 'trophy00.trp' if folder else None
             if path and path.is_file():
                 return path
@@ -2771,7 +2807,7 @@ class Launcher:
                 widget.destroy()
         root = Path(self.var('mods_dir', 'app').get() or DATA_DIR / 'mods')
         profile = load_json(DATA_DIR / 'mods.json', {})
-        game = self.var('game_dir', 'app').get()
+        game = game_folder(self.var('game_dir', 'app').get())
         available = discover(root, game)
         if set(self.mod_order) != set(available):
             known = [n for n in profile.get('order', []) if n in available]
@@ -2872,7 +2908,7 @@ class Launcher:
             return
         root = Path(self.var('mods_dir', 'app').get() or DATA_DIR / 'mods')
         active = [n for n in self.mod_order if self.mod_vars[n].get()]
-        found = conflicts(root, active, self.var('game_dir', 'app').get())
+        found = conflicts(root, active, game_folder(self.var('game_dir', 'app').get()))
         self.mod_conflicts = found
         self.mods_count.configure(text=_('{} of {} active', 'активно {} из {}').format(len(active), len(self.mod_order)) if self.mod_order else '')
         involved = {name for _path, owners in found for name in owners}
@@ -3149,6 +3185,8 @@ class Launcher:
         copy (system_files_beside) for the game folder and for an update folder with an
         eboot.bin, the update's candidate checked against the game's param.sfo. False when a
         copy was started: it runs in the background and presses Play again when it ends."""
+        if game_image(self.app.get('game_dir')):
+            return True  # an image has no folder of its own to copy the system files into
         game_dir = self.app['game_dir'] or '.'
         update_dir = self.app.get('update_dir') or ''
         folders = [(game_dir, False)]
@@ -3204,7 +3242,22 @@ class Launcher:
             return
         if not self.offer_system_files():
             return
-        missing = missing_game_files(self.app['game_dir'])
+        if game_image(self.app['game_dir']) and (self.app.get('update_dir') or ''):
+            self.messagebox.showerror(APP_NAME, _(
+                'A .zar game image cannot take a separate update folder. Pack the updated game, or '
+                'choose its unpacked folder and the update folder.',
+                'Образ .zar не может использовать отдельную папку обновления. Упакуйте обновлённую '
+                'игру или выберите её распакованную папку и папку обновления.'))
+            self.show('game')
+            return
+        game = game_folder(self.app['game_dir'])
+        if not game:
+            self.messagebox.showerror(APP_NAME, _(
+                'The game image cannot be read. See the Log for the reason.',
+                'Не удалось прочитать образ игры. Причина записана в журнале.'))
+            self.show('game')
+            return
+        missing = missing_game_files(game)
         if missing:
             self.messagebox.showerror(APP_NAME, _('The game dump is incomplete. Missing or empty files:\n\n{}\n\n'
                                                   'Dump the game again, or copy these files from a complete dump.')
@@ -3485,8 +3538,8 @@ class Launcher:
         """A non-Steam shortcut with the game's icon, capsules, hero and logo (scripts/steam_shortcut.py)."""
         if not self.collect():
             return
-        game = self.var('game_dir', 'app').get()
-        if not game_info(game):
+        game = game_folder(self.var('game_dir', 'app').get())
+        if not game or not game_info(game):
             self.messagebox.showerror(APP_NAME, _('Choose the game folder with eboot.bin (CUSA01623).',
                                                   'Выберите папку игры с eboot.bin (CUSA01623).'))
             return

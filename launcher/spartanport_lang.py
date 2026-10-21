@@ -1919,6 +1919,38 @@ EXTRA['zh'].update({
         '将游戏中的 PlayStation 按键图标替换为你的控制器图标。使用移植版数据文件夹内最多三个游戏文件的副本（约 410 MB），不会更改游戏文件夹。启动游戏时生效。',
 })
 
+# Packed .zar game images (Game → Game folder → Image…).
+EXTRA['pt'].update({
+    'Choose the game image (.zar)': 'Escolha a imagem do jogo (.zar)',
+    'ZArchive game image': 'Imagem de jogo ZArchive',
+    'All files': 'Todos os arquivos',
+    'Image…': 'Imagem…',
+    'A .zar game image cannot take a separate update folder. Pack the updated game, or choose its unpacked folder and the update folder.':
+        'Uma imagem .zar não aceita uma pasta de atualização separada. Empacote o jogo atualizado ou escolha a pasta descompactada dele e a pasta de atualização.',
+    'The game image cannot be read. See the Log for the reason.':
+        'Não foi possível ler a imagem do jogo. Veja o Registro para saber o motivo.',
+})
+EXTRA['es'].update({
+    'Choose the game image (.zar)': 'Elige la imagen del juego (.zar)',
+    'ZArchive game image': 'Imagen de juego ZArchive',
+    'All files': 'Todos los archivos',
+    'Image…': 'Imagen…',
+    'A .zar game image cannot take a separate update folder. Pack the updated game, or choose its unpacked folder and the update folder.':
+        'Una imagen .zar no admite una carpeta de actualización aparte. Empaqueta el juego actualizado o elige su carpeta sin empaquetar y la carpeta de actualización.',
+    'The game image cannot be read. See the Log for the reason.':
+        'No se pudo leer la imagen del juego. Consulta el Registro para ver el motivo.',
+})
+EXTRA['zh'].update({
+    'Choose the game image (.zar)': '选择游戏镜像（.zar）',
+    'ZArchive game image': 'ZArchive 游戏镜像',
+    'All files': '所有文件',
+    'Image…': '镜像…',
+    'A .zar game image cannot take a separate update folder. Pack the updated game, or choose its unpacked folder and the update folder.':
+        '一个 .zar 游戏镜像无法使用单独的更新文件夹。请打包更新后的游戏，或选择其未打包的文件夹和更新文件夹。',
+    'The game image cannot be read. See the Log for the reason.':
+        '无法读取游戏镜像。原因请查看日志。',
+})
+
 _tables = {}
 
 

@@ -29,6 +29,7 @@ e Linux (AppImage experimental).
 - [SpartanPort](#spartanport)
   - [Sumário](#sumário)
   - [Baixar e jogar](#baixar-e-jogar)
+    - [Imagens de jogo empacotadas (.zar)](#imagens-de-jogo-empacotadas-zar)
   - [Linux (AppImage, experimental)](#linux-appimage-experimental)
   - [O que funciona](#o-que-funciona)
   - [Disponibilidade dos recursos](#disponibilidade-dos-recursos)
@@ -59,8 +60,9 @@ e Linux (AppImage experimental).
   ainda não foi medido. CPUs mais antigas param na abertura com uma linha `STOP: this CPU lacks`
   no log.
 - Placa de vídeo com Vulkan 1.3 e driver atualizado.
-- Sua cópia do jogo (a pasta com `eboot.bin`, `sce_module` e `sce_sys`). Testados: CUSA01623 e
-  CUSA01715, versões 01.00 e 01.02.
+- Sua cópia do jogo: a pasta com `eboot.bin`, `sce_module` e `sce_sys`, ou essa pasta
+  empacotada como imagem `.zar` (veja [Imagens de jogo empacotadas](#imagens-de-jogo-empacotadas-zar)).
+  Testados: CUSA01623 e CUSA01715, versões 01.00 e 01.02.
 
 **Passos**
 
@@ -72,7 +74,8 @@ e Linux (AppImage experimental).
    clique em **Mais informações** e depois em **Executar assim mesmo**: o programa não tem
    assinatura digital.
 4. Clique em **Choose the game folder**. Isso leva à tela **Game**. Em **Game folder**, clique
-   em **Browse…** e escolha a pasta que tem o `eboot.bin`.
+   em **Browse…** e escolha a pasta que tem o `eboot.bin`, ou em **Image…** e escolha uma imagem
+   `.zar` do jogo.
 5. De volta à **Home**, aparecem a capa e "CUSA01623 · version 01.02". Ajuste os **Quick
    settings** se quiser: modo de tela, limite de FPS, resolução e FPS do motor.
 6. Clique em **Save** para guardar alterações pendentes e depois em **PLAY**. A primeira
@@ -100,6 +103,24 @@ substitui a correção de texturas.
   essa pasta ao atualizar.
 - **Advanced → Check for updates** baixa e instala a versão nova. Saves e configurações são
   mantidos.
+
+### Imagens de jogo empacotadas (.zar)
+
+Um dump empacotado como ZArchive (`.zar`) roda como a pasta descompactada, sem etapa de extração:
+o jogo lê a imagem direto em `/app0` (blocos de 64 KiB comprimidos com zstd, descomprimidos sob
+demanda). O shadPS4 lê as mesmas imagens.
+
+- **Launcher:** **Game → Game folder → Image…** e escolha o `.zar`. Título, versão, capa e os
+  patches embutidos vêm da imagem. Sem o launcher, `SPARTAN_GAME_DIR` pode apontar para o `.zar`.
+- **Empacotar:** `python tools/make_zar.py <pasta do jogo> [SAIDA.zar]` (precisa de Python 3.14
+  ou do pacote `zstandard`).
+- **Preparação:** os scripts e o launcher leem `eboot.bin`, `sce_module/` e `sce_sys/` de uma
+  cópia em `out/zar`, refeita quando a imagem muda; nada é escrito ao lado do `.zar`.
+- **Pasta de atualização:** uma imagem não aceita uma pasta de atualização separada: empacote o
+  jogo atualizado. **Mods** que substituem arquivos do jogo precisam da pasta; os patches que
+  eles trazem continuam valendo.
+- **libzstd** descomprime os blocos: os pacotes já o incluem; num build do código-fonte instale
+  `libzstd` (`zstd`/`libzstd1` na maioria das distribuições).
 
 ## Linux (AppImage, experimental)
 

@@ -61,6 +61,9 @@ void runtime_file_configure(const char *app0, const char *user);
 int runtime_file_mount(const char *guest, const char *host);
 void runtime_file_unmount(const char *guest);
 int runtime_file_translate(const char *guest, char *out, size_t size);
+/* A guest file read whole into buffer (at most size bytes): its length, or -1 when it is missing
+ * or larger than the buffer. Works for an unpacked game folder and for a mounted .zar. */
+int64_t runtime_file_read_all(const char *guest, void *buffer, uint64_t size);
 int64_t runtime_file_open(const char *path, int flags, int mode);
 int64_t runtime_file_close(int fd);
 int64_t runtime_file_read(int fd, void *buffer, uint64_t size);

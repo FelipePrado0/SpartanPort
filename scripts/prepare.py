@@ -169,7 +169,9 @@ def inspect_libc(path):
     return evidence
 
 
-def prepare(game, out):
+def prepare(game, out, listing=None):
+    """Prepares the probe image. `listing` is the {path: size} of a .zar game image (the folder
+    `game` then holds only the files the scripts read): the resource census comes from it."""
     source = read_self(game / 'eboot.bin')
     elf, header, ph, segments, missing = parse_self(source)
     loads = [p for p in ph if p['type'] in (1, 0x61000010)]
@@ -272,10 +274,17 @@ def prepare(game, out):
     (out / 'entry.bin').write_bytes(image[:1024])
     resources = collections.Counter()
     total_bytes = 0
-    for path in (game / 'dvdroot_ps4').rglob('*'):
-        if path.is_file():
-            resources[path.relative_to(game / 'dvdroot_ps4').parts[0]] += 1
-            total_bytes += path.stat().st_size
+    if listing is not None:
+        for name, size in listing.items():
+            parts = name.split('/')
+            if len(parts) > 1 and parts[0] == 'dvdroot_ps4':
+                resources[parts[1]] += 1
+                total_bytes += size
+    else:
+        for path in (game / 'dvdroot_ps4').rglob('*'):
+            if path.is_file():
+                resources[path.relative_to(game / 'dvdroot_ps4').parts[0]] += 1
+                total_bytes += path.stat().st_size
     report = dict(source_sha256=hashlib.sha256(source).hexdigest(), source_bytes=len(source),
                   sfo=sfo((game / 'sce_sys/param.sfo').read_bytes()), entry=hex(header[4]),
                   image_bytes=size, program_headers=ph, self_segments=segments,
@@ -298,10 +307,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('game', type=Path)
     parser.add_argument('--out', type=Path, default=Path(__file__).resolve().parent.parent / 'out')
+    parser.add_argument('--listing', type=Path,
+                        help='{path: size} of a .zar game image, for the resource census')
     args = parser.parse_args()
     # The title is printed; a console or pipe in a legacy code page cannot encode every language.
     sys.stdout.reconfigure(errors='replace')
+    listing = json.loads(args.listing.read_text(encoding='utf-8')) if args.listing else None
     try:
-        prepare(args.game, args.out)
+        prepare(args.game, args.out, listing)
     except (ValueError, OSError, StopIteration, KeyError, IndexError) as error:
         parser.exit(1, f'prepare failed: {error}\n')
