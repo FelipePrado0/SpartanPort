@@ -471,7 +471,7 @@ static size_t live_thread_cpu(ThreadCpu *out,size_t max) {
     long hz=sysconf(_SC_CLK_TCK);
     for (struct dirent *d;(d=readdir(dir)) && n<max;) {
         if (d->d_name[0]=='.') continue;
-        char path[64], line[1024];
+        char path[sizeof(d->d_name)+sizeof("/proc/self/task//stat")], line[1024];
         snprintf(path,sizeof(path),"/proc/self/task/%s/stat",d->d_name);
         FILE *f=fopen(path,"r");
         if (!f) continue;
