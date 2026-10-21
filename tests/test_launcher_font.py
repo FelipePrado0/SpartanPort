@@ -7,12 +7,12 @@ from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
-import gow3_launcher_win as launcher  # noqa: E402
+import spartanport_launcher_win as launcher  # noqa: E402
 
 
 class FontFileTest(unittest.TestCase):
     def test_font_file_is_a_launcher_asset_under_port_dir(self):
-        # Frozen builds find launcher assets next to the exe (PORT_DIR / 'launcher'), like gow3.ico.
+        # Frozen builds find launcher assets next to the exe (PORT_DIR / 'launcher'), like spartanport.ico.
         self.assertEqual(launcher.FONT_FILE, launcher.PORT_DIR / 'launcher' / 'Cinzel-Black.ttf')
         self.assertTrue(launcher.FONT_FILE.is_file())
 
@@ -61,6 +61,32 @@ class RegisterFontTest(unittest.TestCase):
         with mock.patch.object(launcher, 'WINDOWS', False), \
                 mock.patch.object(launcher.ctypes, 'CDLL', side_effect=OSError('no fontconfig')):
             self.assertFalse(launcher.register_font(launcher.FONT_FILE))
+
+
+class ChineseFontTest(unittest.TestCase):
+    def setUp(self):
+        self.saved = launcher.LANG, launcher.UI_FONT, launcher.MONO_FONT, launcher.SERIF_FONT, launcher.FONT_LOADED
+
+    def tearDown(self):
+        launcher.LANG, launcher.UI_FONT, launcher.MONO_FONT, launcher.SERIF_FONT, launcher.FONT_LOADED = self.saved
+
+    def test_chinese_prefers_windows_cjk_font_for_body_and_headings(self):
+        launcher.LANG = 'zh'
+        launcher.pick_fonts(['Microsoft YaHei UI', 'Segoe UI', 'Georgia', 'Consolas'])
+        self.assertEqual(launcher.UI_FONT, 'Microsoft YaHei UI')
+        self.assertEqual(launcher.heading_font(12), ('Microsoft YaHei UI', 12))
+
+    def test_chinese_can_use_noto_on_linux(self):
+        launcher.LANG = 'zh'
+        launcher.pick_fonts(['Noto Sans CJK SC', 'DejaVu Sans', 'DejaVu Serif'])
+        self.assertEqual(launcher.UI_FONT, 'Noto Sans CJK SC')
+        self.assertEqual(launcher.SERIF_FONT, 'Noto Sans CJK SC')
+
+    def test_english_font_preferences_are_unchanged(self):
+        launcher.LANG = 'en'
+        launcher.pick_fonts(['Microsoft YaHei UI', 'Segoe UI', 'Georgia', 'Consolas'])
+        self.assertEqual(launcher.UI_FONT, 'Segoe UI')
+        self.assertEqual(launcher.SERIF_FONT, 'Georgia')
 
 
 class HeadingFontTest(unittest.TestCase):
@@ -116,10 +142,10 @@ class LatinHeadingsTest(unittest.TestCase):
             from fontTools.ttLib import TTFont
         except ImportError:
             self.skipTest('fontTools reads the face')
-        import gow3_lang
+        import spartanport_lang
         cmap = TTFont(launcher.FONT_FILE).getBestCmap()
         for lang in launcher.LATIN_UI_LANGUAGES:
-            text = ''.join(gow3_lang.table(lang).values()).upper()
+            text = ''.join(spartanport_lang.table(lang).values()).upper()
             missing = {c for c in text if c.isalpha() and ord(c) not in cmap}
             self.assertFalse(missing, lang)
 

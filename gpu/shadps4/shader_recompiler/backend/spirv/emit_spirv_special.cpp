@@ -66,7 +66,7 @@ void ConvertPositionToClipSpace(EmitContext& ctx) {
     ctx.OpStore(ctx.output_position, vector);
 }
 
-// gow3: object motion vectors (runtime_info.h, MotionVectors). The vertex shader stores its
+// spartanport: object motion vectors (runtime_info.h, MotionVectors). The vertex shader stores its
 // clip position for this frame and loads the one of the previous frame (same draw, same
 // vertex), both by buffer device address. Disabled accesses are branched around: a shared
 // scratch element would race between all the inactive vertex invocations.

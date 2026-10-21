@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// gow3: speculative draw preparation on worker threads (see vk_draw_prep.h).
+// spartanport: speculative draw preparation on worker threads (see vk_draw_prep.h).
 
 #include <algorithm>
 #include <chrono>
@@ -7,8 +7,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "gow3_threads.h"
-#include "gow3_toggles.h"
+#include "spartanport_threads.h"
+#include "spartanport_toggles.h"
 #include "common/thread.h"
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/amdgpu/pm4_cmds.h"
@@ -48,12 +48,12 @@ void ForEachPacket(std::span<const u32> commands, Func&& func) {
 }
 
 u32 DefaultWorkerCount() {
-    if (const char* env = std::getenv("GOW3_PREP_WORKERS")) {
+    if (const char* env = std::getenv("SPARTAN_PREP_WORKERS")) {
         return static_cast<u32>(std::clamp(std::atoi(env), 0, 16));
     }
     // Workers are SCHED_IDLE and claim whole buffers, so more of them only use more idle
     // cores: half the hardware threads (Steam Deck 4, 16-thread desktop 8).
-    return std::clamp<u32>(Gow3Threads::Available() / 2, 1, 8);
+    return std::clamp<u32>(SpartanThreads::Available() / 2, 1, 8);
 }
 
 /// Flattened user data of one submission: chunks never move, so the GPU thread can read a
@@ -206,7 +206,7 @@ DrawPreparation::DrawPreparation(PipelineCache& pipeline_cache_)
         workers.emplace_back([this, i](std::stop_token stop) { WorkerLoop(stop, i); });
     }
     std::printf("GPU: draw preparation workers: %u (+1 scanner, %u hardware threads)\n",
-                worker_count, Gow3Threads::Available());
+                worker_count, SpartanThreads::Available());
 }
 
 DrawPreparation::~DrawPreparation() {
@@ -298,7 +298,7 @@ const PreparedDraw* DrawPreparation::NextDraw() {
         return nullptr;
     }
     const PreparedDraw* draw = &current->draws[current_draw++];
-    if (Gow3Toggle::Disabled(Gow3Toggle::DrawPreparation)) {
+    if (SpartanToggle::Disabled(SpartanToggle::DrawPreparation)) {
         return nullptr;
     }
     return draw;
@@ -325,8 +325,8 @@ void DrawPreparation::Collect() {
 }
 
 void DrawPreparation::ScannerLoop(std::stop_token stop) {
-    Common::SetCurrentThreadName("gow3:DrawScan");
-    Gow3Threads::MakeBackground();
+    Common::SetCurrentThreadName("spartanport:DrawScan");
+    SpartanThreads::MakeBackground();
     std::unique_ptr<AmdGpu::Regs> regs;
     u64 checksum = 0;
     u64 next_seq = 0;
@@ -379,8 +379,8 @@ void DrawPreparation::ScannerLoop(std::stop_token stop) {
 }
 
 void DrawPreparation::WorkerLoop(std::stop_token stop, u32 index) {
-    Common::SetCurrentThreadName(("gow3:DrawPrep" + std::to_string(index)).c_str());
-    Gow3Threads::MakeBackground();
+    Common::SetCurrentThreadName(("spartanport:DrawPrep" + std::to_string(index)).c_str());
+    SpartanThreads::MakeBackground();
     auto regs = std::make_unique<AmdGpu::Regs>();
     constexpr u64 NoPosition = ~0ull;
     u64 position = NoPosition; ///< `regs` holds the state at the start of this buffer
@@ -485,7 +485,7 @@ void DrawPreparation::WorkerLoop(std::stop_token stop, u32 index) {
 
 void DrawPreparation::Count(bool was_used) {
     ++(was_used ? used : unused);
-    static const bool stats = std::getenv("GOW3_FRAME_STATS") != nullptr;
+    static const bool stats = std::getenv("SPARTAN_FRAME_STATS") != nullptr;
     // The clock is read every 1024 draws: per draw it was 8% of the GPU thread.
     if (!stats || ((used + unused) & 1023) != 0) {
         return;

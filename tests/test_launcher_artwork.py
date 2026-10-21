@@ -17,7 +17,7 @@ class LauncherArtworkTest(unittest.TestCase):
             (folder / 'sce_sys').mkdir(parents=True)
             (folder / 'eboot.bin').write_bytes(b'fixture')
             (folder / 'sce_sys/param.sfo').write_bytes(
-                sfo_bytes(TITLE_ID='CUSA01623', APP_VER=version, TITLE='God of War III'))
+                sfo_bytes(TITLE_ID='CUSA01623', APP_VER=version, TITLE='SpartanPort'))
         for name in ('pic1.png', 'icon0.png'):
             (self.base / 'sce_sys' / name).write_bytes(b'base artwork')
 
@@ -32,7 +32,8 @@ class LauncherArtworkTest(unittest.TestCase):
         app.banner.__getitem__.return_value = 240
         app.px = lambda value: value
         app.font = lambda family, points, *style: (family, points, *style)
-        app.banner_source = None
+        app.banner_source = app.banner_logo = None
+        app.logo_image = mock.Mock(return_value=None)
         app.scaled_art = mock.Mock()
         return app
 
@@ -43,11 +44,13 @@ class LauncherArtworkTest(unittest.TestCase):
         labels = [call.kwargs.get('text', '') for call in app.banner.create_text.call_args_list]
         self.assertTrue(any('01.02' in label for label in labels), labels)
 
-    def test_icon_falls_back_to_base(self):
+    def test_window_icon_is_the_ports_own_whatever_the_dump(self):
+        (self.update / 'sce_sys/icon0.png').write_bytes(b'updated icon')
         app = self.app()
         with mock.patch.object(launcher, 'window_icon') as icon:
             app.set_icon()
-        self.assertEqual(icon.call_args.args[2], self.base / 'sce_sys/icon0.png')
+        self.assertEqual(icon.call_args.args[2:], (launcher.PORT_DIR / 'launcher' / 'spartanport.ico',
+                                                   launcher.PORT_DIR / 'launcher' / 'spartanport.png'))
 
     def test_update_artwork_overrides_base_when_present(self):
         for name in ('pic1.png', 'icon0.png'):
@@ -55,18 +58,12 @@ class LauncherArtworkTest(unittest.TestCase):
         app = self.app()
         app.draw_banner()
         app.tk.PhotoImage.assert_called_once_with(file=str(self.update / 'sce_sys/pic1.png'))
-        with mock.patch.object(launcher, 'window_icon') as icon:
-            app.set_icon()
-        self.assertEqual(icon.call_args.args[2], self.update / 'sce_sys/icon0.png')
 
-    def test_cover_and_icon_are_resolved_independently(self):
+    def test_cover_falls_back_to_base_when_only_the_icon_was_updated(self):
         (self.update / 'sce_sys/icon0.png').write_bytes(b'updated icon')
         app = self.app()
         app.draw_banner()
         app.tk.PhotoImage.assert_called_once_with(file=str(self.base / 'sce_sys/pic1.png'))
-        with mock.patch.object(launcher, 'window_icon') as icon:
-            app.set_icon()
-        self.assertEqual(icon.call_args.args[2], self.update / 'sce_sys/icon0.png')
 
     def test_without_an_update_the_base_cover_is_used(self):
         app = self.app(update='')
@@ -81,6 +78,14 @@ class LauncherArtworkTest(unittest.TestCase):
             app.draw_banner()
         app.banner.create_image.assert_not_called()
         self.assertTrue(app.banner.create_text.called)
+
+    def test_missing_artwork_shows_the_ports_logo(self):
+        (self.base / 'sce_sys/pic1.png').unlink()
+        app = self.app()
+        app.tk.PhotoImage.side_effect = OSError('missing image')
+        app.logo_image.return_value = 'logo'
+        app.draw_banner()
+        self.assertEqual(app.banner.create_image.call_args.kwargs['image'], 'logo')
 
 
 if __name__ == '__main__':

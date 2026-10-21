@@ -41,7 +41,7 @@ public:
     }
     static bool Enabled() {
         static const bool enabled = [] {
-            const char* value = std::getenv("GOW3_PERF_DIAG");
+            const char* value = std::getenv("SPARTAN_PERF_DIAG");
             return value && value[0] == '1';
         }();
         return enabled;

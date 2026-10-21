@@ -23,7 +23,7 @@ def child(folder, name):
     return folder / name
 
 
-# Top-level folders a mod may shadow (casefolded). The GOW3PC game keeps its data in EXEC and one
+# Top-level folders a mod may shadow (casefolded). The game keeps its data in EXEC and one
 # folder per language at the game root; dvdroot_ps4 is the shadPS4 layout many mods still use.
 GAME_ROOTS = frozenset({'dvdroot_ps4', 'exec', 'dutch', 'english', 'french', 'german', 'italian',
                         'polish', 'portuguese', 'russian', 'spanish'})
@@ -31,9 +31,18 @@ GAME_ROOTS = frozenset({'dvdroot_ps4', 'exec', 'dutch', 'english', 'french', 'ge
 PROTECTED = frozenset({'eboot.bin', 'sce_module', 'sce_sys'})
 
 
-def has_game_root(folder):
+def data_roots(game=None):
+    """Allowed data folders for this game only; never learn executable/system folders (#234)."""
+    game = Path(game) if game else None
+    if not game or not game.is_dir():
+        return GAME_ROOTS
+    return GAME_ROOTS | {e.name.casefold() for e in game.iterdir()
+                         if e.is_dir() and e.name.casefold() not in PROTECTED}
+
+
+def has_game_root(folder, roots=GAME_ROOTS):
     folder = Path(folder)
-    return folder.is_dir() and any(e.is_dir() and e.name.casefold() in GAME_ROOTS for e in folder.iterdir())
+    return folder.is_dir() and any(e.is_dir() and e.name.casefold() in roots for e in folder.iterdir())
 
 
 def game_path(relative, flat):
@@ -46,7 +55,7 @@ def game_path(relative, flat):
     return relative
 
 
-def content_root(folder):
+def content_root(folder, roots=GAME_ROOTS):
     """(root, prefix): where a mod's files are and the game path they go to, or None.
 
     Accepted layouts: <mod>/<game folder>, <mod>/app0/<game folder> and one wrapper folder
@@ -57,13 +66,13 @@ def content_root(folder):
         return None
     for wrapper in ('', 'app0'):
         base = child(folder, wrapper) if wrapper else folder
-        if has_game_root(base):
+        if has_game_root(base, roots):
             return base, ''
     entries = [e for e in folder.iterdir() if not e.name.startswith('.')]
     folders = [e for e in entries if e.is_dir()]
     if len(folders) == 1 and not [e for e in entries if e.is_file() and
                                   e.suffix.casefold() not in METADATA]:
-        return content_root(folders[0])
+        return content_root(folders[0], roots)
     return None
 
 
@@ -73,12 +82,12 @@ IMAGES = ('.png', '.jpg', '.jpeg')
 FIRST_IMAGES = ('preview', 'cover', 'screenshot')
 
 
-def mod_info(folder):
+def mod_info(folder, game=None):
     """What the launcher shows for a mod: name, author, version, description and url from an
     optional mod.json, else the folder name and the start of a readme; image is the mod's preview
     (preview, cover or screenshot first, else any picture) or None. Only reads inside the mod."""
     folder = Path(folder)
-    layout = content_root(folder)
+    layout = content_root(folder, data_roots(game))
     places = list(dict.fromkeys([folder, layout[0] if layout else folder]))
     info = {'name': folder.name, 'author': '', 'version': '', 'description': '', 'url': '', 'image': None}
     files = [e for place in places for e in sorted(place.iterdir(), key=lambda e: e.name.casefold())
@@ -131,7 +140,7 @@ def zip_members(archive):
     return members
 
 
-def unpack_zips(root):
+def unpack_zips(root, game=None):
     """Unpacks every <root>/<name>.zip into <root>/<name>/ (a mod dropped into the mods folder as a zip).
     Done again when the zip changes; a folder with that name that did not come from the zip is left alone.
     Returns the names unpacked now; a zip that cannot be unpacked is reported and skipped."""
@@ -176,7 +185,7 @@ def unpack_zips(root):
             target.mkdir(exist_ok=True)
             marker.write_text(stamp)
             done.append(archive_path.stem)
-            kind = 'a mod' if (content_root(target) or patch_files(target)) else 'not a mod (no EXEC, language folder, dvdroot_ps4 or patches)'
+            kind = 'a mod' if (content_root(target, data_roots(game)) or patch_files(target)) else 'not a mod (no EXEC, language folder, dvdroot_ps4 or patches)'
             print(f'Mods: {archive_path.name} unpacked: {kind}', file=sys.stderr)
         except (OSError, ValueError, RuntimeError, zipfile.BadZipFile) as error:
             shutil.rmtree(target, ignore_errors=True)
@@ -204,19 +213,20 @@ def patch_files(folder):
     return []
 
 
-def discover(root):
+def discover(root, game=None):
     """Named mods: folders of `root` with an accepted layout (content_root) or with patch files. A mod
     dropped in as <name>.zip is unpacked first (unpack_zips)."""
     root = Path(root)
     if not root.is_dir():
         return []
-    unpack_zips(root)
-    return sorted((p.name for p in root.iterdir() if p.is_dir() and (content_root(p) or patch_files(p))),
+    unpack_zips(root, game)
+    roots = data_roots(game)
+    return sorted((p.name for p in root.iterdir() if p.is_dir() and (content_root(p, roots) or patch_files(p))),
                   key=lambda name: (name.casefold(), name))
 
 
-def selected(root, config):
-    available = discover(root)
+def selected(root, config, game=None):
+    available = discover(root, game)
     if not config or not Path(config).is_file():
         return available
     settings = json.loads(Path(config).read_text())
@@ -232,18 +242,19 @@ def selected(root, config):
                              if n in available and n not in disabled))
 
 
-def enabled_patch_files(root, config, enabled=True):
+def enabled_patch_files(root, config, enabled=True, game=None):
     """The patch files of the enabled mods, in load order (a later file wins where patches share a name)."""
     if not enabled:
         return []
     root = Path(root)
-    return [f for name in selected(root, config) for f in patch_files(root / name)]
+    return [f for name in selected(root, config, game) for f in patch_files(root / name)]
 
 
-def mod_files(folder):
+def mod_files(folder, game=None):
     """(mod path, source) of every file a mod replaces or adds under a GAME_ROOTS folder; the
     game path is game_path(mod path)."""
-    layout = content_root(folder)
+    roots = data_roots(game)
+    layout = content_root(folder, roots)
     if not layout:
         if patch_files(folder):
             return  # patches only
@@ -263,7 +274,7 @@ def mod_files(folder):
             relative = Path(prefix) / source.relative_to(root) if prefix else source.relative_to(root)
             # Readme/metadata stay outside the mounted game. This loader handles assets;
             # executable patches use the existing patch compiler, with address validation.
-            if relative.parts[0].casefold() not in GAME_ROOTS:
+            if relative.parts[0].casefold() not in roots:
                 if relative.parts[0].casefold() in PROTECTED:
                     raise ValueError(f'Executable/system replacement is unsupported: {source}')
                 continue
@@ -272,15 +283,15 @@ def mod_files(folder):
             yield relative, source
 
 
-def conflicts(root, names):
+def conflicts(root, names, game=None):
     """Files more than one of `names` (in load order) replaces: [(game path, [mods])], the last
     mod of each list wins. Paths match case-insensitively, as in build_overlay; unreadable mods
     are skipped."""
     owners = {}
     for name in names:
         try:
-            for relative, _source in mod_files(Path(root) / name):
-                relative = game_path(relative, flat=True)  # the GOW3PC game has no dvdroot_ps4
+            for relative, _source in mod_files(Path(root) / name, game):
+                relative = game_path(relative, flat=True)  # the game has no dvdroot_ps4
                 key = relative.as_posix().casefold()
                 owners.setdefault(key, (relative.as_posix(), []))[1].append(name)
         except (OSError, ValueError):
@@ -386,7 +397,7 @@ def build_overlay(game, out, mods):
     owners = {}
     for name, root in mods:
         count = 0
-        for relative, source in mod_files(root):
+        for relative, source in mod_files(root, game):
             relative = game_path(relative, flat)
             key = relative.as_posix().casefold()
             if key in owners:
@@ -444,10 +455,10 @@ def main():
         if legacy.is_dir():
             layers.append((legacy.name, legacy))
         # A directly selected loose overlay is also accepted.
-        if has_game_root(args.mods_dir):
+        if has_game_root(args.mods_dir, data_roots(args.game)):
             layers.append((args.mods_dir.name, args.mods_dir))
         else:
-            for name in selected(args.mods_dir, args.config):
+            for name in selected(args.mods_dir, args.config, args.game):
                 layers.append((name, args.mods_dir / name))
     print(build_overlay(args.game, args.out, layers))
 

@@ -24,9 +24,9 @@ namespace Vulkan {
 
 using Shader::Backend::SPIRV::AuxShaderType;
 
-// gow3: where pipeline construction time goes (reported when the background warm-up ends).
-std::atomic<u64> g_gow3_pipeline_total_ns, g_gow3_pipeline_driver_ns;
-std::atomic<u32> g_gow3_pipelines_built;
+// spartanport: where pipeline construction time goes (reported when the background warm-up ends).
+std::atomic<u64> g_spartanport_pipeline_total_ns, g_spartanport_pipeline_driver_ns;
+std::atomic<u32> g_spartanport_pipelines_built;
 namespace {
 using Clock = std::chrono::steady_clock;
 u64 NsSince(Clock::time_point start) {
@@ -140,7 +140,7 @@ GraphicsPipeline::GraphicsPipeline(
         sdata.multisampling = {
             .rasterizationSamples = LiverpoolToVK::NumSamples(
                 key.num_samples, instance.GetColorSampleCounts() & instance.GetDepthSampleCounts()),
-            // gow3: GOW3_LIGHTING_TEST=shading keeps sample shading off (vk_lighting_test.h).
+            // spartanport: SPARTAN_LIGHTING_TEST=shading keeps sample shading off (vk_lighting_test.h).
             .sampleShadingEnable = !LightingTest::Current().shading &&
                                    (fs_info.addr_flags.persp_sample_ena ||
                                     fs_info.addr_flags.linear_sample_ena),
@@ -311,7 +311,7 @@ GraphicsPipeline::GraphicsPipeline(
     };
 
     std::array<vk::PipelineColorBlendAttachmentState, AmdGpu::NUM_COLOR_BUFFERS> attachments;
-    // gow3: GNM scales MIN/MAX operands, Vulkan does not (vk_blend_rewrite.h). A self-scaled
+    // spartanport: GNM scales MIN/MAX operands, Vulkan does not (vk_blend_rewrite.h). A self-scaled
     // MIN/MAX is drawn twice: native, then this pipeline squares the destination.
     std::array<vk::PipelineColorBlendAttachmentState, AmdGpu::NUM_COLOR_BUFFERS> square_attachments;
     bool needs_square_pass = false;
@@ -456,8 +456,8 @@ GraphicsPipeline::GraphicsPipeline(
         square_pipeline = std::move(square);
         SetObjectName(device, *square_pipeline, "Graphics Pipeline {} squaring pass", debug_str);
     }
-    g_gow3_pipeline_total_ns += NsSince(started);
-    ++g_gow3_pipelines_built;
+    g_spartanport_pipeline_total_ns += NsSince(started);
+    ++g_spartanport_pipelines_built;
 }
 
 GraphicsPipeline::~GraphicsPipeline() = default;

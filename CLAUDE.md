@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-GitHub Issues on `FelipePrado0/gow3_pc` (`origin`); always pass `-R FelipePrado0/gow3_pc` to `gh`. See `docs/agents/issue-tracker.md`.
+GitHub Issues on `FelipePrado0/SpartanPort` (`origin`); always pass `-R FelipePrado0/SpartanPort` to `gh`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
