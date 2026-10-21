@@ -63,7 +63,7 @@ public:
 protected:
     [[nodiscard]] std::string GetDebugString() const;
 
-    /// gow3: GOW3_WAVE_STATS=1: logs the subgroup width the driver compiled each stage of
+    /// spartanport: SPARTAN_WAVE_STATS=1: logs the subgroup width the driver compiled each stage of
     /// `pipeline` at (vk_wave_stats.h). Call once the pipeline exists.
     void RecordWaveSizes() const;
 

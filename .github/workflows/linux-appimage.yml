@@ -35,11 +35,11 @@ jobs:
       - name: AppImage
         run: |
           PATH="$PWD/out/venv/bin:$PATH" bash packaging/linux/build.sh
-          cd dist && sha256sum gow3-x86_64.AppImage | sed 's/  / */' > gow3-x86_64.AppImage.sha256
+          cd dist && sha256sum spartanport-x86_64.AppImage | sed 's/  / */' > spartanport-x86_64.AppImage.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: gow3-x86_64.AppImage
-          path: dist/gow3-x86_64.AppImage*
+          name: spartanport-x86_64.AppImage
+          path: dist/spartanport-x86_64.AppImage*
           if-no-files-found: error
 
   smoke:
@@ -55,12 +55,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: gow3-x86_64.AppImage
+          name: spartanport-x86_64.AppImage
           path: dist
       - name: Open the launcher on ${{ matrix.image }}
         run: |
-          chmod +x dist/gow3-x86_64.AppImage
-          docker run --rm -v "$PWD:/w:ro" "${{ matrix.image }}" bash /w/packaging/linux/smoke-test.sh /w/dist/gow3-x86_64.AppImage
+          chmod +x dist/spartanport-x86_64.AppImage
+          docker run --rm -v "$PWD:/w:ro" "${{ matrix.image }}" bash /w/packaging/linux/smoke-test.sh /w/dist/spartanport-x86_64.AppImage
 
   publish:
     needs: smoke
@@ -69,7 +69,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: gow3-x86_64.AppImage
+          name: spartanport-x86_64.AppImage
           path: dist
       - name: Release
         env:
@@ -79,6 +79,6 @@ jobs:
         run: |
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Linux test build $TAG" \
-              --notes "Linux test build from \`${GITHUB_SHA::7}\`. Download \`gow3-x86_64.AppImage\`, then \`chmod +x gow3-x86_64.AppImage\` and run it. Not a final release: please report in the linked issue whether it opens and runs."
+              --notes "Linux test build from \`${GITHUB_SHA::7}\`. Download \`spartanport-x86_64.AppImage\`, then \`chmod +x spartanport-x86_64.AppImage\` and run it. Not a final release: please report in the linked issue whether it opens and runs."
           fi
-          gh release upload "$TAG" dist/gow3-x86_64.AppImage dist/gow3-x86_64.AppImage.sha256 --clobber
+          gh release upload "$TAG" dist/spartanport-x86_64.AppImage dist/spartanport-x86_64.AppImage.sha256 --clobber

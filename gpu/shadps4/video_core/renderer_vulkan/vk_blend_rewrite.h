@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
-// gow3: from cuesta4/shadPS4 (eltutz), GNM scaled MIN/MAX blends.
+// spartanport: from cuesta4/shadPS4 (eltutz), GNM scaled MIN/MAX blends.
 
 #pragma once
 

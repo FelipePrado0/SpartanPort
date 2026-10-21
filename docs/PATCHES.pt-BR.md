@@ -18,19 +18,19 @@ jogo (Insert ou R3 + L2) é em inglês.
 
 ## Patches embutidos
 
-Os patches embutidos ficam em `patches/God_of_War_III_Remastered.xml`. Eles são para o CUSA01623 e o
+Os patches embutidos ficam em `patches/CUSA01623.xml`. Eles são para o CUSA01623 e o
 CUSA01715, versão 01.02, e acham cada ponto por **assinatura** (os bytes originais em volta do ponto),
 então também funcionam em outros builds cujo código bate.
 
 | Patch | O que faz | Quem liga | Autor |
 |---|---|---|---|
-| **Bug Fix - Startup Black Screen** | Corrige a tela preta ao abrir com o contador de FPS rodando: o índice de ritmo dos quadros começa em 2 em vez de 0 | Sempre aplicado; não aparece no launcher | gow3_pc |
+| **Bug Fix - Startup Black Screen** | Corrige a tela preta ao abrir com o contador de FPS rodando: o índice de ritmo dos quadros começa em 2 em vez de 0 | Sempre aplicado; não aparece no launcher | SpartanPort |
 | **Bug Fix - Texture Corruption Fix** | Corrige texturas corrompidas dando ao jogo uma video arena maior (mais memória de vídeo) | Aplicado sempre que a resolução de renderização é **Native**; um patch de resolução o substitui | cuesta4 |
 | **Skip Any Video With X Button** | Permite pular qualquer cinemática com o X | Página **Jogo**, ligado por padrão | cuesta4 |
 | **Skip Intro** | Pula os logos ao abrir | Página **Jogo**, desligado por padrão | cuesta4 |
-| **Resolution Patch - &lt;tamanho&gt;** (21 tamanhos, de 480p a 5120 × 2160) | Define a resolução de renderização e a video arena; os tamanhos ultrawide também alargam o campo de visão (Hor+) | **Resolução de renderização** (página **Desempenho** do launcher, ou o menu do jogo); um por vez | kvicken + cuesta4 (480p, 720p, 1440p, 1800p, 4K); gow3_pc (900p e os tamanhos ultrawide, 16:10 e 4:3) |
-| **Frame Rate Patch - 240 FPS** | Sobe o limite de quadros do motor e corrige a swing energy para bater com a simulação original de 60 Hz | Aplicado em toda abertura; a **Taxa de quadros do motor** escolhida (60, 100, 120 ou 240) é escrita ao vivo | kvicken, gow3_pc |
-| Frame Rate Patch - 120 FPS / 100 FPS | O mesmo patch com limite de 120 ou 100 | O launcher não usa mais; ficam no arquivo para outros usos | kvicken / kvicken, gow3_pc |
+| **Resolution Patch - &lt;tamanho&gt;** (21 tamanhos, de 480p a 5120 × 2160) | Define a resolução de renderização e a video arena; os tamanhos ultrawide também alargam o campo de visão (Hor+) | **Resolução de renderização** (página **Desempenho** do launcher, ou o menu do jogo); um por vez | kvicken + cuesta4 (480p, 720p, 1440p, 1800p, 4K); SpartanPort (900p e os tamanhos ultrawide, 16:10 e 4:3) |
+| **Frame Rate Patch - 240 FPS** | Sobe o limite de quadros do motor e corrige a swing energy para bater com a simulação original de 60 Hz | Aplicado em toda abertura; a **Taxa de quadros do motor** escolhida (60, 100, 120, 144, 180 ou 240) é escrita ao vivo | kvicken, SpartanPort |
+| Frame Rate Patch - 120 FPS / 144 FPS / 100 FPS | O mesmo patch com limite de 120, 144 ou 100 | O launcher não usa mais; ficam no arquivo para outros usos | kvicken / kvicken, SpartanPort |
 
 Observações:
 
@@ -40,7 +40,8 @@ Observações:
 - **Memória.** Uma nota de patch como "Requires setting DMEM to 3072 MB" faz o port reservar essa
   memória direta a mais, além dos 5056 MB do jogo original. Nada precisa ser ajustado à mão.
 - **Taxa de quadros.** A taxa do motor muda com o jogo rodando (menu do jogo, **R3 + L1 + R1** ou
-  **F9**): toda abertura usa o patch de 240 FPS e o port escreve a taxa escolhida no jogo. Se o patch
+  **F9**): toda abertura usa o patch de 240 FPS e o port escreve a taxa escolhida no jogo. 144 FPS é
+  voltado para telas de 144 Hz; com VSync, ele mantém a apresentação alinhada a essa taxa. Se o patch
   de 240 FPS não for encontrado no seu `eboot.bin`, entra o maior patch de taxa de quadros encontrado;
   se nenhum for encontrado, o motor fica nos 60 FPS originais.
 
@@ -102,7 +103,7 @@ Engine frame rate: 120 FPS, live up to 240
 | `signature found more than once` | O padrão não é único no seu build | O autor do patch precisa aumentar o padrão |
 | O patch de 240 FPS fica de fora e o motor fica em 60 FPS | Nenhum patch de taxa de quadros bate com o seu build | Informe o sha256 do log |
 | Um patch de terceiros não faz nada | Patches de terceiros só valem para o build de referência (abaixo) | Confira a linha do sha256 no log |
-| O jogo não abre e o log diz `choose one resolution patch, not [...]` | O `GOW3_PATCHES` (terminal) cita dois patches de resolução | Cite só um; o launcher sempre passa o escolhido em **Resolução de renderização** |
+| O jogo não abre e o log diz `choose one resolution patch, not [...]` | O `SPARTAN_PATCHES` (terminal) cita dois patches de resolução | Cite só um; o launcher sempre passa o escolhido em **Resolução de renderização** |
 | O jogo fecha ao abrir depois de acrescentar um patch | O patch escreve os bytes errados para o seu build | Desligue-o; patches com assinatura são mais seguros que endereços fixos |
 
 ## Escrevendo um patch
@@ -117,7 +118,7 @@ Os patches usam o formato XML do shadPS4/GoldHEN. Um arquivo tem os title IDs a 
         <ID>CUSA01623</ID>
         <ID>CUSA01715</ID>
     </TitleID>
-    <Metadata Title="GOW3PC" Name="Skip Any Video With X Button" Note="Allows skipping any cinematic with Cross." Author="cuesta4" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
+    <Metadata Title="SpartanPort" Name="Skip Any Video With X Button" Note="Allows skipping any cinematic with Cross." Author="cuesta4" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
         <PatchList>
             <Line Type="bytes" Address="0x0041b2a3" Value="7542" Pattern="e8 ?? ?? ?? ?? 31 c9 80 3d ?? ?? ?? ?? 00 75 4a" At="14"/>
             <Line Type="bytes" Address="0x0041b2e7" Value="b901000000909090" Pattern="8b 00 eb 05 e8 ?? ?? ?? ?? 85 c0 0f 95 c0 0f b6 c8" At="9"/>
@@ -215,7 +216,7 @@ escolhe outra pasta).
 - Tipos de linha aceitos: `bytes`, `bytes16/32/64`, `float32/64`, `utf8`, `utf16`. Um patch com linha
   `mask` ou com endereço fora do `eboot.bin` fica de fora inteiro, com aviso no log.
 - Eles entram depois dos embutidos: onde os dois escrevem, vence o de terceiros.
-- Pelo terminal: `GOW3_PATCHES_DIR=/caminho GOW3_PATCHES_CONFIG=/caminho/patches.json python run.py`.
+- Pelo terminal: `SPARTAN_PATCHES_DIR=/caminho SPARTAN_PATCHES_CONFIG=/caminho/patches.json python run.py`.
 
 Para usar um patch de terceiros em qualquer build, converta-o para o formato embutido, com
 assinaturas, e distribua-o num mod ([Patches em mods](#patches-em-mods)).
@@ -224,6 +225,6 @@ assinaturas, e distribua-o num mod ([Patches em mods](#patches-em-mods)).
 
 - **kvicken** e **cuesta4**: os patches de resolução, correção de textura, 120 FPS e pular vídeos,
   publicados para o shadPS4, a partir dos patches de PS3 de **illusion0001**.
-- **gow3_pc** (Felipe Prado): o porte desses patches para este build e para assinaturas, as versões
-  de 100 e 240 FPS, a correção da tela preta ao abrir e os tamanhos ultrawide, 16:10 e 4:3
+- **SpartanPort** (Felipe Prado): o porte desses patches para este build e para assinaturas, as versões
+  de 100, 144 e 240 FPS, a correção da tela preta ao abrir e os tamanhos ultrawide, 16:10 e 4:3
   (`tools/make_ultrawide_patch.py`).

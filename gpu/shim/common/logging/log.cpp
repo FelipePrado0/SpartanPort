@@ -1,4 +1,4 @@
-// gow3: see log.h.
+// spartanport: see log.h.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -8,7 +8,7 @@
 namespace Common::Log {
 static Level threshold() {
     static const Level level = [] {
-        const char* v = std::getenv("GOW3_GPU_LOG");
+        const char* v = std::getenv("SPARTAN_GPU_LOG");
         if (!v) return Level::warn;
         static const char* names[] = {"trace", "debug", "info", "warning", "error", "critical"};
         for (int i = 0; i < 6; ++i)

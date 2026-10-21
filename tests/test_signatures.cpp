@@ -8,20 +8,20 @@
 #include "../src/damage_hook.h"
 #include "../src/orb_hook.h"
 
-struct Site { const Gow3Signature* sig; uint64_t reference; };
+struct Site { const SpartanSignature* sig; uint64_t reference; };
 
-static uint64_t Find(const std::vector<unsigned char>& image, const Gow3Signature& sig) {
-    return gow3_signature_find(image.data(), image.size(), &sig);
+static uint64_t Find(const std::vector<unsigned char>& image, const SpartanSignature& sig) {
+    return spartanport_signature_find(image.data(), image.size(), &sig);
 }
 
 int main(int argc, char** argv) {
-    int parsed[GOW3_SIGNATURE_MAX];
-    assert(gow3_signature_parse("c5 ?? 0a", parsed) == 3 && parsed[0] == 0xc5 && parsed[1] == -1 && parsed[2] == 10);
-    assert(!gow3_signature_parse("c5 g0", parsed) && !gow3_signature_parse("c5 0", parsed));
+    int parsed[SPARTAN_SIGNATURE_MAX];
+    assert(spartanport_signature_parse("c5 ?? 0a", parsed) == 3 && parsed[0] == 0xc5 && parsed[1] == -1 && parsed[2] == 10);
+    assert(!spartanport_signature_parse("c5 g0", parsed) && !spartanport_signature_parse("c5 0", parsed));
 
     std::vector<unsigned char> buffer(256);
     const unsigned char bytes[] = {0x48, 0x8d, 0x05, 1, 2, 3, 4, 0xc3};
-    const Gow3Signature sig = {"48 8d 05 ?? ?? ?? ?? c3", 3};
+    const SpartanSignature sig = {"48 8d 05 ?? ?? ?? ?? c3", 3};
     assert(Find(buffer, sig) == UINT64_MAX);                       // absent
     memcpy(buffer.data() + 100, bytes, sizeof(bytes));
     assert(Find(buffer, sig) == 103);                              // the site, wildcards ignored
@@ -46,16 +46,16 @@ int main(int argc, char** argv) {
     std::fclose(file);
 
     std::vector<Site> sites;
-    for (const auto& hook : gow3_cheat_hooks) sites.push_back({&hook.site, hook.offset});
-    sites.push_back({&gow3_actor_site, GOW3_ACTOR_HOOK_OFFSET});
-    sites.push_back({&gow3_damage_site, GOW3_DAMAGE_HOOK_OFFSET});
-    sites.push_back({&gow3_orb_pickup_site, GOW3_ORB_PICKUP_OFFSET});
-    sites.push_back({&gow3_orb_setter_site, 0x6a9f0});
+    for (const auto& hook : spartanport_cheat_hooks) sites.push_back({&hook.site, hook.offset});
+    sites.push_back({&spartanport_actor_site, SPARTAN_ACTOR_HOOK_OFFSET});
+    sites.push_back({&spartanport_damage_site, SPARTAN_DAMAGE_HOOK_OFFSET});
+    sites.push_back({&spartanport_orb_pickup_site, SPARTAN_ORB_PICKUP_OFFSET});
+    sites.push_back({&spartanport_orb_setter_site, 0x6a9f0});
     const uint64_t calls[] = {0x6a775, 0x6fa33, 0x6fbd7};
-    for (unsigned i = 0; i < 3; ++i) sites.push_back({&gow3_orb_call_sites[i], calls[i]});
+    for (unsigned i = 0; i < 3; ++i) sites.push_back({&spartanport_orb_call_sites[i], calls[i]});
     for (const auto& site : sites) assert(Find(image, *site.sig) == site.reference);
     uint64_t found[3];
-    assert(gow3_orb_find(image.data(), image.size(), found) == 0x6a9f0);
+    assert(spartanport_orb_find(image.data(), image.size(), found) == 0x6a9f0);
     for (unsigned i = 0; i < 3; ++i) assert(found[i] == calls[i]);
 
     // Another build: 0x120 bytes more before 0x60000, 0x10 fewer at 0x90000.
@@ -65,13 +65,13 @@ int main(int argc, char** argv) {
     moved.insert(moved.end(), image.begin() + 0x90010, image.end());
     const auto shifted = [](uint64_t at) { return at < 0x60000 ? at : at < 0x90000 ? at + 0x120 : at + 0x110; };
     for (const auto& site : sites) assert(Find(moved, *site.sig) == shifted(site.reference));
-    assert(gow3_orb_find(moved.data(), moved.size(), found) == shifted(0x6a9f0));
-    for (const auto& hook : gow3_cheat_hooks) {
+    assert(spartanport_orb_find(moved.data(), moved.size(), found) == shifted(0x6a9f0));
+    for (const auto& hook : spartanport_cheat_hooks) {
         const uint64_t at = Find(moved, hook.site);
-        assert(gow3_cheat_signature_match(&hook, moved.data() + at, moved.size() - at));
+        assert(spartanport_cheat_signature_match(&hook, moved.data() + at, moved.size() - at));
     }
     // A call that no longer reaches the setter leaves the orb multiplier off.
     moved[shifted(0x6fa33) + 1] ^= 1;
-    assert(gow3_orb_find(moved.data(), moved.size(), found) == UINT64_MAX);
+    assert(spartanport_orb_find(moved.data(), moved.size(), found) == UINT64_MAX);
     std::printf("signatures-test: OK (%zu hook sites in the reference build and in a moved build)\n", sites.size());
 }

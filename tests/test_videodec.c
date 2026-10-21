@@ -8,7 +8,7 @@
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *nid) { (void)table; (void)count; (void)nid; return 0; }
 /* Each picture handed to the game tells the presenter a cutscene is on screen (its bars). */
 static int reported;
-void gow3gpu_movie_picture(void) { ++reported; }
+void spartanportgpu_movie_picture(void) { ++reported; }
 
 static unsigned char frame_buffer[1<<16];
 static int pictures, first_luma_sum, seen;

@@ -15,7 +15,7 @@
 int main() {
     using namespace Vulkan;
     Instance instance(0, false);
-    // Calls emitted by this executable use a local dispatcher. libgow3gpu.so initializes
+    // Calls emitted by this executable use a local dispatcher. libspartanportgpu.so initializes
     // its own default dispatcher while constructing Instance.
     static vk::detail::DynamicLoader loader;
     vk::detail::DispatchLoaderDynamic dispatch;

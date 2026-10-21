@@ -49,10 +49,10 @@ tem a instrução seguinte como alvo de salto direto.
 
 ```
 run.py
-  gow3-probe --cpu-features          -> "CPU: missing MOVBE, BMI1, LZCNT" | "CPU: complete"
+  spartanport-probe --cpu-features          -> "CPU: missing MOVBE, BMI1, LZCNT" | "CPU: complete"
   prepare.py / link_libc.py / link_modules.py   (como hoje)
-  isa_rewrite.py out/boot-linked.bin --out out  (só se faltar algo ou GOW3_ISA_REWRITE=1)
-  gow3-probe out/boot-linked.bin ... --isa-rewrite out/isa-rewrite.bin
+  isa_rewrite.py out/boot-linked.bin --out out  (só se faltar algo ou SPARTAN_ISA_REWRITE=1)
+  spartanport-probe out/boot-linked.bin ... --isa-rewrite out/isa-rewrite.bin
       cpu_check: conjuntos fatais -> STOP; reescrevíveis -> lista
       carrega imagem, relocações, patches, cheats, hooks, TCB (como hoje)
       isa_rewrite_apply: verifica bytes, gera stubs, aplica jmp/int3
@@ -161,7 +161,7 @@ Sem `iced_x86` importável, ou arquivo de entrada inválido: imprime
 
 ### 5.1 Ativação
 
-Opção nova `--isa-rewrite <arquivo>`. Variável `GOW3_ISA_REWRITE`:
+Opção nova `--isa-rewrite <arquivo>`. Variável `SPARTAN_ISA_REWRITE`:
 
 - ausente: automático. Reescreve só os sítios dos conjuntos que o CPUID não tem.
 - `1`: reescreve todos os sítios, mesmo com CPU completa. Modo de teste.
@@ -172,15 +172,15 @@ POPCNT, AVX) → `STOP` com texto novo: `(Intel Sandy Bridge 2011 or newer, or A
 newer, is needed)`, código 20. Conjunto reescrevível ausente (MOVBE, BMI1, LZCNT, F16C)
 sem `--isa-rewrite`, com tabela inválida, ou com sha256 diferente da imagem → `STOP:
 this CPU lacks MOVBE, BMI1, LZCNT and no rewrite table matches the image`, código 20.
-Com `GOW3_ISA_REWRITE=0` o texto é `STOP: this CPU lacks MOVBE, BMI1, LZCNT and the
-rewrite is disabled (GOW3_ISA_REWRITE=0)`, código 20. Com tabela válida → segue.
+Com `SPARTAN_ISA_REWRITE=0` o texto é `STOP: this CPU lacks MOVBE, BMI1, LZCNT and the
+rewrite is disabled (SPARTAN_ISA_REWRITE=0)`, código 20. Com tabela válida → segue.
 
 ### 5.2 `cpu_check`
 
 `cpu_missing_features` passa a separar os dois grupos (dois buffers ou uma máscara por
-conjunto). Modo novo `gow3-probe --cpu-features`: imprime `CPU: missing MOVBE, BMI1,
+conjunto). Modo novo `spartanport-probe --cpu-features`: imprime `CPU: missing MOVBE, BMI1,
 LZCNT` ou `CPU: complete` e sai 0; conjunto fatal ausente imprime a linha `STOP:` e sai 20.
-`GOW3_CPU_CHECK=0` continua pulando a checagem inteira.
+`SPARTAN_CPU_CHECK=0` continua pulando a checagem inteira.
 
 ### 5.3 Memória
 
@@ -265,7 +265,7 @@ Escrita no destino: 64 bits escrevem tudo; 32 bits zeram os 32 altos; 16 bits (L
 TZCNT, MOVBE) preservam os bits altos. Operando de memória: os registradores do guest já
 guardam endereços do host, então endereço = `base + índice × escala + deslocamento`;
 RIP-relativo vem da tabela como offset absoluto e vira `image + deslocamento`. Um store em
-página rastreada pela GPU cai no `gow3gpu_handle_fault` existente e continua, como um
+página rastreada pela GPU cai no `spartanportgpu_handle_fault` existente e continua, como um
 store do guest.
 
 ### 5.7 Trap `int3`
@@ -282,20 +282,20 @@ chama `isa_emulate`, copia de volta registradores e flags, RIP = sítio + tamanh
 
 Na aplicação:
 `ISA: CPU lacks MOVBE, BMI1, LZCNT: 1412 sites rewritten (1327 jmp, 85 relocated, 0 int3), 0 skipped`.
-Em modo forçado: `ISA: forced rewrite of all 1412 sites (GOW3_ISA_REWRITE=1), 0 skipped`.
+Em modo forçado: `ISA: forced rewrite of all 1412 sites (SPARTAN_ISA_REWRITE=1), 0 skipped`.
 Na saída normal e no relatório de falha: `ISA: most executed sites:` seguido dos 10
 sítios com mais `hits` (`0x<offset> <mnemônico> <hits>`). Serve para decidir se um dia
 vale um caminho rápido em asm para algum sítio.
 
 ## 6. `run.py`
 
-1. Antes dos scripts de preparação, roda `gow3-probe --cpu-features`. Saída 20: imprime a
+1. Antes dos scripts de preparação, roda `spartanport-probe --cpu-features`. Saída 20: imprime a
    linha `STOP:` e termina. Lê a lista de conjuntos ausentes.
-2. Depois de `link_modules.py`, se a lista não está vazia ou `GOW3_ISA_REWRITE=1`:
+2. Depois de `link_modules.py`, se a lista não está vazia ou `SPARTAN_ISA_REWRITE=1`:
    `run_script('isa_rewrite.py', out / 'boot-linked.bin', '--out', out)`. Sucesso →
    acrescenta `--isa-rewrite out/isa-rewrite.bin` ao comando do probe. Falha → imprime a
    linha do script e segue sem a flag (o probe dá o `STOP` com o motivo).
-3. `GOW3_ISA_REWRITE=0`: não roda o script nem passa a flag.
+3. `SPARTAN_ISA_REWRITE=0`: não roda o script nem passa a flag.
 
 ## 7. Empacotamento e documentação
 
@@ -330,7 +330,7 @@ vale um caminho rápido em asm para algum sítio.
   `isa_rewrite_apply`, executa trecho reescrito e nativo, compara registradores, flags e
   memória; confere XMM0-15 e os 128 bytes abaixo de `rsp` intactos; exercita o trap pelo
   handler da plataforma.
-- Ponta a ponta: `GOW3_ISA_REWRITE=1` no Windows e no Linux de desenvolvimento. O jogo
+- Ponta a ponta: `SPARTAN_ISA_REWRITE=1` no Windows e no Linux de desenvolvimento. O jogo
   abre e joga com `ISA: forced rewrite of all N sites`, sem falha nova. Build de teste
   para os relatores das issues #33 e #66.
 - `build.sh --test` e `gpu/CMakeLists.txt` ganham `isa-emulate-test` e `isa-stub-test`

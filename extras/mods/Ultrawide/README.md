@@ -2,7 +2,7 @@
 
 **English** | [Português (Brasil)](#português-brasil)
 
-Makes God of War III Remastered fill an ultrawide screen **without the zoomed-in picture**. The game's
+Makes SpartanPort fill an ultrawide screen **without the zoomed-in picture**. The game's
 camera has a fixed horizontal field of view, so a plain resolution change only crops a 16:9 picture top
 and bottom. This mod adds render resolutions that also widen the field of view: the world keeps its
 proportions and you see more to the sides.
@@ -31,11 +31,11 @@ how it looks (resolution, and whether anything is cropped, stretched or missing 
 request #202 and the releases after it is merged. 2.2.0 and 2.3.0 do not: with them the zip is ignored and the
 game stays at its usual resolution.
 
-1. Put `Ultrawide.zip` into the `mods` folder, next to `God of War III.exe` (in the launcher: **Mods** →
+1. Put `Ultrawide.zip` into the `mods` folder, next to `SpartanPort.exe` (in the launcher: **Mods** →
    **Open**; create the folder if it is not there). Do not unzip it: the game does that by itself.
 2. Open the launcher. The mod is listed on the Mods page, ticked, with "(game patches)".
 3. In **Render resolution** (Home or Performance) pick `3440x1440 (mod)` or another size, then **PLAY**. The
-   in-game menu (Insert → Performance) lists them too. The **Engine frame rate** (60, 120 or 240) is a
+   in-game menu (Insert → Performance) lists them too. The **Engine frame rate** (60, 100, 120, 144, 180 or 240) is a
    separate choice that works with any resolution.
 4. Use a display or window of the same size (borderless is the easy way).
 
@@ -43,9 +43,9 @@ game stays at its usual resolution.
 (attached to pull request #202).
 
 1. Close the game and the launcher. Unzip `Ultrawide-installer.zip` anywhere.
-2. Double-click **`INSTALL.bat`**. Paste the game folder when it asks (the one with `God of War III.exe`; if you
+2. Double-click **`INSTALL.bat`**. Paste the game folder when it asks (the one with `SpartanPort.exe`; if you
    unzipped inside that folder it finds it by itself), then pick a resolution from the menu.
-3. Start the game with **`Play God of War III.exe`**. Do not use the launcher on 2.2.0 or 2.3.0: it does not list the new
+3. Start the game with **`Play SpartanPort.exe`**. Do not use the launcher on 2.2.0 or 2.3.0: it does not list the new
    sizes and can reset the setting. To pick another size later, run `Ultrawide - choose resolution.bat` in the
    game folder.
 4. To undo everything: **`UNINSTALL.bat`** (it puts the original files back).
@@ -89,19 +89,19 @@ Reported by testers; they come from the game, which is built for 16:9:
 
 ## Português (Brasil)
 
-Faz o God of War III Remastered encher uma tela ultrawide **sem a imagem com zoom**. A câmera do jogo tem
+Faz o SpartanPort encher uma tela ultrawide **sem a imagem com zoom**. A câmera do jogo tem
 campo de visão horizontal fixo, então só trocar a resolução corta a imagem de 16:9 em cima e embaixo. Este
 mod adiciona resoluções que também abrem o campo de visão: o mundo mantém as proporções e você vê mais dos
 lados.
 
 **Como instalar.** Nas versões **que leem mods em zip** (a build de teste do Ultrawide indicada no pull request
 #202 e as releases depois do merge; a 2.2.0 e a 2.3.0 não leem, e o jogo fica na resolução de sempre): coloque o
-`Ultrawide.zip` (sem extrair) na pasta `mods`, ao lado do `God of War III.exe` (no launcher: **Mods** →
+`Ultrawide.zip` (sem extrair) na pasta `mods`, ao lado do `SpartanPort.exe` (no launcher: **Mods** →
 **Open**), abra o launcher e escolha o tamanho em **Render resolution**. Na **2.2.0 ou 2.3.0 oficiais** (que ainda não leem mods em zip): baixe o instalador
 `Ultrawide-installer.zip` (anexado ao pull request #202), extraia, dê dois cliques no **`INSTALL.bat`**, cole
-a pasta do jogo, escolha a resolução no menu e inicie o jogo pelo **`Play God of War III.exe`** (não pelo
+a pasta do jogo, escolha a resolução no menu e inicie o jogo pelo **`Play SpartanPort.exe`** (não pelo
 launcher). Para desfazer: **`UNINSTALL.bat`**. Em **Render resolution** aparecem `3440x1440 (mod)` e os outros tamanhos (e no menu do jogo,
-tecla Insert). O **Engine frame rate** (60, 120 ou 240) é uma escolha à parte e vale com qualquer resolução.
+tecla Insert). O **Engine frame rate** (60, 100, 120, 144, 180 ou 240) é uma escolha à parte e vale com qualquer resolução.
 
 **As cutscenes continuam com bordas:** são vídeos 16:9 pré-renderizados, então tocam com barras pretas dos
 lados (em cima e embaixo no 16:10); as builds anteriores à de teste deixavam o último frame do jogo nessas
