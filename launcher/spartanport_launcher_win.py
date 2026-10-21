@@ -233,9 +233,11 @@ def pick_fonts(families):
     # Registration can succeed in fontconfig even when Tk uses the X core font backend.
     FONT_LOADED = FONT_LOADED and bool({'Cinzel Black', 'Cinzel'} & available)
     pick = lambda names: next((name for name in names if name in available), names[-1])
-    UI_FONT = pick(('Segoe UI', 'Helvetica Neue', 'Noto Sans', 'DejaVu Sans', 'Helvetica'))
+    chinese = ('Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Noto Sans SC',
+               'Source Han Sans SC', 'PingFang SC', 'WenQuanYi Micro Hei') if LANG == 'zh' else ()
+    UI_FONT = pick(chinese + ('Segoe UI', 'Helvetica Neue', 'Noto Sans', 'DejaVu Sans', 'Helvetica'))
     MONO_FONT = pick(('Consolas', 'Menlo', 'Noto Sans Mono', 'DejaVu Sans Mono', 'Courier'))
-    SERIF_FONT = pick(('Georgia', 'Noto Serif', 'DejaVu Serif', 'Times'))
+    SERIF_FONT = UI_FONT if LANG == 'zh' else pick(('Georgia', 'Noto Serif', 'DejaVu Serif', 'Times'))
 
 
 def positive_number(value):
@@ -1137,6 +1139,8 @@ def game_environment(s):
     env['SPARTAN_PATCHES_DIR'] = s['patches_dir'] or str(DATA_DIR / 'patches')
     env['SPARTAN_PATCHES_CONFIG'] = str(DATA_DIR / 'patches.json')
     env['SPARTAN_LANGUAGE'] = s['language']
+    # Menu language is independent from the game's text and voice language.
+    env['SPARTAN_UI_LANGUAGE'] = s.get('ui_language') or windows_language()
     env['SPARTAN_DISCORD'] = '1' if s.get('discord_rpc') else '0'
     if s['hdr']:
         env['SPARTAN_HDR'] = '1'
@@ -1414,7 +1418,7 @@ class Launcher:
         s.configure('Link.TButton', background=PANEL, foreground=MUTED, borderwidth=0, padding=self.px((2, 1)),
                     font=self.font(UI_FONT, 9, 'underline'))
         s.map('Link.TButton', background=[('active', PANEL)], foreground=[('active', TEXT)])
-        s.configure('Play.TButton', background=ACCENT, foreground='#f4ece0', font=self.heading_font(15, bold=True),
+        s.configure('Play.TButton', background=ACCENT, foreground='#f4ece0', font=self.heading_font(11 if LANG == 'zh' else 15, bold=True),
                     padding=self.px((36, 10)), borderwidth=0)
         s.map('Play.TButton', background=[('active', ACCENT_HI), ('disabled', '#2e1c1c')],
               foreground=[('disabled', '#8a7a78')])
@@ -1469,6 +1473,8 @@ class Launcher:
             var.set(values()[0])
 
         def show(*_args):
+            if not box.winfo_exists():
+                return
             reload()  # the list may have changed since it was last opened
             current, known = var.get(), values()
             box.current(known.index(current) if current in known else 0)
@@ -2792,7 +2798,7 @@ class Launcher:
         if self.dpi != previous_scale:
             self.size_window()
         if language != LANG or self.dpi != previous_scale:
-            self.rebuild(language)
+            self.root.after_idle(self.rebuild, language)
 
     def rebuild(self, language):
         """The window again in another language: every setting stays in its variable; the page,
@@ -2801,10 +2807,18 @@ class Launcher:
         LANG = language
         log, page, update = self.log.get('1.0', 'end-1c'), self.current_page, self.pending_update
         status = self.status['text'], self.status['fg']  # of the running game; otherwise build() redoes it
-        for var in self.vars.values():  # the old widgets' value labels and links
+        for var in list(self.vars.values()):  # the old widgets' value labels and links
             for modes, name in var.trace_info():
                 var.trace_remove(modes, name)
-        for child in self.root.winfo_children():
+        for kind in getattr(self, 'control_vars', {}).values():
+            for var in kind.values():
+                for modes, name in var.trace_info():
+                    var.trace_remove(modes, name)
+        if getattr(self, 'aspect', None) is not None:
+            for modes, name in self.aspect.trace_info():
+                self.aspect.trace_remove(modes, name)
+            self.aspect = None
+        for child in list(self.root.winfo_children()):
             child.destroy()
         self.style()
         self.build()
@@ -2822,7 +2836,8 @@ class Launcher:
 
     def refresh_save_button(self):
         """Save is only active while the window differs from the files (gather() against the last save)."""
-        self.save_button.configure(state='normal' if self.gather() != self.saved else 'disabled')
+        if getattr(self, 'save_button', None) and self.save_button.winfo_exists():
+            self.save_button.configure(state='normal' if self.gather() != self.saved else 'disabled')
 
     def watch_changes(self):
         self.refresh_save_button()
@@ -2986,6 +3001,8 @@ class Launcher:
         self.root.after(100, self.drain_output)
 
     def append(self, text):
+        if not getattr(self, 'log', None) or not self.log.winfo_exists():
+            return
         self.log.configure(state='normal')
         self.log.insert('end', text)
         lines = int(self.log.index('end-1c').split('.')[0])
@@ -3361,7 +3378,7 @@ def move_from_legacy_name():
             print(f'Rename: {line}', flush=True)
         if WINDOWS and FROZEN and UPDATE_DIR not in PORT_DIR.parents:
             legacy.remove_leftovers(PORT_DIR)
-            legacy.retarget_desktop_shortcut(PORT_DIR)
+            legacy.retarget_desktop_shortcut(PORT_DIR, data_dir=DATA_DIR)
     except OSError as error:
         print(f'Rename: {error}', flush=True)
 

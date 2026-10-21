@@ -221,6 +221,11 @@ if (WIN32)
     target_compile_options(pad-map-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
     target_include_directories(pad-map-test PRIVATE .. ../src)
     target_link_libraries(pad-map-test PRIVATE PkgConfig::SDL3 bcrypt -pthread)
+    add_executable(audio-test EXCLUDE_FROM_ALL ../tests/test_audio.c ../src/compat_win.c)
+    set_target_properties(audio-test PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
+    target_compile_options(audio-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+    target_include_directories(audio-test PRIVATE .. ../src)
+    target_link_libraries(audio-test PRIVATE PkgConfig::SDL3 bcrypt -pthread)
     add_executable(audio-downmix-test EXCLUDE_FROM_ALL ../tests/test_audio_downmix.c ../src/compat_win.c)
     set_target_properties(audio-downmix-test PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
     target_compile_options(audio-downmix-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
@@ -394,6 +399,15 @@ add_executable(perf-overlay-test EXCLUDE_FROM_ALL ../tests/test_perf_overlay.cpp
     shim/spartanport_settings.cpp)
 target_include_directories(perf-overlay-test PRIVATE shim)
 target_compile_options(perf-overlay-test PRIVATE -UNDEBUG)
+add_executable(chinese-ui-test EXCLUDE_FROM_ALL ../tests/test_chinese_ui.cpp
+    third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp
+    third_party/imgui/imgui_tables.cpp third_party/imgui/imgui_widgets.cpp)
+target_include_directories(chinese-ui-test PRIVATE shim third_party/imgui)
+target_compile_options(chinese-ui-test PRIVATE -UNDEBUG)
+target_compile_definitions(chinese-ui-test PRIVATE IMGUI_DISABLE_SSE)
+if (WIN32)
+    target_link_libraries(chinese-ui-test PRIVATE user32 gdi32 imm32)
+endif()
 add_executable(cheat-hooks-test EXCLUDE_FROM_ALL ../tests/test_cheat_hooks.cpp)
 target_compile_options(cheat-hooks-test PRIVATE -UNDEBUG)
 add_executable(signatures-test EXCLUDE_FROM_ALL ../tests/test_signatures.cpp)
@@ -430,3 +444,9 @@ target_link_libraries(fsr4-bench PRIVATE ffx-vulkan::fsr4-v07-vulkan ffx-vulkan:
 
 add_executable(cheat-hook-test ../tests/test_cheat_hook.cpp)
 target_compile_options(cheat-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+
+add_executable(swapchain-focus-test EXCLUDE_FROM_ALL ../tests/test_swapchain_focus.cpp
+    shim/window.cpp shim/spartanport_settings.cpp)
+target_include_directories(swapchain-focus-test PRIVATE shim shadps4)
+target_link_libraries(swapchain-focus-test PRIVATE PkgConfig::SDL3 Vulkan::Vulkan fmt::fmt)
+target_compile_options(swapchain-focus-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
