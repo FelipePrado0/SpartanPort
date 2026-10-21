@@ -1,4 +1,4 @@
-// gow3: profiler disabled.
+// spartanport: profiler disabled.
 #pragma once
 #include "Tracy.hpp"
 #define TracyVkCtx void*

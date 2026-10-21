@@ -12,16 +12,16 @@
 
 ## Global Constraints
 
-- C: `-std=c11 -Wall -Wextra -Werror`; headers com guarda `GOW3_*_H`; comentários em inglês como o resto de `src/`.
+- C: `-std=c11 -Wall -Wextra -Werror`; headers com guarda `SPARTAN_*_H`; comentários em inglês como o resto de `src/`.
 - `src/isa_emulate.c` compila com `-mgeneral-regs-only` e não chama a libc (nem `memcpy`).
 - Convenção de chamada do stub para C: macro `ABI` de `src/runtime.h` (`__attribute__((sysv_abi))`).
 - Registro da tabela: 64 bytes; cabeçalho: 64 bytes; magic `G3ISA1\0\0` (spec 4.4). Stub: no máximo 256 bytes.
-- Textos de log exatos (spec 4, 5.1, 5.2, 5.8): `CPU: missing ...`, `CPU: complete`, `ISA: ... sites (...)`, `ISA: rewrite table unavailable (...)`, `ISA: CPU lacks ...: N sites rewritten (...)`, `ISA: forced rewrite of all N sites (GOW3_ISA_REWRITE=1)`, `ISA: most executed sites:`.
+- Textos de log exatos (spec 4, 5.1, 5.2, 5.8): `CPU: missing ...`, `CPU: complete`, `ISA: ... sites (...)`, `ISA: rewrite table unavailable (...)`, `ISA: CPU lacks ...: N sites rewritten (...)`, `ISA: forced rewrite of all N sites (SPARTAN_ISA_REWRITE=1)`, `ISA: most executed sites:`.
 - Código de saída 20 para toda linha `STOP:`.
 - Numeração de registradores: a do x86 (0 rax ... 4 rsp ... 15 r15); `0xFF` = ausente.
 - Commits: mensagem gerada com a skill `caveman-commit`, formato do projeto `Tipo(Escopo): descrição em português` (ex.: `Feat(Probe): ...`), sem menção a IA, sem `Co-Authored-By`.
 - Testes Python: `python -m unittest discover -s tests -p "test_*.py"` (4 falhas + 1 erro pré-existentes em `test_packaged_vulkan` e `test_mods` no Windows; não regredir o resto).
-- Build no worktree (memória `worktree-build-msys2`): `subst W: "<caminho do worktree>"`, depois no MSYS2 CLANG64 `cmake -S gpu -B out/w -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DGOW3_PGO=off -DGOW3_LTO=OFF -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++` a partir de `/w`, e `ninja -C out/w <alvo>`. Executáveis clang64 precisam de `PATH=/c/msys64/clang64/bin:$PATH` no Git Bash.
+- Build no worktree (memória `worktree-build-msys2`): `subst W: "<caminho do worktree>"`, depois no MSYS2 CLANG64 `cmake -S gpu -B out/w -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSPARTAN_PGO=off -DSPARTAN_LTO=OFF -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++` a partir de `/w`, e `ninja -C out/w <alvo>`. Executáveis clang64 precisam de `PATH=/c/msys64/clang64/bin:$PATH` no Git Bash.
 
 ## Review Focus
 
@@ -31,7 +31,7 @@ Entradas que a spec implica e que ficariam sem teste; cada uma ganhou o teste in
 2. Sítio `JMP_RELOCATE` com instrução realocada de 15 bytes: o stub não pode passar de 256 bytes; `isa_rewrite_apply` falha alto, não corrompe o vizinho (Tarefa 5, `test_largest_stub_fits`).
 3. `int3` que não é nosso (breakpoint real): `isa_rewrite_trap` devolve 0 e o caminho fatal de hoje segue (Tarefa 6, `test_trap_unknown_address`).
 4. Tabela de outra build (sha256 ou tamanho diferentes): nada é escrito e a mensagem `STOP` nomeia o motivo (Tarefa 5, `test_table_mismatch`; Tarefa 7, inspeção manual do log).
-5. `GOW3_ISA_REWRITE=0` em CPU antiga: `run.py` não roda o localizador nem passa a flag, e o probe para no `STOP` (Tarefa 8, `test_rewrite_disabled`).
+5. `SPARTAN_ISA_REWRITE=0` em CPU antiga: `run.py` não roda o localizador nem passa a flag, e o probe para no `STOP` (Tarefa 8, `test_rewrite_disabled`).
 
 ---
 
@@ -39,7 +39,7 @@ Entradas que a spec implica e que ficariam sem teste; cada uma ganhou o teste in
 
 **Files:**
 - Modify: `src/cpu_check.h`, `src/cpu_check.c`
-- Modify: `src/probe.c` (bloco `GOW3_CPU_CHECK` em `main`, logo após o parse das opções; e o `if (argc == 2 && !strcmp(argv[1], "--vulkan-only"))`)
+- Modify: `src/probe.c` (bloco `SPARTAN_CPU_CHECK` em `main`, logo após o parse das opções; e o `if (argc == 2 && !strcmp(argv[1], "--vulkan-only"))`)
 - Test: `tests/test_cpu_check.c`, `tests/test_probe.py`
 
 **Interfaces:**
@@ -94,7 +94,7 @@ Expected: `cpu-check-test ok`
 
 - [ ] **Passo 5: probe: `--cpu-features` e checagem em dois grupos**
 
-Em `main`, ao lado de `--vulkan-only`: `if (argc == 2 && !strcmp(argv[1], "--cpu-features"))` imprime `STOP: this CPU lacks instruction sets the game's code uses: %s (Intel Sandy Bridge 2011 or newer, or AMD FX or newer, is needed)` e devolve 20 quando `cpu_missing_fatal` > 0 (respeitando `GOW3_CPU_CHECK=0`: então imprime `CPU: complete`); senão `CPU: missing %s` ou `CPU: complete` e devolve 0. No bloco `GOW3_CPU_CHECK` existente: fatal → mesmo `STOP`, `return 20`; reescrevível → guardar em `static unsigned cpu_missing_sets` e imprimir `CPU: missing %s` (a Tarefa 7 usa a máscara). Atualize a linha `Usage:`.
+Em `main`, ao lado de `--vulkan-only`: `if (argc == 2 && !strcmp(argv[1], "--cpu-features"))` imprime `STOP: this CPU lacks instruction sets the game's code uses: %s (Intel Sandy Bridge 2011 or newer, or AMD FX or newer, is needed)` e devolve 20 quando `cpu_missing_fatal` > 0 (respeitando `SPARTAN_CPU_CHECK=0`: então imprime `CPU: complete`); senão `CPU: missing %s` ou `CPU: complete` e devolve 0. No bloco `SPARTAN_CPU_CHECK` existente: fatal → mesmo `STOP`, `return 20`; reescrevível → guardar em `static unsigned cpu_missing_sets` e imprimir `CPU: missing %s` (a Tarefa 7 usa a máscara). Atualize a linha `Usage:`.
 
 - [ ] **Passo 6: teste Python do modo novo em `tests/test_probe.py`**
 
@@ -108,7 +108,7 @@ def test_cpu_features_mode_reports_this_machine(self):
 
 - [ ] **Passo 7: build do probe e testes**
 
-Run (MSYS2, ver Global Constraints): `ninja -C out/w gow3-probe cpu-check-test && out/w/cpu-check-test.exe`; copie `out/w/gow3-probe.exe` para `out/gow3-probe.exe` (com as DLLs no PATH) e `python -m unittest discover -s tests -p "test_probe.py" -v` (o `.exe` em `out/` faz o `skipUnless` passar).
+Run (MSYS2, ver Global Constraints): `ninja -C out/w spartanport-probe cpu-check-test && out/w/cpu-check-test.exe`; copie `out/w/spartanport-probe.exe` para `out/spartanport-probe.exe` (com as DLLs no PATH) e `python -m unittest discover -s tests -p "test_probe.py" -v` (o `.exe` em `out/` faz o `skipUnless` passar).
 Expected: `cpu-check-test ok`; `test_cpu_features_mode_reports_this_machine ... ok`.
 
 - [ ] **Passo 8: commit**
@@ -488,7 +488,7 @@ Expected: `isa-stub-test ok`.
 
 **Files:**
 - Modify: `src/probe.c` (parse das opções em `main`; `allocate(round_page(size))` da imagem; bloco após `patch_tcb_loads` e antes do primeiro `protect`; `vectored_fault`, `fatal_exception`, `describe_address` no Windows; `fault()` e a instalação de `sigaction` no Linux), `src/runtime.h`, `src/runtime.c` (`runtime_report`)
-- Modify: `build.sh` (linha do `gow3-probe`: `out/isa_emulate.o` compilado com `-mgeneral-regs-only` e `src/isa_rewrite.c`), `gpu/CMakeLists.txt` (`add_executable(gow3-probe ...)` ganha `../src/isa_rewrite.c ../src/isa_emulate.c` com a `COMPILE_OPTIONS` do `isa_emulate.c`)
+- Modify: `build.sh` (linha do `spartanport-probe`: `out/isa_emulate.o` compilado com `-mgeneral-regs-only` e `src/isa_rewrite.c`), `gpu/CMakeLists.txt` (`add_executable(spartanport-probe ...)` ganha `../src/isa_rewrite.c ../src/isa_emulate.c` com a `COMPILE_OPTIONS` do `isa_emulate.c`)
 
 **Interfaces:**
 - Consumes: `IsaTable`, `isa_table_load`, `isa_table_matches`, `isa_stub_area_size`, `isa_rewrite_apply`, `isa_rewrite_trap`, `isa_rewrite_site_of_stub`, `isa_rewrite_report`, `isa_emulate_set_image`; `cpu_missing_sets` da Tarefa 1.
@@ -498,7 +498,7 @@ Sem teste unitário novo: a verificação é o probe construído, o `isa-stub-te
 
 - [ ] **Passo 1: opção e política**
 
-`--isa-rewrite <file>` no loop de opções (`isa_file`), na linha `Usage:`. Após o bloco de CPU: `const char *policy = getenv("GOW3_ISA_REWRITE")`; `unsigned isa_sets = policy && !strcmp(policy, "1") ? 0xffffffffu : policy && !strcmp(policy, "0") ? 0 : cpu_missing_sets;`. Se `cpu_missing_sets && !isa_sets` (política `0`) ou `isa_sets && cpu_missing_sets && !isa_file` → `printf("STOP: this CPU lacks %s and no rewrite table matches the image\n", missing)`, `return 20`.
+`--isa-rewrite <file>` no loop de opções (`isa_file`), na linha `Usage:`. Após o bloco de CPU: `const char *policy = getenv("SPARTAN_ISA_REWRITE")`; `unsigned isa_sets = policy && !strcmp(policy, "1") ? 0xffffffffu : policy && !strcmp(policy, "0") ? 0 : cpu_missing_sets;`. Se `cpu_missing_sets && !isa_sets` (política `0`) ou `isa_sets && cpu_missing_sets && !isa_file` → `printf("STOP: this CPU lacks %s and no rewrite table matches the image\n", missing)`, `return 20`.
 
 - [ ] **Passo 2: carregar a tabela e reservar a área de stubs**
 
@@ -512,7 +512,7 @@ if (isa) {
     isa_emulate_set_image(image);
     IsaReport r = isa_rewrite_apply(isa, image, stubs, isa_sets);
     if (r.unsupported_needed) { printf("STOP: this CPU lacks %s and %u sites use encodings the rewrite cannot emulate\n", missing, r.unsupported_needed); return 20; }
-    if (isa_sets == 0xffffffffu) printf("ISA: forced rewrite of all %u sites (GOW3_ISA_REWRITE=1)\n", r.rewritten);
+    if (isa_sets == 0xffffffffu) printf("ISA: forced rewrite of all %u sites (SPARTAN_ISA_REWRITE=1)\n", r.rewritten);
     else printf("ISA: CPU lacks %s: %u sites rewritten (%u jmp, %u relocated, %u int3), %u skipped\n", missing, r.rewritten, r.jmp, r.relocated, r.int3, r.skipped);
     runtime_set_report_hook(isa_report_hook);
     protect(stubs, stub_area, 5);
@@ -526,7 +526,7 @@ Windows, em `vectored_fault` antes do bloco de falhas fatais: `if (code == EXCEP
 
 - [ ] **Passo 5: build e testes**
 
-Run: `ninja -C out/w gow3-probe isa-stub-test isa-emulate-test cpu-check-test` e os três testes; `python -m unittest discover -s tests -p "test_*.py"`.
+Run: `ninja -C out/w spartanport-probe isa-stub-test isa-emulate-test cpu-check-test` e os três testes; `python -m unittest discover -s tests -p "test_*.py"`.
 Expected: build sem avisos; `isa-stub-test ok`, `isa-emulate-test ok`, `cpu-check-test ok`; Python sem regressão (só as 5 falhas pré-existentes).
 
 - [ ] **Passo 6: commit**
@@ -545,7 +545,7 @@ Expected: build sem avisos; `isa-stub-test ok`, `isa-emulate-test ok`, `cpu-chec
 - Produces (`run.py`, funções puras no nível do módulo):
   ```python
   def parse_cpu_features(output: str) -> list[str]     # 'CPU: missing MOVBE, BMI1, LZCNT\n' -> ['MOVBE', 'BMI1', 'LZCNT']; 'CPU: complete' -> []
-  def isa_rewrite_wanted(missing: list[str], env: Mapping[str, str]) -> bool   # env GOW3_ISA_REWRITE: '1' -> True, '0' -> False, else bool(missing)
+  def isa_rewrite_wanted(missing: list[str], env: Mapping[str, str]) -> bool   # env SPARTAN_ISA_REWRITE: '1' -> True, '0' -> False, else bool(missing)
   ```
 
 - [ ] **Passo 1: testes (falhando)**
@@ -559,9 +559,9 @@ def test_rewrite_wanted_follows_cpu_by_default(self):
     self.assertTrue(run.isa_rewrite_wanted(['MOVBE'], {}))
     self.assertFalse(run.isa_rewrite_wanted([], {}))
 def test_rewrite_forced(self):
-    self.assertTrue(run.isa_rewrite_wanted([], {'GOW3_ISA_REWRITE': '1'}))
+    self.assertTrue(run.isa_rewrite_wanted([], {'SPARTAN_ISA_REWRITE': '1'}))
 def test_rewrite_disabled(self):
-    self.assertFalse(run.isa_rewrite_wanted(['MOVBE', 'BMI1'], {'GOW3_ISA_REWRITE': '0'}))
+    self.assertFalse(run.isa_rewrite_wanted(['MOVBE', 'BMI1'], {'SPARTAN_ISA_REWRITE': '0'}))
 ```
 
 - [ ] **Passo 2: rodar e ver falhar**
@@ -614,17 +614,17 @@ Expected: cada arquivo aparece ao menos uma vez; `bash -n packaging/windows/pack
 
 - [ ] **Passo 1: build completo e testes**
 
-Run (MSYS2 em `/w`): `ninja -C out/w gow3-probe gow3-gpu-capabilities gow3-play cpu-check-test isa-emulate-test isa-stub-test`, os três testes, e `python -m unittest discover -s tests -p "test_*.py"`.
+Run (MSYS2 em `/w`): `ninja -C out/w spartanport-probe spartanport-gpu-capabilities spartanport-play cpu-check-test isa-emulate-test isa-stub-test`, os três testes, e `python -m unittest discover -s tests -p "test_*.py"`.
 Expected: três `ok`; Python só com as 5 falhas pré-existentes.
 
 - [ ] **Passo 2: jogo em modo forçado**
 
-Com `out/gow3-probe.exe` atualizado e o Python do repositório com `iced-x86`: `GOW3_ISA_REWRITE=1 GOW3_GAME_DIR="C:/Users/Lucas Emiliano/Documents/My Games/GOW III/God.of.War.III.Remastered.PS4-CUSA01623/Image0" python run.py`.
-Expected no log: `CPU: complete`, `ISA: 14xx sites (MOVBE 104, BMI1 12xx, LZCNT 77, F16C 0); 8x relocated, 0 int3, 0 unsupported`, `ISA: forced rewrite of all 14xx sites (GOW3_ISA_REWRITE=1)`; o jogo abre, chega ao menu e a uma luta sem falha nova; ao fechar, `ISA: most executed sites:` com até 10 linhas. Registre as linhas `ISA:` no resumo da tarefa (elas dizem se a abordagem C da spec algum dia compensa).
+Com `out/spartanport-probe.exe` atualizado e o Python do repositório com `iced-x86`: `SPARTAN_ISA_REWRITE=1 SPARTAN_GAME_DIR="C:/Users/Lucas Emiliano/Documents/My Games/CUSA01623/Image0" python run.py`.
+Expected no log: `CPU: complete`, `ISA: 14xx sites (MOVBE 104, BMI1 12xx, LZCNT 77, F16C 0); 8x relocated, 0 int3, 0 unsupported`, `ISA: forced rewrite of all 14xx sites (SPARTAN_ISA_REWRITE=1)`; o jogo abre, chega ao menu e a uma luta sem falha nova; ao fechar, `ISA: most executed sites:` com até 10 linhas. Registre as linhas `ISA:` no resumo da tarefa (elas dizem se a abordagem C da spec algum dia compensa).
 
 - [ ] **Passo 3: sem a variável**
 
-Mesmo comando sem `GOW3_ISA_REWRITE`: nenhuma linha `ISA:`, jogo igual a antes.
+Mesmo comando sem `SPARTAN_ISA_REWRITE`: nenhuma linha `ISA:`, jogo igual a antes.
 
 - [ ] **Passo 4: Linux (quando houver a máquina)**
 

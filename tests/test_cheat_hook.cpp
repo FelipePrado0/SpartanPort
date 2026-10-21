@@ -23,8 +23,8 @@ static int jump_blocked(void* entry, void* actor) {
 
 int main() {
     _set_error_mode(_OUT_TO_STDERR);
-    const Gow3CheatHook* unlock = nullptr;
-    for (const auto& hook : gow3_cheat_hooks) {
+    const SpartanCheatHook* unlock = nullptr;
+    for (const auto& hook : spartanport_cheat_hooks) {
         if (hook.offset == 0xc77ea) unlock = &hook;
     }
     assert(unlock);
@@ -34,12 +34,12 @@ int main() {
         0xb8,1,0,0,0,0xf6,0xc1,2,0x75,7,
         0x83,0xe1,1,0xff,0xc9,0x89,0xc8,0xc3
     };
-    assert(gow3_cheat_signature_match(unlock, tail, sizeof(tail)));
+    assert(spartanport_cheat_signature_match(unlock, tail, sizeof(tail)));
     auto* memory = static_cast<unsigned char*>(VirtualAlloc(nullptr,4096,MEM_COMMIT|MEM_RESERVE,PAGE_EXECUTE_READWRITE));
     assert(memory);
     std::memcpy(memory+512,tail,sizeof(tail));
     unsigned char enabled=0;
-    gow3_cheat_build_stub(memory,unlock,reinterpret_cast<uintptr_t>(&enabled),reinterpret_cast<uintptr_t>(memory+512+unlock->length));
+    spartanport_cheat_build_stub(memory,unlock,reinterpret_cast<uintptr_t>(&enabled),reinterpret_cast<uintptr_t>(memory+512+unlock->length));
     for(unsigned mask=0;mask<16;++mask) {
         enabled=0;
         const int expected=mask&8?3:mask&4?2:mask&2?1:mask&1?0:-1;
@@ -47,19 +47,19 @@ int main() {
         enabled=1;
         assert(read_difficulty(memory,mask)==3);
     }
-    const Gow3CheatHook* jumps = nullptr;
-    for (const auto& hook : gow3_cheat_hooks) {
+    const SpartanCheatHook* jumps = nullptr;
+    for (const auto& hook : spartanport_cheat_hooks) {
         if (hook.offset == 0x95d51) jumps = &hook;
     }
     assert(jumps);
     const unsigned char original[] = {0x41,0xf6,0x84,0x24,0xac,4,0,0,4};
-    assert(gow3_cheat_signature_match(jumps,original,sizeof(original)));
-    assert(!gow3_cheat_signature_match(jumps,original,sizeof(original)-1));
+    assert(spartanport_cheat_signature_match(jumps,original,sizeof(original)));
+    assert(!spartanport_cheat_signature_match(jumps,original,sizeof(original)-1));
     unsigned char mismatch[9];std::memcpy(mismatch,original,9);mismatch[8]=8;
-    assert(!gow3_cheat_signature_match(jumps,mismatch,9));
+    assert(!spartanport_cheat_signature_match(jumps,mismatch,9));
     const unsigned char resume[] = {0x0f,0x95,0xc0,0x0f,0xb6,0xc0,0xc3};
     std::memcpy(memory+512,resume,sizeof(resume));
-    gow3_cheat_build_stub(memory,jumps,reinterpret_cast<uintptr_t>(&enabled),reinterpret_cast<uintptr_t>(memory+512));
+    spartanport_cheat_build_stub(memory,jumps,reinterpret_cast<uintptr_t>(&enabled),reinterpret_cast<uintptr_t>(memory+512));
     unsigned char actor[0x500]{};
     for (unsigned flags : {0u,4u,0x80004u}) {
         std::memcpy(actor+0x4ac,&flags,4);

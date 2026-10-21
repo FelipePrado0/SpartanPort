@@ -1,13 +1,13 @@
-#ifndef GOW3_RUNTIME_H
-#define GOW3_RUNTIME_H
+#ifndef SPARTAN_RUNTIME_H
+#define SPARTAN_RUNTIME_H
 #include <stdint.h>
 #include <stddef.h>
 #ifdef _WIN32
 #include "compat_win.h"
-/* No signals on Windows: the exception handler resumes the thread in gow3_longjmp
- * (gpu/shim/gow3_toggles.h uses the same buffer type). */
-typedef gow3_jmp_buf sigjmp_buf;
-#define sigsetjmp(buffer, save) gow3_setjmp(buffer)
+/* No signals on Windows: the exception handler resumes the thread in spartanport_longjmp
+ * (gpu/shim/spartanport_toggles.h uses the same buffer type). */
+typedef spartanport_jmp_buf sigjmp_buf;
+#define sigsetjmp(buffer, save) spartanport_setjmp(buffer)
 #else
 #include <setjmp.h>
 #endif
@@ -37,6 +37,8 @@ void runtime_set_procparam(void *param);
 void **runtime_application_heap_api(void);
 uintptr_t runtime_thread_resolve(const char *name);
 void runtime_thread_report(void);
+/* Counts a guest sched_yield (zero_sleep 0) or a zero-length sleep (1) for the report (#209). */
+void runtime_thread_count_yield(int zero_sleep);
 void runtime_set_main_tls(const void *data, uint64_t filesz, uint64_t memsz, uint64_t align);
 void runtime_thread_attach_main(void);
 int32_t *runtime_errno(void);

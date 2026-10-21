@@ -9,12 +9,12 @@
 #include <string.h>
 #include "compat_win.h"
 
-/* gow3_jmp_buf: rbx rbp rdi rsi r12-r15 (0-56), rsp after return (64), return address (72),
+/* spartanport_jmp_buf: rbx rbp rdi rsi r12-r15 (0-56), rsp after return (64), return address (72),
  * xmm6-15 (80-239), mxcsr (240), x87 control word (244). */
 __asm__(".text\n"
-        ".globl gow3_setjmp\n"
-        ".def gow3_setjmp; .scl 2; .type 32; .endef\n"
-        "gow3_setjmp:\n"
+        ".globl spartanport_setjmp\n"
+        ".def spartanport_setjmp; .scl 2; .type 32; .endef\n"
+        "spartanport_setjmp:\n"
         "    mov %rbx,0(%rcx)\n    mov %rbp,8(%rcx)\n    mov %rdi,16(%rcx)\n    mov %rsi,24(%rcx)\n"
         "    mov %r12,32(%rcx)\n    mov %r13,40(%rcx)\n    mov %r14,48(%rcx)\n    mov %r15,56(%rcx)\n"
         "    lea 8(%rsp),%rdx\n    mov %rdx,64(%rcx)\n    mov (%rsp),%rdx\n    mov %rdx,72(%rcx)\n"
@@ -23,9 +23,9 @@ __asm__(".text\n"
         "    movups %xmm12,176(%rcx)\n    movups %xmm13,192(%rcx)\n    movups %xmm14,208(%rcx)\n"
         "    movups %xmm15,224(%rcx)\n    stmxcsr 240(%rcx)\n    fnstcw 244(%rcx)\n"
         "    xor %eax,%eax\n    ret\n"
-        ".globl gow3_longjmp\n"
-        ".def gow3_longjmp; .scl 2; .type 32; .endef\n"
-        "gow3_longjmp:\n"
+        ".globl spartanport_longjmp\n"
+        ".def spartanport_longjmp; .scl 2; .type 32; .endef\n"
+        "spartanport_longjmp:\n"
         "    mov %edx,%eax\n    test %eax,%eax\n    jnz 1f\n    mov $1,%eax\n"
         "1:  mov 0(%rcx),%rbx\n    mov 8(%rcx),%rbp\n    mov 16(%rcx),%rdi\n    mov 24(%rcx),%rsi\n"
         "    mov 32(%rcx),%r12\n    mov 40(%rcx),%r13\n    mov 48(%rcx),%r14\n    mov 56(%rcx),%r15\n"

@@ -91,11 +91,45 @@ dentro del WAD antes de contar con ello.
 
 Un WAD es una lista de entradas, cada una con una cabecera de 64 bytes (etiqueta, flags, tamaño y un
 nombre de hasta 56 caracteres) y sus datos, alineados a 16 bytes. Las texturas son entradas llamadas
-`TX<hash>.<hash>.dds` con un prefijo corto seguido de un archivo DDS normal (DXT1 o DXT5), y los materiales las encuentran por ese
-nombre. El propio port cambia texturas así: los iconos de botones (Xbox, Nintendo, teclado) se dibujan
-en copias de `R_UI.WAD` y `R_PERM.WAD`, manteniendo el tamaño y el formato de cada textura, de modo
-que solo cambian sus píxeles (`scripts/glyphs.py`). Un mod de textura que mantiene el tamaño y el
-formato DXT del original es el tipo más seguro.
+`TX<hash>.<hash>.dds` con un prefijo corto seguido de un archivo DDS normal (DXT1 o DXT5), y los
+materiales las encuentran por ese nombre. Un mod de textura que mantiene el tamaño y el formato DXT
+del original es el tipo más seguro.
+
+Los WAD de nivel (`OLY150.WAD` y similares, no `R_UI.WAD` ni `R_PERM.WAD`) empiezan con una entrada
+`EntityCount` (etiqueta 0) cuyo campo de tamaño guarda una cuenta de entidades, no una longitud, y
+tras su cabecera no vienen datos. Un lector que salta `size` bytes ahí cae en medio del archivo y no
+encuentra nada después: hasta la versión 2.5.0 el propio lector del port lo hacía, así que podía cambiar
+texturas en `R_UI.WAD` y `R_PERM.WAD` pero en ningún nivel. `scripts/glyphs.py` (`entries()`) y
+`tools/wad_textures.py` ahora leen ese marcador como una cabecera sola, de modo que cualquier textura
+de un WAD de nivel se puede encontrar y cambiar igual que las de la interfaz.
+
+El port cambia texturas así: los iconos de botones (Xbox, Nintendo, teclado) se dibujan en copias de
+`R_UI.WAD`, `R_PERM.WAD` y `OLY150.WAD` (la lira de las Musas en la Cámara de la Llama), manteniendo
+el tamaño y el formato de cada textura, de modo que solo cambian sus píxeles (`scripts/glyphs.py`). En
+una textura de nivel solo se vuelven a codificar los bloques de 4 × 4 cuyos píxeles cambiaron, en
+cada nivel de mip, así que el resto de la textura queda byte a byte como el original.
+
+### Encontrar una textura del mundo
+
+Algo pintado sobre una superficie del mundo suele estar pintado en varias texturas a la vez, una por
+capa del material, en el mismo lugar de cada una: el color (diffuse), el brillo (specular, en grises),
+la luz que emite (una máscara de brillo, a menudo más pequeña), su relieve (un normal map: DXT5, X en
+alfa e Y en verde) y a veces un decal dibujado encima. Si cambias una y dejas otra, el dibujo viejo se
+sigue viendo debajo o encima. Las cuatro letras griegas de la lira están en cinco texturas de
+`OLY150.WAD`; las de color que seguían visibles sobre las letras nuevas venían del decal.
+
+Para encontrarlas todas, encuentra el WAD de la sala (`--grep` con palabras de la sala:
+`--grep Muse Lyre`) y arma hojas solo con la parte de cada textura donde está el dibujo, a un tamaño
+legible: `--crop 0.75,0,1,0.25` toma el cuarto superior derecho (izquierda, arriba, derecha, abajo,
+en fracciones). Cada textura que muestra las mismas formas ahí es una capa que hay que cambiar.
+
+`tools/wad_textures.py` encuentra una textura mirando: arma hojas de contacto numeradas con todas las
+texturas de los WAD que nombres (`"SpartanPort.exe" --script tools\wad_textures.py "<juego>\EXEC\WAD\PS4_LE" OLY1* -o sheets`),
+arma hojas con una parte de cada textura (`--crop`), extrae las numeradas como `.dds` (`--extract`),
+busca palabras en los nombres de entrada de todos los WAD para encontrar el WAD de una sala
+(`--grep Muse Lyre`) y ordena las texturas pequeñas que parecen indicaciones de botones (`--find`).
+Ejecútalo con la ruta completa del script; `--script` del launcher lo corre con el Python que trae, y
+`2>&1 | Out-Host` en PowerShell muestra su salida.
 
 Los WADs de `PS4_LE` son little-endian. La versión de PS3 funcionaba en una consola big-endian, así
 que no se espera que sus WADs funcionen aquí.
@@ -166,10 +200,10 @@ copia del juego.
 ## Cómo armar un mod
 
 La carpeta predeterminada es `mods/` en la carpeta de datos: en Windows, junto a
-`God of War III.exe`; en Linux (AppImage), en `~/.local/share/gow3`. **Carpetas → Carpeta de mods**
+`SpartanPort.exe`; en Linux (AppImage), en `~/.local/share/spartanport`. **Carpetas → Carpeta de mods**
 (*Folders → Mods folder*) elige otra.
 
-Cada mod tiene su propia carpeta, que replica el árbol del juego. En GOW3PC los datos están en `EXEC/`
+Cada mod tiene su propia carpeta, que replica el árbol del juego. En SpartanPort los datos están en `EXEC/`
 y en una carpeta por idioma (`ENGLISH/`, `SPANISH/`, ...):
 
 ```text
@@ -295,7 +329,7 @@ El orden y los mods desactivados se guardan en `mods.json` en la carpeta de dato
 ```
 
 Las carpetas nuevas entran activadas, al final de la lista, en orden alfabético.
-`GOW3_MODS_CONFIG` cambia la ruta de ese archivo.
+`SPARTAN_MODS_CONFIG` cambia la ruta de ese archivo.
 
 Los preajustes de la página Mods se guardan en `mods_presets.json`, una entrada por nombre, con las
 mismas dos listas:
@@ -309,8 +343,8 @@ mismas dos listas:
 Desde un terminal:
 
 ```sh
-GOW3_GAME_DIR=/ruta/CUSA01623 GOW3_MODS_DIR=/ruta/mods python run.py
-GOW3_GAME_DIR=/ruta/CUSA01623 GOW3_MODS_ENABLED=0 python run.py
+SPARTAN_GAME_DIR=/ruta/CUSA01623 SPARTAN_MODS_DIR=/ruta/mods python run.py
+SPARTAN_GAME_DIR=/ruta/CUSA01623 SPARTAN_MODS_ENABLED=0 python run.py
 ```
 
 ## Mods con parches del juego
@@ -340,7 +374,7 @@ teclado mantiene el dibujo original del mando. Las copias se crean en la caché 
 el dump del jugador.
 
 Los dibujos y la herramienta de `tools/controller_diagrams/` vienen de la contribución de Kristian
-Andreev en la [PR #234](https://github.com/FelipePrado0/gow3_pc/pull/234), bajo GPL-2.0-or-later.
+Andreev en la [PR #234](https://github.com/FelipePrado0/SpartanPort/pull/234), bajo GPL-2.0-or-later.
 `scripts/controller_diagrams/*.png` contiene solo esos dibujos, sin archivos del juego. Para
 regenerarlos, la herramienta usa Pillow, NumPy y scikit-image, con la fuente Cinzel incluida en el
 proyecto (OFL). Esas dependencias de dibujo no hacen falta para usar los PNG en el launcher.

@@ -23,7 +23,7 @@ def child(folder, name):
     return folder / name
 
 
-# Top-level folders a mod may shadow (casefolded). The GOW3PC game keeps its data in EXEC and one
+# Top-level folders a mod may shadow (casefolded). The game keeps its data in EXEC and one
 # folder per language at the game root; dvdroot_ps4 is the shadPS4 layout many mods still use.
 GAME_ROOTS = frozenset({'dvdroot_ps4', 'exec', 'dutch', 'english', 'french', 'german', 'italian',
                         'polish', 'portuguese', 'russian', 'spanish'})
@@ -291,7 +291,7 @@ def conflicts(root, names, game=None):
     for name in names:
         try:
             for relative, _source in mod_files(Path(root) / name, game):
-                relative = game_path(relative, flat=True)  # the GOW3PC game has no dvdroot_ps4
+                relative = game_path(relative, flat=True)  # the game has no dvdroot_ps4
                 key = relative.as_posix().casefold()
                 owners.setdefault(key, (relative.as_posix(), []))[1].append(name)
         except (OSError, ValueError):

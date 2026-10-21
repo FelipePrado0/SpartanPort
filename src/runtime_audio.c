@@ -4,7 +4,7 @@
  * bursts (whenever the device pulls a quantum) lets it overtake the mixer and
  * play stale halves - a click every 10.7 ms. The lowest SDL queue level of
  * each window is steered to two buffers (silence prefill on underrun, ±3%
- * cadence corrections), which also absorbs device clock drift. Without an audio device (headless runs, GOW3_AUDIO=none)
+ * cadence corrections), which also absorbs device clock drift. Without an audio device (headless runs, SPARTAN_AUDIO=none)
  * ports only follow the clock. */
 #define _GNU_SOURCE
 #include "runtime.h"
@@ -37,9 +37,9 @@ typedef struct {
     int64_t adjust_ns; int window_min, window_count; /* queue level control */
     uint64_t last_output_us;
     pthread_mutex_t lock;
-    FILE *dump;                     /* GOW3_AUDIO_DUMP: raw converted PCM per port */
+    FILE *dump;                     /* SPARTAN_AUDIO_DUMP: raw converted PCM per port */
     int stats;
-    uint64_t stat_start_ns, stat_last_ns, stat_max_gap_ns; /* GOW3_AUDIO_STATS */
+    uint64_t stat_start_ns, stat_last_ns, stat_max_gap_ns; /* SPARTAN_AUDIO_STATS */
     unsigned stat_starved, stat_buffers; int stat_min_queued;
 } Port;
 typedef struct { uint16_t output; uint8_t channel, reserved; int16_t volume; uint16_t reroute; uint64_t flag, reserved64[2]; } PortState;
@@ -62,7 +62,7 @@ static void sleep_until(uint64_t deadline) {
 }
 static int sdl_audio(void) {
     if (sdl_ready<0) {
-        const char *mode=getenv("GOW3_AUDIO");
+        const char *mode=getenv("SPARTAN_AUDIO");
         sdl_ready = (!mode || strcmp(mode,"none")) && SDL_InitSubSystem(SDL_INIT_AUDIO);
         printf("Runtime: audio backend %s\n", sdl_ready ? SDL_GetCurrentAudioDriver() : "timer (silent)");
     }
@@ -115,6 +115,50 @@ static ABI int32_t audio_init(void) {
     pthread_mutex_unlock(&table_lock);
     return r;
 }
+#ifdef TEST_AUDIO_HOOK
+static SDL_AudioStream *(*test_open_stream)(SDL_AudioDeviceID, const SDL_AudioSpec *, SDL_AudioStreamCallback, void *) = NULL;
+#define OPEN_AUDIO_STREAM(dev, spec, cb, user) (test_open_stream ? test_open_stream(dev, spec, cb, user) : SDL_OpenAudioDeviceStream(dev, spec, cb, user))
+#else
+#define OPEN_AUDIO_STREAM(dev, spec, cb, user) SDL_OpenAudioDeviceStream(dev, spec, cb, user)
+#endif
+
+#ifdef _WIN32
+static void try_audio_fallback(Port *p, int id) {
+    const char *driver = SDL_GetCurrentAudioDriver();
+    /* When WASAPI fails on Windows and the user hasn't forced a driver, try DirectSound. */
+    if (!driver || strcmp(driver, "wasapi") || getenv("SDL_AUDIO_DRIVER")) return;
+
+    /* Only switch backend if no other port currently has an active stream. */
+    for (int i = 0; i < PORTS; ++i) {
+        if (ports[i].used && ports[i].stream) return;
+    }
+
+    int has_ds = 0, n = SDL_GetNumAudioDrivers();
+    for (int i = 0; i < n; ++i) {
+        const char *d = SDL_GetAudioDriver(i);
+        if (d && !strcmp(d, "directsound")) { has_ds = 1; break; }
+    }
+    if (!has_ds) return;
+
+    fprintf(stderr, "Runtime: SDL audio stream failed on wasapi (%s); trying directsound fallback for port %d\n", SDL_GetError(), id);
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER, "directsound", SDL_HINT_OVERRIDE);
+    sdl_ready = SDL_InitSubSystem(SDL_INIT_AUDIO);
+    const char *new_driver = sdl_ready ? SDL_GetCurrentAudioDriver() : NULL;
+    if (sdl_ready && new_driver && !strcmp(new_driver, "directsound")) {
+        printf("Runtime: audio backend %s (fallback from wasapi)\n", new_driver);
+        SDL_AudioSpec device; int device_frames;
+        p->downmix = p->channels == 8 && SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &device, &device_frames)
+                     && device.channels == 2;
+        SDL_AudioSpec spec = {p->is_float ? SDL_AUDIO_F32 : SDL_AUDIO_S16, p->downmix ? 2 : p->channels, 48000};
+        p->stream = OPEN_AUDIO_STREAM(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+    } else {
+        fprintf(stderr, "Runtime: failed to initialize directsound audio backend (current: %s, error: %s) for port %d\n",
+                new_driver ? new_driver : "none", SDL_GetError(), id);
+    }
+}
+#endif
+
 static ABI int32_t audio_open(int32_t user, int32_t type, int32_t index, uint32_t length, uint32_t freq, uint32_t param) {
     (void)user; (void)index;
     if (!initialized) return ERR_NOT_INIT;
@@ -140,12 +184,15 @@ static ABI int32_t audio_open(int32_t user, int32_t type, int32_t index, uint32_
         p->downmix=p->channels==8 && SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&device,&device_frames)
                    && device.channels==2;
         SDL_AudioSpec spec={p->is_float ? SDL_AUDIO_F32 : SDL_AUDIO_S16, p->downmix ? 2 : p->channels, 48000};
-        p->stream=SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,NULL,NULL);
+        p->stream=OPEN_AUDIO_STREAM(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,NULL,NULL);
+#ifdef _WIN32
+        if (!p->stream) try_audio_fallback(p, id);
+#endif
         if (p->stream) SDL_ResumeAudioStreamDevice(p->stream);
         else fprintf(stderr,"Runtime: SDL audio stream failed (%s); port %d uses the timer sink\n",SDL_GetError(),id);
     }
-    p->stats=getenv("GOW3_AUDIO_STATS")!=NULL;
-    const char *dump=getenv("GOW3_AUDIO_DUMP");
+    p->stats=getenv("SPARTAN_AUDIO_STATS")!=NULL;
+    const char *dump=getenv("SPARTAN_AUDIO_DUMP");
     if (dump) {
         char path[4096];
         snprintf(path,sizeof(path),"%s.port%d.%dch.%s",dump,id,p->downmix ? 2 : p->channels,p->is_float ? "f32" : "s16");

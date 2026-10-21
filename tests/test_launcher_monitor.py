@@ -1,4 +1,4 @@
-"""The launcher's monitor choice (GOW3_MONITOR): the `gow3-probe --displays` parser, the Monitor
+"""The launcher's monitor choice (SPARTAN_MONITOR): the `spartanport-probe --displays` parser, the Monitor
 list of the Graphics page, the saved 'monitor' setting and the environment each launch path builds.
 The probe prints seven TAB-separated columns; a monitor it cannot describe is left out, so the
 indices the launcher offers may have gaps."""
@@ -12,9 +12,9 @@ from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
-import gow3_launcher_win as launcher  # noqa: E402
+import spartanport_launcher_win as launcher  # noqa: E402
 
-# `gow3-probe --displays`: index, name, primary, x, y, width, height. The name keeps spaces.
+# `spartanport-probe --displays`: index, name, primary, x, y, width, height. The name keeps spaces.
 TWO_DISPLAYS = ('0\tMonitor A\t1\t0\t0\t1920\t1080\n'
                 '1\tMonitor B\t0\t1920\t0\t2560\t1440\n')
 
@@ -43,7 +43,7 @@ class DisplayParserTest(unittest.TestCase):
                           ('1', 'Monitor B', '0', 1920, 0, 2560, 1440)])
 
     def test_names_keep_spaces_quotes_and_utf8(self):
-        name = 'Dell U2720Q «à esquerda» — 4K'
+        name = 'Dell U2720Q «à esquerda» , 4K'
         rows = launcher.parse_display_list(f'3\t{name}\t0\t-1920\t0\t3840\t2160\n')
         self.assertEqual(rows, [('3', name, '0', -1920, 0, 3840, 2160)])
 
@@ -145,7 +145,7 @@ class ListDisplaysTest(unittest.TestCase):
             self.assertEqual(launcher.list_displays(), [])
 
     def test_failures_and_a_bad_exit_list_nothing(self):
-        with mock.patch.object(launcher, 'find_tool', return_value='gow3-probe'):
+        with mock.patch.object(launcher, 'find_tool', return_value='spartanport-probe'):
             with mock.patch.object(launcher.subprocess, 'run', side_effect=subprocess.TimeoutExpired('x', 5)):
                 self.assertEqual(launcher.list_displays(), [])
             with mock.patch.object(launcher.subprocess, 'run', side_effect=OSError):
@@ -156,10 +156,10 @@ class ListDisplaysTest(unittest.TestCase):
 
     def test_a_good_run_is_parsed_and_captured_as_utf8(self):
         done = mock.Mock(returncode=0, stdout=TWO_DISPLAYS)
-        with mock.patch.object(launcher, 'find_tool', return_value='gow3-probe'), \
+        with mock.patch.object(launcher, 'find_tool', return_value='spartanport-probe'), \
                 mock.patch.object(launcher.subprocess, 'run', return_value=done) as run:
             self.assertEqual(launcher.list_displays(), launcher.parse_display_list(TWO_DISPLAYS))
-        self.assertEqual(run.call_args.args[0], ['gow3-probe', '--displays'])
+        self.assertEqual(run.call_args.args[0], ['spartanport-probe', '--displays'])
         self.assertEqual(run.call_args.kwargs['timeout'], 5)
         self.assertEqual(run.call_args.kwargs['encoding'], 'utf-8')
         self.assertEqual(run.call_args.kwargs['errors'], 'replace')
@@ -167,7 +167,7 @@ class ListDisplaysTest(unittest.TestCase):
     def test_the_game_backend_sets_the_sdl_driver_for_the_probe(self):
         done = mock.Mock(returncode=0, stdout='')
         with mock.patch.object(launcher, 'WINDOWS', False), \
-                mock.patch.object(launcher, 'find_tool', return_value='gow3-probe'), \
+                mock.patch.object(launcher, 'find_tool', return_value='spartanport-probe'), \
                 mock.patch.object(launcher.subprocess, 'run', return_value=done) as run, \
                 mock.patch.dict(os.environ, {'SDL_VIDEODRIVER': 'sentinel', 'SDL_VIDEO_DRIVER': 'sentinel'}):
             launcher.list_displays('x11')
@@ -182,30 +182,30 @@ class ListDisplaysTest(unittest.TestCase):
 class MonitorEnvironmentTest(unittest.TestCase):
     def test_the_default_is_the_primary_and_sends_no_variable(self):
         self.assertEqual(launcher.APP_DEFAULTS['monitor'], '')
-        self.assertNotIn('GOW3_MONITOR', added(launcher.game_environment(dict(launcher.APP_DEFAULTS))))
+        self.assertNotIn('SPARTAN_MONITOR', added(launcher.game_environment(dict(launcher.APP_DEFAULTS))))
 
     def test_a_saved_index_reaches_the_game(self):
         env = launcher.game_environment({**launcher.APP_DEFAULTS, 'monitor': '1'})
-        self.assertEqual(env['GOW3_MONITOR'], '1')
+        self.assertEqual(env['SPARTAN_MONITOR'], '1')
         # The first monitor is a real choice, not the default: it must be sent as well.
-        self.assertEqual(launcher.game_environment({**launcher.APP_DEFAULTS, 'monitor': '0'})['GOW3_MONITOR'], '0')
-        self.assertEqual(launcher.game_environment({**launcher.APP_DEFAULTS, 'monitor': 2})['GOW3_MONITOR'], '2')
+        self.assertEqual(launcher.game_environment({**launcher.APP_DEFAULTS, 'monitor': '0'})['SPARTAN_MONITOR'], '0')
+        self.assertEqual(launcher.game_environment({**launcher.APP_DEFAULTS, 'monitor': 2})['SPARTAN_MONITOR'], '2')
 
     def test_an_invalid_choice_sends_nothing(self):
         for bad in ('', 'bad', '-1', '1.5', ' 1', '²', '  ', None):
             with self.subTest(bad=bad):
                 env = launcher.game_environment({**launcher.APP_DEFAULTS, 'monitor': bad})
-                self.assertNotIn('GOW3_MONITOR', added(env))
+                self.assertNotIn('SPARTAN_MONITOR', added(env))
 
     def test_an_old_setting_without_the_key_is_the_default(self):
         legacy = dict(launcher.APP_DEFAULTS)
         legacy.pop('monitor')
-        self.assertNotIn('GOW3_MONITOR', added(launcher.game_environment(legacy)))
+        self.assertNotIn('SPARTAN_MONITOR', added(launcher.game_environment(legacy)))
 
     def test_an_inherited_variable_is_overridden(self):
-        with mock.patch.dict(os.environ, {'GOW3_MONITOR': '3'}):
-            self.assertNotIn('GOW3_MONITOR', added(launcher.game_environment(dict(launcher.APP_DEFAULTS))))
-            self.assertEqual(launcher.game_environment({**launcher.APP_DEFAULTS, 'monitor': '1'})['GOW3_MONITOR'], '1')
+        with mock.patch.dict(os.environ, {'SPARTAN_MONITOR': '3'}):
+            self.assertNotIn('SPARTAN_MONITOR', added(launcher.game_environment(dict(launcher.APP_DEFAULTS))))
+            self.assertEqual(launcher.game_environment({**launcher.APP_DEFAULTS, 'monitor': '1'})['SPARTAN_MONITOR'], '1')
 
 
 class MonitorSelectionTest(unittest.TestCase):
@@ -333,7 +333,7 @@ class MonitorRefreshTest(unittest.TestCase):
 
     def test_the_refreshed_choice_is_what_a_launch_sends(self):
         _changed, fake, _detect = self.refresh('wayland', 'x11', '1', launcher.parse_display_list(TWO_DISPLAYS))
-        self.assertEqual(launcher.game_environment(fake.app)['GOW3_MONITOR'], '1')
+        self.assertEqual(launcher.game_environment(fake.app)['SPARTAN_MONITOR'], '1')
 
 
 class _ValueVar:
@@ -500,7 +500,7 @@ class PlayMonitorConsistencyTest(_StubbedLauncherTest):
             env = launcher.game_environment(stub.app)
         self.assertEqual(env['SDL_VIDEODRIVER'], 'x11')
         self.assertEqual(env['SDL_VIDEO_DRIVER'], 'x11')
-        self.assertEqual(env['GOW3_MONITOR'], '1')
+        self.assertEqual(env['SPARTAN_MONITOR'], '1')
 
     def test_play_delivers_the_default_when_the_choice_was_reset(self):
         stub = _LauncherStub('wayland', 'x11', '0')
@@ -508,7 +508,7 @@ class PlayMonitorConsistencyTest(_StubbedLauncherTest):
             self.run_play(stub, '1\tB\t0\t0\t0\t1280\t720\n')
             env = launcher.game_environment(stub.app)
         self.assertEqual(env['SDL_VIDEODRIVER'], 'x11')
-        self.assertNotIn('GOW3_MONITOR', added(env))  # the reset choice is the primary default
+        self.assertNotIn('SPARTAN_MONITOR', added(env))  # the reset choice is the primary default
 
     def test_play_keeps_a_choice_not_saved_yet(self):
         # Picked index 1, switched the window system, then PLAY: the game must open on that monitor,
@@ -519,14 +519,14 @@ class PlayMonitorConsistencyTest(_StubbedLauncherTest):
             env = launcher.game_environment(stub.app)
         detect.assert_called_once_with('x11')
         self.assertEqual(env['SDL_VIDEODRIVER'], 'x11')
-        self.assertEqual(env['GOW3_MONITOR'], '1')
+        self.assertEqual(env['SPARTAN_MONITOR'], '1')
 
     def test_play_drops_a_choice_not_saved_yet_that_the_new_list_lost(self):
         stub = _LauncherStub('auto', 'x11', '', visible='9')  # 9 is not in the x11 list
         with mock.patch.object(launcher, 'WINDOWS', False):
             self.run_play(stub, TWO_DISPLAYS)
             env = launcher.game_environment(stub.app)
-        self.assertNotIn('GOW3_MONITOR', added(env))
+        self.assertNotIn('SPARTAN_MONITOR', added(env))
 
     def test_a_persisted_pair_reaches_a_play_as_one_environment(self):
         # --play (play_without_window) builds its environment the same way, from the saved settings.
@@ -534,7 +534,7 @@ class PlayMonitorConsistencyTest(_StubbedLauncherTest):
         with mock.patch.object(launcher, 'WINDOWS', False):
             env = launcher.game_environment(settings)
         self.assertEqual(env['SDL_VIDEODRIVER'], 'x11')
-        self.assertEqual(env['GOW3_MONITOR'], '1')
+        self.assertEqual(env['SPARTAN_MONITOR'], '1')
 
 
 class CollectCallersTest(unittest.TestCase):
@@ -580,7 +580,7 @@ class CollectCallersTest(unittest.TestCase):
         app.collect.return_value = False
         with mock.patch.object(launcher, 'WINDOWS', False), \
                 mock.patch.object(launcher.subprocess, 'Popen') as start:
-            launcher.Launcher.open_path(app, 'gow3.ini')
+            launcher.Launcher.open_path(app, 'spartanport.ini')
         app.collect.assert_called_once_with()
         start.assert_not_called()  # the save failed: nothing opens
 
@@ -616,7 +616,7 @@ class MonitorLauncherTest(unittest.TestCase):
         self.addCleanup(root.destroy)
 
         def build(language='en', monitor='', backend='auto', displays=TWO_DISPLAYS):
-            with mock.patch.dict(os.environ, {'GOW3_CONFIG': os.devnull}), \
+            with mock.patch.dict(os.environ, {'SPARTAN_CONFIG': os.devnull}), \
                     mock.patch.object(launcher, 'LANG', language), \
                     mock.patch.object(launcher, 'list_displays',
                                       return_value=launcher.parse_display_list(displays)) as detect:
@@ -707,7 +707,7 @@ class MonitorLauncherTest(unittest.TestCase):
 
 
 class QuickSettingsMonitorTest(unittest.TestCase):
-    """The Monitor choice of Quick settings: the same 'monitor' setting and the same gow3-probe list
+    """The Monitor choice of Quick settings: the same 'monitor' setting and the same spartanport-probe list
     as the Graphics page (one variable, one enumeration), so either row shows the screen the other
     one picks and the game receives the same index wherever it was chosen."""
     def setUp(self):
@@ -726,7 +726,7 @@ class QuickSettingsMonitorTest(unittest.TestCase):
     def build(self, language='en', monitor='', backend='auto', displays=TWO_DISPLAYS):
         """A Launcher with the Home and Graphics pages built the way build() builds them: the Home
         page lists the monitors first and the Graphics page reads that same list."""
-        with mock.patch.dict(os.environ, {'GOW3_CONFIG': os.devnull}), \
+        with mock.patch.dict(os.environ, {'SPARTAN_CONFIG': os.devnull}), \
                 mock.patch.object(launcher, 'LANG', language), \
                 mock.patch.object(launcher, 'list_displays',
                                   return_value=launcher.parse_display_list(displays)) as detect:
@@ -806,7 +806,7 @@ class QuickSettingsMonitorTest(unittest.TestCase):
             self.assertEqual(tuple(box['values']), ('Primary (default)', 'B · 1280 × 720'))
             self.assertEqual(box.current(), 0)
         self.assertEqual(app.vars['monitor'].get(), '')
-        self.assertNotIn('GOW3_MONITOR', added(launcher.game_environment(app.app)))
+        self.assertNotIn('SPARTAN_MONITOR', added(launcher.game_environment(app.app)))
 
     def test_both_rows_follow_a_reordered_list_that_still_holds_the_index(self):
         # The index stays valid but sits at another position (another window system): the write trace
@@ -830,7 +830,7 @@ class QuickSettingsMonitorTest(unittest.TestCase):
         quick.event_generate('<<ComboboxSelected>>')
         with mock.patch.object(launcher, 'WINDOWS', False):
             # gather() is what save and PLAY hand to the game, so the row reaches it exactly as saved.
-            self.assertEqual(launcher.game_environment(app.gather()['app'])['GOW3_MONITOR'], '1')
+            self.assertEqual(launcher.game_environment(app.gather()['app'])['SPARTAN_MONITOR'], '1')
 
     def test_without_monitors_quick_settings_still_builds(self):
         app, _ = self.build(displays='')

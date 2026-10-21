@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-#ifndef GOW3_SIGNATURE_H
-#define GOW3_SIGNATURE_H
+#ifndef SPARTAN_SIGNATURE_H
+#define SPARTAN_SIGNATURE_H
 #include <stdint.h>
 #include <string.h>
 
@@ -8,16 +8,16 @@
  * marks bytes another build may change (rip-relative displacements, rel32 branch targets).
  * tools/make_signatures.py writes them from the reference eboot.bin; scripts/patches.py does the
  * same search for the XML patches. at: the site's offset in the pattern. */
-typedef struct { const char *pattern; unsigned at; } Gow3Signature;
+typedef struct { const char *pattern; unsigned at; } SpartanSignature;
 
-enum { GOW3_SIGNATURE_MAX = 64 };
+enum { SPARTAN_SIGNATURE_MAX = 64 };
 
 /* Bytes of text into out (-1 for "??"); the count, or 0 when the text is not a pattern. */
-static inline unsigned gow3_signature_parse(const char *text, int *out) {
+static inline unsigned spartanport_signature_parse(const char *text, int *out) {
     unsigned n = 0;
     while (*text) {
         if (*text == ' ') { ++text; continue; }
-        if (n == GOW3_SIGNATURE_MAX || !text[1]) return 0;
+        if (n == SPARTAN_SIGNATURE_MAX || !text[1]) return 0;
         if (text[0] == '?' && text[1] == '?') {
             out[n++] = -1;
         } else {
@@ -35,9 +35,9 @@ static inline unsigned gow3_signature_parse(const char *text, int *out) {
 }
 
 /* The image offset of the signature's site when the pattern occurs exactly once, else UINT64_MAX. */
-static inline uint64_t gow3_signature_find(const unsigned char *image, uint64_t size, const Gow3Signature *sig) {
-    int pattern[GOW3_SIGNATURE_MAX];
-    const unsigned n = gow3_signature_parse(sig->pattern, pattern);
+static inline uint64_t spartanport_signature_find(const unsigned char *image, uint64_t size, const SpartanSignature *sig) {
+    int pattern[SPARTAN_SIGNATURE_MAX];
+    const unsigned n = spartanport_signature_parse(sig->pattern, pattern);
     if (!n || n > size || sig->at >= n) return UINT64_MAX;
     /* Scan for the longest run of fixed bytes, then check the whole pattern around it. */
     unsigned best = 0, best_length = 0;
@@ -48,7 +48,7 @@ static inline uint64_t gow3_signature_find(const unsigned char *image, uint64_t 
         i = j + 1;
     }
     if (!best_length) return UINT64_MAX;
-    unsigned char anchor[GOW3_SIGNATURE_MAX];
+    unsigned char anchor[SPARTAN_SIGNATURE_MAX];
     for (unsigned i = 0; i < best_length; ++i) anchor[i] = (unsigned char)pattern[best + i];
     uint64_t found = UINT64_MAX;
     for (uint64_t at = best; at + (n - best) <= size;) {

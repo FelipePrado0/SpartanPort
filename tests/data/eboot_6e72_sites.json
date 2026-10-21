@@ -1,5 +1,5 @@
 {
- "_source": "Original bytes of the full 01.02 eboot.bin (sha256 6e72330e...), as published by others: patches from FelipePrado0/gow3_pc PR #34 (Expected attributes), cheats from GoldHEN_Cheat_Repository json/CUSA01623_01.02.json (image offsets, \"off\" bytes).",
+ "_source": "Original bytes of the full 01.02 eboot.bin (sha256 6e72330e...), as published by others: patches from FelipePrado0/SpartanPort PR #34 (Expected attributes), cheats from GoldHEN_Cheat_Repository json/CUSA01623_01.02.json (image offsets, \"off\" bytes).",
  "patches": {
   "Bug Fix - Texture Corruption Fix": [
    [

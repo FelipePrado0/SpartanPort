@@ -2,8 +2,8 @@
  * Ivy Bridge, #33, #66). Each G3ISA1 record (scripts/isa_rewrite.py) describes one instruction
  * site; a stub calls isa_emulate with the guest's registers. Built with -mgeneral-regs-only and
  * no libc: it runs inside guest code and must leave the XMM/YMM registers untouched. */
-#ifndef GOW3_ISA_EMULATE_H
-#define GOW3_ISA_EMULATE_H
+#ifndef SPARTAN_ISA_EMULATE_H
+#define SPARTAN_ISA_EMULATE_H
 #include <stdint.h>
 #ifndef ABI               /* same as runtime.h, which needs sigjmp_buf (_GNU_SOURCE) */
 #define ABI __attribute__((sysv_abi))
