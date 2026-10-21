@@ -10,7 +10,7 @@ from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
-import gow3_launcher_win as launcher  # noqa: E402
+import spartanport_launcher_win as launcher  # noqa: E402
 
 
 class RunLogTest(unittest.TestCase):
@@ -21,7 +21,7 @@ class RunLogTest(unittest.TestCase):
         for name in ('collect', 'offer_system_files', 'set_log', 'play_button', 'status'):
             setattr(owner, name, mock.Mock(return_value=True))
         process, log = mock.Mock(), launcher._NullLog()
-        with mock.patch.object(launcher, 'game_info', return_value=('God of War III', '01.02')), \
+        with mock.patch.object(launcher, 'game_info', return_value=('SpartanPort', '01.02')), \
                 mock.patch.object(launcher, 'missing_game_files', return_value=[]), \
                 mock.patch.object(launcher, 'open_play_log', return_value=log), \
                 mock.patch.object(launcher.subprocess, 'Popen', return_value=process), \
@@ -86,16 +86,13 @@ class RunLogTest(unittest.TestCase):
         self.assertTrue(log.closed)
         self.assertEqual([owner.output.get_nowait() for _ in range(3)], ['a\n', 'b\n', (0,)])
 
-    def test_play_log_is_skipped_when_the_launcher_closes_on_play(self):
-        # The reader thread dies with the launcher 5 s after start: a truncated file would
-        # replace the previous full log.
+    def test_play_log_is_kept_when_the_launcher_hides_on_play(self):
         with tempfile.TemporaryDirectory() as tmp:
-            self.assertIsInstance(launcher.open_play_log({'user_dir': tmp, 'close_on_play': True}),
-                                  launcher._NullLog)
-            self.assertFalse(launcher.run_log_path({'user_dir': tmp}).exists())
-            with launcher.open_play_log({'user_dir': tmp, 'close_on_play': False}) as log:
-                log.write('x\n')
-            self.assertEqual(launcher.run_log_path({'user_dir': tmp}).read_text(encoding='utf-8'), 'x\n')
+            for close_on_play in (True, False):
+                with self.subTest(close_on_play=close_on_play):
+                    with launcher.open_play_log({'user_dir': tmp, 'close_on_play': close_on_play}) as log:
+                        log.write('x\n')
+                    self.assertEqual(launcher.run_log_path({'user_dir': tmp}).read_text(encoding='utf-8'), 'x\n')
 
 
 def _launcher_class():

@@ -23,16 +23,16 @@ int main(int argc, char** argv) {
         assert(std::fread(image.data(), 1, image.size(), file) == image.size());
         std::fclose(file);
     }
-    for (unsigned i = 0; i < GOW3_CHEAT_HOOK_COUNT; ++i) {
-        const auto& hook = gow3_cheat_hooks[i];
-        assert(gow3_cheat_signature_match(&hook, hook.original, hook.length));
+    for (unsigned i = 0; i < SPARTAN_CHEAT_HOOK_COUNT; ++i) {
+        const auto& hook = spartanport_cheat_hooks[i];
+        assert(spartanport_cheat_signature_match(&hook, hook.original, hook.length));
         code[0] = 0;
-        assert(!gow3_cheat_signature_match(&hook, code, hook.length));
-        assert(!gow3_cheat_signature_match(&hook, hook.original, hook.length - 1));
-        assert(gow3_cheat_build_stub(code, &hook, 0x12345678, 0x87654321) < sizeof(code));
+        assert(!spartanport_cheat_signature_match(&hook, code, hook.length));
+        assert(!spartanport_cheat_signature_match(&hook, hook.original, hook.length - 1));
+        assert(spartanport_cheat_build_stub(code, &hook, 0x12345678, 0x87654321) < sizeof(code));
         if (!image.empty()) {
             assert(hook.offset + hook.length <= image.size());
-            assert(gow3_cheat_signature_match(&hook, image.data() + hook.offset, image.size() - hook.offset));
+            assert(spartanport_cheat_signature_match(&hook, image.data() + hook.offset, image.size() - hook.offset));
         }
 #ifdef _WIN32
         auto* executable = static_cast<unsigned char*>(VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
         uintptr_t target = reinterpret_cast<uintptr_t>(executable + 64);
         memcpy(executable + sizeof(entry), &target, 8);
         std::atomic<bool> flag{false};
-        assert(gow3_cheat_build_stub(executable + 64, &hook, reinterpret_cast<uintptr_t>(&flag),
+        assert(spartanport_cheat_build_stub(executable + 64, &hook, reinterpret_cast<uintptr_t>(&flag),
                                     reinterpret_cast<uintptr_t>(executable + 256)) < 192);
         const unsigned char exit[] = {0x0f,0x92,0x87,0,3,0,0,
             0x48,0x89,0x87,8,3,0,0,0x41,0x5d,0x5b,0xc3};
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
         memcpy(&preserved, player.data() + 0x308, 8);
         assert(preserved == 0x12345678);
         memcpy(player.data() + offset, &original, 4);
-        if (hook.id == GOW3_CHEAT_HEALTH) memcpy(player.data() + 0x1d0, &health_max, 4);
+        if (hook.id == SPARTAN_CHEAT_HEALTH) memcpy(player.data() + 0x1d0, &health_max, 4);
         flag.store(true);
         execute(player.data(), 5);
         memcpy(&result, player.data() + offset, 4);
@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
         assert(result == expected[hook.id] && player[0x300] == 1);
         memcpy(&preserved, player.data() + 0x308, 8);
         assert(preserved == 0x12345678);
-        if (hook.id == GOW3_CHEAT_HEALTH) {
+        if (hook.id == SPARTAN_CHEAT_HEALTH) {
             player[0x298] = 1;
             execute(player.data(), 7);
             memcpy(&result, player.data() + offset, 4);

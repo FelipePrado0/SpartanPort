@@ -1,4 +1,4 @@
-From: gow3
+From: spartanport
 Subject: [PATCH] FFX 1.1.4: include missing standard headers for libc++ (MSYS2 CLANG64)
 
 ---
@@ -10,8 +10,8 @@ index b2439b6..ba9b667 100644
  
  #include <vulkan/vulkan.h>
  
-+#include <cmath>  // gow3: log2 (libc++ does not include it transitively)
-+#include <new>    // gow3: placement new (libc++ does not include it transitively)
++#include <cmath>  // spartanport: log2 (libc++ does not include it transitively)
++#include <new>    // spartanport: placement new (libc++ does not include it transitively)
 +
  // prototypes for functions in the interface
  FfxVersionNumber       GetSDKVersionVK(FfxInterface* backendInterface);
@@ -24,7 +24,7 @@ index b8f48c0..afd3c13 100644
  #include <cmath>        // for fabs, abs, sinf, sqrt, etc.
  #include <string>       // for memset
  #include <cfloat>       // for FLT_EPSILON
-+#include <cstdlib>      // gow3: _countof on MinGW/libc++
++#include <cstdlib>      // spartanport: _countof on MinGW/libc++
  #include <FidelityFX/host/ffx_frameinterpolation.h>
  
  #define FFX_CPU
@@ -36,7 +36,7 @@ index 94bf581..a7c223b 100644
  #include <cmath>        // for fabs, abs, sinf, sqrt, etc.
  #include <string.h>     // for memset
  #include <cfloat>       // for FLT_EPSILON
-+#include <cstdlib>      // gow3: _countof on MinGW/libc++
++#include <cstdlib>      // spartanport: _countof on MinGW/libc++
  #include <FidelityFX/host/ffx_fsr3upscaler.h>
  
  #define FFX_CPU
@@ -48,7 +48,7 @@ index ae94c2d..140c937 100644
  #include <cmath>        // for fabs, abs, sinf, sqrt, etc.
  #include <string>       // for memset
  #include <cfloat>       // for FLT_EPSILON
-+#include <cstdlib>      // gow3: _countof on MinGW/libc++
++#include <cstdlib>      // spartanport: _countof on MinGW/libc++
  #include "FidelityFX/host/ffx_opticalflow.h"
  
  #ifdef __clang__
@@ -60,7 +60,7 @@ index e325a05..74c6016 100644
  
  #include <FidelityFX/host/ffx_message.h>
  #include <FidelityFX/host/ffx_util.h>
-+#include <wchar.h>  // gow3: swprintf_s on MinGW (libc++ does not pull it in)
++#include <wchar.h>  // spartanport: swprintf_s on MinGW (libc++ does not pull it in)
  
  #ifdef _WIN32
  #ifndef WIN32_LEAN_AND_MEAN

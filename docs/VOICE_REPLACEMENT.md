@@ -35,8 +35,10 @@ So Portuguese (Brazil) (id 17) is Brazilian **text** with the `PORTUGUESE` **voi
 Portuguese (Portugal) (id 7) uses. That voice is European Portuguese (the PlayStation Store lists
 "Português (Portugal)" as the only Portuguese voice), so there is no Brazilian Portuguese voice in the game.
 
-The launcher's *Game language* list is the system language handed to the game (`GOW3_LANGUAGE`); the game also
+The launcher's *Game language* list is the system language handed to the game (`SPARTAN_LANGUAGE`); the game also
 has its own language options in its menu.
+Match `--language` to the speech language selected inside the game. Existing saves keep that choice;
+changing only the launcher language does not change it. English speech reads the `ENGLISH` folder.
 
 ## What a voice file is
 
@@ -81,13 +83,12 @@ To check that the game read a file on Windows, compare its *last access time* in
 (`Get-Item <file> | Select LastAccessTime`) before and after playing the scene. Windows may delay or disable
 that timestamp, so treat a missing change as inconclusive.
 
-### The `mods` folder does not replace these files (yet)
+### The `mods` folder
 
-A loose-file mod is laid out under `dvdroot_ps4/...` and `scripts/mods.py` keeps that first folder in the
-path it builds (`tests/test_mods.py` expects exactly that). This game's dump has no `dvdroot_ps4` folder (its
-files sit at the root: `EXEC/`, `PORTUGUESE/`, ...), so a file such as
-`dvdroot_ps4/PORTUGUESE/SOUNDS/STREAMS_PS4/X.XVAG` ends up in a new `dvdroot_ps4` folder that the game never
-opens; the log says `0 game files replaced, N added`. Until that is addressed, use the Update folder.
+The current mod loader supports loose voice replacements under
+`dvdroot_ps4/<LANGUAGE>/SOUNDS/STREAMS_PS4/`. It removes the `dvdroot_ps4` prefix for a flat game dump
+(`scripts/mods.py`). The tool documented here builds an Update folder; select that folder through
+**Game > Update folder**.
 
 ## Legal
 
@@ -123,8 +124,10 @@ Portanto Português (Brasil) (id 17) é **texto** brasileiro com a **voz** `PORT
 Português (Portugal) (id 7) usa. Essa voz é português europeu (a PlayStation Store lista "Português (Portugal)"
 como a única voz em português), então não existe voz em português do Brasil no jogo.
 
-A lista *Game language* do launcher é o idioma de sistema entregue ao jogo (`GOW3_LANGUAGE`); o jogo também tem
+A lista *Game language* do launcher é o idioma de sistema entregue ao jogo (`SPARTAN_LANGUAGE`); o jogo também tem
 opções de idioma no próprio menu.
+Use em `--language` a pasta correspondente ao idioma de fala selecionado dentro do jogo. Saves existentes
+mantêm essa escolha; mudar apenas o idioma do launcher não a altera. Voz em inglês usa a pasta `ENGLISH`.
 
 ## O que é um arquivo de voz
 
@@ -162,13 +165,12 @@ Para conferir no Windows se o jogo leu um arquivo, compare o *último acesso* de
 `Get-Item <arquivo> | Select LastAccessTime`) antes e depois de jogar a cena. O Windows pode atrasar ou desligar
 esse horário; se não mudar, o resultado é inconclusivo.
 
-### A pasta `mods` ainda não troca esses arquivos
+### A pasta `mods`
 
-Um mod de arquivos soltos usa `dvdroot_ps4/...` e o `scripts/mods.py` mantém essa primeira pasta no caminho que
-monta (o `tests/test_mods.py` espera exatamente isso). O dump deste jogo não tem `dvdroot_ps4` (os arquivos ficam
-na raiz: `EXEC/`, `PORTUGUESE/`, ...), então um arquivo como `dvdroot_ps4/PORTUGUESE/SOUNDS/STREAMS_PS4/X.XVAG`
-cai numa pasta `dvdroot_ps4` nova que o jogo nunca abre; o log diz `0 game files replaced, N added`. Até isso ser
-tratado, use a pasta de Update.
+O loader atual aceita substituições de voz em
+`dvdroot_ps4/<IDIOMA>/SOUNDS/STREAMS_PS4/`. Ele remove o prefixo `dvdroot_ps4` quando o dump tem os arquivos
+na raiz (`scripts/mods.py`). A ferramenta descrita aqui monta uma pasta Update; selecione essa pasta em
+**Game > Update folder**.
 
 ## Aviso legal
 

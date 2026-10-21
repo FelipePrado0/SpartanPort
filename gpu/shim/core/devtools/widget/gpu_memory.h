@@ -1,4 +1,4 @@
-// gow3: devtools GPU memory viewer is not part of the port.
+// spartanport: devtools GPU memory viewer is not part of the port.
 #pragma once
 #include <string>
 #include <vector>

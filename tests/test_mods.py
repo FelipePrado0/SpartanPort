@@ -1,4 +1,5 @@
 from paths import ROOT
+import contextlib
 import importlib.util
 import json
 import os
@@ -7,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from unittest import mock
 import zipfile
@@ -48,6 +50,25 @@ class ModTests(unittest.TestCase):
         self.assertEqual((self.assets / 'a.wad').read_bytes(), b'original')
         self.assertFalse((self.assets / 'new.wad').exists())
         self.assertEqual((result / 'eboot.bin').read_bytes(), b'original executable')
+
+    def test_a_network_share_without_symlinks_or_junctions_still_overlays(self):
+        # A network share (SMB) refuses symlinks and junctions alike; only hard links work.
+        # The overlay must still merge the mod and leave the game folder untouched.
+        a = self.mod('A')
+        self.mod('A', b'new', 'new.wad')
+        def create_junction(src, dst):  # CreateJunction creates the dir, then refuses the reparse point
+            Path(dst).mkdir()
+            raise PermissionError(5, 'Access is denied')
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.object(Path, 'symlink_to', side_effect=PermissionError(5, 'Access is denied')))
+            stack.enter_context(mock.patch.object(os, 'name', 'nt'))
+            stack.enter_context(mock.patch.dict(sys.modules, {'_winapi': types.SimpleNamespace(CreateJunction=create_junction)}))
+            result = mods.build_overlay(self.game, self.root / 'out', [('A', a)])
+        folder = result / 'dvdroot_ps4' / 'data'
+        self.assertEqual((folder / 'a.wad').read_bytes(), b'mod')
+        self.assertEqual((folder / 'b.wad').read_bytes(), b'untouched')
+        self.assertEqual((folder / 'new.wad').read_bytes(), b'new')
+        self.assertEqual((self.assets / 'a.wad').read_bytes(), b'original')  # the game folder is untouched
 
     def test_last_mod_wins_and_reordering_changes_winner(self):
         a, b = self.mod('A', b'A'), self.mod('B', b'B')
@@ -297,16 +318,181 @@ class ModTests(unittest.TestCase):
         probe = self.root / 'probe'
         probe.write_text(f'#!{sys.executable}\nimport json,sys,os\nfrom pathlib import Path\n'
             'game=Path(sys.argv[sys.argv.index("--app0")+1])\n'
-            'Path(os.environ["GOW3_DATA_DIR"],"mounted.json").write_text(json.dumps({\n'
+            'Path(os.environ["SPARTAN_DATA_DIR"],"mounted.json").write_text(json.dumps({\n'
             '"path":str(game),"content":(game/"dvdroot_ps4/data/a.wad").read_text()}))\n'
             'sys.exit(7)\n')
         probe.chmod(0o755)
-        env = dict(os.environ, GOW3_PROBE=str(probe),
-            GOW3_DATA_DIR=str(self.root), GOW3_GAME_DIR=str(self.game),
-            GOW3_MODS_DIR=str(self.moddir), GOW3_MODS_ENABLED='1', GOW3_MODS_CONFIG=str(self.root/'mods.json'))
+        env = dict(os.environ, SPARTAN_PROBE=str(probe),
+            SPARTAN_DATA_DIR=str(self.root), SPARTAN_GAME_DIR=str(self.game),
+            SPARTAN_MODS_DIR=str(self.moddir), SPARTAN_MODS_ENABLED='1', SPARTAN_MODS_CONFIG=str(self.root/'mods.json'))
         result = subprocess.run([sys.executable, 'run.py'], cwd=port, env=env, capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 7, result.stderr)
         mounted = json.loads((self.root / 'mounted.json').read_text())
         self.assertEqual(mounted['content'], 'mod')
         self.assertFalse(Path(mounted['path']).exists())
         self.assertEqual((self.assets/'a.wad').read_bytes(), b'original')
+
+
+class GameLayout(unittest.TestCase):
+    """The game keeps its data in EXEC and one folder per language at the game root, with
+    no dvdroot_ps4 folder (#473, #574)."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.game = self.root / 'CUSA01623'
+        for folder in ('EXEC/WAD/PS4_LE', 'PORTUGUESE/SOUNDS', 'sce_sys'):
+            (self.game / folder).mkdir(parents=True)
+        (self.game / 'eboot.bin').write_bytes(b'original executable')
+        (self.game / 'EXEC/WAD/PS4_LE/R_UI.WAD').write_bytes(b'original ui')
+        (self.game / 'PORTUGUESE/SOUNDS/X.XVAG').write_bytes(b'original voice')
+        self.moddir = self.root / 'mods'
+
+    def mod(self, name, path, contents=b'mod'):
+        file = self.moddir / name / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(contents)
+        return self.moddir / name
+
+    def overlay(self, *names):
+        return mods.build_overlay(self.game, self.root / 'out', [(n, self.moddir / n) for n in names])
+
+    def test_exec_and_language_folders_replace_game_files(self):
+        self.mod('UI', 'exec/wad/ps4_le/r_ui.wad', b'mod ui')
+        self.mod('UI', 'Portuguese/SOUNDS/X.XVAG', b'mod voice')
+        (self.moddir / 'UI' / 'readme.txt').write_text('ignored')
+        self.assertEqual(mods.discover(self.moddir), ['UI'])
+        view = self.overlay('UI')
+        self.assertEqual((view / 'EXEC/WAD/PS4_LE/R_UI.WAD').read_bytes(), b'mod ui')
+        self.assertEqual((view / 'PORTUGUESE/SOUNDS/X.XVAG').read_bytes(), b'mod voice')
+        self.assertFalse((view / 'readme.txt').exists())
+        self.assertEqual((self.game / 'EXEC/WAD/PS4_LE/R_UI.WAD').read_bytes(), b'original ui')
+
+    def test_dvdroot_prefix_is_dropped_when_the_game_has_none(self):
+        self.mod('Voice', 'dvdroot_ps4/PORTUGUESE/SOUNDS/X.XVAG', b'mod voice')
+        with mock.patch('sys.stderr') as log:
+            view = self.overlay('Voice')
+        self.assertEqual((view / 'PORTUGUESE/SOUNDS/X.XVAG').read_bytes(), b'mod voice')
+        self.assertFalse((view / 'dvdroot_ps4').exists())
+        self.assertIn('1 game files replaced, 0 added', ''.join(c.args[0] for c in log.write.call_args_list))
+
+    def test_wrapper_folder_around_exec(self):
+        self.mod('Pack', 'Pack v1.0/EXEC/WAD/PS4_LE/R_UI.WAD', b'wrapped')
+        self.assertEqual(mods.discover(self.moddir), ['Pack'])
+        self.assertEqual((self.overlay('Pack') / 'EXEC/WAD/PS4_LE/R_UI.WAD').read_bytes(), b'wrapped')
+
+    def test_system_files_are_refused_with_or_without_the_prefix(self):
+        self.mod('Bad', 'EXEC/WAD/PS4_LE/R_UI.WAD')
+        self.mod('Bad', 'sce_sys/param.sfo')
+        self.mod('Sneaky', 'dvdroot_ps4/eboot.bin')
+        for name in ('Bad', 'Sneaky'):
+            with self.assertRaises(ValueError):
+                self.overlay(name)
+        self.assertEqual((self.game / 'eboot.bin').read_bytes(), b'original executable')
+
+    def test_conflicts_match_across_layouts(self):
+        self.mod('A', 'EXEC/WAD/PS4_LE/R_UI.WAD')
+        self.mod('B', 'dvdroot_ps4/EXEC/WAD/PS4_LE/R_UI.WAD')
+        self.assertEqual(mods.conflicts(self.moddir, ['A', 'B']), [('EXEC/WAD/PS4_LE/R_UI.WAD', ['A', 'B'])])
+
+    def test_region_folders_are_used_for_discovery_and_overlay(self):
+        original = self.game / 'JAPANESE/text.wad'
+        original.parent.mkdir()
+        original.write_bytes(b'original')
+        self.mod('JP', 'Pack/app0/japanese/text.wad', b'translated')
+        self.assertEqual(mods.discover(self.moddir, self.game), ['JP'])
+        view = self.overlay('JP')
+        self.assertEqual((view / 'JAPANESE/text.wad').read_bytes(), b'translated')
+        self.assertEqual(original.read_bytes(), b'original')
+
+    def test_region_folders_do_not_leak_to_another_game(self):
+        (self.game / 'JAPANESE').mkdir()
+        self.mod('JP', 'JAPANESE/text.wad')
+        self.assertEqual(mods.discover(self.moddir, self.game), ['JP'])
+        other = self.root / 'other'
+        other.mkdir()
+        self.assertEqual(mods.discover(self.moddir, other), [])
+        self.assertEqual(mods.discover(self.moddir), [])
+
+    def test_region_mods_keep_metadata_conflicts_and_selection(self):
+        (self.game / 'JAPANESE').mkdir()
+        for name in ('A', 'B'):
+            self.mod(name, 'JAPANESE/text.wad')
+        self.assertEqual(mods.selected(self.moddir, None, self.game), ['A', 'B'])
+        self.assertEqual(mods.conflicts(self.moddir, ['A', 'B'], self.game),
+                         [('JAPANESE/text.wad', ['A', 'B'])])
+        self.assertEqual(len(list(mods.mod_files(self.moddir / 'A', self.game))), 1)
+
+    def test_learning_game_folders_does_not_allow_system_replacements(self):
+        for folder in ('sce_sys', 'sce_module', 'eboot.bin'):
+            mod = self.mod('Bad', folder + '/payload')
+            self.assertEqual(mods.discover(self.moddir, self.game), [])
+            with self.assertRaises(ValueError):
+                mods.build_overlay(self.game, self.root / 'out', [('Bad', mod)])
+            shutil.rmtree(mod)
+
+
+class ModInfo(unittest.TestCase):
+    """What the launcher's Mods page shows for a mod: mod.json, else the readme and an image."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.mod = Path(self.temp.name) / 'Gold Armor'
+        (self.mod / 'EXEC').mkdir(parents=True)
+        (self.mod / 'EXEC' / 'R_HERO00.WAD').write_bytes(b'x')
+
+    def test_mod_json_fields(self):
+        (self.mod / 'mod.json').write_text(json.dumps({
+            'name': 'Kratos Gold Armor', 'author': 'someone', 'version': '1.2',
+            'description': 'Golden armor.', 'url': 'https://example.com/mod'}), encoding='utf-8')
+        info = mods.mod_info(self.mod)
+        self.assertEqual((info['name'], info['author'], info['version'], info['description'], info['url']),
+                         ('Kratos Gold Armor', 'someone', '1.2', 'Golden armor.', 'https://example.com/mod'))
+        self.assertIsNone(info['image'])
+
+    def test_without_mod_json_the_folder_name_and_readme_are_used(self):
+        (self.mod / 'Readme.txt').write_text('\n  First line.\nSecond line.\n\n' + 'x' * 900, encoding='utf-8')
+        info = mods.mod_info(self.mod)
+        self.assertEqual(info['name'], 'Gold Armor')
+        self.assertTrue(info['description'].startswith('First line.\nSecond line.'))
+        self.assertLessEqual(len(info['description']), 400)
+        self.assertEqual((info['author'], info['version'], info['url']), ('', '', ''))
+
+    def test_invalid_mod_json_falls_back(self):
+        (self.mod / 'mod.json').write_text('{not json', encoding='utf-8')
+        self.assertEqual(mods.mod_info(self.mod)['name'], 'Gold Armor')
+        (self.mod / 'mod.json').write_text('["a list"]', encoding='utf-8')
+        self.assertEqual(mods.mod_info(self.mod)['name'], 'Gold Armor')
+
+    def test_only_web_links_are_kept(self):
+        (self.mod / 'mod.json').write_text(json.dumps({'url': 'file:///C:/Windows/system32'}), encoding='utf-8')
+        self.assertEqual(mods.mod_info(self.mod)['url'], '')
+
+    def test_preview_image_wins_over_other_images(self):
+        for name in ('a.jpg', 'screenshot.png', 'Preview.PNG'):
+            (self.mod / name).write_bytes(b'img')
+        self.assertEqual(mods.mod_info(self.mod)['image'].name, 'Preview.PNG')
+        (self.mod / 'Preview.PNG').unlink()
+        self.assertEqual(mods.mod_info(self.mod)['image'].name, 'screenshot.png')
+        (self.mod / 'screenshot.png').unlink()
+        self.assertEqual(mods.mod_info(self.mod)['image'].name, 'a.jpg')
+
+    def test_metadata_inside_a_wrapper_folder(self):
+        wrapper = Path(self.temp.name) / 'Pack'
+        (wrapper / 'Pack v1' / 'EXEC').mkdir(parents=True)
+        (wrapper / 'Pack v1' / 'EXEC' / 'R_UI.WAD').write_bytes(b'x')
+        (wrapper / 'Pack v1' / 'mod.json').write_text(json.dumps({'name': 'Wrapped'}), encoding='utf-8')
+        (wrapper / 'Pack v1' / 'cover.jpg').write_bytes(b'img')
+        self.assertEqual(mods.discover(Path(self.temp.name)), ['Gold Armor', 'Pack'])
+        info = mods.mod_info(wrapper)
+        self.assertEqual((info['name'], info['image'].name), ('Wrapped', 'cover.jpg'))
+
+    def test_mod_json_beside_the_wrapper_folder_keeps_the_mod(self):
+        wrapper = Path(self.temp.name) / 'Outer'
+        (wrapper / 'Outer v2' / 'EXEC').mkdir(parents=True)
+        (wrapper / 'Outer v2' / 'EXEC' / 'R_UI.WAD').write_bytes(b'x')
+        (wrapper / 'mod.json').write_text(json.dumps({'name': 'Outer Mod'}), encoding='utf-8')
+        self.assertIn('Outer', mods.discover(Path(self.temp.name)))
+        self.assertEqual(mods.mod_info(wrapper)['name'], 'Outer Mod')

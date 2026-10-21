@@ -89,6 +89,11 @@ def read_xvag_header(data):
     big = bool(data[8] & 1)
     # start, channels, codec, samples, samples (again), interleave factor, sample rate, data size
     fields = struct.unpack(('>' if big else '<') + '8I', data[4:8] + data[0x28:0x44])
+    if not 0x44 <= fields[0] <= len(data):
+        raise ValueError('XVAG audio offset is outside the payload')
+    if fields[1] == 1 and fields[2] == 6:
+        if fields[3] % 28 or len(data) - fields[0] < fields[3] // 28 * 16:
+            raise ValueError('XVAG audio is shorter than its header or has incomplete frames')
     return big, fields[0], fields[1], fields[2], fields[3], fields[6]
 
 

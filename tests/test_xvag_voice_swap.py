@@ -85,6 +85,18 @@ class SwapVoiceTests(unittest.TestCase):
         from_vagp = swap.swap_voice(xvag(ORIGINAL, big=False), vagp(DUBBED))
         self.assertEqual(from_xvag, from_vagp)
 
+    def test_truncated_xvag_recordings_are_refused(self):
+        for missing in (1, 16, 64):
+            with self.subTest(missing=missing), self.assertRaises(ValueError):
+                swap.swap_voice(xvag(ORIGINAL), xvag(DUBBED)[:-missing])
+
+    def test_xvag_payload_cannot_overlap_the_header(self):
+        for recording in (False, True):
+            malformed = bytearray(xvag(DUBBED if recording else ORIGINAL))
+            struct.pack_into('>I', malformed, 4, 0)
+            with self.subTest(recording=recording), self.assertRaises(ValueError):
+                swap.swap_voice(xvag(ORIGINAL), malformed) if recording else swap.swap_voice(malformed, vagp(DUBBED))
+
     def test_what_does_not_fit_is_refused_with_a_reason(self):
         original = xvag(ORIGINAL)
         cases = {

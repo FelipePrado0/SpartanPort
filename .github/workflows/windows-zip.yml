@@ -60,11 +60,11 @@ jobs:
           PYTHON_EXE: ${{ steps.python.outputs.python-path }}
         run: |
           WINPYTHON=$(cygpath -u "$PYTHON_EXE") bash packaging/windows/package.sh
-          cd dist && sha256sum -b gow3-windows.zip > gow3-windows.zip.sha256
+          cd dist && sha256sum -b spartanport-windows.zip > spartanport-windows.zip.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: gow3-windows.zip
-          path: dist/gow3-windows.zip*
+          name: spartanport-windows.zip
+          path: dist/spartanport-windows.zip*
           if-no-files-found: error
 
   smoke:
@@ -74,11 +74,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: gow3-windows.zip
+          name: spartanport-windows.zip
           path: dist
       - name: Open the package without MSYS2
         shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/smoke-test.ps1 dist/gow3-windows.zip
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/smoke-test.ps1 dist/spartanport-windows.zip
 
   publish:
     needs: smoke
@@ -87,7 +87,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: gow3-windows.zip
+          name: spartanport-windows.zip
           path: dist
       - name: Release
         env:
@@ -97,6 +97,6 @@ jobs:
         run: |
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Windows test build $TAG" \
-              --notes "Windows test build from \`${GITHUB_SHA::7}\`. Download \`gow3-windows.zip\`, extract it and run \`God of War III.exe\`. Not a final release: please report in the linked issue whether it opens and runs."
+              --notes "Windows test build from \`${GITHUB_SHA::7}\`. Download \`spartanport-windows.zip\`, extract it and run \`SpartanPort.exe\`. Not a final release: please report in the linked issue whether it opens and runs."
           fi
-          gh release upload "$TAG" dist/gow3-windows.zip dist/gow3-windows.zip.sha256 --clobber
+          gh release upload "$TAG" dist/spartanport-windows.zip dist/spartanport-windows.zip.sha256 --clobber
