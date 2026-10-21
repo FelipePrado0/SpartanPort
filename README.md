@@ -42,6 +42,7 @@ and Linux (experimental AppImage).
   - [Building from source](#building-from-source)
     - [Windows](#windows)
     - [Linux (Ubuntu 24.04)](#linux-ubuntu-2404)
+    - [Linux (Arch Linux)](#linux-arch-linux)
   - [Tests](#tests)
     - [Python](#python)
     - [Windows C++ tests (MSYS2 CLANG64)](#windows-c-tests-msys2-clang64)
@@ -441,6 +442,29 @@ The build environment is created before the packaging command. Building on a new
 can require a newer glibc; public release builds use Ubuntu 24.04. From the repository, use
 `out/venv/bin/python launcher/spartanport_launcher_win.py --play` for saved launcher settings, or
 `SPARTAN_GAME_DIR=/path/to/CUSA01623 out/venv/bin/python run.py` for a direct launch.
+
+### Linux (Arch Linux)
+
+The `PKGBUILD` is provided [here](packaging/linux/PKGBUILD).
+
+Build and install (using [`yay`](https://github.com/jguer/yay) for the AUR build dependency):
+
+```bash
+sudo pacman -S --needed base-devel git curl robin-map
+yay -S --needed vulkan-memory-allocator
+mkdir -p ~/spartanport-build && cd ~/spartanport-build
+curl -fLO https://raw.githubusercontent.com/FelipePrado0/SpartanPort/main/packaging/linux/PKGBUILD
+makepkg -si
+```
+Run the launcher under **Games** in your [application menu](https://wiki.archlinux.org/title/Desktop_entries) or with `spartanport` from terminal.
+
+Optional packages (use an [AUR helper](https://wiki.archlinux.org/title/AUR_helpers)
+such as [`yay`](https://github.com/jguer/yay) for `python-iced-x86`):
+
+```bash
+sudo pacman -S --needed gamemode mangohud
+yay -S --needed python-iced-x86
+```
 
 ## Tests
 
