@@ -143,7 +143,7 @@ Fedora 42, Arch e openSUSE Tumbleweed; isso não comprova gameplay em todas as G
 3. Escolha a pasta do jogo, salve as configurações e pressione **PLAY**.
 
 Se um download antigo mostrar `GLIBC_2.44 not found`, baixe novamente o AppImage recompilado.
-O atualizador do Windows não está disponível no Linux; baixe um AppImage novo para atualizar.
+O AppImage se atualiza sozinho: **Advanced → Check for updates** (ou o aviso ao abrir o launcher) baixa o AppImage novo do release, confere o SHA-256 e troca o arquivo. Precisa de uma pasta com permissão de escrita; senão abre a página de releases.
 A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2.2.0 publicado.
 
 - **Arquivos:** saves, configurações, cache de shaders e o registro ficam em `~/.local/share/spartanport`; as
@@ -340,6 +340,10 @@ uma correção para todas as configurações de overlay.
   Se persistir, informe GPU, driver, build do jogo e a saída de **Advanced → Log**. Apagar o
   cache de shaders não é uma solução geral e exige reconstruí-lo na próxima abertura.
 - O jogo fecha com "cannot create ... guest memory (error 1450)": o Windows ficou sem memória virtual para alocar o pool de memória do jogo. Aumente o arquivo de paginação: pressione **Win + R**, digite `SystemPropertiesAdvanced`, vá em Configurações de **Desempenho** → guia **Avançado** → **Memória virtual** Alterar, desmarque o gerenciamento automático, selecione a unidade **C:**, defina um tamanho personalizado (ex.: 16384 MB inicial, 24576 MB máximo), clique em **Definir**, **OK** e reinicie o PC.
+- O **Idioma do jogo** do launcher não muda nada: ele só vale no primeiro início do jogo. Depois, o
+  jogo restaura os próprios idiomas de texto e de falas do save de configurações, então troque no
+  jogo: **Opções → Configurações de jogo → Texto de jogo** e **Opções → Áudio → Falas** (por exemplo,
+  texto em português com vozes em inglês).
 - O jogo não abre: veja **Advanced → Log**, ou envie o `user\last_run.log` junto com o relato.
   Se escolheu uma **Saves folder** personalizada, o `last_run.log` fica nessa pasta.
 - Texturas amarelas/laranjas/brancas ou iluminação errada: experimente desligar **Performance →

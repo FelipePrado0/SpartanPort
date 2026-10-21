@@ -16,6 +16,8 @@
     <TitleID>
         <ID>CUSA01623</ID>
         <ID>CUSA01715</ID>
+        <ID>CUSA01720</ID>
+        <ID>CUSA01740</ID>
     </TitleID>
     <Metadata Title="SpartanPort" Name="Bug Fix - Texture Corruption Fix" Note="Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both." Author="cuesta4" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
         <PatchList>

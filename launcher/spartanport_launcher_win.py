@@ -14,6 +14,7 @@ so a packaged port needs no Python installation.
 import base64
 import contextlib
 import glob
+import hashlib
 import io
 import importlib.util
 import json
@@ -451,7 +452,7 @@ def register_font(path):
 
 # The heading face (Cinzel Black, SIL OFL 1.1, launcher/OFL-Cinzel.txt) covers the Latin-script
 # languages; the other scripts keep the launcher's usual families.
-LATIN_UI_LANGUAGES = ('en', 'es', 'pt', 'fr', 'de', 'it', 'pl', 'tr')
+LATIN_UI_LANGUAGES = ('en', 'es', 'pt', 'fr', 'de', 'it', 'pl', 'tr', 'id')
 
 
 def heading_face(every_language=False):
@@ -477,7 +478,7 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
                 'live_resolution': 'auto', 'display_mode': 'windowed', 'vsync': '1', 'fps_limit': '0',
                 'async_shaders': '1', 'deferred_readback': '1', 'stale_readback': '1',
-                'render_resolution': 'native', 'engine_fps': '120',
+                'render_resolution': graphics_options.DEFAULTS['render_resolution'], 'engine_fps': '120',
                 'frames_queued': '1', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
                 'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1',
                 'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100'}
@@ -750,7 +751,7 @@ UPSCALERS = [('fsr3', ('FSR 3.1 (every GPU)', 'FSR 3.1 (любая видеок�
              ('off', ('Off', 'Выключен'))]
 PRESETS = [('0', ('Native AA (×1.0)',)), ('1', ('Quality (×1.5)',)), ('2', ('Balanced (×1.7)',)),
            ('3', ('Performance (×2)',)), ('4', ('Ultra Performance (×3)',))]
-OUTPUTS = [('1280x720', ('1280 × 720 (Steam Deck)',)), ('1920x1080', ('1920 × 1080',)),
+OUTPUTS = [('1280x720', ('1280 × 720',)), ('1920x1080', ('1920 × 1080',)),
            ('2560x1440', ('2560 × 1440',)), ('3840x2160', ('3840 × 2160 (4K)',))]
 LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарте)')), ('0', ('Off (faster)', 'Выключена (быстрее)')),
         ('1', ('On (change without restarting)', 'Включена (без перезапуска)'))]
@@ -1420,7 +1421,7 @@ class Launcher:
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.drain_output)
         root.after(500, self.watch_changes)
-        if WINDOWS and self.app.get('check_updates', True):
+        if can_self_update() and self.app.get('check_updates', True):
             threading.Thread(target=self.check_update, daemon=True).start()
 
     def meta_dir(self):
@@ -2098,7 +2099,15 @@ class Launcher:
         self.section(f, _('Saves'))
         self.build_save_backups(f)
         self.section(f, _('Language'))
-        self.row(f, _('Game language', 'Язык игры'), self.choice(f, 'language', 'app', LANGUAGES))
+        # The game saves its own text and speech languages (Options) and restores them over the
+        # system language at every start after the first one (#842).
+        self.row(f, _('Game language', 'Язык игры'), self.choice(f, 'language', 'app', LANGUAGES),
+                 _("Used on the game's first start. After that, the game keeps its own text and speech "
+                   'languages in its settings save: change them in the game, in Options → Game Settings → '
+                   'Game Text and Options → Audio → Speech.',
+                   'Действует при первом запуске игры. Потом игра хранит язык текста и речи в своём '
+                   'сохранении настроек: меняйте их в игре, в Настройки → Параметры игры → Текст и '
+                   'Настройки → Аудио → Речь.'))
         self.build_patches(f)
 
     def user_dir(self):
@@ -2691,12 +2700,12 @@ class Launcher:
                    _('Shows only the game name and the time played on your Discord profile.',
                      'Показывает в профиле Discord только название игры и время в игре.'))
         self.check(f, 'close_on_play', 'app', _('Close the launcher when the game starts', 'Закрывать лаунчер при запуске игры'))
-        if WINDOWS:
+        if can_self_update():
             self.check(f, 'check_updates', 'app', _('Check for updates when the launcher opens',
                                                     'Проверять обновления при открытии лаунчера'))
         holder = ttk.Frame(f)
         holder.grid(row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((10, 0)))
-        if WINDOWS:
+        if can_self_update():
             ttk.Button(holder, text=_('Check for updates', 'Проверить обновления'),
                        command=lambda: threading.Thread(target=self.check_update, args=(True,), daemon=True).start()
                        ).pack(side='left')
@@ -3405,8 +3414,11 @@ class Launcher:
             return
 
         def show():
-            if version_tuple(version) > version_tuple(VERSION):
+            if version_tuple(version) > version_tuple(VERSION) and (url or WINDOWS):
                 self.offer_update(version, url, page)
+            elif manual and version_tuple(version) > version_tuple(VERSION):
+                self.messagebox.showinfo(APP_NAME, _('Version {} is out, but it has no Linux build yet.',
+                                                         'Версия {} вышла, но сборки для Linux пока нет.').format(version))
             elif manual:
                 self.messagebox.showinfo(APP_NAME, _('You have the latest version ({}).',
                                                          'У вас последняя версия ({}).').format(VERSION))
@@ -3438,7 +3450,21 @@ class Launcher:
         if self.process:
             self.messagebox.showinfo(APP_NAME, _('Close the game before updating.', 'Закройте игру перед обновлением.'))
             return
-        if not FROZEN or not url:  # a source tree updates with git
+        appimage = None if WINDOWS else os.environ.get('APPIMAGE')
+        if not WINDOWS and not (appimage and url):
+            open_url(page)  # not an AppImage: download it by hand
+            return
+        if not WINDOWS:
+            folder = Path(os.path.realpath(appimage)).parent
+            if not os.access(folder, os.W_OK):
+                if self.messagebox.askyesno(APP_NAME, _(
+                        'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page '
+                        'to download the new version by hand?',
+                        'Лаунчер не может записывать в {}, поэтому не может заменить себя. Открыть страницу релизов, '
+                        'чтобы скачать новую версию вручную?').format(folder)):
+                    open_url(page)
+                return
+        if WINDOWS and (not FROZEN or not url):  # a source tree updates with git
             open_url(page)
             return
         if not self.messagebox.askyesno(APP_NAME, _(
@@ -3451,6 +3477,18 @@ class Launcher:
         def progress(percent):
             self.update_label.configure(text=_('Downloading version {}… {}%', 'Загрузка версии {}… {}%').format(
                 version, percent))
+
+        def work_appimage():
+            try:
+                replace_appimage(url, appimage, lambda p: self.ui_calls.put(lambda: progress(p)))
+                relaunch_appimage(appimage)
+                self.ui_calls.put(self.root.destroy)
+            except (OSError, ValueError) as failure:
+                def failed(error=failure):
+                    self.update_button.configure(state='normal')
+                    self.update_label.configure(text=_('Version {} is available.', 'Доступна версия {}.').format(version))
+                    self.messagebox.showerror(APP_NAME, _('Update failed: {}', 'Не удалось обновить: {}').format(error))
+                self.ui_calls.put(failed)
 
         def work():
             try:
@@ -3483,7 +3521,7 @@ class Launcher:
                     self.update_label.configure(text=_('Version {} is available.', 'Доступна версия {}.').format(version))
                     self.messagebox.showerror(APP_NAME, _('Update failed: {}', 'Не удалось обновить: {}').format(error))
                 self.ui_calls.put(failed)
-        threading.Thread(target=work, daemon=True).start()
+        threading.Thread(target=work if WINDOWS else work_appimage, daemon=True).start()
 
     def clear_cache(self):
         """Shader and pipeline caches; they are rebuilt while playing."""
@@ -3685,15 +3723,76 @@ def version_tuple(text):
 
 
 def latest_release():
-    """(version, zip URL, page URL) of the newest GitHub release."""
+    """(version, package URL, page URL) of the newest GitHub release: the zip on Windows, the AppImage on
+    Linux (None while that release has no Linux build yet)."""
     request = urllib.request.Request(RELEASES_API, headers={'Accept': 'application/vnd.github+json',
                                                             'User-Agent': 'spartanport-launcher'})
     with urllib.request.urlopen(request, timeout=15) as response:
         release = json.load(response)
     version = '.'.join(re.findall(r'\d+', release['tag_name']))
+    suffix = '.zip' if WINDOWS else '.appimage'
     url = next((asset['browser_download_url'] for asset in release.get('assets', [])
-                if asset.get('name', '').lower().endswith('.zip')), None)
+                if asset.get('name', '').lower().endswith(suffix)), None)
     return version, url, release.get('html_url') or RELEASES_PAGE
+
+
+def can_self_update():
+    """Windows installs replace the folder; on Linux only an AppImage can replace itself."""
+    return WINDOWS or bool(os.environ.get('APPIMAGE'))
+
+
+def release_checksum(url):
+    """SHA-256 the release publishes beside a package (`<package>.sha256`, `sha256sum` format)."""
+    request = urllib.request.Request(url + '.sha256', headers={'User-Agent': 'spartanport-launcher'})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        words = response.read(4096).decode('ascii', 'replace').split()
+    if not words or not re.fullmatch(r'[0-9a-fA-F]{64}', words[0]):
+        raise OSError('the release has no valid checksum')
+    return words[0].lower()
+
+
+def replace_appimage(url, target, progress=lambda percent: None):
+    """Downloads the AppImage beside TARGET, checks it against the release checksum and swaps it in.
+    The swap is a rename, so a running copy keeps its own file until it exits; nothing is replaced
+    when the download or the checksum fails."""
+    target = Path(os.path.realpath(target))  # opened through a symlink, the file behind it is the one to replace
+    expected = release_checksum(url)
+    partial = target.with_name(target.name + '.update')
+    digest = hashlib.sha256()
+    try:
+        request = urllib.request.Request(url, headers={'User-Agent': 'spartanport-launcher'})
+        with urllib.request.urlopen(request, timeout=60) as response, open(partial, 'wb') as out:
+            total, done, shown = int(response.headers.get('Content-Length') or 0), 0, -1
+            while chunk := response.read(1 << 20):
+                out.write(chunk)
+                digest.update(chunk)
+                done += len(chunk)
+                percent = done * 100 // total if total else 0
+                if percent != shown:
+                    shown = percent
+                    progress(percent)
+        if digest.hexdigest() != expected:
+            raise OSError('the download does not match the published checksum')
+        partial.chmod(partial.stat().st_mode | 0o755)
+        os.replace(partial, target)
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+def relaunch_appimage(target, environment=None):
+    """Starts the new AppImage apart from this one; the old mount's variables must not leak into it."""
+    environment = dict(os.environ if environment is None else environment)
+    appdir = environment.get('APPDIR', '')
+    for name in ('APPIMAGE', 'APPDIR', 'ARGV0', 'OWD'):
+        environment.pop(name, None)
+    if appdir and environment.get('LD_LIBRARY_PATH'):
+        kept = [entry for entry in environment['LD_LIBRARY_PATH'].split(':') if entry and not entry.startswith(appdir)]
+        if kept:
+            environment['LD_LIBRARY_PATH'] = ':'.join(kept)
+        else:
+            environment.pop('LD_LIBRARY_PATH')
+    subprocess.Popen([str(target)], cwd=str(Path(target).parent), env=environment, stdin=subprocess.DEVNULL,
+                     start_new_session=True)
 
 
 def install_update(target, wait_pid):

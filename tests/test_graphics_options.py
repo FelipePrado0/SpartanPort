@@ -314,5 +314,43 @@ class AspectRatioTest(unittest.TestCase):
         self.assertEqual(g.resolution_label('2560x1080', aspect=False), '2560 × 1080 (beta)')
         self.assertEqual(g.resolution_label('1800p'), '1800p · 3200 × 1800 · 16:9')  # elsewhere it stays
 
+
+class SteamDeckTest(unittest.TestCase):
+    """The Steam Deck starts at its own 1280 x 800 screen (#855); everything else stays native."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.dmi = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def dmi_names(self, vendor, product):
+        (self.dmi / 'sys_vendor').write_text(vendor + '\n', encoding='utf-8')
+        (self.dmi / 'product_name').write_text(product + '\n', encoding='utf-8')
+
+    def test_lcd_and_oled_models_default_to_1280x800(self):
+        for product in ('Jupiter', 'Galileo'):
+            with self.subTest(product=product):
+                self.dmi_names('Valve', product)
+                self.assertTrue(g.steam_deck(self.dmi))
+                self.assertEqual(g.default_render_resolution(self.dmi), '1280x800')
+
+    def test_other_machines_stay_native(self):
+        self.dmi_names('LENOVO', 'Jupiter')
+        self.assertEqual(g.default_render_resolution(self.dmi), 'native')
+        self.dmi_names('Valve', 'Other')
+        self.assertEqual(g.default_render_resolution(self.dmi), 'native')
+
+    def test_no_dmi_names_stays_native(self):  # Windows, containers, macOS
+        self.assertFalse(g.steam_deck(self.dmi / 'missing'))
+        self.assertEqual(g.default_render_resolution(self.dmi / 'missing'), 'native')
+
+    def test_the_default_resolution_is_a_built_in_one(self):
+        self.assertIn(g.STEAM_DECK_RESOLUTION, g.RESOLUTIONS)
+        self.assertIn(g.STEAM_DECK_RESOLUTION, g.TESTED_RESOLUTIONS)
+        self.assertEqual(g.aspect_of(g.STEAM_DECK_RESOLUTION), '16:10')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -23,7 +23,7 @@ its proportions, and the vertical view is the same as at 16:9.
 | 5120 × 2160 | 21:9 | **Tested in game** by two players (issue #505); it uses the largest Video Arena the patch can hold (3.98 GiB) |
 | 1920 × 1200 | 16:10 | **Tested in game** (taller than 16:9: no field of view change) |
 | 2560 × 1600 | 16:10 | **Tested in game** (taller than 16:9: no field of view change) |
-| 1280 × 800 | 16:10 | **Tested in game** (the Steam Deck's screen) |
+| 1280 × 800 | 16:10 | **Tested in game** (the Steam Deck's screen; chosen by default on a Steam Deck) |
 | 1280 × 960, 1440 × 1080, 1920 × 1440, 2048 × 1536, 2560 × 1920 | 4:3 | **1280 × 960 and 1920 × 1440 tested** (menu and gameplay: 1280 × 960 on a 5:4 monitor, 1920 × 1440 by a player on a 4:3 CRT, issue #519); the others are not (taller than 16:9, but the game letterboxes on exactly 4:3: the patch avoids that) |
 | 1440 × 900 | 16:10 | **Tested in game** |
 | 1360 × 768 | 16:9 | **Tested in game** (the shape of the original picture; no aspect ratio or field of view change) |

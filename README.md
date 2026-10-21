@@ -143,7 +143,7 @@ Arch and openSUSE Tumbleweed; this does not establish gameplay compatibility on 
 3. Choose your game folder, save the settings and press **PLAY**.
 
 If an older download reports `GLIBC_2.44 not found`, download the rebuilt AppImage again.
-The Windows updater is not available on Linux; download a newer AppImage to update.
+The AppImage updates itself: **Advanced → Check for updates** (or the notice when the launcher opens) downloads the newer AppImage from the release, checks its SHA-256 and replaces the file. It needs a writable folder; otherwise it opens the releases page.
 Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 AppImage.
 
 - **Files:** saves, settings, shader cache and the log are in `~/.local/share/spartanport`; the launcher's
@@ -366,6 +366,10 @@ for every overlay configuration.
   If it persists, report your GPU, driver, game build and **Advanced → Log** output. Clearing
   the shader cache is not a general fix and requires rebuilding it on the next launch.
 - The game closes with "cannot create ... guest memory (error 1450)": Windows ran out of virtual memory to allocate the guest pool. Increase the page file: press **Win + R**, type `SystemPropertiesAdvanced`, go to **Performance** Settings → **Advanced** → **Virtual memory** Change, uncheck automatic management, select drive **C:**, set a custom size (e.g. 16384 MB initial, 24576 MB maximum), click **Set**, **OK**, and restart your PC.
+- **Game language** in the launcher has no effect: it is only used on the game's first start. After
+  that the game restores its own text and speech languages from its settings save, so change them in
+  the game: **Options → Game Settings → Game Text** and **Options → Audio → Speech** (for example,
+  Polish text with English voices).
 - The game does not open: check **Advanced → Log**, or send `user\last_run.log` with your report.
   With a custom **Saves folder**, `last_run.log` is in that folder instead.
 - Yellow/orange/white textures or wrong lighting: try disabling **Performance → GPU data →
