@@ -195,12 +195,12 @@ int main() {
         }
         SpartanSettings::Load();
         assert(v.master_volume == 100);
-        _putenv_s("SPARTAN_AUDIO_VOLUME", "80");
-        _putenv_s("SPARTAN_AUDIO_CHANNELS", "stereo");
+        SetEnvironment("SPARTAN_AUDIO_VOLUME", "80");
+        SetEnvironment("SPARTAN_AUDIO_CHANNELS", "stereo");
         SpartanSettings::Load();
         assert(v.master_volume == 80 && v.audio_channels == S::AudioStereo);
-        _putenv_s("SPARTAN_AUDIO_VOLUME", "");
-        _putenv_s("SPARTAN_AUDIO_CHANNELS", "");
+        SetEnvironment("SPARTAN_AUDIO_VOLUME", "");
+        SetEnvironment("SPARTAN_AUDIO_CHANNELS", "");
     }
 
     {
