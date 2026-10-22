@@ -159,10 +159,13 @@ def compile_patches(xml, names, app_version, segments, image=None, skipped=None)
 
 PATCHES_DIR=Path(__file__).resolve().parent.parent/'patches'
 # Built-in patch file per game: its title IDs, the AppVer its metadata is tagged with and the
-# title that also recognizes a release under an ID not listed. The signatures find the sites in
-# any region or version whose code matches, so the eboot.bin build is not checked.
-GAMES=[({'CUSA01623','CUSA01715','CUSA01720'},PATCHES_DIR/'CUSA01623.xml','01.02',
-        'SpartanPort')]
+# title that also recognizes a release under an ID not listed. That title is the GAME's own TITLE
+# in its param.sfo ("God of War III Remastered", with or without the (R)/TM marks), not the name of
+# this project: a release under another ID (CUSA01740, the Asian one) is found by it. The
+# signatures find the sites in any region or version whose code matches, so the eboot.bin build is
+# not checked.
+GAMES=[({'CUSA01623','CUSA01715','CUSA01720','CUSA01740'},PATCHES_DIR/'CUSA01623.xml','01.02',
+        'God of War III')]
 # The build the built-in Address values and third-party patch files are written for.
 REFERENCE_SHA256='d85c8135d330c3b601bf5dc3f1dd86bd6119fb8a9fce372bed2c9785f9a79299'
 DMEM_RETAIL_MB=5056  # runtime_memory.c POOL_SIZE default

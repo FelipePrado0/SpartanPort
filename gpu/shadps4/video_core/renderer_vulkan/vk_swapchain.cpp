@@ -31,7 +31,10 @@ Swapchain::Swapchain(const Instance& instance_, const Frontend::WindowSDL& windo
 
 Swapchain::~Swapchain() {
     Destroy();
-    instance.GetInstance().destroySurfaceKHR(surface);
+    if (surface) {
+        instance.GetInstance().destroySurfaceKHR(surface);
+        surface = nullptr;
+    }
 }
 
 void Swapchain::Create(u32 width_, u32 height_) {
@@ -41,7 +44,10 @@ void Swapchain::Create(u32 width_, u32 height_) {
 
     Destroy();
 
-    SetSurfaceProperties();
+    if (width == 0 || height == 0 || !SetSurfaceProperties()) {
+        needs_recreation = true;
+        return;
+    }
 
     const std::array queue_family_indices = {
         instance.GetGraphicsQueueFamilyIndex(),
@@ -73,6 +79,19 @@ void Swapchain::Create(u32 width_, u32 height_) {
     };
 
     auto [swapchain_result, chain] = instance.GetDevice().createSwapchainKHR(swapchain_info);
+    if (swapchain_result == vk::Result::eErrorNativeWindowInUseKHR ||
+        swapchain_result == vk::Result::eErrorSurfaceLostKHR ||
+        swapchain_result == vk::Result::eErrorOutOfDateKHR ||
+        swapchain_result == vk::Result::eErrorInitializationFailed) {
+        LOG_WARNING(Render_Vulkan, "Failed to create swapchain ({}), postponing until window is ready",
+                    vk::to_string(swapchain_result));
+        if (swapchain_result == vk::Result::eErrorSurfaceLostKHR) {
+            RecreateSurface();
+        }
+        needs_recreation = true;
+        return;
+    }
+
     ASSERT_MSG(swapchain_result == vk::Result::eSuccess, "Failed to create swapchain: {}",
                vk::to_string(swapchain_result));
     swapchain = chain;
@@ -105,6 +124,15 @@ void Swapchain::SetHDR(bool hdr) {
 }
 
 bool Swapchain::AcquireNextImage() {
+    if (!swapchain || image_acquired.empty()) {
+        needs_recreation = true;
+        return false;
+    }
+
+    if (frame_index >= image_acquired.size()) {
+        frame_index = 0;
+    }
+
     vk::Device device = instance.GetDevice();
     vk::Result result =
         device.acquireNextImageKHR(swapchain, std::numeric_limits<u64>::max(),
@@ -130,6 +158,11 @@ bool Swapchain::AcquireNextImage() {
 }
 
 bool Swapchain::Present() {
+    if (!swapchain || present_ready.empty() || image_index >= present_ready.size()) {
+        needs_recreation = true;
+        return false;
+    }
+
     const vk::PresentInfoKHR present_info = {
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = &present_ready[image_index],
@@ -139,14 +172,19 @@ bool Swapchain::Present() {
     };
 
     auto result = instance.GetPresentQueue().presentKHR(present_info);
-    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR) {
+    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR ||
+        result == vk::Result::eErrorSurfaceLostKHR) {
         needs_recreation = true;
     } else {
         ASSERT_MSG(result == vk::Result::eSuccess, "Swapchain presentation failed: {}",
                    vk::to_string(result));
     }
 
-    frame_index = (frame_index + 1) % image_count;
+    if (image_count > 0) {
+        frame_index = (frame_index + 1) % image_count;
+    } else {
+        frame_index = 0;
+    }
 
     return !needs_recreation;
 }
@@ -223,11 +261,36 @@ void Swapchain::UpdateVsync() {
     Recreate(width, height);
 }
 
-void Swapchain::SetSurfaceProperties() {
-    const auto [capabilities_result, capabilities] =
+void Swapchain::RecreateSurface() {
+    Destroy();
+    if (surface) {
+        instance.GetInstance().destroySurfaceKHR(surface);
+        surface = nullptr;
+    }
+    surface = CreateSurface(instance.GetInstance(), window);
+    const auto prev_format = surface_format.format;
+    FindPresentFormat();
+    FindPresentMode();
+    if (surface_format.format != prev_format) {
+        ImGui::Core::OnSurfaceFormatChange(needs_hdr ? SURFACE_FORMAT_HDR.format
+                                                     : surface_format.format);
+    }
+}
+
+bool Swapchain::SetSurfaceProperties() {
+    auto [capabilities_result, capabilities] =
         instance.GetPhysicalDevice().getSurfaceCapabilitiesKHR(surface);
-    ASSERT_MSG(capabilities_result == vk::Result::eSuccess,
-               "Failed to query surface capabilities: {}", vk::to_string(capabilities_result));
+    if (capabilities_result == vk::Result::eErrorSurfaceLostKHR) {
+        LOG_WARNING(Render_Vulkan, "Surface lost while querying capabilities; recreating surface...");
+        RecreateSurface();
+        std::tie(capabilities_result, capabilities) =
+            instance.GetPhysicalDevice().getSurfaceCapabilitiesKHR(surface);
+    }
+    if (capabilities_result != vk::Result::eSuccess) {
+        LOG_WARNING(Render_Vulkan, "Failed to query surface capabilities: {}",
+                    vk::to_string(capabilities_result));
+        return false;
+    }
 
     extent = capabilities.currentExtent;
     if (capabilities.currentExtent.width == std::numeric_limits<u32>::max()) {
@@ -235,6 +298,11 @@ void Swapchain::SetSurfaceProperties() {
                                 std::min(capabilities.maxImageExtent.width, width));
         extent.height = std::max(capabilities.minImageExtent.height,
                                  std::min(capabilities.maxImageExtent.height, height));
+    }
+
+    if (extent.width == 0 || extent.height == 0) {
+        LOG_DEBUG(Render_Vulkan, "Surface extent is 0x0; postponing swapchain creation");
+        return false;
     }
 
     // Select number of images in swap chain, we prefer one buffer in the background to work on
@@ -254,6 +322,8 @@ void Swapchain::SetSurfaceProperties() {
     if (!(capabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::eOpaque)) {
         composite_alpha = vk::CompositeAlphaFlagBitsKHR::eInherit;
     }
+
+    return true;
 }
 
 void Swapchain::Destroy() {
@@ -271,6 +341,7 @@ void Swapchain::Destroy() {
 
     if (swapchain) {
         device.destroySwapchainKHR(swapchain);
+        swapchain = nullptr;
     }
 
     for (const auto& sem : image_acquired) {
@@ -282,6 +353,10 @@ void Swapchain::Destroy() {
 
     image_acquired.clear();
     present_ready.clear();
+    images.clear();
+    image_count = 0;
+    frame_index = 0;
+    image_index = 0;
 }
 
 void Swapchain::RefreshSemaphores() {

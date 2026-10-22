@@ -115,6 +115,50 @@ static ABI int32_t audio_init(void) {
     pthread_mutex_unlock(&table_lock);
     return r;
 }
+#ifdef TEST_AUDIO_HOOK
+static SDL_AudioStream *(*test_open_stream)(SDL_AudioDeviceID, const SDL_AudioSpec *, SDL_AudioStreamCallback, void *) = NULL;
+#define OPEN_AUDIO_STREAM(dev, spec, cb, user) (test_open_stream ? test_open_stream(dev, spec, cb, user) : SDL_OpenAudioDeviceStream(dev, spec, cb, user))
+#else
+#define OPEN_AUDIO_STREAM(dev, spec, cb, user) SDL_OpenAudioDeviceStream(dev, spec, cb, user)
+#endif
+
+#ifdef _WIN32
+static void try_audio_fallback(Port *p, int id) {
+    const char *driver = SDL_GetCurrentAudioDriver();
+    /* When WASAPI fails on Windows and the user hasn't forced a driver, try DirectSound. */
+    if (!driver || strcmp(driver, "wasapi") || getenv("SDL_AUDIO_DRIVER")) return;
+
+    /* Only switch backend if no other port currently has an active stream. */
+    for (int i = 0; i < PORTS; ++i) {
+        if (ports[i].used && ports[i].stream) return;
+    }
+
+    int has_ds = 0, n = SDL_GetNumAudioDrivers();
+    for (int i = 0; i < n; ++i) {
+        const char *d = SDL_GetAudioDriver(i);
+        if (d && !strcmp(d, "directsound")) { has_ds = 1; break; }
+    }
+    if (!has_ds) return;
+
+    fprintf(stderr, "Runtime: SDL audio stream failed on wasapi (%s); trying directsound fallback for port %d\n", SDL_GetError(), id);
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER, "directsound", SDL_HINT_OVERRIDE);
+    sdl_ready = SDL_InitSubSystem(SDL_INIT_AUDIO);
+    const char *new_driver = sdl_ready ? SDL_GetCurrentAudioDriver() : NULL;
+    if (sdl_ready && new_driver && !strcmp(new_driver, "directsound")) {
+        printf("Runtime: audio backend %s (fallback from wasapi)\n", new_driver);
+        SDL_AudioSpec device; int device_frames;
+        p->downmix = p->channels == 8 && SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &device, &device_frames)
+                     && device.channels == 2;
+        SDL_AudioSpec spec = {p->is_float ? SDL_AUDIO_F32 : SDL_AUDIO_S16, p->downmix ? 2 : p->channels, 48000};
+        p->stream = OPEN_AUDIO_STREAM(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+    } else {
+        fprintf(stderr, "Runtime: failed to initialize directsound audio backend (current: %s, error: %s) for port %d\n",
+                new_driver ? new_driver : "none", SDL_GetError(), id);
+    }
+}
+#endif
+
 static ABI int32_t audio_open(int32_t user, int32_t type, int32_t index, uint32_t length, uint32_t freq, uint32_t param) {
     (void)user; (void)index;
     if (!initialized) return ERR_NOT_INIT;
@@ -140,7 +184,10 @@ static ABI int32_t audio_open(int32_t user, int32_t type, int32_t index, uint32_
         p->downmix=p->channels==8 && SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&device,&device_frames)
                    && device.channels==2;
         SDL_AudioSpec spec={p->is_float ? SDL_AUDIO_F32 : SDL_AUDIO_S16, p->downmix ? 2 : p->channels, 48000};
-        p->stream=SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,NULL,NULL);
+        p->stream=OPEN_AUDIO_STREAM(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,NULL,NULL);
+#ifdef _WIN32
+        if (!p->stream) try_audio_fallback(p, id);
+#endif
         if (p->stream) SDL_ResumeAudioStreamDevice(p->stream);
         else fprintf(stderr,"Runtime: SDL audio stream failed (%s); port %d uses the timer sink\n",SDL_GetError(),id);
     }

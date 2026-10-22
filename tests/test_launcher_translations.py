@@ -52,5 +52,42 @@ class SpanishTest(PortugueseTest):
     def test_resolution_labels(self):
         self.assertEqual(self.pt[launcher.RESOLUTION_CHOICES[0][1][0]], 'Nativa · 1920 × 1080 · 16:9')
 
+
+class ChineseTest(PortugueseTest):
+    """Simplified Chinese covers the current launcher, including dynamic choices."""
+
+    def setUp(self):
+        self.pt = spartanport_lang.table('zh')
+
+    def test_resolution_labels(self):
+        self.assertEqual(self.pt[launcher.RESOLUTION_CHOICES[0][1][0]], '原生 · 1920 × 1080 · 16:9')
+
+    def test_all_known_labels_and_format_fields(self):
+        from string import Formatter
+        fields = lambda text: [(field, spec, conversion) for _literal, field, spec, conversion in
+                               Formatter().parse(text) if field is not None]
+        known = set(spartanport_lang.KEYS) | set().union(*(set(v) for v in spartanport_lang.EXTRA.values()))
+        self.assertEqual(sorted(key for key in known if not self.pt.get(key)), [])
+        for english, chinese in self.pt.items():
+            with self.subTest(text=english):
+                self.assertEqual(fields(english), fields(chinese))
+
+    def test_menu_language_is_independent_from_game_language(self):
+        settings = {**launcher.APP_DEFAULTS, 'ui_language': 'zh', 'language': '1'}
+        env = launcher.game_environment(settings)
+        self.assertEqual(env['SPARTAN_UI_LANGUAGE'], 'zh')
+        self.assertEqual(env['SPARTAN_LANGUAGE'], '1')
+
+
+class IndonesianTest(PortugueseTest):
+    """Indonesian covers the same texts as Brazilian Portuguese."""
+
+    def setUp(self):
+        self.pt = spartanport_lang.table('id')
+
+    def test_resolution_labels(self):
+        self.assertEqual(self.pt[launcher.RESOLUTION_CHOICES[0][1][0]], 'Asli · 1920 × 1080 · 16:9')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -120,7 +120,7 @@ Arch and openSUSE Tumbleweed; this does not establish gameplay compatibility on 
 3. Choose your game folder, save the settings and press **PLAY**.
 
 If an older download reports `GLIBC_2.44 not found`, download the rebuilt AppImage again.
-The Windows updater is not available on Linux; download a newer AppImage to update.
+The AppImage updates itself: **Advanced → Check for updates** (or the notice when the launcher opens) downloads the newer AppImage from the release, checks its SHA-256 and replaces the file. It needs a writable folder; otherwise it opens the releases page.
 Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 AppImage.
 
 - **Files:** saves, settings, shader cache and the log are in `~/.local/share/spartanport`; the launcher's
@@ -230,6 +230,22 @@ multisampling off` or `on` is what was applied. Choose **Off** if the lines appe
 card and **On** to keep multisampling anyway. Off and On set `SPARTAN_NO_MSAA=1` or `0`; Automatic
 passes an inherited `SPARTAN_NO_MSAA` through. Applies on the next game launch.
 
+### Chinese interface
+
+Select **简体中文** under **Advanced → Launcher language** for the launcher and the
+Insert / R3+L2 menu. This does not change the game's text or voice language. Direct launches
+without the launcher can set `SPARTAN_UI_LANGUAGE=zh`.
+
+The launcher prefers an installed CJK font (Microsoft YaHei UI on Windows, Noto Sans CJK SC
+or another available CJK family elsewhere). The in-game menu merges an installed Chinese
+font with its embedded font: Windows YaHei/SimHei, common Linux Noto/WenQuanYi locations,
+or macOS PingFang. No additional font is distributed. If no usable CJK font is found, the
+in-game menu keeps English and logs the reason instead of displaying missing-glyph boxes.
+
+The headless `chinese-ui-test` CMake target checks translation fallback, printf arguments,
+font merging and Chinese glyphs without a game dump or Vulkan device. Its real glyph checks
+are skipped, with a message, on systems without an installed CJK font.
+
 ## Keyboard controls
 
 Defaults; change them on the launcher's **Controls** page, under **Keyboard & Mouse Mapping**.
@@ -271,10 +287,11 @@ works as on the PS4, and Share/Create works like View.
 
 **In-game button icons** (off by default) are chosen on the launcher's Controls page, under
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* or *Keyboard*. They replace the PlayStation icons in the
-tutorial, move-list and quick-time prompts; the pause-menu controller drawing stays a DualShock 4.
+tutorial, move-list and quick-time prompts and, for the controller styles, on the Muses' lyre in the
+Chamber of the Flame; the pause-menu controller drawing stays a DualShock 4.
 *Keyboard* shows the key that presses each button, following your keyboard mapping (a changed key shows
 on the next start); *Match my controller* shows the keys too when no gamepad is connected.
-The launcher writes a patched copy of two game files into the port's data folder and never changes
+The launcher writes a patched copy of up to three game files (about 410 MB) into the port's data folder and never changes
 your game folder. A new controller is picked up after a restart. Without the launcher, set
 `SPARTAN_GLYPH_STYLE` to `auto`, `xbox`, `nintendo` or `keyboard` before starting `run.py`.
 
@@ -326,6 +343,10 @@ for every overlay configuration.
   If it persists, report your GPU, driver, game build and **Advanced → Log** output. Clearing
   the shader cache is not a general fix and requires rebuilding it on the next launch.
 - The game closes with "cannot create ... guest memory (error 1450)": Windows ran out of virtual memory to allocate the guest pool. Increase the page file: press **Win + R**, type `SystemPropertiesAdvanced`, go to **Performance** Settings → **Advanced** → **Virtual memory** Change, uncheck automatic management, select drive **C:**, set a custom size (e.g. 16384 MB initial, 24576 MB maximum), click **Set**, **OK**, and restart your PC.
+- **Game language** in the launcher has no effect: it is only used on the game's first start. After
+  that the game restores its own text and speech languages from its settings save, so change them in
+  the game: **Options → Game Settings → Game Text** and **Options → Audio → Speech** (for example,
+  Polish text with English voices).
 - The game does not open: check **Advanced → Log**, or send `user\last_run.log` with your report.
   With a custom **Saves folder**, `last_run.log` is in that folder instead.
 - Yellow/orange/white textures or wrong lighting: try disabling **Performance → GPU data →

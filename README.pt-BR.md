@@ -122,7 +122,7 @@ Fedora 42, Arch e openSUSE Tumbleweed; isso não comprova gameplay em todas as G
 3. Escolha a pasta do jogo, salve as configurações e pressione **PLAY**.
 
 Se um download antigo mostrar `GLIBC_2.44 not found`, baixe novamente o AppImage recompilado.
-O atualizador do Windows não está disponível no Linux; baixe um AppImage novo para atualizar.
+O AppImage se atualiza sozinho: **Advanced → Check for updates** (ou o aviso ao abrir o launcher) baixa o AppImage novo do release, confere o SHA-256 e troca o arquivo. Precisa de uma pasta com permissão de escrita; senão abre a página de releases.
 A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2.2.0 publicado.
 
 - **Arquivos:** saves, configurações, cache de shaders e o registro ficam em `~/.local/share/spartanport`; as
@@ -266,11 +266,11 @@ como no PS4, e Share/Create funciona como View.
 
 Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Controls do launcher, em
 *Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox*, *Nintendo* ou *Teclado*. Eles trocam os ícones
-PlayStation dos tutoriais, da lista de golpes e dos eventos rápidos; o desenho do controle no menu
-de pausa continua sendo um DualShock 4. *Teclado* mostra a tecla que aperta cada botão, seguindo o seu
+PlayStation dos tutoriais, da lista de golpes, dos eventos rápidos e, nos estilos de controle, da lira das Musas
+na Câmara da Chama; o desenho do controle no menu de pausa continua sendo um DualShock 4. *Teclado* mostra a tecla que aperta cada botão, seguindo o seu
 mapeamento do teclado (uma tecla trocada aparece no próximo início); *Igual ao meu controle* também mostra
-as teclas quando nenhum controle está conectado. O launcher grava uma cópia com patch de dois arquivos do
-jogo na pasta de dados do port e nunca altera a pasta do jogo. Um controle novo é reconhecido após
+as teclas quando nenhum controle está conectado. O launcher grava uma cópia com patch de até três arquivos do
+jogo (cerca de 410 MB) na pasta de dados do port e nunca altera a pasta do jogo. Um controle novo é reconhecido após
 reiniciar. Sem o launcher, defina `SPARTAN_GLYPH_STYLE` como `auto`, `xbox`, `nintendo` ou `keyboard` antes de
 iniciar o `run.py`.
 
@@ -319,6 +319,10 @@ uma correção para todas as configurações de overlay.
   Se persistir, informe GPU, driver, build do jogo e a saída de **Advanced → Log**. Apagar o
   cache de shaders não é uma solução geral e exige reconstruí-lo na próxima abertura.
 - O jogo fecha com "cannot create ... guest memory (error 1450)": o Windows ficou sem memória virtual para alocar o pool de memória do jogo. Aumente o arquivo de paginação: pressione **Win + R**, digite `SystemPropertiesAdvanced`, vá em Configurações de **Desempenho** → guia **Avançado** → **Memória virtual** Alterar, desmarque o gerenciamento automático, selecione a unidade **C:**, defina um tamanho personalizado (ex.: 16384 MB inicial, 24576 MB máximo), clique em **Definir**, **OK** e reinicie o PC.
+- O **Idioma do jogo** do launcher não muda nada: ele só vale no primeiro início do jogo. Depois, o
+  jogo restaura os próprios idiomas de texto e de falas do save de configurações, então troque no
+  jogo: **Opções → Configurações de jogo → Texto de jogo** e **Opções → Áudio → Falas** (por exemplo,
+  texto em português com vozes em inglês).
 - O jogo não abre: veja **Advanced → Log**, ou envie o `user\last_run.log` junto com o relato.
   Se escolheu uma **Saves folder** personalizada, o `last_run.log` fica nessa pasta.
 - Texturas amarelas/laranjas/brancas ou iluminação errada: experimente desligar **Performance →

@@ -125,7 +125,7 @@ Fedora 42, Arch y openSUSE Tumbleweed; esto no comprueba gameplay en todas las G
 3. Elegí la carpeta del juego, guardá los ajustes y presioná **PLAY**.
 
 Si una descarga anterior muestra `GLIBC_2.44 not found`, descargá de nuevo el AppImage recompilado.
-El actualizador de Windows no está disponible en Linux; descargá un AppImage nuevo para actualizar.
+El AppImage se actualiza solo: **Advanced → Check for updates** (o el aviso al abrir el launcher) descarga el AppImage nuevo del release, verifica su SHA-256 y reemplaza el archivo. Necesita una carpeta con permiso de escritura; si no, abre la página de releases.
 La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 2.2.0 publicado.
 
 - **Archivos:** las partidas, los ajustes, la caché de shaders y el log están en
@@ -270,11 +270,11 @@ PS4, y Share/Create funciona como View.
 
 Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls del launcher, en
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* o *Keyboard*. Reemplazan los íconos de
-PlayStation en los tutoriales, la lista de movimientos y las indicaciones de quick-time events; el
-dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* muestra la tecla que
+PlayStation en los tutoriales, la lista de movimientos, las indicaciones de quick-time events y, con los estilos
+de control, en la lira de las Musas en la Cámara de la Llama; el dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* muestra la tecla que
 presiona cada botón, según tu mapeo del teclado (una tecla cambiada aparece en el próximo inicio);
 *Match my controller* también muestra las teclas cuando no hay un control conectado. El launcher escribe una copia
-parcheada de dos archivos del juego en la carpeta de datos del port y nunca modifica tu carpeta del
+parcheada de hasta tres archivos del juego (unos 410 MB) en la carpeta de datos del port y nunca modifica tu carpeta del
 juego. Un control nuevo se detecta después de reiniciar. Sin el launcher, definí `SPARTAN_GLYPH_STYLE`
 como `auto`, `xbox`, `nintendo` o `keyboard` antes de iniciar `run.py`.
 
@@ -325,6 +325,10 @@ para todas las configuraciones de overlay.
   paginación de Windows. **Win + R** → `SystemPropertiesAdvanced` → configuración de
   **Rendimiento** → **Opciones avanzadas** → **Memoria virtual**. Podés usar un tamaño
   personalizado en C: (por ejemplo, 16384 MB inicial y 24576 MB máximo); aplicá y reiniciá el PC.
+- El **Idioma del juego** del launcher no cambia nada: solo se usa en el primer inicio del juego.
+  Después, el juego restaura sus propios idiomas de texto y de diálogos desde su partida de ajustes,
+  así que cambialos en el juego: **Opciones → Ajustes de juego → Texto del juego** y
+  **Opciones → Audio → Diálogos** (por ejemplo, texto en español con voces en inglés).
 - El juego no abre: revisá **Advanced → Log**, o enviá `user\last_run.log` junto con tu reporte.
   Con una **Saves folder** personalizada, `last_run.log` está en esa carpeta.
 - Texturas amarillas/naranjas/blancas o iluminación incorrecta: probá desactivar **Performance →

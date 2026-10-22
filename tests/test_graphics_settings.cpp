@@ -3,12 +3,21 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include "spartanport_graphics.h"
 #include "spartanport_settings.h"
 
 namespace G = SpartanGraphics;
+
+static int SetEnvironment(const char* name, const char* value) {
+#if defined(_WIN32)
+    return _putenv_s(name, value);
+#else
+    return value[0] ? setenv(name, value, 1) : unsetenv(name);
+#endif
+}
 
 static std::string Read(const char* path) {
     std::ifstream in(path);
@@ -19,6 +28,21 @@ static std::string Read(const char* path) {
 
 int main() {
     assert(G::ParseDisplayMode("borderless") == G::Borderless && G::ParseDisplayMode("bogus") == G::Windowed);
+    // Monitor preference (window.cpp): empty means the primary display, and that default is distinct
+    // from an explicit index 0. The launcher's value is untrusted text, so anything else falls back.
+    assert(G::ParseMonitor("") == G::PrimaryMonitor && G::PrimaryMonitor != 0);
+    assert(G::ParseMonitor("0") == 0);
+    assert(G::ParseMonitor("1") == 1 && G::ParseMonitor("2") == 2 && G::ParseMonitor("42") == 42);
+    assert(G::ParseMonitor("007") == 7);  // leading zeros are still an index
+    assert(G::ParseMonitor(" 1") == G::PrimaryMonitor && G::ParseMonitor("1 ") == G::PrimaryMonitor);
+    assert(G::ParseMonitor("abc") == G::PrimaryMonitor && G::ParseMonitor("1x") == G::PrimaryMonitor);
+    assert(G::ParseMonitor("-1") == G::PrimaryMonitor && G::ParseMonitor("+1") == G::PrimaryMonitor);
+    // Too large for an int falls back instead of wrapping into a bogus index: the exact INT_MAX + 1
+    // boundary, and an input far past any int.
+    const std::string widest = std::to_string(std::numeric_limits<int>::max());
+    assert(G::ParseMonitor(widest) == std::numeric_limits<int>::max());
+    assert(G::ParseMonitor(std::to_string(std::numeric_limits<int>::max() + 1LL)) == G::PrimaryMonitor);
+    assert(G::ParseMonitor("99999999999999999999") == G::PrimaryMonitor);
     assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(144) == 144 && G::ParseFpsLimit(180) == 180 && G::ParseFpsLimit(100) == 100 && G::ParseFpsLimit(75) == 0);
     assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 22);
     // #238: 900p (1600x900) sits between 720p and 1440p in the built-in list.
@@ -59,24 +83,24 @@ int main() {
                "render_resolution=1440p\nengine_fps=240\ndeferred_readback=0\nstale_readback=1\n"
                "fsr1=1\nrcas=0\nrcas_strength=40\nframes_queued=2\n";
     }
-    _putenv_s("SPARTAN_CONFIG", path);
-    _putenv_s("SPARTAN_ASYNC_SHADERS", "");
+    SetEnvironment("SPARTAN_CONFIG", path);
+    SetEnvironment("SPARTAN_ASYNC_SHADERS", "");
     auto& v = SpartanSettings::Get();
     SpartanSettings::Load();
     assert(v.display_mode == G::Borderless && !v.vsync && v.fps_limit == 240 && !v.async_shaders);
     assert(v.render_resolution == 4 && v.engine_fps == 240 && !v.deferred_readback && v.stale_readback);
     // FSR 1 left the menus in 2.2.0: a saved fsr1=1 (or SPARTAN_FSR1) no longer turns it on.
     assert(!v.fsr1 && !v.rcas && v.rcas_strength == 40 && v.frames_queued == 2);
-    _putenv_s("SPARTAN_FSR1", "1");
+    SetEnvironment("SPARTAN_FSR1", "1");
     SpartanSettings::Load();
     assert(!v.fsr1);
-    _putenv_s("SPARTAN_FSR1", "");
+    SetEnvironment("SPARTAN_FSR1", "");
     assert(!SpartanSettings::GraphicsNeedRestart());
     assert(v.applied_engine_fps == 240);  // no SPARTAN_ENGINE_FPS: the configured rate
-    _putenv_s("SPARTAN_ENGINE_FPS", "60");    // run.py: the frame rate patch did not apply
+    SetEnvironment("SPARTAN_ENGINE_FPS", "60");    // run.py: the frame rate patch did not apply
     SpartanSettings::Load();
     assert(v.engine_fps == 240 && v.applied_engine_fps == 60 && !SpartanSettings::GraphicsNeedRestart());
-    _putenv_s("SPARTAN_ENGINE_FPS", "");
+    SetEnvironment("SPARTAN_ENGINE_FPS", "");
     v.render_resolution = 0;
     assert(SpartanSettings::GraphicsNeedRestart());
     v.render_resolution = 4;
@@ -106,7 +130,7 @@ int main() {
     {
         // The resolutions of the enabled mods' patch files (run.py: SPARTAN_EXTRA_RESOLUTIONS) follow the built-in
         // ones and keep their names through a load and a save; repeated or built-in names are not added twice.
-        _putenv_s("SPARTAN_EXTRA_RESOLUTIONS", "3840x1080;2880x1200;;2880x1200;4K;3440x1440");
+        SetEnvironment("SPARTAN_EXTRA_RESOLUTIONS", "3840x1080;2880x1200;;2880x1200;4K;3440x1440");
         const auto names = G::ResolutionNames();
         assert(names.size() == 25 && names[22] == "8K" && names[23] == "3840x1080" && names[24] == "2880x1200");
         {
@@ -117,7 +141,7 @@ int main() {
         assert(v.render_resolution == 24);
         SpartanSettings::Save();
         assert(Read(path).find("render_resolution=2880x1200\n") != std::string::npos);
-        _putenv_s("SPARTAN_EXTRA_RESOLUTIONS", "");  // the mod is off: its resolution is unknown, so native
+        SetEnvironment("SPARTAN_EXTRA_RESOLUTIONS", "");  // the mod is off: its resolution is unknown, so native
         SpartanSettings::Load();
         assert(v.render_resolution == 0 && G::ResolutionNames().size() == G::Resolutions.size());
     }
@@ -127,7 +151,7 @@ int main() {
         out << "display_mode=huge\nfps_limit=7\nrender_resolution=invalid\nengine_fps=1\n"
                "rcas_strength=250\nframes_queued=9\n";
     }
-    _putenv_s("SPARTAN_ASYNC_SHADERS", "1");  // the environment still wins at start
+    SetEnvironment("SPARTAN_ASYNC_SHADERS", "1");  // the environment still wins at start
     v.async_shaders = false;
     SpartanSettings::Load();
     assert(v.display_mode == G::Windowed && v.fps_limit == 0 && v.render_resolution == 0 && v.engine_fps == 120);

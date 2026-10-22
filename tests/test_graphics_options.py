@@ -164,16 +164,18 @@ class GraphicsOptionsTest(unittest.TestCase):
         self.assertEqual(g.resolution_label('native'), 'Native · 1920 × 1080 · 16:9')
         self.assertEqual(g.resolution_label('480p'), '480p · 854 × 480 · 16:9')
         self.assertEqual(g.resolution_label('900p'), '900p · 1600 × 900 · 16:9')
-        self.assertEqual(g.resolution_label('3440x1440'), '3440 × 1440 · 21:9 (beta)')
-        self.assertEqual(g.resolution_label('5120x1440'), '5120 × 1440 · 32:9 (beta)')
-        self.assertEqual(g.resolution_label('2560x1600'), '2560 × 1600 · 16:10 (beta)')
+        self.assertEqual(g.resolution_label('3440x1440'), '3440 × 1440 · 21:9')  # confirmed in game: not beta
+        self.assertEqual(g.resolution_label('2560x1080'), '2560 × 1080 · 21:9 (beta)')
+        self.assertEqual(g.resolution_label('5120x1440'), '5120 × 1440 · 32:9')
+        self.assertEqual(g.resolution_label('2560x1600'), '2560 × 1600 · 16:10')
         self.assertEqual(g.resolution_label('1280x800'), '1280 × 800 · 16:10')  # the Steam Deck's screen, tested
         self.assertEqual(g.resolution_label('1280x960'), '1280 × 960 · 4:3')
-        self.assertEqual(g.resolution_label('1920x1440'), '1920 × 1440 · 4:3 (beta)')
+        self.assertEqual(g.resolution_label('1920x1440'), '1920 × 1440 · 4:3')
+        self.assertEqual(g.resolution_label('2048x1536'), '2048 × 1536 · 4:3 (beta)')
         self.assertEqual(g.resolution_label('3840x1080'), '3840 × 1080 · 32:9')  # a mod's size, not beta
         self.assertEqual(g.resolution_label('1600x1200'), '1600 × 1200 · 4:3')
         self.assertEqual(g.resolution_label('custom'), 'custom')
-        # Every ultrawide and 16:10 size is beta; the 16:9 ones are not.
+        # Only the sizes nobody has confirmed in game are beta; the 16:9 ones are not.
         self.assertEqual([r for r in g.RESOLUTIONS if g.resolution_label(r).endswith('(beta)')],
                          list(g.BETA_RESOLUTIONS))
 
@@ -309,8 +311,46 @@ class AspectRatioTest(unittest.TestCase):
 
     def test_labels_without_the_aspect_ratio_for_the_filtered_list(self):
         self.assertEqual(g.resolution_label('1800p', aspect=False), '1800p · 3200 × 1800')
-        self.assertEqual(g.resolution_label('3440x1440', aspect=False), '3440 × 1440 (beta)')
+        self.assertEqual(g.resolution_label('2560x1080', aspect=False), '2560 × 1080 (beta)')
         self.assertEqual(g.resolution_label('1800p'), '1800p · 3200 × 1800 · 16:9')  # elsewhere it stays
+
+
+class SteamDeckTest(unittest.TestCase):
+    """The Steam Deck starts at its own 1280 x 800 screen (#855); everything else stays native."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.dmi = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def dmi_names(self, vendor, product):
+        (self.dmi / 'sys_vendor').write_text(vendor + '\n', encoding='utf-8')
+        (self.dmi / 'product_name').write_text(product + '\n', encoding='utf-8')
+
+    def test_lcd_and_oled_models_default_to_1280x800(self):
+        for product in ('Jupiter', 'Galileo'):
+            with self.subTest(product=product):
+                self.dmi_names('Valve', product)
+                self.assertTrue(g.steam_deck(self.dmi))
+                self.assertEqual(g.default_render_resolution(self.dmi), '1280x800')
+
+    def test_other_machines_stay_native(self):
+        self.dmi_names('LENOVO', 'Jupiter')
+        self.assertEqual(g.default_render_resolution(self.dmi), 'native')
+        self.dmi_names('Valve', 'Other')
+        self.assertEqual(g.default_render_resolution(self.dmi), 'native')
+
+    def test_no_dmi_names_stays_native(self):  # Windows, containers, macOS
+        self.assertFalse(g.steam_deck(self.dmi / 'missing'))
+        self.assertEqual(g.default_render_resolution(self.dmi / 'missing'), 'native')
+
+    def test_the_default_resolution_is_a_built_in_one(self):
+        self.assertIn(g.STEAM_DECK_RESOLUTION, g.RESOLUTIONS)
+        self.assertIn(g.STEAM_DECK_RESOLUTION, g.TESTED_RESOLUTIONS)
+        self.assertEqual(g.aspect_of(g.STEAM_DECK_RESOLUTION), '16:10')
+
 
 if __name__ == '__main__':
     unittest.main()

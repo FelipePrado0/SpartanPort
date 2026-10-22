@@ -49,6 +49,7 @@ legacy_names=$(out/pyenv/Scripts/python.exe -c "import sys; sys.path.insert(0, '
 cp "$dest/SpartanPort.exe" "$dest/$(sed -n 1p <<< "$legacy_names")"
 cp "$dest/Play SpartanPort.exe" "$dest/$(sed -n 2p <<< "$legacy_names")"
 cp launcher/spartanport.ico launcher/spartanport.png launcher/logo.png launcher/Cinzel-Black.ttf launcher/OFL-Cinzel.txt "$dest/launcher/"
+cp launcher/BodoniModa.ttf launcher/OFL-BodoniModa.txt "$dest/launcher/"
 # The executables without debug information (out/ keeps the symbols for crash reports).
 for exe in spartanport-probe.exe spartanport-gpu-capabilities.exe; do
     llvm-strip --strip-debug -o "$dest/bin/$exe" "out/$exe"
@@ -59,6 +60,9 @@ ldd "$dest/bin/spartanport-probe.exe" "$dest/bin/spartanport-gpu-capabilities.ex
         cp -u "$dll" "$dest/bin/"
     done
 cp -r scripts patches "$dest/"
+mkdir -p "$dest/tools" "$dest/docs"
+cp tools/xvag_voice_swap.py "$dest/tools/"
+cp docs/VOICE_REPLACEMENT.md "$dest/docs/"
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 find "$dest" -name __pycache__ -prune -exec rm -r {} +
 [[ -f $dest/scripts/discord_presence.py ]] || { echo 'scripts/discord_presence.py is missing from the package' >&2; exit 1; }

@@ -87,11 +87,45 @@ WAD antes de contar com isso.
 
 Um WAD é uma lista de entradas, cada uma com um cabeçalho de 64 bytes (tag, flags, tamanho e um
 nome de até 56 caracteres) e os dados, alinhados a 16 bytes. As texturas são entradas chamadas
-`TX<hash>.<hash>.dds` com um prefixo curto seguido de um arquivo DDS comum (DXT1 ou DXT5), e os materiais as acham por esse
-nome. O próprio port muda texturas assim: os ícones de botão (Xbox, Nintendo, teclado) são
-desenhados em cópias do `R_UI.WAD` e do `R_PERM.WAD`, mantendo o tamanho e o formato de cada
-textura, de modo que só os pixels mudam (`scripts/glyphs.py`). Um mod de textura que mantém o
-tamanho e o formato DXT do original é o tipo mais seguro.
+`TX<hash>.<hash>.dds` com um prefixo curto seguido de um arquivo DDS comum (DXT1 ou DXT5), e os
+materiais as acham por esse nome. Um mod de textura que mantém o tamanho e o formato DXT do original
+é o tipo mais seguro.
+
+Os WAD de fase (`OLY150.WAD` e parecidos, não `R_UI.WAD` nem `R_PERM.WAD`) começam com uma entrada
+`EntityCount` (tag 0) cujo campo de tamanho guarda uma contagem de entidades, não um comprimento, e
+depois do cabeçalho não vêm dados. Um leitor que pula `size` bytes ali cai no meio do arquivo e não
+acha nada depois: até a versão 2.5.0 o próprio leitor do port fazia isso, então ele mudava texturas no
+`R_UI.WAD` e no `R_PERM.WAD`, mas em nenhuma fase. `scripts/glyphs.py` (`entries()`) e
+`tools/wad_textures.py` agora leem esse marcador como um cabeçalho sozinho, e qualquer textura de um
+WAD de fase pode ser achada e mudada do mesmo jeito que as da interface.
+
+O port muda texturas assim: os ícones de botão (Xbox, Nintendo, teclado) são desenhados em cópias do
+`R_UI.WAD`, do `R_PERM.WAD` e do `OLY150.WAD` (a lira das Musas na Câmara da Chama), mantendo o
+tamanho e o formato de cada textura, de modo que só os pixels mudam (`scripts/glyphs.py`). Numa
+textura de fase só os blocos de 4 × 4 cujos pixels mudaram são codificados de novo, em cada nível de
+mip, e o resto da textura fica byte a byte igual ao original.
+
+### Achar uma textura do mundo
+
+Algo pintado numa superfície do mundo costuma estar pintado em várias texturas ao mesmo tempo, uma
+por camada do material, no mesmo lugar de cada uma: a cor (diffuse), o brilho (specular, em tons de
+cinza), a luz que emite (uma máscara de brilho, muitas vezes menor), o relevo (um normal map: DXT5, X
+no alfa e Y no verde) e às vezes um decal desenhado por cima. Mude uma e deixe outra, e o desenho
+antigo continua aparecendo por baixo ou por cima. As quatro letras gregas da lira estão em cinco
+texturas do `OLY150.WAD`; as coloridas que ainda apareciam sobre as letras novas vinham do decal.
+
+Para achar todas, ache o WAD da sala (`--grep` com palavras da sala: `--grep Muse Lyre`) e monte
+folhas só com a parte de cada textura onde está o desenho, num tamanho legível:
+`--crop 0.75,0,1,0.25` pega o quarto superior direito (esquerda, topo, direita, base, em frações).
+Toda textura que mostra as mesmas formas ali é uma camada a mudar.
+
+`tools/wad_textures.py` acha uma textura olhando: monta folhas de contato numeradas com todas as
+texturas dos WAD que você nomear (`"SpartanPort.exe" --script tools\wad_textures.py "<jogo>\EXEC\WAD\PS4_LE" OLY1* -o sheets`),
+monta folhas com uma parte de cada textura (`--crop`), extrai as numeradas como `.dds` (`--extract`),
+procura palavras nos nomes de entrada de todos os WAD para achar o WAD de uma sala (`--grep Muse Lyre`)
+e ordena as texturas pequenas que parecem ícones de botão (`--find`). Rode com o caminho completo do
+script; o `--script` do launcher o executa com o Python que vem junto, e `2>&1 | Out-Host` no
+PowerShell mostra a saída.
 
 Os WADs de `PS4_LE` são little-endian. A versão de PS3 rodava num console big-endian, então não se
 espera que os WADs dela funcionem aqui.

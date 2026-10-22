@@ -86,11 +86,44 @@ before you rely on it.
 
 A WAD is a list of entries, each with a 64-byte header (tag, flags, size, a name of up to 56
 characters) and its data padded to 16 bytes. Textures are entries named `TX<hash>.<hash>.dds` that
-hold a short prefix followed by a plain DDS file (DXT1 or DXT5), and the materials find them by that name. The port itself
-changes textures this way: the button icons (Xbox, Nintendo, keyboard) are drawn into copies of
-`R_UI.WAD` and `R_PERM.WAD`, keeping each texture's size and format so that only its pixels change
-(`scripts/glyphs.py`). A texture mod that keeps the size and the DXT format of the original is the
-safest kind.
+hold a short prefix followed by a plain DDS file (DXT1 or DXT5), and the materials find them by that
+name. A texture mod that keeps the size and the DXT format of the original is the safest kind.
+
+Level WADs (`OLY150.WAD` and the like, not `R_UI.WAD` or `R_PERM.WAD`) start with an `EntityCount`
+entry (tag 0) whose size field holds a count of entities, not a length, and no data follows its
+header. A reader that skips `size` bytes there lands in the middle of the file and finds nothing
+after it: up to version 2.5.0 the port's own reader did, so it could change textures in `R_UI.WAD` and
+`R_PERM.WAD` but in no level. `scripts/glyphs.py` (`entries()`) and `tools/wad_textures.py` now read
+that marker as a header alone, so every texture of a level WAD can be found and changed the same
+way as the interface ones.
+
+The port changes textures this way: the button icons (Xbox, Nintendo, keyboard) are drawn into
+copies of `R_UI.WAD`, `R_PERM.WAD` and `OLY150.WAD` (the Muses' lyre in the Chamber of the Flame),
+keeping each texture's size and format so that only its pixels change (`scripts/glyphs.py`). In a
+level texture only the 4 × 4 blocks whose pixels changed are encoded again, in every mip level, so
+the rest of the texture stays byte for byte the original.
+
+### Finding an in-world texture
+
+Something painted on a surface in the world is usually painted into several textures at once, one
+per material layer, at the same place in each: the colour (diffuse), the shine (specular, greyscale),
+the light it gives off (a glow mask, often smaller), its relief (a normal map: DXT5, X in alpha and Y
+in green), and sometimes a decal drawn over the surface. Change one and leave another, and the old
+picture still shows through or on top. The lyre's four Greek letters are in five textures of
+`OLY150.WAD`; the coloured ones that were still visible over the new letters came from the decal.
+
+To find all of them, find the room's WAD (`--grep` with words from the room: `--grep Muse Lyre`),
+then sheet only the part of every texture where the picture is, at a readable size:
+`--crop 0.75,0,1,0.25` sheets the top-right quarter (left, top, right, bottom, as fractions). Every
+texture that shows the same shapes there is a layer to change.
+
+`tools/wad_textures.py` finds a texture by looking: it tiles every texture of the WADs you name into
+contact sheets with numbers (`"SpartanPort.exe" --script tools\wad_textures.py "<game>\EXEC\WAD\PS4_LE" OLY1* -o sheets`),
+sheets part of each texture (`--crop`), extracts the numbered ones as `.dds` (`--extract`), searches
+the entry names of every WAD for words to find the WAD of a room (`--grep Muse Lyre`), and ranks
+small textures that look like button prompts (`--find`). Run it with the full path to the script;
+the launcher's `--script` runs it with the Python it bundles, and `2>&1 | Out-Host` in PowerShell
+shows its output.
 
 The WADs in `PS4_LE` are little-endian. The PS3 release ran on a big-endian console, so its WADs
 are not expected to work here.
@@ -336,3 +369,5 @@ them, the tool uses Pillow, NumPy and scikit-image, with the Cinzel font shipped
 shadPS4 and GoldHEN patch files go in the `patches/` folder in the data folder and are listed on the
 launcher's **Mods** page, under **Third-party patches**. They only apply to one build of `eboot.bin`: see the
 [patches guide](PATCHES.md#third-party-patches-shadps4-and-goldhen).
+
+Voice replacement through an Update folder: see [VOICE_REPLACEMENT.md](VOICE_REPLACEMENT.md).

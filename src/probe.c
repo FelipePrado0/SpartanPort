@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <SDL3/SDL.h>
 #include "runtime.h"
 #include "cpu_check.h"
 #include "isa_rewrite.h"
@@ -777,6 +778,56 @@ static int cpu_supported(char *missing, size_t size) {
     return 1;
 }
 
+/* --displays: the monitors a launcher can offer, one TSV line each on stdout so a machine can parse
+ * them: index, name, primary, x, y, width, height. The index is the position in SDL_GetDisplays(),
+ * the same value SPARTAN_MONITOR carries; SDL_DisplayID is per process and never printed. TAB, CR and
+ * LF in a name would break the columns or the lines, so they are printed as spaces. Diagnostics go
+ * to stderr and stdout stays empty when the enumeration fails. */
+static int describe_displays(void) {
+    if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
+        fprintf(stderr, "Displays: cannot initialize SDL video: %s\n", SDL_GetError());
+        return 1;
+    }
+    int count = 0;
+    SDL_DisplayID *displays = SDL_GetDisplays(&count);
+    if (!displays) {
+        fprintf(stderr, "Displays: cannot enumerate displays: %s\n", SDL_GetError());
+        SDL_QuitSubSystem(SDL_INIT_VIDEO);
+        return 1;
+    }
+    if (count == 0) {
+        /* A valid enumeration with no monitors is not a failure: no line, no error code. */
+        fprintf(stderr, "Displays: none\n");
+        SDL_free(displays);
+        SDL_QuitSubSystem(SDL_INIT_VIDEO);
+        return 0;
+    }
+    /* 0 when SDL cannot tell: no display matches, so no line claims to be the primary. */
+    const SDL_DisplayID primary = SDL_GetPrimaryDisplay();
+    if (!primary) fprintf(stderr, "Displays: no primary display reported: %s\n", SDL_GetError());
+    for (int i = 0; i < count; ++i) {
+        SDL_Rect bounds;
+        if (!SDL_GetDisplayBounds(displays[i], &bounds)) {
+            /* Reported and left out: a line with invented geometry would lie to the launcher. */
+            fprintf(stderr, "Displays: display %d has no bounds: %s\n", i, SDL_GetError());
+            continue;
+        }
+        const char *name = SDL_GetDisplayName(displays[i]);
+        char fallback[32];
+        if (!name || !name[0]) {
+            snprintf(fallback, sizeof(fallback), "Display %d", i);
+            name = fallback;
+        }
+        printf("%d\t", i);
+        for (const char *at = name; *at; ++at)
+            putchar(*at == '\t' || *at == '\r' || *at == '\n' ? ' ' : *at);
+        printf("\t%d\t%d\t%d\t%d\t%d\n", displays[i] == primary, bounds.x, bounds.y, bounds.w, bounds.h);
+    }
+    SDL_free(displays);
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
 #ifndef _WIN32
@@ -797,6 +848,10 @@ int main(int argc, char **argv) {
         /* Before the memory reservation: this only asks SDL, nothing of the game is set up yet. */
         runtime_pad_describe();
         return 0;
+    }
+    if (argc == 2 && !strcmp(argv[1], "--displays")) {
+        /* Before the memory reservation: this only asks SDL, nothing of the game is set up yet. */
+        return describe_displays();
     }
 #ifdef _WIN32
     /* The PS4 user range must stay free of host allocations (GPU driver, heaps), and the guest
@@ -828,7 +883,7 @@ int main(int argc, char **argv) {
         else { fprintf(stderr, "Unknown option: %s\n", argv[i]); return 1; }
     }
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s boot.bin [--cpu-only] [--strict-imports] [--check-imports] [--content-profile file] [--app0 dir] [--user dir] [--patches file] [--isa-rewrite file] [--pause-menu R_UI.WAD] [--mount guest=host]... [--timeout seconds] | --vulkan-only | --cpu-features | --gamepad\n", argv[0]);
+        fprintf(stderr, "Usage: %s boot.bin [--cpu-only] [--strict-imports] [--check-imports] [--content-profile file] [--app0 dir] [--user dir] [--patches file] [--isa-rewrite file] [--pause-menu R_UI.WAD] [--mount guest=host]... [--timeout seconds] | --vulkan-only | --cpu-features | --gamepad | --displays\n", argv[0]);
         return 1;
     }
     if (!cpu_supported(missing, sizeof missing)) return 20;

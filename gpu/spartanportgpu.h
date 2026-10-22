@@ -54,6 +54,29 @@ int spartanportgpu_mouse_aim_sensitivity(void);
 unsigned spartanportgpu_symbol_count(void);
 /* Yields of threads waiting for guest memory copies (CPU report, #209). */
 unsigned long long spartanportgpu_copy_yields(void);
+/* Trophy notice at the top-right of the game window (any thread). title: the trophy's name,
+ * detail: its description (null or empty: none), png: its icon (PNG bytes; null: a drawn medal). */
+void spartanportgpu_toast_trophy(const char *title, const char *detail, const unsigned char *png, uint64_t png_size);
+void spartanportgpu_toast_icon(const char *text, const unsigned char *png, uint64_t png_size);
+void spartanportgpu_toast(const char *text);
+/* The in-game trophy list (F8 / R3+R2) and the notice labels, handed over once by the runtime.
+ * labels: texts of the window and of the notice (null or empty: English). items: the trophies in
+ * the order of the list (their strings and png stay valid). unlocked: four 32-bit words, bit
+ * id % 32 of word id / 32 set for an unlocked trophy, read live. */
+typedef struct {
+    const char *heading, *notice, *status_unlocked, *status_locked;
+    const char *filter_all, *filter_unlocked, *filter_locked;
+    const char *counter; /* "{} of {} unlocked" */
+    const char *hint;    /* the keys */
+} SpartanGpuTrophyLabels;
+typedef struct {
+    int id;
+    const char *name, *detail;
+    const unsigned char *png;
+    uint64_t png_size;
+} SpartanGpuTrophyInfo;
+void spartanportgpu_trophy_setup(const SpartanGpuTrophyLabels *labels, const SpartanGpuTrophyInfo *items, int count,
+                          const volatile uint32_t *unlocked);
 #ifdef __cplusplus
 }
 #endif

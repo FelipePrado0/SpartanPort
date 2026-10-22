@@ -781,7 +781,7 @@ Frame* Presenter::PrepareBlankFrame(bool present_thread) {
 }
 
 void Presenter::PresentLoadingFrame() {
-    if (window.GetWidth() == 0 || window.GetHeight() == 0) {
+    if (window.IsMinimized() || window.GetWidth() <= 0 || window.GetHeight() <= 0) {
         return;
     }
     swapchain.UpdateVsync();
@@ -789,7 +789,12 @@ void Presenter::PresentLoadingFrame() {
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
     }
     if (!swapchain.AcquireNextImage()) {
-        return;
+        if (!window.IsMinimized() && window.GetWidth() > 0 && window.GetHeight() > 0) {
+            swapchain.Recreate(window.GetWidth(), window.GetHeight());
+        }
+        if (!swapchain.AcquireNextImage()) {
+            return;
+        }
     }
     const vk::Image image = swapchain.Image();
     const vk::Extent2D extent = swapchain.GetExtent();
@@ -830,7 +835,10 @@ void Presenter::PresentLoadingFrame() {
     present_scheduler.Flush(info);
     {
         std::scoped_lock submit_lock{Scheduler::submit_mutex};
-        swapchain.Present();
+        if (!swapchain.Present() && !window.IsMinimized() && window.GetWidth() > 0 &&
+            window.GetHeight() > 0) {
+            swapchain.Recreate(window.GetWidth(), window.GetHeight());
+        }
     }
     // A few frames a second during start-up: waiting keeps semaphores and the swapchain simple.
     present_scheduler.Finish();
@@ -847,9 +855,9 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
         }
     };
 
-    // spartanport: a minimized window has no pixels on Windows (0x0); keep the swapchain and skip
-    // presenting until the window is restored.
-    if (window.GetWidth() == 0 || window.GetHeight() == 0) {
+    // spartanport: a minimized window has no pixels on Windows (0x0) or is hidden/occluded; keep the swapchain
+    // and skip presenting until the window is restored.
+    if (window.IsMinimized() || window.GetWidth() <= 0 || window.GetHeight() <= 0) {
         free_frame();
         return;
     }
@@ -861,7 +869,9 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     }
 
     if (!swapchain.AcquireNextImage()) {
-        swapchain.Recreate(window.GetWidth(), window.GetHeight());
+        if (!window.IsMinimized() && window.GetWidth() > 0 && window.GetHeight() > 0) {
+            swapchain.Recreate(window.GetWidth(), window.GetHeight());
+        }
         if (!swapchain.AcquireNextImage()) {
             // User resizes the window too fast and GPU can't keep up. Skip this frame.
             LOG_WARNING(Render_Vulkan, "Skipping frame!");
@@ -1001,7 +1011,8 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     // Present to swapchain.
     {
         std::scoped_lock submit_lock{Scheduler::submit_mutex};
-        if (!swapchain.Present() && window.GetWidth() != 0 && window.GetHeight() != 0) {
+        if (!swapchain.Present() && !window.IsMinimized() && window.GetWidth() > 0 &&
+            window.GetHeight() > 0) {
             swapchain.Recreate(window.GetWidth(), window.GetHeight());
         }
     }

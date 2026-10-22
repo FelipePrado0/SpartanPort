@@ -55,6 +55,13 @@ class GlyphTableTest(unittest.TestCase):
                          [(0, 5, 'A'), (0x50, 0, 'B'), (0x90, 16, 'C')])
         self.assertEqual([name for _o, _s, name in glyphs.entries(data[:-8])], ['A', 'B'])
 
+    def test_entity_count_marker_carries_no_data(self):
+        # level WADs: the marker's size field is a count; the next entry follows its header at once
+        data = entry('WAD_Oly150', b'\0' * 8, tag=0x14) + entry('EntityCount', tag=0)[:0x40]
+        data = bytearray(data[:-4] + struct.pack('<I', 86) + entry('SBP_OLY150', b'\1' * 40) + entry('GroupEnd', tag=3))
+        struct.pack_into('<I', data, 0x40 + 16 + 4, 86)  # the count where the size goes
+        self.assertEqual([name for _o, _s, name in glyphs.entries(data)], ['WAD_Oly150', 'EntityCount', 'SBP_OLY150', 'GroupEnd'])
+
     def test_glyph_of_each_style(self):
         self.assertEqual(glyphs.glyph('a', 'xbox'), ('disc', 'A', glyphs.STYLES['xbox']['colors']['a']))
         self.assertEqual(glyphs.glyph('a', 'nintendo')[:2], ('disc', 'B'))  # south on a Switch pad
@@ -77,8 +84,9 @@ class GlyphTableTest(unittest.TestCase):
         self.assertEqual((buttons['cross'], buttons['circle']), ('b', 'a'))
         self.assertEqual((buttons['l2'], buttons['square']), ('lefttrigger', 'x'))
         self.assertEqual(glyphs.pad_buttons(''), glyphs.DEFAULT_MAP)
-        self.assertEqual(set(button for _form, names in glyphs.TEXTURES.values()
+        self.assertEqual(set(button for form, names in glyphs.TEXTURES.values() if form not in glyphs.LYRE_FORMS
                              for button in ([names] if isinstance(names, str) else names)) - set(glyphs.DEFAULT_MAP), set())
+        self.assertEqual(set(glyphs.LYRE_DISCS) - set(glyphs.DEFAULT_MAP), set())
 
     def test_key_map_moves_the_key(self):
         keys = glyphs.key_buttons('Cross = Q, square=Left Shift,l2=G,nonsense=Y,circle=')
@@ -153,6 +161,64 @@ class GlyphPatchTest(unittest.TestCase):
                 Image.open(io.BytesIO(bytes(after[pixels - 128:]))).load()
             else:
                 self.assertEqual(before, after, name)
+
+    def test_lyre_discs_are_repainted_in_place(self):
+        original = (texture('TX2CDFA5F8.F2C4FECB.dds', 2048, 2048, 'DXT1', 12)
+                    + texture('TX4158CBF9.70725051.dds', 2048, 2048, 'DXT1', 12)
+                    + texture('TX0C09B6DB.7485CA2D.dds', 2048, 2048, 'DXT1', 12)
+                    + texture('TXF489D97F.2CBA0C02.dds', 2048, 2048, 'DXT5', 12)
+                    + texture('TXEACA5E71.B9CB5700.dds', 512, 512, 'DXT1', 10)
+                    + texture('TXBD54B283.5551218B.dds', 2048, 2048, 'DXT1', 12)
+                    + texture('TXCEE0EE2B.BC09F12D.dds', 2048, 2048, 'DXT1', 12))
+        keyboard = bytearray(original)
+        self.assertEqual(glyphs.patch(keyboard, 'keyboard'), 0)  # the keys are the player's: left alone
+        self.assertEqual(keyboard, original)
+        copies = []
+        for style in ('xbox', 'nintendo'):
+            data = bytearray(original)
+            self.assertEqual(glyphs.patch(data, style), 7)
+            self.assertEqual(len(data), len(original))
+            self.assertEqual(list(glyphs.entries(data)), list(glyphs.entries(original)))
+            for offset, size, name in glyphs.entries(original):
+                end = offset + 0x40 + size
+                dds = original.find(b'DDS ', offset + 0x40, end)
+                self.assertEqual(data[offset:dds + 128], original[offset:dds + 128], name)
+                width = struct.unpack_from('<I', original, dds + 16)[0]
+                corner = glyphs.LYRE_CORNER if width == 2048 else tuple(v // 4 for v in glyphs.LYRE_CORNER)
+                # top level: blocks outside the corner are untouched, blocks inside are redrawn
+                blocks, block = width // 4, 16 if original[dds + 84:dds + 88] == b'DXT5' else 8
+                for by in range(blocks):
+                    row = dds + 128 + by * blocks * block
+                    for bx in range(blocks):
+                        inside = corner[0] <= bx * 4 < corner[2] and corner[1] <= by * 4 < corner[3]
+                        same = data[row + bx * block:row + (bx + 1) * block] == original[row + bx * block:row + (bx + 1) * block]
+                        if not inside:
+                            self.assertTrue(same, (name, bx, by))
+                self.assertNotEqual(data[dds + 128:end], original[dds + 128:end], name)
+                image = Image.open(io.BytesIO(bytes(data[dds:end])))
+                image.load()
+                self.assertEqual(image.size, (width, width))
+            copies.append(bytes(data))
+        self.assertEqual(len(set(copies)), 2)
+
+    def test_encode_region_touches_only_changed_blocks(self):
+        original = texture('TX2CDFA5F8.F2C4FECB.dds', 64, 64, 'DXT1', 7)
+        data = bytearray(original)
+        dds = original.find(b'DDS ')
+        before = Image.open(io.BytesIO(bytes(original[dds:]))).convert('RGB')
+        before.load()
+        painted = before.copy()
+        painted.paste((255, 255, 255), (8, 8, 16, 16))  # four blocks of the 16 x 16 region at (0, 0)
+        glyphs.encode_region(data, dds, len(original), painted, 'DXT1', (0, 0, 16, 16), before)
+        self.assertEqual(len(data), len(original))
+        top = dds + 128
+        changed = [(i - top) // 8 for i in range(top, top + 16 * 16 * 8, 8) if data[i:i + 8] != original[i:i + 8]]
+        self.assertEqual(changed, [2 * 16 + 2, 2 * 16 + 3, 3 * 16 + 2, 3 * 16 + 3])
+        # the smaller levels: only the blocks the white square reaches, nothing beyond the region
+        rest = [i for i in range(top + 16 * 16 * 8, len(original), 8) if data[i:i + 8] != original[i:i + 8]]
+        self.assertTrue(0 < len(rest) <= 12, rest)  # 3 at level 1, then the tiny levels
+        self.assertEqual(data[top + 16 * 16 * 8 + 2 * 8 * 8:top + 16 * 16 * 8 + 8 * 8 * 8],
+                         original[top + 16 * 16 * 8 + 2 * 8 * 8:top + 16 * 16 * 8 + 8 * 8 * 8])  # level 1, rows 2+
 
     def test_remap_and_style_change_the_pixels(self):
         drawn = []
@@ -333,7 +399,8 @@ class KeyboardStickTest(unittest.TestCase):
         self.assertEqual({b for _f, b in glyphs.KEYBOARD_TEXTURES.values()}, {'lstick', 'rstick', 'up'})
         self.assertFalse(set(glyphs.KEYBOARD_TEXTURES) & set(glyphs.TEXTURES))
         self.assertEqual(glyphs.textures('xbox'), glyphs.TEXTURES)
-        self.assertEqual(glyphs.textures('keyboard'), {**glyphs.TEXTURES, **glyphs.KEYBOARD_TEXTURES})
+        prompts = {name: entry for name, entry in glyphs.TEXTURES.items() if entry[0] not in glyphs.LYRE_FORMS}
+        self.assertEqual(glyphs.textures('keyboard'), {**prompts, **glyphs.KEYBOARD_TEXTURES})  # the lyre keeps its letters
 
     def test_sticks_show_the_movement_and_camera_keys(self):
         keys = glyphs.key_buttons('')
