@@ -369,3 +369,5 @@ them, the tool uses Pillow, NumPy and scikit-image, with the Cinzel font shipped
 shadPS4 and GoldHEN patch files go in the `patches/` folder in the data folder and are listed on the
 launcher's **Mods** page, under **Third-party patches**. They only apply to one build of `eboot.bin`: see the
 [patches guide](PATCHES.md#third-party-patches-shadps4-and-goldhen).
+
+Voice replacement through an Update folder: see [VOICE_REPLACEMENT.md](VOICE_REPLACEMENT.md).

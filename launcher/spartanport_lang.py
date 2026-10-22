@@ -983,6 +983,8 @@ EXTRA = {
         "Strength of the gamepad's vibration; 0% turns it off.": 'Força da vibração do controle; 0% desliga.',
         'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
             'O Windows não conseguiu reservar a memória que o jogo precisa. Feche outros programas, ou deixe o arquivo de paginação do Windows crescer (por exemplo 16384 MB inicial, 32768 MB máximo), e inicie de novo.',
+        'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.':
+            'O Linux não conseguiu alocar a memória que o jogo precisa. Feche outros programas, verifique a memória RAM disponível, swap ou /dev/shm, e inicie de novo.',
         'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.':
             'O jogo parou ao ler os próprios arquivos: o dump do jogo pode estar incompleto. Extraia o pkg de novo e confira se a pasta do jogo tem cerca de 40 GB.',
         'Native · 1920 × 1080 · 16:9': 'Nativa · 1920 × 1080 · 16:9',
@@ -1060,6 +1062,19 @@ EXTRA = {
         'Grab': 'Agarrar',
         'Dodge': 'Esquiva',
         'Portuguese (Brazil)': 'Português (Brasil)',
+        'Reuse compiled shaders from disk': 'Reutilizar shaders compilados do disco',
+        'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': 'Os shaders compilados em sessões anteriores carregam do cache de shaders em vez de compilar de novo: os objetos não aparecem mais alguns quadros atrasados depois de iniciar ou carregar um save, e o cache não é reescrito a cada sessão (o antivírus verifica cada arquivo gravado). A primeira inicialização com a opção ligada recria o cache uma vez. Desative se um objeto, efeito ou cor aparecer errado só depois de reiniciar e estiver certo na primeira execução de um cache novo.',
+        'Read the shader cache into memory at start': 'Ler o cache de shaders para a memória ao iniciar',
+        'A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.': 'Uma thread em segundo plano lê os shaders salvos para a memória enquanto o jogo inicia; uma nota no canto inferior direito mostra o progresso. Assim, carregar um shader não segura um quadro. Precisa da opção acima. Desative em um HD lento ou com pouca RAM livre se o primeiro minuto travar mais ou o jogo demorar mais para abrir.',
+        'Show shader notes in the corner': 'Mostrar notas de shaders no canto',
+        'A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.': 'Uma nota no canto inferior direito mostra a leitura do cache de shaders ao iniciar e os shaders sendo compilados, para que uma travada curta tenha um motivo visível. Desative para manter a tela limpa.',
+        'Shader cache': 'Cache de shaders',
+        'Delete shader cache': 'Apagar cache de shaders',
+        'Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look wrong after an update or the cache grew too big; the next start compiles everything again.': 'Apaga os shaders e pipelines salvos desta pasta de saves. Use se os gráficos ficarem errados depois de uma atualização ou se o cache ficar grande demais; a próxima inicialização compila tudo de novo.',
+        'Close the game before deleting the shader cache.': 'Feche o jogo antes de apagar o cache de shaders.',
+        'The shader cache is already empty.': 'O cache de shaders já está vazio.',
+        'Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.': 'Apagar o cache de shaders ({} MB em {})? O jogo compila os shaders de novo, então a próxima inicialização trava por alguns minutos.',
+        'Could not delete all of the shader cache; another program may be using it: {}': 'Não foi possível apagar todo o cache de shaders; outro programa pode estar usando: {}',
     },
     'es': {
         'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?': 'El launcher no puede escribir en {}, así que no puede reemplazarse ahí. ¿Abrir la página de releases para descargar la versión nueva a mano?',
@@ -1272,6 +1287,8 @@ EXTRA = {
             'Sustituye los iconos de botones de PlayStation dentro del juego por los de tu mando. Trabaja sobre una copia de hasta tres archivos del juego en la carpeta de datos del port (unos 410 MB); tu carpeta del juego nunca se modifica. Se aplica al iniciar el juego.',
         'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
             'Windows no pudo reservar la memoria que necesita el juego. Cierra otros programas, o deja que el archivo de paginación de Windows crezca (por ejemplo 16384 MB inicial, 32768 MB máximo), y vuelve a iniciarlo.',
+        'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.':
+            'Linux no pudo asignar la memoria que necesita el juego. Cierra otros programas, comprueba la memoria RAM disponible, swap o /dev/shm, y vuelve a iniciarlo.',
         'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.':
             'El juego se detuvo al leer sus archivos: el dump del juego puede estar incompleto. Extrae el pkg de nuevo y comprueba que la carpeta del juego ocupa unos 40 GB.',
         'Textures': 'Texturas',
@@ -1329,6 +1346,19 @@ EXTRA = {
         'Grab': 'Agarrar',
         'Dodge': 'Esquivar',
         'Portuguese (Brazil)': 'Portugués (Brasil)',
+        'Reuse compiled shaders from disk': 'Reutilizar shaders compilados del disco',
+        'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': 'Los shaders compilados en sesiones anteriores se cargan de la caché de shaders en vez de compilarse de nuevo: los objetos ya no aparecen unos fotogramas tarde al iniciar o cargar una partida, y la caché no se reescribe en cada sesión (el antivirus revisa cada archivo escrito). El primer inicio con la opción activada reconstruye la caché una vez. Desactívalo si un objeto, efecto o color se ve mal solo después de reiniciar y está bien en la primera ejecución de una caché nueva.',
+        'Read the shader cache into memory at start': 'Leer la caché de shaders en memoria al iniciar',
+        'A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.': 'Un hilo en segundo plano lee los shaders guardados en memoria mientras el juego inicia; una nota en la esquina inferior derecha muestra el progreso. Así, cargar un shader no retiene un fotograma. Necesita la opción de arriba. Desactívalo en un disco duro lento o con poca RAM libre si el primer minuto se traba más o el juego tarda más en abrir.',
+        'Show shader notes in the corner': 'Mostrar notas de shaders en la esquina',
+        'A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.': 'Una nota en la esquina inferior derecha muestra la lectura de la caché de shaders al iniciar y los shaders que se están compilando, para que un tirón corto tenga un motivo visible. Desactívalo para mantener la pantalla limpia.',
+        'Shader cache': 'Caché de shaders',
+        'Delete shader cache': 'Borrar caché de shaders',
+        'Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look wrong after an update or the cache grew too big; the next start compiles everything again.': 'Borra los shaders y pipelines guardados de esta carpeta de partidas. Úsalo si los gráficos se ven mal después de una actualización o si la caché creció demasiado; el próximo inicio lo compila todo de nuevo.',
+        'Close the game before deleting the shader cache.': 'Cierra el juego antes de borrar la caché de shaders.',
+        'The shader cache is already empty.': 'La caché de shaders ya está vacía.',
+        'Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.': '¿Borrar la caché de shaders ({} MB en {})? El juego compila los shaders de nuevo, así que el próximo inicio se traba unos minutos.',
+        'Could not delete all of the shader cache; another program may be using it: {}': 'No se pudo borrar toda la caché de shaders; puede que otro programa la esté usando: {}',
     },
 }
 
@@ -1926,6 +1956,7 @@ EXTRA.setdefault('zh', {}).update({'   (game patches)': '   （游戏补丁）',
                                                                                                                                                                                     'MB、最大 '
                                                                                                                                                                                     '32768 '
                                                                                                                                                                                     'MB）后重试。',
+ 'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.': 'Linux 无法为游戏分配所需的内存。请关闭其他程序，检查可用的 RAM、swap 交换空间或 /dev/shm，然后重新启动。',
  'Xbox button': 'Xbox 键',
  'Your game dump, saves and language.': '游戏文件、存档和语言。',
  'Your own dump of the game (eboot.bin, sce_module, sce_sys): God of War III Remastered, any region and version.': '你自己的游戏文件（eboot.bin、sce_module、sce_sys）；支持各地区和版本的战神 '
@@ -2010,6 +2041,10 @@ for _language, _text in {
 
 
 EXTRA.setdefault('id', {}).update({
+    'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?':
+        'Peluncur tidak dapat menulis ke {}, sehingga tidak dapat mengganti dirinya sendiri di sana. Buka halaman rilis untuk mengunduh versi baru secara manual?',
+    'Version {} is out, but it has no Linux build yet.':
+        'Versi {} telah keluar, tetapi belum ada build Linux.',
     'Polish': 'Polandia',
     'Portuguese (Brazil)': 'Portugis (Brasil)',
     'Aspect ratio': 'Rasio aspek',
@@ -2283,6 +2318,8 @@ EXTRA.setdefault('id', {}).update({
         'Saat Anda bermain, mouse tetap berada di dalam jendela game, sehingga klik tidak akan mengenai monitor atau aplikasi lain. Menu dalam game dan berpindah jendela akan mengembalikannya. Juga ada di menu dalam game.',
     'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
         'Windows tidak dapat memesan memori yang dibutuhkan game. Tutup program lain, atau perbesar pagefile Windows (misalnya 16384 MB awal, 32768 MB maksimum), lalu mulai kembali.',
+    'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.':
+        'Linux tidak dapat mengalokasikan memori yang dibutuhkan game. Tutup program lain, periksa RAM yang tersedia, swap, atau /dev/shm, lalu mulai kembali.',
     '{} (a folder, not a file)': '{} (sebuah folder, bukan file)',
     '{} (empty)': '{} (kosong)',
     '{} (not a param.sfo)': '{} (bukan param.sfo)',
@@ -2396,12 +2433,39 @@ EXTRA['id'].update({
     'The game image cannot be read. See the Log for the reason.':
         'Image game tidak dapat dibaca. Lihat Log untuk alasannya.',
 })
-# The AppImage updating itself from the GitHub release (#707): the 'id' texts predate it.
+
+EXTRA['zh'].update({
+    'A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.': '游戏启动时，后台线程会将已保存的着色器读入内存，右下角显示进度。随后加载着色器时无需因磁盘读取而阻塞帧。需要启用上一项。如果硬盘较慢或可用内存不足，导致启动变慢或第一分钟更卡顿，请关闭此项。',
+    'A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.': '右下角显示启动时的着色器缓存读取进度和着色器编译状态，便于了解短暂卡顿的原因。关闭此项可隐藏提示。',
+    'Close the game before deleting the shader cache.': '删除着色器缓存前请先关闭游戏。',
+    'Could not delete all of the shader cache; another program may be using it: {}': '无法删除全部着色器缓存，其他程序可能正在使用：{}',
+    'Delete shader cache': '删除着色器缓存',
+    'Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.': '删除着色器缓存（{} MB，位于 {}）？游戏会重新编译着色器，下次启动后的几分钟可能出现卡顿。',
+    'Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look wrong after an update or the cache grew too big; the next start compiles everything again.': '删除此存档文件夹中保存的着色器和管线。如果更新后画面异常或缓存过大，可以使用此功能。下次启动时会重新编译。',
+    'Read the shader cache into memory at start': '启动时将着色器缓存读入内存',
+    'Reuse compiled shaders from disk': '重用磁盘中已编译的着色器',
+    'Shader cache': '着色器缓存',
+    'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': '从缓存加载先前会话编译的着色器，避免重新编译，减少启动游戏或加载存档后物体延迟出现，并避免每次重写缓存（杀毒软件会扫描每个写入的文件）。首次启用时会重建一次缓存。如果仅在重启后出现物体、特效或颜色异常，而新缓存首次运行正常，请关闭此项。',
+    'Show shader notes in the corner': '在角落显示着色器提示',
+    'The shader cache is already empty.': '着色器缓存已经为空。',
+})
+
 EXTRA['id'].update({
-    'Version {} is out, but it has no Linux build yet.':
-        'Versi {} sudah dirilis, tetapi belum ada build Linux-nya.',
-    'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?':
-        'Launcher tidak dapat menulis ke {}, jadi tidak bisa menggantikan dirinya di sana. Buka halaman rilis untuk mengunduh versi baru secara manual?',
+    'A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.': 'Thread latar belakang membaca shader tersimpan ke memori saat game dimulai; kemajuannya ditampilkan di sudut kanan bawah. Pemuatan shader berikutnya tidak perlu menunggu pembacaan disk. Memerlukan opsi di atas. Nonaktifkan jika hard disk lambat atau RAM terbatas membuat menit pertama lebih tersendat atau waktu mulai lebih lama.',
+    'A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.': 'Catatan di sudut kanan bawah menampilkan pembacaan cache saat mulai dan kompilasi shader, agar penyebab jeda singkat terlihat. Nonaktifkan untuk menyembunyikannya.',
+    'Close the game before deleting the shader cache.': 'Tutup game sebelum menghapus cache shader.',
+    'Could not delete all of the shader cache; another program may be using it: {}': 'Tidak dapat menghapus seluruh cache shader; program lain mungkin sedang menggunakannya: {}',
+    'Delete shader cache': 'Hapus cache shader',
+    'Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.': 'Hapus cache shader ({} MB di {})? Game akan mengompilasi ulang shader, sehingga beberapa menit setelah mulai berikutnya dapat tersendat.',
+    'Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look wrong after an update or the cache grew too big; the next start compiles everything again.': 'Menghapus shader dan pipeline tersimpan dari folder penyimpanan ini. Gunakan jika grafik bermasalah setelah pembaruan atau cache terlalu besar; saat mulai berikutnya semuanya dikompilasi ulang.',
+    'Read the shader cache into memory at start': 'Baca cache shader ke memori saat mulai',
+    'Reuse compiled shaders from disk': 'Gunakan kembali shader terkompilasi dari disk',
+    'Shader cache': 'Cache shader',
+    'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': 'Shader dari sesi sebelumnya dimuat dari cache tanpa dikompilasi ulang, sehingga objek tidak terlambat muncul setelah game dimulai atau penyimpanan dimuat, dan cache tidak ditulis ulang setiap sesi (antivirus memindai setiap berkas yang ditulis). Saat pertama diaktifkan, cache dibangun ulang sekali. Nonaktifkan jika objek, efek, atau warna hanya bermasalah setelah mulai ulang tetapi normal saat cache baru pertama digunakan.',
+    'Show shader notes in the corner': 'Tampilkan catatan shader di sudut',
+    'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?': 'Launcher tidak dapat menulis ke {}, sehingga tidak dapat mengganti dirinya di sana. Buka halaman rilis untuk mengunduh versi baru secara manual?',
+    'The shader cache is already empty.': 'Cache shader sudah kosong.',
+    'Version {} is out, but it has no Linux build yet.': 'Versi {} telah tersedia, tetapi belum memiliki build Linux.',
 })
 
 _tables = {}

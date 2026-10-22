@@ -494,7 +494,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
-                'gpu_id': '', 'monitor': '', 'partial_height_views': True, 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
+                'gpu_id': '', 'monitor': '', 'partial_height_views': True, 'disk_shaders': True, 'shader_prefetch': True, 'shader_notes': False, 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
@@ -1294,6 +1294,9 @@ def game_environment(s):
     env['SPARTAN_PIPELINE_BINARIES'] = '1' if s.get('pipeline_binary_cache', True) else '0'
     env['SPARTAN_PERF_DIAG'] = '1' if s.get('perf_diag', False) else '0'
     env['SPARTAN_PARTIAL_HEIGHT_VIEWS'] = '1' if s.get('partial_height_views', True) else '0'
+    env['SPARTAN_DISK_SHADERS'] = '1' if s.get('disk_shaders', True) else '0'
+    env['SPARTAN_SHADER_PREFETCH'] = '1' if s.get('shader_prefetch', True) else '0'
+    env['SPARTAN_SHADER_NOTES'] = '1' if s.get('shader_notes', False) else '0'
     for key, name in (('frame_stats', 'SPARTAN_FRAME_STATS'), ('gpu_profile', 'SPARTAN_GPU_PROFILE'),
                       ('vk_validation', 'SPARTAN_VK_VALIDATION'), ('frame_capture_key', 'SPARTAN_FRAME_CAPTURE_KEY')):
         if s[key]:
@@ -1765,6 +1768,7 @@ class Launcher:
             canvas.configure(scrollregion=(0, 0, canvas.winfo_width(), inner.winfo_reqheight()))
             canvas.yview_moveto(min(canvas.yview()[0], max(0.0, 1 - canvas.winfo_height() / max(1, inner.winfo_reqheight()))))
         outer.fit = fit
+        outer.canvas = canvas
         self.pages[name] = outer
         return inner
 
@@ -1848,6 +1852,23 @@ class Launcher:
             item.configure(bg=PANEL if n == name else BG, fg=ACCENT_HI if n == name else TEXT)
         for method in PAGE_REFRESH.get(name, ()):
             getattr(self, method)()
+
+    def show_log(self):
+        """Navigates to the Advanced page and brings the Log section into view."""
+        if hasattr(self, 'pages') and 'advanced' in self.pages:
+            self.show('advanced')
+            canvas = getattr(self.pages['advanced'], 'canvas', None)
+            if canvas:
+                try:
+                    canvas.update_idletasks()
+                    canvas.yview_moveto(1.0)
+                except Exception:
+                    pass
+        if getattr(self, 'log', None) and getattr(self.log, 'winfo_exists', lambda: False)():
+            try:
+                self.log.see('end')
+            except Exception:
+                pass
 
     def build_home(self):
         tk, ttk = self.tk, self.ttk
@@ -2037,6 +2058,42 @@ class Launcher:
         self.check(f, 'async_shaders', 'ini', _('Compile new shaders in the background'),
                    _('Fewer stutters in new areas: the game keeps running while new shaders compile. An object '
                      'or effect may appear a moment later. Switch it off if something stays missing.'))
+        self.check(f, 'disk_shaders', 'app', _('Reuse compiled shaders from disk', 'Брать скомпилированные шейдеры с диска'),
+                   _('Shaders compiled in earlier sessions load from the shader cache instead of compiling again, '
+                     'so objects no longer appear a few frames late after starting or loading a save, and the '
+                     'cache is not rewritten every session (antivirus scans each written file). The first launch '
+                     'with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong '
+                     'only after a restart and is fine on the first run of a new cache.',
+                     'Шейдеры прошлых сессий загружаются из кэша, а не компилируются заново: объекты больше не '
+                     'появляются с опозданием после запуска или загрузки сохранения, и кэш не перезаписывается '
+                     'каждый раз (антивирус проверяет каждый записанный файл). Первый запуск с этой опцией один '
+                     'раз пересобирает кэш. Выключите, если объект, эффект или цвет выглядит неправильно только '
+                     'после перезапуска.'),
+                   restart=True)
+        self.check(f, 'shader_prefetch', 'app', _('Read the shader cache into memory at start', 'Читать кэш шейдеров в память при запуске'),
+                   _('A background thread reads the saved shaders into memory while the game starts; a note in the'
+                     ' lower right corner shows the progress. Loading a shader then does not hold up a frame. '
+                     'Needs the option above. Switch it off on a slow hard drive or with little free RAM if the '
+                     'first minute stutters more or the game starts slower.',
+                     'Фоновый поток читает сохранённые шейдеры в память при запуске игры; прогресс показан в '
+                     'правом нижнем углу. Тогда загрузка шейдера не задерживает кадр. Нужна опция выше. Выключите '
+                     'на медленном жёстком диске или при малом объёме свободной памяти, если первая минута '
+                     'дёргается сильнее или игра запускается дольше.'),
+                   restart=True)
+        self.check(f, 'shader_notes', 'app', _('Show shader notes in the corner', 'Показывать заметки о шейдерах в углу'),
+                   _('A note in the lower right corner shows the shader cache being read at start and the shaders '
+                     'being compiled, so a short stutter has a visible reason. Switch it off to keep the screen '
+                     'clean.',
+                     'Заметка в правом нижнем углу показывает чтение кэша шейдеров при запуске и компиляцию новых '
+                     'шейдеров, чтобы было видно причину короткого рывка. Выключите, чтобы экран оставался чистым.'),
+                   restart=True)
+        clear = self.ttk.Button(f, text=_('Delete shader cache', 'Удалить кэш шейдеров'), command=self.clear_cache)
+        self.row(f, _('Shader cache', 'Кэш шейдеров'), clear,
+                 _('Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look '
+                   'wrong after an update or the cache grew too big; the next start compiles everything again.',
+                   'Удаляет сохранённые шейдеры и конвейеры этой папки сохранений. Пригодится, если после '
+                   'обновления графика выглядит неправильно или кэш стал слишком большим; следующий запуск всё'
+                   ' скомпилирует заново.'))
         self.check(f, 'parallel_warmup', 'app', _('Fast shader cache loading (parallel)'),
                    _('Loading screen only: builds the cached pipelines on several CPU threads.'))
         self.section(f, _('GPU data'))
@@ -3344,12 +3401,17 @@ class Launcher:
                     self.append(_('\nThe game exited (code {}).\n', '\nИгра завершилась (код {}).\n').format(item[0]))
                     if getattr(self, 'exit_hint', None):
                         self.append(self.exit_hint + '\n')
+                        self.show_log()
                     self.process = None
                     if self.job:
                         self.job.close()
                     if getattr(self, 'hidden_for_game', False):
-                        self.root.destroy()
-                        return
+                        if getattr(self, 'exit_hint', None):
+                            self.hidden_for_game = False
+                            self.root.deiconify()
+                        else:
+                            self.root.destroy()
+                            return
                     self.refresh_status()
                 else:
                     self.exit_hint = exit_hint(item) or getattr(self, 'exit_hint', None)
@@ -3524,12 +3586,30 @@ class Launcher:
         threading.Thread(target=work if WINDOWS else work_appimage, daemon=True).start()
 
     def clear_cache(self):
-        """Shader and pipeline caches; they are rebuilt while playing."""
+        """Shader and pipeline caches (<saves folder>/cache), after asking; the game rebuilds them."""
         if self.process:
+            self.messagebox.showwarning(APP_NAME, _('Close the game before deleting the shader cache.',
+                                                    'Закройте игру перед удалением кэша шейдеров.'))
             return
         import shutil
         cache = Path(self.app['user_dir'] or DATA_DIR / 'user') / 'cache'
+        size = sum(p.stat().st_size for p in cache.rglob('*') if p.is_file()) if cache.is_dir() else 0
+        if not size:
+            self.messagebox.showinfo(APP_NAME, _('The shader cache is already empty.', 'Кэш шейдеров уже пуст.'))
+            return
+        question = _('Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the '
+                     'next start stutters for a few minutes.',
+                     'Удалить кэш шейдеров ({} МБ в {})? Игра скомпилирует шейдеры заново, поэтому '
+                     'следующий запуск несколько минут будет подтормаживать.')
+        if not self.messagebox.askyesno(APP_NAME, question.format(round(size / 2**20), cache)):
+            return
         shutil.rmtree(cache, ignore_errors=True)
+        if cache.exists():  # files still open elsewhere (an antivirus scan, a second game)
+            self.messagebox.showerror(APP_NAME, _(
+                'Could not delete all of the shader cache; another program may be using it: {}',
+                'Не удалось удалить весь кэш шейдеров; возможно, его использует другая программа: {}'
+            ).format(cache))
+            return
         self.messagebox.showinfo(APP_NAME, _('Shader cache cleared. The next start stutters for a few minutes while '
                                                  'it is rebuilt.', 'Кэш шейдеров очищен. Следующий запуск несколько '
                                                  'минут будет подтормаживать, пока кэш собирается заново.'))
@@ -3680,11 +3760,16 @@ def open_play_log(settings):
 
 def exit_hint(line):
     """Advice for an output line that explains why the game closed, or None."""
-    if 'of guest memory (error ' in line:
-        return _('Windows could not reserve the memory the game needs. Close other programs, or let the '
-                 'Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.',
-                 'Windows не смог выделить память для игры. Закройте другие программы или дайте файлу '
-                 'подкачки Windows расти (например, 16384 МБ исходный, 32768 МБ максимальный) и запустите снова.')
+    if 'of guest memory (error ' in line or 'of guest memory' in line:
+        if 'is the page file large enough?' in line or ('is /dev/shm or RAM large enough?' not in line and WINDOWS):
+            return _('Windows could not reserve the memory the game needs. Close other programs, or let the '
+                     'Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.',
+                     'Windows не смог выделить память для игры. Закройте другие программы или дайте файлу '
+                     'подкачки Windows расти (например, 16384 МБ исходный, 32768 МБ максимальный) и запустите снова.')
+        return _('Linux could not allocate the memory the game needs. Close other programs, check available '
+                 'RAM, swap space, or /dev/shm, and start again.',
+                 'Linux не смогла выделить память для игры. Закройте другие программы, проверьте доступную '
+                 'память RAM, swap или /dev/shm и запустите снова.')
     if 'guest raised debug exception code=0xa0020001' in line:
         return _('The game stopped while reading its files: the game dump may be incomplete. Extract the pkg '
                  'again and check that the game folder is about 40 GB.',
@@ -3704,18 +3789,28 @@ def play_without_window(settings):
     """--play: the game with the saved settings (shortcuts, Steam). Output goes to the console
     when there is one and to <saves folder>/last_run.log."""
     attach_stdio()
+    hint = None
     with open_run_log(settings) as log:
         process = subprocess.Popen(run_command(), cwd=PORT_DIR, env=game_environment(settings),
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
         for raw in iter(process.stdout.readline, b''):
             text = raw.decode('utf-8', errors='replace')
+            hint = exit_hint(text) or hint
             log.write(text)
             try:
                 sys.stdout.write(text)
             except (OSError, ValueError):
                 pass
-        return process.wait()
+        code = process.wait()
+        if code != 0 and hint:
+            try:
+                log.write('\n' + hint + '\n')
+            except (OSError, ValueError):
+                pass
+            if WINDOWS and not ctypes.windll.kernel32.GetConsoleWindow():
+                ctypes.windll.user32.MessageBoxW(0, hint, APP_NAME, 0x10)
+        return code
 
 
 def version_tuple(text):

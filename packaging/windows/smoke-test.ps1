@@ -39,7 +39,16 @@ $check = Join-Path $work 'imports.py'
 Set-Content -LiteralPath $check -Value @'
 import sys, traceback
 try:
-    import PIL.Image, iced_x86
+    import PIL.Image, iced_x86, math, zlib, runpy
+    from pathlib import Path
+    tool = Path(sys.executable).parent / 'tools' / 'xvag_voice_swap.py'
+    voice = runpy.run_path(str(tool))
+    assert callable(voice['swap_voice'])
+    assert voice['main'](['--help']) == 0
+except SystemExit as error:
+    if error.code:
+        traceback.print_exc()
+        sys.exit(1)
 except Exception:
     traceback.print_exc()
     sys.exit(1)
