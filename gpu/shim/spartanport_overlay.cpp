@@ -43,8 +43,10 @@ extern "C" void runtime_restart(void); // src/probe.c: starts run.py again, ends
 
 // DejaVu Sans (Cyrillic), embedded (third_party/fonts, Bitstream Vera license), and the launcher's
 // title face, Cinzel Black (launcher/Cinzel-Black.ttf, SIL OFL 1.1, launcher/OFL-Cinzel.txt), for the
-// headings.
-#ifdef _WIN32
+// headings. The offscreen preview (tools/overlay_preview.cpp) compiles this file again and links the
+// library's copies.
+#ifdef SPARTAN_OVERLAY_PREVIEW
+#elif defined(_WIN32)
 asm(".section .rdata,\"dr\"\n"
     ".balign 16\n"
     ".global spartanport_font_ttf\n"
@@ -2129,7 +2131,7 @@ void CycleEngineFps() {
                    : std::string(Tr("Engine frame rate: 60 FPS only (no frame rate patch for this game build)")));
 }
 
-// The ImGui context's options, style, fonts and language (Init).
+// The ImGui context's options, style, fonts and language (Init; also tools/overlay_preview.cpp).
 void ConfigureContext() {
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr; // window positions are not kept
@@ -2590,7 +2592,7 @@ void SetTextEntry(bool active, const std::string& prompt, const std::string& tex
     text_entry_text = text;
 }
 
-// Every window of a frame, between NewFrame and Render.
+// Every window of a frame, between NewFrame and Render (Render; also tools/overlay_preview.cpp).
 void DrawWindows() {
     if (loading) {
         LoadingScreen();
@@ -2690,6 +2692,7 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
 
 } // namespace SpartanOverlay
 
+#ifndef SPARTAN_OVERLAY_PREVIEW // the preview links the library's
 // Called by the runtime (src/runtime_services.c) when the game unlocks a trophy. id: the trophy's
 // (-1: a plain notice), title: its name, detail: its description (may be empty), png: the trophy's
 // icon (the PNG bytes from trophy00.trp) or null for the drawn medal. The theme chosen in the menu
@@ -2817,3 +2820,4 @@ extern "C" void spartanportgpu_trophy_setup(const SpartanGpuTrophyLabels* labels
         trophy_ready = true;
     }).detach();
 }
+#endif // SPARTAN_OVERLAY_PREVIEW
