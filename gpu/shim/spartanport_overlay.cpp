@@ -90,6 +90,7 @@ std::string text_entry_prompt, text_entry_text;
 // The game's save list (sceSaveDataDialog): a choice made with the arrows/D-pad.
 std::atomic<bool> choice_active{false};
 std::string choice_title;
+std::string choice_preview_label;
 std::vector<std::string> choice_items;
 int choice_index = 0;
 std::atomic<int> choice_result{-1}; // -1 open, -2 cancelled, else the chosen index
@@ -783,10 +784,33 @@ void ChoiceBox() {
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
                      ImGuiWindowFlags_NoFocusOnAppearing);
-    ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "%s", choice_title.c_str());
+    ImGui::PushTextWrapPos(viewport->WorkSize.x * 0.7f);
+    const size_t details = choice_preview_label.empty() ? std::string::npos : choice_title.find("\n\n");
+    ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "%.*s",
+                       int(details == std::string::npos ? choice_title.size() : details), choice_title.c_str());
+    ImGui::PopTextWrapPos();
     ImGui::Separator();
+    if (!choice_preview_label.empty()) {
+        ImGui::BeginGroup();
+        ImGui::TextUnformatted(choice_preview_label.c_str());
+        const ImVec2 preview_size(228.0f * base_scale, 128.0f * base_scale);
+        ImTextureData* preview = choice_textures.size() > choice_items.size() ? choice_textures.back() : nullptr;
+        if (preview) ImGui::Image(preview->GetTexRef(), preview_size);
+        else ImGui::Dummy(preview_size);
+        ImGui::EndGroup();
+        if (details != std::string::npos) {
+            ImGui::SameLine();
+            ImGui::BeginGroup();
+            ImGui::PushTextWrapPos(viewport->WorkSize.x * 0.7f);
+            ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "%s", choice_title.c_str() + details + 2);
+            ImGui::PopTextWrapPos();
+            ImGui::EndGroup();
+        }
+        ImGui::Separator();
+    }
     // Save pictures are 228x128; rows without one keep the text aligned when others have one.
-    const bool pictures = std::any_of(choice_textures.begin(), choice_textures.end(),
+    const bool pictures = std::any_of(choice_textures.begin(),
+                                      choice_textures.begin() + std::min(choice_textures.size(), choice_items.size()),
                                       [](ImTextureData* tex) { return tex != nullptr; });
     const ImVec2 picture_size(228.0f * base_scale, 128.0f * base_scale);
     for (int i = 0; i < int(choice_items.size()); ++i) {
@@ -801,11 +825,13 @@ void ChoiceBox() {
         if (pictures) {
             ImGui::SameLine();
         }
+        ImGui::PushTextWrapPos(viewport->WorkSize.x * 0.7f);
         if (selected) {
             ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.55f, 1.0f), "> %s", choice_items[i].c_str());
         } else {
             ImGui::Text("  %s", choice_items[i].c_str());
         }
+        ImGui::PopTextWrapPos();
         ImGui::EndGroup();
         if (selected) {
             if (pictures) {
@@ -1764,11 +1790,14 @@ bool CapturesInput() {
 }
 
 void BeginChoice(const std::string& title, const std::vector<std::string>& items,
-                 std::vector<SpartanPng::Image> pictures, int focus) {
+                 std::vector<SpartanPng::Image> pictures, int focus,
+                 const std::string& preview_label, SpartanPng::Image preview) {
     std::scoped_lock lock{imgui_mutex};
     RetireChoiceTextures();
     choice_pictures = std::move(pictures);
     choice_pictures.resize(items.size());
+    choice_preview_label = preview_label;
+    if (!preview_label.empty()) choice_pictures.push_back(std::move(preview));
     choice_title = title;
     choice_items = items;
     choice_index = focus >= 0 && focus < int(items.size()) ? focus : 0;

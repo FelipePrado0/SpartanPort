@@ -61,7 +61,8 @@ void SetTextEntry(bool active, const std::string& prompt, const std::string& tex
 /// cancels (Esc/Circle). `pictures`: one per item (empty = none), drawn beside its text.
 /// PollChoice: -1 while open, -2 cancelled, else the chosen index.
 void BeginChoice(const std::string& title, const std::vector<std::string>& items,
-                 std::vector<SpartanPng::Image> pictures, int focus);
+                 std::vector<SpartanPng::Image> pictures, int focus,
+                 const std::string& preview_label = {}, SpartanPng::Image preview = {});
 int PollChoice();
 
 } // namespace SpartanOverlay

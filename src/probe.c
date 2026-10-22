@@ -388,6 +388,31 @@ extern uintptr_t spartanport_auto_qte_flag(void);
 
 /* The hooks below find their sites by signature (src/signature.h), so they work in any region
  * and version of the game whose code matches; a site that is not found leaves its feature off. */
+static void find_save_preview(Segment *segments, uint64_t count, uint64_t size) {
+    const SpartanSignature site={
+        "4c 8d 3d ?? ?? ?? ?? 48 8d 35 ?? ?? ?? ?? 48 8d 15 ?? ?? ?? ?? 31 c0 44 89 e9 4c 89 ff e8 ?? ?? ?? ??",0};
+    runtime_savedata_preview_path(NULL);
+    uint64_t at=spartanport_signature_find(image,size,&site);
+    if (at==UINT64_MAX || !mapped(segments,count,at,33)) return;
+    const char *expected[]={NULL,"%sSAVEDATA/SAVEPT%02u.PNG","/app0/EXEC/ICONS/"};
+    uint64_t target[3];
+    for (unsigned i=0;i<3;++i) {
+        int32_t relative; memcpy(&relative,image+at+i*7+3,4);
+        int64_t offset=(int64_t)at+(i+1)*7+relative;
+        size_t length=i ? strlen(expected[i])+1 : 128;
+        if (offset<0 || !mapped(segments,count,(uint64_t)offset,length)) return;
+        target[i]=(uint64_t)offset;
+        if (i && memcmp(image+target[i],expected[i],length)) return;
+    }
+    int writable=0;
+    for (uint64_t i=0;i<count;++i)
+        if ((segments[i].flags&2) && target[0]>=segments[i].address &&
+            target[0]-segments[i].address<segments[i].size &&
+            128<=segments[i].size-(target[0]-segments[i].address)) writable=1;
+    if (!writable) return;
+    runtime_savedata_preview_path((const char *)image+target[0]);
+    puts("Save preview: pending manual-save image located");
+}
 static void install_cheats(Segment *segments, uint64_t count, uint64_t size) {
     const char *names[] = {"health", "magic", "item meter", "Rage of Sparta", "red orbs",
                            "Very Hard unlock", "infinite double jumps"};
@@ -1061,6 +1086,7 @@ int main(int argc, char **argv) {
     unsigned char *stubs = image + round_page(size);
     if (fread(image, 1, size, f) != size || fgetc(f) != EOF) fail("incorrect memory image size");
     fclose(f);
+    find_save_preview(segments,ns,size);
     if (isa_table && isa_table_matches(isa_table, image, size)) {
         printf("STOP: this CPU lacks %s and no rewrite table matches the image\n", missing);
         return 20;

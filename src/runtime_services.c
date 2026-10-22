@@ -253,39 +253,118 @@ static ABI int32_t msg_progress(uint32_t target, uint32_t value) { (void)value; 
 static ABI int32_t msg_result(unsigned char *out) { return dialog_result(1,out,0); }
 /* SaveDataDialog. OrbisSaveDataDialogParam: BaseParam (48), size, mode @52, dispType @56,
  * animParam @64, items @72, ..., userData @112. SaveDialogItems: userId @0, titleId @8,
- * dirName @16 (32-byte names), dirNameNum @24, newItem @32 (title @0), focusPos @40.
+ * dirName @16 (32-byte names), dirNameNum @24, newItem @32 (title @0, icon @8, size @16), focusPos @40.
  * A list (mode 1) is shown for the player to choose; every other mode answers for the
  * first listed save. The result names the chosen save ("" = the new item). */
 #define SAVE_MODE_LIST 1
 #define SAVE_RESULT_CANCELED 1
 static struct {
-    uint32_t mode, result;
+    uint32_t mode, result, type;
     void *user_data;
     char dirs[32][32];
-    int dir_count, has_new, choosing;
+    int dir_count, has_new, choosing, selected;
+    unsigned char *new_icon;
+    uint64_t new_icon_size;
 } save_dialog;
-static char save_labels[33][200], save_icons[33][720];
-static void save_label(char *out, size_t size, const char *dir) {
+static char save_labels[33][2700], save_icons[33][720], save_question[2800];
+static const char *save_preview_path;
+void runtime_savedata_preview_path(const char *path) { save_preview_path=path; }
+static const char *save_text(const char *english, const char *portuguese) {
+    const char *ui=getenv("SPARTAN_UI_LANGUAGE");
+    int pt=ui && *ui ? !strncmp(ui,"pt",2) : language()==7 || language()==17;
+    return pt ? portuguese : english;
+}
+/* Older saves contain single-byte accents; keep valid UTF-8 and convert legacy bytes. */
+static void save_utf8(char *out, size_t size, const unsigned char *in, size_t limit) {
+    size_t n=0;
+    for (size_t i=0;i<limit && in[i] && n+4<size;) {
+        uint32_t c=in[i];
+        if (c>=0xC2 && c<=0xF4) {
+            size_t want=c<0xE0 ? 2 : c<0xF0 ? 3 : 4;
+            uint32_t value=c & (want==2 ? 31 : want==3 ? 15 : 7);
+            size_t k=1;
+            while (k<want && i+k<limit && (in[i+k]&0xC0)==0x80)
+                value=(value<<6)|(in[i+k++]&63);
+            if (k==want && value>=(want==2 ? 0x80u : want==3 ? 0x800u : 0x10000u) &&
+                value<=0x10FFFF && !(value>=0xD800 && value<=0xDFFF)) {
+                memcpy(out+n,in+i,want); n+=want; i+=want; continue;
+            }
+        }
+        if ((c<32 && c!='\n') || (c>=0x7F && c<0xA0)) c='?';
+        if (c<0x80) out[n++]=(char)c;
+        else { out[n++]=(char)(0xC0|(c>>6)); out[n++]=(char)(0x80|(c&63)); }
+        ++i;
+    }
+    out[n]=0;
+}
+static void save_label(char *out, size_t size, const char *dir, int compact) {
     unsigned char param[RUNTIME_SAVE_PARAM_SIZE];
-    if (runtime_savedata_param(USER_ID,dir,param)) { snprintf(out,size,"%s",dir); return; }
+    const char *unknown=save_text("Difficulty / play time unavailable","Dificuldade / tempo de jogo indisponíveis");
+    if (runtime_savedata_param(USER_ID,dir,param)) {
+        snprintf(out,size,"%s\n%s",compact ? save_text("Location unavailable","Local indisponível") : dir,unknown); return;
+    }
     int64_t mtime; memcpy(&mtime,param+1288,8);
     time_t t=(time_t)mtime; struct tm tm;
 #ifdef _WIN32
-    localtime_s(&tm,&t);
+    int dated=mtime>0 && localtime_s(&tm,&t)==0;
 #else
-    localtime_r(&t,&tm);
+    int dated=mtime>0 && localtime_r(&t,&tm)!=NULL;
 #endif
-    char when[32]; strftime(when,sizeof(when),"%Y-%m-%d %H:%M",&tm);
-    const char *title=(const char *)param, *subtitle=(const char *)param+128;
-    /* Title, subtitle and date on their own lines, beside the save's picture. */
-    snprintf(out,size,"%.60s\n%.60s%s%s",title[0] ? title : dir,subtitle,subtitle[0] ? "\n" : "",when);
+    char when[32]="";
+    if (dated && !strftime(when,sizeof(when),"%Y-%m-%d %H:%M",&tm)) when[0]=0;
+    char title[257], subtitle[257], detail[2049];
+    save_utf8(title,sizeof(title),param,128);
+    save_utf8(subtitle,sizeof(subtitle),param+128,128);
+    save_utf8(detail,sizeof(detail),param+256,1024);
+    if (compact) {
+        snprintf(out,size,"%s\n%s\n%s",subtitle[0] ? subtitle : save_text("Location unavailable","Local indisponível"),
+                 when[0] ? when : save_text("Date unavailable","Data indisponível"),detail[0] ? detail : unknown);
+    } else snprintf(out,size,"%s\n%s%s%s\n%s",title[0] ? title : dir,subtitle,subtitle[0] ? "\n" : "",
+             when[0] ? when : save_text("Date unavailable","Data indisponível"),detail[0] ? detail : unknown);
+}
+static void save_show_list(int focus) {
+    const char *labels[33], *icons[33]; int n=0;
+    if (save_dialog.has_new) {
+        snprintf(save_labels[n],sizeof(save_labels[n]),"%s",save_text("New save","Novo save"));
+        labels[n]=save_labels[n]; icons[n]=NULL; ++n;
+    }
+    for (int i=0;i<save_dialog.dir_count;++i) {
+        save_label(save_labels[n],sizeof(save_labels[n]),save_dialog.dirs[i],0); labels[n]=save_labels[n];
+        icons[n]=runtime_savedata_icon(USER_ID,save_dialog.dirs[i],save_icons[n],sizeof(save_icons[n])) ? NULL : save_icons[n];
+        ++n;
+    }
+    const char *title=save_dialog.type==1 ? save_text("Save game","Salvar jogo")
+                      : save_dialog.type==2 ? save_text("Load game","Carregar jogo") : save_text("Delete save","Excluir save");
+    save_dialog.choosing=n && spartanportgpu_choice_begin(title,labels,icons,n,focus) ? 1 : 0;
+    if (!save_dialog.choosing) {
+        save_dialog.result=SAVE_RESULT_CANCELED;
+        dialogs[2].status=DIALOG_FINISHED; dialogs[2].button=0;
+    } else dialogs[2].status=DIALOG_RUNNING;
 }
 static ABI int32_t save_init(void) { return dialog_init(2); }
+static void save_read_preview(void) {
+    static const char prefix[]="/app0/EXEC/ICONS/SAVEDATA/SAVEPT";
+    const char *path=save_preview_path;
+    const size_t head=sizeof(prefix)-1;
+    if (!path || strnlen(path,128)!=head+6 || strncmp(path,prefix,head) ||
+        path[head]<'0' || path[head]>'9' || path[head+1]<'0' || path[head+1]>'9' || strcmp(path+head+2,".PNG")) return;
+    int64_t fd=runtime_file_open(path,0,0);
+    if (fd<0) return;
+    const size_t limit=4u*1024u*1024u;
+    unsigned char *png=malloc(limit+1);
+    int64_t size=png ? runtime_file_read((int)fd,png,limit+1) : -1;
+    runtime_file_close((int)fd);
+    if (size>0 && (uint64_t)size<=limit) {
+        save_dialog.new_icon=png; save_dialog.new_icon_size=(uint64_t)size;
+    } else free(png);
+}
 static ABI int32_t save_open(const unsigned char *p) {
     if (!p) return DIALOG_ARG_NULL;
     if (!dialogs[2].initialized) return DIALOG_NOT_INITIALIZED;
+    free(save_dialog.new_icon);
     memset(&save_dialog,0,sizeof(save_dialog));
     memcpy(&save_dialog.mode,p+52,4);
+    memcpy(&save_dialog.type,p+56,4);
     memcpy(&save_dialog.user_data,p+112,8);
     const unsigned char *items; memcpy(&items,p+72,8);
     if (items) {
@@ -294,32 +373,47 @@ static ABI int32_t save_open(const unsigned char *p) {
         for (uint32_t i=0;dirs && i<count && save_dialog.dir_count<32;++i)
             if (dirs[i*32]) memcpy(save_dialog.dirs[save_dialog.dir_count++],dirs+i*32,31);
         save_dialog.has_new=new_item!=NULL;
+        if (new_item && save_dialog.mode==SAVE_MODE_LIST && save_dialog.type==1) {
+            const unsigned char *icon; uint64_t size;
+            memcpy(&icon,(const unsigned char *)new_item+8,8);
+            memcpy(&size,(const unsigned char *)new_item+16,8);
+            if (icon && size && size<=4u*1024u*1024u) {
+                save_dialog.new_icon=malloc((size_t)size);
+                if (save_dialog.new_icon) {
+                    memcpy(save_dialog.new_icon,icon,(size_t)size);
+                    save_dialog.new_icon_size=size;
+                }
+            }
+        }
     }
     if (save_dialog.mode!=SAVE_MODE_LIST) return dialog_open_mode(2,p,52,5);
-    const char *labels[33], *icons[33]; int n=0;
-    if (save_dialog.has_new) { snprintf(save_labels[n],sizeof(save_labels[n]),"New save"); labels[n]=save_labels[n]; icons[n]=NULL; ++n; }
-    for (int i=0;i<save_dialog.dir_count;++i) {
-        save_label(save_labels[n],sizeof(save_labels[n]),save_dialog.dirs[i]); labels[n]=save_labels[n];
-        icons[n]=runtime_savedata_icon(USER_ID,save_dialog.dirs[i],save_icons[n],sizeof(save_icons[n])) ? NULL : save_icons[n];
-        ++n;
-    }
-    uint32_t type; memcpy(&type,p+56,4);
-    const char *title=type==1 ? "Save game" : type==2 ? "Load game" : "Delete save";
-    if (!n || !spartanportgpu_choice_begin(title,labels,icons,n,0)) {
-        printf("Runtime: SaveDataDialog list (%s): %s\n",title,n ? "no window, cancelled" : "no saves, cancelled");
-        save_dialog.result=SAVE_RESULT_CANCELED;
-        dialogs[2].status=DIALOG_FINISHED; dialogs[2].button=0;
-        return 0;
-    }
-    printf("Runtime: SaveDataDialog list (%s): %d entries shown\n",title,n);
-    save_dialog.choosing=1;
-    dialogs[2].status=DIALOG_RUNNING;
+    if (save_dialog.type==1 && !save_dialog.new_icon) save_read_preview();
+    save_show_list(0);
     return 0;
 }
 static ABI int32_t save_status(void) {
     if (save_dialog.choosing) {
         int choice=spartanportgpu_choice_poll();
         if (choice!=-1) {
+            if (save_dialog.choosing==2) {
+                if (choice!=0) { save_show_list(save_dialog.selected); return dialog_status(2); }
+                choice=save_dialog.selected;
+            } else if (choice>=save_dialog.has_new && choice<save_dialog.dir_count+save_dialog.has_new && save_dialog.type==1) {
+                save_dialog.selected=choice;
+                int dir=choice-save_dialog.has_new;
+                char metadata[2700];
+                save_label(metadata,sizeof(metadata),save_dialog.dirs[dir],1);
+                snprintf(save_question,sizeof(save_question),"%s\n\n%s",
+                         save_text("Overwrite this save?","Sobrescrever este save?"),
+                         metadata);
+                const char *options[]={save_text("Overwrite","Sobrescrever"),save_text("Cancel","Cancelar")};
+                if (spartanportgpu_choice_confirm(save_question,options,2,1,save_dialog.new_icon,save_dialog.new_icon_size,
+                                                 save_text("New save","Novo save"),save_text("Preview unavailable","Prévia indisponível"))) {
+                    save_dialog.choosing=2; return dialog_status(2);
+                }
+                choice=-2;
+            }
+            if (choice>=save_dialog.dir_count+save_dialog.has_new) choice=-2;
             save_dialog.choosing=0;
             dialogs[2].status=DIALOG_FINISHED;
             if (choice<0) { save_dialog.result=SAVE_RESULT_CANCELED; dialogs[2].button=0; }
@@ -337,8 +431,11 @@ static ABI int32_t save_status(void) {
     }
     return dialog_status(2);
 }
-static ABI int32_t save_term(void) { return dialog_term(2); }
-static ABI int32_t save_close(void) { return dialog_close(2); }
+static void save_release_icon(void) {
+    free(save_dialog.new_icon); save_dialog.new_icon=NULL; save_dialog.new_icon_size=0;
+}
+static ABI int32_t save_term(void) { save_release_icon(); save_dialog.choosing=0; return dialog_term(2); }
+static ABI int32_t save_close(void) { save_release_icon(); save_dialog.choosing=0; return dialog_close(2); }
 static ABI int32_t save_progress(uint32_t target, uint32_t rate) { (void)rate; return dialog_progress(2,target); }
 /* OrbisSaveDataDialogResult: mode, result, buttonId, dirName* @16, param* @24, userData @32. */
 static ABI int32_t save_result(unsigned char *out) {

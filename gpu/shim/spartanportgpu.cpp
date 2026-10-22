@@ -430,6 +430,20 @@ extern "C" int spartanportgpu_choice_poll(void) {
     return SpartanOverlay::PollChoice();
 }
 
+extern "C" int spartanportgpu_choice_confirm(const char* title, const char* const* items, int count, int focus,
+                                           const unsigned char* png, uint64_t size, const char* caption, const char* unavailable) {
+    if (!g_window || !items || count <= 0) return 0;
+    SpartanPng::Image preview;
+    std::string label = caption ? caption : "";
+    if (!png || !size || size > 4u * 1024u * 1024u || !SpartanPng::DecodeRgba(png, size, preview)) {
+        label += "\n";
+        label += unavailable ? unavailable : "";
+    }
+    SpartanOverlay::BeginChoice(title ? title : "", std::vector<std::string>(items, items + count),
+                               std::vector<SpartanPng::Image>(count), focus, label, std::move(preview));
+    return 1;
+}
+
 extern "C" int spartanportgpu_text_input_poll(char* out, uint64_t size) {
     if (!g_window) return 2;
     std::string text;

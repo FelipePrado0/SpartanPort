@@ -33,6 +33,9 @@ int spartanportgpu_text_input_poll(char *out_utf8, uint64_t size);
  * poll: -1 while open, -2 cancelled, else the chosen index. */
 int spartanportgpu_choice_begin(const char *title, const char *const *items, const char *const *images, int count, int focus);
 int spartanportgpu_choice_poll(void);
+/* Confirmation with a separate preview of the new save; PNG data is decoded before returning. */
+int spartanportgpu_choice_confirm(const char *title, const char *const *items, int count, int focus,
+                                 const unsigned char *png, uint64_t size, const char *caption, const char *unavailable);
 /* 1 while the in-game settings menu is open: the game's pad input is held neutral. */
 int spartanportgpu_overlay_captures_input(void);
 /* Controller vibration strength set in the menu, 0 (off) to 100 (the game's own). */
