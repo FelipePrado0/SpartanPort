@@ -43,7 +43,9 @@ int spartanportgpu_vibration_percent(void);
 /* Native Display menu: query (0) or toggle (1); returns 0 off, 1 on, 2 unsupported. */
 int spartanportgpu_enemy_health_bar(int toggle);
 /* Native Cheats: f00+i query/f10+i toggle (8 cheats); f20+i text/f30+i decrease/f40+i increase/
- * f50+i slider position (6 multipliers); f60 resets multipliers. Text results are stable pointers. */
+ * f50+i slider position (6 multipliers); f60 resets multipliers. Native Graphics: f70+i query/
+ * f80+i toggle or next step, f88+i previous step (0 texture quality, 1 shadows, 2 motion blur,
+ * 3 bloom; ids in src/graphics_hook.h). Text results are stable pointers. */
 uint64_t spartanportgpu_native_setting(unsigned function);
 /* R3 + L1 + R1 (pad) or F9: the next engine frame rate (60, 100, 120, 144, 180, 240), applied live. */
 void spartanportgpu_engine_fps_cycle(void);

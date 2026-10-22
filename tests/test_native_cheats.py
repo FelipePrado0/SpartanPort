@@ -27,12 +27,35 @@ class NativeCheats(unittest.TestCase):
     def target(self, name, triggers):
         return next(int.from_bytes(arg, 'big') for _, op, arg in self.block(self.script.one(name), 3, triggers) if op == 0x47)
 
-    def test_cheats_is_between_game_settings_and_audio(self):
-        row = self.script.one('HLNativeCheats')
+    def test_cheats_and_graphics_are_between_game_settings_and_audio(self):
+        row, graphics = self.script.one('HLNativeCheats'), self.script.one('HLNativeGraphics')
         self.assertEqual(self.target('HLGSettings', pause_menu.DOWN), row['at'] - 4)
-        self.assertEqual(self.target('HLAudio', pause_menu.UP), row['at'] - 4)
         self.assertEqual(self.target('HLNativeCheats', pause_menu.UP), self.script.one('HLGSettings')['at'] - 4)
-        self.assertEqual(self.target('HLNativeCheats', pause_menu.DOWN), self.script.one('HLAudio')['at'] - 4)
+        self.assertEqual(self.target('HLNativeCheats', pause_menu.DOWN), graphics['at'] - 4)
+        self.assertEqual(self.target('HLNativeGraphics', pause_menu.UP), row['at'] - 4)
+        self.assertEqual(self.target('HLNativeGraphics', pause_menu.DOWN), self.script.one('HLAudio')['at'] - 4)
+        self.assertEqual(self.target('HLAudio', pause_menu.UP), graphics['at'] - 4)
+
+    def test_graphics_rows_query_and_toggle_their_settings(self):
+        page = self.script.one('NativeGraphics')
+        queries = [int.from_bytes(arg, 'big') for _, op, arg in self.block(page, 1) if op == 0x13]
+        for index, label in enumerate(pause_menu.GRAPHICS_ROWS):
+            self.assertIn(0xf70 + index, queries)
+            self.assertIn(label.encode() + b'\0', self.data)
+            row = self.script.one(f'NativeGraphic{index}')
+            self.assertEqual(row['parent'], page['at'] - 4)
+            calls = lambda triggers: [int.from_bytes(arg, 'big') for _, op, arg in self.block(row, 3, triggers) if op == 0x13]  # noqa: E731
+            if label in pause_menu.GRAPHICS_STEPPED:
+                # Left steps back, right steps on: separate events, no shared toggle.
+                left = next(t for k, v, t in self.script.blocks(row) if k == 3 and 0xe6 in t)
+                right = next(t for k, v, t in self.script.blocks(row) if k == 3 and 0xe2 in t)
+                self.assertNotEqual(left, right)
+                self.assertIn(0xf88 + index, calls(left))
+                self.assertIn(0xf80 + index, calls(right))
+                self.assertNotIn(0xf80 + index, calls(left))
+            else:
+                toggle = next(t for k, v, t in self.script.blocks(row) if k == 3 and 0xe9 in t)
+                self.assertIn(0xf80 + index, calls(toggle))
 
     def test_every_cheat_has_native_selection_and_initial_value(self):
         page = self.script.one('NativeCheats')

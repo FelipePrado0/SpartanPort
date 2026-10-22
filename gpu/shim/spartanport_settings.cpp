@@ -3,6 +3,7 @@
 #include "spartanport_orbs.h"
 #include "spartanport_graphics.h"
 #include "../spartanportgpu.h"
+#include "../../src/graphics_hook.h"
 
 #include <algorithm>
 #include <cmath>
@@ -139,6 +140,14 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.enemy_health_bar = i != 0;
     } else if (key == "auto_qte") {
         v.auto_qte = i != 0;
+    } else if (key == "bloom") {
+        v.bloom = i != 0;
+    } else if (key == "motion_blur") {
+        v.motion_blur = i != 0;
+    } else if (key == "shadows") {
+        v.shadows = i != 0;
+    } else if (key == "texture_quality") {
+        v.texture_quality = std::clamp(i, 0, TextureQualityCount - 1);
     } else if (key == "red_orb_multiplier") {
         v.red_orb_multiplier = SpartanOrbs::ClampMultiplier(f);
     } else if (key == "damage_dealt") {
@@ -351,6 +360,10 @@ void Save() {
                  int(v.cheats[5].load()), int(v.cheats[6].load()));
     std::fprintf(file, "enemy_health_bar=%d\n", int(v.enemy_health_bar.load()));
     std::fprintf(file, "auto_qte=%d\n", int(v.auto_qte.load()));
+    std::fprintf(file, "bloom=%d\n", int(v.bloom.load()));
+    std::fprintf(file, "motion_blur=%d\n", int(v.motion_blur.load()));
+    std::fprintf(file, "texture_quality=%d\n", v.texture_quality.load());
+    std::fprintf(file, "shadows=%d\n", int(v.shadows.load()));
     std::fprintf(file,
                  "overlay_fps=%d\noverlay_frametime=%d\noverlay_upscaler=%d\noverlay_gpu=%d\n"
                  "overlay_cpu=%d\noverlay_ram=%d\noverlay_vram=%d\noverlay_scale=%d\noverlay_corner=%d\n"
@@ -409,10 +422,53 @@ extern "C" int spartanportgpu_enemy_health_bar(int toggle) {
     return v.enemy_health_bar.load();
 }
 
+/// Options > Graphics (src/graphics_hook.h): the byte each hook reads, by SPARTAN_GRAPHICS_* id.
+static std::atomic<bool>* GraphicsToggle(unsigned id) {
+    auto& v = SpartanSettings::Get();
+    return id == SPARTAN_GRAPHICS_BLOOM ? &v.bloom
+         : id == SPARTAN_GRAPHICS_MOTION_BLUR ? &v.motion_blur
+         : id == SPARTAN_GRAPHICS_SHADOWS ? &v.shadows : nullptr;
+}
+
+extern "C" uintptr_t spartanport_graphics_flag(unsigned id) {
+    static_assert(sizeof(std::atomic<bool>) == 1 && std::atomic<bool>::is_always_lock_free);
+    return reinterpret_cast<uintptr_t>(GraphicsToggle(id));
+}
+
+extern "C" void spartanport_graphics_status(unsigned id) {
+    if (GraphicsToggle(id)) SpartanSettings::Get().graphics_supported.fetch_or(1u << id);
+}
+
 extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
     auto& v = SpartanSettings::Get();
     const unsigned group = function & ~0xfu, index = function & 0xfu;
     const auto text = [](const char* value) { return reinterpret_cast<uint64_t>(value); };
+    // Graphics: f70+i query, f80+i toggle / next step, f88+i previous step (stepped rows).
+    // Texture Quality steps stop at both ends (left toward High, right toward Very Low).
+    if (group == 0xf80 && index >= 8 && index - 8 == SPARTAN_GRAPHICS_TEXTURE_QUALITY) {
+        const int quality = std::clamp(v.texture_quality.load() - 1, 0, SpartanSettings::TextureQualityCount - 1);
+        v.texture_quality = quality;
+        SpartanSettings::Save();
+        return text(SpartanSettings::TextureQualityNames[quality]);
+    }
+    if ((group == 0xf70 || group == 0xf80) && index == SPARTAN_GRAPHICS_TEXTURE_QUALITY) {
+        int quality = std::clamp(v.texture_quality.load(), 0, SpartanSettings::TextureQualityCount - 1);
+        if (group == 0xf80) {
+            quality = std::min(quality + 1, SpartanSettings::TextureQualityCount - 1);
+            v.texture_quality = quality;
+            SpartanSettings::Save();
+        }
+        return text(SpartanSettings::TextureQualityNames[quality]);
+    }
+    if (group == 0xf70 || group == 0xf80) {
+        auto* toggle = GraphicsToggle(index);
+        if (!toggle || !(v.graphics_supported.load() & (1u << index))) return text("Unavailable");
+        if (group == 0xf80) {
+            *toggle = !toggle->load();
+            SpartanSettings::Save();
+        }
+        return text(toggle->load() ? "On" : "Off");
+    }
     if ((group == 0xf00 || group == 0xf10) && index == SPARTAN_CHEAT_COUNT) {
         if (!v.qte_supported.load()) return text("Unavailable");
         if (group == 0xf10) {
