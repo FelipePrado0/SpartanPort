@@ -493,7 +493,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
-                'gpu_id': '', 'monitor': '', 'partial_height_views': True, 'disk_shaders': True, 'shader_prefetch': True, 'shader_notes': True, 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
+                'gpu_id': '', 'monitor': '', 'partial_height_views': True, 'disk_shaders': True, 'shader_prefetch': True, 'shader_notes': False, 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
@@ -1271,7 +1271,7 @@ def game_environment(s):
     env['SPARTAN_PARTIAL_HEIGHT_VIEWS'] = '1' if s.get('partial_height_views', True) else '0'
     env['SPARTAN_DISK_SHADERS'] = '1' if s.get('disk_shaders', True) else '0'
     env['SPARTAN_SHADER_PREFETCH'] = '1' if s.get('shader_prefetch', True) else '0'
-    env['SPARTAN_SHADER_NOTES'] = '1' if s.get('shader_notes', True) else '0'
+    env['SPARTAN_SHADER_NOTES'] = '1' if s.get('shader_notes', False) else '0'
     for key, name in (('frame_stats', 'SPARTAN_FRAME_STATS'), ('gpu_profile', 'SPARTAN_GPU_PROFILE'),
                       ('vk_validation', 'SPARTAN_VK_VALIDATION'), ('frame_capture_key', 'SPARTAN_FRAME_CAPTURE_KEY')):
         if s[key]:

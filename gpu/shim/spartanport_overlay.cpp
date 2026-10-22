@@ -1357,10 +1357,10 @@ void Notice(float& bottom) {
     CornerNote("##notice", bottom, 0.6f, [&] { UiText(text.c_str()); });
 }
 
-// Launcher: "Shader notes in the corner" (SPARTAN_SHADER_NOTES), on by default.
+// Launcher: "Shader notes in the corner" (SPARTAN_SHADER_NOTES), off by default.
 const bool shader_notes = [] {
     const char* env = std::getenv("SPARTAN_SHADER_NOTES");
-    return !env || *env != '0';
+    return env && *env != '0';
 }();
 
 bool PrefetchActive() {
