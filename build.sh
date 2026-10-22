@@ -2,6 +2,32 @@
 set -euo pipefail
 cd -- "$(dirname -- "$0")"
 mkdir -p out
+# This port's changes to FSR-Vulkan (gpu/patches/fsr-vulkan), applied to the submodule's working
+# tree. A patch that is already applied is skipped. If one neither is applied nor applies (the
+# patches changed since the last build, or an older set is half applied), the submodule's files
+# are reset to its checked-out commit and the whole set is applied again.
+fsr_patches_apply() {  # succeeds when every patch is applied afterwards
+    local patch
+    for patch in gpu/patches/fsr-vulkan/*.patch; do
+        "${fsr_git[@]}" apply --reverse --check "$PWD/$patch" 2>/dev/null && continue
+        "${fsr_git[@]}" apply "$PWD/$patch" 2>/dev/null || return 1
+    done
+}
+apply_fsr_patches() {
+    local sub=gpu/third_party/fsr-vulkan
+    fsr_git=(git -C "$sub")
+    # A submodule checked out by Git for Windows (core.autocrlf=true) has CRLF files, while the
+    # patches are LF. MSYS2's git does not read Git for Windows' system config, so tell it.
+    if grep -q $'\r' "$sub/CMakeLists.txt" 2>/dev/null; then fsr_git+=(-c core.autocrlf=true); fi
+    fsr_patches_apply && return 0
+    echo "FSR-Vulkan patches changed or partly applied: resetting $sub and applying them again" >&2
+    "${fsr_git[@]}" checkout -f -- .
+    "${fsr_git[@]}" clean -fdq
+    if ! fsr_patches_apply; then
+        echo "A patch in gpu/patches/fsr-vulkan does not apply to $sub (check its pinned commit)." >&2
+        exit 1
+    fi
+}
 # Windows: MSYS2 CLANG64 (packages in packaging/windows/README.md). The GPU library is static
 # there and CMake links spartanport-probe.exe as well; no PGO (GCC-only flags), LTO off by default.
 case $(uname -s) in
@@ -15,11 +41,7 @@ MINGW*|MSYS*)
           ! -f gpu/third_party/xbyak/xbyak/xbyak.h ]]; then
         git submodule update --init --recursive
     fi
-    for patch in gpu/patches/fsr-vulkan/*.patch; do
-        if ! git -C gpu/third_party/fsr-vulkan apply --reverse --check "$PWD/$patch" 2>/dev/null; then
-            git -C gpu/third_party/fsr-vulkan apply "$PWD/$patch"
-        fi
-    done
+    apply_fsr_patches
     cmake -S gpu -B out/gpu -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSPARTAN_PGO=off \
         -DSPARTAN_LTO="${SPARTAN_LTO:-OFF}" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ >/dev/null
     echo "GPU library and loader: LTO ${SPARTAN_LTO:-OFF}"
@@ -64,11 +86,7 @@ mkdir -p pgo
 if [[ ! -f gpu/third_party/fsr-vulkan/CMakeLists.txt || ! -f gpu/third_party/imgui/imgui.h ]]; then
     git submodule update --init --recursive
 fi
-for patch in gpu/patches/fsr-vulkan/*.patch; do
-    if ! git -C gpu/third_party/fsr-vulkan apply --reverse --check "$PWD/$patch" 2>/dev/null; then
-        git -C gpu/third_party/fsr-vulkan apply "$PWD/$patch"
-    fi
-done
+apply_fsr_patches
 cmake -S gpu -B out/gpu -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSPARTAN_PGO="$pgo" \
     -DSPARTAN_LTO="${SPARTAN_LTO:-ON}" -DSPARTAN_PGO_DIR="$PWD/pgo" >/dev/null
 echo "GPU library: PGO $pgo, LTO ${SPARTAN_LTO:-ON}"
