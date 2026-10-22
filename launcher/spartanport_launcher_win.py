@@ -1309,18 +1309,72 @@ RESOLUTION_CHOICES = [(name, (graphics_options.resolution_label(name),)) for nam
 ENGINE_FPS_CHOICES = [('60', ('60 (original)',)), ('100', ('100',)), ('120', ('120',)), ('144', ('144',)), ('180', ('180',)), ('240', ('240',))]
 
 
+def toplevel_hwnd(root):
+    """The top-level Win32 frame window that wraps Tk's client area (GA_ROOT)."""
+    if not WINDOWS:
+        return None
+    try:
+        user32 = ctypes.windll.user32
+        user32.GetAncestor.argtypes, user32.GetAncestor.restype = (ctypes.c_void_p, ctypes.c_uint), ctypes.c_void_p
+        user32.GetParent.argtypes, user32.GetParent.restype = (ctypes.c_void_p,), ctypes.c_void_p
+        root.update_idletasks()
+        wid = root.winfo_id()
+        if not wid:
+            return None
+        return user32.GetAncestor(wid, 2) or user32.GetParent(wid) or wid
+    except (AttributeError, OSError):
+        return None
+
+
+def native_dark_titlebar(root, bg_hex=BG):
+    """Windows: match the native title bar to SpartanPort's dark theme using DWM APIs (#914).
+    DWMWA_USE_IMMERSIVE_DARK_MODE (20 on Windows 10 20H1+ and Windows 11; fallback 19 on 1809/1903/1909)
+    switches the title bar frame, caption buttons, and context menu to dark mode.
+    DWMWA_CAPTION_COLOR (35 on Windows 11 build 22000+) sets the exact caption background color.
+    DWMWA_TEXT_COLOR (36 on Windows 11 build 22000+) sets the title text to crisp white."""
+    if not WINDOWS:
+        return False
+    try:
+        import ctypes.wintypes as wt
+        dwmapi = ctypes.windll.dwmapi
+        dwmapi.DwmSetWindowAttribute.argtypes = (ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_uint)
+        dwmapi.DwmSetWindowAttribute.restype = ctypes.c_long
+        hwnd = toplevel_hwnd(root)
+        if not hwnd:
+            return False
+
+        # DWMWA_USE_IMMERSIVE_DARK_MODE: 20 (Windows 10 20H1+ and Windows 11), 19 (Windows 10 1809/1903/1909)
+        enabled = ctypes.c_int(1)
+        for attr in (20, 19):
+            if dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(enabled), ctypes.sizeof(enabled)) == 0:
+                break
+
+        # DWMWA_CAPTION_COLOR (35) and DWMWA_TEXT_COLOR (36) on Windows 11 (build 22000+)
+        if bg_hex and bg_hex.startswith('#') and len(bg_hex) == 7:
+            r = int(bg_hex[1:3], 16)
+            g = int(bg_hex[3:5], 16)
+            b = int(bg_hex[5:7], 16)
+            colorref = wt.DWORD((b << 16) | (g << 8) | r)
+            dwmapi.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(colorref), ctypes.sizeof(colorref))
+            white = wt.DWORD(0x00ffffff)
+            dwmapi.DwmSetWindowAttribute(hwnd, 36, ctypes.byref(white), ctypes.sizeof(white))
+        return True
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
 def native_window_icons(root, ico):
     """Windows: Tk gives the window one small icon for both slots, and under pythonw the taskbar then
     shows Tk's feather. The .ico's own large and small images go to the window and its class."""
     user32 = ctypes.windll.user32
-    user32.GetAncestor.argtypes, user32.GetAncestor.restype = (ctypes.c_void_p, ctypes.c_uint), ctypes.c_void_p
     user32.LoadImageW.argtypes = (ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint, ctypes.c_int, ctypes.c_int,
                                   ctypes.c_uint)
     user32.LoadImageW.restype = ctypes.c_void_p
     user32.SendMessageW.argtypes = (ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p)
     user32.SetClassLongPtrW.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
-    root.update_idletasks()
-    hwnd = user32.GetAncestor(root.winfo_id(), 2)  # GA_ROOT: the frame Tk wraps the window in
+    hwnd = toplevel_hwnd(root)
+    if not hwnd:
+        return
     for slot, metric, class_index in ((1, 11, -14), (0, 49, -34)):  # big: SM_CXICON, small: SM_CXSMICON
         size = user32.GetSystemMetrics(metric)
         icon = user32.LoadImageW(None, str(ico), 1, size, size, 0x10)  # IMAGE_ICON, LR_LOADFROMFILE
@@ -1339,6 +1393,7 @@ def window_icon(root, tk, own_ico, own_png):
             root.iconbitmap(str(own_ico))
             root.iconbitmap(default=str(own_ico))
             native_window_icons(root, own_ico)
+            native_dark_titlebar(root, BG)
             return None
         except tk.TclError:
             pass
@@ -1453,6 +1508,10 @@ class Launcher:
     def set_icon(self):
         self.icon = window_icon(self.root, self.tk, PORT_DIR / 'launcher' / 'spartanport.ico',
                                 PORT_DIR / 'launcher' / 'spartanport.png')
+        self.apply_dark_titlebar()
+
+    def apply_dark_titlebar(self):
+        native_dark_titlebar(self.root, BG)
 
     # ---- look --------------------------------------------------------------------------------
     def check_images(self):
