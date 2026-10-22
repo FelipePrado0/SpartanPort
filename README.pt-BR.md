@@ -244,7 +244,7 @@ Padrão; mude na tela **Controls** do launcher, seção **Keyboard & Mouse Mappi
 | C | Agarrar (L1 + Círculo) |
 | O botão de voltar do mouse | Esquiva |
 | 1, 2, 3, 4 | direcional: cima, direita, baixo, esquerda (armas) |
-| Roda do mouse para cima e para baixo | próxima arma e arma anterior (percorre as armas do direcional); com o menu de pausa aberto (Esc), sobe e desce a seleção |
+| Roda do mouse para cima e para baixo | próxima arma e arma anterior (percorre as armas do direcional); nos menus do jogo (título, pausa e Power Up) sobe e desce a seleção, e volta às armas quando você anda ou esquiva |
 | Tab | Options |
 | P | clique esquerdo do touchpad (modo foto) |
 | Esc | clique direito do touchpad (menu de pausa) |

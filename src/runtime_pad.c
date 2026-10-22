@@ -697,12 +697,34 @@ static void apply_dodge(PadData *d) {
     if (held || d->timestamp<dodge.until) { d->right_x=dodge.x; d->right_y=dodge.y; }
 }
 
-/* Weapon cycle (SPARTAN_KEY_MAP "weapon_next=<key>", "weapon_prev=<key>"): the game keeps its weapons
- * on the d-pad, one button each, and nothing here can read which one is equipped. So the cycle
- * keeps its own index, follows any d-pad button pressed from another source (keys 1-4, the pad)
- * and moves one step per press of the action, holding the new weapon's button WEAPON_MIN_US so
- * the game sees it. The order is the one the game hands the weapons out in. */
-enum { WEAPON_MIN_US=80000, WEAPON_COUNT=4 };
+/* The game's menus (the title menu, the pause menu, the Power Up menu) move a list with the
+ * d-pad, and nothing here can see them, so they are told by the buttons that open them: a menu is
+ * up from the start (the title menu) and after Options (the Power Up menu) or a touchpad click
+ * (the pause menu, photo mode). Play resumes with a dodge, Rage of Sparta or a grab, or with the
+ * left stick held MENU_WALK_US (a list is stepped through, not walked). Attacks and mouse clicks
+ * do not count: the Power Up menu takes Triangle, and the pause menu lets go of the mouse. */
+enum { MENU_WALK_US=2000000, MENU_WALK_TILT=64 };
+static struct { bool up, walking; uint64_t walk_start; } game_menu={true,false,0};
+static void note_game_menu(const PadData *d) {
+    if (d->buttons & (BTN_OPTIONS|BTN_TOUCHPAD|CLICK_LEFT|CLICK_RIGHT)) {
+        game_menu.up=true;
+        game_menu.walking=false;
+        return;
+    }
+    if (d->buttons & (DODGE|RAGE|GRAB)) game_menu.up=false;
+    const bool walking=abs(d->left_x-128)>=MENU_WALK_TILT || abs(d->left_y-128)>=MENU_WALK_TILT;
+    if (walking && !game_menu.walking) game_menu.walk_start=d->timestamp;
+    game_menu.walking=walking;
+    if (walking && d->timestamp-game_menu.walk_start>=MENU_WALK_US) game_menu.up=false;
+}
+
+/* Weapon cycle (SPARTAN_KEY_MAP "weapon_next=<key>", "weapon_prev=<key>"): the game keeps its
+ * weapons on the d-pad, one button each, and nothing here can read which one is equipped. So the
+ * cycle keeps its own index, follows any d-pad button pressed from another source (keys 1-4, the
+ * pad) and moves one step per press of the action, holding the new weapon's button WEAPON_MIN_US
+ * so the game sees it. That is a wheel notch's press: the gap before the next notch reaches the
+ * game as a release. The order is the one the game hands the weapons out in. */
+enum { WEAPON_MIN_US=WHEEL_PRESS_US, WEAPON_COUNT=4 };
 static const uint32_t weapon_buttons[WEAPON_COUNT]={BTN_UP,BTN_RIGHT,BTN_DOWN,BTN_LEFT};
 static struct { int index; bool next_held, prev_held, pressing; uint32_t button; uint64_t until; } weapon_cycle;
 static void reset_weapon_cycle(void) {
@@ -712,9 +734,9 @@ static void reset_weapon_cycle(void) {
 static void apply_weapon_cycle(PadData *d) {
     const bool next=(d->buttons & WEAPON_NEXT)!=0, prev=(d->buttons & WEAPON_PREV)!=0;
     d->buttons&=~(WEAPON_NEXT|WEAPON_PREV);
-    /* With the pause key's menu up the wheel moves the selection up and down instead: walking
-     * every d-pad direction would make a list jump. The weapon stays as it was. */
-    const bool menu=spartanportgpu_mouse_paused()!=0;
+    /* On a game menu the wheel moves the selection up and down instead: walking every d-pad
+     * direction would take a list up and back down. The weapon stays as it was. */
+    const bool menu=game_menu.up;
     const uint32_t dpad=d->buttons & (BTN_UP|BTN_RIGHT|BTN_DOWN|BTN_LEFT);
     if (!menu) for (int i=0;i<WEAPON_COUNT;++i) if (dpad==weapon_buttons[i]) weapon_cycle.index=i;
     if (dpad) weapon_cycle.pressing=false; /* a d-pad press from another source wins over ours */
@@ -765,6 +787,7 @@ static void sample(PadData *d) {
     if (injected.buttons & BTN_R2) d->r2=255;
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
+    note_game_menu(d); /* before the actions turn into the buttons they press */
     apply_combos(d);
     apply_dodge(d);
     apply_weapon_cycle(d);

@@ -20,10 +20,6 @@ void ToggleMousePause() {
     mouse_paused.store(!mouse_paused.load(std::memory_order_relaxed), std::memory_order_relaxed);
 }
 
-bool MousePaused() {
-    return mouse_paused.load(std::memory_order_relaxed);
-}
-
 // spartanport: the display the window opens on. SPARTAN_MONITOR is an index into SDL_GetDisplays() (the same
 // order a launcher's list would use); absent or empty means the primary display. An invalid,
 // negative or out-of-range value falls back to the primary with a diagnostic. SDL_WINDOWPOS_CENTERED

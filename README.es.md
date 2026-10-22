@@ -248,7 +248,7 @@ Valores por defecto; cambialos en la página **Controls** del launcher, sección
 | C | Agarre (L1 + Círculo) |
 | El botón de retroceder del mouse | Esquivar |
 | 1, 2, 3, 4 | cruceta: arriba, derecha, abajo, izquierda (armas) |
-| Rueda del mouse hacia arriba y hacia abajo | arma siguiente y arma anterior (recorre las armas de la cruceta); con el menú de pausa abierto (Esc), sube y baja la selección |
+| Rueda del mouse hacia arriba y hacia abajo | arma siguiente y arma anterior (recorre las armas de la cruceta); en los menús del juego (título, pausa y Power Up) sube y baja la selección, y vuelve a las armas al caminar o esquivar |
 | Tab | Options |
 | P | clic del touchpad izquierdo (modo foto) |
 | Esc | clic del touchpad derecho (menú de pausa) |
