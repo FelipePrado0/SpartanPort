@@ -55,6 +55,9 @@ struct Values {
     std::atomic<unsigned> overlay_items{7};
     std::atomic<int> overlay_scale{100}, overlay_corner{1}, overlay_opacity{50}, overlay_layout{0};
     std::atomic<int> menu_tab{0};
+    /// The menu's and the trophies' language chosen in the game (SpartanUi::Languages index), -1 for
+    /// the launcher's (SPARTAN_UI_LANGUAGE).
+    std::atomic<int> ui_language{-1};
     std::atomic<float> red_orb_multiplier{1.0f};
     std::atomic<bool> red_orbs_supported{false};
     /// Damage and orb pickup multipliers (src/damage_hook.h, src/orb_hook.h), 0.1x to 100x.
