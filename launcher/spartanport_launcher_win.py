@@ -408,11 +408,7 @@ def open_url(url):
 
 
 def _(en, ru=None):
-    if en.endswith(WARN):
-        return _(en[:-len(WARN)], ru and ru.removesuffix(WARN)) + WARN
-    if LANG == 'ru':
-        return ru or en
-    return spartanport_lang.table(LANG).get(en) or en
+    return translate(LANG, en, ru)
 
 
 def environment_language():
@@ -1250,25 +1246,59 @@ def game_profile_of(folder):
     return title_id, game_profile_for(folder)
 
 
-def write_trophy_texts(folder):
-    """user/trophy_texts.txt: the trophy names, descriptions and labels the game shows, in the launcher's
-    language (the game reads it at start: the notice and the list of F8 / R3+R2). A failure is harmless."""
-    labels = (('heading', _('Trophies', 'Трофеи')), ('notice', _('TROPHY UNLOCKED', 'ТРОФЕЙ ПОЛУЧЕН')),
-              ('unlocked', _('UNLOCKED', 'ПОЛУЧЕН')), ('locked', _('LOCKED', 'ЗАКРЫТ')),
-              ('all', _('All trophies', 'Все')), ('only_unlocked', _('Unlocked', 'Получены')),
-              ('only_locked', _('Locked', 'Закрыты')),
-              ('counter', _('{} of {} unlocked', '{} из {} получено')),
-              ('hint', _('Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close',
-                         'Вверх/Вниз: прокрутка   Влево/Вправо: фильтр   F8 / R3+R2 / Esc: закрыть')))
-    lines = [f'# Written by the launcher on every start (language: {LANG}); do not edit.']
+def translate(language, en, ru=None):
+    """`en` in `language` ("ru": `ru`), as _() does for the launcher's own language."""
+    if en.endswith(WARN):
+        return translate(language, en[:-len(WARN)], ru and ru.removesuffix(WARN)) + WARN
+    if language == 'ru':
+        return ru or en
+    return spartanport_lang.table(language).get(en) or en
+
+
+def trophy_labels(_):
+    """The labels of the game's trophy notice and window, translated by `_`."""
+    return (('heading', _('Trophies', 'Трофеи')), ('notice', _('TROPHY UNLOCKED', 'ТРОФЕЙ ПОЛУЧЕН')),
+            ('unlocked', _('UNLOCKED', 'ПОЛУЧЕН')), ('locked', _('LOCKED', 'ЗАКРЫТ')),
+            ('all', _('All trophies', 'Все')), ('only_unlocked', _('Unlocked', 'Получены')),
+            ('only_locked', _('Locked', 'Закрыты')),
+            ('counter', _('{} of {} unlocked', '{} из {} получено')),
+            ('hint', _('Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close',
+                       'Вверх/Вниз: прокрутка   Влево/Вправо: фильтр   F8 / R3+R2 / Esc: закрыть')),
+            ('notifications', _('Notifications', 'Уведомления')),
+            ('order_list', _('List order', 'Порядок списка')),
+            ('order_common', _('Most earned first', 'Сначала частые')),
+            ('order_rare', _('Rarest first', 'Сначала редкие')),
+            ('rarity', _('{}% of players', '{}% игроков')),
+            ('common', _('Common', 'Обычный')),
+            ('rare', _('Rare', 'Редкий')),
+            ('very_rare', _('Very rare', 'Очень редкий')),
+            ('ultra_rare', _('Ultra rare', 'Ультраредкий')),
+            ('hint_order', _('Triangle/Tab: order   L1/R1: notifications', 'Треугольник/Tab: порядок   L1/R1: уведомления')),
+            ('hint_notifications', _('L1/R1: trophies   F8 / R3+R2 / Esc: close', 'L1/R1: трофеи   F8 / R3+R2 / Esc: закрыть')))
+
+
+def trophy_texts(language):
+    """The text of a trophy_texts.txt in `language`: labels, then "ID=Name | Description" per trophy."""
+    labels = trophy_labels(lambda en, ru=None: translate(language, en, ru))
+    lines = [f'# Written by the launcher on every start (language: {language}); do not edit.']
     lines += [f'@{key}={" ".join(text.split())}' for key, text in labels]
     for trophy in range(spartanport_trophies.TROPHY_COUNT):
-        name, description = spartanport_trophies.text(LANG, trophy)
+        name, description = spartanport_trophies.text(language, trophy)
         lines.append(f'{trophy}={name} | {description}')
+    return '\n'.join(lines) + '\n'
+
+
+def write_trophy_texts(folder):
+    """user/trophy_texts.txt: the trophy names, descriptions and labels the game shows, in the launcher's
+    language (the game reads it at start: the notice and the list of F8 / R3+R2), and the same in every
+    language in user/trophy_texts/<language>.txt, for the language chosen inside the game. A failure is
+    harmless."""
     try:
         folder = Path(folder)
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / 'trophy_texts.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        (folder / 'trophy_texts').mkdir(parents=True, exist_ok=True)
+        (folder / 'trophy_texts.txt').write_text(trophy_texts(LANG), encoding='utf-8')
+        for language in spartanport_trophies.LANGUAGES:
+            (folder / 'trophy_texts' / f'{language}.txt').write_text(trophy_texts(language), encoding='utf-8')
     except OSError:
         pass
 
