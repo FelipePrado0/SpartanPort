@@ -2,6 +2,7 @@
 #include "spartanport_settings.h"
 #include "spartanport_orbs.h"
 #include "spartanport_graphics.h"
+#include "spartanport_ui_language.h"
 #include "../spartanportgpu.h"
 
 #include <algorithm>
@@ -57,6 +58,12 @@ void Set(Values& v, const std::string& key, const std::string& value) {
     }
     if (key == "menu_tab") {
         v.menu_tab = i >= 0 && i <= 3 ? i : 0;
+        return;
+    }
+    if (key == "ui_language") {
+        // A code ("pt"); empty or unknown: the launcher's language.
+        const int index = SpartanUi::FindLanguage(value);
+        v.ui_language = value.empty() || (index == 0 && value != "en") ? -1 : index;
         return;
     }
     const char* cheat_keys[] = {"cheat_health", "cheat_magic", "cheat_item", "cheat_rage", "cheat_orbs",
@@ -349,6 +356,9 @@ void Save() {
                  int(v.cheats[0].load()), int(v.cheats[1].load()), int(v.cheats[2].load()),
                  int(v.cheats[3].load()), int(v.cheats[4].load()),
                  int(v.cheats[5].load()), int(v.cheats[6].load()));
+    const int language = v.ui_language;
+    std::fprintf(file, "ui_language=%s\n",
+                 language >= 0 && language < SpartanUi::LanguageCount ? SpartanUi::Languages[language].code.data() : "");
     std::fprintf(file, "enemy_health_bar=%d\n", int(v.enemy_health_bar.load()));
     std::fprintf(file, "auto_qte=%d\n", int(v.auto_qte.load()));
     std::fprintf(file,
