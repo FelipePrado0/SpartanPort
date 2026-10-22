@@ -329,7 +329,7 @@ std::string OverlayText() {
 
 constexpr const char* Unsupported = "Unavailable: game version or code signature mismatch.";
 
-// Game tab: when the game last wrote its AUTOSAVE (each checkpoint), as "2026-10-22 14:05 (3 minutes
+// Menu footer (Game tab): when the game last wrote its AUTOSAVE (each checkpoint), as "2026-10-22 14:05 (3 minutes
 // ago)". The save folder is read at most every 2 seconds while the menu is open, not every frame.
 std::string AutosaveText() {
     static int64_t mtime = 0;
@@ -453,9 +453,6 @@ void GameTab() {
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
-
-    Separator("Autosave");
-    ImGui::TextDisabled("%s", AutosaveText().c_str());
 }
 
 void ImageTab() {
@@ -729,6 +726,12 @@ void Menu() {
         ImGui::EndDisabled();
     } else {
         ImGui::NewLine();
+    }
+    if (s.menu_tab == 0) {
+        // Game tab: the last autosave beside Close, always in sight (not at the end of the scrolled list).
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("%s", AutosaveText().c_str());
+        ImGui::SameLine();
     }
     const float close_width = ImGui::CalcTextSize(Tr("Close")).x + ImGui::GetStyle().FramePadding.x * 2;
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - close_width);

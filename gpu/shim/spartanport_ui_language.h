@@ -42,7 +42,6 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"Applied on restart", "重启后生效"},
     {"Apply and restart", "应用并重启"},
     {"Automatic QTE", "自动完成 QTE"},
-    {"Autosave", "自动存档"},
     {"Background opacity", "背景不透明度"},
     {"Big FPS gain. Switch it off if lighting or objects look wrong.", "大幅提高帧率；若光照或物体异常，请关闭。"},
     {"Blue orbs (magic)", "蓝魂（魔法）"},
