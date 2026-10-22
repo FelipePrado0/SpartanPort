@@ -9,7 +9,7 @@
  * 0x13), right before the provider's vtable call. esi holds the function id (12 bits), eax the
  * provider index, rbp the interpreter frame. The pause menu's "Exit to Desktop" row
  * (scripts/pause_menu.py) calls function 0xfff, which no provider has: the stub sends it to
- * `quit`, which does not return. GBL functions 0xf00..0xf60 and 0xffd/0xffe use our settings
+ * `quit`, which does not return. GBL functions 0xf00..0xf8f and 0xffd/0xffe use our settings
  * provider; every other call replays the two instructions and goes on. */
 enum { SPARTAN_MENU_HOOK_OFFSET = 0x1d5f0f, SPARTAN_MENU_HOOK_LENGTH = 11, SPARTAN_MENU_EXIT_FUNCTION = 0xfff };
 static const unsigned char spartanport_menu_original[SPARTAN_MENU_HOOK_LENGTH] = {
@@ -36,7 +36,7 @@ static inline unsigned spartanport_menu_build_stub(unsigned char *out, uintptr_t
         0x75,0x2c,                           /* jne original */
         0x81,0xfe,0x00,0x0f,0,0,             /* cmp esi, 0xf00 */
         0x72,0x24,                           /* jb original */
-        0x81,0xfe,0x60,0x0f,0,0,             /* cmp esi, 0xf60 */
+        0x81,0xfe,0x8f,0x0f,0,0,             /* cmp esi, 0xf8f (cheats f00..f60, graphics f70..f8f) */
         0x76,0x10,                           /* jbe native */
         0x81,0xfe,0xfd,0x0f,0,0,             /* cmp esi, 0xffd (toggle) */
         0x74,0x08,                           /* je native */

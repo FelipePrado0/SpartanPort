@@ -193,11 +193,15 @@ class GameScript(unittest.TestCase):
 
     def test_options_row(self):
         options, row = self.new.one('PauseOptions'), self.new.by_name['HLDisplay'][1]
-        self.assertEqual(len(self.new.records), len(self.old.records) + 21)
+        # Exit and health rows, Cheats (row, page, 8 cheats, link, Multipliers page, 6 sliders,
+        # reset) and Graphics (row, page and one row per GRAPHICS_ROWS entry).
+        self.assertEqual(len(self.new.records), len(self.old.records) + 23 + len(pause_menu.GRAPHICS_ROWS))
         self.assertEqual(row['parent'], options['at'] - 4)
-        cheats = self.new.one('HLNativeCheats')
-        self.assertEqual(options['size'], self.old.one('PauseOptions')['size'] + pause_menu.ROW_SIZE + cheats['size'])
+        cheats, graphics = self.new.one('HLNativeCheats'), self.new.one('HLNativeGraphics')
+        self.assertEqual(options['size'], self.old.one('PauseOptions')['size'] + pause_menu.ROW_SIZE
+                         + cheats['size'] + graphics['size'])
         self.assertEqual(row['at'] + row['size'], cheats['at'])
+        self.assertEqual(cheats['at'] + cheats['size'], graphics['at'])
         # The WAD entry, the script header and the padding agree with the new size.
         size = struct.unpack_from('<I', self.data, self.base - 0x40 + 4)[0]
         old_size = struct.unpack_from('<I', self.original, self.old_base - 0x40 + 4)[0]
@@ -225,8 +229,11 @@ class GameScript(unittest.TestCase):
         changed = {at: after[at] for at, b in before.items() if after[at] != moved(b)}
         wad_choose = moved(next(i for i, r in enumerate(self.old.records) if r['at'] == dead['at']))
         cheats = self.new.records.index(self.new.one('HLNativeCheats'))
-        # Only the neighbors of the four added rows change destinations.
-        self.assertEqual(sorted(changed.values()), sorted([wad_choose, wad_choose, inserted, inserted, health, health, cheats, cheats]))
+        graphics = self.new.records.index(self.new.one('HLNativeGraphics'))
+        # Only the neighbors of the added rows change destinations: Game Settings goes down to
+        # Cheats and Audio up to Graphics (Cheats and Graphics link to each other).
+        self.assertEqual(sorted(changed.values()),
+                         sorted([wad_choose, wad_choose, inserted, inserted, health, health, cheats, graphics]))
 
     def test_japanese_fallback(self):
         data = bytearray(self.original)
