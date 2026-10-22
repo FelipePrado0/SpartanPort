@@ -454,6 +454,12 @@ void ImageTab() {
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
+    Separator("Effects");
+    if (BeginRows("##effects")) {
+        CheckRow("Motion blur", s.motion_blur,
+                 "The game's own motion blur on fast moving objects and the camera. Off removes it.");
+        ImGui::EndTable();
+    }
     Separator("Textures (applied on restart)");
     if (BeginRows("##textures")) {
         static const char* const anisotropy_labels[] = {"Game default", "2x", "4x", "8x", "16x"};

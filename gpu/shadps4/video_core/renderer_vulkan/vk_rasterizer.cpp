@@ -3,6 +3,7 @@
 
 #include <xxhash.h>
 #include "video_core/renderer_vulkan/ui_composition.h"
+#include "spartanport_settings.h"
 #include "spartanport_toggles.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
 #include "video_core/renderer_vulkan/vk_lighting_test.h"
@@ -912,6 +913,28 @@ bool Rasterizer::FilterDrawPasses() const {
     return !(mode == Mode::Disable && (depth_copy || stencil_copy));
 }
 
+bool Rasterizer::MotionBlurSkipped(const GraphicsPipeline& pipeline) {
+    const auto* ps = pipeline.GetStages()[u32(Shader::SwStage::Fragment)];
+    if (!ps) {
+        return false;
+    }
+    const auto& blend = Regs().blend_control[0];
+    const bool skip = !SpartanSettings::Get().motion_blur.load(std::memory_order_relaxed);
+    using Action = SpartanMotionBlur::Action;
+    const Action action = motion_blur_rule.Next(ps->pgm_hash, blend.enable, skip);
+    if (action == Action::Draw) {
+        return false;
+    }
+    static bool logged_blur = false, logged_composite = false;
+    bool& logged = action == Action::SkipBlur ? logged_blur : logged_composite;
+    if (!std::exchange(logged, true)) {
+        std::printf("Motion blur: off, skipping the %s draw (ps %016llx)\n",
+                    action == Action::SkipBlur ? "blur" : "composite",
+                    static_cast<unsigned long long>(ps->pgm_hash));
+    }
+    return true;
+}
+
 void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* prepared) {
     RENDERER_TRACE;
     SpartanStats::draws.fetch_add(1, std::memory_order_relaxed);
@@ -940,6 +963,10 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
                          prepared->reg_checksum == liverpool->gfx_reg_checksum);
     }
     if (!pipeline) {
+        return;
+    }
+    // spartanport: the game's motion blur is switched off in the settings.
+    if (MotionBlurSkipped(*pipeline)) {
         return;
     }
     if (pipelined && FilterDrawPasses()) {

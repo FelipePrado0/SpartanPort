@@ -205,6 +205,31 @@ int main() {
     }
 
     {
+        // The game's motion blur (spartanport_motion_blur.h): on by default, a saved 0 turns it off,
+        // the environment wins, and an empty value is off like any other flag.
+        {
+            std::ofstream out(path);
+            out << "motion_blur=0\n";
+        }
+        SpartanSettings::Load();
+        assert(!v.motion_blur);
+        SpartanSettings::Save();
+        assert(Read(path).find("motion_blur=0\n") != std::string::npos);
+        SetEnvironment("SPARTAN_MOTION_BLUR", "1");
+        SpartanSettings::Load();
+        assert(v.motion_blur);
+        SetEnvironment("SPARTAN_MOTION_BLUR", "");
+        {
+            std::ofstream out(path);
+            out << "motion_blur=1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.motion_blur);
+        SpartanSettings::Save();
+        assert(Read(path).find("motion_blur=1\n") != std::string::npos);
+    }
+
+    {
         std::ofstream out(path);
         out << "cheat_double_jumps=1\ncheat_very_hard=1\n";
     }
