@@ -150,7 +150,7 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
 - **In-game button icons** (opt-in, off by default): the PlayStation button icons in the game can
   show your controller's, Xbox or Nintendo ones, or the keyboard keys you play with (Game page, Controls).
 - Saving and loading: the save list is shown on screen, as on the PS4. Autosave works too. The
-  launcher backs the saves up before every start.
+  launcher backs the saves up before every start. Loading opens on the autosave.
 - Patches: render resolution of 480p, 720p, 900p, 1440p, 1800p or 4K, corrupted texture fix and skip
   videos with the X button (community); engine frame rate of 120 FPS (kvicken), 100 FPS (for 100 Hz displays),
   144 FPS (for 144 Hz displays) or 240 FPS (adapted by Felipe Prado).
@@ -173,7 +173,8 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   - **Game:** cheats (infinite health, magic, item meter, Rage of Sparta, max red orbs,
     automatic QTE: button and stick-rotation prompts answer themselves);
     multipliers from 0.1x to 100x for red, green (health), blue (magic) and gold (Rage of
-    Sparta) orbs and for damage dealt and taken; an enemy health bar.
+    Sparta) orbs and for damage dealt and taken; an enemy health bar; when the game last
+    autosaved (at the bottom).
   - **Image:** display mode (windowed, borderless, fullscreen), VSync and RCAS sharpening.
   - **Performance:** frame rate limit (30 to unlimited), frames queued, background shader
     compiling; render resolution, engine frame rate and GPU readback options apply with one

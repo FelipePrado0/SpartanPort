@@ -388,7 +388,17 @@ static ABI int32_t save_open(const unsigned char *p) {
     }
     if (save_dialog.mode!=SAVE_MODE_LIST) return dialog_open_mode(2,p,52,5);
     if (save_dialog.type==1 && !save_dialog.new_icon) save_read_preview();
-    save_show_list(0);
+    /* Loading starts on the autosave (written at every checkpoint); without one, on the newest save. */
+    int focus=0;
+    if (save_dialog.type==2) {
+        int64_t best=0;
+        for (int i=0;i<save_dialog.dir_count;++i) {
+            if (!strcmp(save_dialog.dirs[i],"AUTOSAVE")) { focus=i+save_dialog.has_new; break; }
+            int64_t t=runtime_savedata_mtime(USER_ID,save_dialog.dirs[i]);
+            if (t>best) { best=t; focus=i+save_dialog.has_new; }
+        }
+    }
+    save_show_list(focus);
     return 0;
 }
 static ABI int32_t save_status(void) {

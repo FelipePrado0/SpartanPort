@@ -154,7 +154,7 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
   PlayStation dentro del juego pueden mostrar los de tu control, Xbox o Nintendo, o las teclas con las que jugás (página Game, sección Controls).
 - Guardado y carga: la lista de partidas guardadas se muestra en pantalla, como en la PS4. El
   autoguardado también funciona. El launcher hace una copia de seguridad de las partidas antes de
-  cada inicio.
+  cada inicio. La lista de carga abre en el autoguardado.
 - Parches: resolución de render de 480p, 720p, 900p, 1440p, 1800p o 4K, corrección de texturas corruptas
   y saltar videos con el botón X (comunidad); tasa de cuadros del motor de 120 FPS (kvicken), 100 FPS (para pantallas de 100 Hz),
   144 FPS (para pantallas de 144 Hz) o 240 FPS (adaptado por Felipe Prado).
@@ -178,7 +178,8 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
 - **Menú dentro del juego** (Insert en el teclado, R3+L2 en el control), con cuatro pestañas:
   - **Game:** trucos (vida infinita, magia, medidor de objeto, Furia de Esparta, máximo de orbes
     rojos, QTE automático: los avisos de botón y de giro del stick se resuelven solos); multiplicadores de 0,1x a 100x para los orbes rojos, verdes (vida), azules (magia) y
-    dorados (Furia de Esparta) y para el daño causado y recibido; una barra de vida de enemigos.
+    dorados (Furia de Esparta) y para el daño causado y recibido; una barra de vida de enemigos;
+    cuándo fue el último autoguardado (abajo).
   - **Image:** modo de pantalla (ventana, sin bordes, pantalla completa), VSync y nitidez RCAS.
   - **Performance:** límite de cuadros por segundo (30 a ilimitado), cuadros en cola, compilación de
     shaders en segundo plano; la resolución de render, la tasa de cuadros del motor y las opciones

@@ -52,6 +52,8 @@ int runtime_savedata_param(int32_t user, const char *dir, void *param) {
     memcpy(param,save_param,sizeof(save_param)); return 0;
 }
 int runtime_savedata_icon(int32_t user, const char *dir, char *out, size_t size) { (void)user; (void)dir; (void)out; (void)size; return -1; }
+/* SAVE0002 is the newest save. */
+int64_t runtime_savedata_mtime(int32_t user, const char *dir) { (void)user; return !strcmp(dir,"SAVE0002") ? 200 : 100; }
 
 int main(void) {
     unsigned char param[128]={0}, result[64]={0}; /* the game zeroes the pointers it does not want */
@@ -94,6 +96,7 @@ int main(void) {
     list[52]=1; list[56]=2; memcpy(list+72,&items_ptr,8);
     memcpy(out+16,&chosen_ptr,8);
     assert(save_init()==0 && save_open(list)==0 && save_status()==DIALOG_RUNNING);
+    assert(choice_focus==2); /* loading starts on the newest save */
     choice_next=2; /* entries: New save, SAVE0001, SAVE0002 */
     assert(save_status()==DIALOG_FINISHED && save_result(out)==0 && !strcmp(chosen,"SAVE0002"));
     memcpy(&value,out+4,4); assert(value==0);
@@ -105,6 +108,11 @@ int main(void) {
     choice_next=-2;
     assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
     memcpy(&value,out+4,4); assert(value==SAVE_RESULT_CANCELED);
+    /* ...or on the autosave, even when a manual save is newer. */
+    memcpy(names[0],"AUTOSAVE",9);
+    assert(save_open(list)==0 && choice_focus==1); /* entries: New save, AUTOSAVE, SAVE0002 */
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+    memcpy(names[0],"SAVE0001",9);
 
     /* Overwriting must not return a slot until the second, explicit confirmation. */
     list[56]=1;

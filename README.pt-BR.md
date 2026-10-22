@@ -150,7 +150,7 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
 - Controle (DualSense, Xbox e outros, via SDL3) e teclado ao mesmo tempo, os dois com botões
   configuráveis.
 - Salvar e carregar: a lista de saves aparece na tela, como no PS4. O autosave também funciona.
-  O launcher faz backup dos saves antes de cada partida.
+  O launcher faz backup dos saves antes de cada partida. A lista de carregar abre no autosave.
 - Patches: resolução de renderização de 480p, 720p, 900p, 1440p, 1800p ou 4K, correção de texturas
   corrompidas e pular vídeos com o botão X (comunidade); FPS do motor de 120 (kvicken), 100 (para telas de 100 Hz),
   144 (para telas de 144 Hz) ou 240 (adaptado por Felipe Prado).
@@ -174,7 +174,8 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
 - **Menu dentro do jogo** (Insert no teclado, R3+L2 no controle), com quatro abas:
   - **Game:** trapaças (vida, magia, item e Fúria de Esparta infinitos, orbes vermelhos no
     máximo, QTE automático: prompts de botão e de giro do analógico se resolvem sozinhos); multiplicadores de 0,1x a 100x para orbes vermelhos, verdes (vida), azuis (magia)
-    e dourados (Fúria de Esparta) e para dano causado e recebido; barra de vida do inimigo.
+    e dourados (Fúria de Esparta) e para dano causado e recebido; barra de vida do inimigo;
+    quando o jogo fez o último autosave (embaixo).
   - **Image:** modo de tela (janela, sem borda, tela cheia), VSync e nitidez RCAS.
   - **Performance:** limite de FPS (de 30 a ilimitado), quadros na fila, compilação de shaders
     em segundo plano; resolução, FPS do motor e as opções de leitura da GPU valem com um único

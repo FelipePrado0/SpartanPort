@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
+#include <ctime>
 #include <mutex>
 #include <thread>
 #include <string>
@@ -26,6 +27,8 @@
 
 extern SpartanActorSlot spartanport_actor_slots[2];
 extern "C" void runtime_restart(void); // src/probe.c: starts run.py again, ends this process
+// src/runtime_savedata.c: when a save of user 1 was last written (the Game tab's last autosave).
+extern "C" int64_t runtime_savedata_mtime(int32_t user, const char* dir);
 #include "common/elf_info.h"
 #include "imgui.h"
 #include "imgui_internal.h" // RegisterUserTexture (save pictures)
@@ -326,6 +329,42 @@ std::string OverlayText() {
 
 constexpr const char* Unsupported = "Unavailable: game version or code signature mismatch.";
 
+// Game tab: when the game last wrote its AUTOSAVE (each checkpoint), as "2026-10-22 14:05 (3 minutes
+// ago)". The save folder is read at most every 2 seconds while the menu is open, not every frame.
+std::string AutosaveText() {
+    static int64_t mtime = 0;
+    static std::chrono::steady_clock::time_point checked{};
+    const auto now = std::chrono::steady_clock::now();
+    if (checked == std::chrono::steady_clock::time_point{} || now - checked > std::chrono::seconds(2)) {
+        mtime = runtime_savedata_mtime(1, "AUTOSAVE");
+        checked = now;
+    }
+    if (!mtime) {
+        return Tr("No autosave yet: the game saves at the next checkpoint.");
+    }
+    const time_t t = time_t(mtime);
+    std::tm tm{};
+#ifdef _WIN32
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    char when[32];
+    std::strftime(when, sizeof(when), "%Y-%m-%d %H:%M", &tm);
+    const long long minutes = std::max<long long>(0, (long long)(std::time(nullptr) - t) / 60);
+    char ago[64];
+    if (minutes < 1) {
+        std::snprintf(ago, sizeof(ago), "%s", Tr("less than a minute ago"));
+    } else if (minutes < 120) {
+        std::snprintf(ago, sizeof(ago), Tr("%lld minute%s ago"), minutes, minutes == 1 ? "" : "s");
+    } else {
+        std::snprintf(ago, sizeof(ago), Tr("%lld hours ago"), minutes / 60);
+    }
+    char text[160];
+    std::snprintf(text, sizeof(text), Tr("Last autosave: %s (%s)"), when, ago);
+    return text;
+}
+
 void GameTab() {
     auto& s = SpartanSettings::Get();
     Separator("Cheats");
@@ -414,6 +453,9 @@ void GameTab() {
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
+
+    Separator("Autosave");
+    ImGui::TextDisabled("%s", AutosaveText().c_str());
 }
 
 void ImageTab() {
