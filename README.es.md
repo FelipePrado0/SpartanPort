@@ -187,6 +187,14 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
     CPU, RAM y VRAM, cada uno opcional, con tamaño de fuente, esquina, opacidad del fondo y diseño.
     Los números son el uso del propio juego, no el de todo el sistema.
 
+  El menú sigue el idioma del launcher (inglés, portugués, español, francés, alemán, italiano,
+  polaco, turco, indonesio, ruso o chino), o el elegido arriba de la pestaña **Juego**, al
+  instante. La elección queda en `spartanport.ini` (`ui_language`).
+- **Trofeos** (F8, o R3+R2 en el control): todos los trofeos con su nombre oficial y lo que piden,
+  su grado, cuántos jugadores lo consiguieron y filtros por estado y por grado; notificaciones de
+  trofeo en cuatro temas, con tus propios sonidos e imágenes si quieres. Consulta
+  [docs/TROPHIES.es.md](docs/TROPHIES.es.md).
+
 ## Disponibilidad de funciones
 
 Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/SpartanPort/releases/tag/windows-v2.2.0) y en el código el 14 de octubre de 2026.
