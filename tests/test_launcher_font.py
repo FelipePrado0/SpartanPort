@@ -1,24 +1,40 @@
-"""The God of War title font: an optional launcher asset, never a reason the launcher cannot start."""
+"""The title font (Cinzel Black): an optional launcher asset, never a reason the launcher cannot start."""
+import ctypes
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
-import gow3_launcher_win as launcher  # noqa: E402
+import spartanport_launcher_win as launcher  # noqa: E402
 
 
 class FontFileTest(unittest.TestCase):
     def test_font_file_is_a_launcher_asset_under_port_dir(self):
-        # Frozen builds find launcher assets next to the exe (PORT_DIR / 'launcher'), like gow3.ico.
-        self.assertEqual(launcher.FONT_FILE, launcher.PORT_DIR / 'launcher' / 'gowfont.ttf')
+        # Frozen builds find launcher assets next to the exe (PORT_DIR / 'launcher'), like spartanport.ico.
+        self.assertEqual(launcher.FONT_FILE, launcher.PORT_DIR / 'launcher' / 'Cinzel-Black.ttf')
         self.assertTrue(launcher.FONT_FILE.is_file())
 
     def test_windows_package_ships_the_font(self):
         script = (ROOT / 'packaging' / 'windows' / 'package.sh').read_text(encoding='utf-8')
         copies = [line for line in script.splitlines()
-                  if 'launcher/gowfont.ttf' in line and '"$dest/launcher/"' in line]
-        self.assertTrue(copies, 'package.sh must copy launcher/gowfont.ttf into $dest/launcher/')
+                  if 'launcher/Cinzel-Black.ttf' in line and '"$dest/launcher/"' in line]
+        self.assertTrue(copies, 'package.sh must copy launcher/Cinzel-Black.ttf into $dest/launcher/')
+
+    def test_packages_ship_the_font_license(self):
+        # SIL OFL 1.1: the license text travels with the font.
+        self.assertTrue((ROOT / 'launcher' / 'OFL-Cinzel.txt').is_file())
+        for script, dest in (('windows/package.sh', '"$dest/launcher/"'), ('linux/build.sh', '$share/launcher/')):
+            text = (ROOT / 'packaging' / script).read_text(encoding='utf-8')
+            self.assertTrue([line for line in text.splitlines() if 'launcher/OFL-Cinzel.txt' in line and dest in line], script)
+
+
+    def test_linux_package_ships_the_font(self):
+        script = (ROOT / 'packaging' / 'linux' / 'build.sh').read_text(encoding='utf-8')
+        copies = [line for line in script.splitlines()
+                  if 'launcher/Cinzel-Black.ttf' in line and '$share/launcher/' in line]
+        self.assertTrue(copies, 'build.sh must copy launcher/Cinzel-Black.ttf into $share/launcher/')
 
 
 class RegisterFontTest(unittest.TestCase):
@@ -33,6 +49,45 @@ class RegisterFontTest(unittest.TestCase):
     def test_font_file_registers(self):
         self.assertTrue(launcher.register_font(launcher.FONT_FILE))
 
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'fontconfig font registration')
+    def test_font_file_registers_through_fontconfig(self):
+        try:
+            ctypes.CDLL('libfontconfig.so.1')
+        except OSError:
+            self.skipTest('no fontconfig')
+        self.assertTrue(launcher.register_font(launcher.FONT_FILE))
+
+    def test_a_missing_fontconfig_is_not_fatal(self):
+        with mock.patch.object(launcher, 'WINDOWS', False), \
+                mock.patch.object(launcher.ctypes, 'CDLL', side_effect=OSError('no fontconfig')):
+            self.assertFalse(launcher.register_font(launcher.FONT_FILE))
+
+
+class ChineseFontTest(unittest.TestCase):
+    def setUp(self):
+        self.saved = launcher.LANG, launcher.UI_FONT, launcher.MONO_FONT, launcher.SERIF_FONT, launcher.FONT_LOADED
+
+    def tearDown(self):
+        launcher.LANG, launcher.UI_FONT, launcher.MONO_FONT, launcher.SERIF_FONT, launcher.FONT_LOADED = self.saved
+
+    def test_chinese_prefers_windows_cjk_font_for_body_and_headings(self):
+        launcher.LANG = 'zh'
+        launcher.pick_fonts(['Microsoft YaHei UI', 'Segoe UI', 'Georgia', 'Consolas'])
+        self.assertEqual(launcher.UI_FONT, 'Microsoft YaHei UI')
+        self.assertEqual(launcher.heading_font(12), ('Microsoft YaHei UI', 12))
+
+    def test_chinese_can_use_noto_on_linux(self):
+        launcher.LANG = 'zh'
+        launcher.pick_fonts(['Noto Sans CJK SC', 'DejaVu Sans', 'DejaVu Serif'])
+        self.assertEqual(launcher.UI_FONT, 'Noto Sans CJK SC')
+        self.assertEqual(launcher.SERIF_FONT, 'Noto Sans CJK SC')
+
+    def test_english_font_preferences_are_unchanged(self):
+        launcher.LANG = 'en'
+        launcher.pick_fonts(['Microsoft YaHei UI', 'Segoe UI', 'Georgia', 'Consolas'])
+        self.assertEqual(launcher.UI_FONT, 'Segoe UI')
+        self.assertEqual(launcher.SERIF_FONT, 'Georgia')
+
 
 class HeadingFontTest(unittest.TestCase):
     def setUp(self):
@@ -43,7 +98,7 @@ class HeadingFontTest(unittest.TestCase):
 
     def test_english_titles_use_the_loaded_font(self):
         launcher.LANG, launcher.FONT_LOADED = 'en', True
-        self.assertEqual(launcher.heading_font(12), ('GodOfWar', 12))
+        self.assertEqual(launcher.heading_font(12), ('Cinzel Black', 12))
 
     def test_other_languages_keep_the_fallback(self):
         launcher.LANG, launcher.FONT_LOADED = 'ru', True
@@ -56,13 +111,13 @@ class HeadingFontTest(unittest.TestCase):
 
     def test_game_name_uses_the_font_in_every_language(self):
         launcher.LANG, launcher.FONT_LOADED = 'ru', True
-        self.assertEqual(launcher.heading_font(15, every_language=True), ('GodOfWar', 15))
+        self.assertEqual(launcher.heading_font(15, every_language=True), ('Cinzel Black', 15))
         launcher.FONT_LOADED = False
         self.assertEqual(launcher.heading_font(15, every_language=True), ('Georgia', 15))
 
 
 class LatinHeadingsTest(unittest.TestCase):
-    """The face has ASCII only: Latin-script languages use it with the accents stripped from headings."""
+    """Latin-script languages use the loaded face; the other scripts keep the fallback."""
     def setUp(self):
         self.saved = launcher.LANG, launcher.FONT_LOADED
         launcher.FONT_LOADED = True
@@ -71,34 +126,28 @@ class LatinHeadingsTest(unittest.TestCase):
         launcher.LANG, launcher.FONT_LOADED = self.saved
 
     def test_latin_script_languages_use_the_loaded_font(self):
-        for lang in ('pt', 'es', 'fr', 'de', 'it'):
+        for lang in ('pt', 'es', 'fr', 'de', 'it', 'pl', 'tr'):
             launcher.LANG = lang
-            self.assertEqual(launcher.heading_font(12), ('GodOfWar', 12), lang)
+            self.assertEqual(launcher.heading_font(12), ('Cinzel Black', 12), lang)
 
     def test_other_scripts_keep_the_fallback(self):
         for lang in ('ru', 'ar'):
             launcher.LANG = lang
             self.assertEqual(launcher.heading_font(12), ('Georgia', 12), lang)
 
-    def test_headings_lose_their_accents_in_the_loaded_font(self):
-        launcher.LANG = 'pt'
-        self.assertEqual(launcher.heading_text('GRÁFICOS'), 'GRAFICOS')
-        self.assertEqual(launcher.heading_text('Avançado'), 'Avancado')
-        self.assertEqual(launcher.heading_text('Straße · Œuvre'), 'Strasse · OEuvre')
-
-    def test_headings_keep_their_text_outside_the_font(self):
-        launcher.LANG = 'ru'
-        self.assertEqual(launcher.heading_text('Графика'), 'Графика')
-        launcher.LANG, launcher.FONT_LOADED = 'pt', False
-        self.assertEqual(launcher.heading_text('GRÁFICOS'), 'GRÁFICOS')
-
-    def test_the_game_name_keeps_other_scripts_whole(self):
-        """The game's name (every_language) only loses Latin accents: Cyrillic, kana and hangul
-        letters are not decomposed (Й is not И, ゴ is not コ)."""
-        launcher.LANG = 'ru'
-        for name in ('ГЕРОЙ ВОЙНЫ · ЁЖ', 'ゴッド・オブ・ウォーIII', '갓 오브 워 III'):
-            self.assertEqual(launcher.heading_text(name, every_language=True), name)
-        self.assertEqual(launcher.heading_text('GRÁFICOS', every_language=True), 'GRAFICOS')
+    def test_the_face_has_every_latin_ui_letter(self):
+        """Headings keep their accents (GRÁFICOS, AVANÇADO): every letter of the Latin-script
+        translations must be in the face, or Tk would draw it in another font."""
+        try:
+            from fontTools.ttLib import TTFont
+        except ImportError:
+            self.skipTest('fontTools reads the face')
+        import spartanport_lang
+        cmap = TTFont(launcher.FONT_FILE).getBestCmap()
+        for lang in launcher.LATIN_UI_LANGUAGES:
+            text = ''.join(spartanport_lang.table(lang).values()).upper()
+            missing = {c for c in text if c.isalpha() and ord(c) not in cmap}
+            self.assertFalse(missing, lang)
 
 
 if __name__ == '__main__':

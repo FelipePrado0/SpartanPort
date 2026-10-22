@@ -3,7 +3,7 @@
 # seconds: a missing glibc version or library stops it at import (#291). Run as root in a fresh
 # container of the distro to check; it installs Xvfb and a font, as a desktop has them
 # (.github/workflows/linux-appimage.yml).
-# Usage: smoke-test.sh path/to/gow3-x86_64.AppImage
+# Usage: smoke-test.sh path/to/spartanport-x86_64.AppImage
 set -euo pipefail
 appimage=$(readlink -f -- "$1")
 if command -v apt-get >/dev/null; then

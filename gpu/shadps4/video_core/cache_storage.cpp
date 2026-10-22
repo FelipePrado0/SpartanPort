@@ -151,7 +151,7 @@ bool WriteVector(const BlobType type, std::filesystem::path&& path_, std::vector
                     LOG_ERROR(Render, "Failed to add {} to the archive", path.string().c_str());
                 }
             } else {
-                // gow3: write beside and rename into place, so a game that ends during the
+                // spartanport: write beside and rename into place, so a game that ends during the
                 // write (the queue is not drained at exit) never leaves a truncated blob that
                 // the next start would load.
                 using namespace Common::FS;
@@ -256,6 +256,21 @@ size_t DataBase::CountBlobs(BlobType type) {
         count += entry.path().extension().string().ends_with(ext);
     }
     return count;
+}
+
+std::vector<std::string> DataBase::ListBlobs(BlobType type) {
+    std::vector<std::string> names;
+    if (!opened || EmulatorSettings.IsPipelineCacheArchived()) {
+        return names;
+    }
+    const auto ext = "." + GetBlobFileExtension(type);
+    std::error_code error;
+    for (const auto& entry : std::filesystem::directory_iterator{cache_path, error}) {
+        if (entry.path().extension() == ext) {
+            names.push_back(entry.path().stem().string());
+        }
+    }
+    return names;
 }
 
 bool DataBase::ConcurrentReads() const {

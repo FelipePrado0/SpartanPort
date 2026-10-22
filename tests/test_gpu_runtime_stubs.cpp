@@ -7,7 +7,7 @@
 // Renderer tests have no guest process. Clock/host-thread services work; guest accesses abort.
 extern "C" {
 thread_local sigjmp_buf* runtime_fault_recover = nullptr;
-uint32_t runtime_disabled_optimizations = 0;
+uint64_t runtime_disabled_optimizations = 0; // spartanport_toggles.h: 64 bits
 uint64_t runtime_tsc_frequency() { return 1000000000; }
 int runtime_file_translate(const char*, char*, size_t) { std::abort(); }
 uint64_t runtime_memory_clamp(uintptr_t, uint64_t) { std::abort(); }
@@ -18,9 +18,11 @@ void runtime_memory_set_gpu_hooks(void (*)(uintptr_t, uint64_t),
 void runtime_thread_attach_host(const char*) {}
 void runtime_memory_gpu_protect(uintptr_t, uint64_t, int, int) { std::abort(); }
 void runtime_restart() { std::abort(); }
+int64_t runtime_savedata_mtime(int32_t, const char*) { return 0; }
 uint64_t runtime_process_time_counter() { return runtime_process_time_us() * 1000; }
 uint64_t runtime_read_tsc() { return runtime_process_time_counter(); }
 int32_t* runtime_errno() { std::abort(); }
 int runtime_memory_write_backing(uintptr_t, const void*, uint64_t) { std::abort(); }
+void runtime_report() {}
 }
 

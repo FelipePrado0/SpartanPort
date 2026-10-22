@@ -5,7 +5,7 @@
 #include <string.h>
 #include <vulkan/vulkan.h>
 
-#include "video_core/amdgpu/gow3_msaa_default.h"
+#include "video_core/amdgpu/spartanport_msaa_default.h"
 
 static VkDeviceSize largest_local_heap(VkPhysicalDevice device) {
     VkPhysicalDeviceMemoryProperties memory;
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
     const int live_mode = argc > 1 && !strcmp(argv[1], "--live-resolution");
     const VkApplicationInfo app = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = "gow3 scene scaling probe",
+        .pApplicationName = "spartanport scene scaling probe",
         .apiVersion = VK_API_VERSION_1_3,
     };
     const VkInstanceCreateInfo create = {
@@ -96,9 +96,9 @@ int main(int argc, char **argv) {
         return 1;
     }
     if (argc > 1 && !strcmp(argv[1], "--list")) {
-        /* The launcher's GPU choice: index (as GOW3_GPU_ID), name, type, the game's default for
-         * its multisampling on that driver ("off" or "on", gow3_msaa_default.h) and 1 on the GPU
-         * the game picks without GOW3_GPU_ID. */
+        /* The launcher's GPU choice: index (as SPARTAN_GPU_ID), name, type, the game's default for
+         * its multisampling on that driver ("off" or "on", spartanport_msaa_default.h) and 1 on the GPU
+         * the game picks without SPARTAN_GPU_ID. */
         VkPhysicalDevice preferred = devices[0];
         for (uint32_t i = 1; i < count; ++i)
             if (better_device(devices[i], preferred)) preferred = devices[i];
@@ -120,18 +120,18 @@ int main(int argc, char **argv) {
                    props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU     ? "discrete"
                    : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "integrated"
                                                                                  : "other",
-                   gow3_no_msaa_default(driver.driverID) ? "off" : "on", devices[i] == preferred);
+                   spartanport_no_msaa_default(driver.driverID) ? "off" : "on", devices[i] == preferred);
         }
         free(devices);
         vkDestroyInstance(instance, NULL);
         return 0;
     }
-    /* Match vk_instance.cpp: its default ranking, or the GOW3_GPU_ID index while it exists. */
+    /* Match vk_instance.cpp: its default ranking, or the SPARTAN_GPU_ID index while it exists. */
     VkPhysicalDevice selected = devices[0];
-    const char *gpu_id = getenv("GOW3_GPU_ID");
+    const char *gpu_id = getenv("SPARTAN_GPU_ID");
     const unsigned long index = gpu_id && atoi(gpu_id) >= 0 ? strtoul(gpu_id, NULL, 10) : count;
     if (gpu_id && atoi(gpu_id) >= 0 && index >= count)
-        fputs("GPU: GOW3_GPU_ID is outside the device list; choosing automatically\n", stderr);
+        fputs("GPU: SPARTAN_GPU_ID is outside the device list; choosing automatically\n", stderr);
     if (index < count) {
         selected = devices[index];
     } else {

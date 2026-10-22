@@ -1,4 +1,5 @@
 """The Save button: inactive until a setting differs from what the files hold; writes them on click."""
+import json
 import os
 import shutil
 import sys
@@ -9,7 +10,7 @@ from unittest import mock
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
-import gow3_launcher_win as launcher  # noqa: E402
+import spartanport_launcher_win as launcher  # noqa: E402
 
 try:
     import tkinter as tk
@@ -18,23 +19,23 @@ except ImportError:  # pragma: no cover
     tk = None
 
 
-@unittest.skipUnless(sys.platform == 'win32' and tk, 'needs Windows and Tk')
+@unittest.skipUnless(tk, 'needs Tk')
 class LauncherOverTemporaryFiles(unittest.TestCase):
     """A real launcher window over a temporary settings folder: the user's files are never touched."""
-    INI = None  # gow3.ini the launcher opens over, when a test needs one
+    INI = None  # spartanport.ini the launcher opens over, when a test needs one
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.saved = (launcher.CONFIG_DIR, launcher.CONFIG_FILE, launcher.DATA_DIR, launcher.LANG,
-                      os.environ.get('GOW3_CONFIG'))
+                      os.environ.get('SPARTAN_CONFIG'))
         launcher.CONFIG_DIR = self.tmp / 'config'
         launcher.CONFIG_FILE = launcher.CONFIG_DIR / 'settings.json'
         launcher.DATA_DIR = self.tmp / 'data'
         launcher.DATA_DIR.mkdir()
         launcher.LANG = 'en'
-        os.environ['GOW3_CONFIG'] = str(self.tmp / 'gow3.ini')
+        os.environ['SPARTAN_CONFIG'] = str(self.tmp / 'spartanport.ini')
         if self.INI:
-            (self.tmp / 'gow3.ini').write_text(self.INI, encoding='utf-8')
+            (self.tmp / 'spartanport.ini').write_text(self.INI, encoding='utf-8')
         self.root = tk.Tk()
         self.app = launcher.Launcher(self.root, tk, ttk, filedialog, messagebox)
         self.root.update()
@@ -48,9 +49,9 @@ class LauncherOverTemporaryFiles(unittest.TestCase):
         self.close_window()
         launcher.CONFIG_DIR, launcher.CONFIG_FILE, launcher.DATA_DIR, launcher.LANG, config = self.saved
         if config is None:
-            os.environ.pop('GOW3_CONFIG', None)
+            os.environ.pop('SPARTAN_CONFIG', None)
         else:
-            os.environ['GOW3_CONFIG'] = config
+            os.environ['SPARTAN_CONFIG'] = config
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def save_state(self):
@@ -90,7 +91,7 @@ class SaveButtonTest(LauncherOverTemporaryFiles):
 
     def test_save_preserves_external_changes_and_refreshes_the_controls(self):
         self.app.save()
-        path = self.tmp / 'gow3.ini'
+        path = self.tmp / 'spartanport.ini'
         path.write_text(path.read_text(encoding='utf-8').replace('fps_limit=0', 'fps_limit=60') +
                         'external_runtime_key=keep\n', encoding='utf-8')
         self.app.var('vsync', 'ini').set(False)
@@ -104,7 +105,7 @@ class SaveButtonTest(LauncherOverTemporaryFiles):
 
     def test_failed_replace_keeps_files_and_changes_pending(self):
         self.app.save()
-        path = self.tmp / 'gow3.ini'
+        path = self.tmp / 'spartanport.ini'
         before = path.read_bytes(), launcher.CONFIG_FILE.read_bytes()
         self.app.var('vsync', 'ini').set(False)
         with mock.patch.object(launcher.os, 'replace', side_effect=PermissionError('locked')), \
@@ -128,7 +129,7 @@ class SaveButtonTest(LauncherOverTemporaryFiles):
     def test_saving_writes_the_files_and_disables_the_button(self):
         self.app.var('vsync', 'ini').set(False)
         self.app.save()
-        self.assertIn('vsync=0', (self.tmp / 'gow3.ini').read_text(encoding='utf-8').splitlines())
+        self.assertIn('vsync=0', (self.tmp / 'spartanport.ini').read_text(encoding='utf-8').splitlines())
         self.assertTrue(launcher.CONFIG_FILE.is_file())
         self.assertEqual(self.save_state(), 'disabled')
 
@@ -138,6 +139,7 @@ class SaveButtonTest(LauncherOverTemporaryFiles):
         self.app.show('graphics')
         self.app.var('ui_language', 'app').set('ru')
         self.app.save()
+        self.root.update_idletasks()
         self.assertEqual(launcher.LANG, 'ru')
         self.assertEqual(str(self.app.play_button['text']), 'ИГРАТЬ')
         self.assertFalse(self.app.var('vsync', 'ini').get())  # the settings stay
@@ -150,13 +152,52 @@ class SaveButtonTest(LauncherOverTemporaryFiles):
         self.app.status.configure(text='The game is running.', fg=launcher.TEXT)
         self.app.var('ui_language', 'app').set('ru')
         self.app.save()
+        self.root.update_idletasks()
         self.assertEqual(str(self.app.status['text']), 'The game is running.')
         self.assertEqual(str(self.app.status['fg']), launcher.TEXT)
+
+    def test_saving_without_language_or_scale_change_does_not_rebuild(self):
+        with mock.patch.object(self.app, 'rebuild') as mock_rebuild:
+            self.app.var('vsync', 'ini').set(False)
+            self.app.save()
+            self.root.update_idletasks()
+            mock_rebuild.assert_not_called()
+
+    def test_repeated_language_switching_preserves_page_and_cleans_traces(self):
+        self.app.show('advanced')
+        expected_play_texts = {'pt': 'JOGAR', 'ru': 'ИГРАТЬ', 'zh': '开始游戏', 'en': 'PLAY'}
+        for target_lang in ('pt', 'ru', 'zh', 'en'):
+            self.app.var('ui_language', 'app').set(target_lang)
+            self.assertEqual(self.save_state(), 'normal')
+            self.app.save()
+            self.root.update_idletasks()
+            self.assertEqual(launcher.LANG, target_lang)
+            self.assertEqual(self.app.current_page, 'advanced')
+            self.assertEqual(str(self.app.play_button['text']), expected_play_texts[target_lang])
+            self.assertEqual(self.save_state(), 'disabled')
+
+            config = json.loads(launcher.CONFIG_FILE.read_text(encoding='utf-8'))
+            self.assertEqual(config.get('ui_language'), target_lang)
+
+            for kind in self.app.control_vars.values():
+                for var in kind.values():
+                    self.assertLessEqual(len(var.trace_info()), 1)
+
+    def test_save_button_event_generates_clean_language_rebuild(self):
+        self.app.show('advanced')
+        self.app.var('ui_language', 'app').set('pt')
+        self.assertEqual(self.save_state(), 'normal')
+        self.app.save_button.state(['pressed'])
+        self.app.save_button.event_generate('<ButtonRelease-1>')
+        self.root.update()
+        self.assertEqual(launcher.LANG, 'pt')
+        self.assertEqual(self.app.current_page, 'advanced')
+        self.assertEqual(str(self.app.play_button['text']), 'JOGAR')
 
     def test_nothing_is_written_before_saving(self):
         self.app.var('vsync', 'ini').set(False)
         self.save_state()
-        self.assertFalse((self.tmp / 'gow3.ini').exists())
+        self.assertFalse((self.tmp / 'spartanport.ini').exists())
 
 
 class HiddenUpscalingTest(LauncherOverTemporaryFiles):
@@ -178,11 +219,12 @@ class HiddenUpscalingTest(LauncherOverTemporaryFiles):
                 self.assertEqual(after[key], before[key], key)
         self.app.var('ui_language', 'app').set('ru')
         self.app.save()
+        self.root.update_idletasks()
         self.assertNotIn('upscaler', self.app.vars)
         self.assertEqual(launcher.load_ini()[0]['upscaler'], 'fsr4')
 
 
-@unittest.skipUnless(sys.platform == 'win32' and tk, 'needs Windows and Tk')
+@unittest.skipUnless(tk, 'needs Tk')
 class EverySettingSavesTest(LauncherOverTemporaryFiles):
     """Every option in the window: a change lights Save, saving stores it, a reopened launcher shows it."""
     def setUp(self):
@@ -190,7 +232,8 @@ class EverySettingSavesTest(LauncherOverTemporaryFiles):
         original = launcher.Launcher.choice
 
         def spy(app, parent, key, store, options, width=30, var=None):
-            self.options[key or 'upscale_mode'] = [value for value, _text in options]
+            pairs = options() if callable(options) else options  # a function: the list changes with the mods
+            self.options[key or 'upscale_mode'] = [value for value, _text in pairs]
             return original(app, parent, key, store, options, width, var)
         self.patches = [mock.patch.object(launcher.Launcher, 'choice', spy),
                         mock.patch.object(launcher.Launcher, 'check_update', lambda app, manual=False: None)]

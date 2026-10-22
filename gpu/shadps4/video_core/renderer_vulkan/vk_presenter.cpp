@@ -12,14 +12,16 @@
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
-#include "gow3_overlay.h"
-#include "gow3_settings.h"
-#include "gow3_graphics.h"
+#include "spartanport_overlay.h"
+#include "spartanport_settings.h"
+#include "spartanport_graphics.h"
 #include "video_core/renderer_vulkan/vk_temporal_upscaler.h"
 #include "video_core/renderer_vulkan/vk_presenter.h"
 #include "video_core/renderer_vulkan/vk_warmup_inbox.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/texture_cache/image.h"
+
+#include <miniz.h>
 
 #include <algorithm>
 #include <array>
@@ -41,7 +43,7 @@
 #include <vector>
 #include <vk_mem_alloc.h>
 #ifdef MemoryBarrier
-#undef MemoryBarrier // gow3: winnt.h macro (through fmt), clashes with vk::MemoryBarrier
+#undef MemoryBarrier // spartanport: winnt.h macro (through fmt), clashes with vk::MemoryBarrier
 #endif
 
 namespace Vulkan {
@@ -127,7 +129,171 @@ static vk::Rect2D FitImage(s32 frame_width, s32 frame_height, s32 swapchain_widt
                          dst_rect.offset.x, dst_rect.offset.y);
 }
 
-// gow3: screenshot capture and ImGui overlays removed; the port presents directly.
+// spartanport: F12 screenshots of the game's frame (without the overlay), saved as PNG to the user
+// folder's screenshots/ once the GPU is done; the conversion follows upstream shadPS4.
+namespace {
+
+float PqToNits(float encoded) {
+    constexpr float m1 = 2610.0f / 16384.0f;
+    constexpr float m2 = 2523.0f / 32.0f;
+    constexpr float c1 = 3424.0f / 4096.0f;
+    constexpr float c2 = 2413.0f / 128.0f;
+    constexpr float c3 = 2392.0f / 128.0f;
+    const float vp = std::pow(std::clamp(encoded, 0.0f, 1.0f), 1.0f / m2);
+    return 10000.0f * std::pow(std::max(vp - c1, 0.0f) / std::max(c2 - c3 * vp, 1e-6f), 1.0f / m1);
+}
+
+u8 HdrToSrgb8(float nits) {
+    const float x = std::max(nits, 0.0f) / 100.0f; // 100-nit SDR white
+    const float linear = std::clamp(2.0f * x / (1.0f + x), 0.0f, 1.0f);
+    const float srgb = linear <= 0.0031308f ? 12.92f * linear : 1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
+    return u8(std::clamp(srgb, 0.0f, 1.0f) * 255.0f + 0.5f);
+}
+
+bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, bool hdr,
+                       std::vector<u8>& rgba) {
+    const size_t pixels = size_t(width) * height;
+    rgba.resize(pixels * 4);
+    switch (format) {
+    case vk::Format::eR8G8B8A8Unorm:
+    case vk::Format::eR8G8B8A8Srgb:
+        for (size_t i = 0; i < pixels; ++i) {
+            std::memcpy(&rgba[i * 4], &src[i * 4], 3);
+            rgba[i * 4 + 3] = 255;
+        }
+        return true;
+    case vk::Format::eB8G8R8A8Unorm:
+    case vk::Format::eB8G8R8A8Srgb:
+        for (size_t i = 0; i < pixels; ++i) {
+            rgba[i * 4 + 0] = src[i * 4 + 2];
+            rgba[i * 4 + 1] = src[i * 4 + 1];
+            rgba[i * 4 + 2] = src[i * 4 + 0];
+            rgba[i * 4 + 3] = 255;
+        }
+        return true;
+    case vk::Format::eA2B10G10R10UnormPack32: {
+        static const auto nits = [] {
+            std::array<float, 1024> lut{};
+            for (size_t i = 0; i < lut.size(); ++i) {
+                lut[i] = PqToNits(float(i) / 1023.0f);
+            }
+            return lut;
+        }();
+        for (size_t i = 0; i < pixels; ++i) {
+            u32 packed;
+            std::memcpy(&packed, &src[i * 4], 4);
+            const u32 r = packed & 0x3FF, g = (packed >> 10) & 0x3FF, b = (packed >> 20) & 0x3FF;
+            if (hdr) {
+                // Rec.2020 PQ to SDR Rec.709.
+                const float r2020 = nits[r], g2020 = nits[g], b2020 = nits[b];
+                rgba[i * 4 + 0] = HdrToSrgb8(1.6605f * r2020 - 0.5876f * g2020 - 0.0728f * b2020);
+                rgba[i * 4 + 1] = HdrToSrgb8(-0.1246f * r2020 + 1.1329f * g2020 - 0.0083f * b2020);
+                rgba[i * 4 + 2] = HdrToSrgb8(-0.0182f * r2020 - 0.1006f * g2020 + 1.1187f * b2020);
+            } else {
+                rgba[i * 4 + 0] = u8((r * 255 + 511) / 1023);
+                rgba[i * 4 + 1] = u8((g * 255 + 511) / 1023);
+                rgba[i * 4 + 2] = u8((b * 255 + 511) / 1023);
+            }
+            rgba[i * 4 + 3] = 255;
+        }
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+
+std::filesystem::path ScreenshotPath() {
+    const auto& dir = Common::FS::GetUserPath(Common::FS::PathType::ScreenshotsDir);
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    std::string serial{Common::ElfInfo::Instance().GameSerial()};
+    if (serial.empty()) {
+        serial = "spartanport";
+    }
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+    std::tm local{};
+#ifdef _WIN32
+    localtime_s(&local, &now_time);
+#else
+    localtime_r(&now_time, &local);
+#endif
+    const auto ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
+    char name[96];
+    std::snprintf(name, sizeof(name), "%s_%04d%02d%02d_%02d%02d%02d_%03d.png", serial.c_str(),
+                  local.tm_year + 1900, local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min,
+                  local.tm_sec, int(ms));
+    return dir / name;
+}
+
+/// Records the copy of `image` (layout TransferSrcOptimal) and saves it once the GPU is done.
+void CaptureScreenshot(const Instance& instance, Scheduler& scheduler, vk::CommandBuffer cmdbuf,
+                       const Frame& frame) {
+    const VkBufferCreateInfo buffer_ci{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                       .size = VkDeviceSize(frame.width) * frame.height * 4,
+                                       .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT};
+    const VmaAllocationCreateInfo alloc_ci{
+        .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST};
+    VkBuffer buffer{};
+    VmaAllocation allocation{};
+    VmaAllocationInfo info{};
+    if (vmaCreateBuffer(instance.GetAllocator(), &buffer_ci, &alloc_ci, &buffer, &allocation, &info) !=
+        VK_SUCCESS) {
+        LOG_ERROR(Render_Vulkan, "Screenshot: no memory for the readback");
+        return;
+    }
+    cmdbuf.copyImageToBuffer(frame.image, vk::ImageLayout::eTransferSrcOptimal, buffer,
+                             vk::BufferImageCopy{.imageSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                                                 .imageExtent = {frame.width, frame.height, 1}});
+    const vk::MemoryBarrier to_host{
+        .srcAccessMask = vk::AccessFlagBits::eTransferWrite,
+        .dstAccessMask = vk::AccessFlagBits::eHostRead,
+    };
+    cmdbuf.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eHost,
+                           vk::DependencyFlags{}, to_host, {}, {});
+    scheduler.DeferPriorityOperation([allocator = instance.GetAllocator(), buffer, allocation, info,
+                                      width = frame.width, height = frame.height, format = frame.format,
+                                      hdr = frame.is_hdr, path = ScreenshotPath()] {
+        vmaInvalidateAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
+        std::vector<u8> rgba;
+        const bool converted =
+            ScreenshotToRgba8(static_cast<const u8*>(info.pMappedData), width, height, format, hdr, rgba);
+        vmaDestroyBuffer(allocator, buffer, allocation);
+        if (!converted) {
+            LOG_ERROR(Render_Vulkan, "Screenshot: unsupported format {}", vk::to_string(format));
+            SpartanOverlay::ShowNotice("Screenshot failed: unsupported image format");
+            return;
+        }
+        size_t png_size = 0;
+        void* png = tdefl_write_image_to_png_file_in_memory_ex(rgba.data(), int(width), int(height), 4,
+                                                               &png_size, 6, MZ_FALSE);
+        bool saved = false;
+        if (png) {
+#ifdef _WIN32
+            FILE* f = _wfopen(path.wstring().c_str(), L"wb"); // the user folder may not be ASCII
+#else
+            FILE* f = std::fopen(path.c_str(), "wb");
+#endif
+            if (f) {
+                saved = std::fwrite(png, 1, png_size, f) == png_size;
+                saved = std::fclose(f) == 0 && saved;
+            }
+            mz_free(png);
+        }
+        if (saved) {
+            std::printf("Screenshot: %s (%ux%u)\n", Common::FS::PathToUTF8String(path).c_str(), width, height);
+            SpartanOverlay::ShowNotice("Screenshot saved: " + Common::FS::PathToUTF8String(path.filename()));
+        } else {
+            LOG_ERROR(Render_Vulkan, "Screenshot: cannot write {}", Common::FS::PathToUTF8String(path));
+            SpartanOverlay::ShowNotice("Screenshot failed: cannot write the file");
+        }
+    });
+}
+
+} // namespace
 
 Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_)
     : window{window_}, liverpool{liverpool_},
@@ -153,27 +319,27 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
 
     fsr_pass.Create(device, instance.GetAllocator(), num_images);
     pp_pass.Create(device, swapchain.GetSurfaceFormat().format);
-    Gow3Overlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images);
+    SpartanOverlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images);
 
-    const bool binary_cache = EmulatorSettingsImpl::Flag("GOW3_PIPELINE_BINARIES", true) &&
+    const bool binary_cache = EmulatorSettingsImpl::Flag("SPARTAN_PIPELINE_BINARIES", true) &&
                               EmulatorSettings.IsPipelineCacheEnabled();
-    const bool capture_only = EmulatorSettingsImpl::Flag("GOW3_PIPELINE_BINARY_ISOLATED", false) &&
-                              EmulatorSettingsImpl::Flag("GOW3_PIPELINE_CAPTURE_ONLY", false);
+    const bool capture_only = EmulatorSettingsImpl::Flag("SPARTAN_PIPELINE_BINARY_ISOLATED", false) &&
+                              EmulatorSettingsImpl::Flag("SPARTAN_PIPELINE_CAPTURE_ONLY", false);
     if (UseOnDemandPipelines(binary_cache, instance.GetPipelineBinaryGlobalKey().keySize != 0,
                             capture_only)) {
         rasterizer->GetPipelineCache().StartOnDemand();
         return;
     }
 
-    // gow3: by default the cached pipelines load while the game runs (a corner note shows the
+    // spartanport: by default the cached pipelines load while the game runs (a corner note shows the
     // progress). Otherwise rebuilding them takes up to minutes before the first game frame:
     // show what is happening instead of a black window.
-    const char* background_warmup = std::getenv("GOW3_BACKGROUND_WARMUP");
+    const char* background_warmup = std::getenv("SPARTAN_BACKGROUND_WARMUP");
     if ((!background_warmup || *background_warmup != '0') &&
         rasterizer->GetPipelineCache().StartBackgroundWarmUp()) {
         return;
     }
-    Gow3Overlay::SetLoading(true, 0, 0);
+    SpartanOverlay::SetLoading(true, 0, 0);
     PresentLoadingFrame();
     auto last = std::chrono::steady_clock::now();
     rasterizer->GetPipelineCache().WarmUp([&](u32 done, u32 total) {
@@ -182,10 +348,10 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
             return;
         }
         last = now;
-        Gow3Overlay::SetLoading(true, done, total);
+        SpartanOverlay::SetLoading(true, done, total);
         PresentLoadingFrame();
     });
-    Gow3Overlay::SetLoading(false, 0, 0);
+    SpartanOverlay::SetLoading(false, 0, 0);
 
 }
 
@@ -272,6 +438,7 @@ void Presenter::RecreateFrame(Frame* frame, u32 width, u32 height) {
     frame->height = height;
 
     frame->is_hdr = swapchain.GetHDR();
+    frame->format = format;
 }
 
 Frame* Presenter::PrepareLastFrame() {
@@ -346,7 +513,7 @@ static vk::Format GetFrameViewFormat(const Libraries::VideoOut::PixelFormat form
     return {};
 }
 
-// gow3: raw copy of an image for GOW3_FRAME_DUMP_TRIGGER, written once the GPU is done.
+// spartanport: raw copy of an image for SPARTAN_FRAME_DUMP_TRIGGER, written once the GPU is done.
 static void DumpRaw(const Instance& instance, Scheduler& scheduler, vk::CommandBuffer cmdbuf,
                     vk::Image image, vk::ImageLayout layout, u32 w, u32 h, const char* name,
                     int index) {
@@ -366,7 +533,7 @@ static void DumpRaw(const Instance& instance, Scheduler& scheduler, vk::CommandB
     cmdbuf.copyImageToBuffer(image, layout, buffer,
                              vk::BufferImageCopy{.imageSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
                                                  .imageExtent = {w, h, 1}});
-    const char* dir = std::getenv("GOW3_DUMP_DIR");
+    const char* dir = std::getenv("SPARTAN_DUMP_DIR");
     char path[512];
     std::snprintf(path, sizeof(path), "%s/%s_%03d_%ux%u.raw", dir && *dir ? dir : "out/dump", name,
                   index, w, h);
@@ -383,13 +550,13 @@ static void DumpRaw(const Instance& instance, Scheduler& scheduler, vk::CommandB
 
 Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& attribute,
                                VAddr cpu_address) {
-    // gow3: GOW3_FRAME_DUMP_TRIGGER=<file>: when the file exists it is removed and this frame's
-    // guest display buffer and presented image are written to GOW3_DUMP_DIR (default out/dump)
+    // spartanport: SPARTAN_FRAME_DUMP_TRIGGER=<file>: when the file exists it is removed and this frame's
+    // guest display buffer and presented image are written to SPARTAN_DUMP_DIR (default out/dump)
     // as raw 32-bit pixels (menus and movies included; the upscaler dumps scene frames only).
-    static const char* frame_dump_trigger = std::getenv("GOW3_FRAME_DUMP_TRIGGER");
+    static const char* frame_dump_trigger = std::getenv("SPARTAN_FRAME_DUMP_TRIGGER");
     static int frame_dump_index = 0;
     const bool frame_dump = frame_dump_trigger && std::remove(frame_dump_trigger) == 0;
-    // gow3: scaled upscaler presets: the output-size display buffer drawn by the port.
+    // spartanport: scaled upscaler presets: the output-size display buffer drawn by the port.
     TemporalUpscaler::Display display{};
     const bool upscaled = rasterizer->GetUpscaler().DisplayOverride(cpu_address, display);
     VideoCore::ImageId image_id{};
@@ -476,18 +643,18 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     }
     expected_ratio = static_cast<float>(image_size.width) / static_cast<float>(image_size.height);
 
-    // gow3: FSR 1, RCAS and its strength come from the in-game menu, every frame.
-    const auto& graphics = Gow3Settings::Get();
+    // spartanport: FSR 1, RCAS and its strength come from the in-game menu, every frame.
+    const auto& graphics = SpartanSettings::Get();
     fsr_settings.enable = graphics.fsr1;
     fsr_settings.use_rcas = graphics.rcas;
-    fsr_settings.rcas_attenuation = Gow3Graphics::RcasAttenuation(graphics.rcas_strength);
-    Gow3Settings::Get().image_width = int(image_size.width);
-    Gow3Settings::Get().image_height = int(image_size.height);
-    Gow3Settings::Get().window_width = int(frame->width);
-    Gow3Settings::Get().window_height = int(frame->height);
-    Gow3Settings::Get().rcas_applied =
+    fsr_settings.rcas_attenuation = SpartanGraphics::RcasAttenuation(graphics.rcas_strength);
+    SpartanSettings::Get().image_width = int(image_size.width);
+    SpartanSettings::Get().image_height = int(image_size.height);
+    SpartanSettings::Get().window_width = int(frame->width);
+    SpartanSettings::Get().window_height = int(frame->height);
+    SpartanSettings::Get().rcas_applied =
         fsr_settings.use_rcas &&
-        Gow3Graphics::FsrPassRuns(fsr_settings.enable, true, int(image_size.width), int(image_size.height),
+        SpartanGraphics::FsrPassRuns(fsr_settings.enable, true, int(image_size.width), int(image_size.height),
                                   int(frame->width), int(frame->height));
     image_view = fsr_pass.Render(cmdbuf, image_view, image_size, {frame->width, frame->height},
                                  fsr_settings, frame->is_hdr);
@@ -496,6 +663,9 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     // the post process pass still sRGB encoded and has to be decoded there instead.
     pp_settings.srgb_input =
         attribute.attrib.pixel_format == Libraries::VideoOut::PixelFormat::A2R10G10B10Srgb;
+    // spartanport: black bars around a cutscene when the render resolution is not 16:9 (movie_bars.h).
+    pp_settings.picture = MovieBars::Cutscenes().Bars(image_size.width, image_size.height,
+                                                      MovieBars::NowMs());
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
     if (frame_dump) {
         // The presented image as the swapchain blit reads it (General after the pass).
@@ -515,13 +685,13 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     SubmitInfo info{};
     draw_scheduler.Flush(info);
 
-    // gow3: the GPU command thread runs at most GOW3_FRAMES_AHEAD (default 1) guest frames
+    // spartanport: the GPU command thread runs at most SPARTAN_FRAMES_AHEAD (default 1) guest frames
     // ahead of the GPU: it waits here for the frame that many flips back. When the GPU is the
     // bottleneck it finishes frames at an even rate; without this bound the command thread ran
     // ahead and then blocked wherever a resource ran out, so flips (and the guest's frame
     // timing) came in bursts: 12.5/25 ms alternation at 80 FPS. 0 turns it off.
-    // The in-game menu changes it live (Gow3Settings::frames_queued; GOW3_FRAMES_AHEAD at start).
-    const u32 frames_ahead = u32(std::max(0, Gow3Settings::Get().frames_queued.load()));
+    // The in-game menu changes it live (SpartanSettings::frames_queued; SPARTAN_FRAMES_AHEAD at start).
+    const u32 frames_ahead = u32(std::max(0, SpartanSettings::Get().frames_queued.load()));
     if (!frames_ahead) {
         recent_frame_ticks.clear();
     } else {
@@ -611,7 +781,7 @@ Frame* Presenter::PrepareBlankFrame(bool present_thread) {
 }
 
 void Presenter::PresentLoadingFrame() {
-    if (window.GetWidth() == 0 || window.GetHeight() == 0) {
+    if (window.IsMinimized() || window.GetWidth() <= 0 || window.GetHeight() <= 0) {
         return;
     }
     swapchain.UpdateVsync();
@@ -619,7 +789,12 @@ void Presenter::PresentLoadingFrame() {
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
     }
     if (!swapchain.AcquireNextImage()) {
-        return;
+        if (!window.IsMinimized() && window.GetWidth() > 0 && window.GetHeight() > 0) {
+            swapchain.Recreate(window.GetWidth(), window.GetHeight());
+        }
+        if (!swapchain.AcquireNextImage()) {
+            return;
+        }
     }
     const vk::Image image = swapchain.Image();
     const vk::Extent2D extent = swapchain.GetExtent();
@@ -651,7 +826,7 @@ void Presenter::PresentLoadingFrame() {
                            range);
     barrier(vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eColorAttachmentOptimal,
             vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eColorAttachmentWrite);
-    Gow3Overlay::Render(cmdbuf, swapchain.ImageView(), extent);
+    SpartanOverlay::Render(cmdbuf, swapchain.ImageView(), extent);
     barrier(vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
             vk::AccessFlagBits::eColorAttachmentWrite, {});
     SubmitInfo info{};
@@ -660,7 +835,10 @@ void Presenter::PresentLoadingFrame() {
     present_scheduler.Flush(info);
     {
         std::scoped_lock submit_lock{Scheduler::submit_mutex};
-        swapchain.Present();
+        if (!swapchain.Present() && !window.IsMinimized() && window.GetWidth() > 0 &&
+            window.GetHeight() > 0) {
+            swapchain.Recreate(window.GetWidth(), window.GetHeight());
+        }
     }
     // A few frames a second during start-up: waiting keeps semaphores and the swapchain simple.
     present_scheduler.Finish();
@@ -677,9 +855,9 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
         }
     };
 
-    // gow3: a minimized window has no pixels on Windows (0x0); keep the swapchain and skip
-    // presenting until the window is restored.
-    if (window.GetWidth() == 0 || window.GetHeight() == 0) {
+    // spartanport: a minimized window has no pixels on Windows (0x0) or is hidden/occluded; keep the swapchain
+    // and skip presenting until the window is restored.
+    if (window.IsMinimized() || window.GetWidth() <= 0 || window.GetHeight() <= 0) {
         free_frame();
         return;
     }
@@ -691,7 +869,9 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     }
 
     if (!swapchain.AcquireNextImage()) {
-        swapchain.Recreate(window.GetWidth(), window.GetHeight());
+        if (!window.IsMinimized() && window.GetWidth() > 0 && window.GetHeight() > 0) {
+            swapchain.Recreate(window.GetWidth(), window.GetHeight());
+        }
         if (!swapchain.AcquireNextImage()) {
             // User resizes the window too fast and GPU can't keep up. Skip this frame.
             LOG_WARNING(Render_Vulkan, "Skipping frame!");
@@ -707,7 +887,7 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     ASSERT_MSG(reset_result == vk::Result::eSuccess,
                "Unexpected error resetting present done fence: {}", vk::to_string(reset_result));
 
-    // gow3: the game frame is blitted (letterboxed) straight into the swapchain image.
+    // spartanport: the game frame is blitted (letterboxed) straight into the swapchain image.
     const vk::Image swapchain_image = swapchain.Image();
     auto& scheduler = present_scheduler;
     const auto cmdbuf = scheduler.CommandBuffer();
@@ -765,8 +945,11 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
                          vk::ImageLayout::eTransferDstOptimal,
                          MakeImageBlitFit(frame->width, frame->height, extent.width, extent.height),
                          vk::Filter::eLinear);
-        // gow3: the settings menu / FPS counter over the frame, at display resolution.
-        const bool overlay = Gow3Overlay::Visible();
+        if (VideoCore::ConsumeGameOnlyScreenshotRequests() != 0) {
+            CaptureScreenshot(instance, scheduler, cmdbuf, *frame);
+        }
+        // spartanport: the settings menu / FPS counter over the frame, at display resolution.
+        const bool overlay = SpartanOverlay::Visible();
         const std::array post_barriers{
             vk::ImageMemoryBarrier{
                 .srcAccessMask = vk::AccessFlagBits::eTransferWrite,
@@ -796,7 +979,7 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
                                vk::PipelineStageFlagBits::eAllCommands,
                                vk::DependencyFlagBits::eByRegion, {}, {}, post_barriers);
         if (overlay) {
-            Gow3Overlay::Render(cmdbuf, swapchain.ImageView(), extent);
+            SpartanOverlay::Render(cmdbuf, swapchain.ImageView(), extent);
             const vk::ImageMemoryBarrier to_present{
                 .srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
                 .dstAccessMask = vk::AccessFlagBits::eNone,
@@ -828,7 +1011,8 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     // Present to swapchain.
     {
         std::scoped_lock submit_lock{Scheduler::submit_mutex};
-        if (!swapchain.Present() && window.GetWidth() != 0 && window.GetHeight() != 0) {
+        if (!swapchain.Present() && !window.IsMinimized() && window.GetWidth() > 0 &&
+            window.GetHeight() > 0) {
             swapchain.Recreate(window.GetWidth(), window.GetHeight());
         }
     }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// gow3: GOW3_GPU_PROFILE=1 — GPU time per render pass, dispatch and upscaler run. A timestamp is
+// spartanport: SPARTAN_GPU_PROFILE=1 — GPU time per render pass, dispatch and upscaler run. A timestamp is
 // written where each of them starts (and at the frame end); the time to the next timestamp is
 // charged to its label, barriers and copies recorded in between included. Results are read four
 // frames later and printed every 5 s: GPU ms per frame by label.
@@ -23,7 +23,7 @@ class Scheduler;
 
 class GpuProfiler {
 public:
-    /// The profiler when GOW3_GPU_PROFILE=1, else null.
+    /// The profiler when SPARTAN_GPU_PROFILE=1, else null.
     static GpuProfiler* Get() noexcept {
         return instance_ptr;
     }
@@ -73,6 +73,8 @@ private:
     std::array<std::vector<u64>, NumSlices> keys; ///< label of each timestamp but the last
     std::array<u32, NumSlices> used{};
     std::array<bool, NumSlices> pending{};
+    std::array<u64, NumSlices> ticks{}; ///< scheduler tick of each pending slice's last timestamp
+    bool paused = false; ///< the next slice is still in flight: no timestamps this frame
     std::unordered_map<u64, std::string> described;
     struct Total {
         double ms = 0;

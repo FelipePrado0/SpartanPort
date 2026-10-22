@@ -1,14 +1,14 @@
-// Performance overlay text and settings (gow3_perf_stats.h, gow3_settings.cpp).
+// Performance overlay text and settings (spartanport_perf_stats.h, spartanport_settings.cpp).
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <string>
-#include "gow3_perf_stats.h"
-#include "gow3_settings.h"
+#include "spartanport_perf_stats.h"
+#include "spartanport_settings.h"
 
-namespace P = Gow3PerfStats;
+namespace P = SpartanPerfStats;
 
 static std::string Read(const char* path) {
     std::ifstream in(path);
@@ -54,10 +54,10 @@ int main() {
                "overlay_cpu=1\noverlay_ram=0\noverlay_vram=1\noverlay_scale=400\noverlay_corner=2\n"
                "overlay_opacity=-5\noverlay_layout=1\nmenu_tab=3\n";
     }
-    _putenv_s("GOW3_CONFIG", path);
-    auto& v = Gow3Settings::Get();
+    _putenv_s("SPARTAN_CONFIG", path);
+    auto& v = SpartanSettings::Get();
     assert(v.overlay_items == P::DefaultItems && v.overlay_scale == 100 && v.overlay_corner == 1);
-    Gow3Settings::Load();
+    SpartanSettings::Load();
     assert(v.overlay_items == (P::FrameTime | P::Gpu | P::Cpu | P::Vram));
     assert(v.overlay_scale == 300 && v.overlay_corner == 2 && v.overlay_opacity == 0);
     assert(v.overlay_layout == 1 && v.menu_tab == 3);
@@ -65,7 +65,7 @@ int main() {
     v.overlay_scale = 150;
     v.overlay_opacity = 70;
     v.menu_tab = 1;
-    Gow3Settings::Save();
+    SpartanSettings::Save();
     const std::string saved = Read(path);
     for (const char* line : {"overlay_fps=1\n", "overlay_frametime=0\n", "overlay_ram=1\n", "overlay_vram=0\n",
                              "overlay_scale=150\n", "overlay_corner=2\n", "overlay_opacity=70\n",
@@ -76,7 +76,7 @@ int main() {
         std::ofstream out(path);
         out << "overlay_corner=9\nmenu_tab=-1\noverlay_scale=10\n";
     }
-    Gow3Settings::Load();
+    SpartanSettings::Load();
     assert(v.overlay_corner == 1 && v.menu_tab == 0 && v.overlay_scale == 50);
     std::remove(path);
     std::puts("PASS: performance overlay");

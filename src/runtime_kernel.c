@@ -94,6 +94,7 @@ uint64_t runtime_process_time_counter(void) { return process_time_counter(); }
 uint64_t runtime_tsc_frequency(void) { return tsc_frequency(); }
 uint64_t runtime_read_tsc(void) { return read_tsc(); }
 static int sleep_ns(uint64_t ns) {
+    if (!ns) runtime_thread_count_yield(1);
 #ifdef _WIN32
     compat_sleep_ns(ns);
 #else
@@ -142,7 +143,7 @@ static ABI int64_t posix_time(int64_t *out) { int64_t t=(int64_t)time(NULL); if 
 /* ---- process ---- */
 static ABI int32_t get_pagesize(void) { return PAGE; }
 static ABI int32_t get_pid(void) { return 1000; }
-static ABI int32_t yield(void) { sched_yield(); return 0; }
+static ABI int32_t yield(void) { runtime_thread_count_yield(0); sched_yield(); return 0; }
 static ABI __attribute__((noreturn)) void hard_exit(int status) {
     printf("Runtime: guest requested _exit(%d)\n",status);
     runtime_report();
