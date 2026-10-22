@@ -43,6 +43,14 @@ def solid_png(rgb):
     return out.getvalue()
 
 
+class GameTexts(unittest.TestCase):
+    """The names are the PS4 list's (the Remastered renamed some of the PS3 ones)."""
+
+    def test_english_is_the_ps4_list(self):
+        names = [name for name, _ in spartanport_trophies.TEXTS['en']]
+        self.assertEqual((names[12], names[23], names[28]), ('Torn Up', 'Depths Below', 'Horn of Plenty'))
+
+
 class TrophyTexts(unittest.TestCase):
     def test_every_language_lists_all_trophies(self):
         for language in LANGUAGES:
