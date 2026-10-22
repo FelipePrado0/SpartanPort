@@ -230,6 +230,30 @@ int main() {
     }
 
     {
+        // The game's depth of field (spartanport_depth_of_field.h): the same way.
+        {
+            std::ofstream out(path);
+            out << "depth_of_field=0\n";
+        }
+        SpartanSettings::Load();
+        assert(!v.depth_of_field);
+        SpartanSettings::Save();
+        assert(Read(path).find("depth_of_field=0\n") != std::string::npos);
+        SetEnvironment("SPARTAN_DEPTH_OF_FIELD", "1");
+        SpartanSettings::Load();
+        assert(v.depth_of_field);
+        SetEnvironment("SPARTAN_DEPTH_OF_FIELD", "");
+        {
+            std::ofstream out(path);
+            out << "depth_of_field=1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.depth_of_field);
+        SpartanSettings::Save();
+        assert(Read(path).find("depth_of_field=1\n") != std::string::npos);
+    }
+
+    {
         std::ofstream out(path);
         out << "cheat_double_jumps=1\ncheat_very_hard=1\n";
     }

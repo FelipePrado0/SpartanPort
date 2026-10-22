@@ -88,6 +88,8 @@ struct Values {
     std::atomic<int> rcas_strength{75};
     /// The game's own motion blur (spartanport_motion_blur.h); off skips its draws. Live.
     std::atomic<bool> motion_blur{true};
+    /// The game's depth of field (spartanport_depth_of_field.h); off keeps the whole picture sharp. Live.
+    std::atomic<bool> depth_of_field{true};
     /// Set by the presenter: sharpening ran on the last frame (it needs FSR 1 when the game's
     /// image is smaller than the window).
     std::atomic<bool> rcas_applied{false};

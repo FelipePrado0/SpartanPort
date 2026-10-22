@@ -1558,12 +1558,18 @@ EXTRA['pt'].update({
     'Motion blur': 'Desfoque de movimento',
     "The game's own motion blur on fast moving objects and the camera. Off removes it.":
         'O desfoque de movimento do próprio jogo em objetos rápidos e na câmera. Desligado, ele é removido.',
+    'Depth of field': 'Profundidade de campo',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'O desfoque do próprio jogo em objetos distantes, mais forte nas cenas. Desligado, a imagem inteira fica nítida.',
 })
 EXTRA['es'].update({
     'Effects': 'Efectos',
     'Motion blur': 'Desenfoque de movimiento',
     "The game's own motion blur on fast moving objects and the camera. Off removes it.":
         'El desenfoque de movimiento del propio juego en objetos rápidos y en la cámara. Desactivado, se elimina.',
+    'Depth of field': 'Profundidad de campo',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'El desenfoque del propio juego en objetos lejanos, más fuerte en las escenas. Desactivado, toda la imagen se ve nítida.',
 })
 
 EXTRA['pt'].update({'Polish': 'Polonês'})
@@ -2495,6 +2501,9 @@ EXTRA['zh'].update({
     'Motion blur': '动态模糊',
     "The game's own motion blur on fast moving objects and the camera. Off removes it.":
         '游戏自带的动态模糊（快速移动的物体和镜头）。关闭后将其移除。',
+    'Depth of field': '景深',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        '游戏自带的远景模糊，过场动画中最明显。关闭后整个画面保持清晰。',
 })
 
 EXTRA['id'].update({
@@ -2502,6 +2511,9 @@ EXTRA['id'].update({
     'Motion blur': 'Motion blur',
     "The game's own motion blur on fast moving objects and the camera. Off removes it.":
         'Motion blur bawaan game pada objek yang bergerak cepat dan kamera. Jika dimatikan, efek ini dihilangkan.',
+    'Depth of field': 'Depth of field',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'Blur bawaan game pada objek yang jauh, paling kuat di cutscene. Jika dimatikan, seluruh gambar tetap tajam.',
 })
 
 _tables = {}

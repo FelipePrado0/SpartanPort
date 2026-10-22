@@ -3,6 +3,7 @@
 
 #include <xxhash.h>
 #include "video_core/renderer_vulkan/ui_composition.h"
+#include "spartanport_depth_of_field.h"
 #include "spartanport_settings.h"
 #include "spartanport_toggles.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
@@ -488,6 +489,27 @@ bool Rasterizer::PendingWriteOverlaps(VAddr address, u64 size) {
     return false;
 }
 
+// spartanport: the game's depth of field is switched off in the settings; the composite's constants
+// are then changed on their way to the GPU (spartanport_depth_of_field.h).
+static bool DepthOfFieldOff() {
+    return !SpartanSettings::Get().depth_of_field.load(std::memory_order_relaxed);
+}
+
+/// `constants`: the composite's constant buffer, 80 bytes, a copy that is safe to change.
+static bool DisableDepthOfField(void* constants) {
+    float words[SpartanDepthOfField::ConstantWords];
+    std::memcpy(words, constants, sizeof(words));
+    if (!SpartanDepthOfField::Disable(words)) {
+        return false;
+    }
+    std::memcpy(constants, words, sizeof(words));
+    static bool logged = false;
+    if (!std::exchange(logged, true)) {
+        std::printf("Depth of field: off, the composite's constants set to in focus\n");
+    }
+    return true;
+}
+
 void Rasterizer::CollectRingBindings(const Shader::Info& stage, const PreparedDraw* prepared,
                            boost::container::static_vector<RingBinding, Shader::NUM_BUFFERS>& out) {
     const PreparedStage* prepared_stage = nullptr;
@@ -513,6 +535,9 @@ void Rasterizer::CollectRingBindings(const Shader::Info& stage, const PreparedDr
             std::memcpy(dst, source, size);
         } else {
             memory->CopySparseMemory(address, dst, size);
+        }
+        if (SpartanDepthOfField::IsComposite(stage.pgm_hash, index, size) && DepthOfFieldOff()) {
+            DisableDepthOfField(dst);
         }
         constant_ring->Flush(*offset, size);
         out.push_back({index, static_cast<u32>(size), *offset, address});
@@ -2236,8 +2261,24 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                                      reinterpret_cast<const void*>(vsharp.base_address),
                                      memory->ClampRangeSize(vsharp.base_address, vsharp.GetSize()));
             }
+            // spartanport: the game's depth of field is off: the composite reads a changed copy of
+            // its constants from the stream buffer (the draw pipeline does this in its ring copy).
+            alignas(16) std::array<float, SpartanDepthOfField::ConstantWords> dof_constants;
+            bool dof_off = false;
+            if (vsharp.base_address != 0 && !desc.is_written && !desc.is_formatted &&
+                SpartanDepthOfField::IsComposite(stage.pgm_hash, buffer_index, vsharp.GetSize()) &&
+                DepthOfFieldOff() && memory->IsValidGpuMapping(vsharp.base_address, 0)) {
+                std::memcpy(dof_constants.data(), reinterpret_cast<const void*>(vsharp.base_address),
+                            sizeof(dof_constants));
+                dof_off = DisableDepthOfField(dof_constants.data());
+            }
             if (vsharp.base_address == 0 || vsharp.GetSize() == 0) {
                 buffer_infos.emplace_back(VK_NULL_HANDLE, 0, VK_WHOLE_SIZE);
+            } else if (dof_off) {
+                auto& vk_buffer = buffer_cache.GetStreamBuffer();
+                const u64 offset = vk_buffer.Copy(dof_constants.data(), sizeof(dof_constants), alignment);
+                push_data.AddOffset(binding.buffer, 0);
+                buffer_infos.emplace_back(vk_buffer.Handle(), offset, sizeof(dof_constants));
             } else {
                 const u64 size = memory->ClampRangeSize(vsharp.base_address, vsharp.GetSize());
                 if (size != vsharp.GetSize()) {
