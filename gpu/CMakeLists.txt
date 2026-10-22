@@ -308,6 +308,19 @@ add_executable(trophy-toast-test EXCLUDE_FROM_ALL ../tests/test_trophy_toast.cpp
 target_include_directories(trophy-toast-test PRIVATE shim)
 target_compile_options(trophy-toast-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_link_libraries(trophy-toast-test PRIVATE PkgConfig::FFMPEG)
+# The overlay drawn offscreen (tools/overlay_preview.cpp): its own code through ImGui's SDL software
+# renderer, for working on its look without the game and for the documentation's pictures.
+add_executable(overlay-preview EXCLUDE_FROM_ALL tools/overlay_preview.cpp
+    third_party/imgui/backends/imgui_impl_sdlrenderer3.cpp)
+# The overlay's source is compiled here as in the library: same definitions, includes and options.
+target_include_directories(overlay-preview PRIVATE $<TARGET_PROPERTY:spartanportgpu,INCLUDE_DIRECTORIES>)
+target_compile_definitions(overlay-preview PRIVATE $<TARGET_PROPERTY:spartanportgpu,COMPILE_DEFINITIONS>)
+target_compile_options(overlay-preview PRIVATE $<TARGET_PROPERTY:spartanportgpu,COMPILE_OPTIONS>)
+target_link_libraries(overlay-preview PRIVATE spartanportgpu)
+if (WIN32)
+    target_sources(overlay-preview PRIVATE ../src/compat_win.c)
+    target_link_libraries(overlay-preview PRIVATE onecore bcrypt ws2_32 -pthread)
+endif()
 add_executable(ui-language-test EXCLUDE_FROM_ALL ../tests/test_ui_language.cpp)
 target_include_directories(ui-language-test PRIVATE shim)
 target_compile_options(ui-language-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
