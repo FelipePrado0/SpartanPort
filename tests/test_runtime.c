@@ -14,6 +14,9 @@ __attribute__((weak)) void spartanportgpu_trophy_setup(const SpartanGpuTrophyLab
 #include <pthread.h>
 #include <stdatomic.h>
 #include <time.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 typedef int (ABI *Register)(GuestCallback);
 typedef int (ABI *RegisterCxa)(void (ABI *)(void *), void *, void *);
@@ -385,6 +388,18 @@ static void orbis_fpu(void) {
     assert(tiny*1.0f==0.0f);
     __asm__ volatile("ldmxcsr %0" : : "m"(before));
 }
+/* A slow-wait line that cannot be written leaves errno to the caller (a failed read returns
+ * -errno). */
+static void slow_wait_keeps_errno(void) {
+    const int saved=dup(2), full=open("/dev/full",O_WRONLY);
+    assert(saved>=0 && full>=0 && dup2(full,2)==2);
+    errno=EINTR;
+    runtime_wait_end("test wait",1,"none",0); /* threshold 0: logs */
+    const int after=errno;
+    assert(dup2(saved,2)==2);
+    close(saved); close(full);
+    assert(after==EINTR);
+}
 int main(int argc,char **argv) {
     runtime_start(0); assert(runtime_resolve("bzQExy189ZI#libc",0)==0);
     runtime_start(1);
@@ -429,7 +444,7 @@ int main(int argc,char **argv) {
     if (argc>1 && !strcmp(argv[1],"--rwlock-concurrency")) { rw_concurrency(); return 0; }
     if (argc>1 && !strcmp(argv[1],"--rwlock-timeouts")) { rw_timeouts(); return 0; }
     libc_support(); posix_mutexes(); busy_mutex_lifetimes(); wall_time(); exit_handlers(); guards(); mutexes(); direct_memory(); memory_primitives();
-    rw_lifecycle(); rw_concurrency(); rw_timeouts(); orbis_fpu();
-    puts("PASS: callback lifecycle, guard ABI, mutex errors, shared direct memory, memory primitives, resolver scope, the PS4's floating-point state");
+    rw_lifecycle(); rw_concurrency(); rw_timeouts(); orbis_fpu(); slow_wait_keeps_errno();
+    puts("PASS: callback lifecycle, guard ABI, mutex errors, shared direct memory, memory primitives, resolver scope, the PS4's floating-point state, slow-wait log keeps errno");
     return 0;
 }

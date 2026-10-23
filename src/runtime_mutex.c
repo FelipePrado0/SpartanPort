@@ -91,7 +91,9 @@ static ABI int32_t mutex_lock(GuestMutex **mutex) {
     if (e) return e;
     GuestMutex *value=*mutex;
     __atomic_add_fetch(&value->users,1,__ATOMIC_ACQ_REL);
+    const uint64_t wait_start = runtime_wait_begin();
     e = orbis_error(pthread_mutex_lock(&value->native));
+    runtime_wait_end("mutex lock", wait_start, "mutex", (long long)(uintptr_t)value);
     if (e) __atomic_sub_fetch(&value->users,1,__ATOMIC_RELEASE);
     if (!e) ++locks;
     return e;
@@ -185,7 +187,10 @@ static ABI int32_t cond_wait(GuestCond **cond, GuestMutex **mutex) {
     if (e) return e;
     if (!mutex || (uintptr_t)*mutex < 3) return orbis_error(EINVAL);
     ++waits;
-    return orbis_error(pthread_cond_wait(&(*cond)->native, &(*mutex)->native));
+    const uint64_t wait_start = runtime_wait_begin();
+    const int r = pthread_cond_wait(&(*cond)->native, &(*mutex)->native);
+    runtime_wait_end("cond wait", wait_start, "cond", (long long)(uintptr_t)*cond);
+    return orbis_error(r);
 }
 static int32_t cond_wait_until(GuestCond **cond, GuestMutex **mutex, const struct timespec *end) {
     int32_t e = ensure_cond(cond);

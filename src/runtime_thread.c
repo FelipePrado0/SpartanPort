@@ -62,6 +62,33 @@ static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
 static ThreadAttr *attributes;
 static GuestThread *threads;
 static _Thread_local GuestThread *current;
+
+static int slow_wait_ms(void) {
+    static int threshold_ms=-1;
+    if (threshold_ms<0) { const char *e=getenv("SPARTAN_SLOW_WAITS"); threshold_ms=e ? atoi(e) : 0; }
+    return threshold_ms;
+}
+uint64_t runtime_wait_begin(void) {
+    if (slow_wait_ms()<=0) return 0;
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC,&t);
+    return (uint64_t)t.tv_sec*1000000000ull+(uint64_t)t.tv_nsec;
+}
+void runtime_wait_end(const char *what,uint64_t start,const char *detail,long long arg) {
+    if (!start) return;
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC,&t);
+    const uint64_t ns=(uint64_t)t.tv_sec*1000000000ull+(uint64_t)t.tv_nsec-start;
+    if (ns<(uint64_t)slow_wait_ms()*1000000ull) return;
+    static unsigned logged;
+    if (__atomic_fetch_add(&logged,1,__ATOMIC_RELAXED)>=4000) return;
+    /* Callers read errno after this (a failed read returns -errno); a failed log write must not
+     * change it. */
+    const int saved_errno=errno;
+    fprintf(stderr,"Slow wait: %s %.1f ms, thread '%s' %s %lld\n",what,ns/1e6,
+            current ? current->name : "host",detail ? detail : "",arg);
+    errno=saved_errno;
+}
 static _Thread_local int32_t guest_errno;
 static const unsigned char *tls_template;
 static uint64_t tls_filesz, tls_memsz, tls_align=16;
@@ -349,7 +376,9 @@ static ABI int32_t thread_join(GuestThread *t,void **result) {
     if (t->detached || t->joined) return ERR(22);
     t->joined=1;
     void *value=NULL;
+    const uint64_t wait_start=runtime_wait_begin();
     int e=pthread_join(t->host,&value);
+    runtime_wait_end("thread join",wait_start,t->name,0);
     if (e) { fprintf(stderr,"STOP: host pthread_join failed: %d\n",e); exit(21); }
     if (result) *result=t->result;
     pthread_mutex_lock(&lock); ++joined_count; pthread_mutex_unlock(&lock);
