@@ -71,10 +71,27 @@ _Static_assert(sizeof(BatchEntry)==32,"PS4 batch map entry layout");
  * under the lock may write guest memory, and a GPU-tracked page then faults into
  * runtime_memory_gpu_protect on the same thread. Readers nest because glibc's
  * default rwlock prefers readers; a thread holding it exclusively skips relocking. */
-static pthread_rwlock_t lock=PTHREAD_RWLOCK_INITIALIZER;
 static __thread unsigned exclusive_depth;
 /* Odd while a writer holds the lock; readers' region caches are valid for one even value. */
 static uint64_t table_generation;
+#ifdef _WIN32
+/* Windows: a slim reader/writer lock (from IgorAugustoHH/The-Order-1886-PC-Port a15cf8b).
+ * winpthread's rwlock serializes even readers on a kernel-event spin lock: the GPU thread and
+ * the copy threads spent about half their time blocked in it in a heavy scene. SRW locks do
+ * not nest shared acquisitions safely while a writer waits, so nested reads on one thread only
+ * count (read_depth): the thread holds one shared acquisition. */
+static SRWLOCK lock=SRWLOCK_INIT;
+static __thread unsigned read_depth;
+static void write_lock(void) {
+    if (!exclusive_depth++) { AcquireSRWLockExclusive(&lock); __atomic_add_fetch(&table_generation,1,__ATOMIC_ACQ_REL); }
+}
+static void write_unlock(void) {
+    if (!--exclusive_depth) { __atomic_add_fetch(&table_generation,1,__ATOMIC_RELEASE); ReleaseSRWLockExclusive(&lock); }
+}
+static void read_lock(void) { if (!exclusive_depth && !read_depth++) AcquireSRWLockShared(&lock); }
+static void read_unlock(void) { if (!exclusive_depth && !--read_depth) ReleaseSRWLockShared(&lock); }
+#else
+static pthread_rwlock_t lock=PTHREAD_RWLOCK_INITIALIZER;
 static void write_lock(void) {
     if (!exclusive_depth++) { pthread_rwlock_wrlock(&lock); __atomic_add_fetch(&table_generation,1,__ATOMIC_ACQ_REL); }
 }
@@ -83,6 +100,7 @@ static void write_unlock(void) {
 }
 static void read_lock(void) { if (!exclusive_depth) pthread_rwlock_rdlock(&lock); }
 static void read_unlock(void) { if (!exclusive_depth) pthread_rwlock_unlock(&lock); }
+#endif
 static Block blocks[LIMIT];
 static Vma *vmas; static size_t vma_count, vma_capacity;
 #ifndef _WIN32
