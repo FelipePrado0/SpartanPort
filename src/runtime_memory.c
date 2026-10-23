@@ -24,16 +24,24 @@
 #include <unistd.h>
 #endif
 /* sceKernelGetDirectMemorySize on retail PS4: 5056 MiB. SPARTAN_DMEM_MB raises it (the resolution
- * patches above 1080p need about 4 GiB more; run.sh sets it). */
+ * patches above 1080p need about 4 GiB more; run.sh sets it). pool() falls back to the retail
+ * size when the host refuses the larger pool. */
+#define RETAIL_POOL (UINT64_C(5056) * 1024 * 1024)
+static uint64_t pool_bytes;
 static uint64_t pool_size_bytes(void) {
-    static uint64_t size;
-    if (!size) {
+    uint64_t bytes = __atomic_load_n(&pool_bytes, __ATOMIC_ACQUIRE);
+    if (!bytes) {
         const char *env = getenv("SPARTAN_DMEM_MB");
         uint64_t mb = env ? strtoull(env, NULL, 10) : 0;
         if (mb < 5056 || mb > 16384) mb = 5056;
-        size = mb * 1024 * 1024;
+        /* Set once: callers read the size before taking the lock, and a thread that loses this
+         * race must not overwrite pool()'s retail fallback with the refused size. */
+        uint64_t expected = 0;
+        bytes = mb * 1024 * 1024;
+        if (!__atomic_compare_exchange_n(&pool_bytes, &expected, bytes, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+            bytes = expected;
     }
-    return size;
+    return bytes;
 }
 #define POOL_SIZE pool_size_bytes()
 #define FLEXIBLE_SIZE (UINT64_C(448) * 1024 * 1024)
@@ -94,6 +102,18 @@ static uint64_t live_bytes, flexible_bytes;
 
 static int valid_alignment(uint64_t a) { return a >= PAGE && a <= POOL_SIZE && !(a & (a-1)); }
 static uint64_t align_up(uint64_t n, uint64_t a) { return (n+a-1) & ~(a-1); }
+/* Parts of the guest range something else in the process held before the game started (a DLL
+ * another program loads into every process, or its memory; Windows only). Guest memory is
+ * placed around them, and a fixed guest mapping there fails as on a full PS4 range. */
+#define FOREIGN_LIMIT 64
+typedef struct { uintptr_t start, end; } Foreign;
+static Foreign foreign[FOREIGN_LIMIT];
+static size_t foreign_count;
+/* End of a foreign range overlapping [start,end), or 0. */
+static uintptr_t foreign_overlap(uintptr_t start, uintptr_t end) {
+    for (size_t i=0;i<foreign_count;++i) if (foreign[i].start<end && start<foreign[i].end) return foreign[i].end;
+    return 0;
+}
 static int host_prot(int prot) {
     /* GPU read/write bits (0x10/0x20) need host access for the future GPU backend. */
     return ((prot & 0x11) ? PROT_READ : 0) | ((prot & 0x22) ? PROT_WRITE|PROT_READ : 0) | ((prot & 4) ? PROT_EXEC|PROT_READ : 0);
@@ -135,15 +155,73 @@ static void region_insert(size_t at, HostRegion r) {
 static void region_erase(size_t at, size_t n) {
     memmove(regions+at,regions+at+n,(region_count-at-n)*sizeof(*regions)); region_count-=n;
 }
+static void describe_foreign(const MEMORY_BASIC_INFORMATION *m, char *out, size_t size) {
+    char path[MAX_PATH]="";
+    if (m->Type==MEM_IMAGE && GetModuleFileNameA((HMODULE)m->AllocationBase,path,sizeof(path))) {
+        const char *name=strrchr(path,'\\');
+        snprintf(out,size,"module %s",name ? name+1 : path);
+    } else {
+        snprintf(out,size,"%s memory",m->Type==MEM_IMAGE ? "module" : m->Type==MEM_MAPPED ? "mapped" : "private");
+    }
+}
+/* Reserves each free part of the range as its own placeholder. Placeholders stay within their
+ * part (guest mappings never span a foreign range), so carve_host never coalesces across one. */
+static void reserve_around_foreign(void) {
+    const uintptr_t grain=UINT64_C(0x10000); /* Windows' allocation granularity */
+    for (uintptr_t at=USER_MIN; at<USER_MAX;) {
+        MEMORY_BASIC_INFORMATION m;
+        if (!VirtualQuery((void *)at,&m,sizeof(m))) win_fail("VirtualQuery",at,0);
+        uintptr_t end=(uintptr_t)m.BaseAddress+m.RegionSize;
+        if (end>USER_MAX) end=USER_MAX;
+        if (m.State==MEM_FREE) {
+            uintptr_t a=align_up(at,grain), b=end & ~(grain-1);
+            if (a<b) {
+                if (!VirtualAlloc2(NULL,(void *)a,b-a,MEM_RESERVE|MEM_RESERVE_PLACEHOLDER,PAGE_NOACCESS,NULL,0))
+                    win_fail("reserving the PS4 address range around memory already in use",a,b-a);
+                region_insert(region_count,(HostRegion){a,b,0,0});
+            }
+        } else {
+            /* Rounded out to the granularity: the free sliver after an allocation's last page
+             * (allocations start on the granularity, not always end on it) is left alone too. */
+            char what[MAX_PATH+16];
+            describe_foreign(&m,what,sizeof(what));
+            uintptr_t a=at & ~(grain-1), b=align_up(end,grain);
+            if (foreign_count && foreign[foreign_count-1].end>=a) foreign[foreign_count-1].end=b;
+            else if (foreign_count==FOREIGN_LIMIT) win_fail("reserving the PS4 address range (too many parts in use)",at,end-at);
+            else foreign[foreign_count++]=(Foreign){a,b};
+            printf("Runtime: %p-%p of the PS4 address range was already in use (%s); the game's "
+                   "memory is placed around it\n",(void *)at,(void *)end,what);
+        }
+        at=end;
+    }
+    if (!region_count) win_fail("reserving the PS4 address range (none of it is free)",USER_MIN,USER_MAX-USER_MIN);
+}
 /* The guest range is reserved before anything else can be placed there (runtime_start). */
 void runtime_memory_reserve(void) {
     if (region_count) return;
-    if (!VirtualAlloc2(NULL,(void *)USER_MIN,USER_MAX-USER_MIN,MEM_RESERVE|MEM_RESERVE_PLACEHOLDER,PAGE_NOACCESS,NULL,0))
+    /* SPARTAN_TEST_FOREIGN=1 takes 64 MiB of the range first, as another program's DLL might (tests). */
+    const char *test=getenv("SPARTAN_TEST_FOREIGN");
+    if (test && test[0]=='1') VirtualAlloc((void *)(USER_MIN+(UINT64_C(2)<<30)),UINT64_C(64)<<20,MEM_RESERVE,PAGE_NOACCESS);
+    if (VirtualAlloc2(NULL,(void *)USER_MIN,USER_MAX-USER_MIN,MEM_RESERVE|MEM_RESERVE_PLACEHOLDER,PAGE_NOACCESS,NULL,0)) {
+        region_insert(0,(HostRegion){USER_MIN,USER_MAX,0,0});
+        return;
+    }
+    if (GetLastError()!=ERROR_INVALID_ADDRESS)
         win_fail("reserving the PS4 address range (link with --disable-high-entropy-va)",USER_MIN,USER_MAX-USER_MIN);
-    region_insert(0,(HostRegion){USER_MIN,USER_MAX,0,0});
+    reserve_around_foreign();
+}
+/* Guest memory committed only as the game maps it: the whole pool did not fit Windows' commit
+ * limit (RAM + page file) at once (pool_create()). */
+static int commit_on_map;
+static void commit_backing(uint64_t phys, uint64_t size) {
+    if (!commit_on_map || VirtualAlloc(backing_base+phys,size,MEM_COMMIT,PAGE_READWRITE)) return;
+    fprintf(stderr,"Runtime: cannot commit %" PRIu64 " MiB of guest memory (error %lu); is the page file large "
+            "enough? Let Windows manage its size, or use a lower output resolution\n",size>>20,GetLastError());
+    win_fail("committing guest memory",(uintptr_t)(backing_base+phys),size);
 }
 static void view_map(const HostRegion *r, DWORD protect) {
     DWORD initial=protect==PAGE_NOACCESS ? PAGE_READWRITE : protect, old;
+    commit_backing(r->phys,r->end-r->start);
     if (!MapViewOfFile3(section,GetCurrentProcess(),(void *)r->start,r->phys,r->end-r->start,MEM_REPLACE_PLACEHOLDER,initial,NULL,0))
         win_fail("MapViewOfFile3",r->start,r->end-r->start);
     if (initial!=protect && !VirtualProtect((void *)r->start,r->end-r->start,protect,&old))
@@ -229,10 +307,26 @@ static int host_protect(uintptr_t address, uint64_t size, int prot) {
     }
     return 0;
 }
-/* Released pages read as zero when reused, like the memfd's punched holes. */
-static void host_discard(uint64_t phys, uint64_t size) { memset(backing_base+phys,0,size); }
+/* Released pages read as zero when reused, like the memfd's punched holes. With commit-on-map,
+ * pages never committed are zero-filled when first committed: only committed ones are cleared,
+ * so a release does not spend commit charge on memory the game never used. */
+static void host_discard(uint64_t phys, uint64_t size) {
+    if (!commit_on_map) { memset(backing_base+phys,0,size); return; }
+    for (unsigned char *at=backing_base+phys, *end=at+size; at<end;) {
+        MEMORY_BASIC_INFORMATION m;
+        if (!VirtualQuery(at,&m,sizeof(m))) win_fail("VirtualQuery",(uintptr_t)at,0);
+        unsigned char *next=(unsigned char *)m.BaseAddress+m.RegionSize;
+        if (next>end) next=end;
+        if (m.State==MEM_COMMIT) memset(at,0,(size_t)(next-at));
+        at=next;
+    }
+}
+/* Why the last pool_create() failed, for pool()'s final message. */
+static const char *pool_step="create";
+static unsigned long pool_error;
+#define POOL_HINT "is the page file large enough?"
 /* Direct memory occupies [0,POOL_SIZE) of the section, flexible memory [POOL_SIZE,+FLEX_SPAN). */
-static int pool(void) {
+static int pool_create(void) {
     if (backing_base) return 0;
     runtime_memory_reserve();
     uint64_t bytes=POOL_SIZE+FLEX_SPAN;
@@ -244,20 +338,36 @@ static int pool(void) {
         fflush(stderr);
         exit(21);
     }
-    section=CreateFileMapping2(INVALID_HANDLE_VALUE,NULL,FILE_MAP_ALL_ACCESS,PAGE_EXECUTE_READWRITE,SEC_COMMIT,bytes,NULL,NULL,0);
-    if (!section) {
-        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %lu); is the page file large enough?\n",bytes>>20,GetLastError());
-        fflush(stderr);
-        exit(21);
+    /* SPARTAN_GUEST_COMMIT_ON_MAP=1: the fallback below from the start (tests). */
+    const char *on_map=getenv("SPARTAN_GUEST_COMMIT_ON_MAP");
+    if (on_map && on_map[0]=='1') SetLastError(ERROR_COMMITMENT_LIMIT);
+    else section=CreateFileMapping2(INVALID_HANDLE_VALUE,NULL,FILE_MAP_ALL_ACCESS,PAGE_EXECUTE_READWRITE,SEC_COMMIT,bytes,NULL,NULL,0);
+    if (!section && (GetLastError()==ERROR_NO_SYSTEM_RESOURCES || GetLastError()==ERROR_COMMITMENT_LIMIT)) {
+        /* The pool is sized for the largest resolutions (SPARTAN_DMEM_MB, up to 16 GiB) and committed
+         * at once it exceeded RAM + page file (error 1450) although the game maps much less: then
+         * it is reserved and committed as the game maps it (commit_backing). */
+        DWORD error=GetLastError();
+        section=CreateFileMapping2(INVALID_HANDLE_VALUE,NULL,FILE_MAP_ALL_ACCESS,PAGE_EXECUTE_READWRITE,SEC_RESERVE,bytes,NULL,NULL,0);
+        if (section) {
+            commit_on_map=1;
+            printf("Runtime: the %" PRIu64 " MiB guest memory pool does not fit Windows' commit limit at once "
+                   "(error %lu): committed as the game maps it\n",bytes>>20,error);
+        }
     }
+    if (!section) { pool_step="create"; pool_error=GetLastError(); return -1; }
     backing_base=MapViewOfFile3(section,GetCurrentProcess(),NULL,0,bytes,0,PAGE_READWRITE,NULL,0);
-    if (!backing_base) win_fail("MapViewOfFile3 (guest memory pool)",0,bytes);
-    return 0;
+    if (backing_base) return 0;
+    pool_step="map"; pool_error=GetLastError();
+    CloseHandle(section); section=NULL; commit_on_map=0;
+    return -1;
 }
 #else
+static const char *pool_step="create";
+static unsigned long pool_error;
+#define POOL_HINT "is /dev/shm or RAM large enough?"
 /* Direct memory occupies [0,POOL_SIZE) of the memfd, flexible memory [POOL_SIZE,+FLEX_SPAN). */
-static int pool(void) {
-    if (pool_fd>=0) return 0;
+static int pool_create(void) {
+    if (backing_base) return 0;
     const char *fail_env=getenv("SPARTAN_FAIL_GUEST_MEMORY");
     if (fail_env) {
         int err=fail_env[0] && strcmp(fail_env,"1")!=0 ? (int)strtol(fail_env,NULL,10) : 12;
@@ -266,20 +376,10 @@ static int pool(void) {
         fflush(stderr);
         exit(21);
     }
-    pool_fd=memfd_create("spartanport-guest-memory", MFD_CLOEXEC);
-    if (pool_fd<0 || ftruncate(pool_fd,(off_t)(POOL_SIZE+FLEX_SPAN))) {
-        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %d); is /dev/shm or RAM large enough?\n",
-                (POOL_SIZE+FLEX_SPAN)>>20,errno);
-        fflush(stderr);
-        exit(21);
-    }
+    if (pool_fd<0) pool_fd=memfd_create("spartanport-guest-memory", MFD_CLOEXEC);
+    if (pool_fd<0 || ftruncate(pool_fd,(off_t)(POOL_SIZE+FLEX_SPAN))) { pool_step="create"; pool_error=(unsigned long)errno; return -1; }
     void *view=mmap(NULL,POOL_SIZE+FLEX_SPAN,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_NORESERVE,pool_fd,0);
-    if (view==MAP_FAILED) {
-        fprintf(stderr,"Runtime: cannot map %" PRIu64 " MiB of guest memory (error %d)\n",
-                (POOL_SIZE+FLEX_SPAN)>>20,errno);
-        fflush(stderr);
-        exit(21);
-    }
+    if (view==MAP_FAILED) { pool_step="map"; pool_error=(unsigned long)errno; return -1; }
     backing_base=view;
     return 0;
 }
@@ -296,6 +396,28 @@ static void host_discard(uint64_t phys, uint64_t size) {
     fallocate(pool_fd,FALLOC_FL_PUNCH_HOLE|FALLOC_FL_KEEP_SIZE,(off_t)phys,(off_t)size);
 }
 #endif
+/* A pool larger than the PS4's (SPARTAN_DMEM_MB) that the host refuses (Windows error 1450 on
+ * some laptops) falls back to the retail 5056 MiB instead of stopping the game; resolutions that
+ * need the larger pool may then run out of direct memory. When the retail pool fails too, the
+ * game stops with exit code 21 and the message the launcher recognises. Called with the write
+ * lock held. SPARTAN_TEST_REFUSE_DMEM=1 refuses the larger pool (tests). */
+static int pool(void) {
+    if (backing_base) return 0;
+    const char *refuse=getenv("SPARTAN_TEST_REFUSE_DMEM");
+    int refused=refuse && refuse[0]=='1' && POOL_SIZE>RETAIL_POOL;
+    if (!refused && !pool_create()) return 0;
+    if (POOL_SIZE>RETAIL_POOL) {
+        printf("Runtime: the host refused %" PRIu64 " MiB of direct memory (SPARTAN_DMEM_MB); falling back to "
+               "the PS4's 5056 MiB. High output resolutions may run out of memory: lower the output "
+               "resolution if the game stops\n",POOL_SIZE>>20);
+        __atomic_store_n(&pool_bytes,RETAIL_POOL,__ATOMIC_RELEASE);
+        if (!pool_create()) return 0;
+    }
+    fprintf(stderr,"Runtime: cannot %s %" PRIu64 " MiB of guest memory (error %lu); " POOL_HINT "\n",
+            pool_step,(POOL_SIZE+FLEX_SPAN)>>20,pool_error);
+    fflush(stderr);
+    exit(21);
+}
 static void queue_hook(int kind, uintptr_t address, uint64_t size) {
     GpuRange hook = kind==HOOK_MAP ? hook_map : kind==HOOK_UNMAP ? hook_unmap : hook_invalidate;
     if (!hook) return;
@@ -381,6 +503,8 @@ static int overlaps(uintptr_t start, uintptr_t end, int ignore_reserved) {
 static uintptr_t find_free(uintptr_t hint, uint64_t size, uint64_t alignment) {
     uintptr_t at=align_up(hint<USER_MIN ? USER_MIN : hint, alignment);
     for (size_t i=vma_index(at); at+size<=USER_MAX; ++i) {
+        uintptr_t taken=foreign_overlap(at,at+size);
+        if (taken) { at=align_up(taken,alignment); i=vma_index(at)-1; continue; }
         if (i==vma_count || vmas[i].start>=at+size) return at;
         at=align_up(vmas[i].end,alignment);
     }
@@ -404,6 +528,7 @@ static int32_t place(void **inout, uint64_t size, int prot, int flags, uint64_t 
     if (flags & MAP_FIXED_FLAG) {
         if (!address || address%PAGE) return INVALID;
         if ((flags & MAP_NO_OVERWRITE) && overlaps(address,address+size,1)) return NO_MEMORY;
+        if (foreign_overlap(address,address+size)) return NO_MEMORY;
     } else {
         address=find_free(address,size,alignment);
         if (!address) return NO_MEMORY;
@@ -433,16 +558,24 @@ static int direct_range_allocated(uint64_t phys, uint64_t size) {
     return 1;
 }
 
-static ABI uint64_t direct_size(void) { return POOL_SIZE; }
+/* The pool is created first so that the size reported is the one the host granted. */
+static ABI uint64_t direct_size(void) {
+    write_lock();
+    pool();
+    uint64_t size=POOL_SIZE;
+    write_unlock();
+    return size;
+}
 static ABI int32_t direct_allocate(int64_t low, int64_t high, uint64_t size,
                                   uint64_t alignment, int type, int64_t *out) {
     if (!alignment) alignment = PAGE;
     if (!out || low < 0 || high < 0 || !size || size % PAGE || !valid_alignment(alignment) || type < 0 || type > 10)
         return INVALID;
-    uint64_t end = (uint64_t)high < POOL_SIZE ? (uint64_t)high : POOL_SIZE;
-    if ((uint64_t)low >= end || size > end - (uint64_t)low) return NO_SPACE;
     write_lock();
     if (pool()) { write_unlock(); return NO_MEMORY; }
+    /* After pool(): the pool may have fallen back to the retail size. */
+    uint64_t end = (uint64_t)high < POOL_SIZE ? (uint64_t)high : POOL_SIZE;
+    if ((uint64_t)low >= end || size > end - (uint64_t)low) { write_unlock(); return NO_SPACE; }
     uint64_t start = align_up((uint64_t)low, alignment);
     int slot = -1;
     for (int i=0; i<LIMIT; ++i) if (!blocks[i].used) { slot=i; break; }

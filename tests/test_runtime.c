@@ -362,6 +362,12 @@ int main(int argc,char **argv) {
         alloc(0,536870912,16384,0,0,&a);
         return 99;
     }
+    if (argc>1 && !strcmp(argv[1],"--direct-memory-size")) {
+        /* sceKernelGetDirectMemorySize creates the pool first: the size the host granted. */
+        typedef uint64_t (ABI *DirectSize)(void);
+        printf("direct memory %llu MiB\n",(unsigned long long)(GET(DirectSize,"pO96TwzOm5E#libkernel")()>>20));
+        return 0;
+    }
     if (argc>1 && !strcmp(argv[1],"--stack-failure")) {
         GET(GuestCallback,"Ou3iL1abvng#libkernel")(); return 99;
     }
