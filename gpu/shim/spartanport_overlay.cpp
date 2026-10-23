@@ -149,9 +149,10 @@ ImGuiKey KeyFromSdl(SDL_Keycode key) {
 }
 
 ImGuiKey KeyFromGamepad(u8 button) {
+    const bool swapped = SpartanSettings::Get().menu_confirm_swap.load(std::memory_order_relaxed) != 0;
     switch (button) {
-    case SDL_GAMEPAD_BUTTON_SOUTH: return ImGuiKey_GamepadFaceDown;
-    case SDL_GAMEPAD_BUTTON_EAST: return ImGuiKey_GamepadFaceRight;
+    case SDL_GAMEPAD_BUTTON_SOUTH: return swapped ? ImGuiKey_GamepadFaceRight : ImGuiKey_GamepadFaceDown;
+    case SDL_GAMEPAD_BUTTON_EAST: return swapped ? ImGuiKey_GamepadFaceDown : ImGuiKey_GamepadFaceRight;
     case SDL_GAMEPAD_BUTTON_WEST: return ImGuiKey_GamepadFaceLeft;
     case SDL_GAMEPAD_BUTTON_NORTH: return ImGuiKey_GamepadFaceUp;
     case SDL_GAMEPAD_BUTTON_DPAD_UP: return ImGuiKey_GamepadDpadUp;
@@ -358,6 +359,9 @@ void GameTab() {
     if (BeginRows("##controller")) {
         SliderRow("Vibration", s.vibration, 0, 100, "%d%%",
                   "Strength of the controller's vibration. 0% turns it off.");
+        static const char* const confirm_styles[] = {"Cross confirms, Circle cancels", "Circle confirms, Cross cancels"};
+        ChoiceRow("Menu confirm button", s.menu_confirm_swap, confirm_styles, nullptr, 2,
+                  "Which controller button confirms choices in save/load lists and confirmation dialogs.");
         SliderRow("Mouse prompt distance", s.mouse_prompt_distance, 16, 200, "%d px",
                   "With Joystick prompts on Adaptive mouse: how far the mouse moves for one step of a rotation.");
         static const char* const aim_styles[] = {"Relative", "Absolute"};
@@ -769,7 +773,10 @@ void TextEntryBox() {
     ImGui::SetWindowFontScale(1.0f);
     ImGui::Separator();
     DisabledText("Keyboard: type, Backspace to erase, Enter = OK, Esc = cancel");
-    DisabledText(PadText("Controller: Cross (A) = OK, Circle (B) = cancel", "Controller: A = OK, B = cancel", "Controller: B = OK, A = cancel"));
+    const bool text_entry_swapped = SpartanSettings::Get().menu_confirm_swap.load(std::memory_order_relaxed) != 0;
+    DisabledText(text_entry_swapped
+        ? PadText("Controller: Circle (B) = OK, Cross (A) = cancel", "Controller: B = OK, A = cancel", "Controller: A = OK, B = cancel")
+        : PadText("Controller: Cross (A) = OK, Circle (B) = cancel", "Controller: A = OK, B = cancel", "Controller: B = OK, A = cancel"));
     ImGui::End();
 }
 
@@ -847,7 +854,14 @@ void ChoiceBox() {
         }
     }
     ImGui::Separator();
-    DisabledText(PadText("Up/Down or D-pad: choose   Enter or Cross (A): OK   Esc or Circle (B): cancel", "Up/Down or D-pad: choose   Enter or A: OK   Esc or B: cancel", "Up/Down or D-pad: choose   Enter or B: OK   Esc or A: cancel"));
+    const bool choice_swapped = SpartanSettings::Get().menu_confirm_swap.load(std::memory_order_relaxed) != 0;
+    DisabledText(choice_swapped
+        ? PadText("Up/Down or D-pad: choose   Enter or Circle (B): OK   Esc or Cross (A): cancel",
+                  "Up/Down or D-pad: choose   Enter or B: OK   Esc or A: cancel",
+                  "Up/Down or D-pad: choose   Enter or A: OK   Esc or B: cancel")
+        : PadText("Up/Down or D-pad: choose   Enter or Cross (A): OK   Esc or Circle (B): cancel",
+                  "Up/Down or D-pad: choose   Enter or A: OK   Esc or B: cancel",
+                  "Up/Down or D-pad: choose   Enter or B: OK   Esc or A: cancel"));
     ImGui::End();
 }
 
@@ -1577,7 +1591,10 @@ bool HandleChoiceEvent(const SDL_Event& event) {
     } else if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
         const u8 button = event.gbutton.button;
         move = button == SDL_GAMEPAD_BUTTON_DPAD_UP ? -1 : button == SDL_GAMEPAD_BUTTON_DPAD_DOWN ? 1 : 0;
-        finish = button == SDL_GAMEPAD_BUTTON_SOUTH ? 1 : button == SDL_GAMEPAD_BUTTON_EAST ? 2 : 0;
+        const bool swapped = SpartanSettings::Get().menu_confirm_swap.load(std::memory_order_relaxed) != 0;
+        const u8 confirm_btn = swapped ? SDL_GAMEPAD_BUTTON_EAST : SDL_GAMEPAD_BUTTON_SOUTH;
+        const u8 cancel_btn = swapped ? SDL_GAMEPAD_BUTTON_SOUTH : SDL_GAMEPAD_BUTTON_EAST;
+        finish = button == confirm_btn ? 1 : button == cancel_btn ? 2 : 0;
     } else {
         return event.type == SDL_EVENT_KEY_UP || event.type == SDL_EVENT_GAMEPAD_BUTTON_UP;
     }

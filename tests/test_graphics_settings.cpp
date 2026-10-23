@@ -180,6 +180,56 @@ int main() {
     assert(spartanportgpu_enemy_health_bar(0) == 1);
     assert(spartanportgpu_enemy_health_bar(1) == 0 && !v.enemy_health_bar);
     assert(Read(path).find("enemy_health_bar=0\n") != std::string::npos);
+
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=1\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1 && spartanportgpu_menu_confirm_swap() == 1);
+    SpartanSettings::Save();
+    assert(Read(path).find("menu_confirm_swap=1\n") != std::string::npos);
+
+    {
+        std::ofstream out(path);
+        out << "menu_confirm=circle\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1);
+
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=0\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 0 && spartanportgpu_menu_confirm_swap() == 0);
+    SpartanSettings::Save();
+    assert(Read(path).find("menu_confirm_swap=0\n") != std::string::npos);
+
+    // Conflicting keys in INI: primary menu_confirm_swap always overrides alias menu_confirm
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=0\nmenu_confirm=circle\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 0);
+    {
+        std::ofstream out(path);
+        out << "menu_confirm=circle\nmenu_confirm_swap=0\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 0);
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=1\nmenu_confirm=cross\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1);
+
+    SetEnvironment("SPARTAN_MENU_CONFIRM_SWAP", "1");
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1);
+    SetEnvironment("SPARTAN_MENU_CONFIRM_SWAP", "");
     const auto text = [](unsigned id) { return reinterpret_cast<const char*>(spartanportgpu_native_setting(id)); };
     v.anisotropy = 0;
     assert(spartanportgpu_native_setting(0xf74) != 0);

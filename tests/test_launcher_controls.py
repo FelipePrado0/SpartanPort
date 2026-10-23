@@ -908,3 +908,140 @@ class PadStyleTest(unittest.TestCase):
         import button_icons
         self.assertEqual(button_icons.spec('a', 'nintendo')[:2], ('letter', 'B'))
         self.assertEqual(button_icons.spec('lefttrigger', 'nintendo')[1], 'ZL')
+
+
+class MenuConfirmSwapTest(unittest.TestCase):
+    def test_menu_confirm_swap_defaults(self):
+        self.assertEqual(launcher.APP_DEFAULTS.get('menu_confirm_swap'), '0')
+        self.assertEqual(launcher.INI_DEFAULTS.get('menu_confirm_swap'), '0')
+        self.assertEqual([val for val, _label in launcher.MENU_CONFIRM_STYLES], ['0', '1'])
+
+    def test_menu_confirm_swap_ini_persistence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            ini = folder / 'spartanport.ini'
+            ini.write_text('menu_confirm_swap=1\n', encoding='utf-8')
+            with mock.patch.object(launcher, 'DATA_DIR', folder), \
+                    mock.patch.object(launcher, 'CONFIG_FILE', folder / 'settings.json'), \
+                    mock.patch.dict(os.environ, {'SPARTAN_CONFIG': str(ini)}):
+                values, _lines = launcher.load_ini()
+                self.assertEqual(values.get('menu_confirm_swap'), '1')
+
+    def test_menu_confirm_swap_legacy_migration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            cfg = folder / 'settings.json'
+            cfg.write_text('{"menu_confirm_swap": "1"}\n', encoding='utf-8')
+            ini = folder / 'spartanport.ini'
+            with mock.patch.object(launcher, 'DATA_DIR', folder), \
+                    mock.patch.object(launcher, 'CONFIG_FILE', cfg), \
+                    mock.patch.dict(os.environ, {'SPARTAN_CONFIG': str(ini)}):
+                values, _lines = launcher.load_ini()
+                self.assertEqual(values.get('menu_confirm_swap'), '1')
+
+    def test_game_environment_forwards_menu_confirm_swap(self):
+        settings_swapped = {**launcher.APP_DEFAULTS, 'game_dir': 'game', 'menu_confirm_swap': '1'}
+        env_swapped = launcher.game_environment(settings_swapped)
+        self.assertEqual(env_swapped.get('SPARTAN_MENU_CONFIRM_SWAP'), '1')
+
+        # Default option does not set SPARTAN_MENU_CONFIRM_SWAP
+        settings_default = {**launcher.APP_DEFAULTS, 'game_dir': 'game', 'menu_confirm_swap': '0'}
+        env_default = launcher.game_environment(settings_default)
+        self.assertNotIn('SPARTAN_MENU_CONFIRM_SWAP', env_default)
+
+    def test_conflicting_ini_primary_overrides_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            ini = folder / 'spartanport.ini'
+            cases = [
+                ('menu_confirm_swap=0\nmenu_confirm=circle\n', '0'),
+                ('menu_confirm=circle\nmenu_confirm_swap=0\n', '0'),
+                ('menu_confirm_swap=1\nmenu_confirm=cross\n', '1'),
+                ('menu_confirm=cross\nmenu_confirm_swap=1\n', '1'),
+                ('menu_confirm=circle\n', '1'),
+                ('menu_confirm=cross\n', '0'),
+            ]
+            for content, expected in cases:
+                with self.subTest(content=content, expected=expected):
+                    ini.write_text(content, encoding='utf-8')
+                    with mock.patch.object(launcher, 'DATA_DIR', folder), \
+                            mock.patch.object(launcher, 'CONFIG_FILE', folder / 'settings.json'), \
+                            mock.patch.dict(os.environ, {'SPARTAN_CONFIG': str(ini)}):
+                        values, _lines = launcher.load_ini()
+                        self.assertEqual(values.get('menu_confirm_swap'), expected)
+
+    def test_repeated_load_ini_removes_swap_and_switches_to_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            ini = folder / 'spartanport.ini'
+            with mock.patch.object(launcher, 'DATA_DIR', folder), \
+                    mock.patch.object(launcher, 'CONFIG_FILE', folder / 'settings.json'), \
+                    mock.patch.dict(os.environ, {'SPARTAN_CONFIG': str(ini)}):
+                # Run 1: primary menu_confirm_swap=0
+                ini.write_text('menu_confirm_swap=0\n', encoding='utf-8')
+                vals, _ = launcher.load_ini()
+                self.assertEqual(vals.get('menu_confirm_swap'), '0')
+
+                # Run 2: primary removed, alias menu_confirm=circle remains
+                ini.write_text('menu_confirm=circle\n', encoding='utf-8')
+                vals, _ = launcher.load_ini()
+                self.assertEqual(vals.get('menu_confirm_swap'), '1')
+
+                # Run 3: both removed, unrelated key
+                ini.write_text('vibration=50\n', encoding='utf-8')
+                vals, _ = launcher.load_ini()
+                self.assertEqual(vals.get('menu_confirm_swap'), '0')
+
+    def test_conflicting_legacy_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            cfg = folder / 'settings.json'
+            ini = folder / 'spartanport.ini'
+            cases = [
+                ('{"menu_confirm_swap": "0", "menu_confirm": "circle"}\n', '0'),
+                ('{"menu_confirm_swap": "1", "menu_confirm": "cross"}\n', '1'),
+                ('{"menu_confirm": "circle"}\n', '1'),
+                ('{"menu_confirm": "cross"}\n', '0'),
+            ]
+            for json_str, expected in cases:
+                with self.subTest(json_str=json_str, expected=expected):
+                    cfg.write_text(json_str, encoding='utf-8')
+                    if ini.exists():
+                        ini.unlink()
+                    with mock.patch.object(launcher, 'DATA_DIR', folder), \
+                            mock.patch.object(launcher, 'CONFIG_FILE', cfg), \
+                            mock.patch.dict(os.environ, {'SPARTAN_CONFIG': str(ini)}):
+                        values, _lines = launcher.load_ini()
+                        self.assertEqual(values.get('menu_confirm_swap'), expected)
+
+    def test_game_environment_clears_inherited_alias_and_handles_conflicts(self):
+        # When parent environment contains the alias SPARTAN_MENU_CONFIRM=circle
+        with mock.patch.dict(os.environ, {'SPARTAN_MENU_CONFIRM': 'circle', 'SPARTAN_MENU_CONFIRM_SWAP': '0'}):
+            settings_default = {**launcher.APP_DEFAULTS, 'game_dir': 'game', 'menu_confirm_swap': '0', 'menu_confirm': 'circle'}
+            env_default = launcher.game_environment(settings_default)
+            # Both must be absent so the child process is not overridden by leaked alias
+            self.assertNotIn('SPARTAN_MENU_CONFIRM_SWAP', env_default)
+            self.assertNotIn('SPARTAN_MENU_CONFIRM', env_default)
+
+            settings_swapped = {**launcher.APP_DEFAULTS, 'game_dir': 'game', 'menu_confirm_swap': '1'}
+            env_swapped = launcher.game_environment(settings_swapped)
+            self.assertEqual(env_swapped.get('SPARTAN_MENU_CONFIRM_SWAP'), '1')
+            self.assertNotIn('SPARTAN_MENU_CONFIRM', env_swapped)
+
+    def test_gameplay_controls_and_qte_remain_untouched(self):
+        # Default mapping in CONTROLS table: Cross is Space/a, Circle is Left Shift/b
+        control_dict = {b: (k, p) for b, k, p in launcher.CONTROLS}
+        self.assertEqual(control_dict['cross'], ('Space', 'a'))
+        self.assertEqual(control_dict['circle'], ('Left Shift', 'b'))
+
+        # Uncustomized pad controls produce no gamepad overrides
+        self.assertEqual(launcher.control_map({}, 'pad'), '')
+
+        # Gamepad styles preserve Cross (a) and Circle (b) definitions
+        ps_names = launcher.PAD_STYLES['playstation']
+        self.assertEqual(ps_names['a'], 'Cross')
+        self.assertEqual(ps_names['b'], 'Circle')
+        xbox_names = launcher.PAD_STYLES['xbox']
+        self.assertEqual(xbox_names['a'], 'A')
+        self.assertEqual(xbox_names['b'], 'B')
+
