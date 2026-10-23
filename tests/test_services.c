@@ -288,6 +288,40 @@ int main(void) {
     unsetenv("SPARTAN_MENU_CONFIRM_SWAP");
 #endif
     assert(system_param(1000,&enter_btn)==0 && enter_btn==1);
+    /* Conflicting environment variables: primary SPARTAN_MENU_CONFIRM_SWAP overrides alias SPARTAN_MENU_CONFIRM */
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=0");
+    _putenv("SPARTAN_MENU_CONFIRM=circle");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","0",1);
+    setenv("SPARTAN_MENU_CONFIRM","circle",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==1); /* Primary 0 wins (Cross) */
+
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=1");
+    _putenv("SPARTAN_MENU_CONFIRM=cross");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","1",1);
+    setenv("SPARTAN_MENU_CONFIRM","cross",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0); /* Primary 1 wins (Circle) */
+
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=true");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","true",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0); /* Truthy 'true' wins (Circle) */
+
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=");
+    _putenv("SPARTAN_MENU_CONFIRM=");
+#else
+    unsetenv("SPARTAN_MENU_CONFIRM_SWAP");
+    unsetenv("SPARTAN_MENU_CONFIRM");
+#endif
+
     stub_menu_confirm_swap = 1;
     assert(system_param(1000,&enter_btn)==0 && enter_btn==0);
     stub_menu_confirm_swap = 0;

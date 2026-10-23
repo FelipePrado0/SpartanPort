@@ -30,6 +30,20 @@ float Clamp(float v, float lo, float hi) {
     return std::clamp(v, lo, hi);
 }
 
+bool EqualsIgnoreCase(std::string_view a, std::string_view b) {
+    const size_t start = a.find_first_not_of(" \t\r\n");
+    if (start == std::string_view::npos) return b.empty();
+    const size_t end = a.find_last_not_of(" \t\r\n");
+    a = a.substr(start, end - start + 1);
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void Set(Values& v, const std::string& key, const std::string& value) {
     const float f = float(std::atof(value.c_str()));
     const int i = std::atoi(value.c_str());
@@ -136,9 +150,18 @@ void Set(Values& v, const std::string& key, const std::string& value) {
     } else if (key == "vibration") {
         v.vibration = value.empty() ? 100 : std::clamp(i, 0, 100);
     } else if (key == "menu_confirm_swap") {
-        v.menu_confirm_swap = (i != 0 || value == "1" || value == "circle" || value == "swapped") ? 1 : 0;
+        v.menu_confirm_swap = (i != 0 || EqualsIgnoreCase(value, "1") ||
+                               EqualsIgnoreCase(value, "circle") || EqualsIgnoreCase(value, "swapped") ||
+                               EqualsIgnoreCase(value, "true") || EqualsIgnoreCase(value, "yes") ||
+                               EqualsIgnoreCase(value, "on")) ? 1 : 0;
+        v.menu_confirm_swap_explicit = true;
     } else if (key == "menu_confirm") {
-        v.menu_confirm_swap = (value == "circle" || value == "swapped" || value == "1" || i == 1) ? 1 : 0;
+        if (!v.menu_confirm_swap_explicit) {
+            v.menu_confirm_swap = (EqualsIgnoreCase(value, "circle") || EqualsIgnoreCase(value, "swapped") ||
+                                   EqualsIgnoreCase(value, "1") || EqualsIgnoreCase(value, "true") ||
+                                   EqualsIgnoreCase(value, "yes") || EqualsIgnoreCase(value, "on") ||
+                                   i == 1) ? 1 : 0;
+        }
     } else if (key == "mouse_prompt_distance") {
         v.mouse_prompt_distance = value.empty() ? 48 : std::clamp(i, 16, 200);
     } else if (key == "mouse_lock") {
@@ -189,6 +212,8 @@ Values& Get() {
 
 void Load() {
     auto& v = Get();
+    v.menu_confirm_swap = 0;
+    v.menu_confirm_swap_explicit = false;
     if (FILE* file = std::fopen(Path(), "r")) {
         char line[256];
         while (std::fgets(line, sizeof(line), file)) {
@@ -219,7 +244,6 @@ void Load() {
         {"SPARTAN_STALE_READBACK", "stale_readback"},     {"SPARTAN_FSR1", "fsr1"},
         {"SPARTAN_RCAS", "rcas"},                        {"SPARTAN_FRAMES_AHEAD", "frames_queued"},
         {"SPARTAN_ANISOTROPY", "anisotropy"},            {"SPARTAN_VIBRATION", "vibration"},
-        {"SPARTAN_MENU_CONFIRM_SWAP", "menu_confirm_swap"}, {"SPARTAN_MENU_CONFIRM", "menu_confirm"},
         {"SPARTAN_MOUSE_PROMPT_DISTANCE", "mouse_prompt_distance"}, {"SPARTAN_MOUSE_LOCK", "mouse_lock"},
         {"SPARTAN_MOUSE_AIM_STYLE", "mouse_aim_style"}, {"SPARTAN_MOUSE_AIM_SENSITIVITY", "mouse_aim_sensitivity"},
         {"SPARTAN_AUTO_QTE", "auto_qte"},
@@ -230,6 +254,15 @@ void Load() {
         if (const char* value = std::getenv(env); value && value[0]) {
             Set(v, key, value);
         }
+    }
+    // Menu confirm button environment overrides: primary SPARTAN_MENU_CONFIRM_SWAP takes
+    // precedence over alias SPARTAN_MENU_CONFIRM.
+    if (const char* env = std::getenv("SPARTAN_MENU_CONFIRM_SWAP"); env && env[0]) {
+        v.menu_confirm_swap_explicit = false;
+        Set(v, "menu_confirm_swap", env);
+    } else if (const char* env = std::getenv("SPARTAN_MENU_CONFIRM"); env && env[0]) {
+        v.menu_confirm_swap_explicit = false;
+        Set(v, "menu_confirm", env);
     }
     v.startup_preset = v.preset;
     v.startup_upscaler = v.upscaler;

@@ -206,6 +206,26 @@ int main() {
     SpartanSettings::Save();
     assert(Read(path).find("menu_confirm_swap=0\n") != std::string::npos);
 
+    // Conflicting keys in INI: primary menu_confirm_swap always overrides alias menu_confirm
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=0\nmenu_confirm=circle\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 0);
+    {
+        std::ofstream out(path);
+        out << "menu_confirm=circle\nmenu_confirm_swap=0\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 0);
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=1\nmenu_confirm=cross\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1);
+
     SetEnvironment("SPARTAN_MENU_CONFIRM_SWAP", "1");
     SpartanSettings::Load();
     assert(v.menu_confirm_swap == 1);

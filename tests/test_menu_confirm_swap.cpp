@@ -213,11 +213,106 @@ int main() {
     assert(s.menu_confirm_swap == 0);
     assert(spartanportgpu_menu_confirm_swap() == 0);
 
-    // 5. Environment variable override
-    SetEnv("SPARTAN_MENU_CONFIRM_SWAP", "1");
+    // 5. Conflicting INI values: primary menu_confirm_swap must override alias menu_confirm
+    // Order 1: primary before alias
+    {
+        std::ofstream out(config_path);
+        out << "menu_confirm_swap=0\nmenu_confirm=circle\n";
+    }
+    s.menu_confirm_swap = 1;
+    SpartanSettings::Load();
+    assert(s.menu_confirm_swap == 0); // Primary 0 wins over alias circle
+
+    // Order 2: alias before primary
+    {
+        std::ofstream out(config_path);
+        out << "menu_confirm=circle\nmenu_confirm_swap=0\n";
+    }
+    s.menu_confirm_swap = 1;
+    SpartanSettings::Load();
+    assert(s.menu_confirm_swap == 0); // Primary 0 wins over alias circle
+
+    // Order 3: primary 1 before alias cross
+    {
+        std::ofstream out(config_path);
+        out << "menu_confirm_swap=1\nmenu_confirm=cross\n";
+    }
+    s.menu_confirm_swap = 0;
+    SpartanSettings::Load();
+    assert(s.menu_confirm_swap == 1); // Primary 1 wins over alias cross
+
+    // Order 4: alias cross before primary 1
+    {
+        std::ofstream out(config_path);
+        out << "menu_confirm=cross\nmenu_confirm_swap=1\n";
+    }
+    s.menu_confirm_swap = 0;
+    SpartanSettings::Load();
+    assert(s.menu_confirm_swap == 1); // Primary 1 wins over alias cross
+
+    // Truthy string variants in INI
+    {
+        std::ofstream out(config_path);
+        out << "menu_confirm_swap=true\n";
+    }
+    s.menu_confirm_swap = 0;
     SpartanSettings::Load();
     assert(s.menu_confirm_swap == 1);
+
+    // 5b. Repeated Load() calls: removing primary key and leaving only alias
+    {
+        std::ofstream out(config_path);
+        out << "menu_confirm_swap=0\n";
+    }
+    SpartanSettings::Load();
+    assert(s.menu_confirm_swap == 0);
+
+    // Primary key removed, only alias menu_confirm=circle remains
+    {
+        std::ofstream out(config_path);
+        out << "menu_confirm=circle\n";
+    }
+    SpartanSettings::Load();
+    assert(s.menu_confirm_swap == 1); // Correctly switches to 1 via alias
+
+    // All confirm keys removed (empty/unrelated keys): resets to default 0
+    {
+        std::ofstream out(config_path);
+        out << "vibration=80\n";
+    }
+    SpartanSettings::Load();
+    assert(s.menu_confirm_swap == 0); // Correctly resets to default 0
+
+    // 6. Environment variable overrides and conflicts
+    // Conflicting env vars: primary SPARTAN_MENU_CONFIRM_SWAP=0 overrides SPARTAN_MENU_CONFIRM=circle
+    {
+        std::ofstream out(config_path);
+        out << "menu_confirm_swap=1\n";
+    }
+    SetEnv("SPARTAN_MENU_CONFIRM_SWAP", "0");
+    SetEnv("SPARTAN_MENU_CONFIRM", "circle");
+    SpartanSettings::Load();
+    assert(s.menu_confirm_swap == 0); // Primary env 0 overrides both alias env and INI 1
+
+    // Conflicting env vars: primary SPARTAN_MENU_CONFIRM_SWAP=1 overrides SPARTAN_MENU_CONFIRM=cross
+    {
+        std::ofstream out(config_path);
+        out << "menu_confirm_swap=0\n";
+    }
+    SetEnv("SPARTAN_MENU_CONFIRM_SWAP", "1");
+    SetEnv("SPARTAN_MENU_CONFIRM", "cross");
+    SpartanSettings::Load();
+    assert(s.menu_confirm_swap == 1); // Primary env 1 overrides both alias env and INI 0
+
+    // Alias env var alone overrides INI
     SetEnv("SPARTAN_MENU_CONFIRM_SWAP", "");
+    SetEnv("SPARTAN_MENU_CONFIRM", "circle");
+    SpartanSettings::Load();
+    assert(s.menu_confirm_swap == 1); // Alias env circle overrides INI 0
+
+    // Reset env vars
+    SetEnv("SPARTAN_MENU_CONFIRM_SWAP", "");
+    SetEnv("SPARTAN_MENU_CONFIRM", "");
 
     // Clean up temp file
     std::remove(config_path);

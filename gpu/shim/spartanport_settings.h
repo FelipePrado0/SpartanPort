@@ -85,6 +85,7 @@ struct Values {
     std::atomic<int> vibration{100};
     /// Menu confirmation button: 0 Cross confirms, Circle cancels (default); 1 Circle confirms, Cross cancels. Live.
     std::atomic<int> menu_confirm_swap{0};
+    bool menu_confirm_swap_explicit{false};
     std::atomic<int> glyph_style{0}; ///< PlayStation, Xbox, Nintendo, keyboard, legacy automatic
     int startup_glyph_style = 0;
     /// Mouse movement in px that counts as one step of a stick prompt (runtime_pad.c). Live.
