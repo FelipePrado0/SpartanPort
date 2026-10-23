@@ -182,6 +182,47 @@ static void wall_time(void) {
     assert(get(NULL,NULL)==0 && get(NULL,z.value)==0);
     assert(!runtime_resolve("n88vx3C5nW8#libc",0));
 }
+static void busy_mutex_lifetimes(void) {
+    AttrInit init_attr=GET(AttrInit,"dQHWEsJtoE4#libkernel");
+    AttrType type=GET(AttrType,"mDmgMOGVUqg#libkernel");
+    HandleOp destroy_attr=GET(HandleOp,"HF7lK46xzjY#libkernel");
+    typedef int32_t (ABI *Init)(void **,void **);
+    Init init=GET(Init,"ttHNfU+qDBU#libkernel");
+    HandleOp lock=GET(HandleOp,"7H0iTOciTLo#libkernel");
+    HandleOp trylock=GET(HandleOp,"K-jXhbt2gn4#libkernel");
+    HandleOp unlock=GET(HandleOp,"2Z+PpY6CaJg#libkernel");
+    HandleOp destroy=GET(HandleOp,"ltCfaGr2JGE#libkernel");
+    typedef int32_t (ABI *RelativeLock)(void **,uint32_t);
+    RelativeLock timed=GET(RelativeLock,"IafI2PxcPnQ#libkernel");
+    for (int kind=1;kind<=3;++kind) {
+        void *attr=NULL,*mutex=NULL;
+        assert(init_attr(&attr)==0 && type(&attr,kind)==0 && init(&mutex,&attr)==0);
+        assert(destroy_attr(&attr)==0);
+        assert(kind==3 ? timed(&mutex,1000000)==0 : lock(&mutex)==0);
+        if (kind==3) assert((uint32_t)timed(&mutex,1000)==0x8002003c);
+        void *original=mutex;
+        assert(destroy(&mutex)==16 && mutex==original);
+        if (kind==2) {
+            assert(trylock(&mutex)==0 && destroy(&mutex)==16 && mutex==original);
+            assert(unlock(&mutex)==0 && destroy(&mutex)==16 && mutex==original);
+        }
+        assert(unlock(&mutex)==0 && destroy(&mutex)==0);
+        assert(lock(&mutex)==22 && destroy(&mutex)==22);
+    }
+    typedef int32_t (ABI *CondInit)(void **,void **,const char *);
+    typedef int32_t (ABI *CondTimed)(void **,void **,uint32_t);
+    CondInit init_cond=GET(CondInit,"2Tb92quprl0#libkernel");
+    CondTimed wait_cond=GET(CondTimed,"BmMjYxmew1w#libkernel");
+    HandleOp destroy_cond=GET(HandleOp,"g+PZd2hiacg#libkernel");
+    assert(init_cond && wait_cond && destroy_cond);
+    void *mutex=NULL,*condition=NULL;
+    assert(init(&mutex,NULL)==0 && init_cond(&condition,NULL,"busy-test")==0);
+    assert(lock(&mutex)==0);
+    assert((uint32_t)wait_cond(&condition,&mutex,1000)==0x8002003c);
+    assert(destroy(&mutex)==16);
+    assert(unlock(&mutex)==0 && destroy(&mutex)==0 && destroy_cond(&condition)==0);
+    puts("PASS: busy mutex destruction preserves recursive depth and handle lifetime");
+}
 static void direct_memory(void) {
     Allocate alloc=GET(Allocate,"rTXw65xmLIA#libkernel");
     Map map=GET(Map,"L-Q3LEjIbgA#libkernel");
@@ -372,9 +413,10 @@ int main(int argc,char **argv) {
         GET(GuestCallback,"Ou3iL1abvng#libkernel")(); return 99;
     }
     if (argc>1 && !strcmp(argv[1],"--rwlock-lifecycle")) { rw_lifecycle(); return 0; }
+    if (argc>1 && !strcmp(argv[1],"--mutex-destroy-busy")) { busy_mutex_lifetimes(); return 0; }
     if (argc>1 && !strcmp(argv[1],"--rwlock-concurrency")) { rw_concurrency(); return 0; }
     if (argc>1 && !strcmp(argv[1],"--rwlock-timeouts")) { rw_timeouts(); return 0; }
-    libc_support(); posix_mutexes(); wall_time(); exit_handlers(); guards(); mutexes(); direct_memory(); memory_primitives();
+    libc_support(); posix_mutexes(); busy_mutex_lifetimes(); wall_time(); exit_handlers(); guards(); mutexes(); direct_memory(); memory_primitives();
     rw_lifecycle(); rw_concurrency(); rw_timeouts();
     puts("PASS: callback lifecycle, guard ABI, mutex errors, shared direct memory, memory primitives, resolver scope");
     return 0;
