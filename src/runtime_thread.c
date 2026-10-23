@@ -86,18 +86,16 @@ static void set_gs(void *base) {
     runtime_thread_tcb_offset();
     if (!TlsSetValue(tls_slot,base)) { fprintf(stderr,"STOP: TlsSetValue failed (%lu)\n",GetLastError()); exit(21); }
 }
-#define tls_block_alloc(size) _aligned_malloc(size,64)
 #else
 static void set_gs(void *base) {
     if (syscall(SYS_arch_prctl,ARCH_SET_GS,(unsigned long)base)) { perror("STOP: arch_prctl(ARCH_SET_GS)"); exit(21); }
 }
-#define tls_block_alloc(size) aligned_alloc(64,size)
 #endif
 /* Build TCB/static TLS for the calling host thread and point GS at it. */
 static void attach(GuestThread *t) {
     uint64_t offset=tls_offset();
     size_t total=offset+256;
-    unsigned char *block=tls_block_alloc((total+63)&~(size_t)63);
+    unsigned char *block=runtime_low_alloc(total);
     if (!block) { fputs("Cannot allocate guest TLS\n",stderr); exit(1); }
     memset(block,0,total);
     if (tls_filesz) memcpy(block,tls_template,tls_filesz);
@@ -111,7 +109,7 @@ static void attach(GuestThread *t) {
     current=t;
 }
 static GuestThread *new_thread(void) {
-    GuestThread *t=calloc(1,sizeof(*t));
+    GuestThread *t=runtime_low_alloc(sizeof(*t));
     if (!t) return NULL;
     t->attr=(ThreadAttr){.magic=ATTR_MAGIC,.policy=1,.prio=DEFAULT_PRIO,.stack=DEFAULT_STACK,.affinity=0x7f};
     return t;
@@ -163,7 +161,7 @@ int32_t *runtime_errno(void) { return &guest_errno; }
 
 static ABI int32_t attr_init(ThreadAttr **out) {
     if (!out) return ERR(22);
-    ThreadAttr *a=calloc(1,sizeof(*a));
+    ThreadAttr *a=runtime_low_alloc(sizeof(*a));
     if (!a) return ERR(12);
     *a=(ThreadAttr){.magic=ATTR_MAGIC,.policy=1,.prio=DEFAULT_PRIO,.inherit=4,.stack=DEFAULT_STACK,.guard=4096,.affinity=0x7f};
     pthread_mutex_lock(&lock); a->next=attributes; attributes=a; pthread_mutex_unlock(&lock);
@@ -177,7 +175,7 @@ static ABI int32_t attr_destroy(ThreadAttr **slot) {
     while (*link!=a) link=&(*link)->next;
     *link=a->next; a->magic=0;
     pthread_mutex_unlock(&lock);
-    free(a); *slot=NULL; return 0;
+    runtime_low_free(a); *slot=NULL; return 0;
 }
 static ABI int32_t attr_get(void *thread,ThreadAttr **out) {
     ThreadAttr *a=find_attr(out);

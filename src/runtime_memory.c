@@ -921,30 +921,127 @@ uintptr_t runtime_memory_resolve(const char *name) {
     return RUNTIME_LOOKUP(exports,name);
 }
 /* Host-owned memory the guest can see (image, stacks, trampolines) lives in
- * [LOW_MIN, USER_MIN): PS4 code packs pointers into 40-bit fields. */
+ * [LOW_MIN, HANDLES_MIN): PS4 code packs pointers into 40-bit fields. The image is mapped first,
+ * at LOW_MIN. Handle slabs (runtime_low_alloc) take [HANDLES_MIN, USER_MIN), so the image's
+ * address does not depend on what allocated a handle before it. */
 #define LOW_MIN UINT64_C(0x0800000000)
-static uintptr_t low_next=LOW_MIN;
-void *runtime_low_map(size_t size, int prot) {
+#define HANDLES_MIN UINT64_C(0x0f00000000)
+static uintptr_t low_next=LOW_MIN, handles_next=HANDLES_MIN;
+static void *low_map_from(uintptr_t *next, uintptr_t limit, size_t size, int prot) {
     size=align_up(size,PAGE);
     write_lock();
 #ifdef _WIN32
     void *p=NULL;
-    while (!p && low_next+size<=USER_MIN) {
-        p=VirtualAlloc((void *)low_next,size,MEM_RESERVE|MEM_COMMIT,win_prot(prot));
-        low_next+=size+UINT64_C(65536); /* unmapped gap catches overruns; allocation granularity */
+    while (!p && *next+size<=limit) {
+        p=VirtualAlloc((void *)*next,size,MEM_RESERVE|MEM_COMMIT,win_prot(prot));
+        *next+=size+UINT64_C(65536); /* unmapped gap catches overruns; allocation granularity */
     }
     write_unlock();
     return p;
 #else
     void *p=MAP_FAILED;
-    while (low_next+size<=USER_MIN) {
-        p=mmap((void *)low_next,size,prot,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
-        low_next+=size+PAGE; /* unmapped gap catches overruns */
+    while (*next+size<=limit) {
+        p=mmap((void *)*next,size,prot,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
+        *next+=size+PAGE; /* unmapped gap catches overruns */
         if (p!=MAP_FAILED) break;
     }
     write_unlock();
     return p==MAP_FAILED ? NULL : p;
 #endif
+}
+void *runtime_low_map(size_t size, int prot) { return low_map_from(&low_next,HANDLES_MIN,size,prot); }
+/* Host records the guest holds pointers to (ScePthread handles, the TLS block with the TCB,
+ * mutex, cond, rwlock and attribute handles) come from 1 MiB slabs below the PS4 range. PS4
+ * games keep lock owners in 40 bits: a spin lock that stores scePthreadSelf() & 0xffffffffff
+ * and compares that with the whole handle never sees itself as the owner when the handle is
+ * above 1 TiB, and its thread waits on the lock's semaphore for good (found as a loading-screen
+ * freeze in another PS4 port). Windows' heap grows above 1 TiB once the space below the PS4
+ * reservation is used up; Linux keeps malloc low with mallopt (probe.c).
+ * Blocks are zeroed and 64-byte aligned behind a 64-byte header; SPARTAN_LOW_HANDLES=0 takes
+ * them from the host heap as before. */
+#define LOW_SLAB (UINT64_C(1)<<20)
+#define LOW_HEADER 64
+#define LOW_CLASSES 7 /* 128 B .. 8 KiB including the header */
+#define LOW_MAGIC UINT32_C(0x4c4f5748)
+enum { LOW_LARGE=LOW_CLASSES, LOW_HOST };
+typedef struct { uint32_t magic, kind; } LowHeader;
+typedef struct LowFree { struct LowFree *next; } LowFree;
+static pthread_mutex_t low_lock=PTHREAD_MUTEX_INITIALIZER;
+static LowFree *low_free[LOW_CLASSES];
+static unsigned char *low_slab, *low_slab_end;
+static int low_handles=-1, low_full, low_high_logged;
+static unsigned char *low_host(size_t total) {
+#ifdef _WIN32
+    return _aligned_malloc(total,LOW_HEADER);
+#else
+    return aligned_alloc(LOW_HEADER,total);
+#endif
+}
+/* Called with low_lock held. */
+static unsigned char *low_carve(size_t total, uint32_t *kind) {
+    if (low_handles<0) {
+        const char *e=getenv("SPARTAN_LOW_HANDLES");
+        low_handles=!(e && e[0]=='0');
+        if (!low_handles) puts("Runtime: guest thread and lock handles from the host heap (SPARTAN_LOW_HANDLES=0)");
+    }
+    if (!low_handles || low_full) return NULL;
+    unsigned c=0;
+    while (c<LOW_CLASSES && (size_t)128<<c<total) ++c;
+    if (c==LOW_CLASSES) {
+        *kind=LOW_LARGE; /* kept when freed: only TLS blocks of huge TLS segments get here */
+        unsigned char *p=low_map_from(&handles_next,USER_MIN,total,PROT_READ|PROT_WRITE);
+        if (!p) low_full=1;
+        return p;
+    }
+    *kind=c;
+    size_t bytes=(size_t)128<<c;
+    if (low_free[c]) { LowFree *f=low_free[c]; low_free[c]=f->next; return (unsigned char *)f; }
+    if ((size_t)(low_slab_end-low_slab)<bytes) {
+        unsigned char *slab=low_map_from(&handles_next,USER_MIN,LOW_SLAB,PROT_READ|PROT_WRITE);
+        if (!slab) {
+            low_full=1;
+            fputs("Runtime: no room left below 1 TiB for guest handles; using the host heap\n",stderr);
+            return NULL;
+        }
+        if (!low_slab) printf("Runtime: guest thread and lock handles below 1 TiB at %p (SPARTAN_LOW_HANDLES=0 turns this off)\n",(void *)slab);
+        low_slab=slab; low_slab_end=slab+LOW_SLAB;
+    }
+    unsigned char *p=low_slab; low_slab+=bytes;
+    return p;
+}
+void *runtime_low_alloc(size_t size) {
+    if (size>SIZE_MAX-2*LOW_HEADER) return NULL;
+    size_t total=(size+2*LOW_HEADER-1)&~(size_t)(LOW_HEADER-1);
+    uint32_t kind=LOW_HOST;
+    pthread_mutex_lock(&low_lock);
+    unsigned char *block=low_carve(total,&kind);
+    pthread_mutex_unlock(&low_lock);
+    if (!block && !(block=low_host(total))) return NULL;
+    memset(block,0,total);
+    *(LowHeader *)block=(LowHeader){LOW_MAGIC,kind};
+    unsigned char *p=block+LOW_HEADER;
+    if ((uintptr_t)p+size>UINT64_C(1)<<40 && !__atomic_exchange_n(&low_high_logged,1,__ATOMIC_RELAXED))
+        fprintf(stderr,"Runtime: guest handle %p is above 1 TiB; the game's 40-bit lock owners cannot hold it\n",(void *)p);
+    return p;
+}
+void runtime_low_free(void *pointer) {
+    if (!pointer) return;
+    unsigned char *block=(unsigned char *)pointer-LOW_HEADER;
+    LowHeader h=*(LowHeader *)block;
+    if (h.magic!=LOW_MAGIC || h.kind>LOW_HOST) { fprintf(stderr,"STOP: runtime_low_free(%p): not a low block\n",pointer); exit(21); }
+    ((LowHeader *)block)->magic=0;
+    if (h.kind==LOW_HOST) {
+#ifdef _WIN32
+        _aligned_free(block);
+#else
+        free(block);
+#endif
+        return;
+    }
+    if (h.kind==LOW_LARGE) return;
+    pthread_mutex_lock(&low_lock);
+    LowFree *f=(LowFree *)block; f->next=low_free[h.kind]; low_free[h.kind]=f;
+    pthread_mutex_unlock(&low_lock);
 }
 /* ---- GPU library interface (gpu/shim/spartanportgpu.cpp) ---- */
 /* Optimizations switched off at run time (diagnostics): the number in the file named by
