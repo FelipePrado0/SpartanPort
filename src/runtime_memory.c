@@ -97,8 +97,11 @@ typedef void (*GpuRange)(uintptr_t address, uint64_t size);
 static GpuRange hook_map, hook_unmap, hook_invalidate;
 enum { HOOK_MAP, HOOK_UNMAP, HOOK_INVALIDATE };
 typedef struct { int kind; uintptr_t address; uint64_t size; } PendingHook;
-static PendingHook pending[64]; static size_t pending_count;
-static size_t allocations, maps, flexible_maps, protects, queries;
+/* Grows as needed: one unmap or protect over a range mapped in hundreds of pieces queues a
+ * notification per piece (64 fixed slots overflowed). Owned by the region-table write lock;
+ * flushing copies one value before releasing it, never retaining array pointers. */
+static PendingHook *pending; static size_t pending_count, pending_capacity;
+static size_t allocations, maps, flexible_maps, protects, queries, fixed_replaced;
 static uint64_t live_bytes, flexible_bytes;
 
 static int valid_alignment(uint64_t a) { return a >= PAGE && a <= POOL_SIZE && !(a & (a-1)); }
@@ -420,7 +423,15 @@ static int pool(void) {
 static void queue_hook(int kind, uintptr_t address, uint64_t size) {
     GpuRange hook = kind==HOOK_MAP ? hook_map : kind==HOOK_UNMAP ? hook_unmap : hook_invalidate;
     if (!hook) return;
-    if (pending_count==sizeof(pending)/sizeof(*pending)) { fputs("STOP: GPU hook queue overflow\n",stderr); exit(21); }
+    if (pending_count==pending_capacity) {
+        if (pending_capacity > SIZE_MAX / sizeof(*pending) / 2) {
+            fputs("STOP: GPU notification capacity overflow\n",stderr); exit(21);
+        }
+        size_t capacity=pending_capacity ? pending_capacity*2 : 64;
+        PendingHook *next=realloc(pending,capacity*sizeof(*pending));
+        if (!next) { fputs("STOP: GPU notification allocation failed\n",stderr); exit(21); }
+        pending=next; pending_capacity=capacity;
+    }
     pending[pending_count++]=(PendingHook){kind,address,size};
 }
 /* Runs queued GPU notifications; callers invoke it after dropping the lock. */
@@ -520,7 +531,38 @@ static void drop_range(uintptr_t start, uintptr_t end) {
     }
     vma_erase(i,n);
 }
-/* Places a host mapping; with MAP_FIXED it replaces what the guest had there. */
+/* A MAP_FIXED over guest mappings replaces them, so the GPU retires its view of the range first,
+ * while the old pages are still mapped, as direct_unmap does: the GPU's unmap can write
+ * GPU-modified data back to the guest (readbacks), and that has to land in the old pages, not in
+ * the mapping that replaces them. Runs without the lock, since the GPU's unmap waits for threads
+ * that take it. The GPU's unmap cannot be undone (its texture cache frees the images and cancels
+ * pending readbacks), so callers run the map's own checks first and retire only a map that passes
+ * them, and place's checks are repeated here. Returns whether the GPU was told; the caller then
+ * calls announce_mapped_locked when the map still fails (out of memory, or a host mapping error),
+ * so the GPU gets back the mappings that stay. */
+static int retire_fixed(const void *address, uint64_t size, int flags) {
+    if (!hook_unmap || !(flags & MAP_FIXED_FLAG) || (flags & MAP_NO_OVERWRITE)) return 0;
+    uintptr_t start=(uintptr_t)address;
+    if (!start || start%PAGE || !size) return 0;
+    uint64_t length=align_up(size,PAGE);
+    read_lock();
+    int mapped=!foreign_overlap(start,start+length) && overlaps(start,start+length,1);
+    read_unlock();
+    if (mapped) hook_unmap(start,length);
+    return mapped;
+}
+/* The GPU hears again about the mappings in a range retire_fixed retired for a map that failed. */
+static void announce_mapped_locked(const void *address, uint64_t size) {
+    uintptr_t start=(uintptr_t)address, end=start+align_up(size,PAGE);
+    for (size_t i=vma_index(start); i<vma_count && vmas[i].start<end; ++i)
+        if (vmas[i].kind!=KIND_RESERVED) {
+            uintptr_t a=vmas[i].start>start ? vmas[i].start : start;
+            uintptr_t b=vmas[i].end<end ? vmas[i].end : end;
+            queue_hook(HOOK_MAP,a,b-a);
+        }
+}
+/* Places a host mapping; with MAP_FIXED it replaces what the guest had there. Callers that map
+ * memory the GPU can see with MAP_FIXED call retire_fixed first. */
 static int32_t place(void **inout, uint64_t size, int prot, int flags, uint64_t alignment,
                      int kind, int type, uint64_t phys) {
     uintptr_t address=(uintptr_t)*inout;
@@ -533,6 +575,11 @@ static int32_t place(void **inout, uint64_t size, int prot, int flags, uint64_t 
         if (!address) return NO_MEMORY;
     }
     if (host_map(address,size,host_prot(prot),kind==KIND_RESERVED,phys)) return NO_MEMORY;
+    /* Mappings replaced here (their GPU buffers and images were retired by retire_fixed, found
+     * when a game maps pool chunks over themselves on a level reload) count for the report. */
+    if ((flags & MAP_FIXED_FLAG) && kind!=KIND_RESERVED)
+        for (size_t i=vma_index(address); i<vma_count && vmas[i].start<address+size; ++i)
+            if (vmas[i].kind!=KIND_RESERVED) ++fixed_replaced;
     void *mapped=(void *)address;
     drop_range(address,address+size);
     if (vma_insert(vma_index(address),(Vma){address,address+size,kind,prot,type,phys})) return NO_MEMORY;
@@ -595,21 +642,39 @@ static ABI int32_t direct_allocate(int64_t low, int64_t high, uint64_t size,
     printf("Runtime: direct allocation offset=0x%" PRIx64 ", size=%" PRIu64 " bytes, type=%d\n", start, size, type);
     return 0;
 }
-static int32_t map_direct_locked(void **out, uint64_t size, int prot, int flags, int64_t physical, uint64_t alignment) {
+/* The checks map_direct_locked makes before it changes anything; direct_map and batch_map2 also
+ * run them before retire_fixed. */
+static int32_t direct_map_refused_locked(void *const *out, uint64_t size, int prot, int64_t physical,
+                                         uint64_t alignment) {
     if (!alignment) alignment=PAGE;
     if (!out || physical < 0 || (uint64_t)physical % PAGE || !size || size % PAGE || !valid_alignment(alignment) ||
         (prot & ~0x37)) return INVALID;
     if (!direct_range_allocated((uint64_t)physical,size)) return INVALID;
+    return 0;
+}
+static int32_t map_direct_locked(void **out, uint64_t size, int prot, int flags, int64_t physical, uint64_t alignment) {
+    int32_t refused=direct_map_refused_locked(out,size,prot,physical,alignment);
+    if (refused) return refused;
+    if (!alignment) alignment=PAGE;
     int32_t result=place(out,size,prot,flags,alignment,KIND_DIRECT,block_type((uint64_t)physical),(uint64_t)physical);
     if (!result) ++maps;
     return result;
 }
 static ABI int32_t direct_map(void **out, uint64_t size, int prot, int flags, int64_t physical, uint64_t alignment) {
+    void *fixed=out ? *out : NULL;
+    read_lock();
+    int32_t refused=direct_map_refused_locked(out,size,prot,physical,alignment);
+    read_unlock();
+    int retired=!refused && retire_fixed(fixed,size,flags);
     write_lock();
+    size_t replaced=fixed_replaced;
     int32_t result=map_direct_locked(out,size,prot,flags,physical,alignment);
+    replaced=fixed_replaced-replaced;
+    if (result && retired) announce_mapped_locked(fixed,size);
     write_unlock();
     flush_hooks();
-    if (!result) printf("Runtime: mapped direct memory %p, size=%" PRIu64 ", prot=0x%x\n", *out, size, prot);
+    if (!result) printf("Runtime: mapped direct memory %p, size=%" PRIu64 ", prot=0x%x%s\n", *out, size, prot,
+                        replaced ? " (over a mapping)" : "");
     return result;
 }
 static ABI int32_t direct_map_named(void **out, uint64_t size, int prot, int flags, int64_t physical,
@@ -674,9 +739,18 @@ static ABI int32_t direct_release(uint64_t start, uint64_t size) {
     flush_hooks();
     return 0;
 }
-static int32_t map_flexible_locked(void **inout, uint64_t size, int prot, int flags) {
+/* The checks map_flexible_locked makes before it changes anything (pool() aside: it needs the
+ * write lock, and it either has the pool or stops the game); map_flexible and batch_map2 also run
+ * them before retire_fixed. */
+static int32_t flexible_map_refused_locked(void *const *inout, uint64_t size, int prot) {
     if (!inout || !size || size%PAGE || (prot & ~0x37)) return INVALID;
-    if (flexible_bytes+size>FLEXIBLE_SIZE || pool()) return NO_MEMORY;
+    if (flexible_bytes+size>FLEXIBLE_SIZE) return NO_MEMORY;
+    return 0;
+}
+static int32_t map_flexible_locked(void **inout, uint64_t size, int prot, int flags) {
+    int32_t refused=flexible_map_refused_locked(inout,size,prot);
+    if (refused) return refused;
+    if (pool()) return NO_MEMORY;
     uint64_t phys=flex_alloc(size);
     if (phys==UINT64_MAX) return NO_MEMORY;
     int32_t result=place(inout,size,prot,flags,PAGE,KIND_FLEXIBLE,0,phys);
@@ -684,8 +758,14 @@ static int32_t map_flexible_locked(void **inout, uint64_t size, int prot, int fl
     return result;
 }
 static ABI int32_t map_flexible(void **inout, uint64_t size, int prot, int flags) {
+    void *fixed=inout ? *inout : NULL;
+    read_lock();
+    int32_t refused=flexible_map_refused_locked(inout,size,prot);
+    read_unlock();
+    int retired=!refused && retire_fixed(fixed,size,flags);
     write_lock();
     int32_t result=map_flexible_locked(inout,size,prot,flags);
+    if (result && retired) announce_mapped_locked(fixed,size);
     write_unlock();
     flush_hooks();
     if (!result) printf("Runtime: mapped flexible memory %p, size=%" PRIu64 ", prot=0x%x\n", *inout, size, prot);
@@ -785,9 +865,22 @@ static ABI int32_t direct_memory_type(uint64_t phys, int *type, void **start, vo
 static ABI int32_t batch_map2(BatchEntry *entries, int count, int *processed, int flags) {
     if (!entries || count<0) return INVALID;
     int32_t result=0; int done=0;
-    write_lock();
+    /* One entry at a time, so that a fixed map retires the GPU's view of what it replaces (without
+     * the lock, retire_fixed) only when it passes its checks and is about to run; the entries
+     * after a failed one never touch the GPU. */
     for (; done<count; ++done) {
         BatchEntry *e=&entries[done];
+        void *fixed=e->start;
+        int retired=0;
+        if (e->operation==0 || e->operation==3) {
+            read_lock();
+            int32_t refused=e->operation==0
+                ? direct_map_refused_locked(&e->start,e->length,(uint8_t)e->prot,(int64_t)e->offset,0)
+                : flexible_map_refused_locked(&e->start,e->length,(uint8_t)e->prot);
+            read_unlock();
+            retired=!refused && retire_fixed(fixed,e->length,flags);
+        }
+        write_lock();
         switch (e->operation) {
         case 0: result=map_direct_locked(&e->start,e->length,(uint8_t)e->prot,flags,(int64_t)e->offset,0); break;
         case 1: result=unmap_locked((uintptr_t)e->start,e->length); break;
@@ -796,10 +889,11 @@ static ABI int32_t batch_map2(BatchEntry *entries, int count, int *processed, in
         case 4: result=protect_locked((uintptr_t)e->start,e->length,(uint8_t)e->prot,e->type); break;
         default: result=INVALID;
         }
+        if (result && retired) announce_mapped_locked(fixed,e->length);
+        write_unlock();
+        flush_hooks();
         if (result) break;
     }
-    write_unlock();
-    flush_hooks();
     if (processed) *processed=done;
     return result;
 }
@@ -992,5 +1086,6 @@ void runtime_memory_report(void) {
            allocations, maps, live_bytes, POOL_SIZE);
     printf("Runtime: flexible maps=%zu, in use=%" PRIu64 ", protects=%zu, queries=%zu, regions=%zu\n",
            flexible_maps, flexible_bytes, protects, queries, vma_count);
+    printf("Runtime: fixed maps over mapped memory=%zu\n", fixed_replaced);
 }
 
