@@ -38,9 +38,20 @@ static int32_t error(int e) {
     }
     return (int32_t)(UINT32_C(0x80020000)|code);
 }
-/* All helpers ending in _locked require registry_lock. */
+/* All helpers ending in _locked require registry_lock.
+ * A found rwlock moves to the front of the registry. New ones went in front, so the
+ * game's busiest locks, made at boot, sat behind every one made since: each level load made the
+ * walk under registry_lock longer for every lock and unlock of every guest thread (FPS falling
+ * over a session; from Awakenchan 0.9.34 beta 9.9). SPARTAN_RWLOCK_FRONT=0: the order as before. */
 static Rwlock *find_locked(Rwlock *handle) {
-    for (Rwlock *r=registry; r; r=r->next) if (r==handle) return r;
+    static int front=-1;
+    if (front<0) { const char *e=getenv("SPARTAN_RWLOCK_FRONT"); front=!(e && e[0]=='0'); }
+    Rwlock **link=&registry;
+    for (Rwlock *r=registry; r; link=&r->next, r=r->next) {
+        if (r!=handle) continue;
+        if (front && link!=&registry) { *link=r->next; r->next=registry; registry=r; }
+        return r;
+    }
     return NULL;
 }
 static int create_locked(Rwlock **out) {
