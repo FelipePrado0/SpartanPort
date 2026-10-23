@@ -511,6 +511,14 @@ void Rasterizer::CollectRingBindings(const Shader::Info& stage, const PreparedDr
         if (source) {
             std::memcpy(dst, source, size);
         } else {
+            // spartanport: the backing view does not fault on pages a pending image readback
+            // protects, so wait here as the fault did. Stage B is drained first: the wait can
+            // flush the command buffer it records into.
+            if (texture_cache.ReadbackBlocksRead(address, size)) {
+                DrainDrawPipe();
+                texture_cache.ResolveReadbacks(address, size, true,
+                                               VideoCore::ReadbackSource::CpuRead);
+            }
             memory->CopySparseMemory(address, dst, size);
         }
         constant_ring->Flush(*offset, size);

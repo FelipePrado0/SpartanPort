@@ -78,6 +78,16 @@ TextureCache::~TextureCache() {
     }
 }
 
+bool TextureCache::ReadbackBlocksRead(VAddr address, u64 size) {
+    // Stale readbacks only watch writes: reads of a pending page see the previous copy.
+    if (!deferred_readbacks || stale_readbacks ||
+        !has_pending_readbacks.load(std::memory_order_acquire)) {
+        return false;
+    }
+    std::scoped_lock lock{readback_mutex};
+    return pending_readbacks.RequiredTick(address, size) != 0;
+}
+
 template <bool track>
 void TextureCache::WatchReadback(VAddr address, u64 size) {
     if (stale_readbacks) {

@@ -134,6 +134,9 @@ public:
     bool ResolveReadbacks(VAddr address, u64 size, bool assume_locks = true,
                           ReadbackSource source = ReadbackSource::Unknown);
     void CancelReadbacks(VAddr address, u64 size, bool exact = false);
+    // spartanport: whether a guest-view read of the range would fault on a pending readback, for
+    // readers that go through the backing view instead.
+    bool ReadbackBlocksRead(VAddr address, u64 size);
 
     /// Retrieves the image handle of the image with the provided attributes.
     [[nodiscard]] ImageId FindImage(ImageDesc& desc, bool exact_fmt = false);
