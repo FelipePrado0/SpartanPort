@@ -12,6 +12,7 @@
 #include "orb_hook.h"
 #include "cheat_hook.h"
 #include "qte_hook.h"
+#include "switch_hook.h"
 #include "actor_hook.h"
 #include "damage_hook.h"
 #include "menu_hook.h"
@@ -385,6 +386,10 @@ extern void spartanport_stat_multipliers_status(int damage, int orb_pickup);
 extern uintptr_t spartanport_qte_state_address(void);
 extern void spartanport_qte_status(int supported);
 extern uintptr_t spartanport_auto_qte_flag(void);
+extern uintptr_t spartanport_switch_state_address(void);
+extern void spartanport_switch_status(int supported);
+extern ABI int spartanport_switch_input(const unsigned char *branch, uintptr_t caller);
+extern ABI const unsigned char *spartanport_switch_queue(const unsigned char *branch);
 
 /* The hooks below find their sites by signature (src/signature.h), so they work in any region
  * and version of the game whose code matches; a site that is not found leaves its feature off. */
@@ -612,6 +617,59 @@ static void install_auto_qte_hooks(Segment *segments, uint64_t count, uint64_t s
     if (!ready && !rotation) return;
     spartanport_qte_status(1);
     printf("Automatic QTE: ready for %d of %d prompt kinds (menu, Game)\n", ready + rotation, AUTO_QTE_SITES + 1);
+}
+
+/* Switch attacks (src/switch_hook.h): L1 + a d-pad direction and L1 + Cross take the branches to
+ * the switch attacks. Installed only with SPARTAN_SWITCH_ATTACKS=1; all three or none. */
+static void install_switch_hooks(Segment *segments, uint64_t count, uint64_t size) {
+    const char *setting = getenv("SPARTAN_SWITCH_ATTACKS");
+    if (!setting || strcmp(setting, "1")) return;
+    uint64_t sites[SPARTAN_SWITCH_SITES];
+    for (unsigned i = 0; i < SPARTAN_SWITCH_SITES; ++i) {
+        const SpartanSwitchSite *site = &spartanport_switch_sites[i];
+        sites[i] = spartanport_signature_find(image, size, &site->site);
+        if (sites[i] == UINT64_MAX || !mapped(segments, count, sites[i], site->length) ||
+            memcmp(image + sites[i], site->original, site->length)) {
+            printf("Switch attacks: unavailable (%s not found in this eboot.bin)\n", site->name);
+            return;
+        }
+    }
+    const uint64_t pass_at = spartanport_signature_find(image, size, &spartanport_switch_pass_site);
+    const uint64_t caller = spartanport_signature_find(image, size, &spartanport_switch_caller_site);
+    if (pass_at == UINT64_MAX || caller == UINT64_MAX || !mapped(segments, count, pass_at - 1, 5)) {
+        printf("Switch attacks: unavailable (input check not found in this eboot.bin)\n");
+        return;
+    }
+    int32_t pass_rel;
+    memcpy(&pass_rel, image + pass_at, 4);
+    const uint64_t pass = pass_at + 4 + (int64_t)pass_rel;
+    const size_t stub_size = round_page(SPARTAN_SWITCH_SITES * SPARTAN_SWITCH_SLOT);
+    unsigned char *stubs = allocate(stub_size);
+    int32_t relative[SPARTAN_SWITCH_SITES];
+    for (unsigned i = 0; i < SPARTAN_SWITCH_SITES; ++i) {
+        const int64_t delta = (int64_t)(uintptr_t)(stubs + i * SPARTAN_SWITCH_SLOT) -
+                              (int64_t)(uintptr_t)(image + sites[i] + 5);
+        if (delta < INT32_MIN || delta > INT32_MAX) {
+            printf("Switch attacks: unavailable (hook outside relative-jump range)\n");
+            return;
+        }
+        relative[i] = (int32_t)delta;
+    }
+    ((SpartanSwitchState *)spartanport_switch_state_address())->caller = (uint64_t)(uintptr_t)(image + caller);
+    const uintptr_t calls[SPARTAN_SWITCH_SITES] = {(uintptr_t)&spartanport_switch_input, (uintptr_t)&spartanport_switch_queue, 0};
+    for (unsigned i = 0; i < SPARTAN_SWITCH_SITES; ++i)
+        spartanport_switch_build_stub(stubs + i * SPARTAN_SWITCH_SLOT, &spartanport_switch_sites[i], spartanport_switch_state_address(),
+                               calls[i], (uintptr_t)(image + pass),
+                               (uintptr_t)(image + sites[i] + spartanport_switch_sites[i].length));
+    protect(stubs, stub_size, 5);
+    for (unsigned i = 0; i < SPARTAN_SWITCH_SITES; ++i) {
+        image[sites[i]] = 0xe9;
+        memcpy(image + sites[i] + 1, &relative[i], 4);
+        memset(image + sites[i] + 5, 0x90, spartanport_switch_sites[i].length - 5);
+    }
+    spartanport_switch_status(1);
+    printf("Switch attacks: hooks ready (input check 0x%llx, input queue 0x%llx, d-pad select 0x%llx)\n",
+           (unsigned long long)sites[0], (unsigned long long)sites[1], (unsigned long long)sites[2]);
 }
 
 static void install_orb_multiplier(Segment *segments, uint64_t count, uint64_t size) {
@@ -898,7 +956,7 @@ int main(int argc, char **argv) {
     int cpu_only = 0, strict_imports = 0, check_imports = 0;
     unsigned timeout_seconds = 10;
     const char *content_profile=NULL, *app0=NULL, *user_dir=NULL, *patch_file=NULL, *isa_file=NULL, *pause_menu=NULL;
-    const char *mounts[8]; int mount_count=0;
+    const char *mounts[24]; int mount_count=0;  /* glyphs (3) and the switch attack tutorials (16) */
     for (int i = 2; i < argc; ++i) {
         if (!strcmp(argv[i], "--cpu-only")) cpu_only = 1;
         else if (!strcmp(argv[i], "--strict-imports")) strict_imports = 1;
@@ -912,7 +970,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "--mount") && i+1<argc) {
             /* guest=host; the guest part never has '=', so the first one splits */
             const char *spec=argv[++i], *eq=strchr(spec,'=');
-            if (mount_count==8 || !eq || eq==spec || !eq[1]) { fprintf(stderr, "Bad --mount (guest=host, at most 8): %s\n", spec); return 1; }
+            if (mount_count==24 || !eq || eq==spec || !eq[1]) { fprintf(stderr, "Bad --mount (guest=host, at most 24): %s\n", spec); return 1; }
             mounts[mount_count++]=spec;
         }
         else if (!strcmp(argv[i], "--timeout") && i+1<argc) timeout_seconds=(unsigned)strtoul(argv[++i],NULL,10);
@@ -1169,6 +1227,7 @@ int main(int argc, char **argv) {
     if (gpu_enabled) install_actor_watch(segments, ns, size);
     if (gpu_enabled) install_stat_multipliers(segments, ns, size);
     if (gpu_enabled) install_auto_qte_hooks(segments, ns, size, install_qte_hooks(segments, ns, size));
+    if (gpu_enabled) install_switch_hooks(segments, ns, size);
     if (gpu_enabled && pause_menu && app0) install_menu_exit(segments, ns, size, pause_menu);
 #ifdef _WIN32
     printf("Guest TCB loads redirected to the TEB TLS slot: %" PRIu64 "\n", patch_tcb_loads(segments, ns));
