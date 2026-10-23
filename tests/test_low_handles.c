@@ -18,6 +18,9 @@ uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *n
 }
 static __thread int32_t errno_slot;
 int32_t *runtime_errno(void) { return &errno_slot; }
+/* runtime_thread.c's slow-wait log, which runtime_mutex.c calls; off here. */
+uint64_t runtime_wait_begin(void) { return 0; }
+void runtime_wait_end(const char *what, uint64_t start, const char *detail, long long arg) { (void)what; (void)start; (void)detail; (void)arg; }
 typedef int32_t (ABI *MutexInit)(void **, void **, const char *);
 typedef int32_t (ABI *HandleOp)(void **);
 
