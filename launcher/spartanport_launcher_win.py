@@ -254,6 +254,20 @@ def monitor_selection(displays, saved):
     return saved if saved in values else values[0]
 
 
+def probe_env(probe):
+    """The environment to run spartanport-probe with, or None when it cannot start. As run.py: a
+    development build (no SDL3.dll beside the exe) loads the MSYS2 CLANG64 DLLs (SDL3, FFmpeg), so
+    that folder goes first on PATH; without it Windows would show one missing-DLL dialog per DLL,
+    so the probe is not run at all."""
+    env = dict(os.environ)
+    if WINDOWS and not (Path(probe).parent / 'SDL3.dll').is_file():
+        clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
+        if not (clang64 / 'SDL3.dll').is_file():
+            return None
+        env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
+    return env
+
+
 def list_displays(backend='auto'):
     """The monitors the game can open on, in the order `spartanport-probe --displays` numbers them, or [] when
     the tool cannot tell. The probe runs under the same SDL video driver the game will use, so both
@@ -261,7 +275,9 @@ def list_displays(backend='auto'):
     tool = find_tool('spartanport-probe' + ('.exe' if WINDOWS else ''))
     if not tool:
         return []
-    env = dict(os.environ)
+    env = probe_env(tool)
+    if env is None:
+        return []
     if not WINDOWS and backend in ('wayland', 'x11'):
         env['SDL_VIDEO_DRIVER'] = env['SDL_VIDEODRIVER'] = backend
     try:
@@ -543,14 +559,9 @@ def connected_gamepad():
     probe = next((p for p in (PORT_DIR / 'bin' / name, PORT_DIR / 'out' / name) if p.is_file()), None)
     if not probe:
         return None
-    env = dict(os.environ)
-    # As run.py: a development build loads the MSYS2 CLANG64 DLLs (SDL3, FFmpeg); without them Windows
-    # would show a missing-DLL dialog, so the probe is not run at all.
-    if WINDOWS and not (probe.parent / 'SDL3.dll').is_file():
-        clang64 = Path(env.get('MSYS2_ROOT', r'C:\msys64')) / 'clang64' / 'bin'
-        if not (clang64 / 'SDL3.dll').is_file():
-            return None
-        env['PATH'] = f'{clang64}{os.pathsep}{env.get("PATH", "")}'
+    env = probe_env(probe)
+    if env is None:
+        return None
     try:
         out = subprocess.run([str(probe), '--gamepad'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                              stderr=subprocess.DEVNULL, text=True, timeout=15, creationflags=NO_WINDOW,
