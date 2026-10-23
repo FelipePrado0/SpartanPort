@@ -1,4 +1,4 @@
-/* Linux pthread-backed opaque PS4 mutex handles. No guest threads yet. */
+/* Guest mutex handles backed by host pthreads. */
 #define _GNU_SOURCE
 #include "runtime.h"
 #include <stdio.h>
@@ -7,8 +7,16 @@
 #include <pthread.h>
 #include <errno.h>
 #include <time.h>
+#include <stddef.h>
 typedef struct { int type; } GuestAttr;
-typedef struct { pthread_mutex_t native; } GuestMutex;
+/* Linked libc marks its heap mutex at guest offset 0x20. Guest fields must not
+ * overlap the host pthread object, whose size and layout vary by platform. */
+typedef struct {
+    unsigned char guest_reserved[0x20];
+    uint32_t libc_flags;
+    pthread_mutex_t native;
+} GuestMutex;
+_Static_assert(offsetof(GuestMutex,libc_flags)==0x20,"Guest libc mutex flags offset");
 static size_t created, locks, unlocks;
 static int32_t orbis_error(int e) {
     if (!e) return 0;
@@ -48,7 +56,7 @@ static ABI int32_t mutex_init(GuestMutex **out, GuestAttr **attr, const char *na
     if (!out || (attr && !*attr)) return orbis_error(EINVAL);
     int type = attr ? (*attr)->type : 1;
     if (type < 1 || type > 4) return orbis_error(EINVAL);
-    GuestMutex *mutex = malloc(sizeof(*mutex));
+    GuestMutex *mutex = calloc(1,sizeof(*mutex));
     if (!mutex) return orbis_error(ENOMEM);
     pthread_mutexattr_t native_attr;
     int e = pthread_mutexattr_init(&native_attr);

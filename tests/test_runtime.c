@@ -132,6 +132,10 @@ static void mutexes(void) {
     assert(attr_init(&attr)==0);
     assert((uint32_t)type(&attr,99)==0x80020016);
     assert(type(&attr,2)==0 && init(&mutex,&attr,"recursive-test")==0);
+    /* The linked libc writes this flag after creating its internal heap mutex. */
+    uint32_t *libc_flags=(uint32_t *)((unsigned char *)mutex+0x20);
+    *libc_flags |= 0x100;
+    assert(*libc_flags==0x100);
     assert(attr_destroy(&attr)==0 && attr==NULL);
     assert(lock(&mutex)==0 && trylock(&mutex)==0);
     assert((uint32_t)destroy(&mutex)==0x80020010);
