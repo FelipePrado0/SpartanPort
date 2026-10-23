@@ -358,6 +358,37 @@ static void save_read_preview(void) {
         save_dialog.new_icon=png; save_dialog.new_icon_size=(uint64_t)size;
     } else free(png);
 }
+/* Last-modified time (seconds) of a save; 0 when unavailable. */
+static int64_t save_mtime(const char *dir) {
+    if (!dir || !*dir) return 0;
+    int64_t t=runtime_savedata_mtime(USER_ID,dir);
+    if (t>0) return t;
+    unsigned char param[RUNTIME_SAVE_PARAM_SIZE];
+    if (runtime_savedata_param(USER_ID,dir,param)==0) {
+        memcpy(&t,param+1288,8);
+        if (t>0) return t;
+    }
+    return 0;
+}
+typedef struct { char name[32]; int64_t mtime; } SaveSortEntry;
+/* Newest first; deterministic tie-breaking by name for equal timestamps. */
+static int save_sort_compare(const void *a, const void *b) {
+    const SaveSortEntry *x=(const SaveSortEntry *)a;
+    const SaveSortEntry *y=(const SaveSortEntry *)b;
+    if (x->mtime!=y->mtime) return x->mtime>y->mtime ? -1 : 1;
+    return strcmp(x->name,y->name);
+}
+static void save_sort_dirs(void) {
+    if (save_dialog.dir_count<=1) return;
+    SaveSortEntry entries[32];
+    for (int i=0;i<save_dialog.dir_count;++i) {
+        memcpy(entries[i].name,save_dialog.dirs[i],32);
+        entries[i].name[31]=0;
+        entries[i].mtime=save_mtime(entries[i].name);
+    }
+    qsort(entries,(size_t)save_dialog.dir_count,sizeof(SaveSortEntry),save_sort_compare);
+    for (int i=0;i<save_dialog.dir_count;++i) memcpy(save_dialog.dirs[i],entries[i].name,32);
+}
 static ABI int32_t save_open(const unsigned char *p) {
     if (!p) return DIALOG_ARG_NULL;
     if (!dialogs[2].initialized) return DIALOG_NOT_INITIALIZED;
@@ -388,6 +419,7 @@ static ABI int32_t save_open(const unsigned char *p) {
     }
     if (save_dialog.mode!=SAVE_MODE_LIST) return dialog_open_mode(2,p,52,5);
     if (save_dialog.type==1 && !save_dialog.new_icon) save_read_preview();
+    save_sort_dirs();
     save_show_list(0);
     return 0;
 }

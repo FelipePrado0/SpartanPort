@@ -52,6 +52,18 @@ int runtime_savedata_param(int32_t user, const char *dir, void *param) {
     memcpy(param,save_param,sizeof(save_param)); return 0;
 }
 int runtime_savedata_icon(int32_t user, const char *dir, char *out, size_t size) { (void)user; (void)dir; (void)out; (void)size; return -1; }
+static struct {
+    char dir[32];
+    int64_t mtime;
+} test_save_mtimes[16];
+static int test_save_mtimes_count;
+int64_t runtime_savedata_mtime(int32_t user, const char *dir) {
+    (void)user;
+    for (int i=0;i<test_save_mtimes_count;++i) {
+        if (!strcmp(test_save_mtimes[i].dir,dir)) return test_save_mtimes[i].mtime;
+    }
+    return 0;
+}
 
 int main(void) {
     unsigned char param[128]={0}, result[64]={0}; /* the game zeroes the pointers it does not want */
@@ -222,6 +234,164 @@ int main(void) {
     save_param_available=0;
     assert(save_open(list)==0 && strstr(shown_items[1],"SAVE0001") && strstr(shown_items[1],"unavailable"));
     assert(save_term()==0);
+
+    /* ---- Issue #994: Save list ordering (newest first, overwriting, autosave, PR #938 compatibility) ---- */
+    assert(save_init()==0);
+    char sort_names[3][32]={"SAVE0001","SAVE0002","SAVE0003"};
+    const char *sort_names_ptr=sort_names[0];
+    uint32_t sort_count=3;
+    unsigned char sort_items[64]={0}, sort_list[128]={0};
+    memcpy(sort_items+16,&sort_names_ptr,8);
+    memcpy(sort_items+24,&sort_count,4);
+    unsigned char *sort_items_ptr=sort_items;
+    sort_list[52]=1; /* mode 1: list */
+    sort_list[56]=2; /* type 2: Load game */
+    memcpy(sort_list+72,&sort_items_ptr,8);
+
+    /* 1. Initial save ordering: newest first. */
+    test_save_mtimes_count=3;
+    strcpy(test_save_mtimes[0].dir,"SAVE0001"); test_save_mtimes[0].mtime=100;
+    strcpy(test_save_mtimes[1].dir,"SAVE0002"); test_save_mtimes[1].mtime=300; /* newest */
+    strcpy(test_save_mtimes[2].dir,"SAVE0003"); test_save_mtimes[2].mtime=200;
+    assert(save_open(sort_list)==0 && save_status()==DIALOG_RUNNING);
+    assert(choice_count==3);
+    assert(choice_focus==0);
+    assert(strstr(shown_items[0],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0003")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0001")!=NULL);
+
+    /* 2. Correct slot loaded after reordering. */
+    choice_next=0; /* pick top save (SAVE0002) */
+    assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0002"));
+
+    assert(save_open(sort_list)==0);
+    choice_next=1; /* pick second save (SAVE0003) */
+    assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0003"));
+
+    assert(save_open(sort_list)==0);
+    choice_next=2; /* pick third save (SAVE0001) */
+    assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0001"));
+
+    /* 3. Overwriting an older slot moves it to the top on list refresh. */
+    test_save_mtimes[0].mtime=400; /* SAVE0001 overwritten, now newest */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0003")!=NULL);
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0001"));
+
+    /* 4. Identical timestamps: deterministic alphabetical tie-breaking. */
+    test_save_mtimes[0].mtime=200;
+    test_save_mtimes[1].mtime=500;
+    test_save_mtimes[2].mtime=500; /* SAVE0002 and SAVE0003 tie at 500 */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0003")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0001")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+
+    /* 5. Missing / invalid timestamps placed at the bottom, sorted by name. */
+    test_save_mtimes[0].mtime=0;   /* missing */
+    test_save_mtimes[1].mtime=250; /* valid */
+    test_save_mtimes[2].mtime=-1;  /* invalid */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0003")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+
+    /* 6. Autosave positioning and selection. */
+    strcpy(sort_names[0],"AUTOSAVE");
+    strcpy(sort_names[1],"SAVE0001");
+    strcpy(sort_names[2],"SAVE0002");
+    /* 6a. AUTOSAVE is newest: appears at top. */
+    strcpy(test_save_mtimes[0].dir,"AUTOSAVE"); test_save_mtimes[0].mtime=600;
+    strcpy(test_save_mtimes[1].dir,"SAVE0001"); test_save_mtimes[1].mtime=500;
+    strcpy(test_save_mtimes[2].dir,"SAVE0002"); test_save_mtimes[2].mtime=400;
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"AUTOSAVE")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0002")!=NULL);
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"AUTOSAVE"));
+
+    /* 6b. Manual save newer than AUTOSAVE: manual save at top, AUTOSAVE second. */
+    test_save_mtimes[1].mtime=700; /* SAVE0001 is newer than AUTOSAVE */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[1],"AUTOSAVE")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0002")!=NULL);
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0001"));
+    assert(save_open(sort_list)==0);
+    choice_next=1; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"AUTOSAVE"));
+
+    /* 7. Save/delete navigation consistency. */
+    /* 7a. Save mode (type 1) with new_item: row 0 is 'New save', followed by sorted saves. */
+    sort_list[56]=1; /* type 1: Save game */
+    memcpy(sort_items+32,&new_title,8);
+    assert(save_open(sort_list)==0);
+    assert(choice_count==4);
+    assert(choice_focus==0);
+    assert(strstr(shown_items[0],"New")!=NULL || strstr(shown_items[0],"Novo")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[2],"AUTOSAVE")!=NULL);
+    assert(strstr(shown_items[3],"SAVE0002")!=NULL);
+    /* Selecting 'New save' (row 0) produces empty name. */
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(chosen[0]=='\0');
+    /* Selecting an existing save (row 1: SAVE0001) triggers overwrite confirmation. */
+    assert(save_open(sort_list)==0);
+    choice_next=1; assert(save_status()==DIALOG_RUNNING); /* prompt displayed */
+    choice_next=1; assert(save_status()==DIALOG_RUNNING); /* cancel overwrite */
+    assert(choice_focus==1); /* cursor preserved on row 1 */
+    choice_next=1; assert(save_status()==DIALOG_RUNNING); /* prompt displayed again */
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0); /* confirm overwrite */
+    assert(!strcmp(chosen,"SAVE0001"));
+
+    /* 7b. Save mode without new_item (all slots full): existing saves start at row 0. */
+    memset(sort_items+32,0,8);
+    assert(save_open(sort_list)==0);
+    assert(choice_count==3);
+    assert(strstr(shown_items[0],"SAVE0001")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+
+    /* 7c. Delete mode (type 3): existing saves start at row 0 sorted newest first. */
+    sort_list[56]=3; /* type 3: Delete save */
+    assert(save_open(sort_list)==0);
+    assert(choice_count==3);
+    assert(strstr(shown_items[0],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[1],"AUTOSAVE")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0002")!=NULL);
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0001"));
+
+    /* 8. Compatibility with PR #938: focus calculation on sorted lists. */
+    /* When PR #938 is applied, Load mode focuses AUTOSAVE if present; otherwise the newest save (index 0). */
+    sort_list[56]=2; /* type 2: Load game */
+    int focus_pr938=0;
+    int has_new=(sort_items[32]!=0);
+    for (int i=0;i<3;++i) {
+        if (!strcmp(save_dialog.dirs[i],"AUTOSAVE")) { focus_pr938=i+has_new; break; }
+    }
+    assert(focus_pr938==1); /* AUTOSAVE is at index 1 because SAVE0001 is newer */
+    /* When AUTOSAVE is absent, focus defaults to index 0 (newest save). */
+    strcpy(sort_names[0],"SAVE0003");
+    test_save_mtimes[0].dir[0]='X'; /* invalidate AUTOSAVE */
+    assert(save_open(sort_list)==0);
+    focus_pr938=0;
+    for (int i=0;i<3;++i) {
+        if (!strcmp(save_dialog.dirs[i],"AUTOSAVE")) { focus_pr938=i+has_new; break; }
+    }
+    assert(focus_pr938==0); /* newest save is at index 0 */
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+    assert(save_term()==0);
+    test_save_mtimes_count=0;
 
     /* PlayGo: installed, full speed, progress never divides by zero. */
     int32_t handle=0; uint64_t progress[2]; int32_t speed; uint16_t chunk=0;
