@@ -1208,6 +1208,7 @@ int main(int argc, char **argv) {
         }
         runtime_set_main_tls(image+main_tls[0],main_tls[1],main_tls[2],main_tls[3]);
         runtime_thread_attach_main();
+        runtime_orbis_fpu(); /* the PS4's floating-point state from the first guest code on */
         runtime_set_procparam(image+procparam);
         /* Dependencies start in link order (libc first), as the PS4 dynamic linker does. */
         for (uint64_t m=0;m<module_count;++m) {

@@ -373,6 +373,18 @@ static void rw_timeouts(void) {
     assert(rw_unlock(&f.lock)==0);
     fixture_destroy(&f);
 }
+/* The PS4's floating-point state: flush-to-zero and denormals-are-zero on (shadPS4#3568). */
+static void orbis_fpu(void) {
+    unsigned before, after; unsigned short cw;
+    __asm__ volatile("stmxcsr %0" : "=m"(before));
+    runtime_orbis_fpu();
+    __asm__ volatile("stmxcsr %0" : "=m"(after));
+    __asm__ volatile("fnstcw %0" : "=m"(cw));
+    assert(after==0x9fc0 && cw==0x037f);
+    volatile float tiny=1e-39f; /* a denormal: zero with DAZ */
+    assert(tiny*1.0f==0.0f);
+    __asm__ volatile("ldmxcsr %0" : : "m"(before));
+}
 int main(int argc,char **argv) {
     runtime_start(0); assert(runtime_resolve("bzQExy189ZI#libc",0)==0);
     runtime_start(1);
@@ -417,7 +429,7 @@ int main(int argc,char **argv) {
     if (argc>1 && !strcmp(argv[1],"--rwlock-concurrency")) { rw_concurrency(); return 0; }
     if (argc>1 && !strcmp(argv[1],"--rwlock-timeouts")) { rw_timeouts(); return 0; }
     libc_support(); posix_mutexes(); busy_mutex_lifetimes(); wall_time(); exit_handlers(); guards(); mutexes(); direct_memory(); memory_primitives();
-    rw_lifecycle(); rw_concurrency(); rw_timeouts();
-    puts("PASS: callback lifecycle, guard ABI, mutex errors, shared direct memory, memory primitives, resolver scope");
+    rw_lifecycle(); rw_concurrency(); rw_timeouts(); orbis_fpu();
+    puts("PASS: callback lifecycle, guard ABI, mutex errors, shared direct memory, memory primitives, resolver scope, the PS4's floating-point state");
     return 0;
 }
