@@ -51,6 +51,7 @@ import graphics_options  # noqa: E402  (scripts/)
 import legacy  # noqa: E402  (scripts/)
 import save_backup  # noqa: E402  (scripts/)
 import steam_shortcut  # noqa: E402  (scripts/)
+import controller_mapper  # noqa: E402  (launcher/)
 from patches import game_profile, game_sfo  # noqa: E402  (scripts/)
 from prepare import load_sfo  # noqa: E402  (scripts/)
 legacy.forward_environment()  # before the folders below are read from the environment
@@ -73,7 +74,7 @@ RELEASES_API = 'https://api.github.com/repos/FelipePrado0/SpartanPort/releases/l
 RELEASES_PAGE = 'https://github.com/FelipePrado0/SpartanPort/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'spartanport-update'
 # Never copied over an installation by an update (the package does not hold them either).
-USER_FILES = ('user', 'out', 'mods', 'spartanport.ini', 'settings.json', 'game_icon.ico', 'mods.json', 'mods_presets.json', 'patches.json', 'last_run.log')
+USER_FILES = ('user', 'out', 'mods', 'spartanport.ini', 'settings.json', 'game_icon.ico', 'mods.json', 'mods_presets.json', 'patches.json', 'last_run.log', 'gamecontrollerdb.txt')
 # The title face (Cinzel Black), next to spartanport.ico; main() registers it for this process only.
 FONT_FILE = PORT_DIR / 'launcher' / 'Cinzel-Black.ttf'
 FR_PRIVATE = 0x10
@@ -2467,6 +2468,8 @@ class Launcher:
         tk, ttk = self.tk, self.ttk
         f = self.scrolled_page('controls', _('Controls', 'Управление'),
                                _('Keyboard and mouse, button icons and gamepad mapping.'))
+        ttk.Button(f, text=_('Set up a controller'), command=self.open_controller_mapper).grid(
+            row=self.next_row(f), column=0, columnspan=2, sticky='w', pady=self.px((8, 4)))
         saved = {kind: control_values(self.app.get('controls'), kind) for kind in ('key', 'pad')}
         style = self.app.get('pad_style') if self.app.get('pad_style') in PAD_STYLES else 'playstation'
         self.pad_style = tk.StringVar(value=style)
@@ -2722,6 +2725,19 @@ class Launcher:
         if other:
             table[other].set(bindings[other])
         table[button].set(name)
+
+    def open_controller_mapper(self):
+        if self.process and self.process.poll() is None:
+            self.messagebox.showinfo(_('Set up a controller'), _('Stop the game before setting up a controller.'))
+            return
+        existing = getattr(self, 'controller_mapper_window', None)
+        if existing and not existing.closed:
+            existing.window.lift()
+            return
+        try:
+            self.controller_mapper_window = controller_mapper.MapperWindow(self.root, PORT_DIR, DATA_DIR, _)
+        except (OSError, ValueError) as error:
+            self.messagebox.showerror(_('Set up a controller'), _(str(error)))
 
     def draw_pad_icon(self, button):
         """The gamepad column's icon of a game button, in the chosen style (L2/R2: the triggers)."""

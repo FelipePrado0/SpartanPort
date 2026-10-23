@@ -334,6 +334,23 @@ If the overlay still does not appear, report the port and overlay versions, the 
 working port version, and attach `user\last_run.log`. These checks do not confirm a fix
 for every overlay configuration.
 
+### Generic USB controllers
+
+**Generic USB controllers:** in **Controls → Set up a controller**, select the joystick,
+then choose **Configure** next to any button, D-pad direction or stick axis. Joysticks without
+an existing SDL gamepad mapping are listed too. Each detected input is saved immediately;
+you can start with any row and correct just one control later. Existing bindings are shown
+when reopening the editor. **Clear** removes only that row, and **Cancel capture** leaves
+the pending edit unchanged while keeping previous saves. The live preview lets you check the
+result at any time. Close the window when finished.
+
+Profiles are saved per SDL device GUID and operating system in `gamecontrollerdb.txt` in the
+port's data folder. They load on the next game start, including `--play`, shortcuts and direct
+`run.py` launches. Explicit `SDL_GAMECONTROLLERCONFIG` and `SDL_GAMECONTROLLERCONFIG_FILE`
+mappings retain priority. The existing game button remapping still applies; use
+**Reset to defaults** if you want the buttons to match the guided setup. SDL must be able to
+read the joystick; the mapper does not install device drivers.
+
 ## Troubleshooting
 
 - Executable format errors: source builds accept plaintext PS4 SELF containers and unpacked

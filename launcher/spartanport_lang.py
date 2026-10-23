@@ -2487,6 +2487,82 @@ EXTRA['id'].update({
         'input ini. Mouse adaptif: gambar putaran dengan mouse.',
 })
 
+EXTRA.setdefault('pt', {}).update({
+    'Choose Configure next to a control. Each change is saved immediately.':
+        'Clique em Configurar ao lado de um comando. Cada alteração é salva na hora.',
+    'Game control': 'Comando no jogo', 'Assigned input': 'Entrada do controle',
+    'Configure': 'Configurar', 'Clear': 'Limpar', 'Close': 'Fechar',
+    'Cancel capture': 'Cancelar captura', 'Listening…': 'Aguardando…',
+    'Not configured': 'Não configurado', 'Button {}': 'Botão {}',
+    'D-pad {}: {}': 'Direcional {}: {}', 'Axis {} ({})': 'Eixo {} ({})',
+    'Left stick horizontal': 'Analógico esquerdo , horizontal',
+    'Left stick vertical': 'Analógico esquerdo , vertical',
+    'Right stick horizontal': 'Analógico direito , horizontal',
+    'Right stick vertical': 'Analógico direito , vertical',
+    'Configure any control, in any order.': 'Configure qualquer comando, na ordem que preferir.',
+    'Saved changes are kept when you close this window.':
+        'As alterações salvas são mantidas ao fechar esta janela.',
+    'Hold the input briefly. It will be saved for this control only.':
+        'Mantenha a entrada por um instante. Ela será salva apenas para este comando.',
+    'Saved: {}': 'Salvo: {}',
+    'Capture canceled. Previously saved changes are kept.':
+        'Captura cancelada. As alterações já salvas foram mantidas.',
+    'The change was not saved. Configure the control again to retry.':
+        'A alteração não foi salva. Configure o comando novamente para tentar de novo.',
+    'That input is assigned to another control. Clear its row first or choose another input.':
+        'Essa entrada já está em outro comando. Limpe a linha dele ou escolha outra entrada.',
+    'Set up a controller': 'Configurar um controle',
+    'Connect your controller, select it, then choose Start mapping.':
+        'Conecte seu controle, selecione-o e clique em Iniciar mapeamento.',
+    'Start mapping': 'Iniciar mapeamento',
+    'Save mapping': 'Salvar mapeamento',
+    'Back': 'Voltar', 'Skip': 'Pular', 'Cancel': 'Cancelar',
+    'No controller found. Connect it and choose Refresh.':
+        'Nenhum controle encontrado. Conecte-o e clique em Atualizar.',
+    '{} buttons, {} axes, {} D-pad hats': '{} botões, {} eixos, {} direcionais',
+    'Release all buttons and let the sticks rest.':
+        'Solte todos os botões e deixe os analógicos em repouso.',
+    'Release all buttons and the D-pad before starting.':
+        'Solte todos os botões e o direcional antes de começar.',
+    'Step {} of {}': 'Etapa {} de {}',
+    'Press {}': 'Pressione {}',
+    'Cross / A': 'X / A', 'Circle / B': 'Círculo / B',
+    'Square / X': 'Quadrado / X', 'Triangle / Y': 'Triângulo / Y',
+    'Release the previous input before continuing.': 'Solte o comando anterior para continuar.',
+    'Hold the requested input briefly. Skip controls your device does not have.':
+        'Mantenha o comando solicitado por um instante. Pule os comandos que seu controle não possui.',
+    'That input is already mapped. Use another input or skip this step.':
+        'Esse comando já foi mapeado. Use outro ou pule esta etapa.',
+    'Map Cross / A before saving.': 'Mapeie X / A antes de salvar.',
+    'Test your controller': 'Teste seu controle',
+    'Mapping complete': 'Mapeamento concluído',
+    'Press buttons and move the sticks to check them. Then choose Save mapping.':
+        'Aperte os botões e mova os analógicos para conferir. Depois clique em Salvar mapeamento.',
+    'Pressed: {}': 'Pressionado: {}',
+    'Left stick: {} / {}   Right stick: {} / {}\nL2: {}   R2: {}':
+        'Analógico esquerdo: {} / {}   Direito: {} / {}\nL2: {}   R2: {}',
+    'D-pad up': 'Direcional para cima', 'D-pad down': 'Direcional para baixo',
+    'D-pad left': 'Direcional para a esquerda', 'D-pad right': 'Direcional para a direita',
+    'Move the left stick to the right': 'Mova o analógico esquerdo para a direita',
+    'Move the left stick down': 'Mova o analógico esquerdo para baixo',
+    'Move the right stick to the right': 'Mova o analógico direito para a direita',
+    'Move the right stick down': 'Mova o analógico direito para baixo',
+    'Controller disconnected. Reconnect it and choose Refresh.':
+        'O controle foi desconectado. Reconecte-o e clique em Atualizar.',
+    'Could not save mapping': 'Não foi possível salvar o mapeamento',
+    'Controller ready': 'Controle pronto',
+    'Mapping saved for the next game start. Any game button remapping in Controls still applies.':
+        'Mapeamento salvo para a próxima inicialização. Os remapeamentos de botões na seção Controles continuam valendo.',
+    'Stop the game before setting up a controller.': 'Feche o jogo antes de configurar um controle.',
+    'SDL3 was not found. Use a complete port installation or build the project first.':
+        'A SDL3 não foi encontrada. Use uma instalação completa do port ou compile o projeto primeiro.',
+})
+
+EXTRA.setdefault('es', {}).update({
+    'Set up a controller': 'Configurar un mando',
+    'Stop the game before setting up a controller.': 'Cierra el juego antes de configurar un mando.',
+})
+
 _tables = {}
 
 
