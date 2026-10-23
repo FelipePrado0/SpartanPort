@@ -304,6 +304,34 @@ int main(void) {
     assert(strstr(shown_items[2],"SAVE0003")!=NULL);
     choice_next=-2; assert(save_status()==DIALOG_FINISHED);
 
+    /* 5b. All missing or negative timestamps (0, -10, -100): all treated as invalid category, sorted by name. */
+    test_save_mtimes[0].mtime=-100;
+    test_save_mtimes[1].mtime=-10;
+    test_save_mtimes[2].mtime=0;
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0003")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+
+    /* 5c. Negative (-50) vs zero (0) vs valid (100): valid first, invalid tie-break by name. */
+    test_save_mtimes[0].mtime=-50;  /* SAVE0001 */
+    test_save_mtimes[1].mtime=100;  /* SAVE0002 (valid) */
+    test_save_mtimes[2].mtime=0;    /* SAVE0003 */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0003")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+
+    /* 5d. Date display in save_label matches save_mtime. */
+    save_param_available=1;
+    test_save_mtimes[0].mtime=1720000000; /* 2024-07-03 */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[1],"2024-07-03")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+    save_param_available=0;
+
     /* 6. Autosave positioning and selection. */
     strcpy(sort_names[0],"AUTOSAVE");
     strcpy(sort_names[1],"SAVE0001");

@@ -57,6 +57,25 @@ int main(void) {
     assert(runtime_savedata_mtime(1,"AUTOSAVE")==2000 && runtime_savedata_mtime(1,"SAVE0001")==1500);
     assert(runtime_savedata_mtime(1,"MISSING")==0 && runtime_savedata_mtime(1,"../x")==0);
 
+    /* A directory touched with a newer timestamp must NOT override the files inside. */
+    snprintf(path,sizeof(path),"%s/SAVE0001",base); assert(!touch_dir(path,5000));
+    assert(runtime_savedata_mtime(1,"SAVE0001")==1500);
+
+    /* An empty save directory without any files or param.bin returns 0 even if directory mtime > 0. */
+    snprintf(path,sizeof(path),"%s/SAVEEMPTY",base);
+    assert(!make_dirs(path));
+    assert(!touch_dir(path,3000));
+    assert(runtime_savedata_mtime(1,"SAVEEMPTY")==0);
+
+#ifndef _WIN32
+    /* Symlinks pointing outside the save directory are not followed. */
+    snprintf(path,sizeof(path),"%s/external.bin",user_dir); touch(path,99999);
+    char link_path[800]; snprintf(link_path,sizeof(link_path),"%s/SAVE0001/symlink.bin",base);
+    symlink(path,link_path);
+    assert(runtime_savedata_mtime(1,"SAVE0001")==1500);
+    unlink(link_path);
+#endif
+
     remove_tree(user_dir);
     puts("savedata test: ok");
     return 0;

@@ -297,13 +297,26 @@ static void save_utf8(char *out, size_t size, const unsigned char *in, size_t li
     }
     out[n]=0;
 }
+/* Last-modified time (seconds) of a save; 0 when unavailable. */
+static int64_t save_mtime(const char *dir) {
+    if (!dir || !*dir) return 0;
+    int64_t t=runtime_savedata_mtime(USER_ID,dir);
+    if (t>0) return t;
+    unsigned char param[RUNTIME_SAVE_PARAM_SIZE];
+    if (runtime_savedata_param(USER_ID,dir,param)==0) {
+        memcpy(&t,param+1288,8);
+        if (t>0) return t;
+    }
+    return 0;
+}
 static void save_label(char *out, size_t size, const char *dir, int compact) {
     unsigned char param[RUNTIME_SAVE_PARAM_SIZE];
     const char *unknown=save_text("Difficulty / play time unavailable","Dificuldade / tempo de jogo indisponíveis");
     if (runtime_savedata_param(USER_ID,dir,param)) {
         snprintf(out,size,"%s\n%s",compact ? save_text("Location unavailable","Local indisponível") : dir,unknown); return;
     }
-    int64_t mtime; memcpy(&mtime,param+1288,8);
+    int64_t mtime=save_mtime(dir);
+    if (mtime<=0) memcpy(&mtime,param+1288,8);
     time_t t=(time_t)mtime; struct tm tm;
 #ifdef _WIN32
     int dated=mtime>0 && localtime_s(&tm,&t)==0;
@@ -358,23 +371,15 @@ static void save_read_preview(void) {
         save_dialog.new_icon=png; save_dialog.new_icon_size=(uint64_t)size;
     } else free(png);
 }
-/* Last-modified time (seconds) of a save; 0 when unavailable. */
-static int64_t save_mtime(const char *dir) {
-    if (!dir || !*dir) return 0;
-    int64_t t=runtime_savedata_mtime(USER_ID,dir);
-    if (t>0) return t;
-    unsigned char param[RUNTIME_SAVE_PARAM_SIZE];
-    if (runtime_savedata_param(USER_ID,dir,param)==0) {
-        memcpy(&t,param+1288,8);
-        if (t>0) return t;
-    }
-    return 0;
-}
 typedef struct { char name[32]; int64_t mtime; } SaveSortEntry;
-/* Newest first; deterministic tie-breaking by name for equal timestamps. */
+/* Newest first; deterministic tie-breaking by name for equal timestamps.
+ * Missing and invalid timestamps (mtime <= 0) form a single category at the bottom. */
 static int save_sort_compare(const void *a, const void *b) {
     const SaveSortEntry *x=(const SaveSortEntry *)a;
     const SaveSortEntry *y=(const SaveSortEntry *)b;
+    int x_valid=x->mtime>0, y_valid=y->mtime>0;
+    if (x_valid!=y_valid) return x_valid ? -1 : 1;
+    if (!x_valid) return strcmp(x->name,y->name);
     if (x->mtime!=y->mtime) return x->mtime>y->mtime ? -1 : 1;
     return strcmp(x->name,y->name);
 }

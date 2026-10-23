@@ -132,13 +132,20 @@ int runtime_savedata_icon(int32_t user, const char *dir, char *out, size_t size)
 /* Newest modification time (seconds) of a save: its files and its param.bin; 0 when absent. */
 static int64_t newest(const char *path, int depth) {
     struct stat st;
+#ifndef _WIN32
+    if (lstat(path,&st)) return 0;
+    if (S_ISLNK(st.st_mode)) return 0; /* do not follow symlinks outside save */
+#else
     if (stat(path,&st)) return 0;
-    int64_t t=(int64_t)st.st_mtime;
-    if (!S_ISDIR(st.st_mode) || depth>4) return t;
+#endif
+    if (!S_ISDIR(st.st_mode)) return (int64_t)(st.st_mtime>0 ? st.st_mtime : 0);
+    if (depth>4) return 0;
+    int64_t t=0;
     DIR *d=opendir(path);
     for (struct dirent *e; d && (e=readdir(d));) {
         if (!strcmp(e->d_name,".") || !strcmp(e->d_name,"..")) continue;
-        char child[1024]; snprintf(child,sizeof(child),"%s/%s",path,e->d_name);
+        char child[1024];
+        if (snprintf(child,sizeof(child),"%s/%s",path,e->d_name)>=(int)sizeof(child)) continue;
         int64_t c=newest(child,depth+1);
         if (c>t) t=c;
     }
@@ -156,7 +163,7 @@ int64_t runtime_savedata_mtime(int32_t user, const char *dir) {
     int64_t t=newest(path,0);
     snprintf(path,sizeof(path),"%s/%s.sce_sys/param.bin",base,dir);
     if (!stat(path,&st) && (int64_t)st.st_mtime>t) t=(int64_t)st.st_mtime;
-    return t;
+    return t>0 ? t : 0;
 }
 static ABI int32_t save_initialize(const void *param) { (void)param; initialized=1; return 0; }
 static ABI int32_t save_terminate(void) {
