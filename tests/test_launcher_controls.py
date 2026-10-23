@@ -908,3 +908,61 @@ class PadStyleTest(unittest.TestCase):
         import button_icons
         self.assertEqual(button_icons.spec('a', 'nintendo')[:2], ('letter', 'B'))
         self.assertEqual(button_icons.spec('lefttrigger', 'nintendo')[1], 'ZL')
+
+
+class MenuConfirmSwapTest(unittest.TestCase):
+    def test_menu_confirm_swap_defaults(self):
+        self.assertEqual(launcher.APP_DEFAULTS.get('menu_confirm_swap'), '0')
+        self.assertEqual(launcher.INI_DEFAULTS.get('menu_confirm_swap'), '0')
+        self.assertEqual([val for val, _label in launcher.MENU_CONFIRM_STYLES], ['0', '1'])
+
+    def test_menu_confirm_swap_ini_persistence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            ini = folder / 'spartanport.ini'
+            ini.write_text('menu_confirm_swap=1\n', encoding='utf-8')
+            with mock.patch.object(launcher, 'DATA_DIR', folder), \
+                    mock.patch.object(launcher, 'CONFIG_FILE', folder / 'settings.json'), \
+                    mock.patch.dict(os.environ, {'SPARTAN_CONFIG': str(ini)}):
+                values, _lines = launcher.load_ini()
+                self.assertEqual(values.get('menu_confirm_swap'), '1')
+
+    def test_menu_confirm_swap_legacy_migration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            cfg = folder / 'settings.json'
+            cfg.write_text('{"menu_confirm_swap": "1"}\n', encoding='utf-8')
+            ini = folder / 'spartanport.ini'
+            with mock.patch.object(launcher, 'DATA_DIR', folder), \
+                    mock.patch.object(launcher, 'CONFIG_FILE', cfg), \
+                    mock.patch.dict(os.environ, {'SPARTAN_CONFIG': str(ini)}):
+                values, _lines = launcher.load_ini()
+                self.assertEqual(values.get('menu_confirm_swap'), '1')
+
+    def test_game_environment_forwards_menu_confirm_swap(self):
+        settings_swapped = {**launcher.APP_DEFAULTS, 'game_dir': 'game', 'menu_confirm_swap': '1'}
+        env_swapped = launcher.game_environment(settings_swapped)
+        self.assertEqual(env_swapped.get('SPARTAN_MENU_CONFIRM_SWAP'), '1')
+
+        # Default option does not set SPARTAN_MENU_CONFIRM_SWAP
+        settings_default = {**launcher.APP_DEFAULTS, 'game_dir': 'game', 'menu_confirm_swap': '0'}
+        env_default = launcher.game_environment(settings_default)
+        self.assertNotIn('SPARTAN_MENU_CONFIRM_SWAP', env_default)
+
+    def test_gameplay_controls_and_qte_remain_untouched(self):
+        # Default mapping in CONTROLS table: Cross is Space/a, Circle is Left Shift/b
+        control_dict = {b: (k, p) for b, k, p in launcher.CONTROLS}
+        self.assertEqual(control_dict['cross'], ('Space', 'a'))
+        self.assertEqual(control_dict['circle'], ('Left Shift', 'b'))
+
+        # Uncustomized pad controls produce no gamepad overrides
+        self.assertEqual(launcher.control_map({}, 'pad'), '')
+
+        # Gamepad styles preserve Cross (a) and Circle (b) definitions
+        ps_names = launcher.PAD_STYLES['playstation']
+        self.assertEqual(ps_names['a'], 'Cross')
+        self.assertEqual(ps_names['b'], 'Circle')
+        xbox_names = launcher.PAD_STYLES['xbox']
+        self.assertEqual(xbox_names['a'], 'A')
+        self.assertEqual(xbox_names['b'], 'B')
+

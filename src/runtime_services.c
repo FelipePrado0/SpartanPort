@@ -85,7 +85,15 @@ static ABI int32_t system_param(int32_t id,int32_t *value) {
 #endif
     case 5: *value=0; break;                    /* summer time */
     case 7: *value=0; break;                    /* parental level off */
-    case 1000: *value=1; break;                 /* enter button = cross */
+    case 1000: {
+        const char *v=getenv("SPARTAN_MENU_CONFIRM_SWAP");
+        if (!v || !*v) v=getenv("SPARTAN_MENU_CONFIRM");
+        int swapped=v && (!strcmp(v,"1") || !strcmp(v,"circle") || !strcmp(v,"Circle") || !strcmp(v,"CIRCLE") ||
+                          !strcmp(v,"swapped") || !strcmp(v,"Swapped") || !strcmp(v,"SWAPPED"));
+        if (!swapped && (!v || !*v)) swapped=spartanportgpu_menu_confirm_swap();
+        *value=swapped ? 0 : 1;                 /* enter button: 1 = cross, 0 = circle */
+        break;
+    }
     default: fprintf(stderr,"STOP: unsupported system parameter %d\n",id); exit(21);
     }
     return 0;

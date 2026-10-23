@@ -135,6 +135,10 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         for (int style = 0; style < 5; ++style) if (value == GlyphStyles[style]) v.glyph_style = style;
     } else if (key == "vibration") {
         v.vibration = value.empty() ? 100 : std::clamp(i, 0, 100);
+    } else if (key == "menu_confirm_swap") {
+        v.menu_confirm_swap = (i != 0 || value == "1" || value == "circle" || value == "swapped") ? 1 : 0;
+    } else if (key == "menu_confirm") {
+        v.menu_confirm_swap = (value == "circle" || value == "swapped" || value == "1" || i == 1) ? 1 : 0;
     } else if (key == "mouse_prompt_distance") {
         v.mouse_prompt_distance = value.empty() ? 48 : std::clamp(i, 16, 200);
     } else if (key == "mouse_lock") {
@@ -215,6 +219,7 @@ void Load() {
         {"SPARTAN_STALE_READBACK", "stale_readback"},     {"SPARTAN_FSR1", "fsr1"},
         {"SPARTAN_RCAS", "rcas"},                        {"SPARTAN_FRAMES_AHEAD", "frames_queued"},
         {"SPARTAN_ANISOTROPY", "anisotropy"},            {"SPARTAN_VIBRATION", "vibration"},
+        {"SPARTAN_MENU_CONFIRM_SWAP", "menu_confirm_swap"}, {"SPARTAN_MENU_CONFIRM", "menu_confirm"},
         {"SPARTAN_MOUSE_PROMPT_DISTANCE", "mouse_prompt_distance"}, {"SPARTAN_MOUSE_LOCK", "mouse_lock"},
         {"SPARTAN_MOUSE_AIM_STYLE", "mouse_aim_style"}, {"SPARTAN_MOUSE_AIM_SENSITIVITY", "mouse_aim_sensitivity"},
         {"SPARTAN_AUTO_QTE", "auto_qte"},
@@ -387,9 +392,9 @@ void Save() {
                  resolution_names[std::clamp(v.render_resolution.load(), 0, int(resolution_names.size()) - 1)].c_str(),
                  v.engine_fps.load(), int(v.deferred_readback.load()), int(v.stale_readback.load()),
                  int(v.restart_unconfirmed.load()));
-    std::fprintf(file, "anisotropy=%d\nvibration=%d\nmouse_prompt_distance=%d\nmouse_lock=%d\nmouse_aim_style=%d\n"
+    std::fprintf(file, "anisotropy=%d\nvibration=%d\nmenu_confirm_swap=%d\nmouse_prompt_distance=%d\nmouse_lock=%d\nmouse_aim_style=%d\n"
                        "mouse_aim_sensitivity=%d\n",
-                 v.anisotropy.load(), v.vibration.load(), v.mouse_prompt_distance.load(), int(v.mouse_lock.load()),
+                 v.anisotropy.load(), v.vibration.load(), v.menu_confirm_swap.load(), v.mouse_prompt_distance.load(), int(v.mouse_lock.load()),
                  v.mouse_aim_style.load(), v.mouse_aim_sensitivity.load());
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
@@ -426,6 +431,10 @@ extern "C" int spartanportgpu_enemy_health_bar(int toggle) {
         SpartanSettings::Save();
     }
     return v.enemy_health_bar.load();
+}
+
+extern "C" int spartanportgpu_menu_confirm_swap(void) {
+    return SpartanSettings::Get().menu_confirm_swap.load(std::memory_order_relaxed);
 }
 
 extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
