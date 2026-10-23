@@ -24,6 +24,7 @@ perf.data
 /docs/route_run.log
 mods.json
 patches.json
+gamecontrollerdb.txt
 !launcher/spartanport.png
 !scripts/controller_diagrams/xbox.png
 !scripts/controller_diagrams/nintendo.png

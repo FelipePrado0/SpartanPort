@@ -48,7 +48,8 @@ def default_render_resolution(dmi=Path('/sys/devices/virtual/dmi/id')):
 
 
 DEFAULTS = {'render_resolution': default_render_resolution(), 'engine_fps': '120', 'deferred_readback': '1',
-            'stale_readback': '1', 'async_shaders': '1'}
+            'stale_readback': '1', 'async_shaders': '1', 'monitor': '', 'hdr': '0',
+            'glyph_style': 'off', 'anisotropy': '0'}
 RESOLUTION_PREFIX = 'Resolution Patch'
 FPS_PREFIX = 'Frame Rate Patch'
 TEXTURE_FIX = 'Bug Fix - Texture Corruption Fix'
@@ -163,13 +164,28 @@ def startup_options(ini, extra=()):
         options['engine_fps'] = '120'
     for key in ('deferred_readback', 'stale_readback', 'async_shaders'):
         options[key] = '0' if options[key] == '0' else '1'
+    monitor = options['monitor']
+    options['monitor'] = monitor if monitor.isascii() and monitor.isdigit() and len(monitor) <= 10 and int(monitor) <= 2147483647 else ''
+    options['hdr'] = '1' if options['hdr'] == '1' else '0'
+    if options['glyph_style'] not in ('off', 'auto', 'xbox', 'nintendo', 'keyboard'):
+        options['glyph_style'] = 'off'
+    if options['anisotropy'] not in ('0', '2', '4', '8', '16'):
+        options['anisotropy'] = '0'
     return options
 
 
-def prepare(config, state_path, extra=()):
+def prepare(config, state_path, extra=(), environment=None):
     """(options, reverted): the startup options of this launch, restoring the last confirmed
     ones when the previous launch after a restart never confirmed its own."""
     ini = read_ini(config)
+    if environment is not None:
+        migrated = {key: environment.get(env, DEFAULTS[key]) for key, env in
+                    (('monitor', 'SPARTAN_MONITOR'), ('hdr', 'SPARTAN_HDR'),
+                     ('glyph_style', 'SPARTAN_GLYPH_STYLE'), ('anisotropy', 'SPARTAN_ANISOTROPY')) if key not in ini}
+        if migrated:
+            ini.update(migrated)
+            normalized = startup_options(ini, extra)
+            write_keys(config, {key: normalized[key] for key in migrated})
     state = {}
     try:
         state = json.loads(Path(state_path).read_text(encoding='utf-8'))
@@ -232,4 +248,7 @@ def applied_engine_fps(names):
 def environment(options):
     return {'SPARTAN_DEFERRED_READBACK': options['deferred_readback'],
             'SPARTAN_STALE_READBACK': options['stale_readback'],
-            'SPARTAN_ASYNC_SHADERS': options['async_shaders']}
+            'SPARTAN_ASYNC_SHADERS': options['async_shaders'],
+            'SPARTAN_MONITOR': options.get('monitor', ''), 'SPARTAN_HDR': options.get('hdr', '0'),
+            'SPARTAN_GLYPH_STYLE': options.get('glyph_style', 'off'),
+            'SPARTAN_ANISOTROPY': options.get('anisotropy', '0')}

@@ -25,6 +25,16 @@ void ToggleMousePause() {
 // negative or out-of-range value falls back to the primary with a diagnostic. SDL_WINDOWPOS_CENTERED
 // is SDL_WINDOWPOS_CENTERED_DISPLAY(0), so the primary stays the safe default on every path.
 static SDL_DisplayID MonitorDisplay() {
+    auto& settings = SpartanSettings::Get();
+    int detected = 0;
+    if (SDL_DisplayID* list = SDL_GetDisplays(&detected)) {
+        settings.monitors.clear();
+        for (int i = 0; i < detected; ++i) {
+            SDL_Rect bounds{};
+            if (SDL_GetDisplayBounds(list[i], &bounds) && bounds.w > 0 && bounds.h > 0) settings.monitors.push_back(i);
+        }
+        SDL_free(list);
+    }
     const char* value = std::getenv("SPARTAN_MONITOR");
     const int index = SpartanGraphics::ParseMonitor(value ? value : "");
     if (index == SpartanGraphics::PrimaryMonitor) {
@@ -40,7 +50,8 @@ static SDL_DisplayID MonitorDisplay() {
         SDL_free(displays);
         return SDL_GetPrimaryDisplay();
     }
-    if (index < 0 || index >= count) {
+    if (index < 0 || index >= count || std::find(settings.monitors.begin(), settings.monitors.end(), index) == settings.monitors.end()) {
+        settings.monitor = settings.startup_monitor = -1;
         LOG_WARNING(Frontend, "SPARTAN_MONITOR {} is out of range for {} display(s); using the primary display", value, count);
         SDL_free(displays);
         return SDL_GetPrimaryDisplay();

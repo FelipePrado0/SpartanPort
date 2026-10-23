@@ -602,6 +602,7 @@ void OverlayTab() {
 int RestartChanges() {
     const auto& s = SpartanSettings::Get();
     return (s.render_resolution != s.startup_render_resolution) +
+           (s.monitor != s.startup_monitor) + (s.hdr != s.startup_hdr) +
            (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
            (s.anisotropy != s.startup_anisotropy);
 }

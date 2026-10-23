@@ -180,6 +180,19 @@ class ListDisplaysTest(unittest.TestCase):
 
 
 class MonitorEnvironmentTest(unittest.TestCase):
+    def test_ini_migrates_legacy_display_preferences_and_then_takes_precedence(self):
+        with tempfile.TemporaryDirectory() as folder:
+            from pathlib import Path
+            config, ini = Path(folder) / 'settings.json', Path(folder) / 'spartanport.ini'
+            config.write_text(json.dumps({'monitor': '2', 'hdr': True}), encoding='utf-8')
+            with mock.patch.object(launcher, 'CONFIG_FILE', config), \
+                    mock.patch.dict(os.environ, {'SPARTAN_CONFIG': str(ini)}):
+                values, _ = launcher.load_ini()
+                self.assertEqual((values['monitor'], values['hdr']), ('2', '1'))
+                ini.write_text('monitor=0\nhdr=0\n', encoding='utf-8')
+                values, _ = launcher.load_ini()
+                self.assertEqual((values['monitor'], values['hdr']), ('0', '0'))
+
     def test_the_default_is_the_primary_and_sends_no_variable(self):
         self.assertEqual(launcher.APP_DEFAULTS['monitor'], '')
         self.assertNotIn('SPARTAN_MONITOR', added(launcher.game_environment(dict(launcher.APP_DEFAULTS))))
@@ -626,6 +639,7 @@ class MonitorLauncherTest(unittest.TestCase):
                 app.content, app.pages, app.vars = ttk.Frame(root), {}, {}
                 app.app = {**launcher.APP_DEFAULTS, 'monitor': monitor, 'video_backend': backend}
                 app.ini, app.ini_lines = launcher.load_ini()
+                app.ini['monitor'] = monitor
                 app.build_graphics()
             return app, detect
 
@@ -736,6 +750,7 @@ class QuickSettingsMonitorTest(unittest.TestCase):
             app.content, app.pages, app.vars = self.ttk.Frame(self.root), {}, {}
             app.app = {**launcher.APP_DEFAULTS, 'monitor': monitor, 'video_backend': backend}
             app.ini, app.ini_lines = launcher.load_ini()
+            app.ini['monitor'] = monitor
             app.draw_banner = lambda: None  # the cover art needs the fonts and the game folder
             app.monitor_pairs = None  # as build() leaves it before build_home()
             app.mod_order, app.mod_vars, app.patch_vars = [], {}, {}
@@ -791,8 +806,8 @@ class QuickSettingsMonitorTest(unittest.TestCase):
         quick.current(2)
         quick.event_generate('<<ComboboxSelected>>')
         saved = app.gather()  # the real gather, as collect() writes it to settings.json
-        self.assertEqual(saved['app']['monitor'], '1')  # one setting, whichever row was used
-        app, _ = self.build(monitor=saved['app']['monitor'])  # the launcher again on that file
+        self.assertEqual(saved['ini']['monitor'], '1')  # the same INI key as the native menu
+        app, _ = self.build(monitor=saved['ini']['monitor'])
         for box in self.boxes(app):
             self.assertEqual(box.current(), 2)
 
@@ -830,7 +845,8 @@ class QuickSettingsMonitorTest(unittest.TestCase):
         quick.event_generate('<<ComboboxSelected>>')
         with mock.patch.object(launcher, 'WINDOWS', False):
             # gather() is what save and PLAY hand to the game, so the row reaches it exactly as saved.
-            self.assertEqual(launcher.game_environment(app.gather()['app'])['SPARTAN_MONITOR'], '1')
+            self.assertEqual(launcher.graphics_options.environment(
+                launcher.graphics_options.startup_options(app.gather()['ini']))['SPARTAN_MONITOR'], '1')
 
     def test_without_monitors_quick_settings_still_builds(self):
         app, _ = self.build(displays='')

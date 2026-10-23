@@ -37,5 +37,9 @@ jobs:
           esac
           msg=${msg/opened/aberta}
           # allowed_mentions vazio: título com @everyone não pinga ninguém
-          jq -n --arg c "$msg: **$TITLE**"$'\n'"$URL" '{content: $c, allowed_mentions: {parse: []}}' \
-            | curl -fsS -H 'Content-Type: application/json' -d @- "$hook"
+          body=$(jq -n --arg c "$msg: **$TITLE**"$'\n'"$URL" '{content: $c, allowed_mentions: {parse: []}}')
+          # o secret pode ter várias URLs separadas por espaço, uma por servidor
+          for h in $hook; do
+            curl -fsS -H 'Content-Type: application/json' -d "$body" "$h" || falhou=1
+          done
+          exit ${falhou:-0}

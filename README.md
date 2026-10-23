@@ -43,6 +43,7 @@ and Linux (experimental AppImage).
   - [Building from source](#building-from-source)
     - [Windows](#windows)
     - [Linux (Ubuntu 24.04)](#linux-ubuntu-2404)
+    - [Linux (Arch Linux)](#linux-arch-linux)
   - [Tests](#tests)
     - [Python](#python)
     - [Windows C++ tests (MSYS2 CLANG64)](#windows-c-tests-msys2-clang64)
@@ -284,10 +285,11 @@ Defaults; change them on the launcher's **Controls** page, under **Keyboard & Mo
 | Q and E | L1 and R1 |
 | R and the mouse's forward button | L2 and R2 |
 | Z and X | L3 and R3 |
-| Wheel click | Rage of Sparta (L3 + R3) |
+| F | Rage of Sparta (L3 + R3) |
 | C | Grab (L1 + Circle) |
 | The mouse's back button | Dodge |
 | 1, 2, 3, 4 | d-pad up, right, down, left (weapons) |
+| Mouse wheel up and down | next and previous weapon (cycles the d-pad weapons); in the game's menus (title, pause and Power Up) it moves the selection up and down, and goes back to the weapons once you walk or dodge |
 | Tab | Options |
 | P | left touchpad click (photo mode) |
 | Esc | right touchpad click (pause menu) |
@@ -355,6 +357,23 @@ display. In the ReShade installer, select that same executable and the **Vulkan*
 If the overlay still does not appear, report the port and overlay versions, the last
 working port version, and attach `user\last_run.log`. These checks do not confirm a fix
 for every overlay configuration.
+
+### Generic USB controllers
+
+**Generic USB controllers:** in **Controls → Set up a controller**, select the joystick,
+then choose **Configure** next to any button, D-pad direction or stick axis. Joysticks without
+an existing SDL gamepad mapping are listed too. Each detected input is saved immediately;
+you can start with any row and correct just one control later. Existing bindings are shown
+when reopening the editor. **Clear** removes only that row, and **Cancel capture** leaves
+the pending edit unchanged while keeping previous saves. The live preview lets you check the
+result at any time. Close the window when finished.
+
+Profiles are saved per SDL device GUID and operating system in `gamecontrollerdb.txt` in the
+port's data folder. They load on the next game start, including `--play`, shortcuts and direct
+`run.py` launches. Explicit `SDL_GAMECONTROLLERCONFIG` and `SDL_GAMECONTROLLERCONFIG_FILE`
+mappings retain priority. The existing game button remapping still applies; use
+**Reset to defaults** if you want the buttons to match the guided setup. SDL must be able to
+read the joystick; the mapper does not install device drivers.
 
 ## Troubleshooting
 
@@ -464,6 +483,29 @@ The build environment is created before the packaging command. Building on a new
 can require a newer glibc; public release builds use Ubuntu 24.04. From the repository, use
 `out/venv/bin/python launcher/spartanport_launcher_win.py --play` for saved launcher settings, or
 `SPARTAN_GAME_DIR=/path/to/CUSA01623 out/venv/bin/python run.py` for a direct launch.
+
+### Linux (Arch Linux)
+
+The `PKGBUILD` is provided [here](packaging/linux/PKGBUILD).
+
+Build and install (using [`yay`](https://github.com/jguer/yay) for the AUR build dependency):
+
+```bash
+sudo pacman -S --needed base-devel git curl robin-map
+yay -S --needed vulkan-memory-allocator
+mkdir -p ~/spartanport-build && cd ~/spartanport-build
+curl -fLO https://raw.githubusercontent.com/FelipePrado0/SpartanPort/main/packaging/linux/PKGBUILD
+makepkg -si
+```
+Run the launcher under **Games** in your [application menu](https://wiki.archlinux.org/title/Desktop_entries) or with `spartanport` from terminal.
+
+Optional packages (use an [AUR helper](https://wiki.archlinux.org/title/AUR_helpers)
+such as [`yay`](https://github.com/jguer/yay) for `python-iced-x86`):
+
+```bash
+sudo pacman -S --needed gamemode mangohud
+yay -S --needed python-iced-x86
+```
 
 ## Tests
 

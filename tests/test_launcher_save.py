@@ -278,8 +278,7 @@ class EverySettingSavesTest(LauncherOverTemporaryFiles):
         self.change_and_save('key cross', app.control_vars['key']['cross'], 'Q')
         self.change_and_save('pad cross', app.control_vars['pad']['cross'], 'b')
         expected = {key: var.get() for key, var in app.vars.items()}
-        self.assertEqual(len(expected), len([k for k in launcher.INI_DEFAULTS if k in app.vars]) +
-                         len([k for k in launcher.APP_DEFAULTS if k in app.vars]))
+        self.assertEqual(set(expected), (set(launcher.INI_DEFAULTS) | set(launcher.APP_DEFAULTS)) & set(app.vars))
         self.close_window()
         self.root = tk.Tk()
         reopened = launcher.Launcher(self.root, tk, ttk, filedialog, messagebox)

@@ -265,10 +265,11 @@ Valores por defecto; cambialos en la página **Controls** del launcher, sección
 | Q y E | L1 y R1 |
 | R y el botón de avanzar del mouse | L2 y R2 |
 | Z y X | L3 y R3 |
-| Clic de la rueda | Rage of Sparta (L3 + R3) |
+| F | Rage of Sparta (L3 + R3) |
 | C | Agarre (L1 + Círculo) |
 | El botón de retroceder del mouse | Esquivar |
 | 1, 2, 3, 4 | cruceta: arriba, derecha, abajo, izquierda (armas) |
+| Rueda del mouse hacia arriba y hacia abajo | arma siguiente y arma anterior (recorre las armas de la cruceta); en los menús del juego (título, pausa y Power Up) sube y baja la selección, y vuelve a las armas al caminar o esquivar |
 | Tab | Options |
 | P | clic del touchpad izquierdo (modo foto) |
 | Esc | clic del touchpad derecho (menú de pausa) |

@@ -40,6 +40,17 @@ int spartanportgpu_choice_confirm(const char *title, const char *const *items, i
 int spartanportgpu_overlay_captures_input(void);
 /* Controller vibration strength set in the menu, 0 (off) to 100 (the game's own). */
 int spartanportgpu_vibration_percent(void);
+/* Native Display menu: query (0) or toggle (1); returns 0 off, 1 on, 2 unsupported. */
+int spartanportgpu_enemy_health_bar(int toggle);
+/* Native Cheats: f00+i query/f10+i toggle (8 cheats); f20+i text/f30+i decrease/f40+i increase/
+ * f50+i slider position (6 multipliers); f60 resets multipliers. Graphics: f70+i query,
+ * f80+i decrease/f90+i increase (5 controls), fa3 strength position, fb0 defaults.
+ * Controls: fa4+i query/faa+i decrease/fb1+i increase/fb8+i selected query (6 controls),
+ * fb7 restores only the port's controls defaults.
+ * Display: fc0+i query/fd0+i decrease/fe0+i increase/ff0+i selected query (8 controls;
+ * formatted text), fc9 restart available, fcb confirmed restart request (1 when saved).
+ * Text results are stable pointers. */
+uint64_t spartanportgpu_native_setting(unsigned function);
 /* R3 + L1 + R1 (pad) or F9: the next engine frame rate (60, 100, 120, 144, 180, 240), applied live. */
 void spartanportgpu_engine_fps_cycle(void);
 /* The video decoder handed the game a picture: a cutscene is on screen (the presenter draws

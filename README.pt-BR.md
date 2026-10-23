@@ -261,10 +261,11 @@ Padrão; mude na tela **Controls** do launcher, seção **Keyboard & Mouse Mappi
 | Q e E | L1 e R1 |
 | R e o botão de avançar do mouse | L2 e R2 |
 | Z e X | L3 e R3 |
-| Clique da roda | Rage of Sparta (L3 + R3) |
+| F | Rage of Sparta (L3 + R3) |
 | C | Agarrar (L1 + Círculo) |
 | O botão de voltar do mouse | Esquiva |
 | 1, 2, 3, 4 | direcional: cima, direita, baixo, esquerda (armas) |
+| Roda do mouse para cima e para baixo | próxima arma e arma anterior (percorre as armas do direcional); nos menus do jogo (título, pausa e Power Up) sobe e desce a seleção, e volta às armas quando você anda ou esquiva |
 | Tab | Options |
 | P | clique esquerdo do touchpad (modo foto) |
 | Esc | clique direito do touchpad (menu de pausa) |

@@ -702,6 +702,16 @@ static void menu_quit(void) {
 #endif
     _exit(0);
 }
+/* Same provider ABI as the interpreter's original vtable call. No VM arguments are consumed. */
+static void ABI menu_setting(void *self, uint16_t function, uint64_t *result, void *args) {
+    (void)self;
+    (void)args;
+    *result = function >= 0xffd ? (uint64_t)spartanportgpu_enemy_health_bar(function == 0xffd)
+                              : spartanportgpu_native_setting(function);
+    if (function == 0xfcb && *result) runtime_restart();
+}
+static const uintptr_t menu_vtable[4] = {0, 0, 0, (uintptr_t)menu_setting};
+static const uintptr_t *menu_provider = menu_vtable;
 /* The row comes with the hook: its copy of R_UI.WAD (scripts/pause_menu.py) is mounted over the
  * game's, and over the glyphs' copy it was made from, only once the hook is in. */
 static void install_menu_exit(Segment *segments, uint64_t count, uint64_t size, const char *wad) {
@@ -712,7 +722,8 @@ static void install_menu_exit(Segment *segments, uint64_t count, uint64_t size, 
         return;
     }
     unsigned char *stub = allocate(page_size);
-    spartanport_menu_build_stub(stub, (uintptr_t)menu_quit, (uintptr_t)(image + at + SPARTAN_MENU_HOOK_LENGTH));
+    spartanport_menu_build_stub(stub, (uintptr_t)menu_quit, (uintptr_t)(image + at + SPARTAN_MENU_HOOK_LENGTH),
+                               (uintptr_t)&menu_provider);
     protect(stub, page_size, 5);
     if (!install_jump(at, SPARTAN_MENU_HOOK_LENGTH, stub)) {
         puts("Pause menu: Exit to Desktop unavailable (hook outside relative-jump range)");
