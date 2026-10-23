@@ -74,6 +74,9 @@ void runtime_thread_keys_cleanup(void);
 /* Guest-visible errno values are FreeBSD's. */
 int32_t runtime_guest_errno(int host_errno);
 void *runtime_low_map(size_t size, int prot);
+/* Zeroed, 64-byte aligned host records the guest sees by address, below 1 TiB (SPARTAN_LOW_HANDLES). */
+void *runtime_low_alloc(size_t size);
+void runtime_low_free(void *pointer);
 /* Windows: reserves the PS4 user address range as a placeholder (no-op elsewhere). */
 void runtime_memory_reserve(void);
 uintptr_t runtime_ajm_resolve(const char *name);

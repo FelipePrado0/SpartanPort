@@ -100,6 +100,8 @@ if [[ ${1:-} == --test ]]; then
     out/runtime-test
     "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_memory.c -o out/memory-test
     out/memory-test
+    "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_low_handles.c src/runtime_memory.c src/runtime_mutex.c -o out/low-handles-test
+    out/low-handles-test
     "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread "${includes[@]}" -I. -Isrc tests/test_audio.c "${libraries[@]}" -o out/audio-test
     out/audio-test
     "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -Isrc tests/test_file_mods.c -o out/file-mods-test
