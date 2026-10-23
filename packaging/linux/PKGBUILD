@@ -52,7 +52,7 @@ source=(
 )
 sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
-# Stop if an upstream change would make a packaging substitution silently do nothing.
+# Accept an upstream fix or a repeated prepare(), but reject unexpected layouts.
 _replace_once() {
   python - "$@" <<'PY'
 from pathlib import Path
@@ -61,10 +61,16 @@ import sys
 path = Path(sys.argv[1])
 old, new = sys.argv[2:]
 text = path.read_text()
-count = text.count(old)
-if count != 1:
-    raise SystemExit(f'{path}: expected one occurrence of {old!r}, found {count}')
-path.write_text(text.replace(old, new, 1))
+old_count = text.count(old)
+# The replacement may be contained in the original, as with the retained relative RUNPATH.
+new_count = text.replace(old, '').count(new)
+if (old_count, new_count) == (1, 0):
+    path.write_text(text.replace(old, new, 1))
+elif (old_count, new_count) == (0, 1):
+    print(f'{path}: already contains the expected replacement')
+else:
+    raise SystemExit(f'{path}: expected one original or one replacement for {old!r}; '
+                     f'found {old_count} original and {new_count} replacement matches')
 PY
 }
 
@@ -97,14 +103,16 @@ prepare() {
   _replace_once gpu/CMakeLists.txt \
     'find_package(miniz QUIET)' 'set(miniz_FOUND FALSE)' || return 1
 
-  # Fit a full directory entry name plus the procfs prefix/suffix under GCC's -Werror.
+  # Older sources need the GCC -Werror fix; newer sources already have this buffer size.
   _replace_once src/runtime_thread.c \
     'char path[64], line[1024];' \
     'char path[sizeof(d->d_name)+sizeof("/proc/self/task//stat")], line[1024];' || return 1
 
   # Keep the relative library path; remove the temporary build directory from RUNPATH.
   # CMake's build command also honors CMAKE_BUILD_PARALLEL_LEVEL.
-  _replace_once build.sh ' -Wl,-rpath,"$PWD/out/gpu"' '' || return 1
+  local rpath="-Wl,-rpath,'\$ORIGIN/gpu'"
+  _replace_once build.sh \
+    "$rpath -Wl,-rpath,\"\$PWD/out/gpu\"" "$rpath" || return 1
   _replace_once build.sh \
     'ninja -C out/gpu spartanportgpu' \
     'cmake --build out/gpu --target spartanportgpu' || return 1
