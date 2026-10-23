@@ -963,7 +963,20 @@ void runtime_memory_set_gpu_hooks(GpuRange map, GpuRange unmap, GpuRange invalid
     write_unlock();
     flush_hooks();
 }
-/* Writes through the backing view; 0 when part of the range has no backing. */
+/* Writes through the backing view; 0 when part of the range has no backing.
+ * Every guest-visible byte is stored once. Small glibc memcpy implementations can
+ * use overlapping stores; if a fence-writing thread is preempted between them the guest may free
+ * the label object before the second store lands. */
+static void store_once(unsigned char *dst, const unsigned char *src, uint64_t n) {
+    if (n > 64) { memcpy(dst,src,n); return; }
+    while (n) {
+        const uintptr_t at=(uintptr_t)dst;
+        if (n>=8 && !(at&7)) { uint64_t v; memcpy(&v,src,8); __atomic_store_n((uint64_t *)dst,v,__ATOMIC_RELEASE); dst+=8; src+=8; n-=8; }
+        else if (n>=4 && !(at&3)) { uint32_t v; memcpy(&v,src,4); __atomic_store_n((uint32_t *)dst,v,__ATOMIC_RELEASE); dst+=4; src+=4; n-=4; }
+        else if (n>=2 && !(at&1)) { uint16_t v; memcpy(&v,src,2); __atomic_store_n((uint16_t *)dst,v,__ATOMIC_RELEASE); dst+=2; src+=2; n-=2; }
+        else { __atomic_store_n(dst,*src,__ATOMIC_RELEASE); ++dst; ++src; --n; }
+    }
+}
 int runtime_memory_write_backing(uintptr_t address, const void *data, uint64_t size) {
     read_lock();
     int ok=1;
@@ -971,7 +984,8 @@ int runtime_memory_write_backing(uintptr_t address, const void *data, uint64_t s
         size_t i=vma_index(at);
         if (i==vma_count || vmas[i].start>at || vmas[i].kind==KIND_RESERVED) { ok=0; break; }
         uint64_t n=(vmas[i].end<end ? vmas[i].end : end)-at;
-        memcpy(backing_base+vmas[i].phys+(at-vmas[i].start),(const unsigned char *)data+(at-address),n);
+        store_once(backing_base+vmas[i].phys+(at-vmas[i].start),
+                   (const unsigned char *)data+(at-address),n);
         at+=n;
     }
     read_unlock();

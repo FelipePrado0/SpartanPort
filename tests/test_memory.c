@@ -125,13 +125,29 @@ static void hook_queue_grows(void) {
     CHECK(pending_count == 0);
 }
 
+/* Backing-view writes (fence labels) land whole at any alignment, below and above 64 bytes. */
+static void write_backing_stores_each_byte(void) {
+    void *p = NULL;
+    CHECK(map_flexible(&p, PAGE, 3, 0) == 0 && p);
+    unsigned char *m = p, data[100];
+    for (unsigned i = 0; i < sizeof(data); ++i) data[i] = (unsigned char)(i + 1);
+    for (unsigned offset = 0; offset < 8; ++offset)
+        for (unsigned n = 1; n <= sizeof(data); n += 13) {
+            memset(m, 0, 2 * sizeof(data));
+            CHECK(runtime_memory_write_backing((uintptr_t)m + offset, data, n));
+            CHECK(memcmp(m + offset, data, n) == 0 && m[offset + n] == 0 && (!offset || m[offset - 1] == 0));
+        }
+    CHECK(release_flexible(p, PAGE) == 0);
+}
+
 int main(void) {
     runtime_memory_set_gpu_hooks(on_map, on_unmap, on_invalidate);
     flexible_split_keeps_each_half();
     fixed_map_replaces_for_the_gpu();
     fixed_map_retires_before_replacing();
     hook_queue_grows();
+    write_backing_stores_each_byte();
     if (failures) { fprintf(stderr, "%d failure(s)\n", failures); return 1; }
-    printf("PASS: flexible split keeps each half's pages, fixed maps retire the GPU's view before replacing, hook queue grows (%zu GPU notifications)\n", event_count);
+    printf("PASS: flexible split keeps each half's pages, fixed maps retire the GPU's view before replacing, hook queue grows, backing writes (%zu GPU notifications)\n", event_count);
     return 0;
 }
