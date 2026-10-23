@@ -182,6 +182,14 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
     RAM and VRAM, each optional, with font size, corner, background opacity and layout. The
     numbers are the game's own use, not the whole system's.
 
+  The menu follows the launcher's language (English, Portuguese, Spanish, French, German,
+  Italian, Polish, Turkish, Indonesian, Russian or Chinese), or the one chosen at the top of its
+  **Game** tab, at once (see [Menu language](#menu-language)).
+- **Trophies** (F8, or R3+R2 on the controller): every trophy with its official name and what it
+  asks, its grade, how many players earned it, and filters by state and grade; unlock
+  notifications in four themes, with your own sounds and pictures if you want. See
+  [docs/TROPHIES.md](docs/TROPHIES.md).
+
 ## Feature availability
 
 Availability checked against [release 2.2.0](https://github.com/FelipePrado0/SpartanPort/releases/tag/windows-v2.2.0) and the source on October 14, 2026.
@@ -230,11 +238,22 @@ multisampling off` or `on` is what was applied. Choose **Off** if the lines appe
 card and **On** to keep multisampling anyway. Off and On set `SPARTAN_NO_MSAA=1` or `0`; Automatic
 passes an inherited `SPARTAN_NO_MSAA` through. Applies on the next game launch.
 
-### Chinese interface
+### Menu language
+
+The Insert / R3+L2 menu and the trophy window (F8 / R3+R2) use the launcher's language
+(**Advanced → Launcher language**) in English, Portuguese, Spanish, French, German, Italian,
+Polish, Turkish, Indonesian, Russian and Chinese. **Language**, at the top of the menu's **Game**
+tab (and of the trophy window's **Notifications** page), switches them at once and is kept in
+`spartanport.ini` (`ui_language`); **Same as the launcher** follows the launcher again. The trophy
+names change with it (the launcher writes them in every language in `user/trophy_texts/`). This
+does not change the game's own text or voice language. Arabic, Japanese and Korean keep the menu
+in English: its font does not draw them. The `ui-language-test` CMake target checks that every
+language has every text and keeps each printf format's arguments.
+
+#### Chinese
 
 Select **简体中文** under **Advanced → Launcher language** for the launcher and the
-Insert / R3+L2 menu. This does not change the game's text or voice language. Direct launches
-without the launcher can set `SPARTAN_UI_LANGUAGE=zh`.
+Insert / R3+L2 menu. Direct launches without the launcher can set `SPARTAN_UI_LANGUAGE=zh`.
 
 The launcher prefers an installed CJK font (Microsoft YaHei UI on Windows, Noto Sans CJK SC
 or another available CJK family elsewhere). The in-game menu merges an installed Chinese

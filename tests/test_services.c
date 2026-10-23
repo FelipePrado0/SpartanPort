@@ -237,6 +237,36 @@ int main(void) {
     assert(trophy_unlock_state(1,1,flags,&count)==0 && !flags[0] && !flags[3] && count==0);
     assert(trophy_unlock_state(1,1,NULL,&count)==TROPHY_INVALID && trophy_release(0)==TROPHY_INVALID);
 
+    /* Trophy texts: every label key, the new ones of the list's order and rarity included, lands in its
+     * SpartanGpuTrophyLabels field (the struct is one pointer per key, in the keys' order). */
+    {
+        FILE *texts=fopen("trophy_texts.txt","wb");
+        assert(texts);
+        fputs("\xEF\xBB\xBF# comment\n@heading=Trof\xC3\xA9us\n@rarity={}% dos jogadores\n@ultra_rare=Ultrarraro\n"
+              "@hint_notifications=L1/R1: trof\xC3\xA9us\n@unknown=x\n3=Sr. M\xC3\xA3o | Ache a sala\n",texts);
+        fclose(texts);
+#ifdef _WIN32
+        _putenv("SPARTAN_USER_DIR=.");
+#else
+        setenv("SPARTAN_USER_DIR",".",1);
+#endif
+        trophy_load_names();
+        const char *label_texts[TROPHY_LABELS];
+        for (int k=0;k<TROPHY_LABELS;k++) label_texts[k]=trophy_label[k][0] ? trophy_label[k] : 0;
+        SpartanGpuTrophyLabels labels;
+        memcpy(&labels,label_texts,sizeof(labels));
+        assert(!strcmp(labels.heading,"Trof\xC3\xA9us") && !strcmp(labels.rarity,"{}% dos jogadores"));
+        assert(!strcmp(labels.ultra_rare,"Ultrarraro") && !strcmp(labels.hint_notifications,"L1/R1: trof\xC3\xA9us"));
+        assert(!labels.notice && !labels.order_list && !labels.common);
+        assert(!strcmp(trophy_names[3],"Sr. M\xC3\xA3o") && !strcmp(trophy_details[3],"Ache a sala"));
+        remove("trophy_texts.txt");
+#ifdef _WIN32
+        _putenv("SPARTAN_USER_DIR=");
+#else
+        unsetenv("SPARTAN_USER_DIR");
+#endif
+    }
+
     float ratio=0; assert(safe_area(&ratio)==0 && ratio==1.0f && safe_area(NULL)==SYSTEM_PARAMETER);
 
     /* System parameter 1: language ID from SPARTAN_LANGUAGE (default 1 = English US, 16 = Polish) */

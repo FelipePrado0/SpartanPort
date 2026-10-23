@@ -68,9 +68,11 @@ int spartanportgpu_mouse_aim_sensitivity(void);
 unsigned spartanportgpu_symbol_count(void);
 /* Yields of threads waiting for guest memory copies (CPU report, #209). */
 unsigned long long spartanportgpu_copy_yields(void);
-/* Trophy notice at the top-right of the game window (any thread). title: the trophy's name,
- * detail: its description (null or empty: none), png: its icon (PNG bytes; null: a drawn medal). */
-void spartanportgpu_toast_trophy(const char *title, const char *detail, const unsigned char *png, uint64_t png_size);
+/* Trophy notice (any thread), in the theme chosen in the menu. id: the trophy's (-1: a plain notice),
+ * title: its name, detail: its description (null or empty: none), png: its icon (PNG bytes; null: a
+ * drawn medal). */
+void spartanportgpu_toast_trophy(int id, const char *title, const char *detail, const unsigned char *png,
+                                 uint64_t png_size);
 void spartanportgpu_toast_icon(const char *text, const unsigned char *png, uint64_t png_size);
 void spartanportgpu_toast(const char *text);
 /* The in-game trophy list (F8 / R3+R2) and the notice labels, handed over once by the runtime.
@@ -82,6 +84,11 @@ typedef struct {
     const char *filter_all, *filter_unlocked, *filter_locked;
     const char *counter; /* "{} of {} unlocked" */
     const char *hint;    /* the keys */
+    const char *notifications;                        /* the second page: the notification options */
+    const char *order_list, *order_common, *order_rare; /* the orders of the list */
+    const char *rarity;                               /* "{}% of players" */
+    const char *common, *rare, *very_rare, *ultra_rare; /* the rarity tiers */
+    const char *hint_order, *hint_notifications;      /* the keys of the order and of the second page */
 } SpartanGpuTrophyLabels;
 typedef struct {
     int id;

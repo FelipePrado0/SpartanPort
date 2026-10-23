@@ -71,6 +71,8 @@ inline bool ConfigureChineseFont(ImFontAtlas* atlas, std::string_view language, 
     const auto utf8 = file.path.u8string();
     chinese = atlas->AddFontFromFileTTF(reinterpret_cast<const char*>(utf8.c_str()), 18.0f,
                                       &config, ranges.Data) != nullptr;
+    chinese_font = chinese.load();
+    if (chinese) SpartanUi::language = LanguageCount - 1;
     return chinese;
 }
 } // namespace SpartanUi
