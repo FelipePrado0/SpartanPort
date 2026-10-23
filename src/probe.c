@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include <SDL3/SDL.h>
 #include "runtime.h"
+#include "runtime_zarchive.h"
 #include "cpu_check.h"
 #include "isa_rewrite.h"
 #include "orb_hook.h"
@@ -345,11 +346,7 @@ static void watchdog(int sig, siginfo_t *info, void *context) {
 }
 #endif
 /* param.sfo lookup: string or integer value of key, 0 when absent. */
-static int sfo_value(const char *path, const char *key, char *text, size_t text_size, uint32_t *number) {
-    FILE *f=fopen(path,"rb");
-    if (!f) return 0;
-    unsigned char data[65536];
-    size_t n=fread(data,1,sizeof(data),f); fclose(f);
+static int sfo_lookup(const unsigned char *data, size_t n, const char *key, char *text, size_t text_size, uint32_t *number) {
     if (n<20 || memcmp(data,"\0PSF",4)) return 0;
     uint32_t keys, values, count;
     memcpy(&keys,data+8,4); memcpy(&values,data+12,4); memcpy(&count,data+16,4);
@@ -366,6 +363,17 @@ static int sfo_value(const char *path, const char *key, char *text, size_t text_
         return 1;
     }
     return 0;
+}
+/* The param.sfo of a guest path: the mounted .zar when there is one, else the game folder. */
+static int sfo_value(const char *path, const char *key, char *text, size_t text_size, uint32_t *number) {
+    unsigned char data[65536];
+    int64_t n=runtime_file_read_all(path,data,sizeof(data));
+    if (n<=0) {
+        FILE *f=fopen(path,"rb");
+        if (!f) return 0;
+        n=(int64_t)fread(data,1,sizeof(data),f); fclose(f);
+    }
+    return n>0 && sfo_lookup(data,(size_t)n,key,text,text_size,number);
 }
 static int mapped(Segment *segments, uint64_t count, uint64_t address, uint64_t bytes) {
     for (uint64_t i = 0; i < count; ++i)
@@ -864,6 +872,64 @@ static int describe_displays(void) {
     return 0;
 }
 
+/* --zar-list: one line per entry of the archive, "d<TAB>path" or "f<TAB>path<TAB>size".
+ * The Python side (scripts/zarchive.py) builds the extraction view of a .zar from it. */
+static int zar_list_dir(ZArchive *archive, int64_t node, const char *prefix, unsigned depth) {
+    if (depth > 64) return 1;
+    char name[256];
+    for (uint32_t i = 0;; ++i) {
+        int is_file = 0;
+        if (!zarchive_child(archive, node, i, name, sizeof(name), &is_file)) return 0;
+        char path[4096];
+        int written = prefix[0] ? snprintf(path, sizeof(path), "%s/%s", prefix, name)
+                                : snprintf(path, sizeof(path), "%s", name);
+        if (written < 0 || (size_t)written >= sizeof(path)) return 1;
+        if (!is_file) {
+            printf("d\t%s\n", path);
+            if (zar_list_dir(archive, zarchive_find(archive, path), path, depth + 1)) return 1;
+        } else {
+            int64_t file = zarchive_find(archive, path);
+            if (file == ZARCHIVE_NONE) return 1;
+            printf("f\t%s\t%llu\n", path, (unsigned long long)zarchive_entry_size(archive, file));
+        }
+    }
+}
+
+/* --zar-extract ENTRY DEST: one file of the archive to a host path, for the preparation scripts. */
+static int zar_extract(ZArchive *archive, const char *entry, const char *dest) {
+    int64_t node = zarchive_find(archive, entry);
+    if (node == ZARCHIVE_NONE || !zarchive_is_file(archive, node)) {
+        fprintf(stderr, "zar-extract: no file %s in the archive\n", entry);
+        return 1;
+    }
+    uint64_t size = zarchive_entry_size(archive, node), done = 0;
+    unsigned char *buffer = malloc(1u << 20);
+    FILE *out = fopen(dest, "wb");
+    if (!buffer || !out) {
+        fprintf(stderr, "zar-extract: cannot write %s\n", dest);
+        free(buffer);
+        if (out) fclose(out);
+        return 1;
+    }
+    while (done < size) {
+        uint64_t want = size - done < (1u << 20) ? size - done : (1u << 20);
+        uint64_t got = zarchive_read(archive, node, done, buffer, want);
+        if (got != want || fwrite(buffer, 1, (size_t)got, out) != got) {
+            fprintf(stderr, "zar-extract: cannot read %s\n", entry);
+            free(buffer);
+            fclose(out);
+            return 1;
+        }
+        done += got;
+    }
+    free(buffer);
+    if (fclose(out)) {
+        fprintf(stderr, "zar-extract: cannot write %s\n", dest);
+        return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
 #ifndef _WIN32
@@ -888,6 +954,22 @@ int main(int argc, char **argv) {
     if (argc == 2 && !strcmp(argv[1], "--displays")) {
         /* Before the memory reservation: this only asks SDL, nothing of the game is set up yet. */
         return describe_displays();
+    }
+    if (argc >= 3 && (!strcmp(argv[1], "--zar-list") || !strcmp(argv[1], "--zar-extract"))) {
+        /* Before the memory reservation: the archive helpers only read the dump. */
+        int extract = !strcmp(argv[1], "--zar-extract");
+        if (extract && argc != 5) {
+            fprintf(stderr, "Usage: %s --zar-extract archive.zar ENTRY DEST | --zar-list archive.zar\n", argv[0]);
+            return 1;
+        }
+        ZArchive *archive = zarchive_open(argv[2]);
+        if (!archive) {
+            fprintf(stderr, "Cannot open %s: %s\n", argv[2], zarchive_error());
+            return 1;
+        }
+        int status = extract ? zar_extract(archive, argv[3], argv[4]) : zar_list_dir(archive, 0, "", 0);
+        zarchive_close(archive);
+        return status;
     }
 #ifdef _WIN32
     /* The PS4 user range must stay free of host allocations (GPU driver, heaps), and the guest
@@ -919,7 +1001,7 @@ int main(int argc, char **argv) {
         else { fprintf(stderr, "Unknown option: %s\n", argv[i]); return 1; }
     }
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s boot.bin [--cpu-only] [--strict-imports] [--check-imports] [--content-profile file] [--app0 dir] [--user dir] [--patches file] [--isa-rewrite file] [--pause-menu R_UI.WAD] [--mount guest=host]... [--timeout seconds] | --vulkan-only | --cpu-features | --gamepad | --displays\n", argv[0]);
+        fprintf(stderr, "Usage: %s boot.bin [--cpu-only] [--strict-imports] [--check-imports] [--content-profile file] [--app0 dir|game.zar] [--user dir] [--patches file] [--isa-rewrite file] [--pause-menu R_UI.WAD] [--mount guest=host]... [--timeout seconds] | --vulkan-only | --cpu-features | --gamepad | --displays | --zar-list archive.zar | --zar-extract archive.zar ENTRY DEST\n", argv[0]);
         return 1;
     }
     if (!cpu_supported(missing, sizeof missing)) return 20;
@@ -959,9 +1041,9 @@ int main(int argc, char **argv) {
             if (runtime_file_mount(guest, eq + 1)) { fprintf(stderr, "Cannot mount %s: too many mounts or host path longer than 511 characters\n", mounts[i]); return 1; }
             printf("Runtime: mount %s -> %s\n", guest, eq + 1);
         }
-        char sfo[4096], id[16]="";
-        snprintf(sfo,sizeof(sfo),"%s/sce_sys/param.sfo",app0);
-        if (sfo_value(sfo,"INSTALL_DIR_SAVEDATA",id,sizeof(id),NULL) || sfo_value(sfo,"TITLE_ID",id,sizeof(id),NULL))
+        char id[16]="";
+        if (sfo_value("/app0/sce_sys/param.sfo","INSTALL_DIR_SAVEDATA",id,sizeof(id),NULL) ||
+            sfo_value("/app0/sce_sys/param.sfo","TITLE_ID",id,sizeof(id),NULL))
             runtime_savedata_configure(id);
     }
     spartanportgpu_register_kernel();
@@ -1103,9 +1185,9 @@ int main(int argc, char **argv) {
         return 20;
     }
     if (!cpu_only) {
-        char title[128]="SpartanPort", serial[16]="UNKNOWN", sfo[4096];
+        char title[128]="SpartanPort", serial[16]="UNKNOWN";
         uint32_t attributes=0;
-        snprintf(sfo,sizeof(sfo),"%s/sce_sys/param.sfo",app0 ? app0 : ".");
+        const char *sfo=app0 ? "/app0/sce_sys/param.sfo" : "./sce_sys/param.sfo";
         sfo_value(sfo,"TITLE",title,sizeof(title),NULL);
         sfo_value(sfo,"TITLE_ID",serial,sizeof(serial),NULL);
         sfo_value(sfo,"ATTRIBUTE",NULL,0,&attributes);

@@ -2396,6 +2396,48 @@ EXTRA.setdefault('id', {}).update({
     'Keyboard (native)': 'Keyboard (asli)',
 })
 
+# Packed .zar game images (Game → Game folder → Image…).
+EXTRA['pt'].update({
+    'Choose the game image (.zar)': 'Escolha a imagem do jogo (.zar)',
+    'ZArchive game image': 'Imagem de jogo ZArchive',
+    'All files': 'Todos os arquivos',
+    'Image…': 'Imagem…',
+    'A .zar game image cannot take a separate update folder. Pack the updated game, or choose its unpacked folder and the update folder.':
+        'Uma imagem .zar não aceita uma pasta de atualização separada. Empacote o jogo atualizado ou escolha a pasta descompactada dele e a pasta de atualização.',
+    'The game image cannot be read. See the Log for the reason.':
+        'Não foi possível ler a imagem do jogo. Veja o Registro para saber o motivo.',
+})
+EXTRA['es'].update({
+    'Choose the game image (.zar)': 'Elige la imagen del juego (.zar)',
+    'ZArchive game image': 'Imagen de juego ZArchive',
+    'All files': 'Todos los archivos',
+    'Image…': 'Imagen…',
+    'A .zar game image cannot take a separate update folder. Pack the updated game, or choose its unpacked folder and the update folder.':
+        'Una imagen .zar no admite una carpeta de actualización aparte. Empaqueta el juego actualizado o elige su carpeta sin empaquetar y la carpeta de actualización.',
+    'The game image cannot be read. See the Log for the reason.':
+        'No se pudo leer la imagen del juego. Consulta el Registro para ver el motivo.',
+})
+EXTRA['zh'].update({
+    'Choose the game image (.zar)': '选择游戏镜像（.zar）',
+    'ZArchive game image': 'ZArchive 游戏镜像',
+    'All files': '所有文件',
+    'Image…': '镜像…',
+    'A .zar game image cannot take a separate update folder. Pack the updated game, or choose its unpacked folder and the update folder.':
+        '一个 .zar 游戏镜像无法使用单独的更新文件夹。请打包更新后的游戏，或选择其未打包的文件夹和更新文件夹。',
+    'The game image cannot be read. See the Log for the reason.':
+        '无法读取游戏镜像。原因请查看日志。',
+})
+EXTRA['id'].update({
+    'Choose the game image (.zar)': 'Pilih image game (.zar)',
+    'ZArchive game image': 'Image game ZArchive',
+    'All files': 'Semua file',
+    'Image…': 'Image…',
+    'A .zar game image cannot take a separate update folder. Pack the updated game, or choose its unpacked folder and the update folder.':
+        'Image game .zar tidak dapat memakai folder pembaruan terpisah. Paket game yang sudah diperbarui, atau pilih folder yang belum dipaket beserta folder pembaruan.',
+    'The game image cannot be read. See the Log for the reason.':
+        'Image game tidak dapat dibaca. Lihat Log untuk alasannya.',
+})
+
 EXTRA['zh'].update({
     'A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.': '游戏启动时，后台线程会将已保存的着色器读入内存，右下角显示进度。随后加载着色器时无需因磁盘读取而阻塞帧。需要启用上一项。如果硬盘较慢或可用内存不足，导致启动变慢或第一分钟更卡顿，请关闭此项。',
     'A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.': '右下角显示启动时的着色器缓存读取进度和着色器编译状态，便于了解短暂卡顿的原因。关闭此项可隐藏提示。',

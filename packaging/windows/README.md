@@ -13,7 +13,7 @@ Install [MSYS2](https://www.msys2.org) (`winget install MSYS2.MSYS2`), open the
 pacman -S --needed git patch \
   mingw-w64-clang-x86_64-{toolchain,cmake,ninja,pkgconf,python} \
   mingw-w64-clang-x86_64-{vulkan-headers,vulkan-loader,vulkan-memory-allocator,glslang} \
-  mingw-w64-clang-x86_64-{sdl3,fmt,boost,robin-map,xxhash,ffmpeg,zydis} \
+  mingw-w64-clang-x86_64-{sdl3,fmt,boost,robin-map,xxhash,ffmpeg,zydis,zstd} \
   mingw-w64-clang-x86_64-{spirv-tools,spirv-headers,spirv-cross}
 ```
 

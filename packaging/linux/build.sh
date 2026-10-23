@@ -69,6 +69,14 @@ bundle out/spartanport-probe
 for name in libstdc++.so.6 libgcc_s.so.1; do
     install -m755 "$(ldd out/gpu/libspartanportgpu.so | awk -v n="$name" '$1==n{print $3}')" "$appdir/usr/lib/$name"
 done
+# libzstd is loaded at run time for .zar game images (dlopen), so ldd does not list it. It comes
+# from the build host like libstdc++: every distribution's libzstd.so.1 is a stable ABI.
+zstd=$(ldconfig -p 2>/dev/null | awk '/libzstd\.so\.1 \(/{print $NF; exit}')
+if [[ -n $zstd ]]; then
+    install -m755 "$(readlink -f "$zstd")" "$appdir/usr/lib/libzstd.so.1"
+else
+    echo 'Warning: libzstd.so.1 was not found: .zar game images will not open in this AppImage' >&2
+fi
 # $ORIGIN/gpu is already the probe's RUNPATH; the libraries it needs sit in usr/lib via AppRun.
 find "$appdir/usr/lib" -name '*.so*' -exec strip --strip-unneeded {} + 2>/dev/null || true
 

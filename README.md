@@ -30,6 +30,7 @@ and Linux (experimental AppImage).
 - [SpartanPort](#spartanport)
   - [Contents](#contents)
   - [Download and play](#download-and-play)
+    - [Packed game images (.zar)](#packed-game-images-zar)
   - [Linux (AppImage, experimental)](#linux-appimage-experimental)
   - [What works](#what-works)
   - [Feature availability](#feature-availability)
@@ -60,7 +61,8 @@ and Linux (experimental AppImage).
   use them to emulated stubs and logs an `ISA:` line; performance on those CPUs has not been
   measured yet. Older CPUs stop at start with a `STOP: this CPU lacks` line in the log.
 - A graphics card with Vulkan 1.3 and a current driver.
-- Your copy of the game (the folder with `eboot.bin`, `sce_module` and `sce_sys`). Tested:
+- Your copy of the game: the folder with `eboot.bin`, `sce_module` and `sce_sys`, or that folder
+  packed as a `.zar` image (see [Packed game images](#packed-game-images-zar)). Tested:
   CUSA01623 and CUSA01715, versions 01.00 and 01.02.
 
 **Steps**
@@ -72,7 +74,8 @@ and Linux (experimental AppImage).
 3. Open **`SpartanPort.exe`**. If Windows shows "Windows protected your PC", click
    **More info**, then **Run anyway**: the program is not digitally signed.
 4. Click **Choose the game folder**. It takes you to the **Game** page. Next to **Game folder**,
-   click **Browse…** and select the folder with `eboot.bin`.
+   click **Browse…** and select the folder with `eboot.bin`, or **Image…** and select a `.zar`
+   game image.
 5. Back on **Home**, the cover art and "CUSA01623 · version 01.02" appear. Adjust **Quick
    settings** if you like: display mode, frame rate limit, render resolution and engine frame
    rate.
@@ -99,6 +102,26 @@ patches apply only where their signatures match. A resolution patch replaces the
   that folder when you update.
 - **Advanced → Check for updates** downloads and installs a new version. Your saves and settings
   are kept.
+
+### Packed game images (.zar)
+
+A dump packed as a ZArchive (`.zar`) plays like the unpacked folder, with no extraction step: the
+runtime mounts the image as `/app0` and reads it in place (the game's own reads go through it),
+so start-up and frame times are the same as the folder's apart from decompressing the 64 KiB
+blocks the game asks for (a 4 MiB cache of them is kept). shadPS4 reads the same images.
+
+- **Launcher:** **Game → Game folder → Image…** and pick the `.zar`. Title, version, cover art and
+  built-in patches come from the image. Without the launcher, `SPARTAN_GAME_DIR` may name the `.zar`.
+- **Packing:** `python tools/make_zar.py <game folder> [OUT.zar]` packs a folder (Python 3.14, or
+  the `zstandard` package, compresses the blocks). The folder's contents go at the archive root.
+- **Preparation:** the runtime reads the image; the preparation scripts and the launcher read
+  `eboot.bin`, `sce_module/` and `sce_sys/` from a cache of them under `out/zar` (next to the
+  port's data folder), rebuilt when the image changes. Nothing is written beside the `.zar`.
+- **Update folder:** a separate update folder cannot be laid over an image. Pack the updated
+  game, or play the unpacked folder.
+- **Mods:** mods that replace game files need a folder; patches carried by mods still apply.
+- **libzstd** decompresses the blocks. The Windows and Linux packages include it; a source build
+  needs `libzstd` installed (`zstd`/`libzstd1` on most distributions).
 
 ## Linux (AppImage, experimental)
 
@@ -500,10 +523,11 @@ python -m unittest discover -s tests -p "test_*.py"
 
 ```bash
 source ./msys2-env.sh
-ninja -C out/gpu perf-overlay-test warmup-inbox-test graphics-settings-test
+ninja -C out/gpu perf-overlay-test warmup-inbox-test graphics-settings-test zarchive-test
 out/gpu/perf-overlay-test.exe
 out/gpu/warmup-inbox-test.exe
 out/gpu/graphics-settings-test.exe
+out/gpu/zarchive-test.exe   # .zar reader, on tests/data/zarchive.zar; needs libzstd.dll
 ```
 
 ### Linux C/C++ tests
@@ -516,7 +540,11 @@ out/gpu/warmup-inbox-test
 out/gpu/graphics-settings-test
 ```
 
-`bash build.sh --test` runs the additional C runtime tests on Linux only. On Windows the build exits before that block; use the Ninja targets above.
+`bash build.sh --test` runs the additional C runtime tests on Linux only, among them
+`zarchive-test` (the `.zar` reader on `tests/data/zarchive.zar`) and `archive-fs-test` (guest
+file operations on that image: reads, listings, read-only rules, a host mount over it). Both stop
+with a skip line when `libzstd` is not installed. On Windows the build exits before that block;
+use the Ninja targets above.
 
 ### Checks using a prepared game
 
@@ -527,7 +555,11 @@ following checks. In MSYS2 CLANG64 on Windows, replace the example game path wit
 ninja -C out/gpu stat-multipliers-test
 out/gpu/stat-multipliers-test.exe out/eboot.elf
 out/spartanport-probe.exe out/boot-linked.bin --app0 "D:/Games/CUSA01623" --check-imports
+out/spartanport-probe.exe --zar-list "D:/Games/CUSA01623.zar"   # the image's entries, one per line
 ```
+
+`--app0` takes a game folder or a `.zar`; `--zar-list` and `--zar-extract archive.zar ENTRY DEST`
+read an image without starting the game.
 
 On Linux, use `out/gpu/stat-multipliers-test` and `out/spartanport-probe` without `.exe`, and a Linux
 game path. `--check-imports` checks system imports and exits without starting gameplay.
