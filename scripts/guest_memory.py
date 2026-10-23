@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Memory check for the guest memory pool (src/runtime_memory.c) before the game starts.
 
-On Windows the pool is one SEC_COMMIT section of SPARTAN_DMEM_MB plus the 1 GiB flexible span,
-charged in full at start. The 4K patch asks for about 11 GiB of direct memory: on a 16 GB PC
-with a small system managed page file the start then depends on Windows growing the page file
-in time, and the game closes ("cannot create ... MiB of guest memory (error 1450)") when it
-does not. The page file may grow, so the commit free before the start says little; the
-installed RAM is compared instead.
+On Windows the pool is one section of SPARTAN_DMEM_MB plus the 1 GiB flexible span, committed
+in full at start when RAM and page file allow it. When Windows refuses (error 1450) the section
+is reserved and committed as the game maps it, and when even that fails a pool above the retail
+5056 MiB falls back to the retail size. The 4K patch asks for about 11 GiB of direct memory: on
+a 16 GB PC with a small system managed page file the game then depends on Windows growing the
+page file as it maps memory, and closes ("cannot commit ... MiB of guest memory") when it does
+not, or runs short of direct memory on the retail pool. The page file may grow, so the commit
+free before the start says little; the installed RAM is compared instead.
 """
 import sys
 
@@ -22,7 +24,7 @@ HEADROOM_MB = {'device': 2048, 'cached': 4096, 'host': 4096}
 
 
 def pool_mb(dmem_mb):
-    """The section runtime_memory.c commits for SPARTAN_DMEM_MB (out of range: the retail size)."""
+    """The section runtime_memory.c creates for SPARTAN_DMEM_MB (out of range: the retail size)."""
     try:
         mb = int(dmem_mb) if dmem_mb else 0
     except ValueError:
@@ -61,6 +63,7 @@ def memory_warning(dmem_mb, physical_mb, stream_memory='cached'):
     if needed <= physical_mb:
         return None
     advice = 'set Performance -> Stream buffer memory to GPU memory, ' if stream != 'device' else ''
-    return (f'Memory: the guest memory pool commits {pool} MiB and the game needs about {needed} MiB '
-            f'in all, more than the {physical_mb} MiB of RAM. The game may close at start (error 1450): '
+    return (f'Memory: the guest memory pool holds up to {pool} MiB and the game needs about {needed} MiB '
+            f'in all, more than the {physical_mb} MiB of RAM. The game may close or run out of memory '
+            f'when the page file cannot grow: '
             f'{advice}make sure the Windows page file can grow, or choose a lower render resolution.')
