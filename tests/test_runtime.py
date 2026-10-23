@@ -24,6 +24,11 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(r.returncode,21)
         self.assertIn('recursive/concurrent static initialization',r.stderr)
 
+    def test_busy_mutex_destruction_preserves_handle_and_recursive_depth(self):
+        r=self.run_case('--mutex-destroy-busy')
+        self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+        self.assertIn('busy mutex destruction preserves',r.stdout)
+
     def test_stack_corruption_is_not_ignored(self):
         r=self.run_case('--stack-failure')
         self.assertEqual(r.returncode,22)
