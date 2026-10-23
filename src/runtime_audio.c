@@ -28,6 +28,10 @@
 #define ERR_ALREADY_INIT ((int32_t)0x8026000E)
 #define ERR_NOT_INIT ((int32_t)0x8026000F)
 #define VOLUME_0DB 32768
+/* Pad speaker ports (type 4) play on the main output. The game masters them for the
+   DualShock 4's small speaker: the weapon upgrade sound peaks at full scale, ~14 dB over the
+   loudest gameplay (#464). -15 dB puts it at the main mix's level; tune by ear. */
+#define PAD_SPEAKER_GAIN 0.17783f
 
 typedef struct {
     int used, type, channels, is_float, frames, sample_bytes, std_layout, downmix;
@@ -195,7 +199,7 @@ static ABI int32_t audio_open(int32_t user, int32_t type, int32_t index, uint32_
     const char *dump=getenv("SPARTAN_AUDIO_DUMP");
     if (dump) {
         char path[4096];
-        snprintf(path,sizeof(path),"%s.port%d.%dch.%s",dump,id,p->downmix ? 2 : p->channels,p->is_float ? "f32" : "s16");
+        snprintf(path,sizeof(path),"%s.port%d.%dch.%s",dump,id,p->channels,p->is_float ? "f32" : "s16");
         p->dump=fopen(path,"wb");
     }
     ++ports_opened;
@@ -236,12 +240,12 @@ static int32_t output_port(int32_t handle, const void *data, int pace) {
         for (size_t f=0;f<(size_t)p->frames;++f) for (int c=0;c<p->channels;++c) {
             int target=p->channels==8 && !p->std_layout ? remap[c] : c;
             size_t from=f*(size_t)p->channels+(size_t)c, to=f*(size_t)p->channels+(size_t)target;
-            float gain=(float)p->volume[c]/VOLUME_0DB;
+            float gain=(float)p->volume[c]/VOLUME_0DB*(p->type==4 ? PAD_SPEAKER_GAIN : 1.0f);
             if (p->is_float) { float v; memcpy(&v,(const char *)data+from*4,4); v*=gain; memcpy(converted+to*4,&v,4); }
             else { int16_t v; memcpy(&v,(const char *)data+from*2,2); v=(int16_t)((float)v*gain); memcpy(converted+to*2,&v,2); }
         }
+        if (p->dump) fwrite(converted,1,bytes,p->dump); /* before the fold: shows the game's own channels */
         if (p->downmix) bytes=downmix_stereo(converted,(size_t)p->frames,p->is_float);
-        if (p->dump) fwrite(converted,1,bytes,p->dump);
         if (p->stats) {
             uint64_t now=now_ns();
             if (!p->stat_start_ns) { p->stat_start_ns=now; p->stat_min_queued=1<<30; }

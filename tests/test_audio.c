@@ -257,6 +257,35 @@ static void test_multiple_ports(void) {
     printf("Multiple active audio ports passed!\n");
 }
 
+/* The level a port sends, read back from its SPARTAN_AUDIO_DUMP file. */
+static float dumped_level(int32_t handle, int channels) {
+    float buffer[256 * 2];
+    for (int i = 0; i < 256 * channels; ++i) buffer[i] = 0.5f;
+    assert(audio_output(handle, buffer) == 256 * channels);
+    int id = handle & 0xff;
+    assert(audio_close(handle) == 0);
+    char path[64];
+    snprintf(path, sizeof(path), "test_audio_dump.port%d.%dch.f32", id, channels);
+    FILE *f = fopen(path, "rb");
+    assert(f);
+    float v = 0;
+    assert(fread(&v, sizeof(v), 1, f) == 1);
+    fclose(f);
+    remove(path);
+    return v;
+}
+
+static void test_pad_speaker_attenuated(void) {
+    printf("Testing pad speaker attenuation...\n");
+    putenv("SPARTAN_AUDIO_DUMP=test_audio_dump");
+    /* Main ports keep the game's level; pad speaker ports (type 4) are turned down. */
+    assert(dumped_level(audio_open(0, 0, 0, 256, 48000, 4), 2) == 0.5f);
+    float pad = dumped_level(audio_open(0, 4, 0, 256, 48000, 3), 1);
+    assert(pad > 0.5f * PAD_SPEAKER_GAIN - 1e-6f && pad < 0.5f * PAD_SPEAKER_GAIN + 1e-6f);
+    putenv("SPARTAN_AUDIO_DUMP=");
+    printf("Pad speaker attenuation passed!\n");
+}
+
 int main(void) {
     test_lifecycle();
     test_invalid_parameters();
@@ -268,6 +297,7 @@ int main(void) {
     test_wasapi_and_directsound_both_fail_timer_sink();
 #endif
     test_complete_failure_timer_sink();
+    test_pad_speaker_attenuated();
 
     printf("\naudio tests ok\n");
     return 0;
