@@ -4,7 +4,10 @@
 #pragma once
 
 #include <functional>
+#include <chrono>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <shared_mutex>
 #include <variant>
 #include <boost/container/static_vector.hpp>
@@ -54,8 +57,8 @@ struct Program {
 
     Shader::Info info;
     ModuleList modules{};
-    size_t last_used = 0; ///< gow3: permutation of the previous lookup, compared first
-    /// gow3: `info` as translated, for draw-preparation workers (they must not read `info`,
+    size_t last_used = 0; ///< spartanport: permutation of the previous lookup, compared first
+    /// spartanport: `info` as translated, for draw-preparation workers (they must not read `info`,
     /// whose user data the GPU thread rewrites every draw). Guarded by programs_mutex.
     std::unique_ptr<Shader::Info> info_template;
     std::shared_ptr<AsyncShaderCompilation> pending;
@@ -90,7 +93,7 @@ union Regs;
 
 namespace Vulkan {
 
-/// gow3: state of one graphics/compute pipeline selection. The GPU thread owns one
+/// spartanport: state of one graphics/compute pipeline selection. The GPU thread owns one
 /// (PipelineCache::sel); draw-preparation workers use their own with their register copies.
 struct PipelineSelection {
     const AmdGpu::Regs* regs{};
@@ -105,7 +108,7 @@ struct PipelineSelection {
     struct PrepWorker* worker{}; ///< set: read-only selection for a draw-preparation worker
 };
 
-/// gow3: a draw-preparation worker's own program state (see vk_draw_prep.h).
+/// spartanport: a draw-preparation worker's own program state (see vk_draw_prep.h).
 struct PrepWorker {
     struct Stage {
         const Program* program;
@@ -128,10 +131,10 @@ public:
                            AmdGpu::Liverpool* liverpool, u32 sparse_page_shift);
     ~PipelineCache();
 
-    /// Loads the pipelines of earlier sessions. gow3: called by the presenter once the window
+    /// Loads the pipelines of earlier sessions. spartanport: called by the presenter once the window
     /// can show a loading screen; `progress(done, total)` follows the pipelines read.
     void WarmUp(const std::function<void(u32 done, u32 total)>& progress = {});
-    /// gow3: the same load on low-priority threads while the game runs; the GPU thread takes
+    /// spartanport: the same load on low-priority threads while the game runs; the GPU thread takes
     /// the results a few at a time (PumpWarmUp). False when it cannot (zip archive store).
     bool StartBackgroundWarmUp();
     void StartOnDemand();
@@ -145,15 +148,15 @@ public:
     const GraphicsPipeline* GetGraphicsPipeline(const DrawIndirectParams params = {},
                                                 const PreparedDraw* prepared = nullptr);
 
-    /// gow3: worker side of draw preparation: selects the pipeline key for `sel.regs` without
+    /// spartanport: worker side of draw preparation: selects the pipeline key for `sel.regs` without
     /// creating anything. False when a program or permutation does not exist yet.
     bool PrepareGraphicsPipeline(PipelineSelection& sel);
 
-    /// gow3: GPU-thread side: the pipeline for a prepared draw after checking that registers
+    /// spartanport: GPU-thread side: the pipeline for a prepared draw after checking that registers
     /// and flattened user data match; null to take the regular path.
     const GraphicsPipeline* TryPreparedPipeline(const PreparedDraw& prepared);
 
-    /// gow3: the prepared draw the last GetGraphicsPipeline used, or null (regular path).
+    /// spartanport: the prepared draw the last GetGraphicsPipeline used, or null (regular path).
     [[nodiscard]] const PreparedDraw* UsedPrepared() const noexcept {
         return used_prepared;
     }
@@ -223,18 +226,18 @@ private:
     std::unique_ptr<AsyncCompiler> compiler, capture_compiler;
     std::vector<vk::UniquePipelineCache> worker_pipeline_caches;
     bool worker_caches_seeded = false;
-    /// gow3: GOW3_PARALLEL_WARMUP: WarmUp builds the cached pipelines on these threads.
+    /// spartanport: SPARTAN_PARALLEL_WARMUP: WarmUp builds the cached pipelines on these threads.
     struct WarmupPool;
     WarmupPool* warmup_pool = nullptr;
     std::mutex warmup_results_mutex;
     std::vector<std::pair<GraphicsPipelineKey, std::unique_ptr<GraphicsPipeline>>> warmup_graphics;
     std::vector<std::pair<ComputePipelineKey, std::unique_ptr<ComputePipeline>>> warmup_compute;
-    /// gow3: StartBackgroundWarmUp state; owned here, deleted by StopWarmUp.
+    /// spartanport: StartBackgroundWarmUp state; owned here, deleted by StopWarmUp.
     BackgroundWarmup* background = nullptr;
     tsl::robin_map<GraphicsPipelineKey, std::shared_ptr<AsyncGraphicsCompilation>> pending_graphics;
     tsl::robin_map<size_t, std::unique_ptr<Program>> program_cache;
     std::vector<Program*> pending_programs;
-    /// gow3: exclusive for program/permutation insertions, shared for worker lookups.
+    /// spartanport: exclusive for program/permutation insertions, shared for worker lookups.
     std::shared_mutex programs_mutex;
     u64 prepared_hits = 0, prepared_misses = 0;
     const PreparedDraw* used_prepared = nullptr;
@@ -243,6 +246,38 @@ private:
     PipelineSelection sel{}; ///< GPU thread selection state
     ComputePipelineKey compute_key{};
     u32 num_new_pipelines{}; // new pipelines added to the cache since the game start
+    /// spartanport (SpartanToggle::DiskShaders): with on-demand startup, a program missing from
+    /// program_cache is first read from the store at its saved permutation indices, instead of
+    /// being translated again (pop-in) and rewritten (antivirus scans every file).
+    bool disk_shaders = false;
+    bool disk_store_untrusted = false; ///< the bit went off live: marker reset to 0
+    std::unordered_map<u64, std::vector<u32>> disk_permutations; ///< pgm hash -> saved indices
+    std::unordered_set<std::string> disk_pipeline_keys;          ///< "g_0x..."/"c_0x..." saved
+    std::unordered_set<VkShaderModule> disk_modules_unused;      ///< loaded, not used yet
+    struct DiskShaderStats {
+        u64 programs, permutations, matched, compiled, keys_skipped, keys_written, load_ns;
+    } disk_stats{}, disk_reported{};
+    std::chrono::steady_clock::time_point disk_report{};
+    [[nodiscard]] bool DiskShadersActive() const;
+    void IndexDiskShaders();
+    struct DiskPrefetch;
+    DiskPrefetch* disk_prefetch = nullptr; ///< owned; deleted by StopDiskPrefetch
+    void StartDiskPrefetch();
+    void StopDiskPrefetch();
+    struct BinaryConversion;
+    BinaryConversion* binary_conversion = nullptr; ///< owned; deleted by StopBinaryConversion
+    void StartBinaryConversion();
+    void StopBinaryConversion();
+    bool LoadDiskProgram(u64 hash);
+    /// Index for a new permutation: a slot the store left empty, else the next one.
+    [[nodiscard]] size_t NewPermutationIndex(const Program& program) const;
+    /// False when this pipeline key is already in the store (nothing to write).
+    bool NewPipelineKey(const std::string& name);
+    void ReportDiskShaders();
+    /// spartanport: shader translations started (async and on the GPU thread), for the corner note.
+    u64 compiles_started = 0, compiles_reported = 0;
+    u32 pending_reported = 0;
+    void ReportCompiles();
 
     // Only if Config::collectShadersForDebug()
     tsl::robin_map<vk::ShaderModule,

@@ -4,12 +4,12 @@ import unittest
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
-import gow3_launcher_win as launcher  # noqa: E402
+import spartanport_launcher_win as launcher  # noqa: E402
 
 
 class PagesTest(unittest.TestCase):
-    def test_sidebar_lists_six_pages_in_order(self):
-        self.assertEqual(launcher.PAGES, ('home', 'graphics', 'performance', 'game', 'mods', 'advanced'))
+    def test_sidebar_lists_eight_pages_in_order(self):
+        self.assertEqual(launcher.PAGES, ('home', 'graphics', 'performance', 'game', 'controls', 'mods', 'trophies', 'advanced'))
 
     def test_showing_a_page_refreshes_what_it_holds(self):
         self.assertEqual(launcher.PAGE_REFRESH['home'], ('refresh_status',))

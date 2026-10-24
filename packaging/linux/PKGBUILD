@@ -1,0 +1,173 @@
+pkgname=spartanport-git
+pkgver=2.6.0.r460.gca7a0cf
+pkgrel=1
+pkgdesc='SpartanPort launcher and native runtime for God of War III Remastered (PlayStation 4)'
+arch=('x86_64')
+url='https://github.com/FelipePrado0/SpartanPort'
+license=('GPL-2.0-or-later')
+depends=(
+  'ffmpeg'
+  'fmt'
+  'fontconfig'
+  'gcc-libs'
+  'glibc'
+  'libx11'
+  'python'
+  'python-pillow'
+  'sdl3'
+  'tk'
+  'vulkan-driver'
+  'vulkan-icd-loader'
+  'xxhash'
+  'xorg-xrandr'
+  'zydis'
+)
+makedepends=(
+  'boost'
+  'cmake'
+  'git'
+  'glslang'
+  'ninja'
+  'pkgconf'
+  'robin-map'
+  'vulkan-headers'
+  'vulkan-memory-allocator'
+)
+optdepends=(
+  'gamemode: optional GameMode integration'
+  'mangohud: optional performance overlay'
+  'python-iced-x86: instruction rewriting for older CPUs (AUR)'
+)
+provides=("spartanport=${pkgver}")
+conflicts=('spartanport' 'gow3-pc' 'gow3-pc-git')
+options=('!lto' '!debug')
+source=(
+  'spartanport::git+https://github.com/FelipePrado0/SpartanPort.git'
+  'fsr-vulkan::git+https://github.com/FireBurn/FSR-Vulkan.git'
+  'imgui::git+https://github.com/ocornut/imgui.git'
+  'LibAtrac9::git+https://github.com/Thealexbarney/LibAtrac9.git'
+  'magic_enum::git+https://github.com/Neargye/magic_enum.git'
+  'miniz::git+https://github.com/richgel999/miniz.git'
+  'xbyak::git+https://github.com/herumi/xbyak.git'
+)
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+# Accept an upstream fix or a repeated prepare(), but reject unexpected layouts.
+_replace_once() {
+  python - "$@" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+old, new = sys.argv[2:]
+text = path.read_text()
+old_count = text.count(old)
+# The replacement may be contained in the original, as with the retained relative RUNPATH.
+new_count = text.replace(old, '').count(new)
+if (old_count, new_count) == (1, 0):
+    path.write_text(text.replace(old, new, 1))
+elif (old_count, new_count) == (0, 1):
+    print(f'{path}: already contains the expected replacement')
+else:
+    raise SystemExit(f'{path}: expected one original or one replacement for {old!r}; '
+                     f'found {old_count} original and {new_count} replacement matches')
+PY
+}
+
+pkgver() {
+  cd "${srcdir}/spartanport"
+  local version
+  version=$(sed -n "s/^VERSION = '\([^']*\)'.*/\1/p" launcher/spartanport_launcher_win.py)
+  if [[ -z $version ]]; then
+    printf 'Unable to read the SpartanPort launcher version\n' >&2
+    return 1
+  fi
+  printf '%s.r%s.g%s' "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd "${srcdir}/spartanport"
+
+  # Download through makepkg's source array, then use the revisions pinned by upstream.
+  local module
+  git submodule init
+  for module in fsr-vulkan imgui magic_enum miniz xbyak; do
+    git config "submodule.gpu/third_party/${module}.url" "${srcdir}/${module}"
+  done
+  git config submodule.third_party/LibAtrac9.url "${srcdir}/LibAtrac9"
+  git -c protocol.file.allow=always submodule update --init --recursive
+
+  # Use these bundled revisions consistently, even when system copies are installed.
+  _replace_once gpu/CMakeLists.txt \
+    'find_package(magic_enum QUIET)' 'set(magic_enum_FOUND FALSE)' || return 1
+  _replace_once gpu/CMakeLists.txt \
+    'find_package(miniz QUIET)' 'set(miniz_FOUND FALSE)' || return 1
+
+  # Older sources need the GCC -Werror fix; newer sources already have this buffer size.
+  _replace_once src/runtime_thread.c \
+    'char path[64], line[1024];' \
+    'char path[sizeof(d->d_name)+sizeof("/proc/self/task//stat")], line[1024];' || return 1
+
+  # Keep the relative library path; remove the temporary build directory from RUNPATH.
+  # CMake's build command also honors CMAKE_BUILD_PARALLEL_LEVEL.
+  local rpath="-Wl,-rpath,'\$ORIGIN/gpu'"
+  _replace_once build.sh \
+    "$rpath -Wl,-rpath,\"\$PWD/out/gpu\"" "$rpath" || return 1
+  _replace_once build.sh \
+    'ninja -C out/gpu spartanportgpu' \
+    'cmake --build out/gpu --target spartanportgpu' || return 1
+}
+
+build() {
+  cd "${srcdir}/spartanport"
+  SPARTAN_PGO=off SPARTAN_LTO=OFF bash build.sh
+}
+
+package() {
+  cd "${srcdir}/spartanport"
+
+  local sharedir="${pkgdir}/usr/share/spartanport"
+  local libdir="${pkgdir}/usr/lib/spartanport"
+  install -d "${sharedir}"/{launcher,scripts,patches} "${libdir}/gpu"
+
+  install -m755 out/spartanport-probe out/spartanport-gpu-capabilities "${libdir}/"
+  install -m755 out/gpu/libspartanportgpu.so "${libdir}/gpu/"
+  ln -s ../../lib/spartanport "${sharedir}/bin"
+
+  install -m644 run.py "${sharedir}/"
+  install -m644 scripts/*.py "${sharedir}/scripts/"
+  install -m644 patches/*.xml "${sharedir}/patches/"
+  install -m644 launcher/*.py launcher/*.png launcher/*.ico \
+    launcher/*.ttf launcher/OFL-*.txt "${sharedir}/launcher/"
+
+  install -d "${pkgdir}/usr/bin"
+  cat > "${pkgdir}/usr/bin/spartanport" <<'EOF'
+#!/bin/sh
+set -eu
+export SPARTAN_DATA_DIR="${SPARTAN_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/spartanport}"
+export PYTHONDONTWRITEBYTECODE=1
+mkdir -p -- "$SPARTAN_DATA_DIR"
+exec /usr/bin/python /usr/share/spartanport/launcher/spartanport_launcher_win.py "$@"
+EOF
+  chmod 755 "${pkgdir}/usr/bin/spartanport"
+
+  install -Dm644 launcher/spartanport.png "${pkgdir}/usr/share/pixmaps/spartanport.png"
+  install -Dm644 packaging/linux/spartanport.desktop \
+    "${pkgdir}/usr/share/applications/spartanport.desktop"
+  # Upstream's AppImage launcher is AppRun; the native package has its own wrapper.
+  _replace_once "${pkgdir}/usr/share/applications/spartanport.desktop" \
+    'Exec=AppRun' 'Exec=spartanport' || return 1
+
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+
+  # Notices for the launcher fonts and bundled libraries, including AMD's SDK.
+  local file
+  for file in launcher/OFL-*.txt; do
+    install -Dm644 "$file" "${pkgdir}/usr/share/licenses/${pkgname}/${file##*/}"
+  done
+  while IFS= read -r -d '' file; do
+    install -Dm644 "$file" "${pkgdir}/usr/share/licenses/${pkgname}/${file}"
+  done < <(find gpu/third_party third_party -type f \
+    \( -iname '*license*' -o -iname '*copying*' -o -iname 'notice*' \) -print0)
+}

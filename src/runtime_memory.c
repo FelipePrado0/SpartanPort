@@ -23,12 +23,12 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #endif
-/* sceKernelGetDirectMemorySize on retail PS4: 5056 MiB. GOW3_DMEM_MB raises it (the resolution
+/* sceKernelGetDirectMemorySize on retail PS4: 5056 MiB. SPARTAN_DMEM_MB raises it (the resolution
  * patches above 1080p need about 4 GiB more; run.sh sets it). */
 static uint64_t pool_size_bytes(void) {
     static uint64_t size;
     if (!size) {
-        const char *env = getenv("GOW3_DMEM_MB");
+        const char *env = getenv("SPARTAN_DMEM_MB");
         uint64_t mb = env ? strtoull(env, NULL, 10) : 0;
         if (mb < 5056 || mb > 16384) mb = 5056;
         size = mb * 1024 * 1024;
@@ -83,7 +83,7 @@ static int pool_fd=-1;
 static unsigned char *backing_base; /* second view of the pool: host writes bypass guest/GPU page protection */
 #define FLEX_SPAN (UINT64_C(1024) * 1024 * 1024)
 static uint64_t flex_bitmap[FLEX_SPAN/PAGE/64];
-/* GPU hooks (gow3gpu): notified outside the lock, in order, after each operation. */
+/* GPU hooks (spartanportgpu): notified outside the lock, in order, after each operation. */
 typedef void (*GpuRange)(uintptr_t address, uint64_t size);
 static GpuRange hook_map, hook_unmap, hook_invalidate;
 enum { HOOK_MAP, HOOK_UNMAP, HOOK_INVALIDATE };
@@ -236,19 +236,50 @@ static int pool(void) {
     if (backing_base) return 0;
     runtime_memory_reserve();
     uint64_t bytes=POOL_SIZE+FLEX_SPAN;
+    const char *fail_env=getenv("SPARTAN_FAIL_GUEST_MEMORY");
+    if (fail_env) {
+        DWORD err=fail_env[0] && strcmp(fail_env,"1")!=0 ? (DWORD)strtoul(fail_env,NULL,10) : 1450;
+        SetLastError(err);
+        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %lu); is the page file large enough?\n",bytes>>20,err);
+        fflush(stderr);
+        exit(21);
+    }
     section=CreateFileMapping2(INVALID_HANDLE_VALUE,NULL,FILE_MAP_ALL_ACCESS,PAGE_EXECUTE_READWRITE,SEC_COMMIT,bytes,NULL,NULL,0);
-    if (!section) { fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %lu); is the page file large enough?\n",bytes>>20,GetLastError()); return -1; }
+    if (!section) {
+        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %lu); is the page file large enough?\n",bytes>>20,GetLastError());
+        fflush(stderr);
+        exit(21);
+    }
     backing_base=MapViewOfFile3(section,GetCurrentProcess(),NULL,0,bytes,0,PAGE_READWRITE,NULL,0);
-    return backing_base ? 0 : -1;
+    if (!backing_base) win_fail("MapViewOfFile3 (guest memory pool)",0,bytes);
+    return 0;
 }
 #else
 /* Direct memory occupies [0,POOL_SIZE) of the memfd, flexible memory [POOL_SIZE,+FLEX_SPAN). */
 static int pool(void) {
     if (pool_fd>=0) return 0;
-    pool_fd=memfd_create("gow3-guest-memory", MFD_CLOEXEC);
-    if (pool_fd<0 || ftruncate(pool_fd,(off_t)(POOL_SIZE+FLEX_SPAN))) return -1;
+    const char *fail_env=getenv("SPARTAN_FAIL_GUEST_MEMORY");
+    if (fail_env) {
+        int err=fail_env[0] && strcmp(fail_env,"1")!=0 ? (int)strtol(fail_env,NULL,10) : 12;
+        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %d); is /dev/shm or RAM large enough?\n",
+                (POOL_SIZE+FLEX_SPAN)>>20,err);
+        fflush(stderr);
+        exit(21);
+    }
+    pool_fd=memfd_create("spartanport-guest-memory", MFD_CLOEXEC);
+    if (pool_fd<0 || ftruncate(pool_fd,(off_t)(POOL_SIZE+FLEX_SPAN))) {
+        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %d); is /dev/shm or RAM large enough?\n",
+                (POOL_SIZE+FLEX_SPAN)>>20,errno);
+        fflush(stderr);
+        exit(21);
+    }
     void *view=mmap(NULL,POOL_SIZE+FLEX_SPAN,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_NORESERVE,pool_fd,0);
-    if (view==MAP_FAILED) return -1;
+    if (view==MAP_FAILED) {
+        fprintf(stderr,"Runtime: cannot map %" PRIu64 " MiB of guest memory (error %d)\n",
+                (POOL_SIZE+FLEX_SPAN)>>20,errno);
+        fflush(stderr);
+        exit(21);
+    }
     backing_base=view;
     return 0;
 }
@@ -689,9 +720,9 @@ void *runtime_low_map(size_t size, int prot) {
     return p==MAP_FAILED ? NULL : p;
 #endif
 }
-/* ---- GPU library interface (gpu/shim/gow3gpu.cpp) ---- */
+/* ---- GPU library interface (gpu/shim/spartanportgpu.cpp) ---- */
 /* Optimizations switched off at run time (diagnostics): the number in the file named by
- * GOW3_TOGGLE_FILE, re-read every 250 ms. Bits: 1 region cache, 2 fetch shader cache,
+ * SPARTAN_TOGGLE_FILE, re-read every 250 ms. Bits: 1 region cache, 2 fetch shader cache,
  * 4 page tracking early exit, 8 pending-op poll limit, 16 threaded Vulkan recording,
  * 32 texture descriptor cache, 64 lock-free upload check, 128 image lookup cache,
  * 256 buffer uploads on the recording thread, 512 barrier tracker insert memo,
@@ -699,13 +730,13 @@ void *runtime_low_map(size_t size, int prot) {
  * 4096 resource sharps read by the draw-preparation workers,
  * 8192 prepared draws from the draw-preparation workers,
  * 16384 small read-only buffer copies on the recording thread,
- * 32768 hot pages (opt-in with GOW3_HOT_PAGES=1),
- * 65536 unprotect the 256 KiB window around a guest write fault (GOW3_FAULT_WINDOW KiB),
- * 131072 large guest memory copies split across copy threads (GOW3_COPY_THREADS),
- * 262144 with GOW3_ASYNC_FENCES=1: wait for guest copies at fences again,
+ * 32768 hot pages (opt-in with SPARTAN_HOT_PAGES=1),
+ * 65536 unprotect the 256 KiB window around a guest write fault (SPARTAN_FAULT_WINDOW KiB),
+ * 131072 large guest memory copies split across copy threads (SPARTAN_COPY_THREADS),
+ * 262144 with SPARTAN_ASYNC_FENCES=1: wait for guest copies at fences again,
  * 524288 small guest copies batched for the copy threads instead of the recording thread,
  * 1073741824 the lock-free UpdateImage path for clean, tracked images. */
-/* Bits 32 and up: the draw pipeline and related GPU thread work (gpu/shim/gow3_toggles.h). */
+/* Bits 32 and up: the draw pipeline and related GPU thread work (gpu/shim/spartanport_toggles.h). */
 uint64_t runtime_disabled_optimizations;
 /* Speculative readers of guest memory (GPU draw-preparation workers) register a recovery
  * point: a fault on that thread jumps back to it instead of terminating (probe.c). */
@@ -729,7 +760,7 @@ static void *toggle_watcher(void *path) {
     return NULL;
 }
 void runtime_memory_set_gpu_hooks(GpuRange map, GpuRange unmap, GpuRange invalidate) {
-    const char *toggles=getenv("GOW3_TOGGLE_FILE");
+    const char *toggles=getenv("SPARTAN_TOGGLE_FILE");
     static pthread_t watcher;
     if (toggles && !watcher) pthread_create(&watcher,NULL,toggle_watcher,(void *)toggles);
     write_lock();

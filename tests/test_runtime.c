@@ -4,6 +4,9 @@
 
 /* The settings menu of the GPU library restarts through probe.c, which tests do not link. */
 void runtime_restart(void) { abort(); }
+#include "gpu/spartanportgpu.h"
+__attribute__((weak)) void spartanportgpu_toast_trophy(const char *title, const char *detail, const unsigned char *png, uint64_t png_size) { (void)title; (void)detail; (void)png; (void)png_size; }
+__attribute__((weak)) void spartanportgpu_trophy_setup(const SpartanGpuTrophyLabels *labels, const SpartanGpuTrophyInfo *items, int count, const volatile uint32_t *unlocked) { (void)labels; (void)items; (void)count; (void)unlocked; }
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -348,6 +351,12 @@ int main(int argc,char **argv) {
         runtime_set_libc_tls(data,4,8);
         const uint64_t index[]={2,8};
         GET(TlsAddress,"vNe1w4diLCs#libkernel")(index); return 99;
+    }
+    if (argc>1 && !strcmp(argv[1],"--guest-memory-fail")) {
+        int64_t a=-1;
+        Allocate alloc=GET(Allocate,"rTXw65xmLIA#libkernel");
+        alloc(0,536870912,16384,0,0,&a);
+        return 99;
     }
     if (argc>1 && !strcmp(argv[1],"--stack-failure")) {
         GET(GuestCallback,"Ou3iL1abvng#libkernel")(); return 99;

@@ -8,6 +8,24 @@ PATCH = ('<Patch><TitleID><ID>CUSA01623</ID></TitleID>'
 
 
 class ModResolutionsTest(LauncherOverTemporaryFiles):
+    def test_region_mods_follow_the_game_selected_in_the_launcher(self):
+        game = self.tmp / 'game'
+        (game / 'JAPANESE').mkdir(parents=True)
+        folder = launcher.DATA_DIR / 'mods/JP/Pack/JAPANESE'
+        folder.mkdir(parents=True)
+        (folder / 'text.wad').write_bytes(b'local mod')
+        self.app.var('game_dir', 'app').set(str(game))
+        self.app.refresh_lists()
+        self.assertEqual(self.app.mod_order, ['JP'])
+        self.app.select_mod('JP')
+        self.assertEqual(self.app.selected_mod, 'JP')
+        other = self.tmp / 'other'
+        other.mkdir()
+        self.app.var('game_dir', 'app').set(str(other))
+        self.app.refresh_lists()
+        self.assertEqual(self.app.mod_order, [])
+        self.assertIsNone(self.app.selected_mod)
+
     def make_mod(self, name='Ultrawide'):
         folder = launcher.DATA_DIR / 'mods' / name / 'patches'
         folder.mkdir(parents=True)

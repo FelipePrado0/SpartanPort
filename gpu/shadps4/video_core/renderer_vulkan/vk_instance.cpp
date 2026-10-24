@@ -12,8 +12,8 @@
 #include "common/types.h"
 #include "imgui/renderer/imgui_core.h"
 #include "sdl_window.h"
-#include "video_core/amdgpu/gow3_msaa.h"
-#include "video_core/amdgpu/gow3_msaa_default.h"
+#include "video_core/amdgpu/spartanport_msaa.h"
+#include "video_core/amdgpu/spartanport_msaa_default.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_amd_paths.h"
 #include "video_core/renderer_vulkan/vk_dlss.h"
@@ -116,13 +116,13 @@ Instance::Instance(const Frontend::WindowSystemInfo& window_info, s32 physical_d
     const std::size_t num_physical_devices = static_cast<u16>(physical_devices.size());
     ASSERT_MSG(num_physical_devices > 0, "No physical devices found");
     LOG_INFO(Render_Vulkan, "Found {} physical devices", num_physical_devices);
-    // gow3: the device list in the game log tells a missing driver apart from a wrong choice.
+    // spartanport: the device list in the game log tells a missing driver apart from a wrong choice.
     for (std::size_t i = 0; i < num_physical_devices; ++i) {
         const auto props = physical_devices[i].getProperties();
         std::printf("GPU %zu: %s (%s)\n", i, props.deviceName.data(),
                     vk::to_string(props.deviceType).c_str());
     }
-    // gow3: a saved choice can outlive its GPU (removed card, new driver order).
+    // spartanport: a saved choice can outlive its GPU (removed card, new driver order).
     if (physical_device_index >= static_cast<s32>(num_physical_devices)) {
         std::printf("GPU: selected GPU %d is not in the device list; choosing automatically\n",
                     physical_device_index);
@@ -224,7 +224,7 @@ std::string Instance::GetDriverVersionName() {
 
 namespace {
 bool PipelineBinaryCacheRequested() {
-    const char* setting = std::getenv("GOW3_PIPELINE_BINARIES");
+    const char* setting = std::getenv("SPARTAN_PIPELINE_BINARIES");
     return !setting || *setting != '0';
 }
 }
@@ -365,7 +365,7 @@ bool Instance::CreateDevice() {
         LOG_INFO(Render_Vulkan, "- primitiveTopologyPatchListRestart: {}",
                  list_restart_features.primitiveTopologyPatchListRestart);
     }
-    // gow3: GOW3_AMD_PATHS_OFF=shaderext leaves the AMD shader extensions out (vk_amd_paths.h).
+    // spartanport: SPARTAN_AMD_PATHS_OFF=shaderext leaves the AMD shader extensions out (vk_amd_paths.h).
     const auto amd_paths_off = AmdPathsOff::Current();
     amd_shader_explicit_vertex_parameter =
         !amd_paths_off.shaderext &&
@@ -385,7 +385,7 @@ bool Instance::CreateDevice() {
     amd_shader_trinary_minmax =
         !amd_paths_off.shaderext && add_extension(VK_AMD_SHADER_TRINARY_MINMAX_EXTENSION_NAME);
     nv_framebuffer_mixed_samples = add_extension(VK_NV_FRAMEBUFFER_MIXED_SAMPLES_EXTENSION_NAME);
-    // gow3: GOW3_AMD_PATHS_OFF=mixed forces equal colour and depth samples, as on Intel.
+    // spartanport: SPARTAN_AMD_PATHS_OFF=mixed forces equal colour and depth samples, as on Intel.
     amd_mixed_attachment_samples =
         !amd_paths_off.mixed && add_extension(VK_AMD_MIXED_ATTACHMENT_SAMPLES_EXTENSION_NAME);
     shader_atomic_float = add_extension(VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
@@ -423,9 +423,9 @@ bool Instance::CreateDevice() {
     }
     image_view_min_lod = add_extension(VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME);
     supports_memory_budget = add_extension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
-    // gow3: FSR 4 v07 INT8 (vk_temporal_upscaler): quad derivatives in compute shaders.
+    // spartanport: FSR 4 v07 INT8 (vk_temporal_upscaler): quad derivatives in compute shaders.
     compute_shader_derivatives = add_extension(VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME);
-    // gow3: FSR 4.1.1 passes (dot2 of halves accumulated in float, as vkd3d-proton translates them).
+    // spartanport: FSR 4.1.1 passes (dot2 of halves accumulated in float, as vkd3d-proton translates them).
     mixed_float_dot_product =
         feature_chain.get<vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE>()
             .shaderMixedFloatDotProductFloat16AccFloat32 &&
@@ -440,11 +440,11 @@ bool Instance::CreateDevice() {
         LOG_INFO(Render_Vulkan, "- shaderSubgroupClock: {}",
                  shader_clock_features.shaderSubgroupClock);
     }
-    // gow3: GOW3_WAVE_STATS=1 logs the subgroup width the driver compiled each pipeline stage
+    // spartanport: SPARTAN_WAVE_STATS=1 logs the subgroup width the driver compiled each pipeline stage
     // at (vk_wave_stats.h). Off by default: the feature may change how the driver caches
     // pipelines.
     pipeline_executable_properties = [&] {
-        const char* env = std::getenv("GOW3_WAVE_STATS");
+        const char* env = std::getenv("SPARTAN_WAVE_STATS");
         return env && env[0] == '1' &&
                add_extension(VK_KHR_PIPELINE_EXECUTABLE_PROPERTIES_EXTENSION_NAME);
     }();
@@ -501,7 +501,7 @@ bool Instance::CreateDevice() {
     const auto vk11_features = feature_chain.get<vk::PhysicalDeviceVulkan11Features>();
     vk12_features = feature_chain.get<vk::PhysicalDeviceVulkan12Features>();
     vk13_features = feature_chain.get<vk::PhysicalDeviceVulkan13Features>();
-    // gow3: DLSS (optional bridge DLL) needs its own device extensions on NVIDIA GPUs.
+    // spartanport: DLSS (optional bridge DLL) needs its own device extensions on NVIDIA GPUs.
     std::vector<const char*> dlss_extensions;
     if (Dlss* dlss = Dlss::Get()) {
         dlss->AppendDeviceExtensions(*instance, physical_device, dlss_extensions);
@@ -543,7 +543,7 @@ bool Instance::CreateDevice() {
                 .shaderImageGatherExtended = features.shaderImageGatherExtended,
                 .shaderStorageImageExtendedFormats = features.shaderStorageImageExtendedFormats,
                 .shaderStorageImageMultisample = features.shaderStorageImageMultisample,
-                // gow3: required by the FSR 3 accumulate shaders (vk_temporal_upscaler).
+                // spartanport: required by the FSR 3 accumulate shaders (vk_temporal_upscaler).
                 .shaderStorageImageWriteWithoutFormat =
                     features.shaderStorageImageWriteWithoutFormat,
                 .shaderClipDistance = features.shaderClipDistance,
@@ -821,14 +821,14 @@ void Instance::CollectDeviceParameters() {
     driver_id = driver.driverID;
     vendor_name = driver.driverName.data();
 
-    // gow3: see video_core/amdgpu/gow3_msaa.h; the default per driver is gow3_msaa_default.h.
-    const char* no_msaa_env = std::getenv("GOW3_NO_MSAA");
+    // spartanport: see video_core/amdgpu/spartanport_msaa.h; the default per driver is spartanport_msaa_default.h.
+    const char* no_msaa_env = std::getenv("SPARTAN_NO_MSAA");
     const bool no_msaa = no_msaa_env && *no_msaa_env
                              ? *no_msaa_env == '1'
-                             : gow3_no_msaa_default(static_cast<VkDriverId>(driver_id)) != 0;
+                             : spartanport_no_msaa_default(static_cast<VkDriverId>(driver_id)) != 0;
     AmdGpu::no_msaa.store(no_msaa, std::memory_order_relaxed);
     std::printf("GPU: guest multisampling %s\n",
-                no_msaa ? "off (single-sampled images; GOW3_NO_MSAA=0 keeps it)" : "on");
+                no_msaa ? "off (single-sampled images; SPARTAN_NO_MSAA=0 keeps it)" : "on");
 
     const std::string model_name{GetModelName()};
     const std::string driver_version = GetDriverVersionName();

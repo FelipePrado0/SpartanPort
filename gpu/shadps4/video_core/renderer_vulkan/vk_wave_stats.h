@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// gow3: histogram of the subgroup widths the driver compiled pipeline stages at, from
-// VK_KHR_pipeline_executable_properties (GOW3_WAVE_STATS=1; Pipeline::RecordWaveSizes in
+// spartanport: histogram of the subgroup widths the driver compiled pipeline stages at, from
+// VK_KHR_pipeline_executable_properties (SPARTAN_WAVE_STATS=1; Pipeline::RecordWaveSizes in
 // vk_pipeline_common.cpp). The PS4 shaders assume 64 lanes; a fragment stage compiled at 32
 // covers 8x4 pixels per wave.
 
