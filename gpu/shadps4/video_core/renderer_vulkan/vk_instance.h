@@ -444,6 +444,11 @@ public:
         return vk11_props.maxMemoryAllocationSize;
     }
 
+    /// Returns the physical device limits.
+    const vk::PhysicalDeviceLimits& GetLimits() const noexcept {
+        return properties.limits;
+    }
+
     /// Returns the vulkan 1.2 physical device properties.
     const vk::PhysicalDeviceVulkan12Properties& GetVk12Properties() const noexcept {
         return vk12_props;
