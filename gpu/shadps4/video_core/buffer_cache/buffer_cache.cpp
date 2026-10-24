@@ -91,8 +91,8 @@ BufferCache::BufferCache(const Vulkan::Instance& instance_, Vulkan::Scheduler& s
     block_shift = std::bit_width(block_size) - 1;
     blocks_per_arena_page = arena_page_size / block_size;
     blocks_per_arena_page_shift = arena_page_bits - block_shift;
-    // gow3: residency used to come only from the first device-local type and failed hard once
-    // its heap was full: on Windows APUs (Vega 8) that heap is the BIOS carve-out, often
+    // spartanport: residency used to come only from the first device-local type and failed hard
+    // once its heap was full: on Windows APUs (Vega 8) that heap is the BIOS carve-out, often
     // 512 MiB to 2 GiB, while the shared heap still had room. Keep every allowed type,
     // device-local first, and fall back in that order (EnsureResident).
     const auto& memory_props = instance.GetMemoryProperties();
@@ -120,11 +120,12 @@ BufferCache::BufferCache(const Vulkan::Instance& instance_, Vulkan::Scheduler& s
                                       : "");
     }
     std::printf("GPU: buffer arena memory types:%s\n", types_text.c_str());
-    // GOW3_ARENA_LIMIT_MB=N: treat the first type as out of memory past N MiB (tests).
-    if (const char* env = std::getenv("GOW3_ARENA_LIMIT_MB")) {
+    // SPARTAN_ARENA_LIMIT_MB=N: treat the first type's heap as out of memory past N MiB (tests).
+    if (const char* env = std::getenv("SPARTAN_ARENA_LIMIT_MB")) {
         arena_limit_bytes = std::strtoull(env, nullptr, 10) << 20;
-        std::printf("GPU: buffer arena limit %llu MiB in type %u (GOW3_ARENA_LIMIT_MB)\n",
-                    (unsigned long long)(arena_limit_bytes >> 20), arena_memory_types[0]);
+        std::printf("GPU: buffer arena limit %llu MiB in heap %u (SPARTAN_ARENA_LIMIT_MB)\n",
+                    (unsigned long long)(arena_limit_bytes >> 20),
+                    memory_props.memoryTypes[arena_memory_types[0]].heapIndex);
     }
 
     const u64 bda_pagetable_size =
@@ -507,32 +508,36 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
     const u64 alloc_size = u64{resident_blocks} << block_shift;
     vk::DeviceMemory device_memory{};
     vk::Result last_result = vk::Result::eErrorOutOfDeviceMemory;
-    // gow3: the device-local heaps of a Windows APU are the BIOS carve-out (here 2 x 256 MiB) and
-    // the driver keeps saying yes to allocations past their size by paging into system memory,
-    // until it refuses one and the game aborts (issue #181). Once three quarters of a carve-out
-    // heap has been filled by arena pages, the arenas go to the shared heap instead (7.5 GiB on
-    // this machine); the carve-out stays available to the swapchain and the driver itself.
+    // spartanport: the device-local heaps of a Windows APU are the BIOS carve-out (here
+    // 2 x 256 MiB) and the driver keeps saying yes to allocations past their size by paging into
+    // system memory, until it refuses one and the game aborts (issue #181). Once three quarters
+    // of a carve-out heap has been filled by arena pages, the arenas go to the shared heap
+    // instead (7.5 GiB on this machine); the carve-out stays available to the swapchain and the
+    // driver itself. Integrated GPUs only: on a dedicated GPU the device-local heap is VRAM.
     const auto& arena_memory_props = instance.GetMemoryProperties();
+    const auto heap_of = [&](u32 type) { return arena_memory_props.memoryTypes[type].heapIndex; };
     const auto carve_out_full = [&](u32 type) {
-        const u32 heap = arena_memory_props.memoryTypes[type].heapIndex;
-        if (!bool(arena_memory_props.memoryHeaps[heap].flags &
-                  vk::MemoryHeapFlagBits::eDeviceLocal)) {
+        const u32 heap = heap_of(type);
+        if (!instance.IsIntegrated() || !bool(arena_memory_props.memoryHeaps[heap].flags &
+                                              vk::MemoryHeapFlagBits::eDeviceLocal)) {
             return false;
         }
-        return arena_type_bytes[type] + alloc_size >
+        return arena_heap_bytes[heap] + alloc_size >
                arena_memory_props.memoryHeaps[heap].size / 4 * 3;
     };
+    const u32 limit_heap = heap_of(arena_memory_types[0]);
     for (const u32 type : arena_memory_types) {
-        if (arena_limit_bytes != 0 && type == arena_memory_types[0] &&
-            arena_type_bytes[type] + alloc_size > arena_limit_bytes) {
+        const u32 heap = heap_of(type);
+        if (arena_limit_bytes != 0 && heap == limit_heap &&
+            arena_heap_bytes[heap] + alloc_size > arena_limit_bytes) {
             last_result = vk::Result::eErrorOutOfDeviceMemory;
         } else if (carve_out_full(type)) {
             if ((arena_fallback_logged & (1u << type)) == 0) {
                 arena_fallback_logged |= 1u << type;
-                std::printf("GPU: buffer arena type %u is a device-local heap with %llu MiB "
+                std::printf("GPU: buffer arena type %u is in device-local heap %u with %llu MiB "
                             "placed there already; keeping the carve-out for the rest and using "
                             "the shared heap; heaps:%s\n",
-                            type, (unsigned long long)(arena_type_bytes[type] >> 20),
+                            type, heap, (unsigned long long)(arena_heap_bytes[heap] >> 20),
                             instance.HeapUsageText().c_str());
                 std::fflush(stdout);
             }
@@ -546,7 +551,7 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
             last_result = result;
             if (result == vk::Result::eSuccess) {
                 device_memory = memory;
-                arena_type_bytes[type] += alloc_size;
+                arena_heap_bytes[heap] += alloc_size;
                 break;
             }
         }
@@ -556,17 +561,17 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
         }
         if ((arena_fallback_logged & (1u << type)) == 0) {
             arena_fallback_logged |= 1u << type;
-            std::printf("GPU: buffer arena out of memory in type %u (%llu MiB resident there, "
-                        "%llu MiB asked); trying the next memory type; heaps:%s\n",
-                        type, (unsigned long long)(arena_type_bytes[type] >> 20),
+            std::printf("GPU: buffer arena out of memory in type %u (heap %u, %llu MiB resident "
+                        "there, %llu MiB asked); trying the next memory type; heaps:%s\n",
+                        type, heap, (unsigned long long)(arena_heap_bytes[heap] >> 20),
                         (unsigned long long)(alloc_size >> 20), instance.HeapUsageText().c_str());
             std::fflush(stdout);
         }
     }
     if (!device_memory) {
         std::string resident_text;
-        for (const u32 type : arena_memory_types) {
-            resident_text += fmt::format(" type {}: {} MiB", type, arena_type_bytes[type] >> 20);
+        for (u32 heap = 0; heap < arena_memory_props.memoryHeapCount; ++heap) {
+            resident_text += fmt::format(" heap {}: {} MiB", heap, arena_heap_bytes[heap] >> 20);
         }
         resident_text += "; heaps:" + instance.HeapUsageText();
         ASSERT_MSG(false, "Buffer arena allocation of {} MiB failed in every memory type ({}); "

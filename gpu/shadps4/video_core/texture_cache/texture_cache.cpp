@@ -1645,7 +1645,7 @@ void TextureCache::GarbageCollectImages() {
                 critical_gc_memory = budget / 100 * 95;
             }
         }
-        // gow3: the heaps every 30 s, to follow memory use over a session in the log.
+        // spartanport: the heaps every 30 s, to follow memory use over a session in the log.
         const auto now = std::chrono::steady_clock::now();
         if (now - heap_report_time >= std::chrono::seconds(30)) {
             heap_report_time = now;

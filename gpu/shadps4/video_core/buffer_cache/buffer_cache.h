@@ -188,10 +188,11 @@ private:
     };
     IntervalList<Backing> resident_ranges;
 
-    /// gow3: memory types for arena residency, device-local first; the next one is tried when
-    /// a type's heap is out of memory (integrated GPUs: a small carve-out heap).
+    /// spartanport: memory types for arena residency, device-local first; the next one is tried
+    /// when a type's heap is out of memory (integrated GPUs: a small carve-out heap). Arena bytes
+    /// are counted per heap, since several memory types can share one.
     boost::container::small_vector<u32, VK_MAX_MEMORY_TYPES> arena_memory_types;
-    std::array<u64, VK_MAX_MEMORY_TYPES> arena_type_bytes{};
+    std::array<u64, VK_MAX_MEMORY_HEAPS> arena_heap_bytes{};
     u32 arena_fallback_logged{};
     u64 arena_limit_bytes{};
     u32 block_size{};

@@ -24,7 +24,7 @@ using namespace Vulkan;
 
 Common::IncrementalIdProvider<u64> Image::global_image_uid{};
 
-// gow3: " N: VMA used/budget MiB, driver used MiB (size S)" for every heap, for the log.
+// spartanport: " N: VMA used/budget MiB, driver used MiB (size S)" for every heap, for the log.
 static std::string VmaHeapText(VmaAllocator allocator) {
     const VkPhysicalDeviceMemoryProperties* props{};
     vmaGetMemoryProperties(allocator, &props);
@@ -39,7 +39,7 @@ static std::string VmaHeapText(VmaAllocator allocator) {
     return text;
 }
 
-// gow3: VMA takes the first memory type with the lowest cost and never looks at heap sizes
+// spartanport: VMA takes the first memory type with the lowest cost and never looks at heap sizes
 // (vk_mem_alloc.h, FindMemoryTypeIndex: "if(currCost < minCost)"). On an AMD APU the device-local
 // heaps are the BIOS carve-out (here two of 256 MiB) and the shared heap with the rest of the RAM
 // (7.5 GiB) is *not* device-local, so every image was crammed into the carve-out: 937 MiB alive in
@@ -50,6 +50,13 @@ static std::string VmaHeapText(VmaAllocator allocator) {
 // Returns 0 to leave the choice to VMA (dedicated GPUs, one heap, or a carve-out that is big).
 static u32 SharedHeapMemoryTypes(VmaAllocator allocator) {
     static const u32 types = [allocator] {
+        // Integrated GPUs only: a dedicated GPU can have the same layout (a small VRAM heap next
+        // to a large host heap), and there the host heap is slower memory across the bus.
+        const VkPhysicalDeviceProperties* device_props{};
+        vmaGetPhysicalDeviceProperties(allocator, &device_props);
+        if (device_props->deviceType != VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
+            return 0u;
+        }
         const VkPhysicalDeviceMemoryProperties* props{};
         vmaGetMemoryProperties(allocator, &props);
         u32 shared = VK_MAX_MEMORY_HEAPS;
@@ -71,7 +78,7 @@ static u32 SharedHeapMemoryTypes(VmaAllocator allocator) {
             }
         }
         // Only intervene when device-local memory is a small carve-out and the shared heap is
-        // several times larger (discrete GPUs and single-heap systems keep VMA's own choice).
+        // several times larger (single-heap systems and big carve-outs keep VMA's own choice).
         if (shared == VK_MAX_MEMORY_HEAPS || local_size == 0 || shared_size < (2ull << 30) ||
             shared_size < 4 * local_size) {
             return 0u;
@@ -95,8 +102,9 @@ static u32 SharedHeapMemoryTypes(VmaAllocator allocator) {
     return types;
 }
 
-// gow3: every device-local memory type, for the last-resort retry of an image (the carve-out is
-// small but it is still memory the driver can honour when the shared heap is exhausted).
+// spartanport: every device-local memory type, for the last-resort retry of an image (the
+// carve-out is small but it is still memory the driver can honour when the shared heap is
+// exhausted).
 static u32 DeviceLocalMemoryTypes(VmaAllocator allocator) {
     static const u32 types = [allocator] {
         const VkPhysicalDeviceMemoryProperties* props{};
@@ -212,16 +220,16 @@ void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
     VkResult result = vmaCreateImage(allocator, &image_ci_unsafe, &alloc_ci, &unsafe_image,
                                      &allocation, &alloc_info);
     if (result != VK_SUCCESS && alloc_ci.memoryTypeBits != 0) {
-        // gow3: this image does not support the shared heap (format or usage restrictions), or
-        // that heap is at its budget while the others are not. Fall back to VMA's own choice
-        // before treating the failure as memory pressure.
+        // spartanport: this image does not support the shared heap (format or usage
+        // restrictions), or that heap is at its budget while the others are not. Fall back to
+        // VMA's own choice before treating the failure as memory pressure.
         VmaAllocationCreateInfo relaxed_ci = alloc_ci;
         relaxed_ci.memoryTypeBits = 0;
         result = vmaCreateImage(allocator, &image_ci_unsafe, &relaxed_ci, &unsafe_image,
                                 &allocation, &alloc_info);
     }
     if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
-        // gow3: WITHIN_BUDGET made VMA refuse once every allowed heap was at its budget. On
+        // spartanport: WITHIN_BUDGET made VMA refuse once every allowed heap was at its budget. On
         // integrated GPUs (Vega 8: a 256 MiB carve-out, the rest shared with a busy system)
         // the budget shrinks with system memory use and ended the game mid-session. Log the
         // heaps and ask the driver itself, which can page beyond the budget.
@@ -241,7 +249,7 @@ void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
         result = vmaCreateImage(allocator, &image_ci_unsafe, &retry_ci, &unsafe_image,
                                 &allocation, &alloc_info);
         if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
-            // gow3: the driver also refuses past some point (Vega 8: the 256 MiB carve-out
+            // spartanport: the driver also refuses past some point (Vega 8: the 256 MiB carve-out
             // at 1858 MiB) while the system-memory heap still had GBs free. Place the image
             // outside the device-local heaps: slower to sample, but the game keeps running.
             const VkPhysicalDeviceMemoryProperties* props{};
@@ -270,10 +278,10 @@ void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
             }
         }
         if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
-            // gow3: the images already live in the shared (host) heap, so the retry above asked
-            // for the same memory types again. The last memory the driver can still honour is
-            // the small carve-out the policy avoids for images: slower than the shared heap is
-            // not a thing on an integrated GPU, and a texture is better than an abort.
+            // spartanport: the images already live in the shared (host) heap, so the retry
+            // above asked for the same memory types again. The last memory the driver can still
+            // honour is the small carve-out the policy avoids for images: slower than the shared
+            // heap is not a thing on an integrated GPU, and a texture is better than an abort.
             const u32 local_types = DeviceLocalMemoryTypes(allocator);
             if (local_types != 0 && local_types != retry_ci.memoryTypeBits) {
                 retry_ci.memoryTypeBits = local_types;
@@ -282,7 +290,8 @@ void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
             }
         }
     }
-    ASSERT_MSG(result == VK_SUCCESS, "Failed allocating image {}x{}x{} {} with error {}; VMA heaps:{}",
+    ASSERT_MSG(result == VK_SUCCESS,
+               "Failed allocating image {}x{}x{} {} with error {}; VMA heaps:{}",
                image_ci.extent.width, image_ci.extent.height, image_ci.extent.depth,
                vk::to_string(image_ci.format), vk::to_string(vk::Result{result}),
                VmaHeapText(allocator));

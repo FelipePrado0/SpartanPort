@@ -505,7 +505,7 @@ public:
     /// (VK_EXT_memory_budget: what this process can use now, other processes included).
     [[nodiscard]] u64 GetDeviceMemoryBudgetNow() const;
 
-    /// gow3: " N: used/budget MiB (size S)" for every heap, for the log.
+    /// spartanport: " N: used/budget MiB (size S)" for every heap, for the log.
     [[nodiscard]] std::string HeapUsageText() const;
 
     /// Returns the total memory budget available to the device.
