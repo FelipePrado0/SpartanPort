@@ -300,7 +300,7 @@ const char* UpscalerLabel(int upscaler) {
     switch (upscaler) {
     case SpartanSettings::UpscalerFsr3: return "FSR 3.1";
     case SpartanSettings::UpscalerFsr4: return "FSR 4";
-    case SpartanSettings::UpscalerFsr411: return "FSR 4.1.1";
+    case SpartanSettings::UpscalerFsr411: return "FSR 4.1";
     case SpartanSettings::UpscalerTaa: return "TAA";
     case SpartanSettings::UpscalerDlss: return "DLSS";
     default: return "";
@@ -442,6 +442,43 @@ void ImageTab() {
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
+    Separator("Upscaling (applied on restart)");
+    if (BeginRows("##upscaling")) {
+        // The launcher's choices and order (options.rs UPSCALERS, PRESETS); the same values as the
+        // Display menu's rows.
+#ifdef _WIN32
+        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 4.1", "TAA"};
+        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3,
+                                              SpartanSettings::UpscalerFsr411, SpartanSettings::UpscalerTaa};
+#else
+        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "TAA"};
+        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3,
+                                              SpartanSettings::UpscalerTaa};
+#endif
+        ChoiceRow("Upscaler", s.upscaler, upscaler_labels, upscaler_values, int(std::size(upscaler_values)),
+                  "FSR 4.1 needs an AMD Radeon with Adrenalin 26.10.1 or newer.");
+        // Each preset's render size at the chosen Render resolution, before the restart too.
+        static const int preset_values[] = {SpartanSettings::NativeAA, SpartanSettings::UltraQuality,
+                                            SpartanSettings::Quality, SpartanSettings::Balanced,
+                                            SpartanSettings::Performance, SpartanSettings::UltraPerformance};
+        const auto names = G::ResolutionNames();
+        const auto& name = names[std::clamp(s.render_resolution.load(), 0, int(names.size()) - 1)];
+        const auto [ow, oh] = name == "native" ? std::pair{1920, 1080} : G::ResolutionSize(name);
+        static std::string preset_text[std::size(preset_values)];
+        static const char* preset_labels[std::size(preset_values)];
+        for (size_t i = 0; i < std::size(preset_values); ++i) {
+            const auto [w, h] = SpartanSettings::UpscaleRenderSize(preset_values[i], ow, oh);
+            preset_text[i] = std::string(SpartanSettings::PresetName(preset_values[i])) + " (" +
+                             std::to_string(w) + "x" + std::to_string(h) + ")";
+            preset_labels[i] = preset_text[i].c_str();
+        }
+        ImGui::BeginDisabled(s.upscaler == SpartanSettings::UpscalerOff);
+        ChoiceRow("Quality preset", s.preset, preset_labels, preset_values, int(std::size(preset_values)),
+                  "Share of the Render resolution the game renders at; the upscaler rebuilds the full "
+                  "Render resolution. Lower renders faster.");
+        ImGui::EndDisabled();
+        ImGui::EndTable();
+    }
     Separator("Textures (applied on restart)");
     if (BeginRows("##textures")) {
         static const char* const anisotropy_labels[] = {"Game default", "2x", "4x", "8x", "16x"};
@@ -463,6 +500,8 @@ void ImageTab() {
         }
         std::snprintf(text, sizeof(text), "%d x %d", rw, rh);
         InfoRow("Render resolution", text);
+        InfoRow("Upscaler", UpscalerLabel(s.upscaler));
+        if (const char* problem = s.fsr4_problem.load()) InfoRow("Upscaler status", problem);
         std::snprintf(text, sizeof(text), "%d x %d", iw, ih);
         InfoRow("Game image", text);
         std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
@@ -613,7 +652,9 @@ int RestartChanges() {
     return (s.render_resolution != s.startup_render_resolution) +
            (s.monitor != s.startup_monitor) + (s.hdr != s.startup_hdr) +
            (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
-           (s.anisotropy != s.startup_anisotropy);
+           (s.anisotropy != s.startup_anisotropy) + (s.preset != s.startup_preset) +
+           ((s.upscaler == SpartanSettings::UpscalerOff) != (s.startup_upscaler == SpartanSettings::UpscalerOff) ||
+            (s.upscaler == SpartanSettings::UpscalerTaa) != (s.startup_upscaler == SpartanSettings::UpscalerTaa));
 }
 
 void Menu() {

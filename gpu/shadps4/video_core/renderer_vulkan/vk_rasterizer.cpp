@@ -1027,8 +1027,9 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         regs.color_buffers[0].Address() != last_display_buffer) {
         last_display_buffer = regs.color_buffers[0].Address();
         scene_started = false;
+        const bool upscaler_changed = upscaler->OnFrameStart();
         camera_motion->OnDisplayPass(cb_descs[0].first);
-        if (upscaler->OnFrameStart()) {
+        if (upscaler_changed) {
             object_motion->InvalidateHistory();
             camera_motion->InvalidateHistory();
         }

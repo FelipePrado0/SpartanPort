@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace SpartanSettings {
@@ -30,7 +31,7 @@ inline constexpr int OutputCount = 4;
 inline constexpr int OutputDefault = 1; ///< 1920x1080, the game's own size
 
 struct Values {
-    std::atomic<int> upscaler{UpscalerFsr3};
+    std::atomic<int> upscaler{UpscalerOff};
     std::atomic<int> preset{NativeAA};
     std::atomic<bool> sharpen{true};
     std::atomic<float> sharpness{0.3f};
@@ -131,7 +132,7 @@ struct Values {
 
     /// Startup settings for the explicit SPARTAN_RENDER_RES compatibility patch only.
     int startup_preset = NativeAA;
-    int startup_upscaler = UpscalerFsr3;
+    int startup_upscaler = UpscalerOff;
     bool startup_object_motion = true;
     int startup_output_res = OutputDefault;
     int startup_live_resolution = 0;
@@ -142,7 +143,7 @@ Values& Get();
 /// Reads the file, then the environment overrides. Called once at start.
 void Load();
 /// Checks the loaded choice before the first frame; unsupported FSR 4 uses FSR 3.1.
-void ConfigureUpscalerSupport(bool fsr4, bool fsr411);
+void ConfigureUpscalerSupport(bool fsr4, bool fsr411, const char* fsr411_problem = nullptr);
 /// After device creation: DLSS availability; a DLSS setting falls back to FSR 3.1 without it.
 void ConfigureDlssSupport(bool available, const char* problem);
 /// Startup-patched scene dimensions cannot change until run.sh prepares a new image.
@@ -164,6 +165,9 @@ void Save();
 /// Render resolution divisor of a preset (1.0 native, 1.5 quality, ...).
 float PresetScale(int preset);
 const char* PresetName(int preset);
+/// The game's render size for a preset at an output size (tests/upscale_render_sizes.txt, the
+/// launcher's upscale_render_size): even, never the game's 1920x1080 nor the output size.
+std::pair<int, int> UpscaleRenderSize(int preset, int width, int height);
 const char* UpscalerName(int upscaler);
 
 } // namespace SpartanSettings

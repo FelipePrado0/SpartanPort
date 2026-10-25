@@ -283,19 +283,26 @@ bool GraphicsNeedRestart() {
            v.monitor != v.startup_monitor || v.hdr != v.startup_hdr ||
            v.deferred_readback != v.startup_deferred_readback ||
            v.stale_readback != v.startup_stale_readback ||
-           v.anisotropy != v.startup_anisotropy || v.glyph_style != v.startup_glyph_style;
+           v.anisotropy != v.startup_anisotropy || v.glyph_style != v.startup_glyph_style ||
+           // The launcher patches the render size of the preset (or none without an upscaler).
+           v.preset != v.startup_preset ||
+           (v.upscaler == UpscalerOff) != (v.startup_upscaler == UpscalerOff) ||
+           (v.upscaler == UpscalerTaa) != (v.startup_upscaler == UpscalerTaa);
 }
 
-void ConfigureUpscalerSupport(bool fsr4, bool fsr411) {
+void ConfigureUpscalerSupport(bool fsr4, bool fsr411, const char* fsr411_problem) {
     auto& v = Get();
     v.fsr4_supported = fsr4;
-    v.fsr411_supported = fsr4 && fsr411;
+    v.fsr411_supported = fsr411;
     const int requested = v.upscaler;
     if ((requested == UpscalerFsr4 && !v.fsr4_supported) ||
         (requested == UpscalerFsr411 && !v.fsr411_supported)) {
-        v.fsr4_problem = "GPU does not support the selected FSR 4 shaders; using FSR 3.1";
-        std::printf("Upscaler: %s unsupported on this GPU; falling back to FSR 3.1 before the first frame\n",
-                    UpscalerName(requested));
+        static std::string problem;
+        problem = requested == UpscalerFsr411 && fsr411_problem ? fsr411_problem :
+            "GPU does not support the selected FSR 4 shaders; using FSR 3.1";
+        v.fsr4_problem = problem.c_str();
+        std::printf("Upscaler: %s unavailable: %s; falling back to FSR 3.1 before the first frame\n",
+                    UpscalerName(requested), v.fsr4_problem.load());
         v.upscaler = UpscalerFsr3;
     }
 }
@@ -405,6 +412,14 @@ float PresetScale(int preset) {
     return scales[std::clamp(preset, 0, PresetCount - 1)];
 }
 
+std::pair<int, int> UpscaleRenderSize(int preset, int width, int height) {
+    const double scale = PresetScale(preset);
+    const auto even = [](double value) { return int(std::round(value / 2.0) * 2.0); };
+    const int w = std::clamp(even(width / scale), 640, 7680), h = std::clamp(even(height / scale), 360, 4320);
+    if ((w == width && h == height) || (w == 1920 && h == 1080)) return {w - 2, h - 2};
+    return {w, h};
+}
+
 const char* PresetName(int preset) {
     static constexpr const char* names[PresetCount] = {"Native AA", "Quality", "Balanced",
                                                        "Performance", "Ultra Performance",
@@ -470,6 +485,48 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         else value = v.mouse_lock ? (pt ? "Ligado" : "On") : (pt ? "Desligado" : "Off");
         static thread_local std::string labels[6];
         const bool selected = direction || function >= 0xfb8;
+        labels[row] = std::string(selected ? "[ArrowSelectionL]" : "[ArrowSpacer]") + value
+                    + (selected ? "[ArrowSelectionR]" : "[ArrowSpacer]");
+        return text(labels[row].c_str());
+    }
+    // Display menu, Upscaler (row 0) and Quality preset (row 1): value 0xf61/0xf62, left 0xf63/0xf64,
+    // right 0xf65/0xf66, selected 0xf67/0xf68. Applied by Apply and Restart (GraphicsNeedRestart).
+    if (function >= 0xf61 && function <= 0xf68) {
+        using namespace SpartanSettings;
+        const unsigned row = (function - 0xf61) % 2;
+        const int direction = function >= 0xf67 ? 0 : function >= 0xf65 ? 1 : function >= 0xf63 ? -1 : 0;
+        const char* language = std::getenv("SPARTAN_LANGUAGE");
+        const bool pt = language && (std::strcmp(language, "7") == 0 || std::strcmp(language, "17") == 0
+                                    || std::strncmp(language, "pt", 2) == 0 || std::strcmp(language, "br") == 0);
+        const auto cycle = [&](const std::vector<int>& values, int current) {
+            const auto found = std::find(values.begin(), values.end(), current);
+            const int pos = found == values.end() ? 0 : int(found - values.begin());
+            return values[(pos + direction + int(values.size())) % values.size()];
+        };
+        // The launcher's order (options.rs UPSCALERS, PRESETS).
+#ifdef _WIN32
+        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerFsr411, UpscalerTaa};
+#else
+        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerTaa};
+#endif
+        const std::vector<int> presets{NativeAA, UltraQuality, Quality, Balanced, Performance, UltraPerformance};
+        if (direction) {
+            if (row == 0) v.upscaler = cycle(upscalers, v.upscaler);
+            else v.preset = cycle(presets, v.preset);
+            SpartanSettings::Save();
+        }
+        std::string value;
+        if (row == 0) {
+            const int u = v.upscaler;
+            value = u == UpscalerOff ? (pt ? "Desligado" : "Off") : u == UpscalerFsr3 ? "FSR 3.1"
+                  : u == UpscalerFsr411 ? "FSR 4.1" : u == UpscalerTaa ? "TAA" : UpscalerName(u);
+            if (u == UpscalerFsr411 && !v.fsr411_supported) value += pt ? " (indisponivel)" : " (unavailable)";
+        } else {
+            // The name only: the row has no room for the render size (the Insert menu shows it).
+            value = PresetName(v.preset);
+        }
+        const bool selected = function >= 0xf63;
+        static thread_local std::string labels[2];
         labels[row] = std::string(selected ? "[ArrowSelectionL]" : "[ArrowSpacer]") + value
                     + (selected ? "[ArrowSelectionR]" : "[ArrowSpacer]");
         return text(labels[row].c_str());
