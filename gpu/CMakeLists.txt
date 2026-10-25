@@ -348,6 +348,13 @@ target_include_directories(extension-policy-test PRIVATE shadps4)
 add_executable(vertex-input-default-test EXCLUDE_FROM_ALL ../tests/test_vertex_input_default.cpp)
 target_compile_options(vertex-input-default-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(vertex-input-default-test PRIVATE shadps4)
+add_executable(vertex-format-test EXCLUDE_FROM_ALL ../tests/test_vertex_format.cpp
+    shadps4/video_core/renderer_vulkan/liverpool_to_vk.cpp shadps4/video_core/amdgpu/pixel_format.cpp
+    shadps4/common/number_utils.cpp)
+target_compile_options(vertex-format-test PRIVATE -UNDEBUG)
+target_include_directories(vertex-format-test PRIVATE shim shadps4 third_party/gcn/include
+    third_party/half/include)
+target_link_libraries(vertex-format-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
 add_executable(async-pipeline-cache-test EXCLUDE_FROM_ALL ../tests/test_async_pipeline_cache.cpp)
 target_compile_options(async-pipeline-cache-test PRIVATE -UNDEBUG)
 target_include_directories(async-pipeline-cache-test PRIVATE shadps4)
