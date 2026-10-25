@@ -113,6 +113,20 @@ impl ReleaseId {
         }
     }
 
+    /// The series and number of a build: `issue1-test2` is `("issue1-test", 2)`,
+    /// `hotfix` is `("hotfix", 0)`. None for a stable.
+    pub fn series(&self) -> Option<(&str, u64)> {
+        let build = self.build.as_deref()?;
+        let name = build.trim_end_matches(|c: char| c.is_ascii_digit());
+        let digits = &build[name.len()..];
+        let number = if digits.is_empty() {
+            0
+        } else {
+            digits.parse().unwrap_or(u64::MAX)
+        };
+        Some((name, number))
+    }
+
     /// `Release · VERSION`, no build.
     pub fn fallback() -> ReleaseId {
         ReleaseId {
@@ -205,6 +219,19 @@ pub fn newer_stable<'a>(releases: &'a [Release], installed: &ReleaseId) -> Optio
     releases
         .iter()
         .find(|r| r.id.channel == Channel::Release && version_tuple(&r.id.version) > installed)
+}
+
+/// The stable above the installed one; else the next build of the installed series.
+pub fn newer<'a>(releases: &'a [Release], installed: &ReleaseId) -> Option<&'a Release> {
+    if let Some(stable) = newer_stable(releases, installed) {
+        return Some(stable);
+    }
+    let (series, number) = installed.series()?;
+    let installed = (version_tuple(&installed.version), number);
+    releases.iter().find(|r| {
+        r.id.series()
+            .is_some_and(|(s, n)| s == series && (version_tuple(&r.id.version), n) > installed)
+    })
 }
 
 /// Every run of digits in `text`, as numbers.
@@ -540,5 +567,61 @@ mod tests {
         assert_eq!(newer_stable(&list, &test).unwrap().id.version, "2.8.0");
         assert!(newer_stable(&list[3..], &stable).is_none());
         assert!(newer_stable(&[], &stable).is_none());
+    }
+
+    #[test]
+    fn a_build_has_a_series_and_a_number() {
+        let pre = |build| id(Channel::PreRelease, "2.8.0", Some(build));
+        assert_eq!(pre("issue1-test2").series(), Some(("issue1-test", 2)));
+        assert_eq!(pre("hotfix").series(), Some(("hotfix", 0)));
+        assert_eq!(pre("teste3").series(), Some(("teste", 3)));
+        assert_eq!(pre("t99999999999999999999").series(), Some(("t", u64::MAX)));
+        assert_eq!(id(Channel::Release, "2.8.0", None).series(), None);
+    }
+
+    #[test]
+    fn the_next_build_of_the_installed_series_is_newer() {
+        let list = vec![
+            rel("windows-v2.8.0-issue2-test5", true, "d"),
+            rel("windows-v2.8.0-issue1-test2", true, "d"),
+            rel("windows-v2.8.0-issue1-test1", true, "d"),
+            rel("windows-v2.8.0", false, "d"),
+        ];
+        let test = |n: u64| {
+            let build = format!("issue1-test{n}");
+            id(Channel::PreRelease, "2.8.0", Some(build.as_str()))
+        };
+        assert_eq!(
+            newer(&list, &test(1)).unwrap().id.build.as_deref(),
+            Some("issue1-test2")
+        );
+        assert!(newer(&list, &test(2)).is_none());
+        assert!(newer(&list, &test(3)).is_none());
+        assert!(newer(&list, &id(Channel::Release, "2.8.0", None)).is_none());
+        assert!(newer(&[], &test(1)).is_none());
+        let ten = vec![rel("windows-v2.8.0-issue1-test10", true, "d")];
+        assert_eq!(
+            newer(&ten, &test(9)).unwrap().id.build.as_deref(),
+            Some("issue1-test10")
+        );
+    }
+
+    #[test]
+    fn a_newer_stable_beats_the_next_build() {
+        let list = vec![
+            rel("windows-v2.9.0", false, "d"),
+            rel("windows-v2.8.0-issue1-test2", true, "d"),
+        ];
+        let test1 = id(Channel::PreRelease, "2.8.0", Some("issue1-test1"));
+        assert_eq!(newer(&list, &test1).unwrap().id.version, "2.9.0");
+    }
+
+    #[test]
+    fn the_series_goes_on_to_a_higher_version_and_never_back() {
+        let test1 = id(Channel::PreRelease, "2.8.0", Some("issue1-test1"));
+        let up = vec![rel("windows-v2.9.0-issue1-test2", true, "d")];
+        assert_eq!(newer(&up, &test1).unwrap().id.version, "2.9.0");
+        let back = vec![rel("windows-v2.7.0-issue1-test9", true, "d")];
+        assert!(newer(&back, &test1).is_none());
     }
 }
