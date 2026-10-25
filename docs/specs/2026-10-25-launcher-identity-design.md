@@ -1,6 +1,6 @@
 # Identidade da release compilada no launcher
 
-Data: 2026-10-25. Estado: proposta.
+Data: 2026-10-25. Estado: implementado (branch worktree-launcher-identity, 2026-10-25).
 
 ## 1. Objetivo
 
@@ -219,3 +219,12 @@ Os dois smoke tests conferem `--version` contra a tag (rodam no CI). Conferênci
   spec substitui pelo piso de versão.
 - `.github/workflows/windows-zip.yml`, `.github/workflows/linux-appimage.yml`,
   `packaging/windows/smoke-test.ps1`, `packaging/linux/smoke-test.sh`.
+
+## 10. Desvios
+
+Nenhum desvio de comportamento em relação a esta spec. Dois acréscimos fora do que ela lista:
+
+- `same_build` (`core/release.rs`) teve a doc reescrita (o canal compilado no binário, não o do
+  carimbo, que não existe mais).
+- O teste `releases_below_the_first_rust_one_are_not_listed` mantém de propósito um asset
+  `release-windows.json`: prova que o asset já não decide a lista, só o piso de versão.

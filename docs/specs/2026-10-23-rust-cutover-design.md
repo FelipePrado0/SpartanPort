@@ -158,6 +158,7 @@ A rota não roda `startup::prepare`: nem a migração do nome antigo nem a limpe
 
 O menu de versões só lista releases carimbadas (`release-windows.json`). Por isso nenhuma
 release Python aparece nele, e o caminho Rust → Python não acontece pelo launcher.
+Desde 2026-10-25 o filtro é o piso de versão 2.8.0 (`docs/specs/2026-10-25-launcher-identity-design.md`).
 
 ### 3.5 Troca de vozes
 

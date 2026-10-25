@@ -40,7 +40,6 @@ cp -r scripts/controller_diagrams "$dest/scripts/"
 cp -r patches "$dest/"
 cp docs/VOICE_REPLACEMENT.md "$dest/docs/"
 cp LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
-if [[ -f release.json ]]; then cp release.json "$dest/"; fi
 # No game files and nothing a player made (saves, shader caches built from the game's shaders,
 # settings, logs) may ship: stop when one is found.
 forbidden=$(find "$dest" \( -iname eboot.bin -o -iname sce_module -o -iname sce_sys -o -iname savedata \
