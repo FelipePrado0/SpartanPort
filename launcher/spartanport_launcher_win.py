@@ -1275,7 +1275,7 @@ def write_trophy_texts(folder):
 
 def game_environment(s):
     env = dict(os.environ)
-    user_dir = s.get('user_dir') or str(DATA_DIR / 'user')
+    user_dir = s.get('user_dir') or env.get('SPARTAN_USER_DIR') or str(DATA_DIR / 'user')
     write_trophy_texts(Path(user_dir))
     env['SPARTAN_GAME_DIR'] = s['game_dir']
     env.pop('SPARTAN_PATCH_DIR', None)
@@ -2114,8 +2114,7 @@ class Launcher:
                    _('Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.'))
         self.section(f, _('Screenshots'))
         shots = self.ttk.Button(f, text=_('Open the screenshots folder'),
-                           command=lambda: self.open_path(
-                               Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user') / 'screenshots'))
+                           command=lambda: self.open_path(self.user_dir() / 'screenshots'))
         self.row(f, _('F12 in the game'), shots,
                  _("Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves."))
 
@@ -2237,7 +2236,7 @@ class Launcher:
         self.folder(f, 'user_dir', _('Saves folder', 'Папка сохранений'),
                     _('Choose the saves folder', 'Выберите папку сохранений'),
                     _('Empty: {} (shader caches are kept there too).',
-                      'Пусто: {} (там же кэш шейдеров).').format(DATA_DIR / 'user'), on_change=self.refresh_status)
+                      'Пусто: {} (там же кэш шейдеров).').format(os.environ.get('SPARTAN_USER_DIR') or DATA_DIR / 'user'), on_change=self.refresh_status)
         self.section(f, _('Saves'))
         self.build_save_backups(f)
         self.section(f, _('Language'))
@@ -2253,7 +2252,7 @@ class Launcher:
         self.build_patches(f)
 
     def user_dir(self):
-        return Path(self.var('user_dir', 'app').get() or DATA_DIR / 'user')
+        return Path(self.var('user_dir', 'app').get() or os.environ.get('SPARTAN_USER_DIR') or DATA_DIR / 'user')
 
     # ---- trophies ----------------------------------------------------------------------------
     def build_trophies(self):
@@ -3682,7 +3681,7 @@ class Launcher:
                                                     'Закройте игру перед удалением кэша шейдеров.'))
             return
         import shutil
-        cache = Path(self.app['user_dir'] or DATA_DIR / 'user') / 'cache'
+        cache = Path(self.app['user_dir'] or os.environ.get('SPARTAN_USER_DIR') or DATA_DIR / 'user') / 'cache'
         size = sum(p.stat().st_size for p in cache.rglob('*') if p.is_file()) if cache.is_dir() else 0
         if not size:
             self.messagebox.showinfo(APP_NAME, _('The shader cache is already empty.', 'Кэш шейдеров уже пуст.'))
@@ -3815,7 +3814,7 @@ class GameJob:
 
 def run_log_path(settings):
     """<saves folder>/last_run.log: the game's output, written by both launch paths."""
-    return Path(settings.get('user_dir') or DATA_DIR / 'user') / 'last_run.log'
+    return Path(settings.get('user_dir') or os.environ.get('SPARTAN_USER_DIR') or DATA_DIR / 'user') / 'last_run.log'
 
 
 class _NullLog:

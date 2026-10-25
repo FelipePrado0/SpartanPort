@@ -5,6 +5,7 @@ They need no game files: the trophy package (trophy00.trp) is built here, byte b
 
 import io
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -82,6 +83,7 @@ class PageTexts(unittest.TestCase):
 class TrophyPackage(unittest.TestCase):
     def setUp(self):
         self.folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(self.folder), True)
 
     def write(self, name, data):
         path = self.folder / name
@@ -125,19 +127,40 @@ class TrophyPackage(unittest.TestCase):
 class TrophyEnvironmentAndPersistence(unittest.TestCase):
     def setUp(self):
         self.folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(self.folder), True)
 
     def test_game_environment_propagates_default_and_custom_user_dir(self):
         import spartanport_launcher_win as launcher
-        # Default user_dir
+        # Isolate environment and launcher.DATA_DIR in a temporary directory
+        temp_data = self.folder / 'data'
+        temp_data.mkdir()
+        orig_data = launcher.DATA_DIR
+        launcher.DATA_DIR = temp_data
+        self.addCleanup(setattr, launcher, 'DATA_DIR', orig_data)
+
+        orig_env = dict(os.environ)
+        self.addCleanup(lambda: (os.environ.clear(), os.environ.update(orig_env)))
+        os.environ.pop('SPARTAN_USER_DIR', None)
+
+        # 1. Default user_dir when neither settings['user_dir'] nor SPARTAN_USER_DIR is set
         env_default = launcher.game_environment({**launcher.APP_DEFAULTS, 'user_dir': ''})
         self.assertIn('SPARTAN_USER_DIR', env_default)
-        self.assertEqual(env_default['SPARTAN_USER_DIR'], str(launcher.DATA_DIR / 'user'))
+        self.assertEqual(env_default['SPARTAN_USER_DIR'], str(temp_data / 'user'))
+        self.assertTrue((temp_data / 'user' / 'trophy_texts.txt').is_file())
 
-        # Custom user_dir
+        # 2. Inherited SPARTAN_USER_DIR when settings['user_dir'] is empty
+        env_saves = str(self.folder / 'env_saves')
+        os.environ['SPARTAN_USER_DIR'] = env_saves
+        env_from_os = launcher.game_environment({**launcher.APP_DEFAULTS, 'user_dir': ''})
+        self.assertEqual(env_from_os['SPARTAN_USER_DIR'], env_saves)
+        self.assertTrue((Path(env_saves) / 'trophy_texts.txt').is_file())
+
+        # 3. Explicit custom user_dir in settings overrides inherited SPARTAN_USER_DIR
         custom_dir = str(self.folder / 'custom_saves')
         env_custom = launcher.game_environment({**launcher.APP_DEFAULTS, 'user_dir': custom_dir})
         self.assertIn('SPARTAN_USER_DIR', env_custom)
         self.assertEqual(env_custom['SPARTAN_USER_DIR'], custom_dir)
+        self.assertTrue((Path(custom_dir) / 'trophy_texts.txt').is_file())
 
     def test_write_trophy_texts_and_launcher_display_consistency(self):
         import spartanport_launcher_win as launcher
@@ -220,6 +243,31 @@ class TrophyEnvironmentAndPersistence(unittest.TestCase):
         expected_space_user = str(space_home / '.local' / 'share' / 'spartanport' / 'user')
         self.assertEqual(lines['SPARTAN_USER_DIR'], expected_space_user)
         self.assertTrue(Path(expected_space_user).is_dir())
+
+    @unittest.skipIf(sys.platform == 'win32', 'AppRun is Linux/POSIX only')
+    def test_apprun_preserves_external_spartan_user_dir(self):
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        custom_external = self.folder / 'external_user_dir'
+        custom_external.mkdir()
+
+        appdir = self.folder / 'AppDir'
+        share = appdir / 'usr' / 'share' / 'spartanport'
+        share.mkdir(parents=True)
+        launcher_bin = share / 'spartanport-launcher'
+        launcher_bin.write_text('#!/bin/sh\necho SPARTAN_USER_DIR=$SPARTAN_USER_DIR\n')
+        launcher_bin.chmod(0o755)
+
+        apprun = appdir / 'AppRun'
+        apprun.write_text((root / 'packaging/linux/AppRun').read_text())
+        apprun.chmod(0o755)
+
+        env = os.environ.copy()
+        env['SPARTAN_USER_DIR'] = str(custom_external)
+
+        res = subprocess.run([str(apprun)], env=env, capture_output=True, text=True, check=True)
+        lines = dict(l.split('=', 1) for l in res.stdout.strip().splitlines() if '=' in l)
+        self.assertEqual(lines['SPARTAN_USER_DIR'], str(custom_external))
 
 
 if __name__ == '__main__':

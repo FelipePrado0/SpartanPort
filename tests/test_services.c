@@ -4,9 +4,16 @@
 #include <assert.h>
 #ifdef _WIN32
 #include <direct.h>
+#include <process.h>
+#define test_mkdir(d) _mkdir(d)
+#define test_rmdir(d) _rmdir(d)
+#define test_getpid() _getpid()
 #else
 #include <sys/stat.h>
 #include <unistd.h>
+#define test_mkdir(d) mkdir(d, 0755)
+#define test_rmdir(d) rmdir(d)
+#define test_getpid() getpid()
 #endif
 
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *nid) { (void)table; (void)count; (void)nid; return 0; }
@@ -255,8 +262,18 @@ int main(void) {
 
     /* Trophies: directory resolution, text loading, unlock notifications and persistence across restart. */
     assert(!strcmp(trophy_dir(),"user"));
-    snprintf(mock_user_dir,sizeof(mock_user_dir),"out/test_trophy_user");
-    assert(!strcmp(trophy_dir(),"out/test_trophy_user"));
+    const char *tmp=getenv("TMPDIR");
+    if (!tmp || !tmp[0]) tmp=getenv("TEMP");
+    if (!tmp || !tmp[0]) tmp=getenv("TMP");
+    if (!tmp || !tmp[0]) tmp="/tmp";
+
+    char test_user[256], test_txt[512], test_dat[512];
+    snprintf(test_user,sizeof(test_user),"%s/spartanport_test_user_%d",tmp,(int)test_getpid());
+    snprintf(test_txt,sizeof(test_txt),"%s/trophy_texts.txt",test_user);
+    snprintf(test_dat,sizeof(test_dat),"%s/trophies.dat",test_user);
+
+    snprintf(mock_user_dir,sizeof(mock_user_dir),"%s",test_user);
+    assert(!strcmp(trophy_dir(),test_user));
 #ifdef _WIN32
     _putenv("SPARTAN_USER_DIR=out/test_trophy_env");
 #else
@@ -268,17 +285,22 @@ int main(void) {
 #else
     unsetenv("SPARTAN_USER_DIR");
 #endif
-    assert(!strcmp(trophy_dir(),"out/test_trophy_user"));
+    assert(!strcmp(trophy_dir(),test_user));
 
-    /* Set up test user dir with custom trophy texts */
-    mkdir("out/test_trophy_user",0755);
-    FILE *ft=fopen("out/test_trophy_user/trophy_texts.txt","wb");
+    /* Clean up any leftovers before setup */
+    remove(test_dat);
+    remove(test_txt);
+    test_rmdir(test_user);
+
+    /* Set up isolated test user dir with custom trophy texts */
+    test_mkdir(test_user);
+    FILE *ft=fopen(test_txt,"wb");
     assert(ft!=NULL);
     fputs("@heading=Custom Trophies\n"
           "0=King of the Hill | Unlock all trophies\n"
           "1=Releasing the Floodgates | Kill Poseidon\n",ft);
     fclose(ft);
-    remove("out/test_trophy_user/trophies.dat");
+    remove(test_dat);
 
     /* Reset in-memory trophy state and load from mock_user_dir */
     trophy_ready=0;
@@ -306,9 +328,9 @@ int main(void) {
     assert((trophy_flags[0]&(1u<<1))!=0);
 
     /* Clean up test files */
-    remove("out/test_trophy_user/trophies.dat");
-    remove("out/test_trophy_user/trophy_texts.txt");
-    rmdir("out/test_trophy_user");
+    remove(test_dat);
+    remove(test_txt);
+    test_rmdir(test_user);
     snprintf(mock_user_dir,sizeof(mock_user_dir),"user");
 
     float ratio=0; assert(safe_area(&ratio)==0 && ratio==1.0f && safe_area(NULL)==SYSTEM_PARAMETER);
