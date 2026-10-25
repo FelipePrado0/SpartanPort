@@ -7,7 +7,8 @@
  *   Enter Options, Tab left touchpad (photo mode), Backspace right touchpad (pause menu),
  *   IJKL d-pad (I up, K down, J left, L right).
  * SPARTAN_KEY_MAP also takes the mouse: Mouse Left, Mouse Right, Mouse Middle, Mouse Back,
- * Mouse Forward, Wheel Up and Wheel Down (see mouse_names). */
+ * Mouse Forward, Wheel Up and Wheel Down (see mouse_names). The wheel cycles the weapons
+ * (weapon_next, weapon_prev: apply_weapon_cycle). */
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "gpu/spartanportgpu.h"
@@ -35,8 +36,13 @@ enum {
      * button or key without a touch surface (play_click turns them into a touch and a click). */
     CLICK_LEFT=0x40000000, CLICK_RIGHT=0x80000000,
     /* Host-only actions of the keyboard map: dodge tilts the right stick (apply_dodge); rage and
-     * grab press two buttons together (apply_combos). */
+     * grab press two buttons together (apply_combos); weapon_next and weapon_prev press the
+     * d-pad button of the next or previous weapon (apply_weapon_cycle). */
     DODGE=0x20000000, RAGE=0x10000000, GRAB=0x08000000,
+    WEAPON_NEXT=0x04000000, WEAPON_PREV=0x02000000,
+    MOVE_UP=0x00010000, MOVE_DOWN=0x00020000, MOVE_LEFT=0x00040000, MOVE_RIGHT=0x00080000,
+    LOOK_UP=0x00200000, LOOK_DOWN=0x00400000, LOOK_LEFT=0x00800000, LOOK_RIGHT=0x01000000,
+    STICK_DIRECTIONS=MOVE_UP|MOVE_DOWN|MOVE_LEFT|MOVE_RIGHT|LOOK_UP|LOOK_DOWN|LOOK_LEFT|LOOK_RIGHT,
 };
 typedef struct { uint16_t x, y; uint8_t id, reserve[3]; } PadTouch;
 typedef struct {
@@ -133,14 +139,16 @@ static SDL_Gamepad *current_gamepad(void) {
  * <ps4 button>=None leaves it without any.
  * touchpad_left (alias touchpad) and touchpad_right are the two sides of the touchpad click:
  * photo mode and the pause menu. Back/View (Share on a DualSense) is the right click, and with
- * L1 held the left one. Sticks, triggers, the real touchpad click and the overlay shortcuts are
- * not remapped. */
+ * L1 held the left one. Keyboard stick directions are mapped too; gamepad axes, the real touchpad
+ * click and the overlay shortcuts are unchanged. */
 static const struct { const char *name; uint32_t ps; } ps_names[]={
     {"cross",BTN_CROSS}, {"circle",BTN_CIRCLE}, {"square",BTN_SQUARE}, {"triangle",BTN_TRIANGLE},
     {"l1",BTN_L1}, {"r1",BTN_R1}, {"l2",BTN_L2}, {"r2",BTN_R2}, {"l3",BTN_L3}, {"r3",BTN_R3},
     {"options",BTN_OPTIONS}, {"touchpad",CLICK_LEFT}, {"touchpad_left",CLICK_LEFT}, {"touchpad_right",CLICK_RIGHT},
     {"up",BTN_UP}, {"down",BTN_DOWN}, {"left",BTN_LEFT}, {"right",BTN_RIGHT},
-    {"dodge",DODGE}, {"rage",RAGE}, {"grab",GRAB},
+    {"dodge",DODGE}, {"rage",RAGE}, {"grab",GRAB}, {"weapon_next",WEAPON_NEXT}, {"weapon_prev",WEAPON_PREV},
+    {"move_up",MOVE_UP}, {"move_down",MOVE_DOWN}, {"move_left",MOVE_LEFT}, {"move_right",MOVE_RIGHT},
+    {"look_up",LOOK_UP}, {"look_down",LOOK_DOWN}, {"look_left",LOOK_LEFT}, {"look_right",LOOK_RIGHT},
 };
 typedef struct { int source; uint32_t ps; } ButtonSource;
 typedef struct { ButtonSource entries[48]; size_t count; } ButtonMap;
@@ -160,7 +168,10 @@ static ButtonMap key_map={{
     {SDL_SCANCODE_R,BTN_L2}, {SDL_SCANCODE_F,BTN_R2}, {SDL_SCANCODE_Z,BTN_L3}, {SDL_SCANCODE_C,BTN_R3},
     {SDL_SCANCODE_RETURN,BTN_OPTIONS}, {SDL_SCANCODE_TAB,CLICK_LEFT}, {SDL_SCANCODE_BACKSPACE,CLICK_RIGHT},
     {SDL_SCANCODE_I,BTN_UP}, {SDL_SCANCODE_K,BTN_DOWN}, {SDL_SCANCODE_J,BTN_LEFT}, {SDL_SCANCODE_L,BTN_RIGHT},
-},17};
+    {SDL_SCANCODE_W,MOVE_UP}, {SDL_SCANCODE_S,MOVE_DOWN}, {SDL_SCANCODE_A,MOVE_LEFT}, {SDL_SCANCODE_D,MOVE_RIGHT},
+    {SDL_SCANCODE_UP,LOOK_UP}, {SDL_SCANCODE_DOWN,LOOK_DOWN},
+    {SDL_SCANCODE_LEFT,LOOK_LEFT}, {SDL_SCANCODE_RIGHT,LOOK_RIGHT},
+},25};
 
 static char *trim(char *text) {
     while (*text==' ' || *text=='\t') ++text;
@@ -269,6 +280,7 @@ static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
         entry=next;
         uint32_t ps=0;
         for (size_t i=0;i<sizeof(ps_names)/sizeof(*ps_names);++i) if (!SDL_strcasecmp(button,ps_names[i].name)) ps=ps_names[i].ps;
+        if (!keyboard && (ps & STICK_DIRECTIONS)) ps=0;
         if (ps && !SDL_strcasecmp(name,"None")) { /* the button gets no source at all */
             size_t kept=0;
             for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
@@ -317,7 +329,7 @@ enum { STICK_PROMPTS_OFF, STICK_PROMPTS_KEYBOARD, STICK_PROMPTS_MOUSE };
 static const char *const qte_names[QTE_ROTATIONS]={"up180cw","up180ccw","down180cw","down180ccw","360cw","360ccw"};
 /* As the prompts read in play (the game's Down180CW is typed D S A). */
 static const char *const qte_defaults[QTE_ROTATIONS]={"A>W>D","D>W>A","D>S>A","A>S>D","D>S>A>W","A>S>D>W"};
-static struct { int keys[QTE_KEYS_MAX]; unsigned length; } qte_sequences[QTE_ROTATIONS];
+static struct { int keys[QTE_KEYS_MAX]; unsigned length; bool directions; } qte_sequences[QTE_ROTATIONS];
 static struct {
     int loaded, mode, rotation;
     uint32_t heartbeat;
@@ -353,7 +365,10 @@ static void qte_load(void) {
     const char *mode=getenv("SPARTAN_STICK_PROMPTS");
     qte.mode=!mode ? STICK_PROMPTS_OFF : !strcmp(mode,"keyboard") ? STICK_PROMPTS_KEYBOARD
              : !strcmp(mode,"mouse") ? STICK_PROMPTS_MOUSE : STICK_PROMPTS_OFF;
-    for (unsigned i=0;i<QTE_ROTATIONS;++i) qte_sequences[i].length=qte_parse_sequence(qte_defaults[i],qte_sequences[i].keys);
+    for (unsigned i=0;i<QTE_ROTATIONS;++i) {
+        qte_sequences[i].length=qte_parse_sequence(qte_defaults[i],qte_sequences[i].keys);
+        qte_sequences[i].directions=true;
+    }
     const char *value=getenv("SPARTAN_QTE_SEQUENCES");
     char entries[512];
     if (value && strlen(value)<sizeof(entries)) {
@@ -372,6 +387,7 @@ static void qte_load(void) {
             if (n) {
                 memcpy(qte_sequences[i].keys,parsed,sizeof(parsed));
                 qte_sequences[i].length=n;
+                qte_sequences[i].directions=false;
             } else if (*trim(entry)) {
                 printf("Runtime: stick prompts: ignored '%s'\n",trim(entry));
             }
@@ -425,7 +441,18 @@ static int qte_mouse_key(bool fresh) {
     return key;
 }
 
-/* One read of the stick prompts (keys: SDL's keyboard state); true while they own W/A/S/D. */
+static bool qte_direction_down(int key, const bool *keys) {
+    const uint32_t direction=key==SDL_SCANCODE_W ? MOVE_UP : key==SDL_SCANCODE_S ? MOVE_DOWN
+                             : key==SDL_SCANCODE_A ? MOVE_LEFT : MOVE_RIGHT;
+    const SDL_MouseButtonFlags mouse=SDL_GetMouseState(NULL,NULL);
+    const bool wheel[2]={wheel_pulse[0].phase==1,wheel_pulse[1].phase==1};
+    for (size_t i=0;i<key_map.count;++i)
+        if (key_map.entries[i].ps==direction && source_down(key_map.entries[i].source,keys,mouse,wheel)) return true;
+    return false;
+}
+
+/* Default QTE sequences are directions, so they follow the movement bindings. Explicit sequences
+ * retain their literal keys; mouse gestures keep using the canonical direction tokens. */
 static bool qte_play(const bool *keys, uint64_t now) {
     qte_load();
     if (qte.mode==STICK_PROMPTS_OFF) return false;
@@ -443,13 +470,29 @@ static bool qte_play(const bool *keys, uint64_t now) {
             unsigned first=0;
             while (sequence[first]!=key) ++first;
             if (first<i) continue;  /* a key listed twice is looked at once */
-            const bool pressed=keys[key] && !qte.held[key] && !qte.fresh;
-            qte.held[key]=keys[key];
+            const bool down=qte_sequences[rotation].directions ? qte_direction_down(key,keys) : keys[key];
+            const bool pressed=down && !qte.held[key] && !qte.fresh;
+            qte.held[key]=down;
             if (pressed) qte_advance(key,sequence,length);
         }
     }
     qte.fresh=false;
     return true;
+}
+
+static void sample_keyboard(PadData *d, const bool *keys, SDL_MouseButtonFlags mouse, const bool wheel[2]) {
+    uint32_t pressed=0;
+    for (size_t i=0;i<key_map.count;++i)
+        if (source_down(key_map.entries[i].source,keys,mouse,wheel)) pressed|=key_map.entries[i].ps;
+    d->buttons|=pressed & ~STICK_DIRECTIONS;
+    if (d->buttons & BTN_L2) d->l2=255;
+    if (d->buttons & BTN_R2) d->r2=255;
+    if (!qte_play(keys,d->timestamp)) {
+        key_axis(&d->left_x,pressed & MOVE_LEFT,pressed & MOVE_RIGHT);
+        key_axis(&d->left_y,pressed & MOVE_UP,pressed & MOVE_DOWN);
+    }
+    key_axis(&d->right_x,pressed & LOOK_LEFT,pressed & LOOK_RIGHT);
+    key_axis(&d->right_y,pressed & LOOK_UP,pressed & LOOK_DOWN);
 }
 
 static void sample_host(PadData *d) {
@@ -491,21 +534,12 @@ static void sample_host(PadData *d) {
     if (!k) return;
     const SDL_MouseButtonFlags mouse=SDL_GetMouseState(NULL,NULL);
     const bool wheel[2]={wheel_held(0,d->timestamp),wheel_held(1,d->timestamp)};
-    for (size_t i=0;i<key_map.count;++i)
-        if (source_down(key_map.entries[i].source,k,mouse,wheel)) d->buttons|=key_map.entries[i].ps;
-    if (d->buttons & BTN_L2) d->l2=255;
-    if (d->buttons & BTN_R2) d->r2=255;
-    if (!qte_play(k,d->timestamp)) {
-        key_axis(&d->left_x,k[SDL_SCANCODE_A],k[SDL_SCANCODE_D]);
-        key_axis(&d->left_y,k[SDL_SCANCODE_W],k[SDL_SCANCODE_S]);
-    }
-    key_axis(&d->right_x,k[SDL_SCANCODE_LEFT],k[SDL_SCANCODE_RIGHT]);
-    key_axis(&d->right_y,k[SDL_SCANCODE_UP],k[SDL_SCANCODE_DOWN]);
+    sample_keyboard(d,k,mouse,wheel);
 }
 
 /* SPARTAN_PAD_FILE=<file>: scripted input for automated runs. The file holds whitespace-separated
  * tokens, re-read when it changes: button names (cross circle square triangle l1 r1 l2 r2 l3 r3
- * options touchpad touchpad_left touchpad_right up down left right) are held while listed;
+ * options touchpad touchpad_left touchpad_right up down left right weapon_next weapon_prev) are held while listed;
  * touchpad is the left side; lx= ly= rx= ry= (0..255) override the sticks. An empty file
  * releases everything. */
 static struct { uint32_t buttons; int stick[4]; } injected={0,{-1,-1,-1,-1}};
@@ -694,6 +728,67 @@ static void apply_dodge(PadData *d) {
     if (held || d->timestamp<dodge.until) { d->right_x=dodge.x; d->right_y=dodge.y; }
 }
 
+/* The game's menus (the title menu, the pause menu, the Power Up menu) move a list with the
+ * d-pad, and nothing here can see them, so they are told by the buttons that open them: a menu is
+ * up from the start (the title menu) and after Options (the Power Up menu) or a touchpad click
+ * (the pause menu, photo mode). Play resumes with a dodge, Rage of Sparta or a grab, or with the
+ * left stick held MENU_WALK_US (a list is stepped through, not walked). Attacks and mouse clicks
+ * do not count: the Power Up menu takes Triangle, and the pause menu lets go of the mouse. */
+enum { MENU_WALK_US=2000000, MENU_WALK_TILT=64 };
+static struct { bool up, walking; uint64_t walk_start; } game_menu={true,false,0};
+static void note_game_menu(const PadData *d) {
+    if (d->buttons & (BTN_OPTIONS|BTN_TOUCHPAD|CLICK_LEFT|CLICK_RIGHT)) {
+        game_menu.up=true;
+        game_menu.walking=false;
+        return;
+    }
+    if (d->buttons & (DODGE|RAGE|GRAB)) game_menu.up=false;
+    const bool walking=abs(d->left_x-128)>=MENU_WALK_TILT || abs(d->left_y-128)>=MENU_WALK_TILT;
+    if (walking && !game_menu.walking) game_menu.walk_start=d->timestamp;
+    game_menu.walking=walking;
+    if (walking && d->timestamp-game_menu.walk_start>=MENU_WALK_US) game_menu.up=false;
+}
+
+/* Weapon cycle (SPARTAN_KEY_MAP "weapon_next=<key>", "weapon_prev=<key>"): the game keeps its
+ * weapons on the d-pad, one button each, and nothing here can read which one is equipped. So the
+ * cycle keeps its own index, follows any d-pad button pressed from another source (keys 1-4, the
+ * pad) and moves one step per press of the action, holding the new weapon's button WEAPON_MIN_US
+ * so the game sees it. That is a wheel notch's press: the gap before the next notch reaches the
+ * game as a release. The order is the one the game hands the weapons out in. */
+enum { WEAPON_MIN_US=WHEEL_PRESS_US, WEAPON_COUNT=4 };
+static const uint32_t weapon_buttons[WEAPON_COUNT]={BTN_UP,BTN_RIGHT,BTN_DOWN,BTN_LEFT};
+static struct { int index; bool next_held, prev_held, pressing; uint32_t button; uint64_t until; } weapon_cycle;
+static void reset_weapon_cycle(void) {
+    weapon_cycle.next_held=weapon_cycle.prev_held=weapon_cycle.pressing=false;
+    weapon_cycle.until=0;
+}
+static void apply_weapon_cycle(PadData *d) {
+    const bool next=(d->buttons & WEAPON_NEXT)!=0, prev=(d->buttons & WEAPON_PREV)!=0;
+    d->buttons&=~(WEAPON_NEXT|WEAPON_PREV);
+    /* On a game menu the wheel moves the selection up and down instead: walking every d-pad
+     * direction would take a list up and back down. The weapon stays as it was. */
+    const bool menu=game_menu.up;
+    const uint32_t dpad=d->buttons & (BTN_UP|BTN_RIGHT|BTN_DOWN|BTN_LEFT);
+    if (!menu) for (int i=0;i<WEAPON_COUNT;++i) if (dpad==weapon_buttons[i]) weapon_cycle.index=i;
+    if (dpad) weapon_cycle.pressing=false; /* a d-pad press from another source wins over ours */
+    const bool next_pressed=next && !weapon_cycle.next_held, prev_pressed=prev && !weapon_cycle.prev_held;
+    if (menu && (next_pressed || prev_pressed)) {
+        weapon_cycle.button=next_pressed ? BTN_UP : BTN_DOWN;
+    } else if (next_pressed || prev_pressed) {
+        if (next_pressed) weapon_cycle.index=(weapon_cycle.index+1)%WEAPON_COUNT;
+        if (prev_pressed) weapon_cycle.index=(weapon_cycle.index+WEAPON_COUNT-1)%WEAPON_COUNT;
+        weapon_cycle.button=weapon_buttons[weapon_cycle.index];
+    }
+    if (next_pressed || prev_pressed) {
+        weapon_cycle.pressing=true;
+        weapon_cycle.until=d->timestamp+WEAPON_MIN_US;
+    }
+    weapon_cycle.next_held=next;
+    weapon_cycle.prev_held=prev;
+    if (!next && !prev && d->timestamp>=weapon_cycle.until) weapon_cycle.pressing=false;
+    if (weapon_cycle.pressing) d->buttons|=weapon_cycle.button;
+}
+
 /* R3 + L1 + R1 goes through the engine frame rates live (60 for spots that break at a higher
  * rate). The three stay hidden from the game until each one is released: a stray R1 grabs. */
 enum { ENGINE_FPS_COMBO=BTN_R3|BTN_L1|BTN_R1 };
@@ -714,7 +809,7 @@ static void engine_fps_combo(PadData *d) {
 static int hold_after_capture;
 static void sample(PadData *d) {
     sample_host(d);
-    if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); return; }
+    if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */
     read_inject();
     replay_sample(d);
@@ -723,8 +818,10 @@ static void sample(PadData *d) {
     if (injected.buttons & BTN_R2) d->r2=255;
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
+    note_game_menu(d); /* before the actions turn into the buttons they press */
     apply_combos(d);
     apply_dodge(d);
+    apply_weapon_cycle(d);
     apply_mouse_aim(d);
     note_pause_key(d);
     engine_fps_combo(d);

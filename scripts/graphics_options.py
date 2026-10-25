@@ -16,16 +16,40 @@ RESOLUTIONS = ('native', '480p', '720p', '900p', '1440p', '1800p', '4K',
                '1440x900', '1360x768',
                '1280x960', '1440x1080', '1920x1440', '2048x1536', '2560x1920',
                '5120x2160', '8K')
-# The ultrawide, 16:10 and 4:3 sizes of the Ultrawide mod (#202), built in: beta until more players confirm
-# them, except the ones tested in game. 8K remains beta pending full-game stability testing.
-TESTED_RESOLUTIONS = ('1280x800', '1440x900', '1360x768', '1280x960')
+# The ultrawide, 16:10 and 4:3 sizes of the Ultrawide mod (#202), built in: beta until more screens confirm
+# them, except the ones tested in game (the maintainer's own tests and players' reports in issues #180, #505
+# and #519): 2560x1080, 1440x1080, 2048x1536, 2560x1920 and 8K are still beta.
+TESTED_RESOLUTIONS = ('3440x1440', '3840x1600', '5120x1440', '5120x2160', '1920x1200', '2560x1600', '1280x800',
+                      '1440x900', '1360x768', '1280x960', '1920x1440')
 BETA_RESOLUTIONS = tuple(r for r in RESOLUTIONS[7:] if r not in TESTED_RESOLUTIONS)
 SIZES = {'native': (1920, 1080), '480p': (854, 480), '720p': (1280, 720), '900p': (1600, 900),
          '1440p': (2560, 1440), '1800p': (3200, 1800), '4K': (3840, 2160), '8K': (7680, 4320)}
 ASPECTS = (('16:9', 16 / 9), ('16:10', 16 / 10), ('21:9', 2.37), ('32:9', 32 / 9), ('4:3', 4 / 3))
 ENGINE_FPS = (60, 100, 120, 144, 180, 240)
-DEFAULTS = {'render_resolution': 'native', 'engine_fps': '120', 'deferred_readback': '1',
-            'stale_readback': '1', 'async_shaders': '1'}
+# The Steam Deck's DMI names: LCD (Jupiter) and OLED (Galileo), both with a 1280 × 800 screen (#855).
+STEAM_DECK_PRODUCTS = ('Jupiter', 'Galileo')
+STEAM_DECK_RESOLUTION = '1280x800'
+
+
+def steam_deck(dmi=Path('/sys/devices/virtual/dmi/id')):
+    """True on a Steam Deck running Linux (SteamOS or another distribution), from its DMI names."""
+    try:
+        vendor = (dmi / 'sys_vendor').read_text(encoding='utf-8').strip()
+        product = (dmi / 'product_name').read_text(encoding='utf-8').strip()
+    except (OSError, UnicodeError):
+        return False
+    return vendor == 'Valve' and product in STEAM_DECK_PRODUCTS
+
+
+def default_render_resolution(dmi=Path('/sys/devices/virtual/dmi/id')):
+    """The render resolution before the player chooses one: the Steam Deck's own screen, or native.
+    A choice saved in spartanport.ini always wins, so this only changes a first start."""
+    return STEAM_DECK_RESOLUTION if steam_deck(dmi) else 'native'
+
+
+DEFAULTS = {'render_resolution': default_render_resolution(), 'engine_fps': '120', 'deferred_readback': '1',
+            'stale_readback': '1', 'async_shaders': '1', 'monitor': '', 'hdr': '0',
+            'glyph_style': 'off', 'anisotropy': '0'}
 RESOLUTION_PREFIX = 'Resolution Patch'
 FPS_PREFIX = 'Frame Rate Patch'
 TEXTURE_FIX = 'Bug Fix - Texture Corruption Fix'
@@ -140,13 +164,28 @@ def startup_options(ini, extra=()):
         options['engine_fps'] = '120'
     for key in ('deferred_readback', 'stale_readback', 'async_shaders'):
         options[key] = '0' if options[key] == '0' else '1'
+    monitor = options['monitor']
+    options['monitor'] = monitor if monitor.isascii() and monitor.isdigit() and len(monitor) <= 10 and int(monitor) <= 2147483647 else ''
+    options['hdr'] = '1' if options['hdr'] == '1' else '0'
+    if options['glyph_style'] not in ('off', 'auto', 'xbox', 'nintendo', 'keyboard'):
+        options['glyph_style'] = 'off'
+    if options['anisotropy'] not in ('0', '2', '4', '8', '16'):
+        options['anisotropy'] = '0'
     return options
 
 
-def prepare(config, state_path, extra=()):
+def prepare(config, state_path, extra=(), environment=None):
     """(options, reverted): the startup options of this launch, restoring the last confirmed
     ones when the previous launch after a restart never confirmed its own."""
     ini = read_ini(config)
+    if environment is not None:
+        migrated = {key: environment.get(env, DEFAULTS[key]) for key, env in
+                    (('monitor', 'SPARTAN_MONITOR'), ('hdr', 'SPARTAN_HDR'),
+                     ('glyph_style', 'SPARTAN_GLYPH_STYLE'), ('anisotropy', 'SPARTAN_ANISOTROPY')) if key not in ini}
+        if migrated:
+            ini.update(migrated)
+            normalized = startup_options(ini, extra)
+            write_keys(config, {key: normalized[key] for key in migrated})
     state = {}
     try:
         state = json.loads(Path(state_path).read_text(encoding='utf-8'))
@@ -209,4 +248,7 @@ def applied_engine_fps(names):
 def environment(options):
     return {'SPARTAN_DEFERRED_READBACK': options['deferred_readback'],
             'SPARTAN_STALE_READBACK': options['stale_readback'],
-            'SPARTAN_ASYNC_SHADERS': options['async_shaders']}
+            'SPARTAN_ASYNC_SHADERS': options['async_shaders'],
+            'SPARTAN_MONITOR': options.get('monitor', ''), 'SPARTAN_HDR': options.get('hdr', '0'),
+            'SPARTAN_GLYPH_STYLE': options.get('glyph_style', 'off'),
+            'SPARTAN_ANISOTROPY': options.get('anisotropy', '0')}

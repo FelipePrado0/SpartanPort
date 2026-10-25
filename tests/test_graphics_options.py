@@ -9,6 +9,46 @@ import graphics_options as g
 
 
 class GraphicsOptionsTest(unittest.TestCase):
+    def test_glyphs_and_anisotropy_survive_restart_and_recover_after_failure(self):
+        options, _ = g.prepare(self.ini, self.state, environment={'SPARTAN_GLYPH_STYLE': 'xbox'})
+        self.assertEqual(options['glyph_style'], 'xbox')
+        g.write_keys(self.ini, {'glyph_style': 'keyboard', 'anisotropy': '16', 'restart_unconfirmed': '1'})
+        options, reverted = g.prepare(self.ini, self.state, environment={'SPARTAN_GLYPH_STYLE': 'xbox'})
+        self.assertFalse(reverted)
+        self.assertEqual(g.environment(options)['SPARTAN_GLYPH_STYLE'], 'keyboard')
+        self.assertEqual(g.environment(options)['SPARTAN_ANISOTROPY'], '16')
+        restored, reverted = g.prepare(self.ini, self.state)
+        self.assertTrue(reverted)
+        self.assertEqual((restored['glyph_style'], restored['anisotropy']), ('xbox', '0'))
+
+    def test_invalid_glyphs_and_anisotropy_fall_back_to_defaults(self):
+        options = g.startup_options({'glyph_style': 'bad', 'anisotropy': '3'})
+        self.assertEqual((options['glyph_style'], options['anisotropy']), ('off', '0'))
+
+    def test_monitor_and_hdr_are_shared_and_recovered_after_a_failed_restart(self):
+        self.ini.write_text('monitor=0\nhdr=0\n', encoding='utf-8')
+        good, _ = g.prepare(self.ini, self.state)
+        self.assertEqual(g.environment(good)['SPARTAN_MONITOR'], '0')
+        g.write_keys(self.ini, {'monitor': '2', 'hdr': '1', 'restart_unconfirmed': '1'})
+        tried, reverted = g.prepare(self.ini, self.state)
+        self.assertFalse(reverted)
+        self.assertEqual(g.environment(tried)['SPARTAN_HDR'], '1')
+        restored, reverted = g.prepare(self.ini, self.state)
+        self.assertTrue(reverted)
+        self.assertEqual((restored['monitor'], restored['hdr']), ('0', '0'))
+
+    def test_legacy_launch_choices_are_migrated_once_and_ini_wins_on_restart(self):
+        options, _ = g.prepare(self.ini, self.state, environment={'SPARTAN_MONITOR': '2', 'SPARTAN_HDR': '1'})
+        self.assertEqual((options['monitor'], options['hdr']), ('2', '1'))
+        g.write_keys(self.ini, {'monitor': '0', 'hdr': '0'})
+        options, _ = g.prepare(self.ini, self.state, environment={'SPARTAN_MONITOR': '2', 'SPARTAN_HDR': '1'})
+        self.assertEqual((options['monitor'], options['hdr']), ('0', '0'))
+
+    def test_invalid_monitor_and_hdr_fall_back_safely(self):
+        for value in ('-1', 'bad', '2147483648', '1' * 100, '²'):
+            self.assertEqual(g.startup_options({'monitor': value})['monitor'], '')
+        self.assertEqual(g.startup_options({'hdr': 'bad'})['hdr'], '0')
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.ini = Path(self.temp.name) / 'spartanport.ini'
@@ -32,6 +72,10 @@ class GraphicsOptionsTest(unittest.TestCase):
                 'deferred_readback': '1',
                 'stale_readback': '1',
                 'async_shaders': '1',
+                'monitor': '',
+                'hdr': '0',
+                'glyph_style': 'off',
+                'anisotropy': '0',
             },
         )
 
@@ -164,16 +208,18 @@ class GraphicsOptionsTest(unittest.TestCase):
         self.assertEqual(g.resolution_label('native'), 'Native · 1920 × 1080 · 16:9')
         self.assertEqual(g.resolution_label('480p'), '480p · 854 × 480 · 16:9')
         self.assertEqual(g.resolution_label('900p'), '900p · 1600 × 900 · 16:9')
-        self.assertEqual(g.resolution_label('3440x1440'), '3440 × 1440 · 21:9 (beta)')
-        self.assertEqual(g.resolution_label('5120x1440'), '5120 × 1440 · 32:9 (beta)')
-        self.assertEqual(g.resolution_label('2560x1600'), '2560 × 1600 · 16:10 (beta)')
+        self.assertEqual(g.resolution_label('3440x1440'), '3440 × 1440 · 21:9')  # confirmed in game: not beta
+        self.assertEqual(g.resolution_label('2560x1080'), '2560 × 1080 · 21:9 (beta)')
+        self.assertEqual(g.resolution_label('5120x1440'), '5120 × 1440 · 32:9')
+        self.assertEqual(g.resolution_label('2560x1600'), '2560 × 1600 · 16:10')
         self.assertEqual(g.resolution_label('1280x800'), '1280 × 800 · 16:10')  # the Steam Deck's screen, tested
         self.assertEqual(g.resolution_label('1280x960'), '1280 × 960 · 4:3')
-        self.assertEqual(g.resolution_label('1920x1440'), '1920 × 1440 · 4:3 (beta)')
+        self.assertEqual(g.resolution_label('1920x1440'), '1920 × 1440 · 4:3')
+        self.assertEqual(g.resolution_label('2048x1536'), '2048 × 1536 · 4:3 (beta)')
         self.assertEqual(g.resolution_label('3840x1080'), '3840 × 1080 · 32:9')  # a mod's size, not beta
         self.assertEqual(g.resolution_label('1600x1200'), '1600 × 1200 · 4:3')
         self.assertEqual(g.resolution_label('custom'), 'custom')
-        # Every ultrawide and 16:10 size is beta; the 16:9 ones are not.
+        # Only the sizes nobody has confirmed in game are beta; the 16:9 ones are not.
         self.assertEqual([r for r in g.RESOLUTIONS if g.resolution_label(r).endswith('(beta)')],
                          list(g.BETA_RESOLUTIONS))
 
@@ -268,6 +314,10 @@ class GraphicsOptionsTest(unittest.TestCase):
                 'SPARTAN_DEFERRED_READBACK': '1',
                 'SPARTAN_STALE_READBACK': '0',
                 'SPARTAN_ASYNC_SHADERS': '1',
+                'SPARTAN_MONITOR': '',
+                'SPARTAN_HDR': '0',
+                'SPARTAN_GLYPH_STYLE': 'off',
+                'SPARTAN_ANISOTROPY': '0',
             },
         )
 
@@ -309,8 +359,46 @@ class AspectRatioTest(unittest.TestCase):
 
     def test_labels_without_the_aspect_ratio_for_the_filtered_list(self):
         self.assertEqual(g.resolution_label('1800p', aspect=False), '1800p · 3200 × 1800')
-        self.assertEqual(g.resolution_label('3440x1440', aspect=False), '3440 × 1440 (beta)')
+        self.assertEqual(g.resolution_label('2560x1080', aspect=False), '2560 × 1080 (beta)')
         self.assertEqual(g.resolution_label('1800p'), '1800p · 3200 × 1800 · 16:9')  # elsewhere it stays
+
+
+class SteamDeckTest(unittest.TestCase):
+    """The Steam Deck starts at its own 1280 x 800 screen (#855); everything else stays native."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.dmi = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def dmi_names(self, vendor, product):
+        (self.dmi / 'sys_vendor').write_text(vendor + '\n', encoding='utf-8')
+        (self.dmi / 'product_name').write_text(product + '\n', encoding='utf-8')
+
+    def test_lcd_and_oled_models_default_to_1280x800(self):
+        for product in ('Jupiter', 'Galileo'):
+            with self.subTest(product=product):
+                self.dmi_names('Valve', product)
+                self.assertTrue(g.steam_deck(self.dmi))
+                self.assertEqual(g.default_render_resolution(self.dmi), '1280x800')
+
+    def test_other_machines_stay_native(self):
+        self.dmi_names('LENOVO', 'Jupiter')
+        self.assertEqual(g.default_render_resolution(self.dmi), 'native')
+        self.dmi_names('Valve', 'Other')
+        self.assertEqual(g.default_render_resolution(self.dmi), 'native')
+
+    def test_no_dmi_names_stays_native(self):  # Windows, containers, macOS
+        self.assertFalse(g.steam_deck(self.dmi / 'missing'))
+        self.assertEqual(g.default_render_resolution(self.dmi / 'missing'), 'native')
+
+    def test_the_default_resolution_is_a_built_in_one(self):
+        self.assertIn(g.STEAM_DECK_RESOLUTION, g.RESOLUTIONS)
+        self.assertIn(g.STEAM_DECK_RESOLUTION, g.TESTED_RESOLUTIONS)
+        self.assertEqual(g.aspect_of(g.STEAM_DECK_RESOLUTION), '16:10')
+
 
 if __name__ == '__main__':
     unittest.main()

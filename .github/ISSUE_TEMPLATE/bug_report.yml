@@ -1,18 +1,58 @@
 name: Bug report
-description: Visual glitch, crash, audio issue, or anything that doesn't behave as expected
+description: Crash, graphics, audio, performance or gameplay problem after the game reaches the main menu
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Before opening: search existing issues for your GPU/error first, it may already be tracked.
+        Please test on the [latest release](https://github.com/FelipePrado0/SpartanPort/releases/latest) before reporting, many problems from older versions are already fixed.
+        Game doesn't reach the main menu? Use the **Game won't launch** template instead.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before reporting
+      options:
+        - label: I searched the existing issues for this problem, my GPU and my error message
+          required: true
+        - label: I tested on the latest release, or I wrote below the version I am on
+          required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Crash or freeze
+        - Infinite loading
+        - Graphics or visual glitch
+        - Performance (FPS, stutter, CPU/GPU/RAM)
+        - Audio
+        - Gameplay, collision or progression
+        - Controls or input
+        - Launcher or settings
+        - Other
+    validations:
+      required: true
 
   - type: input
     id: version
     attributes:
       label: Port version
-      description: Shown in the launcher title bar (e.g. v2.1.7)
-      placeholder: v2.1.7
+      description: Shown in the launcher title bar
+      placeholder: v2.7.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Other
     validations:
       required: true
 
@@ -29,6 +69,24 @@ body:
     attributes:
       label: CPU
       placeholder: "Ryzen 7 5700X"
+    validations:
+      required: true
+
+  - type: input
+    id: game_version
+    attributes:
+      label: Game build / update version
+      description: Region and update, e.g. CUSA01623 01.02
+      placeholder: CUSA01623 01.02
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Where in the game
+      description: Chapter, area or boss where it happens
+      placeholder: "Realm of Hades, after the Hades boss fight"
     validations:
       required: true
 
@@ -51,11 +109,38 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Did it work in an earlier port version?
+      options:
+        - "Yes"
+        - "No"
+        - Don't know
+    validations:
+      required: true
+
+  - type: input
+    id: regression_version
+    attributes:
+      label: Last version where it worked
+      placeholder: v2.6.0
+    validations:
+      required: false
+
+  - type: textarea
+    id: settings
+    attributes:
+      label: Settings
+      description: Anything you changed from the defaults, e.g. FPS cap, resolution, HDR, upscaler, controller or keyboard
+    validations:
+      required: false
+
   - type: textarea
     id: log
     attributes:
       label: user/last_run.log
-      description: Attach the file from the port's folder (drag and drop it here). Required for crashes, black screens, graphics glitches and performance issues.
+      description: Drag and drop the file from the port's `user` folder here, don't paste its contents. Required for crashes, infinite loading, graphics and performance problems.
     validations:
       required: false
 

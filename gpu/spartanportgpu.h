@@ -33,10 +33,24 @@ int spartanportgpu_text_input_poll(char *out_utf8, uint64_t size);
  * poll: -1 while open, -2 cancelled, else the chosen index. */
 int spartanportgpu_choice_begin(const char *title, const char *const *items, const char *const *images, int count, int focus);
 int spartanportgpu_choice_poll(void);
+/* Confirmation with a separate preview of the new save; PNG data is decoded before returning. */
+int spartanportgpu_choice_confirm(const char *title, const char *const *items, int count, int focus,
+                                 const unsigned char *png, uint64_t size, const char *caption, const char *unavailable);
 /* 1 while the in-game settings menu is open: the game's pad input is held neutral. */
 int spartanportgpu_overlay_captures_input(void);
 /* Controller vibration strength set in the menu, 0 (off) to 100 (the game's own). */
 int spartanportgpu_vibration_percent(void);
+/* Native Display menu: query (0) or toggle (1); returns 0 off, 1 on, 2 unsupported. */
+int spartanportgpu_enemy_health_bar(int toggle);
+/* Native Cheats: f00+i query/f10+i toggle (8 cheats); f20+i text/f30+i decrease/f40+i increase/
+ * f50+i slider position (6 multipliers); f60 resets multipliers. Graphics: f70+i query,
+ * f80+i decrease/f90+i increase (5 controls), fa3 strength position, fb0 defaults.
+ * Controls: fa4+i query/faa+i decrease/fb1+i increase/fb8+i selected query (6 controls),
+ * fb7 restores only the port's controls defaults.
+ * Display: fc0+i query/fd0+i decrease/fe0+i increase/ff0+i selected query (8 controls;
+ * formatted text), fc9 restart available, fcb confirmed restart request (1 when saved).
+ * Text results are stable pointers. */
+uint64_t spartanportgpu_native_setting(unsigned function);
 /* R3 + L1 + R1 (pad) or F9: the next engine frame rate (60, 100, 120, 144, 180, 240), applied live. */
 void spartanportgpu_engine_fps_cycle(void);
 /* The video decoder handed the game a picture: a cutscene is on screen (the presenter draws
@@ -54,6 +68,29 @@ int spartanportgpu_mouse_aim_sensitivity(void);
 unsigned spartanportgpu_symbol_count(void);
 /* Yields of threads waiting for guest memory copies (CPU report, #209). */
 unsigned long long spartanportgpu_copy_yields(void);
+/* Trophy notice at the top-right of the game window (any thread). title: the trophy's name,
+ * detail: its description (null or empty: none), png: its icon (PNG bytes; null: a drawn medal). */
+void spartanportgpu_toast_trophy(const char *title, const char *detail, const unsigned char *png, uint64_t png_size);
+void spartanportgpu_toast_icon(const char *text, const unsigned char *png, uint64_t png_size);
+void spartanportgpu_toast(const char *text);
+/* The in-game trophy list (F8 / R3+R2) and the notice labels, handed over once by the runtime.
+ * labels: texts of the window and of the notice (null or empty: English). items: the trophies in
+ * the order of the list (their strings and png stay valid). unlocked: four 32-bit words, bit
+ * id % 32 of word id / 32 set for an unlocked trophy, read live. */
+typedef struct {
+    const char *heading, *notice, *status_unlocked, *status_locked;
+    const char *filter_all, *filter_unlocked, *filter_locked;
+    const char *counter; /* "{} of {} unlocked" */
+    const char *hint;    /* the keys */
+} SpartanGpuTrophyLabels;
+typedef struct {
+    int id;
+    const char *name, *detail;
+    const unsigned char *png;
+    uint64_t png_size;
+} SpartanGpuTrophyInfo;
+void spartanportgpu_trophy_setup(const SpartanGpuTrophyLabels *labels, const SpartanGpuTrophyInfo *items, int count,
+                          const volatile uint32_t *unlocked);
 #ifdef __cplusplus
 }
 #endif

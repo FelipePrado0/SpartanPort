@@ -734,22 +734,88 @@ TRANSLATIONS = {
         '업데이트를 확인할 수 없습니다: {}', '업데이트를 설치할 수 없습니다. 릴리스 페이지에서 다운로드하세요.', '', '', '', '', '', '', '',
         '', '', '',
     ],
+    'id': [
+        'Main', 'Grafis', 'Tampilan & FPS', 'Game & efek', 'Mod & patch', 'Lanjutan', 'Log',
+        'MAIN', 'Berhenti', 'Port PC · Windows', "Dalam game: Insert atau R3+L2\nmembuka menu port.",
+        'Pemeriksaan kesiapan', 'Pengaturan cepat', 'Frame rate', 'Upscaler', 'Layar penuh', '{} · versi game {}',
+        'Folder game belum diatur', 'Pilih folder game Anda (Game & efek)',
+        '✗ Tidak ada eboot.bin di folder game (Game & efek)', '✓ Simpanan ditemukan di {}',
+        '• Belum ada simpanan: game akan membuatnya di {}', '✓ Kartu grafis: {}',
+        '• Kartu grafis: belum diperiksa', '• Memeriksa kartu grafis…',
+        '✗ Tidak ditemukan kartu grafis Vulkan 1.3 (perbarui driver)', 'Pilih folder game terlebih dahulu.',
+        'Menyiapkan game; game akan terbuka di jendelanya sendiri…', 'Game sedang berjalan.',
+        'Memulai ulang dengan pengaturan baru…', '\nGame ditutup (kode {}).\n', 'Tidak dapat memulai: {}',
+        'Pilih folder game dengan eboot.bin (CUSA01623).',
+        'Tersimpan di spartanport.ini; menu dalam game (Insert atau R3+L2) mengubah nilai yang sama.',
+        'Upscaling',
+        "Temporal upscaling dengan vektor gerak game itu sendiri. FSR 4 memerlukan asetnya (di bawah) dan GPU dengan INT8 dot product; jika tidak, game akan otomatis beralih ke FSR 3.1.",
+        'Preset kualitas', 'Skala render per sumbu: Kualitas merender pada 1/1,5 dari ukuran output.',
+        'Resolusi output', 'Hasil yang dihasilkan upscaler; HUD juga digambar pada ukuran ini.',
+        'Perubahan resolusi langsung',
+        'Mati: output selain 1080p diatur oleh patch saat mulai (tercepat; mengubahnya dalam game akan memulai ulang game). Nyala: ubah output dan preset dalam game tanpa mulai ulang, dengan sedikit penurunan performa.',
+        'Penajaman (RCAS)', 'Ketajaman', 'Vektor gerak objek',
+        'Mengurangi efek ghosting pada karakter, pakaian, dan senjata; memakan sekitar 10% FPS.',
+        'Aset FSR 4', 'Unduh aset FSR 4',
+        "Dari FireBurn/Q2RTX di GitHub (dibuat dari kode sumber AMD FidelityFX berlisensi MIT), sekitar 30 MB, ke dalam folder fsr4_shaders port.",
+        'Terinstal: {} file di {}.', '{} dari {} file hilang di {}.', 'Pengunduhan gagal: {}',
+        'Tampilkan penghitung FPS', 'FSR 4 (kualitas terbaik)', 'FSR 4.1.1 (memerlukan aset fsr4_411)',
+        'FSR 3.1 (semua GPU)', 'TAA (anti-aliasing resolusi asli)', 'Mati', 'Otomatis (berdasarkan kartu grafis)',
+        'Mati (lebih cepat)', 'Nyala (ubah tanpa mulai ulang)', 'Diterapkan saat game dimulai.',
+        'Frame mendahului GPU',
+        '1 menjaga frame pacing tetap merata; lebih banyak dapat meningkatkan FPS saat kartu grafis menjadi batas performa.',
+        'Jendela', 'Presentasi', 'Izinkan output HDR', 'Saat HDR aktif di Windows dan layar mendukungnya.',
+        'Otomatis: refresh layar, maks 120 (disarankan)', 'Tanpa batas', 'Mailbox (latensi rendah, tanpa tearing)',
+        'Immediate (dengan tearing)', '1 (default)', 'Tak terbatas', 'Dump game, simpanan, dan patch game Anda.', 'Game',
+        'Folder game', 'Pilih folder dengan eboot.bin', 'Folder simpanan', 'Pilih folder simpanan',
+        'Kosong: {} (cache shader juga disimpan di sana).', 'Bahasa game',
+        'Inggris', 'Rusia', 'Jepang',
+        'Prancis', 'Spanyol', 'Jerman', 'Italia',
+        'File game tidak pernah diubah: mod diterapkan di atasnya saat mulai.', 'Mod',
+        'Muat mod', 'Folder mod', 'Pilih folder mod', 'Kosong: {}', 'Patch pihak ketiga',
+        'Folder patch', 'Pilih folder patch', 'Segarkan', 'Belum ada mod di {}.',
+        'Yang lebih bawah dalam daftar dimuat lebih akhir dan menang jika konflik.',
+        'Opsi launcher, sakelar performa, dan diagnostik.', 'Launcher', 'Bahasa launcher',
+        'Berlaku saat launcher dibuka kembali.', 'Tutup launcher saat game dimulai', 'Pintasan desktop',
+        'Folder port', 'Pintasan dibuat di desktop.', 'Performa', 'Pipeline GPU dua tahap',
+        '20–30% lebih cepat; matikan jika game tidak stabil.', 'Otomatis (8+ thread)', 'Nyala',
+        'Mati (lebih stabil)', 'Readback GPU',
+        'Seberapa tepat data yang ditulis GPU disalin kembali untuk game.', 'Relaxed (default)', 'Diagnostik',
+        'Statistik frame di log (setiap 5 d)', 'Waktu GPU per pass di log',
+        'Vulkan validation layers (memerlukan Vulkan SDK; jauh lebih lambat)', 'Variabel tambahan',
+        'Pasangan NAMA=nilai dipisahkan dengan spasi (daftar ada di README).', 'Sistem', 'Salin', 'Bersihkan',
+        'Jelajahi…', 'Buka', 'Hapus cache shader',
+        'Jika game hanya menampilkan layar hitam, ini biasanya membantu.',
+        'Cache shader telah dihapus. Startup berikutnya akan stutter selama beberapa menit saat cache dibuat ulang.',
+        'Versi {} telah tersedia.', 'Pembaruan', 'Apa yang baru',
+        'Instal versi {} sekarang? Launcher akan ditutup, menginstalnya, lalu terbuka kembali. Simpanan dan pengaturan tetap tersimpan.',
+        'Mengunduh versi {}… {}%', 'Pembaruan gagal: {}', 'Tutup game sebelum memperbarui.',
+        'Periksa pembaruan saat launcher dibuka', 'Periksa pembaruan', 'Anda memiliki versi terbaru ({}).',
+        'Tidak dapat memeriksa pembaruan: {}',
+        'Tidak dapat menginstal pembaruan. Unduh dari halaman rilis.', 'Patch game',
+        'Patch komunitas untuk game yang dipilih, diterapkan saat mulai.', '{} · versi {} · {}',
+        'Asli (1920 × 1080)', 'Resolusi',
+        'Game merender pada ukuran ini; patch resolusi menggantikan perbaikan tekstur dan memesan memori yang dibutuhkannya.',
+        'Patch', '✓ Versi game {}: patch game diterapkan',
+        '⚠ Versi game {}: patch game memerlukan {}; tidak ada yang diterapkan', '{} · {} patch lainnya',
+    ],
 }
 
 LANGUAGE_NAMES = [('', ('System', 'Как в системе')), ('en', ('English',)), ('ru', ('Русский',)),
                   ('ar', ('العربية',)), ('es', ('Español',)), ('pt', ('Português (Brasil)',)),
                   ('fr', ('Français',)), ('de', ('Deutsch',)), ('it', ('Italiano',)),
                   ('pl', ('Polski',)), ('tr', ('Türkçe',)), ('zh', ('简体中文',)), ('ja', ('日本語',)),
-                  ('ko', ('한국어',))]
+                  ('ko', ('한국어',)), ('id', ('Bahasa Indonesia',))]
 # Windows primary language ids (GetUserDefaultUILanguage() & 0x3ff) -> launcher language.
 WINDOWS_LANGUAGES = {0x19: 'ru', 0x01: 'ar', 0x0a: 'es', 0x16: 'pt', 0x0c: 'fr', 0x07: 'de', 0x10: 'it',
-                     0x15: 'pl', 0x1f: 'tr', 0x04: 'zh', 0x11: 'ja', 0x12: 'ko'}
+                     0x15: 'pl', 0x1f: 'tr', 0x04: 'zh', 0x11: 'ja', 0x12: 'ko', 0x21: 'id'}
 
 # Texts added after the KEYS tables were written, looked up by English text (positional tables
 # need every language updated at once). Portuguese (the port's own language) and Spanish: the
 # other languages fall back to English for them until someone who speaks them contributes.
 EXTRA = {
     'pt': {
+        'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?': 'O launcher não consegue gravar em {}, então não pode se substituir ali. Abrir a página de releases para baixar a versão nova manualmente?',
+        'Version {} is out, but it has no Linux build yet.': 'A versão {} saiu, mas ainda não tem build para Linux.',
         'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
         'Shows only the game name and the time played on your Discord profile.': 'Mostra no seu perfil do Discord apenas o nome do jogo e o tempo jogado.',
         'Game multisampling': 'Multisampling do jogo',
@@ -904,7 +970,7 @@ EXTRA = {
         'Original (default)': 'Original (padrão)',
         'Match my controller': 'Igual ao meu controle',
         'Keyboard': 'Teclado',
-        "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of two game files in the port's data folder (about 70 MB); your game folder is never changed. Applied when the game starts.": 'Troca os ícones de botões PlayStation dentro do jogo pelos do seu controle. Funciona com uma cópia de dois arquivos do jogo na pasta de dados do port (cerca de 70 MB); a pasta do jogo nunca é alterada. Aplicado quando o jogo inicia.',
+        "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of up to three game files in the port's data folder (about 410 MB); your game folder is never changed. Applied when the game starts.": 'Troca os ícones de botões PlayStation dentro do jogo pelos do seu controle. Funciona com uma cópia de até três arquivos do jogo na pasta de dados do port (cerca de 410 MB); a pasta do jogo nunca é alterada. Aplicado quando o jogo inicia.',
         'Textures': 'Texturas',
         'Anisotropic filtering': 'Filtro anisotrópico',
         'Game default': 'Padrão do jogo',
@@ -917,6 +983,8 @@ EXTRA = {
         "Strength of the gamepad's vibration; 0% turns it off.": 'Força da vibração do controle; 0% desliga.',
         'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
             'O Windows não conseguiu reservar a memória que o jogo precisa. Feche outros programas, ou deixe o arquivo de paginação do Windows crescer (por exemplo 16384 MB inicial, 32768 MB máximo), e inicie de novo.',
+        'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.':
+            'O Linux não conseguiu alocar a memória que o jogo precisa. Feche outros programas, verifique a memória RAM disponível, swap ou /dev/shm, e inicie de novo.',
         'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.':
             'O jogo parou ao ler os próprios arquivos: o dump do jogo pode estar incompleto. Extraia o pkg de novo e confira se a pasta do jogo tem cerca de 40 GB.',
         'Native · 1920 × 1080 · 16:9': 'Nativa · 1920 × 1080 · 16:9',
@@ -958,8 +1026,8 @@ EXTRA = {
             'Mira com o mouse enquanto L2 está pressionado (Cabeça de Hélio, Arco de Apolo). Relativo: o analógico segue o movimento e volta ao centro quando o mouse para. Absoluto: onde o mouse estava ao apertar L2 é o centro, e o analógico aponta dele até o mouse. Também no menu do jogo.',
         'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
             'Mira com o mouse enquanto L2 está pressionado: menor precisa de mais movimento do mouse para o mesmo analógico, maior de menos. Também no menu do jogo.',
-        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
-            'Clique em uma caixa e aperte uma tecla, clique com um botão do mouse ou gire a roda (desiste após {} segundos). Uma entrada já usada por outro botão troca com ele; a seta devolve um botão ao padrão. Rage of Sparta aperta L3 e R3 juntos: marque a caixa acima dele para usar uma entrada em vez de duas. Agarrar aperta L1 e Círculo juntos. A esquiva vai na direção em que você anda (WASD), ou para trás quando parado. O touchpad direito abre o menu de pausa do jogo. Insert sempre abre o menu do port e não pode ser atribuído. Aplicado ao iniciar o jogo.',
+        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving, or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+            'Clique em uma caixa e aperte uma tecla, clique com um botão do mouse ou gire a roda (desiste após {} segundos). Uma entrada já usada por outro botão troca com ele; a seta devolve um botão ao padrão. Rage of Sparta aperta L3 e R3 juntos: marque a caixa acima dele para usar uma entrada em vez de duas. Agarrar aperta L1 e Círculo juntos. A esquiva vai na direção em que você anda, ou para trás quando parado. O touchpad direito abre o menu de pausa do jogo. Insert sempre abre o menu do port e não pode ser atribuído. Aplicado ao iniciar o jogo.',
         'Gamepad Mapping': 'Mapeamento do controle',
         'General': 'Geral',
         'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
@@ -993,9 +1061,26 @@ EXTRA = {
         'Absolute': 'Absoluto',
         'Grab': 'Agarrar',
         'Dodge': 'Esquiva',
+        'Next weapon': 'Próxima arma',
+        'Previous weapon': 'Arma anterior',
         'Portuguese (Brazil)': 'Português (Brasil)',
+        'Reuse compiled shaders from disk': 'Reutilizar shaders compilados do disco',
+        'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': 'Os shaders compilados em sessões anteriores carregam do cache de shaders em vez de compilar de novo: os objetos não aparecem mais alguns quadros atrasados depois de iniciar ou carregar um save, e o cache não é reescrito a cada sessão (o antivírus verifica cada arquivo gravado). A primeira inicialização com a opção ligada recria o cache uma vez. Desative se um objeto, efeito ou cor aparecer errado só depois de reiniciar e estiver certo na primeira execução de um cache novo.',
+        'Read the shader cache into memory at start': 'Ler o cache de shaders para a memória ao iniciar',
+        'A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.': 'Uma thread em segundo plano lê os shaders salvos para a memória enquanto o jogo inicia; uma nota no canto inferior direito mostra o progresso. Assim, carregar um shader não segura um quadro. Precisa da opção acima. Desative em um HD lento ou com pouca RAM livre se o primeiro minuto travar mais ou o jogo demorar mais para abrir.',
+        'Show shader notes in the corner': 'Mostrar notas de shaders no canto',
+        'A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.': 'Uma nota no canto inferior direito mostra a leitura do cache de shaders ao iniciar e os shaders sendo compilados, para que uma travada curta tenha um motivo visível. Desative para manter a tela limpa.',
+        'Shader cache': 'Cache de shaders',
+        'Delete shader cache': 'Apagar cache de shaders',
+        'Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look wrong after an update or the cache grew too big; the next start compiles everything again.': 'Apaga os shaders e pipelines salvos desta pasta de saves. Use se os gráficos ficarem errados depois de uma atualização ou se o cache ficar grande demais; a próxima inicialização compila tudo de novo.',
+        'Close the game before deleting the shader cache.': 'Feche o jogo antes de apagar o cache de shaders.',
+        'The shader cache is already empty.': 'O cache de shaders já está vazio.',
+        'Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.': 'Apagar o cache de shaders ({} MB em {})? O jogo compila os shaders de novo, então a próxima inicialização trava por alguns minutos.',
+        'Could not delete all of the shader cache; another program may be using it: {}': 'Não foi possível apagar todo o cache de shaders; outro programa pode estar usando: {}',
     },
     'es': {
+        'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?': 'El launcher no puede escribir en {}, así que no puede reemplazarse ahí. ¿Abrir la página de releases para descargar la versión nueva a mano?',
+        'Version {} is out, but it has no Linux build yet.': 'La versión {} ya salió, pero aún no tiene compilación para Linux.',
         'Show Discord Rich Presence': 'Mostrar Discord Rich Presence',
         'Shows only the game name and the time played on your Discord profile.': 'Muestra en tu perfil de Discord solo el nombre del juego y el tiempo jugado.',
         'Game multisampling': 'Multisampling del juego',
@@ -1200,10 +1285,12 @@ EXTRA = {
         'Original (default)': 'Original (predeterminado)',
         'Match my controller': 'Igual que mi mando',
         'Keyboard': 'Teclado',
-        "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of two game files in the port's data folder (about 70 MB); your game folder is never changed. Applied when the game starts.":
-            'Sustituye los iconos de botones de PlayStation dentro del juego por los de tu mando. Trabaja sobre una copia de dos archivos del juego en la carpeta de datos del port (unos 70 MB); tu carpeta del juego nunca se modifica. Se aplica al iniciar el juego.',
+        "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of up to three game files in the port's data folder (about 410 MB); your game folder is never changed. Applied when the game starts.":
+            'Sustituye los iconos de botones de PlayStation dentro del juego por los de tu mando. Trabaja sobre una copia de hasta tres archivos del juego en la carpeta de datos del port (unos 410 MB); tu carpeta del juego nunca se modifica. Se aplica al iniciar el juego.',
         'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
             'Windows no pudo reservar la memoria que necesita el juego. Cierra otros programas, o deja que el archivo de paginación de Windows crezca (por ejemplo 16384 MB inicial, 32768 MB máximo), y vuelve a iniciarlo.',
+        'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.':
+            'Linux no pudo asignar la memoria que necesita el juego. Cierra otros programas, comprueba la memoria RAM disponible, swap o /dev/shm, y vuelve a iniciarlo.',
         'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.':
             'El juego se detuvo al leer sus archivos: el dump del juego puede estar incompleto. Extrae el pkg de nuevo y comprueba que la carpeta del juego ocupa unos 40 GB.',
         'Textures': 'Texturas',
@@ -1225,8 +1312,8 @@ EXTRA = {
             'Apuntar con el ratón mientras mantienes L2 (Cabeza de Helios, Arco de Apolo). Relativo: el stick sigue el movimiento y vuelve al centro cuando el ratón se detiene. Absoluto: donde estaba el ratón al pulsar L2 es el centro, y el stick apunta desde él hasta el ratón. También en el menú del juego.',
         'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
             'Apuntar con el ratón mientras mantienes L2: más bajo necesita más movimiento del ratón para el mismo stick, más alto menos. También en el menú del juego.',
-        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving (WASD), or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
-            'Haz clic en una casilla y luego pulsa una tecla, haz clic con un botón del ratón o gira la rueda (se cancela tras {} segundos). Una entrada ya usada por otro botón se intercambia con él; la flecha devuelve un botón a su valor predeterminado. Rage of Sparta pulsa L3 y R3 a la vez: marca la casilla de encima para usar una entrada en lugar de dos. Agarrar pulsa L1 y Círculo a la vez. Esquivar evade hacia donde te mueves (WASD), o hacia atrás si estás quieto. El touchpad derecho abre el menú de pausa del juego. Insert siempre abre el menú del port y no se puede asignar. Se aplica al iniciar el juego.',
+        "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving, or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+            'Haz clic en una casilla y luego pulsa una tecla, haz clic con un botón del ratón o gira la rueda (se cancela tras {} segundos). Una entrada ya usada por otro botón se intercambia con él; la flecha devuelve un botón a su valor predeterminado. Rage of Sparta pulsa L3 y R3 a la vez: marca la casilla de encima para usar una entrada en lugar de dos. Agarrar pulsa L1 y Círculo a la vez. Esquivar evade hacia donde te mueves, o hacia atrás si estás quieto. El touchpad derecho abre el menú de pausa del juego. Insert siempre abre el menú del port y no se puede asignar. Se aplica al iniciar el juego.',
         'Gamepad Mapping': 'Asignación del mando',
         'General': 'General',
         'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
@@ -1260,7 +1347,22 @@ EXTRA = {
         'Absolute': 'Absoluto',
         'Grab': 'Agarrar',
         'Dodge': 'Esquivar',
+        'Next weapon': 'Arma siguiente',
+        'Previous weapon': 'Arma anterior',
         'Portuguese (Brazil)': 'Portugués (Brasil)',
+        'Reuse compiled shaders from disk': 'Reutilizar shaders compilados del disco',
+        'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': 'Los shaders compilados en sesiones anteriores se cargan de la caché de shaders en vez de compilarse de nuevo: los objetos ya no aparecen unos fotogramas tarde al iniciar o cargar una partida, y la caché no se reescribe en cada sesión (el antivirus revisa cada archivo escrito). El primer inicio con la opción activada reconstruye la caché una vez. Desactívalo si un objeto, efecto o color se ve mal solo después de reiniciar y está bien en la primera ejecución de una caché nueva.',
+        'Read the shader cache into memory at start': 'Leer la caché de shaders en memoria al iniciar',
+        'A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.': 'Un hilo en segundo plano lee los shaders guardados en memoria mientras el juego inicia; una nota en la esquina inferior derecha muestra el progreso. Así, cargar un shader no retiene un fotograma. Necesita la opción de arriba. Desactívalo en un disco duro lento o con poca RAM libre si el primer minuto se traba más o el juego tarda más en abrir.',
+        'Show shader notes in the corner': 'Mostrar notas de shaders en la esquina',
+        'A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.': 'Una nota en la esquina inferior derecha muestra la lectura de la caché de shaders al iniciar y los shaders que se están compilando, para que un tirón corto tenga un motivo visible. Desactívalo para mantener la pantalla limpia.',
+        'Shader cache': 'Caché de shaders',
+        'Delete shader cache': 'Borrar caché de shaders',
+        'Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look wrong after an update or the cache grew too big; the next start compiles everything again.': 'Borra los shaders y pipelines guardados de esta carpeta de partidas. Úsalo si los gráficos se ven mal después de una actualización o si la caché creció demasiado; el próximo inicio lo compila todo de nuevo.',
+        'Close the game before deleting the shader cache.': 'Cierra el juego antes de borrar la caché de shaders.',
+        'The shader cache is already empty.': 'La caché de shaders ya está vacía.',
+        'Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.': '¿Borrar la caché de shaders ({} MB en {})? El juego compila los shaders de nuevo, así que el próximo inicio se traba unos minutos.',
+        'Could not delete all of the shader cache; another program may be using it: {}': 'No se pudo borrar toda la caché de shaders; puede que otro programa la esté usando: {}',
     },
 }
 
@@ -1269,6 +1371,10 @@ EXTRA['pt'].update({
     'Auto': 'Automático',
     'For launcher only. Applies after Save.':
         'Somente para o inicializador. Aplica-se após Salvar.',
+    'Monitor': 'Monitor',
+    'Primary (default)': 'Principal (padrão)',
+    'The screen the game opens its window on. Primary is the monitor the system considers the main one.':
+        'A tela em que o jogo abre a sua janela. Principal é o monitor que o sistema considera o principal.',
 })
 
 EXTRA['pt'].update({
@@ -1316,6 +1422,10 @@ EXTRA['es'].update({
     '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 archivo lo cambian dos mods. Gana {}.',
     '⚠ {} also in {}. {} wins.': '⚠ {} también en {}. Gana {}.',
     '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ {} archivos los cambian varios mods. Gana el que está más abajo.',
+    'Monitor': 'Monitor',
+    'Primary (default)': 'Principal (predeterminado)',
+    'The screen the game opens its window on. Primary is the monitor the system considers the main one.':
+        'La pantalla en la que el juego abre su ventana. Principal es el monitor que el sistema considera el principal.',
 })
 
 EXTRA['pt'].update({
@@ -1426,8 +1536,1032 @@ EXTRA['pt'].update({'Polish': 'Polonês'})
 EXTRA['es'].update({'Polish': 'Polaco'})
 for _lang, _text in (('pl', 'Polski'), ('fr', 'Polonais'), ('de', 'Polnisch'),
                      ('it', 'Polacco'), ('tr', 'Lehçe'), ('ar', 'البولندية'),
-                     ('zh', '波兰语'), ('ja', 'ポーランド語'), ('ko', '폴란드어')):
+                     ('zh', '波兰语'), ('ja', 'ポーランド語'), ('ko', '폴란드어'),
+                     ('id', 'Polandia')):
     EXTRA.setdefault(_lang, {})['Polish'] = _text
+
+# Simplified Chinese: current launcher pages, controls and diagnostics.
+EXTRA.setdefault('zh', {})['Portuguese (Brazil)'] = '葡萄牙语（巴西）'
+EXTRA.setdefault('zh', {}).update({'   (game patches)': '   （游戏补丁）',
+ '   … and {} more': '   ……另有 {} 项',
+ ' Previous saves: {}.': ' 原存档备份：{}。',
+ '(none)': '（无）',
+ '1 (lowest latency)': '1（最低延迟）',
+ '1 file': '1 个文件',
+ '1 is the lowest input latency; more can raise FPS when the graphics card is the limit.': '1 '
+                                                                                           '的输入延迟最低；显卡成为性能瓶颈时，增加此值可能提高帧率。',
+ 'About 40 to 66 FPS in a heavy scene. Needs deferred GPU readbacks. Switch it off if lighting or objects look wrong.': '高负载场景约从 '
+                                                                                                                        '40 '
+                                                                                                                        '提升至 '
+                                                                                                                        '66 '
+                                                                                                                        '帧。需要延迟 '
+                                                                                                                        'GPU '
+                                                                                                                        '回读；若光照或物体异常，请关闭。',
+ 'Absolute': '绝对位置',
+ 'Adaptive mouse (experimental)': '自适应鼠标（实验性）',
+ 'Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.': '自适应鼠标：每次旋转步进所需的鼠标移动距离。也可在游戏内菜单调整。',
+ 'Add to Steam': '添加到 Steam',
+ 'Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.': '按住 '
+                                                                                                                                                                                                                                                                                                          'L2 '
+                                                                                                                                                                                                                                                                                                          '时用鼠标瞄准（赫利俄斯之首、阿波罗之弓）。相对模式：摇杆跟随鼠标移动，停止移动时回中。绝对模式：以按下 '
+                                                                                                                                                                                                                                                                                                          'L2 '
+                                                                                                                                                                                                                                                                                                          '时的鼠标位置为中心，按鼠标偏移控制摇杆。也可在游戏内菜单调整。',
+ 'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.': '按住 '
+                                                                                                                                       'L2 '
+                                                                                                                                       '用鼠标瞄准时，数值越低，所需移动距离越大；越高则越小。也可在游戏内菜单调整。',
+ 'Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.': '允许按 '
+                                                                                                                                                             'X '
+                                                                                                                                                             '键跳过过场动画。感谢 '
+                                                                                                                                                             'illusion0001（illusionyy）的 '
+                                                                                                                                                             'PS3 '
+                                                                                                                                                             '补丁为此提供便利。',
+ 'Anisotropic filtering': '各向异性过滤',
+ 'Asks GameMode (gamemoderun) for the performance governor while the game runs.': '游戏运行时请求 '
+                                                                                  'GameMode（gamemoderun）使用性能模式。',
+ 'Aspect ratio': '宽高比',
+ 'Auto': '自动',
+ 'Automatic': '自动',
+ 'Automatic ({}: off)': '自动（{}：关闭）',
+ 'Automatic ({}: on)': '自动（{}：开启）',
+ 'Automatic lets SDL choose. Pick X11 if the window misbehaves on Wayland (it runs through XWayland).': '自动由 '
+                                                                                                        'SDL '
+                                                                                                        '选择。Wayland '
+                                                                                                        '下窗口异常时可选择 '
+                                                                                                        'X11（通过 '
+                                                                                                        'XWayland '
+                                                                                                        '运行）。',
+ 'Balanced (×1.7)': '均衡（×1.7）',
+ 'Borderless': '无边框',
+ 'Borderless covers the screen without changing the display mode.': '无边框模式铺满屏幕，不改变显示模式。',
+ 'Capture': '截屏键',
+ 'Change textures, sounds and text. Your game files stay untouched.': '替换纹理、声音和文字，原始游戏文件保持不变。',
+ 'Changes applied to the game code at start.': '启动时应用到游戏代码的修改。',
+ 'Cheats': '作弊选项',
+ 'Choose the folder of the update (eboot.bin, sce_sys)': '选择更新目录（包含 eboot.bin、sce_sys）',
+ 'Choose the game folder': '选择游戏目录',
+ 'Choose two separate folders for the game and its update, or leave the update folder empty.': '游戏和更新请选择两个不同目录，或将更新目录留空。',
+ 'Choose your game folder to play.': '请选择游戏目录以开始游玩。',
+ 'Circle': '圆圈',
+ "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving, or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.": '点击输入框后按键、点击鼠标按钮或滚动滚轮（{} '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   '秒后自动取消）。已被使用的输入会与原绑定互换；箭头可单独恢复默认绑定。斯巴达之怒同时按下 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   'L3 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   '和 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   'R3：勾选上方选项可改用单个输入。抓取同时按下 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   'L1 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   '和圆圈。闪避沿移动方向（WASD）进行，站立时向后闪避。触摸板右侧打开暂停菜单。Insert '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   '固定打开移植版菜单，不能绑定。下次启动游戏生效。',
+ 'Close the game before restoring saves.': '恢复存档前请先退出游戏。',
+ 'Community patches of the selected game, applied at start.': '所选游戏的社区补丁，启动时应用。',
+ 'Compile new shaders in the background': '后台编译新着色器',
+ 'Controller type': '手柄类型',
+ 'Controls': '控制',
+ 'Copying the system files…': '正在复制系统文件……',
+ 'Could not copy the files: {}': '无法复制文件：{}',
+ 'Could not restore: {}': '无法恢复：{}',
+ 'Could not save all settings. Check write permissions and free disk space, then try again.': '部分设置保存失败。请检查写入权限和磁盘剩余空间后重试。',
+ 'Creates spartanport.desktop in ~/.local/share/applications so the launcher and the game show their icon in the dock and the menu. Turning it off removes the entry.': '在 '
+                                                                                                                                                                        '~/.local/share/applications '
+                                                                                                                                                                        '创建 '
+                                                                                                                                                                        'spartanport.desktop，使启动器和游戏在程序坞与菜单中显示图标。关闭时会删除该条目。',
+ 'Cross': '叉号',
+ 'D-pad down': '方向键下',
+ 'D-pad left': '方向键左',
+ 'D-pad right': '方向键右',
+ 'D-pad up': '方向键上',
+ 'Deferred GPU readbacks': '延迟 GPU 回读',
+ 'Delete': '删除',
+ 'Details': '详细信息',
+ 'Device': '设备',
+ 'Diagnostics (for development)': '诊断（开发用途）',
+ 'Display': '显示',
+ 'Display mode': '显示模式',
+ 'Dodge': '闪避',
+ 'Drop a mod folder or .zip in the mods folder.': '将模组文件夹或 .zip 放入模组目录。',
+ 'Enable the upscaler (experimental)': '启用超分辨率（实验性）',
+ 'Engine frame rate': '引擎帧率',
+ 'Enlarges a smaller game image to the window. With Render resolution 720p (Performance) it raises the FPS; at the size of the window it does nothing.': '将较低分辨率的游戏画面放大到窗口大小。渲染分辨率设为 '
+                                                                                                                                                         '720p '
+                                                                                                                                                         '时可提高帧率；与窗口大小相同时无作用。',
+ 'Experimental': '实验性',
+ 'F11 captures a frame for analysis': '按 F11 捕获一帧用于分析',
+ 'F12 in the game': '游戏中按 F12',
+ 'Fast screen effects (Rage of Sparta, weapons)': '快速屏幕特效（斯巴达之怒、武器）',
+ 'Fast shader cache loading (parallel)': '快速加载着色器缓存（并行）',
+ 'Fewer stutters in new areas: the game keeps running while new shaders compile. An object or effect may appear a moment later. Switch it off if something stays missing.': '进入新区域时减少卡顿：编译新着色器时游戏继续运行，物体或特效可能稍后出现。若内容持续缺失，请关闭。',
+ 'Fewer waits for the GPU. Switch it off if textures or shadows look wrong.': '减少等待 GPU；若纹理或阴影异常，请关闭。',
+ 'Files': '文件',
+ 'Files layered over the game at start; the game files are never changed.': '启动时覆盖加载的文件；原始游戏文件不会改变。',
+ 'Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.': '增大视频内存区，修复纹理损坏，让游戏使用更多显存存放纹理与特效。DMEM '
+                                                                                                                                                                                                                                                                               '需至少 '
+                                                                                                                                                                                                                                                                               '2048 '
+                                                                                                                                                                                                                                                                               'MB，否则会崩溃。此补丁与分辨率补丁只能启用其中一个。',
+ 'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.': '修复启动时帧率计数仍在运行但画面黑屏的问题：帧调度索引从 '
+                                                                                                                                                                                              '2 '
+                                                                                                                                                                                              '开始，避免第二帧等待只能由自身触发的翻转事件。',
+ 'Folders': '目录',
+ 'For launcher only. Applies after Save.': '仅影响启动器，保存后生效。',
+ 'Frame rate and speed options.': '帧率与运行速度选项。',
+ 'Frame rate limit': '帧率上限',
+ 'Frames queued': '排队帧数',
+ 'GAME BUTTON': '游戏按键',
+ 'GAMEPAD': '手柄',
+ 'GPU data': 'GPU 数据',
+ 'GPU memory (previous behavior)': '显存（旧版方式）',
+ 'GPU wait and readback report in the log (every 5 s)': '在日志中记录 GPU 等待与回读（每 5 秒）',
+ 'GUI Scale': '界面缩放',
+ 'Game default': '游戏默认',
+ 'Game multisampling': '游戏多重采样',
+ 'Game patches': '游戏补丁',
+ 'Game reads GPU data without waiting (big FPS gain)': '游戏读取 GPU 数据时不等待（大幅提高帧率）',
+ 'GameMode': 'GameMode',
+ 'Gamepad': '手柄',
+ 'Gamepad Mapping': '手柄映射',
+ 'Gamepad names': '手柄按键名称',
+ 'General': '常规',
+ 'Grab': '抓取',
+ 'Graphics (experimental)': '图形（实验性）',
+ 'Graphics card': '显卡',
+ 'Hide': '隐藏',
+ 'Home': '主页',
+ 'Home button': 'Home 键',
+ 'How the game appears on your screen.': '游戏在屏幕上的显示方式。',
+ 'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.': '旋转摇杆提示的输入方式。键盘模式：依次按键完成旋转。从上方开始半圈按 '
+                                                                                                                                                                                                                                                                                   'D '
+                                                                                                                                                                                                                                                                                   'S '
+                                                                                                                                                                                                                                                                                   'A（顺时针）或 '
+                                                                                                                                                                                                                                                                                   'A '
+                                                                                                                                                                                                                                                                                   'S '
+                                                                                                                                                                                                                                                                                   'D，从下方开始按 '
+                                                                                                                                                                                                                                                                                   'A '
+                                                                                                                                                                                                                                                                                   'W '
+                                                                                                                                                                                                                                                                                   'D '
+                                                                                                                                                                                                                                                                                   '或 '
+                                                                                                                                                                                                                                                                                   'D '
+                                                                                                                                                                                                                                                                                   'W '
+                                                                                                                                                                                                                                                                                   'A；整圈按 '
+                                                                                                                                                                                                                                                                                   'D '
+                                                                                                                                                                                                                                                                                   'S '
+                                                                                                                                                                                                                                                                                   'A '
+                                                                                                                                                                                                                                                                                   'W '
+                                                                                                                                                                                                                                                                                   '或 '
+                                                                                                                                                                                                                                                                                   'A '
+                                                                                                                                                                                                                                                                                   'S '
+                                                                                                                                                                                                                                                                                   'D '
+                                                                                                                                                                                                                                                                                   'W。顺序错误会重新开始。自适应鼠标模式则用鼠标画出旋转轨迹。',
+ 'In-game button icons': '游戏内按键图标',
+ 'Infinite Double Jumps': '无限空中跳跃',
+ 'Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.': '显示项目、大小和位置：游戏内菜单（Insert／R3+L2）→ 性能叠加层。',
+ 'Joystick prompts': '摇杆提示输入',
+ 'KEYBOARD': '键盘',
+ 'Keep the mouse in the game window': '将鼠标限制在游戏窗口内',
+ 'Keeps powers and weapon effects at full FPS. Switch it off if a screen effect (blur, distortion, the color change of a power) looks stretched, shifted or wrong.': '让技能和武器特效保持全帧率。如果模糊、扭曲、技能变色等屏幕特效拉伸、错位或异常，请关闭。',
+ 'Key not supported': '不支持此按键',
+ 'Keyboard': '键盘',
+ 'Keyboard & Mouse Mapping': '键鼠映射',
+ 'Keyboard & mouse': '键盘与鼠标',
+ 'Keyboard (native)': '键盘（原生）',
+ 'Keyboard and mouse, button icons and gamepad mapping.': '键鼠、按键图标与手柄映射。',
+ "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Insert and R3+L2 always open the port's menu. Applied when the game starts.": '按键使用 '
+                                                                                                                                                                                                                                                                                                                                        'SDL '
+                                                                                                                                                                                                                                                                                                                                        '名称：字母、数字、Space、Return、Tab、Left '
+                                                                                                                                                                                                                                                                                                                                        'Shift、Left '
+                                                                                                                                                                                                                                                                                                                                        'Ctrl、Left '
+                                                                                                                                                                                                                                                                                                                                        'Alt、Backspace、Up、Down、Left、Right、F1 '
+                                                                                                                                                                                                                                                                                                                                        '至 '
+                                                                                                                                                                                                                                                                                                                                        'F12。无法识别的名称会保留默认值，并记录到日志。手柄 '
+                                                                                                                                                                                                                                                                                                                                        'L2/R2 '
+                                                                                                                                                                                                                                                                                                                                        '保留为扳机。Insert '
+                                                                                                                                                                                                                                                                                                                                        '和 '
+                                                                                                                                                                                                                                                                                                                                        'R3+L2 '
+                                                                                                                                                                                                                                                                                                                                        '固定打开移植版菜单。下次启动游戏生效。',
+ "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert and R3+L2 always open the port's menu. Applied when the game starts.": '按键使用 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'SDL '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '名称：字母、数字、Space、Return、Tab、Left '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'Shift、Left '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'Ctrl、Left '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'Alt、Backspace、Up、Down、Left、Right、F1 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '至 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'F12。无法识别的名称会保留默认值，并记录到日志。手柄 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'L2/R2 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '保留为扳机。触摸板右侧打开暂停菜单；手柄按 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'L1 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '+ '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '触摸板右侧进入拍照模式。Insert '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '和 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      'R3+L2 '
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      '固定打开移植版菜单。下次启动游戏生效。',
+ 'L1 + Touchpad right': 'L1 + 触摸板右侧',
+ "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.": 'L2/R2 '
+                                                                                                                                                                                                 '保留为扳机。触摸板右侧打开暂停菜单；L1 '
+                                                                                                                                                                                                 '+ '
+                                                                                                                                                                                                 '触摸板右侧进入拍照模式。R3+L2 '
+                                                                                                                                                                                                 '固定打开移植版菜单。下次启动游戏生效。',
+ 'LS (left stick click)': 'LS（按下左摇杆）',
+ 'Language': '语言',
+ 'Launcher options, files and diagnostics.': '启动器选项、文件和诊断。',
+ 'Left stick click': '按下左摇杆',
+ 'Linux': 'Linux',
+ 'Load': '加载',
+ 'Load order': '加载顺序',
+ 'Load shader cache in the background': '后台加载着色器缓存',
+ 'Loading screen only: builds the cached pipelines on several CPU threads.': '仅在加载画面使用多个 CPU 线程构建缓存管线。',
+ 'Loose-file mods, each in its own folder with dvdroot_ps4.': '散装文件模组，每个模组独立放在包含 dvdroot_ps4 的文件夹中。',
+ 'Lower in the list wins': '列表下方优先',
+ 'Made before every start, newest first; the last {} are kept. Restoring backs up the current saves first.': '每次启动前备份，按新到旧排列；保留最近 '
+                                                                                                             '{} '
+                                                                                                             '份。恢复前会先备份当前存档。',
+ 'MangoHud overlay': 'MangoHud 性能叠加层',
+ 'Match my controller': '匹配当前手柄',
+ 'Menu entry and icon (AppImage)': '菜单条目和图标（AppImage）',
+ 'Minus (−)': '减号（−）',
+ 'Mouse prompt distance': '鼠标旋转提示距离',
+ 'Mute button': '静音键',
+ 'Native (1080p)': '原生（1080p）',
+ 'Native (1920 × 1080)': '原生（1920 × 1080）',
+ 'Native AA (×1.0)': '原生抗锯齿（×1.0）',
+ 'Native · 1920 × 1080 · 16:9': '原生 · 1920 × 1080 · 16:9',
+ 'No Wayland session detected.': '未检测到 Wayland 会话。',
+ 'No built-in patches for this game.': '此游戏没有内置补丁。',
+ 'No mods yet': '暂无模组',
+ 'No patch files for this game version yet.': '此游戏版本暂无补丁文件。',
+ 'Not installed.': '未安装。',
+ 'Off (default): the game runs without temporal upscaling. These upscalers are not calibrated for this game yet: expect ghosting or flicker. FSR 3.1 needs nothing else; FSR 4 needs the assets below, and without them the game uses FSR 3.1. The options on this page only take effect with this switch on.': '默认关闭，游戏不使用时域超分辨率。这些算法尚未针对本游戏校准，可能出现拖影或闪烁。FSR '
+                                                                                                                                                                                                                                                                                                                '3.1 '
+                                                                                                                                                                                                                                                                                                                '无需额外文件；FSR '
+                                                                                                                                                                                                                                                                                                                '4 '
+                                                                                                                                                                                                                                                                                                                '需要下方资源，缺失时会回退到 '
+                                                                                                                                                                                                                                                                                                                'FSR '
+                                                                                                                                                                                                                                                                                                                '3.1。本页选项仅在此开关开启时生效。',
+ 'Off (fixes black lines)': '关闭（修复黑线）',
+ 'Off allows tearing for the lowest latency.': '关闭可降低延迟，但可能出现画面撕裂。',
+ 'Only if the update is dumped apart from the game: it is laid over the game folder without changing either. Leave empty when the game folder already has the update.': '仅在更新与本体分开提取时填写：启动时覆盖加载，两个原始目录均不会改变。游戏目录已整合更新时请留空。',
+ 'Open folder': '打开目录',
+ 'Open mod folder': '打开模组目录',
+ 'Open mods folder': '打开模组目录',
+ 'Open the screenshots folder': '打开截图目录',
+ 'Original (default)': '原始图标（默认）',
+ 'Overlay': '性能叠加层',
+ 'PLAY': '开始游戏',
+ 'PS button': 'PS 键',
+ 'Patches': '补丁',
+ 'Performance (×2)': '性能（×2）',
+ 'Play': '开始游戏',
+ 'Plus (+)': '加号（+）',
+ 'Precise': '精确',
+ 'Preset': '预设',
+ 'Presets': '预设方案',
+ 'Press a key': '请按键',
+ 'Press a key or mouse': '请按键或点击鼠标',
+ 'Quality (×1.5)': '质量（×1.5）',
+ 'RS (right stick click)': 'RS（按下右摇杆）',
+ 'RUNNING': '运行中',
+ 'Rage of Sparta on one input (L3 + R3 together)': '单键释放斯巴达之怒（同时按下 L3 + R3）',
+ 'Records how the next frame is drawn into the captures folder.': '将下一帧的绘制过程记录到 captures 目录。',
+ 'Relative': '相对移动',
+ 'Render resolution': '渲染分辨率',
+ 'Repeat air jumps without landing. Also available in the in-game Cheats menu.': '可连续空中跳跃，无需落地。游戏内作弊菜单也可设置。',
+ 'Replace the current saves with the backup {}? The current saves are backed up first.': '用备份 {} '
+                                                                                         '替换当前存档？操作前会先备份当前存档。',
+ "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of two game files in the port's data folder (about 70 MB); your game folder is never changed. Applied when the game starts.": '将游戏内 '
+                                                                                                                                                                                                                                        'PlayStation '
+                                                                                                                                                                                                                                        '按键图标替换为所选手柄图标。在移植版 '
+                                                                                                                                                                                                                                        'data '
+                                                                                                                                                                                                                                        '目录生成两个游戏文件的副本（约 '
+                                                                                                                                                                                                                                        '70 '
+                                                                                                                                                                                                                                        'MB），不改变原始游戏目录。下次启动游戏生效。',
+ 'Reset gamepad to defaults': '恢复默认手柄绑定',
+ 'Reset keyboard & mouse to defaults': '恢复默认键鼠绑定',
+ 'Reset to defaults': '恢复默认',
+ 'Resolution': '分辨率',
+ 'Restore': '恢复',
+ 'Reuse saved Vulkan pipelines. Disable to compare FPS with normal compilation. Takes effect on the next launch; saved caches are preserved.': '复用已保存的 '
+                                                                                                                                               'Vulkan '
+                                                                                                                                               '管线。关闭可与常规编译方式对比帧率。下次启动生效，已有缓存会保留。',
+ 'Right stick click': '按下右摇杆',
+ 'Right stick sensitivity': '右摇杆灵敏度',
+ 'Right stick style': '右摇杆模式',
+ 'Save': '保存',
+ 'Save backups': '存档备份',
+ 'Saves': '存档',
+ 'Saves restored from {}.': '已从 {} 恢复存档。',
+ "Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves.": '将不含性能叠加层的游戏画面保存为 '
+                                                                                                  'PNG，位于用户存档目录中的 '
+                                                                                                  'screenshots '
+                                                                                                  '文件夹。',
+ 'Screenshots': '截图',
+ 'Select Very Hard without completing the game. Does not change existing save difficulty. In-game: enable before opening New Game.': '无需通关即可选择极难模式，不改变已有存档难度。请在打开“新游戏”前启用。',
+ 'Shaders': '着色器',
+ 'Sharper floors and walls seen at an angle, at little cost on most graphics cards.': '斜视地面和墙壁时纹理更清晰，多数显卡的性能开销很小。',
+ 'Shortcut created:': '已创建快捷方式：',
+ 'Show Discord Rich Presence': '显示 Discord 游玩状态',
+ 'Show performance overlay': '显示性能叠加层',
+ 'Shows MangoHud (FPS, frame times, temperatures) through its Vulkan layer.': '通过 Vulkan 图层显示 '
+                                                                              'MangoHud（帧率、帧时间、温度）。',
+ 'Shows only the game name and the time played on your Discord profile.': '仅在 Discord 个人资料中显示游戏名称与游玩时长。',
+ 'Shows the render resolutions of this shape only.': '只显示所选宽高比的渲染分辨率。',
+ 'Shows where the frame waits for the GPU and which reads cause it. For performance tests.': '记录每帧等待 GPU '
+                                                                                             '的位置及相关读取，供性能测试使用。',
+ 'Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.': '跳过开场标志。感谢 '
+                                                                                                                'illusion0001（illusionyy）的 '
+                                                                                                                'PS3 '
+                                                                                                                '补丁为此提供便利。',
+ 'Square': '方块',
+ 'Steam is open. Close it completely (Steam > Exit) and click again: Steam rewrites its shortcuts when it closes.': 'Steam '
+                                                                                                                    '正在运行。请完全退出（Steam '
+                                                                                                                    '→ '
+                                                                                                                    '退出）后重试；Steam '
+                                                                                                                    '关闭时会重写快捷方式。',
+ 'Steam was not found for this user.': '未找到当前用户的 Steam。',
+ 'Stream buffer memory': '流式缓冲区内存',
+ "Strength of the gamepad's vibration; 0% turns it off.": '手柄震动强度；0% 为关闭。',
+ 'System RAM (cached, default)': '系统内存（缓存，默认）',
+ 'System RAM (uncached)': '系统内存（不缓存）',
+ 'System RAM can improve FPS on NVIDIA laptops. Choose GPU memory to restore the previous behavior. Applies on the next game launch.': '使用系统内存可提高部分 '
+                                                                                                                                       'NVIDIA '
+                                                                                                                                       '笔记本的帧率。选择显存可恢复旧版方式。下次启动游戏生效。',
+ 'Textures': '纹理',
+ 'The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.': '运行游戏的显卡。若误用集成显卡，请选择独立显卡。',
+ 'The engine frame rate (below) is the highest it can go.': '最高不会超过下方设置的引擎帧率。',
+ 'The files in {} look like a PKG extraction: the system files (param.sfo, icon0.png, pic1.png and the rest) are in\n\n{}\n\nCopy all of them into its sce_sys folder now? Files already there are kept.': '{} '
+                                                                                                                                                                                                           '中的文件看起来来自 '
+                                                                                                                                                                                                           'PKG '
+                                                                                                                                                                                                           '提取，系统文件（param.sfo、icon0.png、pic1.png '
+                                                                                                                                                                                                           '等）位于\n'
+                                                                                                                                                                                                           '\n'
+                                                                                                                                                                                                           '{}\n'
+                                                                                                                                                                                                           '\n'
+                                                                                                                                                                                                           '现在将它们复制到 '
+                                                                                                                                                                                                           'sce_sys '
+                                                                                                                                                                                                           '目录？已有文件会保留。',
+ 'The game dump is incomplete. Missing or empty files:\n\n{}\n\nDump the game again, or copy these files from a complete dump.': '游戏文件不完整，以下文件缺失或为空：\n'
+                                                                                                                                 '\n'
+                                                                                                                                 '{}\n'
+                                                                                                                                 '\n'
+                                                                                                                                 '请重新提取游戏，或从完整游戏副本中复制这些文件。',
+ 'The game folder has no sce_sys/pic1.png for the pictures.': '游戏目录缺少 sce_sys/pic1.png，无法显示背景图。',
+ 'The game opens at once and the saved shaders load while you play; a small note in the corner shows the progress. Switch it off to wait on the loading screen instead.': '游戏立即打开，缓存着色器在游玩时加载，角落显示进度。关闭则在加载画面等待完成。',
+ 'The game renders at this size; a resolution patch replaces the texture fix and reserves the memory it needs.': '游戏按此尺寸渲染；分辨率补丁会替代纹理修复，并预留所需内存。',
+ 'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.': '读取游戏文件时停止运行，游戏文件可能不完整。请重新提取 '
+                                                                                                                                                    'PKG，并确认游戏目录约为 '
+                                                                                                                                                    '40 '
+                                                                                                                                                    'GB。',
+ "The game's 2-sample depth buffer, read as a texture by its lighting. AMD's and Intel's Windows drivers read it wrong and the lighting shows black lines, so Automatic turns multisampling off on those cards (Radeon, Arc) and keeps it on elsewhere (NVIDIA). Off and On force the choice on any card.": '游戏使用双重采样深度缓冲作为光照纹理。AMD '
+                                                                                                                                                                                                                                                                                                            '和 '
+                                                                                                                                                                                                                                                                                                            'Intel '
+                                                                                                                                                                                                                                                                                                            '的 '
+                                                                                                                                                                                                                                                                                                            'Windows '
+                                                                                                                                                                                                                                                                                                            '驱动可能读取错误并产生黑线；自动模式会在 '
+                                                                                                                                                                                                                                                                                                            'Radeon、Arc '
+                                                                                                                                                                                                                                                                                                            '显卡上关闭多重采样，在 '
+                                                                                                                                                                                                                                                                                                            'NVIDIA '
+                                                                                                                                                                                                                                                                                                            '上保留。也可手动强制开启或关闭。',
+ 'The highest frame rate the game itself runs at (a game patch).': '游戏引擎自身运行的最高帧率（通过游戏补丁实现）。',
+ 'The shortcut "{}" was added to Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.': '快捷方式“{}”已添加到 '
+                                                                                                                                            'Steam（账户：{}），包含图标、封面、背景和标志。打开 '
+                                                                                                                                            'Steam '
+                                                                                                                                            '即可在库中查看。',
+ 'The shortcut "{}" was updated in Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.': '快捷方式“{}”已在 '
+                                                                                                                                              'Steam '
+                                                                                                                                              '中更新（账户：{}），包含图标、封面、背景和标志。打开 '
+                                                                                                                                              'Steam '
+                                                                                                                                              '即可在库中查看。',
+ 'The size the game draws at; higher is sharper and slower. A resolution patch replaces the texture fix and reserves the memory it needs.': '游戏绘制画面的尺寸；越高越清晰，但性能开销越大。分辨率补丁会替代纹理修复，并预留所需内存。',
+ 'The update folder {} is incomplete. Missing or empty files:\n\n{}\n\nChoose the folder of the update (eboot.bin, sce_sys), or leave it empty.': '更新目录 '
+                                                                                                                                                  '{} '
+                                                                                                                                                  '不完整，以下文件缺失或为空：\n'
+                                                                                                                                                  '\n'
+                                                                                                                                                  '{}\n'
+                                                                                                                                                  '\n'
+                                                                                                                                                  '请选择包含 '
+                                                                                                                                                  'eboot.bin、sce_sys '
+                                                                                                                                                  '的更新目录，或留空。',
+ 'Touchpad click': '点击触摸板',
+ 'Touchpad left': '触摸板左侧',
+ 'Touchpad right': '触摸板右侧',
+ 'Triangle': '三角',
+ 'Type a name for the preset first.': '请先输入预设名称。',
+ 'Ultra Performance (×3)': '极致性能（×3）',
+ 'Unlimited': '无限制',
+ 'Unlock Very Hard': '解锁极难模式',
+ 'Update folder (optional)': '更新目录（可选）',
+ 'Use pipeline binary cache (A/B test)': '使用管线二进制缓存（对比测试）',
+ 'VSync': '垂直同步',
+ 'Vibration': '震动',
+ 'Website': '网站',
+ 'Which gamepad button presses each button of the game.': '选择触发各游戏动作的手柄按键。',
+ 'Which key or gamepad button presses each button of the game.': '选择触发各游戏动作的键盘或手柄按键。',
+ 'Which key or mouse input presses each button of the game.': '选择触发各游戏动作的键盘或鼠标输入。',
+ 'While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.': '游玩时将鼠标限制在游戏窗口，避免点到其他屏幕或程序。打开游戏内菜单或切换窗口时释放鼠标。也可在游戏内菜单调整。',
+ 'Window system': '窗口系统',
+ 'Windowed': '窗口化',
+ 'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.': 'Windows '
+                                                                                                                                                                                    '无法预留游戏所需内存。请关闭其他程序，或增大系统分页文件（例如初始 '
+                                                                                                                                                                                    '16384 '
+                                                                                                                                                                                    'MB、最大 '
+                                                                                                                                                                                    '32768 '
+                                                                                                                                                                                    'MB）后重试。',
+ 'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.': 'Linux 无法为游戏分配所需的内存。请关闭其他程序，检查可用的 RAM、swap 交换空间或 /dev/shm，然后重新启动。',
+ 'Xbox button': 'Xbox 键',
+ 'Your game dump, saves and language.': '游戏文件、存档和语言。',
+ 'Your own dump of the game (eboot.bin, sce_module, sce_sys): God of War III Remastered, any region and version.': '你自己的游戏文件（eboot.bin、sce_module、sce_sys）；支持各地区和版本的战神 '
+                                                                                                                   '3 '
+                                                                                                                   '重制版。',
+ 'Your own dump of the game (eboot.bin, sce_module, sce_sys): SpartanPort, any region and version.': '你自己的战神 '
+                                                                                                     '3 '
+                                                                                                     '重制版游戏文件（eboot.bin、sce_module、sce_sys），支持各地区和版本。',
+ 'Your own dump of the game (eboot.bin, sce_module, sce_sys); God of War III Remastered: CUSA01623, version 01.02 for the community patches.': '你自己的游戏文件（eboot.bin、sce_module、sce_sys）；社区补丁要求战神 '
+                                                                                                                                               '3 '
+                                                                                                                                               '重制版 '
+                                                                                                                                               'CUSA01623、01.02 '
+                                                                                                                                               '版本。',
+ 'Your own dump of the game (eboot.bin, sce_module, sce_sys); SpartanPort: CUSA01623, version 01.02 for the community patches.': '你自己的战神 '
+                                                                                                                                 '3 '
+                                                                                                                                 '重制版游戏文件（eboot.bin、sce_module、sce_sys）；社区补丁要求 '
+                                                                                                                                 'CUSA01623、01.02 '
+                                                                                                                                 '版本。',
+ 'by {}': '作者：{}',
+ 'game patches': '游戏补丁',
+ 'restart': '需重启',
+ 'shadPS4/GoldHEN XML patch files for this game version. Empty: {}': '适用于此游戏版本的 shadPS4／GoldHEN XML '
+                                                                     '补丁。留空时使用：{}',
+ '{} (a folder, not a file)': '{}（应为文件夹，而非文件）',
+ '{} (empty)': '{}（为空）',
+ '{} (not a param.sfo)': '{}（不是 param.sfo）',
+ '{} (unreadable)': '{}（无法读取）',
+ '{} files': '{} 个文件',
+ '{} not found in this eboot.bin at the last start (see Log)': '上次启动时未在此 eboot.bin 中找到 {}（见日志）',
+ '{} of {} active': '已启用 {}／{}',
+ '{} trigger': '{} 扳机',
+ '{} · 60 FPS engine · no patches for this game': '{} · 60 帧引擎 · 此游戏无可用补丁',
+ '{} · 60 FPS engine · patches not available for this game build': '{} · 60 帧引擎 · 此游戏版本无可用补丁',
+ '{} · version {}': '{} · 版本 {}',
+ '{} · version {} · {}': '{} · 版本 {} · {}',
+ '{} · version {} · {}. Resolution and frame rate patches follow Performance.': '{} · 版本 {} · '
+                                                                                '{}。分辨率和帧率补丁以“性能”页为准。',
+ '{} · {} FPS engine · {} patches': '{} · {} 帧引擎 · {} 个补丁',
+ '{} · {} more patches': '{} · 另有 {} 个补丁',
+ '… and {} more': '……另有 {} 项',
+ '⚠ 1 file is changed by two mods. {} wins.': '⚠ 两个模组修改了同一个文件，{} 优先。',
+ '⚠ Game version {}: the game patches need {}; none applied': '⚠ 游戏版本 {}：补丁要求版本 {}，未应用任何补丁',
+ '⚠ {} also in {}. {} wins.': '⚠ {} 也存在于 {}，{} 优先。',
+ '⚠ {} file(s) replaced by more than one mod (the last one wins):': '⚠ 有 {} 个文件被多个模组替换（最后加载的优先）：',
+ '⚠ {} files are changed by more than one mod. The lower one in the list wins.': '⚠ 有 {} 个文件被多个模组修改，列表下方的优先。',
+ '✓ Game version {}: the game patches apply': '✓ 游戏版本 {}：可应用游戏补丁'})
+# The Trophies page: its texts (and the trophy names) live in spartanport_trophies.py.
+import spartanport_trophies  # noqa: E402
+
+for _language, _texts in spartanport_trophies.UI.items():
+    EXTRA.setdefault(_language, {}).update(_texts)
+
+
+EXTRA['zh'].update({
+ 'Version {} is out, but it has no Linux build yet.': '版本 {} 已发布，但还没有 Linux 版本。',
+ 'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?': '启动器无法写入 {}，因此无法在此处替换自身。是否打开发布页面手动下载新版本？',
+    'Monitor': '显示器',
+    'Primary (default)': '主显示器（默认）',
+    'The screen the game opens its window on. Primary is the monitor the system considers the main one.':
+        '游戏窗口打开所在的屏幕。主显示器是系统指定的主要屏幕。',
+    "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of up to three game files in the port's data folder (about 410 MB); your game folder is never changed. Applied when the game starts.":
+        '将游戏中的 PlayStation 按键图标替换为你的控制器图标。使用移植版数据文件夹内最多三个游戏文件的副本（约 410 MB），不会更改游戏文件夹。启动游戏时生效。',
+})
+
+# The note under Game language: the game keeps its own text and speech languages (#842).
+# The menu names are the game's own, from its R_LANG_*.WAD.
+_GAME_LANGUAGE_NOTE = "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech."
+for _language, _text in {
+    'pt': 'Vale no primeiro início do jogo. Depois, o jogo guarda os próprios idiomas de texto e de falas no save de configurações: troque no jogo, em Opções → Configurações de jogo → Texto de jogo e Opções → Áudio → Falas.',
+    'es': 'Se usa en el primer inicio del juego. Después, el juego guarda sus propios idiomas de texto y de diálogos en su partida de ajustes: cambialos en el juego, en Opciones → Ajustes de juego → Texto del juego y Opciones → Audio → Diálogos.',
+    'zh': '仅在游戏首次启动时生效。之后游戏会在自己的设置存档中保存文字和台词语言：请在游戏中通过選項 → 遊戲設定 → 遊戲資訊 和 選項 → 聲音 → 台詞 更改。',
+    'pl': 'Używany przy pierwszym uruchomieniu gry. Potem gra zapisuje własny język tekstu i dialogów w zapisie ustawień: zmień je w grze, w Opcje → Ustawienia gry → Tekst gry oraz Opcje → Dźwięk → Dialogi.',
+    'fr': 'Utilisée au premier lancement du jeu. Ensuite, le jeu garde ses propres langues de texte et de voix dans sa sauvegarde de réglages : changez-les dans le jeu, dans Options → Paramètres jeu → Texte du jeu et Options → Audio → Voix.',
+    'de': 'Gilt beim ersten Start des Spiels. Danach speichert das Spiel seine eigene Text- und Sprachausgabe-Sprache im Einstellungsspeicherstand: ändere sie im Spiel unter Optionen → Spieleinstellungen → Spieltext und Optionen → Audio → Sprachausgabe.',
+    'it': 'Usata al primo avvio del gioco. Poi il gioco conserva le proprie lingue di testo e dei dialoghi nel salvataggio delle impostazioni: cambiale nel gioco, in Opzioni → Impostazioni di gioco → Testo di gioco e Opzioni → Audio → Dialoghi.',
+    'tr': 'Oyunun ilk açılışında kullanılır. Sonrasında oyun kendi metin ve konuşma dillerini ayar kaydında tutar: bunları oyunda, Seçenekler → Oyun Ayarları → Oyun Metni ve Seçenekler → Ses → Konuşma bölümünden değiştirin.',
+    'ja': 'ゲームの初回起動時に使われます。その後は、ゲームが設定セーブにテキストと台詞の言語を保存します。ゲーム内の オプション → ゲーム設定 → テキスト表示 と オプション → 音声設定 → 台詞 で変更してください。',
+    'ko': '게임을 처음 시작할 때 사용됩니다. 그 후에는 게임이 설정 저장 데이터에 텍스트와 음성 언어를 저장합니다. 게임 안의 옵션 → 게임 설정 → 게임 텍스트 및 옵션 → 오디오 → 음성에서 변경하세요.',
+    'id': 'Digunakan pada saat pertama kali game dimulai. Setelah itu, game menyimpan bahasa teks dan suaranya sendiri di penyimpanan pengaturan: ubah di dalam game, di Options → Game Settings → Game Text dan Options → Audio → Speech.',
+}.items():
+    EXTRA.setdefault(_language, {})[_GAME_LANGUAGE_NOTE] = _text
+
+
+EXTRA.setdefault('id', {}).update({
+    'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?':
+        'Launcher tidak dapat menulis ke {}, sehingga tidak dapat mengganti dirinya sendiri di sana. Buka halaman rilis untuk mengunduh versi baru secara manual?',
+    'Version {} is out, but it has no Linux build yet.':
+        'Versi {} sudah rilis, tetapi belum ada build untuk Linux.',
+    'Polish': 'Polandia',
+    'Portuguese (Brazil)': 'Portugis (Brasil)',
+    'Aspect ratio': 'Rasio aspek',
+    'Shows the render resolutions of this shape only.': 'Hanya menampilkan resolusi render dari rasio ini.',
+    'Left stick click': 'Klik stik kiri',
+    'Right stick click': 'Klik stik kanan',
+    'Plus (+)': 'Plus (+)',
+    'Minus (−)': 'Minus (−)',
+    'Home button': 'Tombol Home',
+    'Capture': 'Tangkapan',
+    'Circle': 'Lingkaran',
+    'Cross': 'Silang (X)',
+    'Square': 'Kotak',
+    'Triangle': 'Segitiga',
+    'D-pad down': 'D-pad bawah',
+    'D-pad left': 'D-pad kiri',
+    'D-pad right': 'D-pad kanan',
+    'D-pad up': 'D-pad atas',
+    'Touchpad click': 'Klik touchpad',
+    'Touchpad left': 'Touchpad kiri',
+    'Touchpad right': 'Touchpad kanan',
+    'L1 + Touchpad right': 'L1 + Touchpad kanan',
+    'LS (left stick click)': 'LS (klik stik kiri)',
+    'RS (right stick click)': 'RS (klik stik kanan)',
+    'Mute button': 'Tombol bisu',
+    'PS button': 'Tombol PS',
+    'Xbox button': 'Tombol Xbox',
+    'Match my controller': 'Sesuaikan controller saya',
+    'Device': 'Perangkat',
+    'Keyboard & mouse': 'Keyboard & mouse',
+    'Gamepad': 'Gamepad',
+    'Controller type': 'Tipe controller',
+    'Reset gamepad to defaults': 'Atur ulang gamepad ke default',
+    'Reset keyboard & mouse to defaults': 'Atur ulang keyboard & mouse ke default',
+    'Reset to defaults': 'Atur ulang ke default',
+    'Which gamepad button presses each button of the game.': 'Tombol gamepad mana yang menekan setiap tombol game.',
+    'Which key or gamepad button presses each button of the game.': 'Tombol keyboard atau gamepad mana yang menekan setiap tombol game.',
+    'Which key or mouse input presses each button of the game.': 'Tombol keyboard atau input mouse mana yang menekan setiap tombol game.',
+    'Keyboard and mouse, button icons and gamepad mapping.': 'Keyboard dan mouse, ikon tombol, dan pemetaan gamepad.',
+    "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Insert and R3+L2 always open the port's menu. Applied when the game starts.":
+        "Tombol menggunakan nama SDL: huruf, angka, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Atas, Bawah, Kiri, Kanan, F1 hingga F12. Nama yang tidak dikenali game tetap memakai default (dicatat di log). L2/R2 pada gamepad tetap pada trigger. Insert dan R3+L2 selalu membuka menu port. Diterapkan saat game dimulai.",
+    "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert and R3+L2 always open the port's menu. Applied when the game starts.":
+        "Tombol menggunakan nama SDL: huruf, angka, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Atas, Bawah, Kiri, Kanan, F1 hingga F12. Nama yang tidak dikenali game tetap memakai default (dicatat di log). L2/R2 pada gamepad tetap pada trigger. Touchpad kanan membuka menu jeda game; Touchpad kiri (mode foto) adalah L1 + Touchpad kanan pada gamepad. Insert dan R3+L2 selalu membuka menu port. Diterapkan saat game dimulai.",
+    "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.":
+        "L2/R2 tetap pada trigger. Touchpad kanan membuka menu jeda game; Touchpad kiri (mode foto) adalah L1 + Touchpad kanan. R3+L2 selalu membuka menu port. Diterapkan saat game dimulai.",
+    "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of up to three game files in the port's data folder (about 410 MB); your game folder is never changed. Applied when the game starts.":
+        "Mengganti ikon tombol PlayStation di dalam game dengan ikon controller Anda. Bekerja pada salinan hingga tiga file game di folder data port (sekitar 410 MB); folder game Anda tidak pernah diubah. Diterapkan saat game dimulai.",
+    'Monitor': 'Monitor',
+    'Primary (default)': 'Utama (default)',
+    'The screen the game opens its window on. Primary is the monitor the system considers the main one.':
+        'Layar tempat jendela game dibuka. Utama adalah monitor yang dianggap sistem sebagai yang utama.',
+    "Strength of the gamepad's vibration; 0% turns it off.":
+        "Kekuatan getaran gamepad; 0% mematikannya.",
+    'Vibration': 'Getaran',
+    'Press a key': 'Tekan tombol',
+    'Press a key or mouse': 'Tekan tombol atau mouse',
+    'Mouse prompt distance': 'Jarak petunjuk mouse',
+    'Right stick sensitivity': 'Sensitivitas stik kanan',
+    'Right stick style': 'Gaya stik kanan',
+    'Absolute': 'Absolut',
+    'Relative': 'Relatif',
+    'Grab': 'Tangkap',
+    'Dodge': 'Menghindar',
+    '{} trigger': 'Trigger {}',
+    'Textures': 'Tekstur',
+    'Anisotropic filtering': 'Penyaringan anisotropik',
+    'Game default': 'Default game',
+    'Sharper floors and walls seen at an angle, at little cost on most graphics cards.':
+        'Lantai dan dinding lebih tajam saat dilihat dari sudut miring, dengan sedikit beban pada sebagian besar kartu grafis.',
+    'restart': 'mulai ulang',
+    'Overlay': 'Overlay',
+    'Show performance overlay': 'Tampilkan overlay performa',
+    'Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.':
+        'Item, ukuran, dan sudut posisi: menu dalam game (Insert / R3+L2) > Overlay.',
+    'Screenshots': 'Tangkapan layar',
+    'F12 in the game': 'F12 di dalam game',
+    'Open the screenshots folder': 'Buka folder tangkapan layar',
+    "Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves.":
+        "Menyimpan gambar game, tanpa overlay, sebagai file PNG di folder screenshots pada folder simpanan.",
+    'Display': 'Layar',
+    'How the game appears on your screen.': 'Bagaimana game tampil di layar Anda.',
+    'Display mode': 'Mode tampilan',
+    'Borderless covers the screen without changing the display mode.':
+        'Tanpa batas (borderless) menutupi layar tanpa mengubah mode tampilan.',
+    'VSync': 'VSync',
+    'Off allows tearing for the lowest latency.': 'Mati mengizinkan screen tearing untuk latensi terendah.',
+    'Native (1080p)': 'Asli (1080p)',
+    'Native AA (×1.0)': 'AA Asli (×1.0)',
+    'Native · 1920 × 1080 · 16:9': 'Asli · 1920 × 1080 · 16:9',
+    'Quality (×1.5)': 'Kualitas (×1.5)',
+    'Balanced (×1.7)': 'Seimbang (×1.7)',
+    'Performance (×2)': 'Performa (×2)',
+    'Ultra Performance (×3)': 'Ultra Performa (×3)',
+    'Original (default)': 'Asli (default)',
+    'Show Discord Rich Presence': 'Tampilkan Discord Rich Presence',
+    'Shows only the game name and the time played on your Discord profile.':
+        'Hanya menampilkan nama game dan lama waktu bermain di profil Discord Anda.',
+    'Game multisampling': 'Multisampling game',
+    'Automatic ({}: off)': 'Otomatis ({}: mati)',
+    'Automatic ({}: on)': 'Otomatis ({}: nyala)',
+    'Off (fixes black lines)': 'Mati (memperbaiki garis hitam)',
+    "The game's 2-sample depth buffer, read as a texture by its lighting. AMD's and Intel's Windows drivers read it wrong and the lighting shows black lines, so Automatic turns multisampling off on those cards (Radeon, Arc) and keeps it on elsewhere (NVIDIA). Off and On force the choice on any card.":
+        "Buffer kedalaman 2-sampel game dibaca sebagai tekstur oleh pencahayaannya. Driver Windows AMD dan Intel salah membacanya sehingga pencahayaan menampilkan garis hitam; Otomatis mematikan multisampling pada kartu tersebut (Radeon, Arc) dan menyalakannya pada kartu lain (NVIDIA). Mati dan Nyala memaksa pilihan pada kartu grafis apa pun.",
+    'GUI Scale': 'Skala Antarmuka',
+    'For launcher only. Applies after Save.': 'Hanya untuk launcher. Berlaku setelah Disimpan.',
+    'Windowed': 'Berjendela',
+    'Window system': 'Sistem jendela',
+    'No Wayland session detected.': 'Tidak ada sesi Wayland yang terdeteksi.',
+    'MangoHud overlay': 'Overlay MangoHud',
+    'Shows MangoHud (FPS, frame times, temperatures) through its Vulkan layer.':
+        'Menampilkan MangoHud (FPS, frame time, suhu) melalui lapisan Vulkan-nya.',
+    'Records how the next frame is drawn into the captures folder.':
+        'Merekam bagaimana frame berikutnya digambar ke dalam folder captures.',
+    'Shows where the frame waits for the GPU and which reads cause it. For performance tests.':
+        'Menunjukkan di mana frame menunggu GPU dan pembacaan mana yang menyebabkannya. Untuk uji performa.',
+    'Enlarges a smaller game image to the window. With Render resolution 720p (Performance) it raises the FPS; at the size of the window it does nothing.':
+        'Memperbesar gambar game yang lebih kecil ke ukuran jendela. Dengan Resolusi render 720p (Performa) ini meningkatkan FPS; pada ukuran jendela yang sama tidak ada efeknya.',
+    'Off (default): the game runs without temporal upscaling. These upscalers are not calibrated for this game yet: expect ghosting or flicker. FSR 3.1 needs nothing else; FSR 4 needs the assets below, and without them the game uses FSR 3.1. The options on this page only take effect with this switch on.':
+        'Mati (default): game berjalan tanpa temporal upscaling. Upscaler ini belum dikalibrasi untuk game ini: kemungkinan ada efek ghosting atau flicker. FSR 3.1 tidak memerlukan apa pun lagi; FSR 4 memerlukan aset di bawah, dan tanpanya game akan menggunakan FSR 3.1. Opsi pada halaman ini hanya berlaku jika sakelar ini aktif.',
+    'Frame rate and speed options.': 'Opsi frame rate dan kecepatan.',
+    'Frame rate limit': 'Batas frame rate',
+    'The engine frame rate (below) is the highest it can go.':
+        'Frame rate engine (di bawah) adalah batas tertinggi yang dapat dicapai.',
+    'Frames queued': 'Frame dalam antrean',
+    '1 (lowest latency)': '1 (latensi terendah)',
+    'Unlimited': 'Tak terbatas',
+    '1 is the lowest input latency; more can raise FPS when the graphics card is the limit.':
+        '1 memberikan latensi input terendah; lebih banyak dapat menaikkan FPS saat kartu grafis menjadi batas performa.',
+    'Engine frame rate': 'Frame rate engine',
+    'The highest frame rate the game itself runs at (a game patch).':
+        'Frame rate tertinggi tempat game itu sendiri berjalan (sebuah patch game).',
+    'Render resolution': 'Resolusi render',
+    'The size the game draws at; higher is sharper and slower. A resolution patch replaces the texture fix and reserves the memory it needs.':
+        'Ukuran resolusi gambar game; semakin tinggi semakin tajam dan berat. Patch resolusi menggantikan perbaikan tekstur dan memesan memori yang dibutuhkannya.',
+    'Shaders': 'Shader',
+    'Use pipeline binary cache (A/B test)': 'Gunakan cache biner pipeline (uji A/B)',
+    'Reuse saved Vulkan pipelines. Disable to compare FPS with normal compilation. Takes effect on the next launch; saved caches are preserved.':
+        'Gunakan kembali pipeline Vulkan yang tersimpan. Nonaktifkan untuk membandingkan FPS dengan kompilasi normal. Berlaku pada peluncuran berikutnya; cache tersimpan tetap dipertahankan.',
+    'Load shader cache in the background': 'Muat cache shader di latar belakang',
+    'The game opens at once and the saved shaders load while you play; a small note in the corner shows the progress. Switch it off to wait on the loading screen instead.':
+        'Game langsung terbuka dan shader tersimpan dimuat saat Anda bermain; catatan kecil di sudut menunjukkan prosesnya. Matikan jika ingin menunggu di layar pemuatan (loading screen).',
+    'Compile new shaders in the background': 'Kompilasi shader baru di latar belakang',
+    'Fewer stutters in new areas: the game keeps running while new shaders compile. An object or effect may appear a moment later. Switch it off if something stays missing.':
+        'Mengurangi stutter di area baru: game terus berjalan saat shader baru dikompilasi. Objek atau efek mungkin muncul sesaat kemudian. Matikan jika ada yang hilang terus-menerus.',
+    'Fast shader cache loading (parallel)': 'Pemuatan cache shader cepat (paralel)',
+    'Loading screen only: builds the cached pipelines on several CPU threads.':
+        'Hanya di layar pemuatan: membangun pipeline yang di-cache pada beberapa thread CPU.',
+    'GPU data': 'Data GPU',
+    'Graphics card': 'Kartu grafis',
+    'The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.':
+        'GPU tempat game berjalan. Pilih kartu diskrit (dedicated) jika game menggunakan kartu grafis terintegrasi.',
+    'Stream buffer memory': 'Memori stream buffer',
+    'GPU memory (previous behavior)': 'Memori GPU (perilaku sebelumnya)',
+    'System RAM (cached, default)': 'RAM Sistem (di-cache, default)',
+    'System RAM (uncached)': 'RAM Sistem (tidak di-cache)',
+    'System RAM can improve FPS on NVIDIA laptops. Choose GPU memory to restore the previous behavior. Applies on the next game launch.':
+        'RAM Sistem dapat meningkatkan FPS pada laptop NVIDIA. Pilih memori GPU untuk mengembalikan perilaku sebelumnya. Berlaku pada peluncuran game berikutnya.',
+    'Game reads GPU data without waiting (big FPS gain)':
+        'Game membaca data GPU tanpa menunggu (peningkatan FPS besar)',
+    'About 40 to 66 FPS in a heavy scene. Needs deferred GPU readbacks. Switch it off if lighting or objects look wrong.':
+        'Sekitar 40 hingga 66 FPS pada adegan berat. Memerlukan readback GPU yang ditangguhkan. Matikan jika pencahayaan atau objek terlihat salah.',
+    'Deferred GPU readbacks': 'Readback GPU ditangguhkan',
+    'Fewer waits for the GPU. Switch it off if textures or shadows look wrong.':
+        'Lebih sedikit waktu tunggu untuk GPU. Matikan jika tekstur atau bayangan terlihat salah.',
+    'Fast screen effects (Rage of Sparta, weapons)':
+        'Efek layar cepat (Rage of Sparta, senjata)',
+    'Keeps powers and weapon effects at full FPS. Switch it off if a screen effect (blur, distortion, the color change of a power) looks stretched, shifted or wrong.':
+        'Menjaga kekuatan dan efek senjata tetap pada FPS penuh. Matikan jika efek layar (blur, distorsi, perubahan warna kekuatan) terlihat melar, bergeser, atau salah.',
+    'Precise': 'Tepat (Precise)',
+    'Cheats': 'Cheat',
+    'Infinite Double Jumps': 'Lompatan Ganda Tak Terbatas',
+    'Repeat air jumps without landing. Also available in the in-game Cheats menu.':
+        'Ulangi lompatan di udara tanpa harus mendarat. Juga tersedia di menu Cheat dalam game.',
+    'Rage of Sparta on one input (L3 + R3 together)':
+        'Rage of Sparta dalam satu input (L3 + R3 bersamaan)',
+    'Unlock Very Hard': 'Buka Tingkat Kesulitan Sangat Sulit',
+    'Select Very Hard without completing the game. Does not change existing save difficulty. In-game: enable before opening New Game.':
+        'Pilih tingkat Sangat Sulit tanpa menamatkan game. Tidak mengubah kesulitan simpanan yang sudah ada. Dalam game: aktifkan sebelum membuka Game Baru.',
+    'Folders': 'Folder',
+    'Your game dump, saves and language.': 'Dump game, simpanan, dan bahasa Anda.',
+    'Your own dump of the game (eboot.bin, sce_module, sce_sys): SpartanPort, any region and version.':
+        'Dump game milik Anda sendiri (eboot.bin, sce_module, sce_sys): SpartanPort, wilayah dan versi apa pun.',
+    'Your own dump of the game (eboot.bin, sce_module, sce_sys); SpartanPort: CUSA01623, version 01.02 for the community patches.':
+        'Dump game milik Anda sendiri (eboot.bin, sce_module, sce_sys); SpartanPort: CUSA01623, versi 01.02 untuk patch komunitas.',
+    'Update folder (optional)': 'Folder pembaruan (opsional)',
+    'Only if the update is dumped apart from the game: it is laid over the game folder without changing either. Leave empty when the game folder already has the update.':
+        'Hanya jika pembaruan di-dump terpisah dari game: pembaruan akan diterapkan di atas folder game tanpa mengubah keduanya. Biarkan kosong jika folder game sudah memiliki pembaruan.',
+    'The update folder {} is incomplete. Missing or empty files:\n\n{}\n\nChoose the folder of the update (eboot.bin, sce_sys), or leave it empty.':
+        'Folder pembaruan {} tidak lengkap. File hilang atau kosong:\n\n{}\n\nPilih folder pembaruan (eboot.bin, sce_sys), atau biarkan kosong.',
+    'The game dump is incomplete. Missing or empty files:\n\n{}\n\nDump the game again, or copy these files from a complete dump.':
+        'Dump game tidak lengkap. File hilang atau kosong:\n\n{}\n\nDump game kembali, atau salin file-file ini dari dump yang lengkap.',
+    'The files in {} look like a PKG extraction: the system files (param.sfo, icon0.png, pic1.png and the rest) are in\n\n{}\n\nCopy all of them into its sce_sys folder now? Files already there are kept.':
+        'File dalam {} terlihat seperti ekstraksi PKG: file sistem (param.sfo, icon0.png, pic1.png dan lainnya) berada di\n\n{}\n\nSalin semuanya ke dalam folder sce_sys sekarang? File yang sudah ada tetap dipertahankan.',
+    'The game folder has no sce_sys/pic1.png for the pictures.':
+        'Folder game tidak memiliki sce_sys/pic1.png untuk gambar latar.',
+    'The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.':
+        'Game berhenti saat membaca file-filenya: dump game mungkin tidak lengkap. Ekstrak pkg kembali dan pastikan folder game berukuran sekitar 40 GB.',
+    'Saves': 'Simpanan',
+    'Save backups': 'Cadangan simpanan',
+    'Restore': 'Pulihkan',
+    'Save': 'Simpan',
+    'Made before every start, newest first; the last {} are kept. Restoring backs up the current saves first.':
+        'Dibuat sebelum setiap peluncuran, yang terbaru di awal; {} terakhir disimpan. Memulihkan akan mencadangkan simpanan saat ini terlebih dahulu.',
+    'Replace the current saves with the backup {}? The current saves are backed up first.':
+        'Ganti simpanan saat ini dengan cadangan {}? Simpanan saat ini akan dicadangkan terlebih dahulu.',
+    'Saves restored from {}.': 'Simpanan dipulihkan dari {}.',
+    'RUNNING': 'BERJALAN',
+    'Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.':
+        'Memperbaiki tekstur yang rusak dalam game dengan meningkatkan ukuran Video Arena, memungkinkan game menggunakan lebih banyak memori video untuk tekstur dan efek. Memerlukan pengaturan DMEM ke 2048 MB atau lebih, jika tidak game akan crash. Aktifkan patch ini atau salah satu patch resolusi, jangan keduanya.',
+    'Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+        'Melewati logo pembuka. Terima kasih kepada illusion0001 alias illusionyy atas patch PS3 yang membuat ini sangat mudah.',
+    'Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.':
+        'Mengizinkan melewati sinematik apa pun secara manual dengan tombol X. Terima kasih kepada illusion0001 alias illusionyy atas patch PS3 yang membuat ini sangat mudah.',
+    'Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.':
+        'Memperbaiki layar hitam saat startup dengan penghitung FPS berjalan: indeks frame pacing dimulai dari 2, bukan 0, sehingga frame kedua tidak lagi menunggu flip yang hanya bisa dipicu olehnya.',
+    'No built-in patches for this game.': 'Tidak ada patch bawaan untuk game ini.',
+    'No patch files for this game version yet.': 'Belum ada file patch untuk versi game ini.',
+    'shadPS4/GoldHEN XML patch files for this game version. Empty: {}':
+        'File patch XML shadPS4/GoldHEN untuk versi game ini. Kosong: {}',
+    '{} · 60 FPS engine · no patches for this game': '{} · engine 60 FPS · tidak ada patch untuk game ini',
+    '{} · 60 FPS engine · patches not available for this game build':
+        '{} · engine 60 FPS · patch tidak tersedia untuk build game ini',
+    '{} · version {}': '{} · versi {}',
+    '{} · version {} · {}. Resolution and frame rate patches follow Performance.':
+        '{} · versi {} · {}. Patch resolusi dan frame rate mengikuti Performa.',
+    '{} · {} FPS engine · {} patches': '{} · engine {} FPS · {} patch',
+    'game patches': 'patch game',
+    'Loose-file mods, each in its own folder with dvdroot_ps4.':
+        'Mod file lepas, masing-masing dalam foldernya sendiri dengan dvdroot_ps4.',
+    'Change textures, sounds and text. Your game files stay untouched.':
+        'Ubah tekstur, suara, dan teks. File game Anda tetap tidak tersentuh.',
+    'Drop a mod folder or .zip in the mods folder.': 'Tarik folder mod atau file .zip ke dalam folder mods.',
+    'No mods yet': 'Belum ada mod',
+    'Details': 'Detail',
+    'Hide': 'Sembunyikan',
+    'Load order': 'Urutan muat',
+    'Lower in the list wins': 'Yang lebih bawah dalam daftar menang',
+    'Open folder': 'Buka folder',
+    'Open mod folder': 'Buka folder mod',
+    'Open mods folder': 'Buka folder mod',
+    'Presets': 'Preset',
+    'Preset': 'Preset',
+    'Type a name for the preset first.': 'Ketik nama untuk preset terlebih dahulu.',
+    'Website': 'Situs web',
+    'by {}': 'oleh {}',
+    '{} files': '{} file',
+    '{} of {} active': '{} dari {} aktif',
+    '… and {} more': '… dan {} lainnya',
+    '⚠ 1 file is changed by two mods. {} wins.': '⚠ 1 file diubah oleh dua mod. {} menang.',
+    '⚠ {} also in {}. {} wins.': '⚠ {} juga ada di {}. {} menang.',
+    '⚠ {} file(s) replaced by more than one mod (the last one wins):':
+        '⚠ {} file digantikan oleh lebih dari satu mod (yang terakhir menang):',
+    '⚠ {} files are changed by more than one mod. The lower one in the list wins.':
+        '⚠ {} file diubah oleh lebih dari satu mod. Yang lebih bawah dalam daftar menang.',
+    '1 file': '1 file',
+    'Load': 'Muat',
+    'Launcher options, files and diagnostics.': 'Opsi launcher, file, dan diagnostik.',
+    'Language': 'Bahasa',
+    'Linux': 'Linux',
+    'Menu entry and icon (AppImage)': 'Entri menu dan ikon (AppImage)',
+    'Not installed.': 'Belum terinstal.',
+    'Steam is open. Close it completely (Steam > Exit) and click again: Steam rewrites its shortcuts when it closes.':
+        'Steam sedang terbuka. Tutup sepenuhnya (Steam > Keluar) dan klik lagi: Steam menulis ulang pintasannya saat ditutup.',
+    'Steam was not found for this user.': 'Steam tidak ditemukan untuk pengguna ini.',
+    'Shortcut created:': 'Pintasan dibuat:',
+    'The shortcut "{}" was added to Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.':
+        'Pintasan "{}" telah ditambahkan ke Steam (akun: {}), dengan ikon, kapsul, latar belakang, dan logonya. Buka Steam untuk melihatnya di perpustakaan.',
+    'The shortcut "{}" was updated in Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.':
+        'Pintasan "{}" telah diperbarui di Steam (akun: {}), dengan ikon, kapsul, latar belakang, dan logonya. Buka Steam untuk melihatnya di perpustakaan.',
+    'While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.':
+        'Saat Anda bermain, mouse tetap berada di dalam jendela game, sehingga klik tidak akan mengenai monitor atau aplikasi lain. Menu dalam game dan berpindah jendela akan mengembalikannya. Juga ada di menu dalam game.',
+    'Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.':
+        'Windows tidak dapat memesan memori yang dibutuhkan game. Tutup program lain, atau perbesar pagefile Windows (misalnya 16384 MB awal, 32768 MB maksimum), lalu mulai kembali.',
+    'Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.':
+        'Linux tidak dapat mengalokasikan memori yang dibutuhkan game. Tutup program lain, periksa RAM yang tersedia, swap, atau /dev/shm, lalu mulai kembali.',
+    '{} (a folder, not a file)': '{} (sebuah folder, bukan file)',
+    '{} (empty)': '{} (kosong)',
+    '{} (not a param.sfo)': '{} (bukan param.sfo)',
+    '{} (unreadable)': '{} (tidak dapat dibaca)',
+    '{} not found in this eboot.bin at the last start (see Log)':
+        '{} tidak ditemukan di eboot.bin ini pada peluncuran terakhir (lihat Log)',
+    '   (game patches)': '   (patch game)',
+    '   … and {} more': '   … dan {} lainnya',
+    ' Previous saves: {}.': ' Simpanan sebelumnya: {}.',
+    '(none)': '(tidak ada)',
+    'Adaptive mouse (experimental)': 'Mouse adaptif (eksperimental)',
+    'Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.':
+        'Mouse adaptif: seberapa jauh mouse bergerak untuk satu langkah putaran. Juga ada di menu dalam game.',
+    'Add to Steam': 'Tambahkan ke Steam',
+    'Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.':
+        'Membidik dengan mouse saat L2 ditahan (Head of Helios, Bow of Apollo). Relatif: stik mengikuti gerakan dan kembali ke netral saat mouse berhenti. Absolut: posisi mouse saat L2 ditekan menjadi titik tengah, dan stik mengarah darinya ke mouse. Juga ada di menu dalam game.',
+    'Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.':
+        'Membidik dengan mouse saat L2 ditahan: nilai lebih rendah memerlukan lebih banyak gerakan mouse untuk pergerakan stik yang sama, lebih tinggi lebih sedikit. Juga ada di menu dalam game.',
+    'Asks GameMode (gamemoderun) for the performance governor while the game runs.':
+        'Meminta GameMode (gamemoderun) untuk pengatur performa saat game berjalan.',
+    'Auto': 'Otomatis',
+    'Automatic': 'Otomatis',
+    'Automatic lets SDL choose. Pick X11 if the window misbehaves on Wayland (it runs through XWayland).':
+        'Otomatis membiarkan SDL memilih. Pilih X11 jika jendela bermasalah di Wayland (berjalan melalui XWayland).',
+    'Borderless': 'Tanpa batas',
+    'Changes applied to the game code at start.': 'Perubahan yang diterapkan ke kode game saat mulai.',
+    'Choose the folder of the update (eboot.bin, sce_sys)': 'Pilih folder pembaruan (eboot.bin, sce_sys)',
+    'Choose the game folder': 'Pilih folder game',
+    'Choose two separate folders for the game and its update, or leave the update folder empty.':
+        'Pilih dua folder terpisah untuk game dan pembaruannya, atau biarkan folder pembaruan kosong.',
+    'Choose your game folder to play.': 'Pilih folder game Anda untuk bermain.',
+    "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving, or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.":
+        "Klik kotak, lalu tekan tombol, klik tombol mouse, atau putar roda mouse (waktu habis setelah {} detik). Input yang sudah digunakan oleh tombol lain akan ditukar; panah mengembalikan tombol ke default-nya. Rage of Sparta menekan L3 dan R3 bersamaan: centang kotak di atasnya untuk memakai satu input saja. Grab menekan L1 dan Lingkaran bersamaan. Dodge menghindar ke arah gerakan Anda (WASD), atau mundur jika diam. Touchpad kanan membuka menu jeda game. Insert selalu membuka menu port dan tidak dapat diubah. Diterapkan saat game dimulai.",
+    'Close the game before restoring saves.': 'Tutup game sebelum memulihkan simpanan.',
+    'Controls': 'Kontrol',
+    'Copying the system files…': 'Menyalin file sistem…',
+    'Could not copy the files: {}': 'Tidak dapat menyalin file: {}',
+    'Could not restore: {}': 'Tidak dapat memulihkan: {}',
+    'Could not save all settings. Check write permissions and free disk space, then try again.':
+        'Tidak dapat menyimpan semua pengaturan. Periksa izin penulisan dan ruang disk yang kosong, lalu coba lagi.',
+    'Creates spartanport.desktop in ~/.local/share/applications so the launcher and the game show their icon in the dock and the menu. Turning it off removes the entry.':
+        'Membuat spartanport.desktop di ~/.local/share/applications agar launcher dan game menampilkan ikon di dock dan menu. Mematikannya akan menghapus entri ini.',
+    'Delete': 'Hapus',
+    'Diagnostics (for development)': 'Diagnostik (untuk pengembangan)',
+    'Enable the upscaler (experimental)': 'Aktifkan upscaler (eksperimental)',
+    'Experimental': 'Eksperimental',
+    'F11 captures a frame for analysis': 'F11 menangkap satu frame untuk analisis',
+    'Files': 'File',
+    'Files layered over the game at start; the game files are never changed.':
+        'File yang diterapkan di atas game saat mulai; file game tidak pernah diubah.',
+    'GAME BUTTON': 'TOMBOL GAME',
+    'GAMEPAD': 'GAMEPAD',
+    'GPU wait and readback report in the log (every 5 s)':
+        'Laporan tunggu dan readback GPU di log (setiap 5 detik)',
+    'GameMode': 'GameMode',
+    'Gamepad Mapping': 'Pemetaan Gamepad',
+    'Gamepad names': 'Nama gamepad',
+    'General': 'Umum',
+    'Graphics (experimental)': 'Grafis (eksperimental)',
+    'Home': 'Beranda',
+    'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
+        'Bagaimana petunjuk putaran stik dijawab. Keyboard: tekan arah putarannya, setengah putaran dari atas D S A (searah jarum jam) atau A S D, dari bawah A W D atau D W A, putaran penuh D S A W atau A S D W; tombol yang salah mengulang dari awal. Mouse adaptif: gambar putaran menggunakan mouse.',
+    'In-game button icons': 'Ikon tombol dalam game',
+    'Joystick prompts': 'Petunjuk joystick',
+    'KEYBOARD': 'KEYBOARD',
+    'Keep the mouse in the game window': 'Kunci mouse di dalam jendela game',
+    'Key not supported': 'Tombol tidak didukung',
+    'Keyboard': 'Keyboard',
+    'Keyboard & Mouse Mapping': 'Pemetaan Keyboard & Mouse',
+    'Keyboard (native)': 'Keyboard (asli)',
+})
+
+EXTRA['zh'].update({
+    'A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.': '游戏启动时，后台线程会将已保存的着色器读入内存，右下角显示进度。随后加载着色器时无需因磁盘读取而阻塞帧。需要启用上一项。如果硬盘较慢或可用内存不足，导致启动变慢或第一分钟更卡顿，请关闭此项。',
+    'A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.': '右下角显示启动时的着色器缓存读取进度和着色器编译状态，便于了解短暂卡顿的原因。关闭此项可隐藏提示。',
+    'Close the game before deleting the shader cache.': '删除着色器缓存前请先关闭游戏。',
+    'Could not delete all of the shader cache; another program may be using it: {}': '无法删除全部着色器缓存，其他程序可能正在使用：{}',
+    'Delete shader cache': '删除着色器缓存',
+    'Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.': '删除着色器缓存（{} MB，位于 {}）？游戏会重新编译着色器，下次启动后的几分钟可能出现卡顿。',
+    'Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look wrong after an update or the cache grew too big; the next start compiles everything again.': '删除此存档文件夹中保存的着色器和管线。如果更新后画面异常或缓存过大，可以使用此功能。下次启动时会重新编译。',
+    'Read the shader cache into memory at start': '启动时将着色器缓存读入内存',
+    'Reuse compiled shaders from disk': '重用磁盘中已编译的着色器',
+    'Shader cache': '着色器缓存',
+    'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': '从缓存加载先前会话编译的着色器，避免重新编译，减少启动游戏或加载存档后物体延迟出现，并避免每次重写缓存（杀毒软件会扫描每个写入的文件）。首次启用时会重建一次缓存。如果仅在重启后出现物体、特效或颜色异常，而新缓存首次运行正常，请关闭此项。',
+    'Show shader notes in the corner': '在角落显示着色器提示',
+    'The shader cache is already empty.': '着色器缓存已经为空。',
+})
+
+EXTRA['id'].update({
+    'A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.': 'Thread latar belakang membaca shader tersimpan ke memori saat game dimulai; kemajuannya ditampilkan di sudut kanan bawah. Pemuatan shader berikutnya tidak perlu menunggu pembacaan disk. Memerlukan opsi di atas. Nonaktifkan jika hard disk lambat atau RAM terbatas membuat menit pertama lebih tersendat atau waktu mulai lebih lama.',
+    'A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.': 'Catatan di sudut kanan bawah menampilkan pembacaan cache saat mulai dan kompilasi shader, agar penyebab jeda singkat terlihat. Nonaktifkan untuk menyembunyikannya.',
+    'Close the game before deleting the shader cache.': 'Tutup game sebelum menghapus cache shader.',
+    'Could not delete all of the shader cache; another program may be using it: {}': 'Tidak dapat menghapus seluruh cache shader; program lain mungkin sedang menggunakannya: {}',
+    'Delete shader cache': 'Hapus cache shader',
+    'Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.': 'Hapus cache shader ({} MB di {})? Game akan mengompilasi ulang shader, sehingga beberapa menit setelah mulai berikutnya dapat tersendat.',
+    'Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look wrong after an update or the cache grew too big; the next start compiles everything again.': 'Menghapus shader dan pipeline tersimpan dari folder penyimpanan ini. Gunakan jika grafik bermasalah setelah pembaruan atau cache terlalu besar; saat mulai berikutnya semuanya dikompilasi ulang.',
+    'Read the shader cache into memory at start': 'Baca cache shader ke memori saat mulai',
+    'Reuse compiled shaders from disk': 'Gunakan kembali shader terkompilasi dari disk',
+    'Shader cache': 'Cache shader',
+    'Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.': 'Shader dari sesi sebelumnya dimuat dari cache tanpa dikompilasi ulang, sehingga objek tidak terlambat muncul setelah game dimulai atau penyimpanan dimuat, dan cache tidak ditulis ulang setiap sesi (antivirus memindai setiap berkas yang ditulis). Saat pertama diaktifkan, cache dibangun ulang sekali. Nonaktifkan jika objek, efek, atau warna hanya bermasalah setelah mulai ulang tetapi normal saat cache baru pertama digunakan.',
+    'Show shader notes in the corner': 'Tampilkan catatan shader di sudut',
+    'The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?': 'Launcher tidak dapat menulis ke {}, sehingga tidak dapat mengganti dirinya di sana. Buka halaman rilis untuk mengunduh versi baru secara manual?',
+    'The shader cache is already empty.': 'Cache shader sudah kosong.',
+    'Version {} is out, but it has no Linux build yet.': 'Versi {} telah tersedia, tetapi belum memiliki build Linux.',
+})
+
+# The weapon cycle rows of the keyboard table.
+EXTRA['zh'].update({'Next weapon': '下一把武器', 'Previous weapon': '上一把武器'})
+EXTRA['id'].update({'Next weapon': 'Senjata berikutnya', 'Previous weapon': 'Senjata sebelumnya'})
+
+EXTRA['pt'].update({
+    'Move forward': 'Mover para frente', 'Move backward': 'Mover para trás',
+    'Move left': 'Mover para a esquerda', 'Move right': 'Mover para a direita',
+    'Right stick up': 'Analógico direito para cima', 'Right stick down': 'Analógico direito para baixo',
+    'Right stick left': 'Analógico direito para a esquerda', 'Right stick right': 'Analógico direito para a direita',
+    'Clear input': 'Limpar entrada',
+    'Keyboard: enter the rotation with your movement inputs. With default keys, the sequences '
+    'are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these '
+    'inputs too. Adaptive mouse: draw the turn with the mouse.':
+        'Teclado: faça a rotação com suas entradas de movimentação. Com as teclas padrão, as sequências '
+        'são A W D / D W A, D S A / A S D e D S A W / A S D W. Remapear a movimentação também altera '
+        'essas entradas. Mouse adaptativo: desenhe a rotação com o mouse.',
+})
+EXTRA['es'].update({
+    'Move forward': 'Mover hacia delante', 'Move backward': 'Mover hacia atrás',
+    'Move left': 'Mover a la izquierda', 'Move right': 'Mover a la derecha',
+    'Right stick up': 'Stick derecho hacia arriba', 'Right stick down': 'Stick derecho hacia abajo',
+    'Right stick left': 'Stick derecho a la izquierda', 'Right stick right': 'Stick derecho a la derecha',
+    'Clear input': 'Borrar entrada',
+    'Keyboard: enter the rotation with your movement inputs. With default keys, the sequences '
+    'are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these '
+    'inputs too. Adaptive mouse: draw the turn with the mouse.':
+        'Teclado: introduce la rotación con tus entradas de movimiento. Con las teclas predeterminadas, '
+        'las secuencias son A W D / D W A, D S A / A S D y D S A W / A S D W. Reasignar el movimiento '
+        'también cambia estas entradas. Ratón adaptativo: dibuja la rotación con el ratón.',
+})
+
+EXTRA['zh'].update({
+    'Move forward': '向前移动', 'Move backward': '向后移动',
+    'Move left': '向左移动', 'Move right': '向右移动',
+    'Right stick up': '右摇杆向上', 'Right stick down': '右摇杆向下',
+    'Right stick left': '右摇杆向左', 'Right stick right': '右摇杆向右',
+    'Clear input': '清除绑定',
+    'Keyboard: enter the rotation with your movement inputs. With default keys, the sequences '
+    'are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these '
+    'inputs too. Adaptive mouse: draw the turn with the mouse.':
+        '键盘：使用移动绑定输入旋转。默认按键序列为 A W D / D W A、D S A / A S D 和 D S A W / A S D W。'
+        '重新绑定移动按键后，这些输入也会随之改变。自适应鼠标：用鼠标画出旋转。',
+})
+EXTRA['id'].update({
+    'Move forward': 'Bergerak maju', 'Move backward': 'Bergerak mundur',
+    'Move left': 'Bergerak ke kiri', 'Move right': 'Bergerak ke kanan',
+    'Right stick up': 'Stik kanan ke atas', 'Right stick down': 'Stik kanan ke bawah',
+    'Right stick left': 'Stik kanan ke kiri', 'Right stick right': 'Stik kanan ke kanan',
+    'Clear input': 'Hapus input',
+    'Keyboard: enter the rotation with your movement inputs. With default keys, the sequences '
+    'are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these '
+    'inputs too. Adaptive mouse: draw the turn with the mouse.':
+        'Keyboard: masukkan putaran dengan input gerakan Anda. Dengan tombol default, urutannya adalah '
+        'A W D / D W A, D S A / A S D dan D S A W / A S D W. Mengubah pemetaan gerakan juga mengubah '
+        'input ini. Mouse adaptif: gambar putaran dengan mouse.',
+})
+
+EXTRA.setdefault('pt', {}).update({
+    'Choose Configure next to a control. Each change is saved immediately.':
+        'Clique em Configurar ao lado de um comando. Cada alteração é salva na hora.',
+    'Game control': 'Comando no jogo', 'Assigned input': 'Entrada do controle',
+    'Configure': 'Configurar', 'Clear': 'Limpar', 'Close': 'Fechar',
+    'Cancel capture': 'Cancelar captura', 'Listening…': 'Aguardando…',
+    'Not configured': 'Não configurado', 'Button {}': 'Botão {}',
+    'D-pad {}: {}': 'Direcional {}: {}', 'Axis {} ({})': 'Eixo {} ({})',
+    'Left stick horizontal': 'Analógico esquerdo , horizontal',
+    'Left stick vertical': 'Analógico esquerdo , vertical',
+    'Right stick horizontal': 'Analógico direito , horizontal',
+    'Right stick vertical': 'Analógico direito , vertical',
+    'Configure any control, in any order.': 'Configure qualquer comando, na ordem que preferir.',
+    'Saved changes are kept when you close this window.':
+        'As alterações salvas são mantidas ao fechar esta janela.',
+    'Hold the input briefly. It will be saved for this control only.':
+        'Mantenha a entrada por um instante. Ela será salva apenas para este comando.',
+    'Saved: {}': 'Salvo: {}',
+    'Capture canceled. Previously saved changes are kept.':
+        'Captura cancelada. As alterações já salvas foram mantidas.',
+    'The change was not saved. Configure the control again to retry.':
+        'A alteração não foi salva. Configure o comando novamente para tentar de novo.',
+    'That input is assigned to another control. Clear its row first or choose another input.':
+        'Essa entrada já está em outro comando. Limpe a linha dele ou escolha outra entrada.',
+    'Set up a controller': 'Configurar um controle',
+    'Connect your controller, select it, then choose Start mapping.':
+        'Conecte seu controle, selecione-o e clique em Iniciar mapeamento.',
+    'Start mapping': 'Iniciar mapeamento',
+    'Save mapping': 'Salvar mapeamento',
+    'Back': 'Voltar', 'Skip': 'Pular', 'Cancel': 'Cancelar',
+    'No controller found. Connect it and choose Refresh.':
+        'Nenhum controle encontrado. Conecte-o e clique em Atualizar.',
+    '{} buttons, {} axes, {} D-pad hats': '{} botões, {} eixos, {} direcionais',
+    'Release all buttons and let the sticks rest.':
+        'Solte todos os botões e deixe os analógicos em repouso.',
+    'Release all buttons and the D-pad before starting.':
+        'Solte todos os botões e o direcional antes de começar.',
+    'Step {} of {}': 'Etapa {} de {}',
+    'Press {}': 'Pressione {}',
+    'Cross / A': 'X / A', 'Circle / B': 'Círculo / B',
+    'Square / X': 'Quadrado / X', 'Triangle / Y': 'Triângulo / Y',
+    'Release the previous input before continuing.': 'Solte o comando anterior para continuar.',
+    'Hold the requested input briefly. Skip controls your device does not have.':
+        'Mantenha o comando solicitado por um instante. Pule os comandos que seu controle não possui.',
+    'That input is already mapped. Use another input or skip this step.':
+        'Esse comando já foi mapeado. Use outro ou pule esta etapa.',
+    'Map Cross / A before saving.': 'Mapeie X / A antes de salvar.',
+    'Test your controller': 'Teste seu controle',
+    'Mapping complete': 'Mapeamento concluído',
+    'Press buttons and move the sticks to check them. Then choose Save mapping.':
+        'Aperte os botões e mova os analógicos para conferir. Depois clique em Salvar mapeamento.',
+    'Pressed: {}': 'Pressionado: {}',
+    'Left stick: {} / {}   Right stick: {} / {}\nL2: {}   R2: {}':
+        'Analógico esquerdo: {} / {}   Direito: {} / {}\nL2: {}   R2: {}',
+    'D-pad up': 'Direcional para cima', 'D-pad down': 'Direcional para baixo',
+    'D-pad left': 'Direcional para a esquerda', 'D-pad right': 'Direcional para a direita',
+    'Move the left stick to the right': 'Mova o analógico esquerdo para a direita',
+    'Move the left stick down': 'Mova o analógico esquerdo para baixo',
+    'Move the right stick to the right': 'Mova o analógico direito para a direita',
+    'Move the right stick down': 'Mova o analógico direito para baixo',
+    'Controller disconnected. Reconnect it and choose Refresh.':
+        'O controle foi desconectado. Reconecte-o e clique em Atualizar.',
+    'Could not save mapping': 'Não foi possível salvar o mapeamento',
+    'Controller ready': 'Controle pronto',
+    'Mapping saved for the next game start. Any game button remapping in Controls still applies.':
+        'Mapeamento salvo para a próxima inicialização. Os remapeamentos de botões na seção Controles continuam valendo.',
+    'Stop the game before setting up a controller.': 'Feche o jogo antes de configurar um controle.',
+    'SDL3 was not found. Use a complete port installation or build the project first.':
+        'A SDL3 não foi encontrada. Use uma instalação completa do port ou compile o projeto primeiro.',
+})
+
+EXTRA.setdefault('es', {}).update({
+    'Set up a controller': 'Configurar un mando',
+    'Stop the game before setting up a controller.': 'Cierra el juego antes de configurar un mando.',
+})
 
 _tables = {}
 

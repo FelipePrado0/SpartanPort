@@ -1,1 +1,8 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Latest release
+    url: https://github.com/FelipePrado0/SpartanPort/releases/latest
+    about: Download the newest version first, your problem may already be fixed.
+  - name: Troubleshooting
+    url: https://github.com/FelipePrado0/SpartanPort#troubleshooting
+    about: Common setup and launch problems with their solutions.

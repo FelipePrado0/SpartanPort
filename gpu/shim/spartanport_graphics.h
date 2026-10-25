@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -77,6 +78,22 @@ constexpr int IndexOf(const std::array<T, N>& values, const T& value, int fallba
 
 inline int ParseDisplayMode(std::string_view text) {
     return IndexOf(DisplayModeKeys, text, Windowed);
+}
+/// The primary display, the default when the launcher saved no monitor choice. -1 keeps it distinct
+/// from an explicit index 0, which names the first display SDL3 lists even when it is not the primary.
+inline constexpr int PrimaryMonitor = -1;
+/// The display the window opens on: an index into the list window.cpp reads from SDL3, or
+/// PrimaryMonitor. The value comes from the launcher (SPARTAN_MONITOR), so it is untrusted text:
+/// empty, negative, non-numeric or too large for an int falls back to PrimaryMonitor.
+inline int ParseMonitor(std::string_view text) {
+    if (text.empty()) return PrimaryMonitor;
+    int index = 0;
+    for (const char digit : text) {
+        if (digit < '0' || digit > '9') return PrimaryMonitor;
+        if (index > (std::numeric_limits<int>::max() - (digit - '0')) / 10) return PrimaryMonitor;
+        index = index * 10 + (digit - '0');
+    }
+    return index;
 }
 /// A listed limit, else unlimited.
 inline int ParseFpsLimit(int value) {

@@ -25,6 +25,8 @@ install -m644 "$icon" "$share/launcher/spartanport.png"
 install -m644 launcher/logo.png "$share/launcher/logo.png"
 install -m644 launcher/Cinzel-Black.ttf "$share/launcher/Cinzel-Black.ttf"
 install -m644 launcher/OFL-Cinzel.txt "$share/launcher/OFL-Cinzel.txt"
+install -m644 launcher/BodoniModa.ttf "$share/launcher/BodoniModa.ttf"
+install -m644 launcher/OFL-BodoniModa.txt "$share/launcher/OFL-BodoniModa.txt"
 
 # The launcher also runs run.py (--run) and the preparation scripts (--script) itself, as on
 # Windows: the standard modules those scripts import come along as hidden imports.

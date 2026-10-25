@@ -253,39 +253,118 @@ static ABI int32_t msg_progress(uint32_t target, uint32_t value) { (void)value; 
 static ABI int32_t msg_result(unsigned char *out) { return dialog_result(1,out,0); }
 /* SaveDataDialog. OrbisSaveDataDialogParam: BaseParam (48), size, mode @52, dispType @56,
  * animParam @64, items @72, ..., userData @112. SaveDialogItems: userId @0, titleId @8,
- * dirName @16 (32-byte names), dirNameNum @24, newItem @32 (title @0), focusPos @40.
+ * dirName @16 (32-byte names), dirNameNum @24, newItem @32 (title @0, icon @8, size @16), focusPos @40.
  * A list (mode 1) is shown for the player to choose; every other mode answers for the
  * first listed save. The result names the chosen save ("" = the new item). */
 #define SAVE_MODE_LIST 1
 #define SAVE_RESULT_CANCELED 1
 static struct {
-    uint32_t mode, result;
+    uint32_t mode, result, type;
     void *user_data;
     char dirs[32][32];
-    int dir_count, has_new, choosing;
+    int dir_count, has_new, choosing, selected;
+    unsigned char *new_icon;
+    uint64_t new_icon_size;
 } save_dialog;
-static char save_labels[33][200], save_icons[33][720];
-static void save_label(char *out, size_t size, const char *dir) {
+static char save_labels[33][2700], save_icons[33][720], save_question[2800];
+static const char *save_preview_path;
+void runtime_savedata_preview_path(const char *path) { save_preview_path=path; }
+static const char *save_text(const char *english, const char *portuguese) {
+    const char *ui=getenv("SPARTAN_UI_LANGUAGE");
+    int pt=ui && *ui ? !strncmp(ui,"pt",2) : language()==7 || language()==17;
+    return pt ? portuguese : english;
+}
+/* Older saves contain single-byte accents; keep valid UTF-8 and convert legacy bytes. */
+static void save_utf8(char *out, size_t size, const unsigned char *in, size_t limit) {
+    size_t n=0;
+    for (size_t i=0;i<limit && in[i] && n+4<size;) {
+        uint32_t c=in[i];
+        if (c>=0xC2 && c<=0xF4) {
+            size_t want=c<0xE0 ? 2 : c<0xF0 ? 3 : 4;
+            uint32_t value=c & (want==2 ? 31 : want==3 ? 15 : 7);
+            size_t k=1;
+            while (k<want && i+k<limit && (in[i+k]&0xC0)==0x80)
+                value=(value<<6)|(in[i+k++]&63);
+            if (k==want && value>=(want==2 ? 0x80u : want==3 ? 0x800u : 0x10000u) &&
+                value<=0x10FFFF && !(value>=0xD800 && value<=0xDFFF)) {
+                memcpy(out+n,in+i,want); n+=want; i+=want; continue;
+            }
+        }
+        if ((c<32 && c!='\n') || (c>=0x7F && c<0xA0)) c='?';
+        if (c<0x80) out[n++]=(char)c;
+        else { out[n++]=(char)(0xC0|(c>>6)); out[n++]=(char)(0x80|(c&63)); }
+        ++i;
+    }
+    out[n]=0;
+}
+static void save_label(char *out, size_t size, const char *dir, int compact) {
     unsigned char param[RUNTIME_SAVE_PARAM_SIZE];
-    if (runtime_savedata_param(USER_ID,dir,param)) { snprintf(out,size,"%s",dir); return; }
+    const char *unknown=save_text("Difficulty / play time unavailable","Dificuldade / tempo de jogo indisponíveis");
+    if (runtime_savedata_param(USER_ID,dir,param)) {
+        snprintf(out,size,"%s\n%s",compact ? save_text("Location unavailable","Local indisponível") : dir,unknown); return;
+    }
     int64_t mtime; memcpy(&mtime,param+1288,8);
     time_t t=(time_t)mtime; struct tm tm;
 #ifdef _WIN32
-    localtime_s(&tm,&t);
+    int dated=mtime>0 && localtime_s(&tm,&t)==0;
 #else
-    localtime_r(&t,&tm);
+    int dated=mtime>0 && localtime_r(&t,&tm)!=NULL;
 #endif
-    char when[32]; strftime(when,sizeof(when),"%Y-%m-%d %H:%M",&tm);
-    const char *title=(const char *)param, *subtitle=(const char *)param+128;
-    /* Title, subtitle and date on their own lines, beside the save's picture. */
-    snprintf(out,size,"%.60s\n%.60s%s%s",title[0] ? title : dir,subtitle,subtitle[0] ? "\n" : "",when);
+    char when[32]="";
+    if (dated && !strftime(when,sizeof(when),"%Y-%m-%d %H:%M",&tm)) when[0]=0;
+    char title[257], subtitle[257], detail[2049];
+    save_utf8(title,sizeof(title),param,128);
+    save_utf8(subtitle,sizeof(subtitle),param+128,128);
+    save_utf8(detail,sizeof(detail),param+256,1024);
+    if (compact) {
+        snprintf(out,size,"%s\n%s\n%s",subtitle[0] ? subtitle : save_text("Location unavailable","Local indisponível"),
+                 when[0] ? when : save_text("Date unavailable","Data indisponível"),detail[0] ? detail : unknown);
+    } else snprintf(out,size,"%s\n%s%s%s\n%s",title[0] ? title : dir,subtitle,subtitle[0] ? "\n" : "",
+             when[0] ? when : save_text("Date unavailable","Data indisponível"),detail[0] ? detail : unknown);
+}
+static void save_show_list(int focus) {
+    const char *labels[33], *icons[33]; int n=0;
+    if (save_dialog.has_new) {
+        snprintf(save_labels[n],sizeof(save_labels[n]),"%s",save_text("New save","Novo save"));
+        labels[n]=save_labels[n]; icons[n]=NULL; ++n;
+    }
+    for (int i=0;i<save_dialog.dir_count;++i) {
+        save_label(save_labels[n],sizeof(save_labels[n]),save_dialog.dirs[i],0); labels[n]=save_labels[n];
+        icons[n]=runtime_savedata_icon(USER_ID,save_dialog.dirs[i],save_icons[n],sizeof(save_icons[n])) ? NULL : save_icons[n];
+        ++n;
+    }
+    const char *title=save_dialog.type==1 ? save_text("Save game","Salvar jogo")
+                      : save_dialog.type==2 ? save_text("Load game","Carregar jogo") : save_text("Delete save","Excluir save");
+    save_dialog.choosing=n && spartanportgpu_choice_begin(title,labels,icons,n,focus) ? 1 : 0;
+    if (!save_dialog.choosing) {
+        save_dialog.result=SAVE_RESULT_CANCELED;
+        dialogs[2].status=DIALOG_FINISHED; dialogs[2].button=0;
+    } else dialogs[2].status=DIALOG_RUNNING;
 }
 static ABI int32_t save_init(void) { return dialog_init(2); }
+static void save_read_preview(void) {
+    static const char prefix[]="/app0/EXEC/ICONS/SAVEDATA/SAVEPT";
+    const char *path=save_preview_path;
+    const size_t head=sizeof(prefix)-1;
+    if (!path || strnlen(path,128)!=head+6 || strncmp(path,prefix,head) ||
+        path[head]<'0' || path[head]>'9' || path[head+1]<'0' || path[head+1]>'9' || strcmp(path+head+2,".PNG")) return;
+    int64_t fd=runtime_file_open(path,0,0);
+    if (fd<0) return;
+    const size_t limit=4u*1024u*1024u;
+    unsigned char *png=malloc(limit+1);
+    int64_t size=png ? runtime_file_read((int)fd,png,limit+1) : -1;
+    runtime_file_close((int)fd);
+    if (size>0 && (uint64_t)size<=limit) {
+        save_dialog.new_icon=png; save_dialog.new_icon_size=(uint64_t)size;
+    } else free(png);
+}
 static ABI int32_t save_open(const unsigned char *p) {
     if (!p) return DIALOG_ARG_NULL;
     if (!dialogs[2].initialized) return DIALOG_NOT_INITIALIZED;
+    free(save_dialog.new_icon);
     memset(&save_dialog,0,sizeof(save_dialog));
     memcpy(&save_dialog.mode,p+52,4);
+    memcpy(&save_dialog.type,p+56,4);
     memcpy(&save_dialog.user_data,p+112,8);
     const unsigned char *items; memcpy(&items,p+72,8);
     if (items) {
@@ -294,32 +373,47 @@ static ABI int32_t save_open(const unsigned char *p) {
         for (uint32_t i=0;dirs && i<count && save_dialog.dir_count<32;++i)
             if (dirs[i*32]) memcpy(save_dialog.dirs[save_dialog.dir_count++],dirs+i*32,31);
         save_dialog.has_new=new_item!=NULL;
+        if (new_item && save_dialog.mode==SAVE_MODE_LIST && save_dialog.type==1) {
+            const unsigned char *icon; uint64_t size;
+            memcpy(&icon,(const unsigned char *)new_item+8,8);
+            memcpy(&size,(const unsigned char *)new_item+16,8);
+            if (icon && size && size<=4u*1024u*1024u) {
+                save_dialog.new_icon=malloc((size_t)size);
+                if (save_dialog.new_icon) {
+                    memcpy(save_dialog.new_icon,icon,(size_t)size);
+                    save_dialog.new_icon_size=size;
+                }
+            }
+        }
     }
     if (save_dialog.mode!=SAVE_MODE_LIST) return dialog_open_mode(2,p,52,5);
-    const char *labels[33], *icons[33]; int n=0;
-    if (save_dialog.has_new) { snprintf(save_labels[n],sizeof(save_labels[n]),"New save"); labels[n]=save_labels[n]; icons[n]=NULL; ++n; }
-    for (int i=0;i<save_dialog.dir_count;++i) {
-        save_label(save_labels[n],sizeof(save_labels[n]),save_dialog.dirs[i]); labels[n]=save_labels[n];
-        icons[n]=runtime_savedata_icon(USER_ID,save_dialog.dirs[i],save_icons[n],sizeof(save_icons[n])) ? NULL : save_icons[n];
-        ++n;
-    }
-    uint32_t type; memcpy(&type,p+56,4);
-    const char *title=type==1 ? "Save game" : type==2 ? "Load game" : "Delete save";
-    if (!n || !spartanportgpu_choice_begin(title,labels,icons,n,0)) {
-        printf("Runtime: SaveDataDialog list (%s): %s\n",title,n ? "no window, cancelled" : "no saves, cancelled");
-        save_dialog.result=SAVE_RESULT_CANCELED;
-        dialogs[2].status=DIALOG_FINISHED; dialogs[2].button=0;
-        return 0;
-    }
-    printf("Runtime: SaveDataDialog list (%s): %d entries shown\n",title,n);
-    save_dialog.choosing=1;
-    dialogs[2].status=DIALOG_RUNNING;
+    if (save_dialog.type==1 && !save_dialog.new_icon) save_read_preview();
+    save_show_list(0);
     return 0;
 }
 static ABI int32_t save_status(void) {
     if (save_dialog.choosing) {
         int choice=spartanportgpu_choice_poll();
         if (choice!=-1) {
+            if (save_dialog.choosing==2) {
+                if (choice!=0) { save_show_list(save_dialog.selected); return dialog_status(2); }
+                choice=save_dialog.selected;
+            } else if (choice>=save_dialog.has_new && choice<save_dialog.dir_count+save_dialog.has_new && save_dialog.type==1) {
+                save_dialog.selected=choice;
+                int dir=choice-save_dialog.has_new;
+                char metadata[2700];
+                save_label(metadata,sizeof(metadata),save_dialog.dirs[dir],1);
+                snprintf(save_question,sizeof(save_question),"%s\n\n%s",
+                         save_text("Overwrite this save?","Sobrescrever este save?"),
+                         metadata);
+                const char *options[]={save_text("Overwrite","Sobrescrever"),save_text("Cancel","Cancelar")};
+                if (spartanportgpu_choice_confirm(save_question,options,2,1,save_dialog.new_icon,save_dialog.new_icon_size,
+                                                 save_text("New save","Novo save"),save_text("Preview unavailable","Prévia indisponível"))) {
+                    save_dialog.choosing=2; return dialog_status(2);
+                }
+                choice=-2;
+            }
+            if (choice>=save_dialog.dir_count+save_dialog.has_new) choice=-2;
             save_dialog.choosing=0;
             dialogs[2].status=DIALOG_FINISHED;
             if (choice<0) { save_dialog.result=SAVE_RESULT_CANCELED; dialogs[2].button=0; }
@@ -337,8 +431,11 @@ static ABI int32_t save_status(void) {
     }
     return dialog_status(2);
 }
-static ABI int32_t save_term(void) { return dialog_term(2); }
-static ABI int32_t save_close(void) { return dialog_close(2); }
+static void save_release_icon(void) {
+    free(save_dialog.new_icon); save_dialog.new_icon=NULL; save_dialog.new_icon_size=0;
+}
+static ABI int32_t save_term(void) { save_release_icon(); save_dialog.choosing=0; return dialog_term(2); }
+static ABI int32_t save_close(void) { save_release_icon(); save_dialog.choosing=0; return dialog_close(2); }
 static ABI int32_t save_progress(uint32_t target, uint32_t rate) { (void)rate; return dialog_progress(2,target); }
 /* OrbisSaveDataDialogResult: mode, result, buttonId, dirName* @16, param* @24, userData @32. */
 static ABI int32_t save_result(unsigned char *out) {
@@ -428,18 +525,234 @@ static ABI int32_t ime_result(uint32_t *result) {
 }
 static ABI int32_t ime_term(void) { memset(&ime,0,sizeof(ime)); return 0; }
 
-/* ---- Trophies: accepted locally, recorded in the log ---- */
+/* ---- Trophies: unlocks are kept on disk and reported back to the game ----
+ * The count of trophies and their icons (TROP000.PNG, TROP001.PNG...) come from the game's
+ * own sce_sys/trophy/trophy00.trp. The unlocked set is saved in <user dir>/trophies.dat
+ * (user dir: SPARTAN_USER_DIR, or "user"). The texts come from <user dir>/trophy_texts.txt (written by the
+ * launcher in its language) or, without it, from a hand-made trophy_names.txt. */
+#define TROPHY_MAX 128
+#define TROPHY_ALREADY_UNLOCKED ((int32_t)0x80551609)
+static uint32_t trophy_flags[4];
+static uint32_t trophy_total;
+static int trophy_ready;
+
+static const char *trophy_state_path(void) {
+    static char path[512];
+    const char *dir=getenv("SPARTAN_USER_DIR");
+    snprintf(path,sizeof(path),"%s/trophies.dat",dir && dir[0] ? dir : "user");
+    return path;
+}
+static uint32_t trp_be32(const unsigned char *p) { return (uint32_t)p[0]<<24|(uint32_t)p[1]<<16|(uint32_t)p[2]<<8|p[3]; }
+static void trophy_save(void) {
+    FILE *f=fopen(trophy_state_path(),"wb");
+    if (!f) { printf("Runtime: trophies: cannot write %s\n",trophy_state_path()); return; }
+    fwrite(trophy_flags,sizeof(trophy_flags),1,f); fclose(f);
+}
+/* The whole trophy00.trp stays in memory (about 3 MB): trophy_icon() hands the overlay the PNG of
+ * the trophy that was just unlocked. */
+static int trophy_ids[TROPHY_MAX]; /* ids of the icons in the TRP, ascending */
+static uint32_t trophy_id_count;
+static unsigned char *trp_data;
+static uint64_t trp_size;
+static uint32_t trp_files, trp_elem;
+
+static uint64_t trp_be64(const unsigned char *p) { return (uint64_t)trp_be32(p)<<32 | trp_be32(p+4); }
+/* The PNG of trophy `id` (TROP000.PNG, TROP001.PNG...) inside the TRP, or 0. */
+static int trophy_icon(int32_t id,const unsigned char **png,uint64_t *size) {
+    char want[16];
+    snprintf(want,sizeof(want),"TROP%03d.PNG",id);
+    for (uint32_t i=0;trp_data && i<trp_files;i++) {
+        uint64_t entry=0x60+(uint64_t)i*trp_elem;
+        if (entry+0x30>trp_size) break;
+        const unsigned char *e=trp_data+entry;
+        if (strncmp((const char *)e,want,32)) continue;
+        uint64_t off=trp_be64(e+0x20), len=trp_be64(e+0x28);
+        if (off>trp_size || len>trp_size-off || !len) return 0;
+        *png=trp_data+off; *size=len;
+        return 1;
+    }
+    return 0;
+}
+/* Texts: <user dir>/trophy_texts.txt (the launcher writes it in its language on every start) or, when
+ * there is none, <user dir>/trophy_names.txt. One "ID=Name | Description" per line (the description is
+ * optional), "@label=text" for the labels of the notice and of the trophy list, # starts a comment. */
+static const char *const trophy_label_keys[9]={"heading","notice","unlocked","locked","all","only_unlocked","only_locked","counter","hint"};
+static char trophy_label[9][200];
+static char trophy_names[TROPHY_MAX][64];
+static char trophy_details[TROPHY_MAX][160];
+static FILE *trophy_open_text(char *path,size_t size) {
+    const char *dir=getenv("SPARTAN_USER_DIR");
+    static const char *const files[2]={"trophy_texts.txt","trophy_names.txt"};
+    for (int i=0;i<2;i++) {
+        snprintf(path,size,"%s/%s",dir && dir[0] ? dir : "user",files[i]);
+        FILE *f=fopen(path,"rb");
+        if (f) return f;
+    }
+    return 0;
+}
+static void trophy_load_names(void) {
+    char path[512];
+    FILE *f=trophy_open_text(path,sizeof(path));
+    if (!f) return;
+    char line[512];
+    unsigned loaded=0;
+    while (fgets(line,sizeof(line),f)) {
+        char *p=line;
+        if ((unsigned char)p[0]==0xEF && (unsigned char)p[1]==0xBB && (unsigned char)p[2]==0xBF) p+=3; /* UTF-8 BOM */
+        if (*p=='#') continue;
+        char *eq=strchr(p,'=');
+        if (!eq) continue;
+        char *value=eq+1;
+        size_t n=strlen(value);
+        while (n && (value[n-1]=='\n' || value[n-1]=='\r' || value[n-1]==' ')) value[--n]=0;
+        while (*value==' ') value++;
+        if (*p=='@') {
+            *eq=0;
+            for (int k=0;k<9;k++) if (!strcmp(p+1,trophy_label_keys[k])) snprintf(trophy_label[k],sizeof(trophy_label[k]),"%s",value);
+            continue;
+        }
+        char *end; long id=strtol(p,&end,10);
+        if (end==p || id<0 || id>=TROPHY_MAX) continue;
+        char *detail="";
+        char *bar=strchr(value,'|');
+        if (bar) {
+            *bar=0; detail=bar+1;
+            while (*detail==' ') detail++;
+            size_t d=strlen(detail);
+            while (d && detail[d-1]==' ') detail[--d]=0;
+            size_t m=strlen(value);
+            while (m && value[m-1]==' ') value[--m]=0;
+        }
+        if (!*value) continue;
+        snprintf(trophy_names[id],sizeof(trophy_names[id]),"%s",value);
+        snprintf(trophy_details[id],sizeof(trophy_details[id]),"%s",detail);
+        loaded++;
+    }
+    fclose(f);
+    printf("Runtime: trophies: %u texts read from %s\n",loaded,path);
+}
+static void trophy_load_once(void) {
+    if (trophy_ready) return;
+    trophy_ready=1;
+    FILE *f=fopen(trophy_state_path(),"rb");
+    if (f) { if (fread(trophy_flags,sizeof(trophy_flags),1,f)!=1) memset(trophy_flags,0,sizeof(trophy_flags)); fclose(f); }
+    trophy_load_names();
+    int fd=(int)runtime_file_open("/app0/sce_sys/trophy/trophy00.trp",0,0);
+    if (fd<0) { note("trophies: trophy00.trp not found, trophy count unknown"); return; }
+    const uint64_t limit=32u<<20;
+    uint64_t cap=4u<<20, got=0;
+    unsigned char *buf=malloc(cap);
+    while (buf) {
+        if (got==cap) {
+            if (cap>=limit) break;
+            unsigned char *bigger=realloc(buf,cap*2);
+            if (!bigger) break;
+            buf=bigger; cap*=2;
+        }
+        int64_t n=(int64_t)runtime_file_read(fd,buf+got,cap-got);
+        if (n<=0) break;
+        got+=(uint64_t)n;
+    }
+    runtime_file_close(fd);
+    /* TRP header (big endian): magic DC A2 4D 00, files_count at 0x10, element_size at 0x14;
+     * the entries start at 0x60 and each is a 32-byte file name, offset (u64), size (u64). */
+    if (!buf || got<0x60 || buf[0]!=0xDC || buf[1]!=0xA2 || buf[2]!=0x4D || buf[3]!=0x00) { note("trophies: unexpected trophy00.trp header"); free(buf); return; }
+    uint32_t files=trp_be32(buf+0x10), elem=trp_be32(buf+0x14);
+    if (elem<0x30 || elem>0x100) { note("trophies: unexpected trophy00.trp entry size"); free(buf); return; }
+    trp_data=buf; trp_size=got; trp_files=files; trp_elem=elem;
+    uint32_t total=0;
+    for (uint32_t i=0;i<files;i++) {
+        uint64_t off=0x60+(uint64_t)i*elem;
+        if (off+32>got) break;
+        const char *name=(const char *)buf+off;
+        if (!strncmp(name,"TROP",4) && name[4]>='0' && name[4]<='9' && name[5]>='0' && name[5]<='9' && name[6]>='0' && name[6]<='9' && !strncmp(name+7,".PNG",5)) {
+            int id=(name[4]-'0')*100+(name[5]-'0')*10+(name[6]-'0');
+            if (id<TROPHY_MAX && total<TROPHY_MAX) trophy_ids[total++]=id;
+        }
+    }
+    trophy_total=total;
+    trophy_id_count=total;
+    printf("Runtime: trophies: %u in trophy00.trp, %u already unlocked\n",total,
+        (unsigned)(__builtin_popcount(trophy_flags[0])+__builtin_popcount(trophy_flags[1])+__builtin_popcount(trophy_flags[2])+__builtin_popcount(trophy_flags[3])));
+    /* The in-game list (F8 / R3+R2) and the notice labels: the texts above, the icons from the TRP. */
+    static SpartanGpuTrophyInfo infos[TROPHY_MAX];
+    for (uint32_t i=0;i<total;i++) {
+        int id=trophy_ids[i];
+        if (!trophy_names[id][0]) snprintf(trophy_names[id],sizeof(trophy_names[id]),"Trophy ID %d",id);
+        const unsigned char *png=0; uint64_t png_size=0;
+        if (!trophy_icon(id,&png,&png_size)) { png=0; png_size=0; }
+        infos[i].id=id; infos[i].name=trophy_names[id]; infos[i].detail=trophy_details[id];
+        infos[i].png=png; infos[i].png_size=png_size;
+    }
+    SpartanGpuTrophyLabels labels={
+        trophy_label[0][0] ? trophy_label[0] : 0, trophy_label[1][0] ? trophy_label[1] : 0,
+        trophy_label[2][0] ? trophy_label[2] : 0, trophy_label[3][0] ? trophy_label[3] : 0,
+        trophy_label[4][0] ? trophy_label[4] : 0, trophy_label[5][0] ? trophy_label[5] : 0,
+        trophy_label[6][0] ? trophy_label[6] : 0, trophy_label[7][0] ? trophy_label[7] : 0,
+        trophy_label[8][0] ? trophy_label[8] : 0};
+    spartanportgpu_trophy_setup(&labels,infos,(int)total,(const volatile uint32_t *)trophy_flags);
+}
 static ABI int32_t trophy_context(int32_t *ctx,int32_t user,uint32_t label,uint64_t options) {
     (void)user; (void)label; (void)options;
     if (!ctx) return TROPHY_INVALID;
     *ctx=new_id(); return 0;
 }
 static ABI int32_t trophy_handle(int32_t *handle) { if (!handle) return TROPHY_INVALID; *handle=new_id(); return 0; }
-static ABI int32_t trophy_register(int32_t ctx,int32_t handle,uint64_t options) { (void)ctx; (void)handle; (void)options; return 0; }
+static ABI int32_t trophy_register(int32_t ctx,int32_t handle,uint64_t options) {
+    (void)ctx; (void)handle; (void)options;
+    pthread_mutex_lock(&lock); trophy_load_once(); pthread_mutex_unlock(&lock);
+    return 0;
+}
+/* The notice of an unlocked trophy: its name, description and icon (lock not held). */
+static void trophy_notify(int32_t id) {
+    char notice[64], detail[sizeof(trophy_details[0])];
+    const unsigned char *png=0; uint64_t png_size=0;
+    pthread_mutex_lock(&lock);
+    if (trophy_names[id][0]) snprintf(notice,sizeof(notice),"%s",trophy_names[id]);
+    else snprintf(notice,sizeof(notice),"Trophy ID %d",id);
+    snprintf(detail,sizeof(detail),"%s",trophy_details[id]);
+    int has_icon=trophy_icon(id,&png,&png_size);
+    pthread_mutex_unlock(&lock);
+    spartanportgpu_toast_trophy(notice,detail,has_icon ? png : 0,has_icon ? png_size : 0);
+}
+/* On a PlayStation the system grants the platinum (id 0) with the last trophy: 1 when every other
+ * trophy of the package is unlocked and this call just unlocked the platinum. Lock held. */
+static int trophy_grant_platinum(void) {
+    int has_platinum=0;
+    if (trophy_flags[0]&1u) return 0;
+    for (uint32_t i=0;i<trophy_id_count;i++) {
+        int t=trophy_ids[i];
+        if (t==0) { has_platinum=1; continue; }
+        if (!(trophy_flags[t/32]>>(t%32)&1u)) return 0;
+    }
+    if (!has_platinum) return 0;
+    trophy_flags[0]|=1u;
+    trophy_save();
+    return 1;
+}
 static ABI int32_t trophy_unlock(int32_t ctx,int32_t handle,int32_t id,int32_t *platinum) {
     (void)ctx; (void)handle;
-    printf("Runtime: trophy %d unlocked\n",id);
     if (platinum) *platinum=-1;
+    if (id<0 || id>=TROPHY_MAX) return TROPHY_INVALID;
+    pthread_mutex_lock(&lock);
+    trophy_load_once();
+    uint32_t bit=1u<<(id%32);
+    int already=(trophy_flags[id/32]&bit)!=0;
+    int platinum_now=0;
+    if (!already) {
+        trophy_flags[id/32]|=bit;
+        trophy_save();
+        platinum_now=id!=0 && trophy_grant_platinum();
+    }
+    pthread_mutex_unlock(&lock);
+    if (already) return TROPHY_ALREADY_UNLOCKED;
+    printf("Runtime: trophy %d unlocked\n",id);
+    trophy_notify(id);
+    if (platinum_now) {
+        if (platinum) *platinum=0;
+        printf("Runtime: trophy 0 (platinum) unlocked\n");
+        trophy_notify(0);
+    }
     return 0;
 }
 static ABI int32_t trophy_game_info(int32_t ctx,int32_t handle,void *details,void *data) {
@@ -451,11 +764,13 @@ static ABI int32_t trophy_game_info(int32_t ctx,int32_t handle,void *details,voi
 static ABI int32_t trophy_info(int32_t ctx,int32_t handle,int32_t id,void *details,void *data) {
     (void)id; return trophy_game_info(ctx,handle,details,data);
 }
-/* Nothing is unlocked on this console: an empty 128-trophy flag set. */
 static ABI int32_t trophy_unlock_state(int32_t ctx,int32_t handle,uint32_t *flags,uint32_t *count) {
     if (!flags || !count) return TROPHY_INVALID;
     if (ctx<=0 || handle<=0) return TROPHY_INVALID;
-    memset(flags,0,16); *count=0;
+    pthread_mutex_lock(&lock);
+    trophy_load_once();
+    memcpy(flags,trophy_flags,16); *count=trophy_total;
+    pthread_mutex_unlock(&lock);
     return 0;
 }
 static ABI int32_t trophy_release(int32_t id) { return id>0 ? 0 : TROPHY_INVALID; }

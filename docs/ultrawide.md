@@ -3,7 +3,7 @@
 **English** | [Português (Brasil)](#português-brasil)
 
 The ultrawide sizes are **built in**: choose one in **Render resolution** (launcher or in-game menu); they are
-marked "(beta)". Before that they were a **mod**, still available for older versions: the folder
+the ones nobody has confirmed in game yet are marked "(beta)" (2560x1080, 1440x1080, 2048x1536 and 2560x1920). Before that they were a **mod**, still available for older versions: the folder
 [`extras/mods/Ultrawide`](../extras/mods/Ultrawide)
 (install steps in its README). It uses the patch support of mods: a mod folder can carry game patches
 (XML files with signatures, in its `patches/` folder), applied while the mod is ticked on the Mods
@@ -23,14 +23,14 @@ its proportions, and the vertical view is the same as at 16:9.
 | 5120 × 2160 | 21:9 | **Tested in game** by two players (issue #505); it uses the largest Video Arena the patch can hold (3.98 GiB) |
 | 1920 × 1200 | 16:10 | **Tested in game** (taller than 16:9: no field of view change) |
 | 2560 × 1600 | 16:10 | **Tested in game** (taller than 16:9: no field of view change) |
-| 1280 × 800 | 16:10 | **Tested in game** (the Steam Deck's screen) |
+| 1280 × 800 | 16:10 | **Tested in game** (the Steam Deck's screen; chosen by default on a Steam Deck) |
 | 1280 × 960, 1440 × 1080, 1920 × 1440, 2048 × 1536, 2560 × 1920 | 4:3 | **1280 × 960 and 1920 × 1440 tested** (menu and gameplay: 1280 × 960 on a 5:4 monitor, 1920 × 1440 by a player on a 4:3 CRT, issue #519); the others are not (taller than 16:9, but the game letterboxes on exactly 4:3: the patch avoids that) |
 | 1440 × 900 | 16:10 | **Tested in game** |
 | 1360 × 768 | 16:9 | **Tested in game** (the shape of the original picture; no aspect ratio or field of view change) |
 
 Every size but 1440x1080, 2048x1536 and 2560x1920 was tested in game: on an RX 6700 XT (Windows 11, reference build `d85c8135…`), and
 3440x1440, 5120x1440, 1920x1200 and 2560x1600 also by players in issue #180, 5120x2160 by two players in #505 and 1920x1440 by a player in #519 (thank you!). They stay marked
-"(beta)" until more screens and GPUs confirm them. **If something looks wrong on yours, please say how it looks**
+"(beta)" until a second screen or GPU confirms them: the sizes confirmed in game by players are not marked, so 2560x1080, 1440x1080, 2048x1536 and 2560x1920 still are. **If something looks wrong on yours, please say how it looks**
 (an issue): the resolution, your GPU, and whether anything is cropped, stretched or missing at the edges.
 
 ### Known limitations (outside 16:9)
@@ -48,7 +48,7 @@ They come from the game, which is built for 16:9, and are already known; they wi
 
 Choose a size in **Render resolution** (launcher, **Home** and **Performance**) or in the in-game menu (Insert or
 R3+L2 → Performance → Render resolution). Each one shows its exact size and aspect ratio, for example
-`3440 × 1440 · 21:9 (beta)`. Pick one and **PLAY** (in the game menu: "Apply and restart"). The **Engine frame
+`2560 × 1080 · 21:9 (beta)`. Pick one and **PLAY** (in the game menu: "Apply and restart"). The **Engine frame
 rate** (60, 100, 120, 144, 180 or 240) is a separate choice that works with any resolution.
 
 **Older versions (before 2.4.0):** put `Ultrawide.zip` (made with `python tools/zip_mod.py extras/mods/Ultrawide`)
@@ -118,7 +118,7 @@ python tools/make_ultrawide_patch.py --rebase path/to/eboot_d85c.bin 3440 1440 -
 ## Português (Brasil)
 
 As resoluções ultrawide são **embutidas**: escolha em **Resolução de renderização** (launcher ou menu do jogo);
-elas aparecem com "(beta)". Antes eram um **mod**, que continua disponível para versões antigas: a pasta
+as que ninguém confirmou ainda no jogo aparecem com "(beta)" (2560x1080, 1440x1080, 2048x1536 e 2560x1920). Antes eram um **mod**, que continua disponível para versões antigas: a pasta
 [`extras/mods/Ultrawide`](../extras/mods/Ultrawide) (o passo a
 passo está no README dela). Ele usa o suporte a patches dos mods: uma pasta de mod pode trazer patches de
 jogo (arquivos XML com assinaturas, na pasta `patches/`), aplicados enquanto o mod está marcado na página
@@ -131,14 +131,14 @@ visão vertical é a mesma do 16:9.
 
 **Todas as resoluções, menos 1440x1080, 2048x1536 e 2560x1920, foram testadas no jogo:** numa RX 6700 XT (Windows 11, build de referência
 `d85c8135…`), e 3440x1440, 5120x1440, 1920x1200 e 2560x1600 também por jogadores na issue #180, 5120x2160 por dois jogadores no #505 e 1920x1440 por um jogador (CRT 4:3) no #519. Elas continuam
-marcadas como "(beta)" até mais telas e placas confirmarem; se algo parecer errado na sua, conte numa issue (a
+marcadas como "(beta)" até uma segunda tela ou placa confirmar: os tamanhos confirmados por jogadores no jogo não têm a marca, então 2560x1080, 1440x1080, 2048x1536 e 2560x1920 ainda têm; se algo parecer errado na sua, conte numa issue (a
 resolução, a placa de vídeo e o que aparece cortado, esticado ou faltando nas bordas). Os tamanhos 16:10
 (1920x1200 e 2560x1600): como a câmera mantém o campo horizontal, uma imagem mais alta só mostra mais em cima e
 embaixo, então essas entradas mudam apenas a resolução e o aspect ratio.
 
 **Como usar:** escolha um tamanho em **Resolução de renderização** (launcher, páginas **Início** e
 **Desempenho**) ou no menu do jogo (Insert ou R3+L2 → Performance → Render resolution). Cada opção mostra a
-resolução exata e a proporção, por exemplo `3440 × 1440 · 21:9 (beta)`. Escolha e clique em **JOGAR**. A **Taxa
+resolução exata e a proporção, por exemplo `2560 × 1080 · 21:9 (beta)`. Escolha e clique em **JOGAR**. A **Taxa
 de quadros do motor** (60, 100, 120, 144, 180 ou 240) é uma escolha à parte e vale com qualquer resolução. **Versões antigas
 (antes da 2.4.0):** coloque o `Ultrawide.zip` (gerado com `python tools/zip_mod.py extras/mods/Ultrawide`) ou a
 pasta `Ultrawide` na pasta de mods; o zip é extraído sozinho ao abrir o launcher ou o jogo.

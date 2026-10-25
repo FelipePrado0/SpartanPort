@@ -49,6 +49,8 @@ public:
     [[nodiscard]] bool ConcurrentReads() const;
     /// spartanport: number of blobs ForEachBlob visits (the loading screen's total).
     size_t CountBlobs(BlobType type);
+    /// spartanport: names (without extension) of the blobs of `type`; empty for the zip archive.
+    std::vector<std::string> ListBlobs(BlobType type);
 
 private:
     std::jthread io_worker{};

@@ -114,9 +114,11 @@ static inline unsigned spartanport_qte_build_timed_stub(unsigned char *out, uint
     static const unsigned char body[] = {
         0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, auto */
         0x80,0x38,0x00,                           /* cmp byte [rax], 0 */
-        0x75,0x11,                                /* jne automatic */
+        0x75,0x12,                                /* jne automatic */
         0x8b,0x87,0x98,0x00,0x00,0x00,            /* mov eax, [rdi+0x98] */
-        0xc4,0xe2,0x78,0xf2,0x8f,0x94,0,0,0,      /* andn ecx, eax, [rdi+0x94] */
+        0x89,0xc1,                                /* mov ecx, eax */
+        0xf7,0xd1,                                /* not ecx */
+        0x23,0x8f,0x94,0x00,0x00,0x00,            /* and ecx, [rdi+0x94]: the andn, without BMI1 */
         0xeb,0x10,                                /* jmp back */
         0x0f,0xb7,0x4b,0x10,                      /* automatic: movzx ecx, word [rbx+0x10] */
         0x83,0xc1,0x04,                           /* add ecx, 4 */

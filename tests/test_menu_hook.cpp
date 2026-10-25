@@ -19,6 +19,7 @@ static void quit() {
 // The interpreter frame: [rbp-0x2a0] is the provider table, rax the provider; rdi gets the entry.
 alignas(16) static uint64_t frame[96];
 static uint64_t providers[2] = {0x1111, 0x2222};
+static uint64_t native_provider;
 
 static uint64_t call(unsigned char* stub, uint32_t function, uint64_t provider) {
     uint64_t rdi;
@@ -37,11 +38,24 @@ int main() {
         VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
     assert(stub);
     assert(spartanport_menu_build_stub(stub, reinterpret_cast<uintptr_t>(&quit),
-                                reinterpret_cast<uintptr_t>(&menu_hook_return)) < 256);
+                                reinterpret_cast<uintptr_t>(&menu_hook_return),
+                                reinterpret_cast<uintptr_t>(&native_provider)) < 256);
     frame[96 - 0x2a0 / 8] = reinterpret_cast<uint64_t>(providers);
 
     assert(call(stub, 0x5a, 1) == 0x2222);  // a game builtin: the original lookup
-    assert(call(stub, 0xffe, 0) == 0x1111 && quits == 0);
+    assert(call(stub, 0xffc, 0) == 0x1111 && quits == 0);
+    assert(call(stub, 0xffd, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xffe, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xffe, 1) == 0x2222);  // only GBL (provider 0) is extended
+    assert(call(stub, 0xf00, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xf60, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xf70, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xfb0, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xf90, 1) == 0x2222);
+    assert(call(stub, 0xfc0, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xff7, 0) == reinterpret_cast<uintptr_t>(&native_provider));
+    assert(call(stub, 0xff8, 0) == 0x1111);
+    assert(call(stub, 0xeff, 0) == 0x1111);
     if (!__builtin_setjmp(back)) {
         call(stub, SPARTAN_MENU_EXIT_FUNCTION, 0);
         assert(!"quit returned");

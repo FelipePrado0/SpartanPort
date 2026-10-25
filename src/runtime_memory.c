@@ -236,19 +236,50 @@ static int pool(void) {
     if (backing_base) return 0;
     runtime_memory_reserve();
     uint64_t bytes=POOL_SIZE+FLEX_SPAN;
+    const char *fail_env=getenv("SPARTAN_FAIL_GUEST_MEMORY");
+    if (fail_env) {
+        DWORD err=fail_env[0] && strcmp(fail_env,"1")!=0 ? (DWORD)strtoul(fail_env,NULL,10) : 1450;
+        SetLastError(err);
+        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %lu); is the page file large enough?\n",bytes>>20,err);
+        fflush(stderr);
+        exit(21);
+    }
     section=CreateFileMapping2(INVALID_HANDLE_VALUE,NULL,FILE_MAP_ALL_ACCESS,PAGE_EXECUTE_READWRITE,SEC_COMMIT,bytes,NULL,NULL,0);
-    if (!section) { fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %lu); is the page file large enough?\n",bytes>>20,GetLastError()); return -1; }
+    if (!section) {
+        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %lu); is the page file large enough?\n",bytes>>20,GetLastError());
+        fflush(stderr);
+        exit(21);
+    }
     backing_base=MapViewOfFile3(section,GetCurrentProcess(),NULL,0,bytes,0,PAGE_READWRITE,NULL,0);
-    return backing_base ? 0 : -1;
+    if (!backing_base) win_fail("MapViewOfFile3 (guest memory pool)",0,bytes);
+    return 0;
 }
 #else
 /* Direct memory occupies [0,POOL_SIZE) of the memfd, flexible memory [POOL_SIZE,+FLEX_SPAN). */
 static int pool(void) {
     if (pool_fd>=0) return 0;
+    const char *fail_env=getenv("SPARTAN_FAIL_GUEST_MEMORY");
+    if (fail_env) {
+        int err=fail_env[0] && strcmp(fail_env,"1")!=0 ? (int)strtol(fail_env,NULL,10) : 12;
+        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %d); is /dev/shm or RAM large enough?\n",
+                (POOL_SIZE+FLEX_SPAN)>>20,err);
+        fflush(stderr);
+        exit(21);
+    }
     pool_fd=memfd_create("spartanport-guest-memory", MFD_CLOEXEC);
-    if (pool_fd<0 || ftruncate(pool_fd,(off_t)(POOL_SIZE+FLEX_SPAN))) return -1;
+    if (pool_fd<0 || ftruncate(pool_fd,(off_t)(POOL_SIZE+FLEX_SPAN))) {
+        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %d); is /dev/shm or RAM large enough?\n",
+                (POOL_SIZE+FLEX_SPAN)>>20,errno);
+        fflush(stderr);
+        exit(21);
+    }
     void *view=mmap(NULL,POOL_SIZE+FLEX_SPAN,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_NORESERVE,pool_fd,0);
-    if (view==MAP_FAILED) return -1;
+    if (view==MAP_FAILED) {
+        fprintf(stderr,"Runtime: cannot map %" PRIu64 " MiB of guest memory (error %d)\n",
+                (POOL_SIZE+FLEX_SPAN)>>20,errno);
+        fflush(stderr);
+        exit(21);
+    }
     backing_base=view;
     return 0;
 }

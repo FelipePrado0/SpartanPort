@@ -33,6 +33,7 @@ class PolishLanguageTest(unittest.TestCase):
             'zh': '波兰语',
             'ja': 'ポーランド語',
             'ko': '폴란드어',
+            'id': 'Polandia',
         }
         for lang, expected in expected_translations.items():
             with self.subTest(lang=lang):
