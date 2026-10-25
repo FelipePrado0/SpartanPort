@@ -1,10 +1,11 @@
 # Rust runner parity: Python tests → Rust tests
 
-Every test method of the 18 Python files that test the game runner (`tests/test_prepare.py`,
+Every test method of the 19 Python files that test the game runner (`tests/test_prepare.py`,
 `test_link_libc.py`, `test_link_modules.py`, `test_isa_rewrite.py`, `test_run_isa.py`,
 `test_patches.py`, `test_mods.py`, `test_mod_conflicts.py`, `test_glyphs.py`, `test_content.py`,
 `test_guest_memory.py`, `test_graphics_options.py`, `test_save_backup.py`, `test_pause_menu.py`,
-`test_native_cheats.py`, `test_legacy.py`, `test_discord_presence.py`, `test_game_update.py`; the
+`test_native_cheats.py`, `test_legacy.py`, `test_discord_presence.py`, `test_game_update.py`,
+`test_switch_text.py`; the
 Python runner 2.7.0, reference `003e42b`) with the Rust test of `launcher-rust/` that covers its
 behaviour (spec `2026-10-22-rust-runner-design.md` §7). `tests/test_runner_parity_doc.py` keeps this
 map honest through `tests/parity_doc.py`, the checker it shares with the launcher map
@@ -54,6 +55,9 @@ the second definition is the live one and has the only row (33 definitions, 32 r
 `test_patches.py::test_unavailable_frame_rate_patch_falls_back_to_the_highest_lower_one` tests
 `graphics_options.restrict_to_available`; its row names the Rust test of `graphics_options.rs`.
 `test_game_update.py` has its own rows against `src/runner/game_update.rs`.
+`test_switch_text.py` (the switch attacks' tutorial texts, after 2.7.0) has its own rows against
+`src/runner/switch_text.rs`; `tests/dump.rs::real_switch_text_wads_match_python` compares the copies of
+the dump's language WADs with the Python's.
 The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discovery, conflict and info tests of `src/core/mods.rs` are ports from the launcher work (sub-project 1) that the runner kept using.
 
 ## Counts
@@ -78,7 +82,8 @@ The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discove
 | `tests/test_legacy.py` | 34 | 18 | 6 | 0 | 0 | 10 | 0 |
 | `tests/test_discord_presence.py` | 26 | 22 | 3 | 0 | 0 | 1 | 0 |
 | `tests/test_game_update.py` | 6 | 6 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **326** | **289** | **21** | **4** | **0** | **12** | **0** |
+| `tests/test_switch_text.py` | 4 | 4 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **330** | **293** | **21** | **4** | **0** | **12** | **0** |
 
 ## Map
 
@@ -410,6 +415,10 @@ The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discove
 | `tests/test_game_update.py::GameUpdateTests::test_dumps_are_not_modified` | `src/runner/game_update.rs::tests::dumps_are_not_modified` | ported |
 | `tests/test_game_update.py::GameUpdateTests::test_a_network_share_without_junctions_mirrors_the_tree` | `src/runner/game_update.rs::tests::a_network_share_without_junctions_mirrors_the_tree` | ported |
 | `tests/test_game_update.py::GameUpdateTests::test_different_titles_and_nested_folders_are_refused` | `src/runner/game_update.rs::tests::different_titles_and_nested_folders_are_refused` | ported |
+| `tests/test_switch_text.py::SwitchTextTest::test_cards_end_with_the_new_lines_and_what_follows_moves` | `src/runner/switch_text.rs::cards_end_with_the_new_lines_and_what_follows_moves` | ported |
+| `tests/test_switch_text.py::SwitchTextTest::test_any_wording_of_the_old_sentence` | `src/runner/switch_text.rs::any_wording_of_the_old_sentence` | ported |
+| `tests/test_switch_text.py::SwitchTextTest::test_a_language_whose_font_lacks_a_new_character_keeps_its_text` | `src/runner/switch_text.rs::a_language_whose_font_lacks_a_new_character_keeps_its_text` | ported |
+| `tests/test_switch_text.py::SwitchTextTest::test_build_mounts_copies_and_never_writes_the_game` | `src/runner/switch_text.rs::build_mounts_copies_and_never_writes_the_game` | ported |
 
 ## Known deviations from the Python
 

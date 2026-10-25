@@ -268,6 +268,9 @@ pub fn environment(
     if !value.is_empty() {
         env.insert("SPARTAN_PAD_MAP".into(), value);
     }
+    // The saved choice wins over an inherited variable, as in the Python.
+    env.shift_remove(var("switch_attacks"));
+    put_if_on(&mut env, settings, "switch_attacks");
     // A saved value that is not a choice, or is the runner's own default, is left out.
     let put_choice = |env: &mut IndexMap<String, String>, key: &str| {
         let name = var(key);
@@ -477,6 +480,23 @@ mod tests {
         let (settings, paths, _dir) = setup(json!({"stream_memory": "host"}));
         let env = game_environment(&settings, &paths, "en", &inherited, true);
         assert_eq!(env["SPARTAN_STREAM_MEMORY"], "host");
+    }
+
+    #[test]
+    fn switch_attacks_follow_the_saved_choice() {
+        // Off by default: no variable, also over an inherited one.
+        let (settings, paths, _dir) = setup(json!({}));
+        let inherited = base(&[("SPARTAN_SWITCH_ATTACKS", "1")]);
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert!(!env.contains_key("SPARTAN_SWITCH_ATTACKS"));
+        let (on, paths, _dir) = setup(json!({"switch_attacks": true}));
+        let env = game_environment(&on, &paths, "en", &IndexMap::new(), true);
+        assert_eq!(env["SPARTAN_SWITCH_ATTACKS"], "1");
+        // In the Python's order: after the key and gamepad maps.
+        let keys: Vec<&str> = env.keys().map(String::as_str).collect();
+        let at = keys.iter().position(|key| *key == "SPARTAN_SWITCH_ATTACKS");
+        let key_map = keys.iter().position(|key| *key == "SPARTAN_KEY_MAP");
+        assert!(key_map.is_some() && key_map < at, "{keys:?}");
     }
 
     #[test]
