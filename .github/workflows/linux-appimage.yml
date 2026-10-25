@@ -3,14 +3,15 @@
 # (Actions > Linux AppImage > Run workflow), on the branch to build:
 #   - no tag: build and test only (the AppImage is kept as a workflow artifact).
 #   - tag of an existing release (e.g. windows-v2.2.0): the AppImage replaces the one attached to it.
-#   - new tag (e.g. linux-v2.2.1-test1): test build, published as a pre-release on that commit.
+#   - new tag (e.g. linux-v2.8.0-issue1-test2): test build, published as a pre-release on that commit.
+#     Name it <system>-v<version>-<issue>-test<N>: the launcher offers the next build of the same series.
 name: Linux AppImage
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release to attach the AppImage to; a new tag makes a test pre-release. Empty builds only.
+        description: Release to attach the AppImage to; a new tag makes a test pre-release, named <system>-v<version>-<issue>-test<N> (e.g. windows-v2.8.0-issue1-test2). Empty builds only.
         required: false
 
 permissions:

@@ -91,7 +91,10 @@ version_tuple(FIRST_RUST_VERSION)`. O resto fica: draft é pulado, Windows exige
 `.AppImage`, ordem por `published_at`.
 
 Efeito nas releases de hoje: o draft `windows-v2.8.0` (sem carimbo) passa a ser listado quando
-publicado; `windows-v2.7.0-rust-launcher-test1` (carimbado, 2.7.0) e tudo abaixo não entram.
+publicado. `windows-v2.7.0-rust-launcher-test1` já não está no GitHub. As pré-releases vivas
+`windows-v2.8.0-intel-test1` (c04f8d8) e `windows-v2.8.0-issue1075-test1` (6093789) foram
+compiladas com o código antigo, que só lista releases com um asset `release-*.json`: quem as
+usa não vê builds nem releases sem esse asset.
 
 ### 3.5 Novidade (`src/core/release.rs`)
 
@@ -210,6 +213,13 @@ Os dois smoke tests conferem `--version` contra a tag (rodam no CI). Conferênci
   lista, de propósito.
 - Releases antigas carimbadas não ganham nada com o carimbo; o arquivo `release.json` que já
   está num pacote instalado é ignorado.
+- Sequência de publicação: o zip e o AppImage do draft `windows-v2.8.0` foram compilados a
+  partir de 6d733ed, cujo launcher lista só releases carimbadas. Publicado assim, quem tem a 2.8.0
+  nunca veria uma release posterior. Antes de publicar: recompilar o draft a partir da main com os
+  dois workflows (`tag: windows-v2.8.0`; o job de publicação sobe com `--clobber`), conferir que a
+  saída do smoke é `SpartanPort 2.8.0` e só então publicar. Quem está nas duas builds test1
+  carimbadas acima não vê a test2 nem a 2.8.0 no menu: baixa a test2 à mão (ou se anexa às
+  releases de destino um asset de preenchimento chamado `release-windows.json`).
 
 ## 9. Referências
 
@@ -228,3 +238,8 @@ Nenhum desvio de comportamento em relação a esta spec. Dois acréscimos fora d
   carimbo, que não existe mais).
 - O teste `releases_below_the_first_rust_one_are_not_listed` mantém de propósito um asset
   `release-windows.json`: prova que o asset já não decide a lista, só o piso de versão.
+- Convenção de tags de teste: `<sistema>-v<versão>-<issue>-test<N>` (por exemplo
+  `windows-v2.8.0-issue1-test2`). `series()` descarta os dígitos finais da build, então `beta2` e
+  `beta3`, ou `test1` e `test2` soltos de issues diferentes, contariam como uma série só; o
+  launcher oferece a próxima build da mesma série. Documentada na descrição do input `tag` dos
+  dois workflows e no README do launcher.

@@ -27,6 +27,6 @@ On Windows PowerShell: `$env:SPARTAN_GAME_DIR = "<game folder>"; cargo test --te
 
 ## Environment
 
-- `SPARTAN_RELEASE_TAG`: read at build time, not at run time. The release tag the binary is (`windows-v2.8.0-beta2`); without it the binary is the stable of `Cargo.toml`. The release workflows set it from their tag. A local test build: `$env:SPARTAN_RELEASE_TAG = 'windows-v2.8.0-beta2'; cargo build --release --locked` (PowerShell) or `SPARTAN_RELEASE_TAG=windows-v2.8.0-beta2 cargo build --release --locked`.
+- `SPARTAN_RELEASE_TAG`: read at build time, not at run time. The release tag the binary is (`windows-v2.8.0-issue1-test2`); without it the binary is the stable of `Cargo.toml`. The release workflows set it from their tag. Name test tags `<system>-v<version>-<issue>-test<N>`: the launcher offers the next build of the same series. A local test build: `$env:SPARTAN_RELEASE_TAG = 'windows-v2.8.0-issue1-test2'; cargo build --release --locked` (PowerShell) or `SPARTAN_RELEASE_TAG=windows-v2.8.0-issue1-test2 cargo build --release --locked`.
 - `SPARTAN_PORT_DIR`: the port folder (with `bin/`) and, unless `SPARTAN_DATA_DIR` is set, the data folder. Defaults to the executable's folder; point it at the repository root to run a `cargo` build.
 - `SPARTANPORT_PYTHON`: the Python the dump tests compare against (the frozen Python launcher and runner). Defaults to `py -3` on Windows and `python3` elsewhere. The exe itself never runs Python.
