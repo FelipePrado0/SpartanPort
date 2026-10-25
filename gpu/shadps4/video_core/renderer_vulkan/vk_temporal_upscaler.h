@@ -152,6 +152,9 @@ private:
     void RunScaled();
     /// FSR 3 at 1:1 on an RGBA8 (sRGB) scene color, written back with a blit.
     void RunLdr();
+    /// Stencil reactive mask into reactive_image (w x h): false when off or without stencil.
+    bool RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore::Image& depth, vk::Format depth_format,
+                               u32 w, u32 h);
     void RunUiOnly(VideoCore::ImageId color, VideoCore::ImageId depth);
     void EnsureUiResources(u32 width, u32 height, vk::Format color, vk::Format depth);
     void PrepareUiDepth(VideoCore::ImageId depth);

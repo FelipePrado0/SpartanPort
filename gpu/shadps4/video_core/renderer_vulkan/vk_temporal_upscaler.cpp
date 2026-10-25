@@ -391,6 +391,59 @@ void TemporalUpscaler::OnGraphicsDraw(u64 ps_hash, VideoCore::ImageId color) {
     }
 }
 
+bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore::Image& depth,
+                                             vk::Format depth_format, u32 w, u32 h) {
+    // Characters and interactive objects (any stencil but the world's) animate without object
+    // motion vectors: a reactive mask keeps FSR from ghosting them. SPARTAN_STENCIL_REACTIVE
+    // sets the reactivity (0 turns the mask off), toggle 1 << 28 switches it off at run time.
+    // The depth is in General layout (both callers transit it for the motion pass).
+    static const float stencil_value = [] {
+        const char* env = std::getenv("SPARTAN_STENCIL_REACTIVE");
+        return env && env[0] ? std::clamp(float(std::atof(env)), 0.0f, 1.0f) : 1.0f;
+    }();
+    if (stencil_value <= 0.0f || SpartanToggle::Disabled(1u << 28) ||
+        !(depth.info.props.has_stencil || depth_format == vk::Format::eD32SfloatS8Uint)) {
+        return false;
+    }
+    const auto all = vk::PipelineStageFlagBits2::eAllCommands;
+    const auto barrier = [&](vk::ImageLayout old_layout, vk::PipelineStageFlags2 src_stage,
+                             vk::AccessFlags2 src_access, vk::PipelineStageFlags2 dst_stage,
+                             vk::AccessFlags2 dst_access) {
+        const vk::ImageMemoryBarrier2 b{
+            .srcStageMask = src_stage, .srcAccessMask = src_access,
+            .dstStageMask = dst_stage, .dstAccessMask = dst_access,
+            .oldLayout = old_layout, .newLayout = vk::ImageLayout::eGeneral,
+            .image = vk::Image(reactive_image),
+            .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1},
+        };
+        cmdbuf.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &b});
+    };
+    barrier(vk::ImageLayout::eUndefined, all, vk::AccessFlagBits2::eNone,
+            vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderWrite);
+    const vk::DescriptorImageInfo stencil_info{
+        .imageView = CachedView(depth, depth_format, vk::ImageAspectFlagBits::eStencil),
+        .imageLayout = vk::ImageLayout::eGeneral};
+    const vk::DescriptorImageInfo mask_info{.imageView = *reactive_view,
+                                            .imageLayout = vk::ImageLayout::eGeneral};
+    const std::array<vk::WriteDescriptorSet, 2> writes{{
+        {.dstBinding = 0, .descriptorCount = 1, .descriptorType = vk::DescriptorType::eSampledImage,
+         .pImageInfo = &stencil_info},
+        {.dstBinding = 1, .descriptorCount = 1, .descriptorType = vk::DescriptorType::eStorageImage,
+         .pImageInfo = &mask_info},
+    }};
+    // The world's stencil value (frame_20261024-233122_3.txt: 129; characters 0, objects 128).
+    const std::array<u32, 2> push{129u, std::bit_cast<u32>(stencil_value)};
+    cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, *stencil_reactive_pipeline);
+    cmdbuf.pushDescriptorSetKHR(vk::PipelineBindPoint::eCompute, *stencil_reactive_pipeline_layout, 0,
+                                writes);
+    cmdbuf.pushConstants(*stencil_reactive_pipeline_layout, vk::ShaderStageFlagBits::eCompute, 0,
+                         sizeof(push), push.data());
+    cmdbuf.dispatch((w + 7) / 8, (h + 7) / 8, 1);
+    barrier(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits2::eComputeShader,
+            vk::AccessFlagBits2::eShaderWrite, all, vk::AccessFlagBits2::eShaderRead);
+    return true;
+}
+
 void TemporalUpscaler::RunLdr() {
     // Step 1 of the SpartanPort port: FSR 3.1 at Native AA. FSR 4, DLSS and TAA still need the
     // Bloodborne HDR scene color (Run).
@@ -458,41 +511,7 @@ void TemporalUpscaler::RunLdr() {
     }
     last_frame = now;
 
-    // Characters and interactive objects (any stencil but the world's) animate without object
-    // motion vectors: a reactive mask keeps FSR from ghosting them. SPARTAN_STENCIL_REACTIVE
-    // sets the reactivity (0 turns the mask off), toggle 1 << 28 switches it off at run time.
-    static const float stencil_value = [] {
-        const char* env = std::getenv("SPARTAN_STENCIL_REACTIVE");
-        return env && env[0] ? std::clamp(float(std::atof(env)), 0.0f, 1.0f) : 1.0f;
-    }();
-    const bool stencil_mask = stencil_value > 0.0f && !SpartanToggle::Disabled(1u << 28) &&
-                              (depth.info.props.has_stencil || depth_format == vk::Format::eD32SfloatS8Uint);
-    if (stencil_mask) {
-        barrier(vk::Image(reactive_image), vk::ImageLayout::eUndefined, all, vk::AccessFlagBits2::eNone,
-                vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderWrite);
-        const vk::DescriptorImageInfo stencil_info{
-            .imageView = CachedView(depth, depth_format, vk::ImageAspectFlagBits::eStencil),
-            .imageLayout = vk::ImageLayout::eGeneral};
-        const vk::DescriptorImageInfo mask_info{.imageView = *reactive_view,
-                                                .imageLayout = vk::ImageLayout::eGeneral};
-        const std::array<vk::WriteDescriptorSet, 2> writes{{
-            {.dstBinding = 0, .descriptorCount = 1, .descriptorType = vk::DescriptorType::eSampledImage,
-             .pImageInfo = &stencil_info},
-            {.dstBinding = 1, .descriptorCount = 1, .descriptorType = vk::DescriptorType::eStorageImage,
-             .pImageInfo = &mask_info},
-        }};
-        // The world's stencil value (frame_20261024-233122_3.txt: 129; characters 0, objects 128).
-        const std::array<u32, 2> push{129u, std::bit_cast<u32>(stencil_value)};
-        cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, *stencil_reactive_pipeline);
-        cmdbuf.pushDescriptorSetKHR(vk::PipelineBindPoint::eCompute, *stencil_reactive_pipeline_layout, 0,
-                                    writes);
-        cmdbuf.pushConstants(*stencil_reactive_pipeline_layout, vk::ShaderStageFlagBits::eCompute, 0,
-                             sizeof(push), push.data());
-        cmdbuf.dispatch((w + 7) / 8, (h + 7) / 8, 1);
-        barrier(vk::Image(reactive_image), vk::ImageLayout::eGeneral,
-                vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderWrite, all,
-                vk::AccessFlagBits2::eShaderRead);
-    }
+    const bool stencil_mask = RecordStencilReactive(cmdbuf, depth, depth_format, w, h);
     // SPARTAN_DUMP_TRIGGER: the composite before FSR, motion, depth, then FSR's output.
     const int dump = DumpFrame();
     if (dump >= 0) {
@@ -1823,6 +1842,12 @@ void TemporalUpscaler::RunScaled() {
         depth_view = dp.view;
         source_width = w;
         source_height = h;
+        if (w == iw && h == ih) {
+            // The game's own size (Ultra Quality at 1440p): the stencil mask reads the guest depth.
+            runtime.Transit(&depth, vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits2::eComputeShader,
+                            vk::AccessFlagBits2::eShaderRead);
+            runtime.FlushBarriers();
+        }
     } else {
         depth_view = CachedView(depth, depth_format, vk::ImageAspectFlagBits::eDepth);
         color_view = CachedView(color, color.info.pixel_format, vk::ImageAspectFlagBits::eColor);
@@ -1977,7 +2002,12 @@ void TemporalUpscaler::RunScaled() {
                            FFX_VK_PORTABLE_RESOURCE_STATE_UNORDERED_ACCESS);
     info.exposure.structSize = sizeof(info.exposure);
     info.reactiveMask.structSize = sizeof(info.reactiveMask);
-    if (mask_ready && ReactiveOn()) {
+    if ((scaled_session || (w == iw && h == ih)) &&
+        RecordStencilReactive(cmdbuf, depth, depth_format, w, h)) {
+        info.reactiveMask = Describe(vk::Image(reactive_image), vk::Format::eR8Unorm, w, h,
+            vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+            vk::ImageAspectFlagBits::eColor, FFX_VK_PORTABLE_RESOURCE_STATE_GENERIC_READ);
+    } else if (mask_ready && ReactiveOn()) {
         info.reactiveMask = Describe(vk::Image(reactive_image), vk::Format::eR8Unorm, w, h,
             vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
             vk::ImageAspectFlagBits::eColor, FFX_VK_PORTABLE_RESOURCE_STATE_GENERIC_READ);
