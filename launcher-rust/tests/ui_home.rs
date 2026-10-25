@@ -632,6 +632,40 @@ fn the_version_button_offers_a_newer_stable() {
 }
 
 #[test]
+fn the_version_button_offers_the_next_build_of_the_series() {
+    let dir = tempfile::tempdir().unwrap();
+    let installed = ReleaseId {
+        channel: Channel::PreRelease,
+        version: "2.8.0".into(),
+        build: Some("issue1-test1".into()),
+    };
+    let list = vec![
+        release(Channel::PreRelease, "2.8.0", Some("issue2-test5")),
+        release(Channel::PreRelease, "2.8.0", Some("issue1-test2")),
+        release(Channel::Release, "2.8.0", None),
+    ];
+    let mut state = state_installed(dir.path(), installed);
+    ready_with(&mut state, list.clone());
+    let mut ui = simulator(app::view(&state));
+    assert!(ui
+        .find("Pre-release · 2.8.0 · issue1-test1 · issue1-test2 available ▾")
+        .is_ok());
+    drop(ui);
+    open_menu(&mut state);
+    let mut ui = simulator(app::view(&state));
+    assert!(ui.find("new").is_ok());
+    drop(ui);
+
+    // A stable user sees the same list with nothing new.
+    let mut state = state_installed(dir.path(), release(Channel::Release, "2.8.0", None).id);
+    ready_with(&mut state, list);
+    open_menu(&mut state);
+    let mut ui = simulator(app::view(&state));
+    assert!(ui.find("Release · 2.8.0 ▾").is_ok());
+    assert!(ui.find("new").is_err());
+}
+
+#[test]
 fn the_version_button_sits_before_the_language_one() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state_installed(dir.path(), stable_2_6_0());

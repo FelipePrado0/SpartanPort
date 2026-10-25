@@ -5,7 +5,7 @@ use iced::widget::{button, column, container, mouse_area, row, scrollable, space
 use iced::{Element, Fill, Padding, Right, Task, Top};
 
 use crate::core::i18n::{tr, tr_fmt};
-use crate::core::release::{prereleases, stables, Release};
+use crate::core::release::{prereleases, stables, Channel, Release};
 use crate::ui::app::{home_interactive_enabled, home_interactive_opacity, Message, State};
 use crate::ui::hover_menu::{self, HoverMessage};
 use crate::ui::lang_menu::{EDGE_RIGHT, EDGE_TOP, MENU_DROP, MENU_WIDTH};
@@ -80,7 +80,8 @@ pub fn timing(state: &State) -> bool {
     hover_menu::timing(&state.version_menu)
 }
 
-/// The installed release, with the newer stable noted; the download's progress while one runs.
+/// The installed release, with the newer stable or the next build of the series noted; the
+/// download's progress while one runs.
 pub fn button_text(state: &State) -> String {
     let lang = state.lang.as_str();
     if let Some((release, percent)) = state.updater.downloading() {
@@ -93,7 +94,11 @@ pub fn button_text(state: &State) -> String {
     let mut label = state.updater.installed().label(lang);
     if let Some(newer) = state.updater.newer() {
         label.push_str(" · ");
-        label.push_str(&tr_fmt(lang, "{} available", &[&newer.id.version]));
+        let offered = match (&newer.id.channel, &newer.id.build) {
+            (Channel::PreRelease, Some(build)) => build,
+            _ => &newer.id.version,
+        };
+        label.push_str(&tr_fmt(lang, "{} available", &[offered]));
     }
     label.push_str(" ▾");
     label
@@ -201,7 +206,12 @@ pub fn menu(state: &State) -> Element<'_, Message> {
                 list = list.push(muted_row(tr(lang, key)));
             } else {
                 let rows = column(pre.into_iter().map(|r| {
-                    release_row(r, r.id.same_build(state.updater.installed()), false, lang)
+                    release_row(
+                        r,
+                        r.id.same_build(state.updater.installed()),
+                        newer == Some(&r.id),
+                        lang,
+                    )
                 }))
                 .spacing(2);
                 list = list.push(
