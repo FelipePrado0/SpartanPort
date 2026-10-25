@@ -454,6 +454,15 @@ void ImageTab() {
     Separator("Information");
     if (BeginRows("##image_info")) {
         char text[96];
+        // The game's own render size: smaller than the game image when an upscaler preset scales it.
+        static const char* render = std::getenv("SPARTAN_RENDER_RES");
+        int rw = 0, rh = 0;
+        if (!render || std::sscanf(render, "%dx%d", &rw, &rh) != 2) {
+            rw = 1920;
+            rh = 1080;
+        }
+        std::snprintf(text, sizeof(text), "%d x %d", rw, rh);
+        InfoRow("Render resolution", text);
         std::snprintf(text, sizeof(text), "%d x %d", iw, ih);
         InfoRow("Game image", text);
         std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
