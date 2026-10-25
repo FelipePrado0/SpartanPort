@@ -44,7 +44,5 @@ gamecontrollerdb.txt
 launcher-rust/target/
 !launcher-rust/assets/*.png
 !docs/specs/assets/**/*.png
-# Release stamp: the workflows' Stamp step writes it here; a stale local copy would be packaged.
-/release.json
 # Brainstorming companion sessions
 .superpowers/

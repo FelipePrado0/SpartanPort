@@ -2,7 +2,8 @@
 # Builds dist/spartanport-windows/ (and dist/spartanport-windows.zip): SpartanPort.exe (the Rust launcher,
 # built outside MSYS2 with `cd launcher-rust && cargo build --release --locked`; it must run inside launcher-rust/ to read its .cargo/config.toml),
 # spartanport-probe.exe with the MSYS2 CLANG64 DLLs it needs and the controller diagrams the runner reads.
-# Run from an MSYS2 CLANG64 shell after `bash build.sh` and the cargo build. No Python is packaged. The
+# Run from an MSYS2 CLANG64 shell after `bash build.sh` and the cargo build (for a test build, set
+# SPARTAN_RELEASE_TAG for cargo too: launcher-rust/README.md). No Python is packaged. The
 # temporal upscalers are off, so neither the FSR 4 assets nor the DLSS runtime are packaged.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
@@ -10,7 +11,7 @@ source ./msys2-env.sh
 [[ -f out/spartanport-probe.exe && -f out/spartanport-gpu-capabilities.exe && -f out/spartanport-play.exe ]] || { echo 'Build first: bash build.sh' >&2; exit 1; }
 
 launcher=launcher-rust/target/release/spartanport-launcher.exe
-[[ -f $launcher ]] || { echo 'Build the launcher first, outside MSYS2: cd launcher-rust && cargo build --release --locked' >&2; exit 1; }
+[[ -f $launcher ]] || { echo 'Build the launcher first, outside MSYS2: cd launcher-rust && cargo build --release --locked (SPARTAN_RELEASE_TAG for a test build: launcher-rust/README.md)' >&2; exit 1; }
 
 # The package is assembled in a fresh staging folder and zipped from there; dist/spartanport-windows
 # (a playable copy that may hold saves and settings) is only refreshed afterwards.

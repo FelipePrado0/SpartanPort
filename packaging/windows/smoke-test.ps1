@@ -44,10 +44,10 @@ if (-not $version.WaitForExit(30000)) {
 } elseif ($version.ExitCode -ne 0) {
     $failed += ('SpartanPort.exe --version exited 0x{0:X}' -f $version.ExitCode)
 } else {
-    $printed = (Get-Content -Raw (Join-Path $work 'version.log')).Trim()
+    $printed = "$(Get-Content -Raw (Join-Path $work 'version.log'))".Trim()
     if ($env:SPARTAN_RELEASE_TAG) {
         $expected = 'SpartanPort ' + ($env:SPARTAN_RELEASE_TAG -replace '^[a-z]+-v', '')
-        if ($printed -ne $expected) {
+        if ($printed -cne $expected) {
             $failed += "SpartanPort.exe --version printed '$printed', not '$expected'"
         }
     } elseif ($printed -notmatch '^SpartanPort \d+\.\d+\.\d+') {
