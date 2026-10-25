@@ -1,0 +1,35 @@
+# awaiting-response: open issues whose last human message is from a non-collaborator and is older
+# than 48h. The sweep adds/removes the label every 6h; a collaborator comment removes it at once.
+# Issues created before AWAITING_SINCE are ignored. Logic and tests in .github/scripts/issue-triage.js.
+name: Issue awaiting response
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: awaiting-response-${{ github.event.issue.number || 'sweep' }}
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AWAITING_SINCE: '2026-10-23T00:00:00Z'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const triage = require('./.github/scripts/issue-triage.js');
+            if (context.eventName === 'issue_comment') await triage.onComment({ github, context, core });
+            else await triage.onSweep({ github, context, core }, Date.parse(process.env.AWAITING_SINCE));

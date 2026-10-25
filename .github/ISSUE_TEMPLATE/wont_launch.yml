@@ -1,21 +1,62 @@
-name: Game won't launch / crashes on startup
-description: Black screen, instant close, "prepare failed", param.sfo errors, etc.
-labels: ["bug"]
+name: Game won't launch (fails before main menu)
+description: Black screen, instant close, "prepare failed", param.sfo errors, etc. before the main menu
+labels: ["bug", "startup"]
 body:
   - type: markdown
     attributes:
       value: |
+        **Crashed after the main menu?** Use the **Bug report** template instead.
+
+        Please test on the [latest release](https://github.com/FelipePrado0/SpartanPort/releases/latest) before reporting.
         Most launch failures come from an incomplete or misplaced game dump (missing `param.sfo`,
         wrong update version, wrong folder selected). Check the README's setup section before
         filing, it covers the folder layout the launcher expects.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before reporting
+      options:
+        - label: I searched the existing issues for this problem, my GPU and my error message
+          required: true
+        - label: I tested on the latest release, or I wrote below the version I am on
+          required: true
 
   - type: input
     id: version
     attributes:
       label: Port version
-      placeholder: v2.1.7
+      placeholder: v2.7.0
     validations:
       required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver version
+      placeholder: "RX 6600, Adrenalin 26.8.1"
+    validations:
+      required: true
+
+  - type: input
+    id: cpu
+    attributes:
+      label: CPU
+      placeholder: "Ryzen 7 5700X"
+    validations:
+      required: false
 
   - type: input
     id: game_version
@@ -29,7 +70,7 @@ body:
     id: folder
     attributes:
       label: Selected game folder
-      description: Screenshot of the folder you pointed the launcher at, showing eboot.bin, sce_sys and sce_module.
+      description: Screenshot (not the log) of the folder you pointed the launcher at, showing eboot.bin, sce_sys and sce_module.
     validations:
       required: true
 
@@ -45,6 +86,6 @@ body:
     id: log
     attributes:
       label: user/last_run.log
-      description: Attach the file from the port's folder.
+      description: Drag and drop the file from the port's `user` folder here, don't paste its contents.
     validations:
       required: true

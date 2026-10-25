@@ -94,6 +94,9 @@ class GlyphTableTest(unittest.TestCase):
         self.assertEqual(keys['circle'], 'Left Shift')  # empty: the default
         self.assertEqual(glyphs.key_buttons('l3=None')['l3'], 'Z')
         self.assertEqual(glyphs.key_buttons(''), {**glyphs.DEFAULT_KEYS, **glyphs.STICK_KEYS})
+        self.assertEqual(glyphs.key_buttons('move_up=T,move_left=F,move_down=G,move_right=H')['lstick'],
+                         'T/F/G/H')
+        self.assertEqual(glyphs.key_buttons('look_left=None')['rstick'], 'Up/None/Down/Right')
         self.assertEqual(set(glyphs.DEFAULT_KEYS) - set(glyphs.DEFAULT_MAP), {'up'})  # the keyboard-only D-pad icon
 
     def test_rage_on_one_input_draws_its_key_on_l3_and_r3(self):
