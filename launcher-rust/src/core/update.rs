@@ -8,13 +8,12 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use indexmap::IndexMap;
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::core::platform::{self, Exec};
 pub use crate::core::release::version_tuple;
-use crate::core::release::{self, Channel, ReleaseId};
+use crate::core::release::{self, ReleaseId};
 
 pub const RELEASES_API: &str =
     "https://api.github.com/repos/FelipePrado0/SpartanPort/releases?per_page=100";
@@ -74,40 +73,6 @@ pub fn list_releases(windows: bool) -> Result<Vec<release::Release>, UpdateError
     reader.read_to_string(&mut text)?;
     let json = serde_json::from_str(&text).map_err(|e| UpdateError::Json(e.to_string()))?;
     release::parse_releases(&json, windows)
-}
-
-/// `port_dir/release.json` on Windows; `appdir/release.json` (or `port_dir` without an APPDIR) elsewhere.
-pub fn stamp_path(port_dir: &Path, appdir: Option<&Path>, windows: bool) -> PathBuf {
-    let dir = if windows {
-        port_dir
-    } else {
-        appdir.unwrap_or(port_dir)
-    };
-    dir.join(release::STAMP_FILE)
-}
-
-/// The stamp, or `ReleaseId::fallback()` when the file is missing or invalid.
-pub fn installed_release(stamp: &Path) -> ReleaseId {
-    read_stamp(stamp).unwrap_or_else(ReleaseId::fallback)
-}
-
-fn read_stamp(stamp: &Path) -> Option<ReleaseId> {
-    let json: Value = serde_json::from_str(&fs::read_to_string(stamp).ok()?).ok()?;
-    let channel = match json.get("channel")?.as_str()? {
-        "release" => Channel::Release,
-        "pre-release" => Channel::PreRelease,
-        _ => return None,
-    };
-    let version = json.get("version")?.as_str().filter(|v| !v.is_empty())?;
-    let build = json
-        .get("build")
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    Some(ReleaseId {
-        channel,
-        version: version.to_string(),
-        build,
-    })
 }
 
 /// The SHA-256 in a `<package>.sha256` file (`sha256sum` format).
@@ -402,13 +367,12 @@ pub trait ReleaseHost: Send + Sync {
     fn open_page(&self, url: &str);
 }
 
-/// The releases on GitHub and this machine's install. `APPIMAGE`, `APPDIR` and the packaged
+/// The releases on GitHub and this machine's install. `APPIMAGE` and the packaged
 /// check are read once: the environment does not change while the program runs.
 pub struct GitHubReleases {
     windows: bool,
     port_dir: PathBuf,
     appimage: Option<PathBuf>,
-    appdir: Option<PathBuf>,
     packaged: bool,
 }
 
@@ -424,7 +388,6 @@ impl GitHubReleases {
             windows,
             port_dir: port_dir.to_path_buf(),
             appimage: if windows { None } else { var("APPIMAGE") },
-            appdir: var("APPDIR"),
             packaged: is_packaged(),
         }
     }
@@ -432,11 +395,7 @@ impl GitHubReleases {
 
 impl ReleaseHost for GitHubReleases {
     fn installed(&self) -> ReleaseId {
-        installed_release(&stamp_path(
-            &self.port_dir,
-            self.appdir.as_deref(),
-            self.windows,
-        ))
+        ReleaseId::this()
     }
 
     fn target(&self) -> InstallTarget {
@@ -736,51 +695,9 @@ mod tests {
     }
 
     #[test]
-    fn the_stamp_names_the_installed_release() {
-        let dir = tempfile::tempdir().unwrap();
-        let stamp = dir.path().join("release.json");
-        std::fs::write(
-            &stamp,
-            r#"{"channel":"pre-release","version":"2.6.0","build":"issue209-test1"}"#,
-        )
-        .unwrap();
-        let id = installed_release(&stamp);
-        assert_eq!(id.channel, Channel::PreRelease);
-        assert_eq!(id.version, "2.6.0");
-        assert_eq!(id.build.as_deref(), Some("issue209-test1"));
-        std::fs::write(&stamp, r#"{"channel":"release","version":"2.7.0"}"#).unwrap();
-        let id = installed_release(&stamp);
-        assert_eq!(id.channel, Channel::Release);
-        assert_eq!(id.version, "2.7.0");
-        assert_eq!(id.build, None);
-    }
-
-    #[test]
-    fn a_missing_or_broken_stamp_is_this_version() {
-        let dir = tempfile::tempdir().unwrap();
-        let stamp = dir.path().join("release.json");
-        assert_eq!(installed_release(&stamp), ReleaseId::fallback());
-        for text in [
-            "not json",
-            r#"{"channel":"beta","version":"2.6.0"}"#,
-            r#"{"channel":"release"}"#,
-            r#"{"channel":"release","version":""}"#,
-        ] {
-            std::fs::write(&stamp, text).unwrap();
-            assert_eq!(installed_release(&stamp), ReleaseId::fallback(), "{text}");
-        }
-    }
-
-    #[test]
-    fn the_stamp_sits_beside_the_launcher() {
-        let port = Path::new("port");
-        let appdir = Path::new("appdir");
-        assert_eq!(stamp_path(port, None, true), port.join("release.json"));
-        assert_eq!(
-            stamp_path(port, Some(appdir), false),
-            appdir.join("release.json")
-        );
-        assert_eq!(stamp_path(port, None, false), port.join("release.json"));
+    fn the_host_is_this_binary() {
+        let host = GitHubReleases::from_env(Path::new("port"));
+        assert_eq!(host.installed(), ReleaseId::this());
     }
 
     #[test]

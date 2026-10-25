@@ -78,7 +78,7 @@ impl Updater {
         newer_stable(self.releases(), &self.installed)
     }
 
-    /// The installed release: the stamp beside the launcher, or this version.
+    /// The release this binary is.
     pub fn installed(&self) -> &ReleaseId {
         &self.installed
     }

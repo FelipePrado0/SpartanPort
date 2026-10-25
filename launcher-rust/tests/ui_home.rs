@@ -592,10 +592,10 @@ fn stable_2_6_0() -> ReleaseId {
 #[test]
 fn the_version_button_names_the_installed_release() {
     let dir = tempfile::tempdir().unwrap();
-    let state = state_installed(dir.path(), ReleaseId::fallback());
+    let state = state_installed(dir.path(), ReleaseId::this());
     let mut ui = simulator(app::view(&state));
     assert!(ui
-        .find(format!("Release · {} ▾", spartanport_launcher::VERSION).as_str())
+        .find(format!("{} ▾", ReleaseId::this().label("en")).as_str())
         .is_ok());
     drop(ui);
     let state = state_installed(
