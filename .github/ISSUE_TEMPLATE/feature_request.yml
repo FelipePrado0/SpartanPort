@@ -2,6 +2,42 @@ name: Feature request
 description: Suggest something that isn't a bug, e.g. new platform support, settings, QoL
 labels: ["enhancement"]
 body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before requesting
+      options:
+        - label: I checked the [latest release notes](https://github.com/FelipePrado0/SpartanPort/releases/latest) and the existing issues, this isn't available or requested yet
+          required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Controls or input
+        - Graphics or display options
+        - Gameplay options or cheats
+        - Save system
+        - Platform or hardware support
+        - Launcher or UI
+        - Audio or language
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - All
+        - Windows
+        - Linux
+        - macOS
+    validations:
+      required: false
+
   - type: textarea
     id: problem
     attributes:
