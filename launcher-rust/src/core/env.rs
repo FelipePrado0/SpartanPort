@@ -280,6 +280,22 @@ pub fn environment(
     };
     put_choice(&mut env, "stick_prompts");
     put_choice(&mut env, "glyph_style");
+    env.shift_remove("SPARTAN_MENU_CONFIRM_SWAP");
+    env.shift_remove("SPARTAN_MENU_CONFIRM");
+    if let Some(val) = settings.get("menu_confirm_swap") {
+        let is_swapped = match val {
+            Value::String(s) => matches!(
+                s.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "circle" | "swapped" | "yes" | "on"
+            ),
+            Value::Number(n) => n.as_i64() == Some(1),
+            Value::Bool(b) => *b,
+            _ => false,
+        };
+        if is_swapped {
+            env.insert("SPARTAN_MENU_CONFIRM_SWAP".into(), "1".into());
+        }
+    }
     env.insert("PYTHONUNBUFFERED".into(), "1".into());
     env.insert("PYTHONIOENCODING".into(), "utf-8".into());
     env
@@ -493,5 +509,30 @@ mod tests {
         let (name, _) = trophy_text("pt", 0);
         assert!(lines[10].starts_with(&format!("0={name} | ")));
         assert!(lines[44].starts_with("34="));
+    }
+
+    #[test]
+    fn inherited_menu_confirm_env_is_not_leaked() {
+        let (settings, paths, _dir) = setup(json!({}));
+        let inherited = base(&[
+            ("SPARTAN_MENU_CONFIRM_SWAP", "1"),
+            ("SPARTAN_MENU_CONFIRM", "circle"),
+        ]);
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert!(!env.contains_key("SPARTAN_MENU_CONFIRM_SWAP"));
+        assert!(!env.contains_key("SPARTAN_MENU_CONFIRM"));
+    }
+
+    #[test]
+    fn menu_confirm_swap_in_settings_is_forwarded() {
+        let (settings, paths, _dir) = setup(json!({"menu_confirm_swap": "1"}));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert_eq!(
+            env.get("SPARTAN_MENU_CONFIRM_SWAP").map(String::as_str),
+            Some("1")
+        );
+        let (settings, paths, _dir) = setup(json!({"menu_confirm_swap": "0"}));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert!(!env.contains_key("SPARTAN_MENU_CONFIRM_SWAP"));
     }
 }
