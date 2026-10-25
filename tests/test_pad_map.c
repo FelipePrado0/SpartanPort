@@ -13,6 +13,8 @@ int spartanportgpu_mouse_aim_style(void) { return aim_style; }
 static int aim_sensitivity=100;
 int spartanportgpu_mouse_aim_sensitivity(void) { return aim_sensitivity; }
 void spartanportgpu_engine_fps_cycle(void) {}
+static SpartanActorSlot test_actor_slots[2];
+uintptr_t spartanport_actor_slots_address(void) { return (uintptr_t)test_actor_slots; }
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *name) {
     (void)table; (void)count; (void)name;
     return 0;

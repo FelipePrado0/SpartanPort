@@ -14,6 +14,8 @@
 #include "gpu/spartanportgpu.h"
 #include "qte_hook.h"
 #include "switch_hook.h"
+#include "actor_hook.h"
+#include "dualsense.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -131,7 +133,7 @@ static void apply_light_bar(SDL_Gamepad *g) {
 static SDL_Gamepad *current_gamepad(void) {
     if (!sdl_ready) sdl_ready = SDL_WasInit(SDL_INIT_GAMEPAD) ? 1 : SDL_InitSubSystem(SDL_INIT_GAMEPAD) ? 1 : -1;
     if (sdl_ready<0) return NULL;
-    if (gamepad && !SDL_GamepadConnected(gamepad)) { SDL_CloseGamepad(gamepad); gamepad=NULL; light_bar.applied_to=NULL; }
+    if (gamepad && !SDL_GamepadConnected(gamepad)) { SDL_CloseGamepad(gamepad); gamepad=NULL; light_bar.applied_to=NULL; ds_forget(); }
     if (!gamepad) {
         int count=0;
         SDL_JoystickID *ids=SDL_GetGamepads(&count);
@@ -507,6 +509,83 @@ static void sample_keyboard(PadData *d, const bool *keys, SDL_MouseButtonFlags m
     key_axis(&d->right_y,pressed & LOOK_UP,pressed & LOOK_DOWN);
 }
 
+/* DualSense extras, each one switched on by SPARTAN_DUALSENSE (dualsense.h); called under lock
+ * with the pad sampled so far.
+ *
+ * hitflash: the light bar flashes red when the player's health drops. The health hook
+ * (actor_hook.h, slot 0) bumps its sequence on every hit of the player; the colour the game set
+ * is put back after HIT_FLASH_US. */
+extern uintptr_t spartanport_actor_slots_address(void);
+enum { HIT_FLASH_US=180000 };
+static struct { bool seen, flashing; uint32_t seq; float health; uint64_t until; } hit;
+static void update_hit_flash(SDL_Gamepad *g, uint64_t now) {
+    if (hit.flashing && now>=hit.until) {
+        hit.flashing=false;
+        if (light_bar.set) { light_bar.applied_to=NULL; apply_light_bar(g); }
+        else SDL_SetGamepadLED(g,0,0,255); /* the pad's own colour: player 1 blue */
+    }
+    const void *slots=(const void *)spartanport_actor_slots_address();
+    if (!slots || !SDL_GetBooleanProperty(SDL_GetGamepadProperties(g),SDL_PROP_GAMEPAD_CAP_RGB_LED_BOOLEAN,false)) return;
+    SpartanActorSlot player;
+    memcpy(&player,slots,sizeof(player));
+    if (player.seq==hit.seq) return;
+    if (hit.seen && player.health<hit.health) {
+        hit.until=now+HIT_FLASH_US;
+        if (!hit.flashing) { hit.flashing=true; SDL_SetGamepadLED(g,255,0,0); }
+    }
+    hit.seen=true; hit.seq=player.seq; hit.health=player.health;
+}
+
+/* triggers: R2 gets a click (a wall that gives way near the end of the travel) on a DualSense.
+ * This is where a trigger effect for something in the game (a chest, a bow) would be chosen. */
+enum { R2_CLICK_START=4, R2_CLICK_END=6, R2_CLICK_STRENGTH=6 };
+static void restore_triggers(void) {
+    const DsTrigger off=ds_trigger_off();
+    if (gamepad && SDL_WasInit(SDL_INIT_GAMEPAD) && SDL_GamepadConnected(gamepad)) ds_set_triggers(gamepad,&off,&off);
+}
+static void update_triggers(SDL_Gamepad *g) {
+    static bool exit_hook;
+    const DsTrigger off=ds_trigger_off();
+    const DsTrigger right=ds_trigger_weapon(R2_CLICK_START,R2_CLICK_END,R2_CLICK_STRENGTH);
+    if (!ds_set_triggers(g,&right,&off) || exit_hook) return;
+    exit_hook=true;
+    atexit(restore_triggers); /* the pad keeps an effect until the next one: leave it free */
+}
+
+/* motion: the pad's gyro (rad/s) and accelerometer (g) in the PS4 pad data, which the game may
+ * read. gyroaim: with L2 held (aiming), the gyro also moves the right stick: turning the pad
+ * left or right turns the view, tilting it up or down raises or lowers it (SDL's gyro x is
+ * pitch, y is yaw; a stick up is a smaller value). */
+enum { GYRO_DEADZONE_MILLI=40, GYRO_STICK_PER_RAD=64 };
+static SDL_Gamepad *motion_enabled_for;
+static uint8_t add_stick(uint8_t value, float delta) {
+    const float x=(float)value+delta;
+    return (uint8_t)(x<0.0f ? 0.0f : x>255.0f ? 255.0f : x+0.5f);
+}
+static void update_motion(SDL_Gamepad *g, PadData *d) {
+    if (motion_enabled_for!=g) {
+        motion_enabled_for=g;
+        if (SDL_GamepadHasSensor(g,SDL_SENSOR_GYRO)) SDL_SetGamepadSensorEnabled(g,SDL_SENSOR_GYRO,true);
+        if (SDL_GamepadHasSensor(g,SDL_SENSOR_ACCEL)) SDL_SetGamepadSensorEnabled(g,SDL_SENSOR_ACCEL,true);
+    }
+    float gyro[3]={0,0,0}, accel[3]={0,0,0};
+    if (SDL_GetGamepadSensorData(g,SDL_SENSOR_GYRO,gyro,3)) memcpy(d->angular_velocity,gyro,sizeof(gyro));
+    if (SDL_GetGamepadSensorData(g,SDL_SENSOR_ACCEL,accel,3))
+        for (int i=0;i<3;++i) d->acceleration[i]=accel[i]/SDL_STANDARD_GRAVITY;
+    if (!(ds_features() & DS_GYROAIM) || d->l2<=30) return;
+    const float dead=GYRO_DEADZONE_MILLI/1000.0f;
+    const float yaw=fabsf(gyro[1])>dead ? gyro[1] : 0.0f, pitch=fabsf(gyro[0])>dead ? gyro[0] : 0.0f;
+    d->right_x=add_stick(d->right_x,-yaw*GYRO_STICK_PER_RAD);
+    d->right_y=add_stick(d->right_y,pitch*GYRO_STICK_PER_RAD);
+}
+static void update_dualsense(SDL_Gamepad *g, PadData *d) {
+    if (!ds_is_dualsense(g)) return;
+    const unsigned features=ds_features();
+    if (features & DS_HITFLASH) update_hit_flash(g,d->timestamp);
+    if (features & DS_TRIGGERS) update_triggers(g);
+    if (features & DS_MOTION) update_motion(g,d);
+}
+
 static void sample_host(PadData *d) {
     memset(d,0,sizeof(*d));
     d->left_x=d->left_y=d->right_x=d->right_y=128;
@@ -540,6 +619,7 @@ static void sample_host(PadData *d) {
                 }
             }
         }
+        update_dualsense(g,d);
     }
     /* The keyboard works with or without a gamepad: its buttons add to the pad's, and a stick
      * follows the keys only while one of them is held. */
