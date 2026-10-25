@@ -390,6 +390,7 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
         .needs_unorm_fixup = instance.GetDriverID() == vk::DriverId::eMesaKosmickrisp,
         .needs_clip_distance_emulation = instance.GetDriverID() == vk::DriverId::eNvidiaProprietary,
         .supports_shader_stencil_export = instance_.IsShaderStencilExportSupported(),
+        .vertex_input = instance_.IsVertexInputDynamicState() ? 1u : 2u,
         .dref_broadcast = LightingTest::Current().dref,
     };
 
