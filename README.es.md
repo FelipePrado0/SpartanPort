@@ -197,7 +197,8 @@ Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/
 | Corrección de pantalla negra / íconos de botones del control | Incluidos | Incluidos |
 | Discord Rich Presence | No incluido | Opcional en Advanced, desactivado por defecto; nombre del juego y tiempo transcurrido |
 | Corrección de la cola sparse en RADV | No incluida | Integrada en `main` |
-| FSR 1, FSR 3.1, FSR 4, TAA, DLSS | Desactivados | Desactivados en el flujo de ajustes del launcher/juego |
+| FSR 3.1, FSR 4.1, TAA | Desactivados | Gráficos → Upscaling y los menús del juego ([detalles](#upscaling)) |
+| FSR 1, FSR 4, DLSS | Desactivados | Desactivados en el flujo de ajustes del launcher/juego |
 | Nitidez RCAS | Disponible | Disponible |
 
 El AppImage Linux se recompiló el 14 de octubre para glibc 2.39 o posterior. Los paquetes
@@ -228,6 +229,24 @@ cubre toda GPU con esos dos drivers, incluidas las integradas; la línea del log
 multisampling off` u `on` indica lo que se aplicó. Elegí **Off** si las líneas aparecen en otra placa
 y **On** para mantener el multimuestreo de todas formas. Off y On establecen `SPARTAN_NO_MSAA=1` o `0`;
 Automatic deja pasar un `SPARTAN_NO_MSAA` heredado. Se aplica en el próximo inicio del juego.
+
+### Upscaling
+
+Elegí el upscaler y el preset de calidad en **Gráficos → Upscaling**, en el menú **Pantalla** del
+juego o en el menú **Insert** (**Image**). Los tres muestran los mismos valores. El valor por
+defecto es Desactivado. El preset renderiza una fracción de la resolución de renderizado y el
+upscaler reconstruye la resolución completa; cada preset muestra la resolución en que renderiza.
+Los cambios se aplican al reiniciar (**Aplicar y reiniciar** en el juego).
+
+#### FSR 4.1 (AMD, Windows)
+
+FSR 4.1 funciona con el runtime Vulkan de AMD (`amdvkffx64.dll`), que viene con el driver de AMD
+(Adrenalin 26.10.1 o posterior).
+
+- RX 7000 y RX 9000: el driver debería incluirlo. Todavía no confirmado; los reportes son bienvenidos.
+- RX 6000: el driver actual trae FSR 4.1 solo para DirectX 12, sin el runtime Vulkan. SpartanPort
+  usa FSR 3.1 en su lugar e indica el motivo en el menú del juego (**Insert → Image**).
+- NVIDIA e Intel: FSR 3.1.
 
 ## Controles de teclado
 

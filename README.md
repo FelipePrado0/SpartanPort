@@ -193,7 +193,8 @@ Availability checked against [release 2.2.0](https://github.com/FelipePrado0/Spa
 | Startup black-screen patch / controller button icons | Included | Included |
 | Discord Rich Presence | Not included | Optional under Advanced, off by default; game name and elapsed time |
 | RADV sparse-queue fix | Not included | Merged into `main` |
-| FSR 1, FSR 3.1, FSR 4, TAA, DLSS | Disabled | Disabled in the launcher/game settings path |
+| FSR 3.1, FSR 4.1, TAA | Disabled | Graphics → Upscaling and the in-game menus ([details](#upscaling)) |
+| FSR 1, FSR 4, DLSS | Disabled | Disabled in the launcher/game settings path |
 | RCAS sharpening | Available | Available |
 
 The Linux AppImage was rebuilt on October 14 for glibc 2.39 or newer. The Windows and Linux
@@ -230,6 +231,24 @@ GPU on those two drivers, integrated ones included; the game's log line `GPU: gu
 multisampling off` or `on` is what was applied. Choose **Off** if the lines appear on another
 card and **On** to keep multisampling anyway. Off and On set `SPARTAN_NO_MSAA=1` or `0`; Automatic
 passes an inherited `SPARTAN_NO_MSAA` through. Applies on the next game launch.
+
+### Upscaling
+
+Choose the upscaler and the quality preset under **Graphics → Upscaling**, in the in-game
+**Display** menu or in the **Insert** menu (**Image**). The three show the same values. Off is
+the default. A preset renders a share of the Render resolution and the upscaler rebuilds the
+full resolution; each preset shows the size it renders at. Changes apply on restart (**Apply
+and Restart** in the game).
+
+#### FSR 4.1 (AMD, Windows)
+
+FSR 4.1 runs through AMD's Vulkan runtime (`amdvkffx64.dll`), which comes with the AMD driver
+(Adrenalin 26.10.1 or newer).
+
+- RX 7000 and RX 9000: the driver should include it. Not yet confirmed; reports are welcome.
+- RX 6000: the current driver ships FSR 4.1 for DirectX 12 only, without the Vulkan runtime.
+  SpartanPort uses FSR 3.1 instead and says why in the in-game menu (**Insert → Image**).
+- NVIDIA and Intel: FSR 3.1.
 
 ### Chinese interface
 

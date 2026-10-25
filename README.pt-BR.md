@@ -193,7 +193,8 @@ Disponibilidade conferida na [release 2.2.0](https://github.com/FelipePrado0/Spa
 | Correção da tela preta / ícones dos botões do controle | Incluídos | Incluídos |
 | Discord Rich Presence | Não incluído | Opcional em Advanced, desligado por padrão; nome do jogo e tempo decorrido |
 | Correção da fila esparsa no RADV | Não incluída | Integrada à `main` |
-| FSR 1, FSR 3.1, FSR 4, TAA, DLSS | Desativados | Desativados no fluxo de configurações do launcher/jogo |
+| FSR 3.1, FSR 4.1, TAA | Desativados | Gráficos → Upscaling e os menus do jogo ([detalhes](#upscaling)) |
+| FSR 1, FSR 4, DLSS | Desativados | Desativados no fluxo de configurações do launcher/jogo |
 | Nitidez RCAS | Disponível | Disponível |
 
 O AppImage Linux foi recompilado em 14 de outubro para glibc 2.39 ou mais nova. Os pacotes
@@ -224,6 +225,24 @@ A opção automática mostra o nome da placa e a decisão, acompanhando **Graphi
 se aparecerem linhas em outra placa, ou **On** para manter a multiamostragem. A alteração vale
 na próxima abertura. Sem o launcher, `SPARTAN_NO_MSAA=1` desliga e `0` liga; **Automatic** preserva
 essa variável caso ela já exista no ambiente.
+
+### Upscaling
+
+Escolha o upscaler e o preset de qualidade em **Gráficos → Upscaling**, no menu **Exibição** do
+jogo ou no menu **Insert** (**Image**). Os três mostram os mesmos valores. O padrão é
+Desligado. O preset renderiza uma fração da resolução de renderização, e o upscaler reconstrói
+a resolução completa; cada preset mostra a resolução em que renderiza. As mudanças valem ao
+reiniciar (**Aplicar e reiniciar** no jogo).
+
+#### FSR 4.1 (AMD, Windows)
+
+O FSR 4.1 roda pelo runtime Vulkan da AMD (`amdvkffx64.dll`), que vem com o driver da AMD
+(Adrenalin 26.10.1 ou mais recente).
+
+- RX 7000 e RX 9000: o driver deve incluí-lo. Ainda não confirmado; relatos são bem-vindos.
+- RX 6000: o driver atual traz o FSR 4.1 só para DirectX 12, sem o runtime Vulkan. O
+  SpartanPort usa o FSR 3.1 no lugar e mostra o motivo no menu do jogo (**Insert → Image**).
+- NVIDIA e Intel: FSR 3.1.
 
 ## Teclado
 
