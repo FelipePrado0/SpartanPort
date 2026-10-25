@@ -87,6 +87,32 @@ impl ReleaseId {
         self.version == other.version && self.build == other.build
     }
 
+    /// The identity of `tag`; None, empty or invalid is `fallback()`.
+    pub fn from_tag(tag: Option<&str>) -> ReleaseId {
+        match tag.and_then(|t| ReleaseId::parse(t, false)) {
+            Some(mut id) => {
+                if id.build.is_some() {
+                    id.channel = Channel::PreRelease;
+                }
+                id
+            }
+            None => ReleaseId::fallback(),
+        }
+    }
+
+    /// The release this binary is: the tag it was built with, else `fallback()`.
+    pub fn this() -> ReleaseId {
+        Self::from_tag(option_env!("SPARTAN_RELEASE_TAG"))
+    }
+
+    /// `2.8.0`, `2.8.0-beta2`: the tag without its system prefix.
+    pub fn plain(&self) -> String {
+        match &self.build {
+            Some(build) => format!("{}-{build}", self.version),
+            None => self.version.clone(),
+        }
+    }
+
     /// `Release · VERSION`, no build.
     pub fn fallback() -> ReleaseId {
         ReleaseId {
@@ -306,6 +332,52 @@ mod tests {
         assert_eq!(
             ReleaseId::fallback(),
             id(Channel::Release, crate::VERSION, None)
+        );
+    }
+
+    #[test]
+    fn the_identity_comes_from_the_tag() {
+        for tag in [
+            None,
+            Some(""),
+            Some("   "),
+            Some("nonsense"),
+            Some("windows-2.8.0"),
+        ] {
+            assert_eq!(ReleaseId::from_tag(tag), ReleaseId::fallback(), "{tag:?}");
+        }
+        assert_eq!(
+            ReleaseId::from_tag(Some("windows-v2.8.0")),
+            id(Channel::Release, "2.8.0", None)
+        );
+        assert_eq!(
+            ReleaseId::from_tag(Some("windows-v2.8.0-beta2")),
+            id(Channel::PreRelease, "2.8.0", Some("beta2"))
+        );
+        assert_eq!(
+            ReleaseId::from_tag(Some("linux-v2.8.1-issue1-test2")),
+            id(Channel::PreRelease, "2.8.1", Some("issue1-test2"))
+        );
+        assert_eq!(
+            ReleaseId::from_tag(Some("macos-v2.8.0-apple-silicon-test2")),
+            id(Channel::PreRelease, "2.8.0", Some("apple-silicon-test2"))
+        );
+    }
+
+    #[test]
+    fn this_binary_is_the_tag_it_was_built_with() {
+        assert_eq!(
+            ReleaseId::this(),
+            ReleaseId::from_tag(option_env!("SPARTAN_RELEASE_TAG"))
+        );
+    }
+
+    #[test]
+    fn plain_is_the_tag_without_its_system() {
+        assert_eq!(id(Channel::Release, "2.8.0", None).plain(), "2.8.0");
+        assert_eq!(
+            id(Channel::PreRelease, "2.8.0", Some("beta2")).plain(),
+            "2.8.0-beta2"
         );
     }
 
