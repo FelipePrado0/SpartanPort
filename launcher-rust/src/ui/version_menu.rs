@@ -5,7 +5,7 @@ use iced::widget::{button, column, container, mouse_area, row, scrollable, space
 use iced::{Element, Fill, Padding, Right, Task, Top};
 
 use crate::core::i18n::{tr, tr_fmt};
-use crate::core::release::{prereleases, stables, Channel, Release};
+use crate::core::release::{prereleases, stables, Release};
 use crate::ui::app::{home_interactive_enabled, home_interactive_opacity, Message, State};
 use crate::ui::hover_menu::{self, HoverMessage};
 use crate::ui::lang_menu::{EDGE_RIGHT, EDGE_TOP, MENU_DROP, MENU_WIDTH};
@@ -91,11 +91,17 @@ pub fn button_text(state: &State) -> String {
             &[&release.id.short(), &percent.to_string()],
         );
     }
-    let mut label = state.updater.installed().label(lang);
+    let installed = state.updater.installed();
+    let mut label = installed.label(lang);
     if let Some(newer) = state.updater.newer() {
         label.push_str(" · ");
-        let offered = match (&newer.id.channel, &newer.id.build) {
-            (Channel::PreRelease, Some(build)) => build,
+        // A series offer names the build; any other offer names the version.
+        let same_series = match (installed.series(), newer.id.series()) {
+            (Some((mine, _)), Some((theirs, _))) => mine == theirs,
+            _ => false,
+        };
+        let offered = match (&newer.id.build, same_series) {
+            (Some(build), true) => build,
             _ => &newer.id.version,
         };
         label.push_str(&tr_fmt(lang, "{} available", &[offered]));

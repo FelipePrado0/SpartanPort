@@ -666,6 +666,25 @@ fn the_version_button_offers_the_next_build_of_the_series() {
 }
 
 #[test]
+fn the_version_button_offers_the_build_of_a_promoted_series_release() {
+    let dir = tempfile::tempdir().unwrap();
+    let installed = ReleaseId {
+        channel: Channel::PreRelease,
+        version: "2.8.0".into(),
+        build: Some("issue1-test1".into()),
+    };
+    let mut state = state_installed(dir.path(), installed);
+    ready_with(
+        &mut state,
+        vec![release(Channel::Release, "2.8.0", Some("issue1-test2"))],
+    );
+    let mut ui = simulator(app::view(&state));
+    assert!(ui
+        .find("Pre-release · 2.8.0 · issue1-test1 · issue1-test2 available ▾")
+        .is_ok());
+}
+
+#[test]
 fn the_version_button_sits_before_the_language_one() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state_installed(dir.path(), stable_2_6_0());
