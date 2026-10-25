@@ -117,11 +117,21 @@ static void play_click(PadData *d) {
     if (now>=down && now<up) d->buttons|=BTN_TOUCHPAD;
 }
 
+/* Last light bar colour the game asked for, and the pad it was last written to (so a pad that
+ * reconnects gets it again). Called under lock. */
+static struct { uint8_t rgb[3]; bool set; SDL_Gamepad *applied_to; } light_bar;
+static void apply_light_bar(SDL_Gamepad *g) {
+    if (!g || !light_bar.set || light_bar.applied_to==g) return;
+    light_bar.applied_to=g;
+    if (SDL_GetBooleanProperty(SDL_GetGamepadProperties(g),SDL_PROP_GAMEPAD_CAP_RGB_LED_BOOLEAN,false))
+        SDL_SetGamepadLED(g,light_bar.rgb[0],light_bar.rgb[1],light_bar.rgb[2]);
+}
+
 /* Opens the first gamepad SDL knows about; called under lock. */
 static SDL_Gamepad *current_gamepad(void) {
     if (!sdl_ready) sdl_ready = SDL_WasInit(SDL_INIT_GAMEPAD) ? 1 : SDL_InitSubSystem(SDL_INIT_GAMEPAD) ? 1 : -1;
     if (sdl_ready<0) return NULL;
-    if (gamepad && !SDL_GamepadConnected(gamepad)) { SDL_CloseGamepad(gamepad); gamepad=NULL; }
+    if (gamepad && !SDL_GamepadConnected(gamepad)) { SDL_CloseGamepad(gamepad); gamepad=NULL; light_bar.applied_to=NULL; }
     if (!gamepad) {
         int count=0;
         SDL_JoystickID *ids=SDL_GetGamepads(&count);
@@ -131,6 +141,7 @@ static SDL_Gamepad *current_gamepad(void) {
         }
         SDL_free(ids);
     }
+    apply_light_bar(gamepad);
     return gamepad;
 }
 /* Button sources: a host button or key and the PS4 button it presses. The defaults below can be
@@ -1053,12 +1064,30 @@ static ABI int32_t pad_vibration(int32_t handle, const uint8_t *param) {
 static ABI int32_t pad_ok_handle(int32_t handle) { return handle==PAD_HANDLE && opened ? 0 : ERR_INVALID_HANDLE; }
 static ABI int32_t pad_ok_handle_flag(int32_t handle, uint8_t flag) { (void)flag; return pad_ok_handle(handle); }
 
+/* The game's light bar colour (OrbisPadLightBarParam: r, g, b, reserved) goes to the pad's LED when
+ * it has one (a DualSense); a pad that connects later gets the last colour (apply_light_bar). */
 static ABI int32_t pad_light_bar(int32_t handle, const uint8_t *rgb) {
     if (handle!=PAD_HANDLE || !opened) return ERR_INVALID_HANDLE;
-    (void)rgb; return 0;
+    if (!rgb) return ERR_INVALID_ARG;
+    pthread_mutex_lock(&lock);
+    memcpy(light_bar.rgb,rgb,3);
+    light_bar.set=true; light_bar.applied_to=NULL;
+    apply_light_bar(current_gamepad());
+    pthread_mutex_unlock(&lock);
+    return 0;
+}
+/* scePadResetLightBar returns the colour to the pad's own: the blue of player 1 on a PS4. */
+static ABI int32_t pad_reset_light_bar(int32_t handle) {
+    if (handle!=PAD_HANDLE || !opened) return ERR_INVALID_HANDLE;
+    pthread_mutex_lock(&lock);
+    memcpy(light_bar.rgb,(const uint8_t[3]){0,0,255},3);
+    light_bar.set=true; light_bar.applied_to=NULL;
+    apply_light_bar(current_gamepad());
+    pthread_mutex_unlock(&lock);
+    return 0;
 }
 static const RuntimeExport exports[]={
-    {"scePadSetLightBar",pad_light_bar}, {"scePadResetLightBar",pad_ok_handle},
+    {"scePadSetLightBar",pad_light_bar}, {"scePadResetLightBar",pad_reset_light_bar},
     {"scePadInit",pad_init}, {"scePadOpen",pad_open}, {"scePadClose",pad_close},
     {"scePadReadState",pad_read_state}, {"scePadRead",pad_read},
     {"scePadGetControllerInformation",pad_info}, {"scePadSetVibration",pad_vibration},
