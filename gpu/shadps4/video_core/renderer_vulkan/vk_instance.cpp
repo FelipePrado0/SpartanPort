@@ -565,6 +565,10 @@ bool Instance::CreateDevice() {
     if (Dlss* dlss = Dlss::Get()) {
         dlss->AppendDeviceExtensions(*instance, physical_device, dlss_extensions);
         for (const char* name : dlss_extensions) {
+            if (std::any_of(enabled_extensions.begin(), enabled_extensions.end(),
+                            [&](const char* e) { return std::string_view{e} == name; })) {
+                continue;
+            }
             if (ext_policy.IsDisabled(name)) {
                 if (std::find(disabled_extensions.begin(), disabled_extensions.end(), name) ==
                     disabled_extensions.end()) {
@@ -574,9 +578,7 @@ bool Instance::CreateDevice() {
                 }
                 continue;
             }
-            if (std::none_of(enabled_extensions.begin(), enabled_extensions.end(),
-                             [&](const char* e) { return std::string_view{e} == name; }) &&
-                enabled_extensions.size() < enabled_extensions.capacity()) {
+            if (enabled_extensions.size() < enabled_extensions.capacity()) {
                 enabled_extensions.push_back(name);
             }
         }
