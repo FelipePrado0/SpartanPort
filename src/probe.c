@@ -950,6 +950,13 @@ int main(int argc, char **argv) {
     }
     if (app0) {
         runtime_file_configure(app0, user_dir ? user_dir : "user");
+        if (user_dir && user_dir[0]) {
+#ifdef _WIN32
+            _putenv_s("SPARTAN_USER_DIR", user_dir);
+#else
+            setenv("SPARTAN_USER_DIR", user_dir, 1);
+#endif
+        }
         for (int i = 0; i < mount_count; ++i) {
             const char *eq = strchr(mounts[i], '=');
             char guest[64];

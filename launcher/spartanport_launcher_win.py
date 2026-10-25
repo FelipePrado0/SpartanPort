@@ -1275,7 +1275,8 @@ def write_trophy_texts(folder):
 
 def game_environment(s):
     env = dict(os.environ)
-    write_trophy_texts(Path(s.get('user_dir') or DATA_DIR / 'user'))
+    user_dir = s.get('user_dir') or str(DATA_DIR / 'user')
+    write_trophy_texts(Path(user_dir))
     env['SPARTAN_GAME_DIR'] = s['game_dir']
     env.pop('SPARTAN_PATCH_DIR', None)
     # Temporal upscaling is parked (build_graphics): a switch saved on by 2.1.8 has no control left to
@@ -1295,8 +1296,7 @@ def game_environment(s):
     if profile and chosen is not None:
         env['SPARTAN_PATCHES'] = ';'.join(chosen)
         env['SPARTAN_PATCHES_ONLY'] = '1'
-    if s['user_dir']:
-        env['SPARTAN_USER_DIR'] = s['user_dir']
+    env['SPARTAN_USER_DIR'] = user_dir
     if not WINDOWS:
         env['SPARTAN_FSR4_DIR'] = str(fsr4_folder())
     env['SPARTAN_MODS_DIR'] = s['mods_dir'] or str(DATA_DIR / 'mods')

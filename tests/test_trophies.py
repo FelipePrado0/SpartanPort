@@ -4,7 +4,9 @@
 They need no game files: the trophy package (trophy00.trp) is built here, byte by byte."""
 
 import io
+import os
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -118,6 +120,106 @@ class TrophyPackage(unittest.TestCase):
             self.assertEqual(spartanport_trophies.trophy_tier(solid_png(rgb)), tier)
         self.assertEqual(spartanport_trophies.trophy_tier(b'not a png'), '')
         self.assertEqual(spartanport_trophies.trophy_tier(solid_png((0, 0, 0))), '')
+
+
+class TrophyEnvironmentAndPersistence(unittest.TestCase):
+    def setUp(self):
+        self.folder = Path(tempfile.mkdtemp())
+
+    def test_game_environment_propagates_default_and_custom_user_dir(self):
+        import spartanport_launcher_win as launcher
+        # Default user_dir
+        env_default = launcher.game_environment({**launcher.APP_DEFAULTS, 'user_dir': ''})
+        self.assertIn('SPARTAN_USER_DIR', env_default)
+        self.assertEqual(env_default['SPARTAN_USER_DIR'], str(launcher.DATA_DIR / 'user'))
+
+        # Custom user_dir
+        custom_dir = str(self.folder / 'custom_saves')
+        env_custom = launcher.game_environment({**launcher.APP_DEFAULTS, 'user_dir': custom_dir})
+        self.assertIn('SPARTAN_USER_DIR', env_custom)
+        self.assertEqual(env_custom['SPARTAN_USER_DIR'], custom_dir)
+
+    def test_write_trophy_texts_and_launcher_display_consistency(self):
+        import spartanport_launcher_win as launcher
+        test_user = self.folder / 'deck_user'
+        launcher.write_trophy_texts(test_user)
+
+        trophy_file = test_user / 'trophy_texts.txt'
+        self.assertTrue(trophy_file.is_file())
+        content = trophy_file.read_text(encoding='utf-8')
+        self.assertIn('@heading=', content)
+        self.assertIn('0=', content)
+        self.assertIn('1=', content)
+
+        # Write unlocked trophies to user dir and verify read_unlocked_trophies finds them
+        flags = [0, 0, 0, 0]
+        flags[0] |= (1 << 1)  # trophy 1
+        (test_user / 'trophies.dat').write_bytes(struct.pack('<4I', *flags))
+        unlocked = spartanport_trophies.read_unlocked_trophies(test_user / 'trophies.dat')
+        self.assertEqual(unlocked, {1})
+
+    @unittest.skipIf(sys.platform == 'win32', 'AppRun is Linux/POSIX only')
+    def test_apprun_environment_default_xdg(self):
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        appdir = self.folder / 'AppDir'
+        share = appdir / 'usr' / 'share' / 'spartanport'
+        share.mkdir(parents=True)
+        launcher_bin = share / 'spartanport-launcher'
+        launcher_bin.write_text('#!/bin/sh\necho SPARTAN_DATA_DIR=$SPARTAN_DATA_DIR\necho SPARTAN_USER_DIR=$SPARTAN_USER_DIR\n')
+        launcher_bin.chmod(0o755)
+
+        apprun = appdir / 'AppRun'
+        apprun.write_text((root / 'packaging/linux/AppRun').read_text())
+        apprun.chmod(0o755)
+
+        env = os.environ.copy()
+        fake_home = self.folder / 'fake_home'
+        fake_home.mkdir()
+        env['HOME'] = str(fake_home)
+        env.pop('SPARTAN_DATA_DIR', None)
+        env.pop('SPARTAN_USER_DIR', None)
+        env.pop('XDG_DATA_HOME', None)
+
+        res = subprocess.run([str(apprun)], env=env, capture_output=True, text=True, check=True)
+        lines = dict(l.split('=', 1) for l in res.stdout.strip().splitlines() if '=' in l)
+
+        expected_data = str(fake_home / '.local' / 'share' / 'spartanport')
+        expected_user = str(fake_home / '.local' / 'share' / 'spartanport' / 'user')
+        self.assertEqual(lines['SPARTAN_DATA_DIR'], expected_data)
+        self.assertEqual(lines['SPARTAN_USER_DIR'], expected_user)
+        self.assertTrue(Path(expected_user).is_dir())
+
+    @unittest.skipIf(sys.platform == 'win32', 'AppRun is Linux/POSIX only')
+    def test_apprun_environment_paths_with_spaces(self):
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        space_home = self.folder / 'User With Spaces'
+        space_home.mkdir()
+
+        appdir = self.folder / 'AppDir'
+        share = appdir / 'usr' / 'share' / 'spartanport'
+        share.mkdir(parents=True)
+        launcher_bin = share / 'spartanport-launcher'
+        launcher_bin.write_text('#!/bin/sh\necho SPARTAN_USER_DIR=$SPARTAN_USER_DIR\n')
+        launcher_bin.chmod(0o755)
+
+        apprun = appdir / 'AppRun'
+        apprun.write_text((root / 'packaging/linux/AppRun').read_text())
+        apprun.chmod(0o755)
+
+        env = os.environ.copy()
+        env['HOME'] = str(space_home)
+        env.pop('SPARTAN_DATA_DIR', None)
+        env.pop('SPARTAN_USER_DIR', None)
+        env.pop('XDG_DATA_HOME', None)
+
+        res = subprocess.run([str(apprun)], env=env, capture_output=True, text=True, check=True)
+        lines = dict(l.split('=', 1) for l in res.stdout.strip().splitlines() if '=' in l)
+
+        expected_space_user = str(space_home / '.local' / 'share' / 'spartanport' / 'user')
+        self.assertEqual(lines['SPARTAN_USER_DIR'], expected_space_user)
+        self.assertTrue(Path(expected_space_user).is_dir())
 
 
 if __name__ == '__main__':
