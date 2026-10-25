@@ -29,7 +29,6 @@ use spartanport_launcher::ui::theme::{self, palette, CINZEL_BOLD};
 use spartanport_launcher::ui::update::UpdateMessage;
 use spartanport_launcher::ui::widgets;
 use spartanport_launcher::ui::widgets::modal::{Modal, ModalKind, ModalMessage};
-use spartanport_launcher::VERSION;
 
 /// The page order of the Global Constraints.
 const ORDER: [Page; 9] = [
@@ -324,7 +323,8 @@ fn rtl_puts_the_drawer_on_the_right() {
     assert!(panel.x >= 640.0, "drawer at x = {}", panel.x);
     assert!((panel.x + panel.width - 1280.0).abs() < 1.0, "{panel:?}");
     // The bar is mirrored too: the version sits at the left, the tabs at the right.
-    let version = ui.find(app::version_label(cfg!(windows))).unwrap().bounds();
+    let label = app::version_label(&ReleaseId::this(), cfg!(windows));
+    let version = ui.find(label.as_str()).unwrap().bounds();
     assert!(version.x < 640.0, "version at x = {}", version.x);
     // Arabic needs advanced shaping: iced's default (`Auto`) gives it to every non-ASCII text.
     assert!(matches!(
@@ -336,13 +336,24 @@ fn rtl_puts_the_drawer_on_the_right() {
 #[test]
 fn the_bar_names_the_version_and_the_system() {
     // Ruling R82; there is no Steam Deck detection to tell SteamOS apart.
-    assert_eq!(app::version_label(true), format!("v{VERSION} · Windows"));
-    assert_eq!(app::version_label(false), format!("v{VERSION} · Linux"));
+    let stable = ReleaseId {
+        channel: Channel::Release,
+        version: "2.8.0".into(),
+        build: None,
+    };
+    let beta = ReleaseId {
+        channel: Channel::PreRelease,
+        version: "2.8.0".into(),
+        build: Some("beta2".into()),
+    };
+    assert_eq!(app::version_label(&stable, true), "v2.8.0 · Windows");
+    assert_eq!(app::version_label(&stable, false), "v2.8.0 · Linux");
+    assert_eq!(app::version_label(&beta, false), "v2.8.0 · beta2 · Linux");
     let dir = tempfile::tempdir().unwrap();
     let state = state_in(dir.path());
     let mut ui = simulator(app::view(&state));
     let system = if cfg!(windows) { "Windows" } else { "Linux" };
-    let shown = format!("v{VERSION} · {system}");
+    let shown = format!("v{} · {system}", ReleaseId::this().short());
     assert!(
         ui.find(shown.as_str()).is_ok(),
         "{shown} missing from the bar"

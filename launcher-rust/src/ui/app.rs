@@ -22,6 +22,7 @@ use crate::core::log::{LogBuffer, MAX_LOG_LINES};
 use crate::core::paths::Paths;
 use crate::core::platform;
 use crate::core::platform::tool::SystemTools;
+use crate::core::release::ReleaseId;
 use crate::core::settings::SettingsFile;
 use crate::core::store::Store;
 use crate::core::update::{GitHubReleases, ReleaseHost};
@@ -50,7 +51,6 @@ use crate::ui::update::{self, UpdateMessage, Updater};
 use crate::ui::version_menu::{self, VersionMessage};
 use crate::ui::widgets;
 use crate::ui::widgets::modal::{Modal, ModalKind, ModalMessage};
-use crate::VERSION;
 
 /// Starting and minimum window size, in logical pixels.
 pub const WINDOW_SIZE: Size = Size::new(1280.0, 800.0);
@@ -746,12 +746,12 @@ fn dim_close_catcher<'a>() -> Element<'a, Message> {
     mouse_area(dim).on_press(Message::CloseDrawer).into()
 }
 
-/// The version and the system at the right of the bar (ruling R82): `v2.6.0 · Windows`, or
-/// `· Linux` elsewhere (nothing tells a Steam Deck apart yet). `windows` is a parameter so tests
-/// can cover both systems.
-pub fn version_label(windows: bool) -> String {
+/// The installed release and the system at the right of the bar (ruling R82): `v2.8.0 · Windows`
+/// or `v2.8.0 · beta2 · Windows`, with `· Linux` elsewhere (nothing tells a Steam Deck apart
+/// yet). `windows` is a parameter so tests can cover both systems.
+pub fn version_label(installed: &ReleaseId, windows: bool) -> String {
     let system = if windows { "Windows" } else { "Linux" };
-    format!("v{VERSION} · {system}")
+    format!("v{} · {system}", installed.short())
 }
 
 /// The id of the red line along the bar's top edge.
@@ -764,7 +764,7 @@ fn bar(state: &State) -> Element<'_, Message> {
         .fold(row![].spacing(2).height(Fill), |tabs, page| {
             tabs.push(tab(state, page))
         });
-    let version = text(version_label(cfg!(windows)))
+    let version = text(version_label(state.updater.installed(), cfg!(windows)))
         .size(13)
         .style(theme::text_muted);
     // Right to left, the bar is mirrored: the tabs sit at the right, the version at the left.

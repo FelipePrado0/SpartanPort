@@ -7,6 +7,7 @@ use std::path::Path;
 use iced::{window, Point, Size};
 use spartanport_launcher::core::i18n::launcher_language;
 use spartanport_launcher::core::paths::Paths;
+use spartanport_launcher::core::release::ReleaseId;
 use spartanport_launcher::core::settings::app_defaults;
 use spartanport_launcher::startup::{migrates, route, route_on, start, Route};
 use spartanport_launcher::ui::app::{
@@ -153,10 +154,9 @@ fn version_prints_the_name_and_the_version() {
         .output()
         .unwrap();
     assert!(out.status.success());
-    // The version itself is pinned to the Python launcher's in `core_boundary.rs`.
     assert_eq!(
         String::from_utf8_lossy(&out.stdout).trim(),
-        format!("SpartanPort {}", spartanport_launcher::VERSION)
+        format!("SpartanPort {}", ReleaseId::this().plain())
     );
 }
 
