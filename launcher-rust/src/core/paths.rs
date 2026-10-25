@@ -11,11 +11,13 @@ const LEGACY_CONFIG_DIR: &str = "gow3-launcher";
 /// `SPARTAN_PORT_DIR` names the port folder (default: the executable's; absolute, even when the
 /// variable is relative), whose `bin/` and `scripts/` the launcher uses;
 /// `SPARTAN_DATA_DIR` the data folder (default: the port folder, as the Python's
-/// `DATA_DIR = PORT_DIR`); `SPARTAN_CONFIG` the ini.
+/// `DATA_DIR = PORT_DIR`); `SPARTAN_USER_DIR` the default saves and trophy directory (default:
+/// `SPARTAN_DATA_DIR/user`); `SPARTAN_CONFIG` the ini.
 #[derive(Debug, Clone)]
 pub struct Paths {
     pub port_dir: PathBuf,
     pub data_dir: PathBuf,
+    user_dir_default: PathBuf,
     ini: PathBuf,
     legacy_config_dir: PathBuf,
     /// `SPARTAN_GAME_DIR` as the environment given to `from_env` had it: the game folder a new
@@ -54,6 +56,10 @@ impl Paths {
             .filter(|dir| !dir.is_empty())
             .map(PathBuf::from)
             .unwrap_or_else(|| port_dir.clone());
+        let user_dir_default = env("SPARTAN_USER_DIR")
+            .filter(|dir| !dir.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| data_dir.join("user"));
         let ini = env("SPARTAN_CONFIG")
             .filter(|file| !file.is_empty())
             .map(PathBuf::from)
@@ -70,6 +76,7 @@ impl Paths {
         Paths {
             port_dir,
             data_dir,
+            user_dir_default,
             ini,
             legacy_config_dir: base.join(LEGACY_CONFIG_DIR),
             game_dir_default: env("SPARTAN_GAME_DIR").unwrap_or_default(),
@@ -92,9 +99,18 @@ impl Paths {
         self.ini.clone()
     }
 
-    /// The saves folder: the setting, or `data_dir/user` when it is empty.
+    /// The saves folder: the setting, or `user_dir_default` (`SPARTAN_USER_DIR` or `data_dir/user`)
+    /// when it is empty.
     pub fn user_dir(&self, settings_user_dir: &str) -> PathBuf {
-        self.setting_or_default(settings_user_dir, "user")
+        if settings_user_dir.is_empty() {
+            self.user_dir_default.clone()
+        } else {
+            PathBuf::from(settings_user_dir)
+        }
+    }
+
+    pub fn user_dir_default(&self) -> &Path {
+        &self.user_dir_default
     }
 
     pub fn mods_dir(&self, settings_mods_dir: &str) -> PathBuf {
@@ -264,6 +280,60 @@ mod tests {
         assert_eq!(
             paths.run_log_path(""),
             Path::new("data").join("user").join("last_run.log")
+        );
+    }
+
+    #[test]
+    fn user_dir_follows_spartan_user_dir() {
+        let paths = Paths::from_env(
+            Path::new("exe"),
+            &env_of(&[
+                ("SPARTAN_DATA_DIR", "data"),
+                ("SPARTAN_USER_DIR", "custom_user"),
+            ]),
+        );
+        assert_eq!(paths.user_dir_default(), Path::new("custom_user"));
+        assert_eq!(paths.user_dir(""), Path::new("custom_user"));
+        assert_eq!(
+            paths.run_log_path(""),
+            Path::new("custom_user").join("last_run.log")
+        );
+        // Explicit saved user_dir setting overrides inherited SPARTAN_USER_DIR
+        assert_eq!(paths.user_dir("saved_setting"), Path::new("saved_setting"));
+        assert_eq!(
+            paths.run_log_path("saved_setting"),
+            Path::new("saved_setting").join("last_run.log")
+        );
+    }
+
+    #[test]
+    fn empty_spartan_user_dir_falls_back_to_data_dir() {
+        let paths = Paths::from_env(
+            Path::new("exe"),
+            &env_of(&[("SPARTAN_DATA_DIR", "data"), ("SPARTAN_USER_DIR", "")]),
+        );
+        assert_eq!(paths.user_dir_default(), Path::new("data").join("user"));
+        assert_eq!(paths.user_dir(""), Path::new("data").join("user"));
+        assert_eq!(
+            paths.run_log_path(""),
+            Path::new("data").join("user").join("last_run.log")
+        );
+    }
+
+    #[test]
+    fn user_dir_with_spaces() {
+        let paths = Paths::from_env(
+            Path::new("exe"),
+            &env_of(&[("SPARTAN_USER_DIR", "my custom/user folder")]),
+        );
+        assert_eq!(paths.user_dir(""), Path::new("my custom/user folder"));
+        assert_eq!(
+            paths.run_log_path(""),
+            Path::new("my custom/user folder").join("last_run.log")
+        );
+        assert_eq!(
+            paths.user_dir("saved/path with spaces"),
+            Path::new("saved/path with spaces")
         );
     }
 
