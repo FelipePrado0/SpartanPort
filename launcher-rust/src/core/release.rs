@@ -1,22 +1,12 @@
-//! Which release is which: the tag's identity, the list GitHub returns and the newer-stable rule.
+//! Which release is which: the tag's identity, the list GitHub returns, the version floor and the newer rules.
 
 use serde_json::Value;
 
 use crate::core::i18n::tr;
 use crate::core::update::{UpdateError, RELEASES_PAGE};
 
-/// The stamp's file name inside the package: `port_dir/release.json`, `$APPDIR/release.json`.
-pub const STAMP_FILE: &str = "release.json";
-
-/// The asset a release carries once this system's package in it is stamped. One per system: a
-/// release often holds both packages, and each workflow stamps only its own.
-pub fn stamp_asset(windows: bool) -> &'static str {
-    if windows {
-        "release-windows.json"
-    } else {
-        "release-linux.json"
-    }
-}
+/// The first package with the Rust launcher: nothing below it is listed, so no Python-era release is.
+pub const FIRST_RUST_VERSION: &str = "2.8.0";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Channel {
@@ -81,8 +71,8 @@ impl ReleaseId {
     }
 
     /// Whether `other` is the same package: same version and build, whatever the channel. The
-    /// stamp's channel is frozen when the package is built, while the list's follows the API's
-    /// `prerelease`, which changes when a release is promoted or demoted.
+    /// channel compiled into the binary is frozen when it is built, while the list's follows the
+    /// API's `prerelease`, which changes when a release is promoted or demoted.
     pub fn same_build(&self, other: &ReleaseId) -> bool {
         self.version == other.version && self.build == other.build
     }
@@ -165,9 +155,11 @@ fn parse_entry(entry: &Value, windows: bool) -> Option<Release> {
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let id = ReleaseId::parse(entry.get("tag_name")?.as_str()?, prerelease)?;
+    if version_tuple(&id.version) < version_tuple(FIRST_RUST_VERSION) {
+        return None;
+    }
     let published = entry.get("published_at")?.as_str()?.to_string();
     let assets = entry.get("assets")?.as_array()?;
-    asset_url(assets, |name| name == stamp_asset(windows))?;
     let suffix = if windows { ".zip" } else { ".appimage" };
     let url = asset_url(assets, |name| name.to_lowercase().ends_with(suffix))?;
     let page = entry
@@ -261,7 +253,7 @@ mod tests {
                "html_url": format!("https://x.test/{tag}"),
                "assets": assets.iter().map(|a| asset(a)).collect::<Vec<_>>()})
     }
-    const WIN: [&str; 2] = ["spartanport-windows.zip", "release-windows.json"];
+    const WIN: [&str; 1] = ["spartanport-windows.zip"];
 
     fn id(channel: Channel, version: &str, build: Option<&str>) -> ReleaseId {
         ReleaseId {
@@ -409,29 +401,24 @@ mod tests {
     }
 
     fn mixed(extra_linux_asset: bool) -> Value {
-        let mut stable = vec![
-            "spartanport-windows.zip",
-            "spartanport-x86_64.AppImage",
-            "release-windows.json",
-            "release-linux.json",
-        ];
+        let mut stable = vec!["spartanport-windows.zip", "spartanport-x86_64.AppImage"];
         if extra_linux_asset {
             stable.push("spartanport-x86_64.AppImage.sha256");
         }
         let python_era = entry(
-            "windows-v2.6.0",
+            "windows-v2.7.0",
             false,
             "2026-01-01T00:00:00Z",
             &["spartanport-windows.zip"],
         );
-        let mut draft = entry("windows-v2.5.0-test1", true, "2026-02-01T00:00:00Z", &WIN);
+        let mut draft = entry("windows-v2.8.0-test1", true, "2026-02-01T00:00:00Z", &WIN);
         draft["draft"] = json!(true);
-        let mut no_date = entry("windows-v2.4.0", false, "x", &WIN);
+        let mut no_date = entry("windows-v2.8.0", false, "x", &WIN);
         no_date.as_object_mut().unwrap().remove("published_at");
         json!([
-            entry("windows-v2.7.0", false, "2026-05-01T00:00:00Z", &stable),
+            entry("windows-v2.9.0", false, "2026-05-01T00:00:00Z", &stable),
             entry(
-                "windows-v2.6.0-issue209-test1",
+                "windows-v2.8.0-issue209-test1",
                 true,
                 "2026-04-01T00:00:00Z",
                 &WIN
@@ -439,73 +426,45 @@ mod tests {
             draft,
             python_era,
             entry(
-                "linux-v2.7.1-test1",
+                "linux-v2.8.1-test1",
                 true,
                 "2026-03-01T00:00:00Z",
-                &["spartanport-x86_64.AppImage", "release-linux.json"]
+                &["spartanport-x86_64.AppImage"]
             ),
             entry("nonsense", false, "2026-03-02T00:00:00Z", &WIN),
             no_date,
         ])
     }
 
-    /// `mixed` plus the newest release, whose only stamp is the other system's.
-    fn with_the_other_stamp(mut body: Value, package: &str, stamp: &str) -> Value {
-        let newest = entry(
-            "windows-v2.8.0",
-            false,
-            "2026-06-01T00:00:00Z",
-            &[package, stamp],
-        );
-        body.as_array_mut().unwrap().push(newest);
-        body
-    }
-
     #[test]
     fn windows_takes_the_zip() {
-        // The zip next to the Linux stamp only is not a stamped Windows package.
-        let body = with_the_other_stamp(
-            mixed(false),
-            "spartanport-windows.zip",
-            "release-linux.json",
-        );
-        let list = parse_releases(&body, true).unwrap();
+        let list = parse_releases(&mixed(false), true).unwrap();
         assert_eq!(list.len(), 2);
-        assert_eq!(list[0].id.version, "2.7.0");
+        assert_eq!(list[0].id.version, "2.9.0");
         assert_eq!(list[0].url, "https://x.test/spartanport-windows.zip");
-        assert_eq!(list[0].page, "https://x.test/windows-v2.7.0");
+        assert_eq!(list[0].page, "https://x.test/windows-v2.9.0");
         assert_eq!(
             list[1].id,
-            id(Channel::PreRelease, "2.6.0", Some("issue209-test1"))
+            id(Channel::PreRelease, "2.8.0", Some("issue209-test1"))
         );
     }
 
     #[test]
     fn linux_takes_the_appimage_not_its_checksum() {
-        // The AppImage next to the Windows stamp only is not a stamped Linux package.
-        let body = with_the_other_stamp(
-            mixed(true),
-            "spartanport-x86_64.AppImage",
-            "release-windows.json",
-        );
-        let list = parse_releases(&body, false).unwrap();
+        let list = parse_releases(&mixed(true), false).unwrap();
         assert_eq!(list.len(), 2);
-        assert_eq!(list[0].id.version, "2.7.0");
+        assert_eq!(list[0].id.version, "2.9.0");
         assert_eq!(list[0].url, "https://x.test/spartanport-x86_64.AppImage");
-        assert_eq!(list[1].id, id(Channel::PreRelease, "2.7.1", Some("test1")));
+        assert_eq!(list[1].id, id(Channel::PreRelease, "2.8.1", Some("test1")));
     }
 
     #[test]
     fn linux_has_no_package_while_the_release_has_no_appimage() {
         let body = json!([entry(
-            "windows-v2.7.0",
+            "windows-v2.8.0",
             false,
             "2026-05-01T00:00:00Z",
-            &[
-                "spartanport-windows.zip",
-                "release-windows.json",
-                "release-linux.json"
-            ]
+            &["spartanport-windows.zip"]
         )]);
         assert!(parse_releases(&body, false).unwrap().is_empty());
         assert_eq!(parse_releases(&body, true).unwrap().len(), 1);
@@ -514,16 +473,37 @@ mod tests {
     #[test]
     fn the_list_is_newest_first() {
         let body = json!([
-            entry("windows-v2.6.0", false, "2026-01-01T00:00:00Z", &WIN),
-            entry("windows-v2.8.0", false, "2026-03-01T00:00:00Z", &WIN),
-            entry("windows-v2.7.0", false, "2026-02-01T00:00:00Z", &WIN),
+            entry("windows-v2.8.0", false, "2026-01-01T00:00:00Z", &WIN),
+            entry("windows-v2.10.0", false, "2026-03-01T00:00:00Z", &WIN),
+            entry("windows-v2.9.0", false, "2026-02-01T00:00:00Z", &WIN),
         ]);
         let versions: Vec<_> = parse_releases(&body, true)
             .unwrap()
             .into_iter()
             .map(|r| r.id.version)
             .collect();
-        assert_eq!(versions, ["2.8.0", "2.7.0", "2.6.0"]);
+        assert_eq!(versions, ["2.10.0", "2.9.0", "2.8.0"]);
+    }
+
+    #[test]
+    fn releases_below_the_first_rust_one_are_not_listed() {
+        let body = json!([
+            entry("windows-v2.8.0", false, "2026-10-25T00:00:00Z", &WIN),
+            entry(
+                "windows-v2.7.0-rust-launcher-test1",
+                true,
+                "2026-10-24T00:00:00Z",
+                &["spartanport-windows.zip", "release-windows.json"]
+            ),
+            entry("windows-v2.7.0", false, "2026-10-22T00:00:00Z", &WIN),
+        ]);
+        let versions: Vec<_> = parse_releases(&body, true)
+            .unwrap()
+            .into_iter()
+            .map(|r| r.id.version)
+            .collect();
+        assert_eq!(versions, ["2.8.0"]);
+        assert_eq!(FIRST_RUST_VERSION, "2.8.0");
     }
 
     #[test]
