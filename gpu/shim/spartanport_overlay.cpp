@@ -1816,14 +1816,17 @@ void BeginChoice(const std::string& title, const std::vector<std::string>& items
 }
 
 int PollChoice() {
-    // SPARTAN_CHOICE_AUTO=1 (automated test runs): lists accept their focused item, as Enter would.
-    static const bool auto_accept = [] {
+    // SPARTAN_CHOICE_AUTO=1 (automated test runs): the first list (the title screen's Load)
+    // accepts its focused item, as Enter would. Only once: the game's own save prompts later
+    // would otherwise write new saves.
+    static bool auto_accept = [] {
         const char* env = std::getenv("SPARTAN_CHOICE_AUTO");
         return env && env[0] == '1';
     }();
     if (auto_accept) {
         std::scoped_lock lock{imgui_mutex};
         if (choice_active && !choice_items.empty()) {
+            auto_accept = false;
             choice_result = choice_index;
             choice_active = false;
             RetireChoiceTextures();
