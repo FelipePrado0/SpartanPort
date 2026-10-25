@@ -399,6 +399,31 @@ class SteamDeckTest(unittest.TestCase):
         self.assertIn(g.STEAM_DECK_RESOLUTION, g.TESTED_RESOLUTIONS)
         self.assertEqual(g.aspect_of(g.STEAM_DECK_RESOLUTION), '16:10')
 
+    def test_upscale_render_size_follows_the_preset_scale(self):
+        # Native AA (0), Quality (1), Balanced (2), Performance (3), Ultra Performance (4), Ultra Quality (5)
+        self.assertIsNone(g.upscale_render_size(0, (1920, 1080)))
+        self.assertEqual(g.upscale_render_size(1, (1920, 1080)), (1280, 720))
+        self.assertEqual(g.upscale_render_size(2, (1920, 1080)), (1130, 636))
+        self.assertEqual(g.upscale_render_size(3, (1920, 1080)), (960, 540))
+        self.assertEqual(g.upscale_render_size(4, (1920, 1080)), (640, 360))
+        self.assertEqual(g.upscale_render_size(5, (1920, 1080)), (1476, 830))
+        # Never below 640x360, never above the game's own 1920x1080, always even.
+        self.assertEqual(g.upscale_render_size(4, (1280, 720)), (640, 360))
+        self.assertEqual(g.upscale_render_size(5, (3840, 2160)), (1920, 1080))
+        for preset in range(1, 6):
+            w, h = g.upscale_render_size(preset, (2560, 1440))
+            self.assertEqual((w % 2, h % 2), (0, 0))
+        self.assertIsNone(g.upscale_render_size(9, (1920, 1080)))
+        self.assertIsNone(g.upscale_render_size('x', (1920, 1080)))
+
+    def test_resolution_patch_for_any_size_matches_the_built_in_720p(self):
+        xml = g.resolution_patch_xml(1280, 720)
+        builtin = Path(__file__).resolve().parents[1] / 'patches' / 'CUSA01623.xml'
+        block = re.search(r'Name="Resolution Patch - 720p".*?</Metadata>', builtin.read_text(encoding='utf-8'), re.S)
+        lines = lambda text: re.findall(r'<Line [^>]*/>', text)
+        self.assertEqual(lines(xml), lines(block.group(0)))
+        self.assertIn('Name="Resolution Patch - 1280x720"', xml)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -19,7 +19,8 @@ enum Upscaler : int { UpscalerOff = 0, UpscalerFsr3 = 1, UpscalerFsr4 = 2, Upsca
 inline bool IsFsr4(int upscaler) {
     return upscaler == UpscalerFsr4 || upscaler == UpscalerFsr411;
 }
-enum Preset : int { NativeAA = 0, Quality, Balanced, Performance, UltraPerformance, PresetCount };
+// Ultra Quality (FSR 1's 1.3x) is appended: saved preset numbers keep their meaning.
+enum Preset : int { NativeAA = 0, Quality, Balanced, Performance, UltraPerformance, UltraQuality, PresetCount };
 enum DebugView : int { DebugNone = 0, DebugReactive = 1, DebugMotion = 2, DebugViewCount };
 
 /// Live output resolutions: the upscaler's output and the UI host targets.

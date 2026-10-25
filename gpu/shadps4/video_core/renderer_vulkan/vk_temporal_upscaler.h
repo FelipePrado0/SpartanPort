@@ -211,6 +211,7 @@ private:
     /// color before the HUD. SPARTAN_UPSCALER_LDR_TRIGGER overrides it (hex).
     u64 ldr_trigger_ps = 0x0c20ededc9e7c40cull;
     bool ldr_pending = false;
+    bool ldr_scaled = false; ///< this session's scaled frames come from the composite (RunScaled)
     bool done_this_frame = false;
     u32 preset_file_frames = 0; ///< SPARTAN_PRESET_FILE polling
     int applied_output = -1;
@@ -258,6 +259,10 @@ private:
         vk::Format format{};
         u32 width = 0, height = 0;
         bool valid = false;
+        /// SpartanPort's display pass samples the frame in render-size coordinates: the port copies
+        /// the UI image itself and the game's copy draws land here instead.
+        VideoCore::UniqueImage scratch;
+        std::vector<MirrorView> scratch_views;
     };
     std::mutex display_mutex;
     std::unordered_map<VAddr, DisplayImage> displays;

@@ -365,7 +365,18 @@ bool TemporalUpscaler::OnFrameStart() {
 void TemporalUpscaler::OnGraphicsDraw(u64 ps_hash, VideoCore::ImageId color) {
     if (ldr_pending) {
         ldr_pending = false;
-        if (!done_this_frame && !Scaled() && !failed) {
+        if (!done_this_frame && !failed && Scaled()) {
+            // Scaled presets: the composite is the frame at the render size; FSR writes the output-size
+            // UI image and the HUD drawn after it goes there (RedirectColor), as in the scaled path.
+            if (camera_motion.Ready() && Active()) {
+                ldr_target = scene_color;
+                ldr_scaled = true;
+                RunScaled();
+            } else {
+                reset = true;
+            }
+            done_this_frame = true;
+        } else if (!done_this_frame && !failed) {
             done_this_frame = true;
             if (camera_motion.Ready() && Active()) {
                 RunLdr();
@@ -1945,7 +1956,11 @@ void TemporalUpscaler::RunScaled() {
     FfxVkPortableUpscaleDispatchInfo info{};
     info.structSize = sizeof(info);
     info.commandBuffer = cmdbuf;
-    info.color = Describe(color_image, color.info.pixel_format, source_width, source_height,
+    // The output below is written as UNORM: an sRGB frame (SpartanPort's composite) is read as UNORM
+    // too, or FSR works on linear values and the frame comes out darker.
+    const vk::Format input_format = color.info.pixel_format == vk::Format::eR8G8B8A8Srgb
+        ? vk::Format::eR8G8B8A8Unorm : color.info.pixel_format;
+    info.color = Describe(color_image, input_format, source_width, source_height,
                           color.usage_flags, vk::ImageAspectFlagBits::eColor,
                           FFX_VK_PORTABLE_RESOURCE_STATE_GENERIC_READ);
     info.depth = Describe(depth_image, depth_format, source_width, source_height, depth.usage_flags,
@@ -2080,6 +2095,23 @@ bool TemporalUpscaler::RedirectColor(VideoCore::ImageId color,
             .initialLayout = vk::ImageLayout::eUndefined,
         });
         display.views.clear();
+        display.scratch_views.clear();
+        display.scratch = VideoCore::UniqueImage{};
+        if (ldr_scaled) {
+            display.scratch = VideoCore::UniqueImage(device, instance.GetAllocator());
+            display.scratch.Create(vk::ImageCreateInfo{
+                .flags = vk::ImageCreateFlagBits::eMutableFormat,
+                .imageType = vk::ImageType::e2D,
+                .format = display.format,
+                .extent = {ui_width, ui_height, 1},
+                .mipLevels = 1,
+                .arrayLayers = 1,
+                .samples = vk::SampleCountFlagBits::e1,
+                .tiling = vk::ImageTiling::eOptimal,
+                .usage = vk::ImageUsageFlagBits::eColorAttachment,
+                .initialLayout = vk::ImageLayout::eUndefined,
+            });
+        }
     }
     scheduler.EndRendering();
     const vk::ImageMemoryBarrier2 b{
@@ -2096,6 +2128,50 @@ bool TemporalUpscaler::RedirectColor(VideoCore::ImageId color,
         cmd.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &b});
     });
     display.valid = true;
+    if (ldr_scaled && display.scratch) {
+        // The finished UI image is the displayed frame: copied as is (the game's copy shader reads
+        // it with render-size coordinates and showed only its top-left part).
+        const vk::Image ui = vk::Image(ui_image), out = vk::Image(display.image),
+                        scratch = vk::Image(display.scratch);
+        const u32 w = ui_width, h = ui_height;
+        scheduler.Record([ui, out, scratch, w, h](vk::CommandBuffer cmd) {
+            const auto barrier = [](vk::Image image, vk::PipelineStageFlags2 src, vk::AccessFlags2 src_access,
+                                    vk::PipelineStageFlags2 dst, vk::AccessFlags2 dst_access,
+                                    vk::ImageLayout old_layout) {
+                return vk::ImageMemoryBarrier2{.srcStageMask = src, .srcAccessMask = src_access,
+                                               .dstStageMask = dst, .dstAccessMask = dst_access,
+                                               .oldLayout = old_layout,
+                                               .newLayout = vk::ImageLayout::eGeneral, .image = image,
+                                               .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+            };
+            const auto all = vk::PipelineStageFlagBits2::eAllCommands;
+            const std::array before{
+                barrier(ui, all, vk::AccessFlagBits2::eMemoryWrite, vk::PipelineStageFlagBits2::eBlit,
+                        vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eGeneral),
+                barrier(out, all, vk::AccessFlagBits2::eMemoryWrite | vk::AccessFlagBits2::eMemoryRead,
+                        vk::PipelineStageFlagBits2::eBlit, vk::AccessFlagBits2::eTransferWrite,
+                        vk::ImageLayout::eGeneral),
+                barrier(scratch, all, vk::AccessFlagBits2::eNone, all,
+                        vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eUndefined)};
+            cmd.pipelineBarrier2({.imageMemoryBarrierCount = u32(before.size()),
+                                  .pImageMemoryBarriers = before.data()});
+            const vk::ImageBlit region{
+                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcOffsets = std::array{vk::Offset3D{0, 0, 0}, vk::Offset3D{s32(w), s32(h), 1}},
+                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .dstOffsets = std::array{vk::Offset3D{0, 0, 0}, vk::Offset3D{s32(w), s32(h), 1}},
+            };
+            cmd.blitImage(ui, vk::ImageLayout::eGeneral, out, vk::ImageLayout::eGeneral, region,
+                          vk::Filter::eNearest);
+            const auto after = barrier(out, vk::PipelineStageFlagBits2::eBlit,
+                                       vk::AccessFlagBits2::eTransferWrite, all,
+                                       vk::AccessFlagBits2::eMemoryRead, vk::ImageLayout::eGeneral);
+            cmd.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &after});
+        });
+        target = {Mirror(vk::Image(display.scratch), display.scratch_views, view_info.format, {}),
+                  vk::ImageLayout::eGeneral, ui_width, ui_height};
+        return true;
+    }
     target = {Mirror(vk::Image(display.image), display.views, view_info.format, {}),
               vk::ImageLayout::eGeneral, ui_width, ui_height};
     return true;
@@ -2164,6 +2240,10 @@ bool TemporalUpscaler::DisplayOverride(VAddr address, Display& display) {
         DumpImages(instance, scheduler, scheduler.CommandBuffer(), dump_index++,
                    {{display.image, display.width, display.height, 4, "present",
                      bgra ? "bgra" : "rgba"}});
+        if (ui_image) {
+            DumpImages(instance, scheduler, scheduler.CommandBuffer(), dump_index - 1,
+                       {{vk::Image(ui_image), ui_width, ui_height, 4, "ui", "rgba"}});
+        }
     }
     return true;
 }
