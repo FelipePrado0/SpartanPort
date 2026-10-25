@@ -103,6 +103,8 @@ pub static GLYPH_STYLES: &[Choice] = &[
 
 pub static UPSCALERS: &[Choice] = &[
     cr("fsr3", "FSR 3.1 (every GPU)", "FSR 3.1 (любая видеокарта)"),
+    #[cfg(windows)]
+    c("fsr411", "FSR 4.1 (AMD driver)"),
     cr(
         "taa",
         "TAA (native resolution anti-aliasing)",
@@ -111,12 +113,14 @@ pub static UPSCALERS: &[Choice] = &[
     cr("off", "Off", "Выключен"),
 ];
 
+/// Ordered by render scale; the values are the ini's preset numbers (Ultra Quality was added as 5).
 pub static PRESETS: &[Choice] = &[
-    c("0", "Native AA (×1.0)"),
-    c("1", "Quality (×1.5)"),
-    c("2", "Balanced (×1.7)"),
-    c("3", "Performance (×2)"),
-    c("4", "Ultra Performance (×3)"),
+    c("0", "Native AA (100%)"),
+    c("5", "Ultra Quality (77%)"),
+    c("1", "Quality (67%)"),
+    c("2", "Balanced (59%)"),
+    c("3", "Performance (50%)"),
+    c("4", "Ultra Performance (33%)"),
 ];
 
 pub static OUTPUTS: &[Choice] = &[

@@ -157,12 +157,6 @@ pub static SETTINGS: &[Setting] = &[
         Text(""),
         env("SPARTAN_PATCH_DIR", ""),
     ),
-    app(
-        "experimental_upscaler",
-        Flag,
-        Bool(false),
-        env("SPARTAN_EXPERIMENTAL_UPSCALER", ""),
-    ),
     app("video_backend", Pick(VIDEO_BACKENDS), Text("auto"), None),
     app("gamemode", Flag, Bool(false), env("SPARTAN_GAMEMODE", "")),
     app("mangohud", Flag, Bool(false), env("SPARTAN_MANGOHUD", "")),
@@ -349,8 +343,8 @@ pub static SETTINGS: &[Setting] = &[
     ini("mouse_aim_sensitivity", Kind::Int, Int(100), true, 25),
     ini("mouse_lock", Kind::Int, Int(1), true, 23),
     ini("vibration", Kind::Int, Int(100), true, 21),
-    ini("upscaler", Pick(UPSCALERS), Text("fsr3"), false, 0),
-    ini("preset", Pick(PRESETS), Text("1"), false, 1),
+    ini("upscaler", Pick(UPSCALERS), Text("off"), true, 0),
+    ini("preset", Pick(PRESETS), Text("1"), true, 1),
     ini("object_motion", Flag, Bool(true), false, 2),
     ini("output_res", Pick(OUTPUTS), Text("1920x1080"), false, 4),
     ini(
@@ -499,15 +493,16 @@ mod tests {
     }
 
     #[test]
-    fn shown_ini_keys_are_the_21_controls_of_the_window() {
-        assert_eq!(SHOWN_INI_KEYS.len(), 21);
+    fn shown_ini_keys_are_the_23_controls_of_the_window() {
+        assert_eq!(SHOWN_INI_KEYS.len(), 23);
         for seeded in ["monitor", "hdr", "glyph_style"] {
             assert!(SHOWN_INI_KEYS.contains(&seeded), "{seeded}");
         }
         assert!(INI_FLAGS.contains(&"hdr"));
+        for shown in ["upscaler", "preset"] {
+            assert!(SHOWN_INI_KEYS.contains(&shown), "{shown}");
+        }
         for parked in [
-            "upscaler",
-            "preset",
             "object_motion",
             "output_res",
             "live_resolution",

@@ -150,7 +150,7 @@ mod tests {
     #[test]
     fn defaults_are_in_python_order() {
         let defaults = app_defaults(&no_env);
-        assert_eq!(defaults.len(), 43);
+        assert_eq!(defaults.len(), 42);
         assert_eq!(defaults.keys().next().unwrap(), "ui_language");
         assert_eq!(defaults.keys().next_back().unwrap(), "glyph_style");
         // The 2.7.0 shader cache switches sit between the screen effects and the warm-up.

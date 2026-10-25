@@ -109,32 +109,40 @@ PRESET_SCALES = (1.0, 1.5, 1.7, 2.0, 3.0, 1.3)
 
 
 def upscale_render_size(preset, output):
-    """The game's render size for an upscaler preset and output size: even, at least 640x360 and at most
-    the game's own 1920x1080 (the resolution patch shrinks it). None for Native AA or an unknown preset."""
+    """The game's render size for an upscaler preset and output size: even, from 640x360 to 7680x4320.
+    Never the game's own 1920x1080 nor the output size (Native AA): at that size the game composites
+    straight into the display buffer, before the upscaler can run, so it is 2 pixels short instead.
+    None for an unknown preset."""
     try:
         scale = PRESET_SCALES[int(preset)]
     except (ValueError, TypeError, IndexError):
         return None
-    if scale == 1.0:
-        return None
     even = lambda value: 2 * round(value / 2)
-    width = min(max(even(output[0] / scale), 640), 1920)
-    height = min(max(even(output[1] / scale), 360), 1080)
-    return width, height
+    size = (min(max(even(output[0] / scale), 640), 7680), min(max(even(output[1] / scale), 360), 4320))
+    if size in (tuple(output), SIZES['native']):
+        size = (size[0] - 2, size[1] - 2)
+    return size
+
+
+# The built-in resolution patches a render size is made from, smallest first, with the largest size
+# each covers: the Video Arena (0x7cd918) and the passes the game sizes at 1080p grow with them.
+PATCH_TEMPLATES = (('720p', (1280, 720), (1920, 1080)), ('1440p', (2560, 1440), (2560, 1440)),
+                   ('4K', (3840, 2160), (3840, 2160)), ('8K', (7680, 4320), (7680, 4320)))
 
 
 def resolution_patch_xml(width, height, source=Path(__file__).resolve().parents[1] / 'patches' / 'CUSA01623.xml'):
-    """A "Resolution Patch - <width>x<height>" patch file for a render size up to 1920x1080: the built-in
-    720p patch with its sizes, half sizes (bloom) replaced (the Video Arena stays at 2.25 GiB)."""
+    """A "Resolution Patch - <width>x<height>" patch file: the smallest built-in resolution patch that
+    fits the size, with its sizes and half sizes (bloom) replaced."""
     import re
+    name, (tw, th), _ = next((t for t in PATCH_TEMPLATES if width <= t[2][0] and height <= t[2][1]),
+                             PATCH_TEMPLATES[-1])
     text = Path(source).read_text(encoding='utf-8')
-    block = re.search(r'<Metadata [^>]*Name="Resolution Patch - 720p".*?</Metadata>', text, re.S).group(0)
+    block = re.search(rf'<Metadata [^>]*Name="Resolution Patch - {name}".*?</Metadata>', text, re.S).group(0)
     le = lambda value, size: value.to_bytes(size, 'little').hex()
-    values = {le(1280, 4): le(width, 4), le(720, 4): le(height, 4), le(1280, 2): le(width, 2),
-              le(720, 2): le(height, 2), le(640, 4): le(width // 2, 4), le(360, 4): le(height // 2, 4)}
+    values = {le(tw, 4): le(width, 4), le(th, 4): le(height, 4), le(tw, 2): le(width, 2),
+              le(th, 2): le(height, 2), le(tw // 2, 4): le(width // 2, 4), le(th // 2, 4): le(height // 2, 4)}
     block = re.sub(r'Value="([0-9a-f]+)"', lambda m: f'Value="{values.get(m.group(1), m.group(1))}"', block)
-    block = block.replace('Name="Resolution Patch - 720p"', f'Name="Resolution Patch - {width}x{height}"')
-    block = block.replace('output resolution to 1280x720', f'render resolution to {width}x{height}')
+    block = re.sub(r'Name="Resolution Patch - [^"]*"', f'Name="Resolution Patch - {width}x{height}"', block, count=1)
     return '<?xml version="1.0" encoding="utf-8"?>\n<Patch>\n    ' + block + '\n</Patch>\n'
 
 

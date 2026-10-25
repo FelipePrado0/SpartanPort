@@ -293,6 +293,12 @@ The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discove
 | `tests/test_graphics_options.py::SteamDeckTest::test_other_machines_stay_native` | `src/core/graphics_options.rs::tests::other_machines_stay_native` | ported |
 | `tests/test_graphics_options.py::SteamDeckTest::test_no_dmi_names_stays_native` | `src/core/graphics_options.rs::tests::no_dmi_names_stays_native` | ported |
 | `tests/test_graphics_options.py::SteamDeckTest::test_the_default_resolution_is_a_built_in_one` | `src/core/graphics_options.rs::tests::the_default_resolution_is_a_built_in_one` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_upscale_render_size_follows_the_preset_scale` | `src/core/graphics_options.rs::tests::upscale_render_size_follows_the_preset_scale` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_upscaler_output_is_the_chosen_render_resolution` | `src/core/graphics_options.rs::tests::upscaler_output_is_the_chosen_render_resolution` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_upscale_render_size_goes_above_the_games_1080p` | `src/core/graphics_options.rs::tests::upscale_render_size_follows_the_preset_scale` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_the_scene_is_never_the_display_size` | `src/core/graphics_options.rs::tests::upscale_render_size_follows_the_preset_scale` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_resolution_patch_for_any_size_matches_the_built_in_ones` | `src/core/graphics_options.rs::tests::resolution_patch_for_any_size_matches_the_built_in_ones` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_resolution_patch_takes_the_smallest_template_that_fits` | `src/core/graphics_options.rs::tests::resolution_patch_takes_the_smallest_template_that_fits` | ported |
 | `tests/test_save_backup.py::SaveBackupTest::test_copies_savedata` | `src/core/save_backup.rs::tests::copies_savedata` | ported |
 | `tests/test_save_backup.py::SaveBackupTest::test_no_backup_without_saves` | `src/core/save_backup.rs::tests::no_backup_without_saves` | ported |
 | `tests/test_save_backup.py::SaveBackupTest::test_same_second_gets_unique_name` | `src/core/save_backup.rs::tests::same_second_gets_unique_name` | ported |
@@ -332,7 +338,7 @@ The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discove
 | `tests/test_native_cheats.py::NativeCheats::test_graphics_options_label_animation_and_confirmation_focus` | `src/runner/pause_menu.rs::tests::graphics_options_label_animation_and_confirmation_focus` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_graphics_rows_wrap_and_only_strength_uses_a_slider` | `src/runner/pause_menu.rs::tests::graphics_rows_wrap_and_only_strength_uses_a_slider` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_audio_clears_unused_rows_inherited_from_options` | `src/runner/pause_menu.rs::tests::audio_clears_unused_rows_inherited_from_options` | ported |
-| `tests/test_native_cheats.py::NativeCheats::test_display_contains_eight_new_controls_and_keeps_its_original_rows` | `src/runner/pause_menu.rs::tests::display_contains_eight_new_controls_and_keeps_its_original_rows` | ported |
+| `tests/test_native_cheats.py::NativeCheats::test_display_contains_eight_new_controls_and_keeps_its_original_rows` | `src/runner/pause_menu.rs::tests::display_contains_ten_new_controls_and_keeps_its_original_rows` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_display_scrolls_without_overwriting_original_setting_values` | `src/runner/pause_menu.rs::tests::display_scrolls_without_overwriting_original_setting_values` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_graphics_does_not_add_an_informational_row` | `src/runner/pause_menu.rs::tests::graphics_does_not_add_an_informational_row` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_every_cheat_has_native_selection_and_initial_value` | `tests/dump.rs::real_menu_every_cheat_has_native_selection_and_initial_value` | ported |

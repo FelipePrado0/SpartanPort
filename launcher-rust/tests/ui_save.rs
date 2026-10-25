@@ -423,7 +423,7 @@ fn saving_patches_keeps_the_choice_of_other_game_versions() {
     assert!(!dirty(&state));
 }
 
-const HIDDEN_UPSCALING_INI: &str = "upscaler=fsr4\npreset=3\nfsr1=1\nsharpen=1\nsharpness=0.73\n\
+const HIDDEN_UPSCALING_INI: &str = "upscaler=fsr3\npreset=3\nfsr1=1\nsharpen=1\nsharpness=0.73\n\
      rcas=1\nrcas_strength=42\nobject_motion=0\noutput_res=2560x1440\n";
 
 #[test]
@@ -432,9 +432,10 @@ fn hidden_settings_are_preserved_without_migration() {
     fs::write(dir.path().join("spartanport.ini"), HIDDEN_UPSCALING_INI).unwrap();
     let mut state = state_in(dir.path());
     let before = load_ini(&state.paths.ini_path()).values;
+    for key in ["upscaler", "preset"] {
+        assert!(SHOWN_INI_KEYS.contains(&key), "{key}");
+    }
     for key in [
-        "upscaler",
-        "preset",
         "fsr1",
         "sharpen",
         "sharpness",
@@ -461,7 +462,7 @@ fn hidden_settings_are_preserved_without_migration() {
     set(&mut state, "ui_language", json!("ru"));
     save(&mut state);
     assert_eq!(state.lang, "ru");
-    assert_eq!(load_ini(&state.paths.ini_path()).values["upscaler"], "fsr4");
+    assert_eq!(load_ini(&state.paths.ini_path()).values["upscaler"], "fsr3");
 }
 
 #[test]
