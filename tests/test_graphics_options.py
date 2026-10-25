@@ -416,6 +416,15 @@ class SteamDeckTest(unittest.TestCase):
         self.assertIsNone(g.upscale_render_size(9, (1920, 1080)))
         self.assertIsNone(g.upscale_render_size('x', (1920, 1080)))
 
+    def test_upscaler_output_is_the_chosen_render_resolution(self):
+        on = {'SPARTAN_EXPERIMENTAL_UPSCALER': '1'}
+        ini = {'upscaler': 'fsr3', 'preset': '1', 'render_resolution': '1440p', 'output_res': '1280x720'}
+        self.assertEqual(g.upscaler_render_size(ini, on), (1706, 960, (2560, 1440)))
+        self.assertEqual(g.upscaler_render_size({**ini, 'render_resolution': 'native'}, on), (1280, 720, (1920, 1080)))
+        self.assertIsNone(g.upscaler_render_size({**ini, 'preset': '0'}, on))
+        self.assertIsNone(g.upscaler_render_size(ini, {}))
+        self.assertIsNone(g.upscaler_render_size({**ini, 'upscaler': 'off'}, on))
+
     def test_resolution_patch_for_any_size_matches_the_built_in_720p(self):
         xml = g.resolution_patch_xml(1280, 720)
         builtin = Path(__file__).resolve().parents[1] / 'patches' / 'CUSA01623.xml'

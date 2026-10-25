@@ -140,17 +140,15 @@ def resolution_patch_xml(width, height, source=Path(__file__).resolve().parents[
 
 def upscaler_render_size(ini, environment):
     """(width, height, output) when a temporal upscaler preset renders below the output size, else None.
-    The launcher's experimental switch must be on; SPARTAN_UPSCALER and SPARTAN_UPSCALE_PRESET override
+    The output is the chosen render resolution: the upscaler delivers it and the preset renders below
+    it. The launcher's upscaler switch must be on; SPARTAN_UPSCALER and SPARTAN_UPSCALE_PRESET override
     spartanport.ini as in the game."""
     if environment.get('SPARTAN_EXPERIMENTAL_UPSCALER') != '1':
         return None
     upscaler = environment.get('SPARTAN_UPSCALER') or ini.get('upscaler', 'none')
     if upscaler in ('none', 'off', 'taa'):
         return None
-    try:
-        output = tuple(int(v) for v in ini.get('output_res', '1920x1080').split('x'))
-    except ValueError:
-        output = (1920, 1080)
+    output = resolution_size(ini.get('render_resolution', 'native')) or SIZES['native']
     size = upscale_render_size(environment.get('SPARTAN_UPSCALE_PRESET') or ini.get('preset', '0'), output)
     return (*size, output) if size else None
 

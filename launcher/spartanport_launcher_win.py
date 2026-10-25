@@ -1934,20 +1934,18 @@ class Launcher:
             return self.banner_image.subsample(factor) if factor > 1 else self.banner_image
 
     def build_graphics(self):
-        """Window and overlay controls, then the experimental temporal upscaler."""
+        """Window and overlay controls, then the temporal upscaler."""
         f = self.scrolled_page('graphics', _('Graphics', 'Графика'), _('How the game appears on your screen.'))
         self.build_display(f)
-        self.section(f, _('Upscaling (experimental)'))
-        self.check(f, 'experimental_upscaler', 'app', _('Enable the upscaler (experimental)'),
+        self.section(f, _('Upscaling'))
+        self.check(f, 'experimental_upscaler', 'app', _('Enable the upscaler'),
                    _('Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. '
                      'Animated characters can still show some ghosting.'), restart=True)
         self.row(f, _('Upscaler', 'Апскейлер'), self.choice(f, 'upscaler', 'ini', UPSCALERS))
+        # The upscaler outputs the Render resolution chosen above; the preset renders below it.
         self.row(f, _('Quality preset', 'Пресет'), self.choice(f, 'preset', 'ini', PRESETS),
-                 _('Render resolution as a share of the output: lower renders faster and the upscaler '
-                   'rebuilds the output. Native AA keeps the full resolution.'), restart=True)
-        self.row(f, _('Output resolution', 'Разрешение вывода'), self.choice(f, 'output_res', 'ini', OUTPUTS),
-                 _('What the upscaler produces; the HUD is drawn at this size too.',
-                   'Что выдаёт апскейлер; интерфейс рисуется в этом же размере.'), restart=True)
+                 _('Share of the Render resolution above the game renders at; the upscaler rebuilds the full '
+                   'Render resolution. Lower renders faster. Native AA keeps the full resolution.'), restart=True)
         # self.row(f, _('Live resolution changes', 'Смена разрешения на лету'), self.choice(f, 'live_resolution', 'ini', LIVE),
         #          _('Off: outputs other than 1080p are set by a patch at start (fastest; changing them in the '
         #            'game restarts it). On: change output and preset in the game without a restart, at a cost.',
