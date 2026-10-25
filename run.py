@@ -201,16 +201,23 @@ def main():
         print('Graphics: the last restart never reached the game; previous options restored', flush=True)
     env.update(graphics_options.environment(graphics))
     # A temporal upscaler preset below Native AA: the game renders at the preset's size (a resolution
-    # patch of that size) and the upscaler outputs at output_res.
+    # patch of that size) and the upscaler outputs the chosen resolution. The game's own 1920x1080 takes
+    # no patch: a resolution patch drops the texture corruption fix (black eyes on Kratos).
     if upscale := graphics_options.upscaler_render_size(graphics_options.read_ini(env['SPARTAN_CONFIG']), env):
         width, height, output = upscale
-        upscale_patch = out / 'upscale-resolution.xml'
-        upscale_patch.write_text(graphics_options.resolution_patch_xml(width, height), encoding='utf-8')
-        mod_patch_files = [*mod_patch_files, upscale_patch]
-        graphics['render_resolution'] = f'{width}x{height}'
-        env['SPARTAN_RENDER_RES'] = f'{width}x{height}'
+        if (width, height) != graphics_options.SIZES['native']:
+            upscale_patch = out / 'upscale-resolution.xml'
+            upscale_patch.write_text(graphics_options.resolution_patch_xml(width, height), encoding='utf-8')
+            mod_patch_files = [*mod_patch_files, upscale_patch]
+            graphics['render_resolution'] = f'{width}x{height}'
+            # A render size patched below 1080p: its full-size passes are the HUD's (the game's own
+            # 1080p would take every scene pass for HUD: black eyes, darker frame).
+            env['SPARTAN_RENDER_RES'] = f'{width}x{height}'
+            derived.append('SPARTAN_RENDER_RES')
+        else:
+            graphics['render_resolution'] = 'native'
         env['SPARTAN_OUTPUT_RES'] = f'{output[0]}x{output[1]}'
-        derived += ['SPARTAN_RENDER_RES', 'SPARTAN_OUTPUT_RES']
+        derived.append('SPARTAN_OUTPUT_RES')
         print(f'Upscaler: render {width}x{height}, output {output[0]}x{output[1]}', flush=True)
     if not env.get('SPARTAN_FSR411_DIR') and not (PORT / 'fsr4_411').is_dir() and (data / 'fsr4_411').is_dir():
         env['SPARTAN_FSR411_DIR'] = str(data / 'fsr4_411')
