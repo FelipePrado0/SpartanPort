@@ -310,7 +310,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
     let hint = |english: &str| tr(lang, english);
     let language = state.store.text("language");
-    let default_saves = state.paths.data_dir.join("user").display().to_string();
+    let default_saves = state.paths.user_dir("").display().to_string();
 
     column![
         section(state.rtl, &tr(lang, "Cheats")),

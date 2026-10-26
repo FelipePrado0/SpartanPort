@@ -331,6 +331,7 @@ def main():
         # GPU caches (shaders, pipelines) beside the saves; read before main(), so set here.
         user_dir = Path(env.get('SPARTAN_USER_DIR', data / 'user')).resolve()
         user_dir.mkdir(parents=True, exist_ok=True)
+        env['SPARTAN_USER_DIR'] = str(user_dir)
         env.setdefault('SPARTAN_GPU_USER_DIR', str(user_dir))
         from save_backup import backup
         try:

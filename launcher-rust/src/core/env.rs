@@ -494,4 +494,47 @@ mod tests {
         assert!(lines[10].starts_with(&format!("0={name} | ")));
         assert!(lines[44].starts_with("34="));
     }
+
+    #[test]
+    fn game_environment_honors_inherited_spartan_user_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let user_folder = dir.path().join("inherited_user");
+        let user_str = user_folder.to_string_lossy().into_owned();
+        let user_clone = user_str.clone();
+        let env_fn = move |key: &str| (key == "SPARTAN_USER_DIR").then(|| user_clone.clone());
+        let paths = Paths::from_env(dir.path(), &env_fn);
+        let settings = Settings(app_defaults(&|_| None));
+        let inherited = base(&[("SPARTAN_USER_DIR", &user_str)]);
+
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert_eq!(
+            env.get("SPARTAN_USER_DIR").map(String::as_str),
+            Some(user_str.as_str())
+        );
+        assert!(user_folder.join("trophy_texts.txt").is_file());
+    }
+
+    #[test]
+    fn game_environment_honors_explicit_user_dir_over_inherited_env() {
+        let dir = tempfile::tempdir().unwrap();
+        let inherited_folder = dir.path().join("inherited_user");
+        let custom_folder = dir.path().join("custom_user");
+        let inherited_str = inherited_folder.to_string_lossy().into_owned();
+        let custom_str = custom_folder.to_string_lossy().into_owned();
+        let inh_clone = inherited_str.clone();
+        let env_fn = move |key: &str| (key == "SPARTAN_USER_DIR").then(|| inh_clone.clone());
+        let paths = Paths::from_env(dir.path(), &env_fn);
+
+        let (mut settings, _, _temp) = setup(json!({}));
+        settings.set("user_dir", json!(custom_str));
+        let inherited = base(&[("SPARTAN_USER_DIR", &inherited_str)]);
+
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert_eq!(
+            env.get("SPARTAN_USER_DIR").map(String::as_str),
+            Some(custom_str.as_str())
+        );
+        assert!(custom_folder.join("trophy_texts.txt").is_file());
+        assert!(!inherited_folder.join("trophy_texts.txt").exists());
+    }
 }

@@ -2,6 +2,19 @@
 #undef NDEBUG /* the checks are asserts; release builds define NDEBUG */
 #include "../src/runtime_services.c"
 #include <assert.h>
+#ifdef _WIN32
+#include <direct.h>
+#include <process.h>
+#define test_mkdir(d) _mkdir(d)
+#define test_rmdir(d) _rmdir(d)
+#define test_getpid() _getpid()
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#define test_mkdir(d) mkdir(d, 0755)
+#define test_rmdir(d) rmdir(d)
+#define test_getpid() getpid()
+#endif
 
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *nid) { (void)table; (void)count; (void)nid; return 0; }
 int spartanportgpu_text_input_begin(const char *text, const char *prompt) { (void)text; (void)prompt; return 0; }
@@ -10,8 +23,15 @@ void spartanportgpu_trophy_setup(const SpartanGpuTrophyLabels *labels, const Spa
                                 int count, const volatile uint32_t *unlocked) {
     (void)labels; (void)items; (void)count; (void)unlocked;
 }
-void spartanportgpu_toast_trophy(const char *title, const char *detail, const unsigned char *png, uint64_t size) {
-    (void)title; (void)detail; (void)png; (void)size;
+static char mock_user_dir[512]="user";
+const char *runtime_file_user_dir(void) { return mock_user_dir; }
+static char last_toast_title[128], last_toast_detail[256];
+void spartanportgpu_toast_trophy(const char *title, const char *detail, const unsigned char *png, uint64_t png_size) {
+    (void)png; (void)png_size;
+    if (title) snprintf(last_toast_title, sizeof(last_toast_title), "%s", title);
+    else last_toast_title[0] = 0;
+    if (detail) snprintf(last_toast_detail, sizeof(last_toast_detail), "%s", detail);
+    else last_toast_detail[0] = 0;
 }
 static int preview_file_enabled, preview_file_reads, preview_file_closes;
 static int64_t preview_file_result=8;
@@ -437,6 +457,79 @@ int main(void) {
     uint32_t flags[4]={~0u,~0u,~0u,~0u}, count=7;
     assert(trophy_unlock_state(1,1,flags,&count)==0 && !flags[0] && !flags[3] && count==0);
     assert(trophy_unlock_state(1,1,NULL,&count)==TROPHY_INVALID && trophy_release(0)==TROPHY_INVALID);
+
+    /* Trophies: directory resolution, text loading, unlock notifications and persistence across restart. */
+    assert(!strcmp(trophy_dir(),"user"));
+    const char *tmp=getenv("TMPDIR");
+    if (!tmp || !tmp[0]) tmp=getenv("TEMP");
+    if (!tmp || !tmp[0]) tmp=getenv("TMP");
+    if (!tmp || !tmp[0]) tmp="/tmp";
+
+    char test_user[256], test_txt[512], test_dat[512];
+    snprintf(test_user,sizeof(test_user),"%s/spartanport_test_user_%d",tmp,(int)test_getpid());
+    snprintf(test_txt,sizeof(test_txt),"%s/trophy_texts.txt",test_user);
+    snprintf(test_dat,sizeof(test_dat),"%s/trophies.dat",test_user);
+
+    snprintf(mock_user_dir,sizeof(mock_user_dir),"%s",test_user);
+    assert(!strcmp(trophy_dir(),test_user));
+#ifdef _WIN32
+    _putenv("SPARTAN_USER_DIR=out/test_trophy_env");
+#else
+    setenv("SPARTAN_USER_DIR","out/test_trophy_env",1);
+#endif
+    assert(!strcmp(trophy_dir(),"out/test_trophy_env"));
+#ifdef _WIN32
+    _putenv("SPARTAN_USER_DIR=");
+#else
+    unsetenv("SPARTAN_USER_DIR");
+#endif
+    assert(!strcmp(trophy_dir(),test_user));
+
+    /* Clean up any leftovers before setup */
+    remove(test_dat);
+    remove(test_txt);
+    test_rmdir(test_user);
+
+    /* Set up isolated test user dir with custom trophy texts */
+    test_mkdir(test_user);
+    FILE *ft=fopen(test_txt,"wb");
+    assert(ft!=NULL);
+    fputs("@heading=Custom Trophies\n"
+          "0=King of the Hill | Unlock all trophies\n"
+          "1=Releasing the Floodgates | Kill Poseidon\n",ft);
+    fclose(ft);
+    remove(test_dat);
+
+    /* Reset in-memory trophy state and load from mock_user_dir */
+    trophy_ready=0;
+    memset(trophy_flags,0,sizeof(trophy_flags));
+    memset(trophy_names,0,sizeof(trophy_names));
+    memset(trophy_details,0,sizeof(trophy_details));
+    trophy_load_once();
+
+    /* Verified: names are resolved from mock_user_dir/trophy_texts.txt */
+    assert(!strcmp(trophy_names[0],"King of the Hill"));
+    assert(!strcmp(trophy_names[1],"Releasing the Floodgates"));
+    assert(!strcmp(trophy_details[1],"Kill Poseidon"));
+
+    /* Verified: unlocking trophy 1 shows decoded name in notification and persists to disk */
+    last_toast_title[0]=0;
+    assert(trophy_unlock(1,1,1,NULL)==0);
+    assert(!strcmp(last_toast_title,"Releasing the Floodgates"));
+    assert(!strcmp(last_toast_detail,"Kill Poseidon"));
+    assert((trophy_flags[0]&(1u<<1))!=0);
+
+    /* Verified: persistence across application restart */
+    trophy_ready=0;
+    memset(trophy_flags,0,sizeof(trophy_flags));
+    trophy_load_once();
+    assert((trophy_flags[0]&(1u<<1))!=0);
+
+    /* Clean up test files */
+    remove(test_dat);
+    remove(test_txt);
+    test_rmdir(test_user);
+    snprintf(mock_user_dir,sizeof(mock_user_dir),"user");
 
     float ratio=0; assert(safe_area(&ratio)==0 && ratio==1.0f && safe_area(NULL)==SYSTEM_PARAMETER);
 

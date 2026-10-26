@@ -573,10 +573,16 @@ static uint32_t trophy_flags[4];
 static uint32_t trophy_total;
 static int trophy_ready;
 
+static const char *trophy_dir(void) {
+    const char *dir=getenv("SPARTAN_USER_DIR");
+    if (dir && dir[0]) return dir;
+    const char *rf=runtime_file_user_dir();
+    if (rf && rf[0]) return rf;
+    return "user";
+}
 static const char *trophy_state_path(void) {
     static char path[512];
-    const char *dir=getenv("SPARTAN_USER_DIR");
-    snprintf(path,sizeof(path),"%s/trophies.dat",dir && dir[0] ? dir : "user");
+    snprintf(path,sizeof(path),"%s/trophies.dat",trophy_dir());
     return path;
 }
 static uint32_t trp_be32(const unsigned char *p) { return (uint32_t)p[0]<<24|(uint32_t)p[1]<<16|(uint32_t)p[2]<<8|p[3]; }
@@ -618,10 +624,10 @@ static char trophy_label[9][200];
 static char trophy_names[TROPHY_MAX][64];
 static char trophy_details[TROPHY_MAX][160];
 static FILE *trophy_open_text(char *path,size_t size) {
-    const char *dir=getenv("SPARTAN_USER_DIR");
+    const char *dir=trophy_dir();
     static const char *const files[2]={"trophy_texts.txt","trophy_names.txt"};
     for (int i=0;i<2;i++) {
-        snprintf(path,size,"%s/%s",dir && dir[0] ? dir : "user",files[i]);
+        snprintf(path,size,"%s/%s",dir,files[i]);
         FILE *f=fopen(path,"rb");
         if (f) return f;
     }
