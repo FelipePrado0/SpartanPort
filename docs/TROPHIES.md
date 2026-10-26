@@ -198,7 +198,8 @@ This is not legal advice; it is how the port keeps its own repository clean.
 - `gpu/shim/spartanport_ui_language.h`, `gpu/shim/ui_language/`: the menu's and the trophy window's
   texts in every language, keyed by the English text.
 - `gpu/tools/overlay_preview.cpp` (`overlay-preview`): draws the menu, the trophy window and the
-  notifications offscreen with made-up trophies, without the game, to work on their look.
+  notifications offscreen with made-up trophies, and the game's save list with made-up saves,
+  without the game, to work on their look.
 - `launcher-rust/assets/i18n.json`: the texts and labels in every language, made from
   `launcher/spartanport_trophies.py` and `launcher/spartanport_lang.py` by `tools/launcher_i18n.py`.
 - `launcher-rust/src/core/trophies.rs`: the reader of the `.trp` and of `trophies.dat`, and the share

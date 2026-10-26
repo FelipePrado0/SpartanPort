@@ -6,7 +6,8 @@
 // background generated.
 //   overlay-preview OUT.bmp SCENE [WIDTH HEIGHT]
 // SCENE: menu (SPARTAN_PREVIEW_TAB 0-3), trophies, notifications (the trophy window's pages, with
-// SPARTAN_PREVIEW_ORDER 0-2, SPARTAN_PREVIEW_FILTER 0-2 and SPARTAN_PREVIEW_GRADE 0-4), or toast.
+// SPARTAN_PREVIEW_ORDER 0-2, SPARTAN_PREVIEW_FILTER 0-2 and SPARTAN_PREVIEW_GRADE 0-4), saves (the
+// game's save list, SPARTAN_PREVIEW_SAVE=1 to save), overwrite (its question), or toast.
 // SPARTAN_PREVIEW_TOAST=1..4 (bronze..platinum, or several: "1234") adds notifications, over any
 // scene, in SPARTAN_PREVIEW_THEME (original, card, card_cinematic, corner), drawn
 // SPARTAN_PREVIEW_TOAST_MS after they start; with SPARTAN_PREVIEW_FRAMES=N and SPARTAN_PREVIEW_STEP_MS,
@@ -195,11 +196,68 @@ int Env(const char* name, int fallback) {
     return value && *value ? std::atoi(value) : fallback;
 }
 
+// A save picture (228 x 128, as the game's): a made-up dusk over hills, its colours by `seed`.
+SpartanPng::Image DemoSavePicture(int seed) {
+    SpartanPng::Image image;
+    image.width = 228;
+    image.height = 128;
+    image.rgba.resize(size_t(image.width) * image.height * 4);
+    const float hue[][3] = {{0.95f, 0.45f, 0.25f}, {0.35f, 0.55f, 0.95f}, {0.85f, 0.75f, 0.35f}, {0.55f, 0.85f, 0.65f}};
+    const float* sky = hue[seed % 4];
+    for (int y = 0; y < image.height; ++y)
+        for (int x = 0; x < image.width; ++x) {
+            const float u = float(x) / float(image.width), v = float(y) / float(image.height);
+            const float ridge = 0.62f + 0.12f * std::sin(u * 7.0f + float(seed)) + 0.06f * std::sin(u * 19.0f + float(seed) * 2.0f);
+            const float hills = 0.52f + 0.08f * std::sin(u * 4.0f - float(seed));
+            float k = 0.25f + 0.75f * (1.0f - v);
+            float r = 30 + 200 * sky[0] * k, g = 20 + 170 * sky[1] * k, b = 30 + 150 * sky[2] * k;
+            if (v > hills) r *= 0.55f, g *= 0.55f, b *= 0.6f;
+            if (v > ridge) r *= 0.3f, g *= 0.3f, b *= 0.35f;
+            unsigned char* p = &image.rgba[(size_t(y) * image.width + x) * 4];
+            p[0] = (unsigned char)std::min(r, 255.0f), p[1] = (unsigned char)std::min(g, 255.0f);
+            p[2] = (unsigned char)std::min(b, 255.0f), p[3] = 255;
+        }
+    return image;
+}
+
+// The game's save list with made-up saves: "saves" loads (SPARTAN_PREVIEW_SAVE=1: saves, with a new
+// save first), "overwrite" asks before saving over one. Its texts are the runtime's (English or
+// Portuguese, src/runtime_services.c).
+void DemoSaves(const std::string& scene, bool portuguese) {
+    const auto t = [&](const char* en, const char* pt) { return std::string(portuguese ? pt : en); };
+    const std::string places[] = {"Storm Peak", "Ember Halls", "Sunken Archive"};
+    const char* times[] = {"2026-10-26 21:14", "2026-10-25 23:02", "2026-10-24 19:47"};
+    const char* played[] = {"6:42", "4:18", "2:05"};
+    std::vector<std::string> items;
+    std::vector<SpartanPng::Image> pictures;
+    const bool saving = scene == "overwrite" || Env("SPARTAN_PREVIEW_SAVE", 0) != 0;
+    if (saving && scene != "overwrite") {
+        items.push_back(t("New save", "Novo save"));
+        pictures.emplace_back();
+    }
+    for (int i = 0; i < 3; ++i) {
+        items.push_back("SpartanPort demo\n" + places[i] + "\n" + times[i] + "\n" +
+                        t("Difficulty: Spartan  ·  Play time ", "Dificuldade: Espartano  ·  Tempo de jogo ") + played[i]);
+        pictures.push_back(DemoSavePicture(i));
+    }
+    if (scene == "overwrite") {
+        const std::string question = t("Overwrite this save?", "Sobrescrever este save?") + "\n\n" + places[0] + "\n" +
+                                     times[0] + "\n" +
+                                     t("Difficulty: Spartan  ·  Play time ", "Dificuldade: Espartano  ·  Tempo de jogo ") +
+                                     played[0];
+        BeginChoice(question, {t("Overwrite", "Sobrescrever"), t("Cancel", "Cancelar")}, {}, 1,
+                    t("New save", "Novo save"), DemoSavePicture(3));
+        return;
+    }
+    BeginChoice(saving ? t("Save game", "Salvar jogo") : t("Load game", "Carregar jogo"), items, std::move(pictures),
+                saving ? 2 : 1);
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        std::fprintf(stderr, "overlay-preview OUT.bmp menu|trophies|notifications|toast [WIDTH HEIGHT]\n");
+        std::fprintf(stderr, "overlay-preview OUT.bmp menu|trophies|notifications|saves|overwrite|toast [WIDTH HEIGHT]\n");
         return 2;
     }
     const std::string out = argv[1], scene = argv[2];
@@ -246,6 +304,9 @@ int main(int argc, char** argv) {
         trophy_filter = std::clamp(Env("SPARTAN_PREVIEW_FILTER", 0), 0, 2);
         trophy_grade = std::clamp(Env("SPARTAN_PREVIEW_GRADE", 0), 0, 4); // 1 bronze .. 4 platinum
         if (scene == "notifications") SetTrophyPage(1);
+    } else if (scene == "saves" || scene == "overwrite") {
+        const char* language = std::getenv("SPARTAN_PREVIEW_LANG");
+        DemoSaves(scene, language && std::string(language) == "pt");
     }
     // One grade, or several in a row ("1234": bronze, silver, gold, platinum).
     const char* grades = std::getenv("SPARTAN_PREVIEW_TOAST");
@@ -277,6 +338,7 @@ int main(int argc, char** argv) {
         if (grade >= 1 && !original) SpartanToast::SetClockOverride(ms);
         UpdateToastTextures();
         UpdateTrophyTextures();
+        UpdateChoiceTextures();
         io.DisplaySize = ImVec2(float(width), float(height));
         io.DeltaTime = frames > 1 ? float(step_ms) / 1000.0f : 1.0f / 60.0f; // ImGui's clock (the platinum's light)
         ImGui_ImplSDLRenderer3_NewFrame();

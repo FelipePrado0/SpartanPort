@@ -207,7 +207,8 @@ Esto no es asesoramiento legal; es como el port mantiene limpio su propio reposi
 - `gpu/shim/spartanport_ui_language.h`, `gpu/shim/ui_language/`: los textos del menú y de la ventana
   de trofeos en cada idioma, con el texto en inglés como clave.
 - `gpu/tools/overlay_preview.cpp` (`overlay-preview`): dibuja el menú, la ventana de trofeos y las
-  notificaciones fuera del juego, con trofeos inventados, para trabajar en su aspecto sin el juego.
+  notificaciones fuera del juego, con trofeos inventados, y la lista de partidas guardadas del
+  juego, con partidas inventadas, para trabajar en su aspecto sin el juego.
 - `launcher-rust/assets/i18n.json`: los textos y etiquetas en todos los idiomas, generados a partir
   de `launcher/spartanport_trophies.py` y `launcher/spartanport_lang.py` por `tools/launcher_i18n.py`.
 - `launcher-rust/src/core/trophies.rs`: el lector del `.trp` y de `trophies.dat`, y la parte de
