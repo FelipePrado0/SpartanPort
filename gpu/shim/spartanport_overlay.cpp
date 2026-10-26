@@ -390,6 +390,7 @@ void GameTab() {
     auto& s = SpartanSettings::Get();
     if (BeginRows("##language")) {
         LanguageRow();
+        CheckRow("Pause the game", s.pause_game, "The game stops while this menu or the trophy list is open.");
         ImGui::EndTable();
     }
     Separator("Cheats");
@@ -2563,6 +2564,18 @@ bool Visible() {
 
 bool CapturesInput() {
     return menu_open || text_entry_active || choice_active || trophy_view;
+}
+
+bool GamePaused() {
+    return SpartanSettings::Get().pause_game && (menu_open || trophy_view) && !loading;
+}
+
+void WaitWhilePaused() {
+    // The game's own thread stops here, between two frames: its clock goes on, and the game takes
+    // the gap as one long frame, as after a load.
+    while (GamePaused()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
 }
 
 void BeginChoice(const std::string& title, const std::vector<std::string>& items,

@@ -206,6 +206,8 @@ inline constexpr std::pair<std::string_view, const char*> GermanText[] = {
     {"Reload sounds", "Töne neu laden"},
     {"Trophy unlocked!", "Trophäe freigeschaltet!"},
     {"Language", "Sprache"},
+    {"Pause the game", "Spiel pausieren"},
+    {"The game stops while this menu or the trophy list is open.", "Das Spiel hält an, solange dieses Menü oder die Trophäenliste offen ist."},
     {"Same as the launcher", "Wie im Launcher"},
     {"The language of this menu and of the trophies. Until you choose one, the launcher's is used.", "Die Sprache dieses Menüs und der Trophäen. Bis du eine wählst, gilt die des Launchers."},
     {"none", "keine"},

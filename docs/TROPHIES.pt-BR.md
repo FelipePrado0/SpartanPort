@@ -28,7 +28,9 @@ Quadrado ou G, o filtro de classe; Triângulo ou Tab trocam a ordem; L1/R1 ou Q/
 **Notificações**; F8, Esc, Backspace, Enter, Bola/X ou R3+R2 fecham a janela.
 A página **Notificações** é usada como o menu do Insert (direcional ou setas, X ou Enter, o mouse);
 L1/R1 ou Q/E voltam para a lista; F8, Esc ou R3+R2 fecham. Com a janela aberta o jogo não recebe
-comandos (como no menu do Insert).
+comandos (como no menu do Insert), e o jogo fica parado até ela fechar, como com o menu do
+Insert: Jogo > **Pausar o jogo** (ligado por padrão) desliga isso. O R3 apertado com o R2 ou o L2
+não chega ao jogo, então abrir a janela ou o menu não usa o item nem a magia.
 
 A platina (id 0) é desbloqueada junto com o último dos outros troféus, como no PlayStation.
 
