@@ -102,7 +102,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
             state.rtl,
             &tr(lang, "Upscaler"),
             select("upscaler", UPSCALERS, &ini("upscaler"), lang),
-            Some(&hint("FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.")),
+            Some(&hint("FSR 4.1 requires AMD Adrenalin 26.10.1 or newer; DLSS requires an NVIDIA RTX card. The log shows the active provider; a fallback to FSR 3.1 is not FSR 4.1 or DLSS.")),
         ),
         row(
             state.rtl,

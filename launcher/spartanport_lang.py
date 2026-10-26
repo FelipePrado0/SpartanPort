@@ -2600,21 +2600,25 @@ EXTRA.setdefault('es', {}).update({
 EXTRA.setdefault('pt', {}).update({
     'FSR 4.1 (AMD driver)': 'FSR 4.1 (driver AMD)',
     'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 exige AMD Adrenalin 26.10.1 ou mais recente. O registro mostra o provedor ativo; usar FSR 3.1 como alternativa não significa FSR 4.1 ativo.',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer; DLSS requires an NVIDIA RTX card. The log shows the active provider; a fallback to FSR 3.1 is not FSR 4.1 or DLSS.': 'FSR 4.1 exige AMD Adrenalin 26.10.1 ou mais recente; DLSS exige uma placa NVIDIA RTX. O registro mostra o provedor ativo; usar FSR 3.1 como alternativa não significa FSR 4.1 nem DLSS ativos.',
     'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Desligado (padrão): sem upscaling temporal. Ligado: usa o upscaler e a predefinição selecionados. Personagens animados ainda podem mostrar algum rastro.',
 })
 EXTRA.setdefault('es', {}).update({
     'FSR 4.1 (AMD driver)': 'FSR 4.1 (controlador AMD)',
     'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 requiere AMD Adrenalin 26.10.1 o posterior. El registro muestra el proveedor activo; usar FSR 3.1 como alternativa no significa que FSR 4.1 esté activo.',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer; DLSS requires an NVIDIA RTX card. The log shows the active provider; a fallback to FSR 3.1 is not FSR 4.1 or DLSS.': 'FSR 4.1 requiere AMD Adrenalin 26.10.1 o posterior; DLSS requiere una tarjeta NVIDIA RTX. El registro muestra el proveedor activo; usar FSR 3.1 como alternativa no significa que FSR 4.1 o DLSS estén activos.',
     'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Desactivado (predeterminado): sin escalado temporal. Activado: usa el escalador y el ajuste seleccionados. Los personajes animados aún pueden mostrar estelas.',
 })
 EXTRA.setdefault('zh', {}).update({
     'FSR 4.1 (AMD driver)': 'FSR 4.1（AMD 驱动）',
     'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 需要 AMD Adrenalin 26.10.1 或更新版本。日志会显示实际使用的提供程序；回退至 FSR 3.1 并不表示 FSR 4.1 已启用。',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer; DLSS requires an NVIDIA RTX card. The log shows the active provider; a fallback to FSR 3.1 is not FSR 4.1 or DLSS.': 'FSR 4.1 需要 AMD Adrenalin 26.10.1 或更新版本；DLSS 需要 NVIDIA RTX 显卡。日志会显示实际使用的提供程序；回退至 FSR 3.1 并不表示 FSR 4.1 或 DLSS 已启用。',
     'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': '默认关闭：不使用时域超分辨率。开启：使用所选超分辨率和预设。动画角色仍可能出现拖影。',
 })
 EXTRA.setdefault('id', {}).update({
     'FSR 4.1 (AMD driver)': 'FSR 4.1 (driver AMD)',
     'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 memerlukan AMD Adrenalin 26.10.1 atau lebih baru. Log menampilkan penyedia aktif; fallback ke FSR 3.1 bukan berarti FSR 4.1 aktif.',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer; DLSS requires an NVIDIA RTX card. The log shows the active provider; a fallback to FSR 3.1 is not FSR 4.1 or DLSS.': 'FSR 4.1 memerlukan AMD Adrenalin 26.10.1 atau lebih baru; DLSS memerlukan kartu NVIDIA RTX. Log menampilkan penyedia aktif; fallback ke FSR 3.1 bukan berarti FSR 4.1 atau DLSS aktif.',
     'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Mati (bawaan): tanpa upscaling temporal. Nyala: memakai upscaler dan preset pilihan. Karakter yang bergerak masih dapat berbayang.',
 })
 
