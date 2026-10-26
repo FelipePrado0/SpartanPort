@@ -51,7 +51,9 @@ done
 if [[ $pr == 1070 ]]; then
     for compiler in "${compilers[@]}"; do
         log="out/validation/$compiler-trophy-process.log"
-        if "$compiler" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc \
+        # Keep this process fixture separate from the optimized contracts above: its fixed-size
+        # mock directory is not the production runtime_file_user_dir implementation.
+        if "$compiler" -std=c11 -O0 -g -Wall -Wextra -Werror -pthread -I. -Isrc \
             tools/validation/trophy-process.c "${extra[@]}" \
             -o "out/validation/$compiler-trophy-process.exe" >"$log" 2>&1 && \
             python3 tools/validation/trophy-process.py "out/validation/$compiler-trophy-process.exe" >>"$log" 2>&1; then
