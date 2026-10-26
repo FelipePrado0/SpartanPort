@@ -155,6 +155,16 @@ inline std::string FormatCheckpoint(const CheckpointRecord& record) {
     return buf;
 }
 
+/// Whether the markers are recorded. SPARTAN_GPU_CHECKPOINTS=1 turns them on anywhere, any other
+/// value turns them off; unset or empty keeps the default: on for Intel's Windows driver, whose
+/// device losses (#334) are the reason they exist, off elsewhere.
+inline bool CheckpointsWanted(const char* env, bool intel_windows) {
+    if (env && *env) {
+        return env[0] == '1' && env[1] == '\0';
+    }
+    return intel_windows;
+}
+
 /// One entry of vkGetQueueCheckpointDataNV: the stage name as vk::to_string prints it and the
 /// last marker that stage executed.
 struct CheckpointStageData {

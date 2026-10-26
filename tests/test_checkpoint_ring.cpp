@@ -99,6 +99,15 @@ int main() {
                    "  ComputeShader: none\n");
     assert(DescribeCheckpointData(ring, {}) == "  (no checkpoint data)\n");
 
+    // SPARTAN_GPU_CHECKPOINTS: unset or empty keeps the default (on for Intel's Windows driver,
+    // off elsewhere); "1" turns the markers on anywhere, anything else turns them off.
+    assert(CheckpointsWanted(nullptr, true) == true);
+    assert(CheckpointsWanted("", true) == true);
+    assert(CheckpointsWanted(nullptr, false) == false);
+    assert(CheckpointsWanted("1", false) == true);
+    assert(CheckpointsWanted("0", true) == false);
+    assert(CheckpointsWanted("yes", true) == false);
+
     std::puts("checkpoint-ring-test: ok");
     return 0;
 }
