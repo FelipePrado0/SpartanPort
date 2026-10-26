@@ -108,7 +108,7 @@ static inline SDL_AudioDeviceID ds_speaker_device(void) {
     SDL_AudioDeviceID *devices=SDL_GetAudioPlaybackDevices(&count), found=0;
     for (int i=0;devices && i<count && !found;++i) {
         const char *name=SDL_GetAudioDeviceName(devices[i]);
-        if (name && (SDL_strcasestr(name,"DualSense") || SDL_strcasestr(name,"Wireless Controller"))) found=devices[i];
+        if (name && SDL_strcasestr(name,"DualSense")) found=devices[i]; /* a DualShock 4 is "Wireless Controller" */
     }
     SDL_free(devices);
     return found;
