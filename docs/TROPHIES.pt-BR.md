@@ -96,7 +96,8 @@ README). Árabe, japonês e coreano os deixam em inglês, porque a fonte do over
 escritas; os nomes dos troféus continuam vindo nesses idiomas no launcher.
 
 Idiomas: inglês, russo, árabe, espanhol, português, francês, alemão, italiano, polonês, turco,
-chinês, japonês e coreano (`launcher/spartanport_trophies.py`). Os nomes e descrições são os do
+chinês, japonês e coreano (`launcher-rust/assets/i18n.json`, gerado a partir do
+`launcher/spartanport_trophies.py` pelo `tools/launcher_i18n.py`). Os nomes e descrições são os do
 próprio jogo, como a lista de troféus do PS4 os mostra em cada idioma, então dá para procurar um
 troféu pelo nome que o jogo dá a ele: inglês, português (Brasil), espanhol (a lista da América
 Latina), francês, alemão, italiano, polonês, turco, russo, japonês e coreano. **Árabe e chinês
@@ -196,8 +197,13 @@ Isto não é aconselhamento jurídico; é como o port mantém o próprio reposit
   troféus em cada idioma, com o texto em inglês como chave.
 - `gpu/tools/overlay_preview.cpp` (`overlay-preview`): desenha o menu, a janela de troféus e as
   notificações fora do jogo, com troféus inventados, para trabalhar na aparência sem o jogo.
-- `launcher/spartanport_trophies.py`: os textos, o leitor do `.trp` e do `trophies.dat`.
-- `launcher/spartanport_launcher_win.py`: a página Trophies e `write_trophy_texts`.
+- `launcher-rust/assets/i18n.json`: os textos e rótulos em todos os idiomas, gerados a partir do
+  `launcher/spartanport_trophies.py` e do `launcher/spartanport_lang.py` pelo `tools/launcher_i18n.py`.
+- `launcher-rust/src/core/trophies.rs`: o leitor do `.trp` e do `trophies.dat`, e a parcela de
+  jogadores (a mesma tabela do jogo).
+- `launcher-rust/src/core/env.rs`: `write_trophy_texts`, os arquivos que o jogo lê.
+- `launcher-rust/src/ui/pages/trophies.rs`: a página Troféus do launcher, com a mesma ordem e
+  raridade da janela do jogo.
 - `tests/test_trophies.py`, `tests/test_trophy_toast.cpp`, `tests/test_ui_language.cpp`,
   `tests/test_services.c`: testes unitários. Eles montam os próprios arquivos e não precisam de
   arquivos do jogo; `trophy-toast-test PASTA_TEMP trophy00.trp` também confere as classes dos ícones

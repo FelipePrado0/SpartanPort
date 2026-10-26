@@ -97,7 +97,8 @@ README). Arabic, Japanese and Korean keep them in English, because the overlay's
 those scripts; the trophy names still come in those languages in the launcher.
 
 Languages: English, Russian, Arabic, Spanish, Portuguese, French, German, Italian, Polish, Turkish,
-Chinese, Japanese and Korean (`launcher/spartanport_trophies.py`). The names and descriptions are
+Chinese, Japanese and Korean (`launcher-rust/assets/i18n.json`, made from
+`launcher/spartanport_trophies.py` by `tools/launcher_i18n.py`). The names and descriptions are
 the game's own, as the PS4 trophy list shows them in each language, so a trophy can be looked up by
 the name the game gives it: English, Portuguese (Brazil), Spanish (the Latin American list), French,
 German, Italian, Polish, Turkish, Russian, Japanese and Korean. **Arabic and Simplified Chinese are
@@ -196,8 +197,13 @@ This is not legal advice; it is how the port keeps its own repository clean.
   texts in every language, keyed by the English text.
 - `gpu/tools/overlay_preview.cpp` (`overlay-preview`): draws the menu, the trophy window and the
   notifications offscreen with made-up trophies, without the game, to work on their look.
-- `launcher/spartanport_trophies.py`: the texts, the reader of the `.trp` and of `trophies.dat`.
-- `launcher/spartanport_launcher_win.py`: the Trophies page and `write_trophy_texts`.
+- `launcher-rust/assets/i18n.json`: the texts and labels in every language, made from
+  `launcher/spartanport_trophies.py` and `launcher/spartanport_lang.py` by `tools/launcher_i18n.py`.
+- `launcher-rust/src/core/trophies.rs`: the reader of the `.trp` and of `trophies.dat`, and the share
+  of players (the same table as the game's).
+- `launcher-rust/src/core/env.rs`: `write_trophy_texts`, the files the game reads.
+- `launcher-rust/src/ui/pages/trophies.rs`: the launcher's Trophies page, with the same order and
+  rarity as the game's window.
 - `tests/test_trophies.py`, `tests/test_trophy_toast.cpp`, `tests/test_ui_language.cpp`,
   `tests/test_services.c`: unit tests. They build their own files and need no game files;
   `trophy-toast-test SCRATCH_DIR trophy00.trp` also checks the grades of the game's own icons.
