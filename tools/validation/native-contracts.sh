@@ -114,5 +114,13 @@ if [[ $(uname -s) == Linux ]]; then
 fi
 if [[ $pr == 1007 ]]; then
     if ! bash tools/validation/menu-coherence.sh; then failed=1; fi
+    original="${RUNNER_TEMP:?}/pr1007-original"
+    git worktree add --detach "$original" 75078c918964a94b1d2ec1d37909e72ada388265
+    mkdir -p "$original/tools/validation"
+    cp tools/validation/menu-{runtime.c,coherence.cpp,coherence.sh} "$original/tools/validation/"
+    if ! (cd "$original" && bash tools/validation/menu-coherence.sh); then failed=1; fi
+    for log in "$original"/out/validation/*-menu-coherence.log; do
+        cp "$log" "out/validation/original-$(basename "$log")"
+    done
 fi
 exit "$failed"
