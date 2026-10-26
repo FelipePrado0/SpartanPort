@@ -17,9 +17,10 @@ read -r -a libraries <<< "$(pkg-config --libs vulkan sdl3 libavcodec libavutil l
 Path('out/validation/production-runtime-build.sh').write_text(prefix + source.split(marker, 1)[1])
 PY
 bash out/validation/production-runtime-build.sh
-g++ -std=c++20 -O2 -UNDEBUG -Igpu/shim tests/test_graphics_settings.cpp \
-    gpu/shim/spartanport_settings.cpp -o out/validation/graphics-settings-test
-timeout --kill-after=5s 60 out/validation/graphics-settings-test
+cmake -S gpu -B out/gpu -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DSPARTAN_LTO=OFF -DSPARTAN_PGO=off -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+ninja -C out/gpu -j"$(nproc)" graphics-settings-test
+timeout --kill-after=5s 60 out/gpu/graphics-settings-test
 export XDG_DATA_HOME="$RUNNER_TEMP/spartanport-xdg"
 mkdir -p "$XDG_DATA_HOME"
 timeout --kill-after=5s 30 out/spartanport-probe --cpu-features
