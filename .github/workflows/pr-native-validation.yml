@@ -1,0 +1,70 @@
+name: Isolated native PR validation
+
+on:
+  push:
+    branches: [validation/prs-1009-1070-1007]
+    paths:
+      - '.github/workflows/pr-native-validation.yml'
+      - 'tools/validation/**'
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: Main commit used as the comparison baseline
+        required: true
+      pr:
+        description: Pull request under validation
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: isolated-pr-validation
+  cancel-in-progress: false
+
+env:
+  VALIDATION_BASELINE: ${{ inputs.baseline || 'ec468cdb1c950ff0d811ee5d39293b449af5ca22' }}
+  VALIDATION_PR: ${{ inputs.pr || '1009' }}
+  CMAKE_BUILD_PARALLEL_LEVEL: '1'
+  CARGO_BUILD_JOBS: '1'
+  MAKEFLAGS: '-j1'
+  TZ: UTC
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Keep source line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: msys2/setup-msys2@v2
+        if: runner.os == 'Windows'
+        with:
+          msystem: CLANG64
+          release: false
+          update: true
+          install: git
+          pacboy: toolchain:p
+      - name: Native contracts on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash tools/validation/native-contracts.sh "$VALIDATION_BASELINE" "$VALIDATION_PR"
+      - name: Native contracts on Windows
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: bash tools/validation/native-contracts.sh "$VALIDATION_BASELINE" "$VALIDATION_PR"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-pr${{ env.VALIDATION_PR }}-${{ matrix.os }}
+          path: out/validation/*.log
+          if-no-files-found: warn

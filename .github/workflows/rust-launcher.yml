@@ -2,6 +2,7 @@ name: Rust launcher
 
 on:
   push:
+    branches-ignore: ['validation/**']
     paths:
       - 'launcher-rust/**'
       - '.github/workflows/rust-launcher.yml'
