@@ -804,6 +804,19 @@ static void engine_fps_combo(PadData *d) {
     engine_fps_hidden&=d->buttons;
     d->buttons&=~engine_fps_hidden;
 }
+/* R3 + L2 opens the port's menu and R3 + R2 the trophy list (gpu/shim/spartanport_overlay.cpp),
+ * at half a pull, while the game takes a trigger from a slight one. With R3 held, the trigger and
+ * R3 stay hidden from the game until each one is released: a stray R2 uses the item. */
+enum { OVERLAY_TRIGGERS=BTN_L2|BTN_R2 };
+static uint32_t overlay_chord_hidden;
+static void overlay_chords(PadData *d) {
+    if ((d->buttons & BTN_R3) && (d->buttons & OVERLAY_TRIGGERS))
+        overlay_chord_hidden|=BTN_R3|(d->buttons & OVERLAY_TRIGGERS);
+    overlay_chord_hidden&=d->buttons;
+    d->buttons&=~overlay_chord_hidden;
+    if (overlay_chord_hidden & BTN_L2) d->l2=0;
+    if (overlay_chord_hidden & BTN_R2) d->r2=0;
+}
 /* After the menu or the text dialog closes, buttons still held (the Cross that accepted a
  * name) stay hidden until released: the game would take them as a new press. */
 static int hold_after_capture;
@@ -818,6 +831,7 @@ static void sample(PadData *d) {
     if (injected.buttons & BTN_R2) d->r2=255;
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
+    overlay_chords(d);
     note_game_menu(d); /* before the actions turn into the buttons they press */
     apply_combos(d);
     apply_dodge(d);

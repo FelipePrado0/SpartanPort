@@ -153,6 +153,31 @@ int main(void) {
     data=read_pad();
     assert(data.buttons==0);
 
+    /* R3 + R2 opens the trophy list and R3 + L2 the menu: with R3 held the trigger never reaches
+     * the game (a stray R2 uses the item), until each one is released. */
+    inject(path,"r2");
+    data=read_pad();
+    assert(data.buttons==BTN_R2 && data.r2==255);
+    inject(path,"");
+    data=read_pad();
+    inject(path,"r3 r2");
+    data=read_pad();
+    assert(data.buttons==0 && data.r2==0);
+    inject(path,"r2");
+    data=read_pad();
+    assert(data.buttons==0 && data.r2==0);
+    inject(path,"r3 l2 cross");
+    data=read_pad();
+    assert(data.buttons==BTN_CROSS && data.l2==0);
+    inject(path,"");
+    data=read_pad();
+    inject(path,"r3");
+    data=read_pad();
+    assert(data.buttons==BTN_R3);
+    inject(path,"");
+    data=read_pad();
+    assert(data.buttons==0);
+
     SDL_VirtualJoystickTouchpadDesc touch={.nfingers=2};
     SDL_VirtualJoystickDesc desc;
     SDL_INIT_INTERFACE(&desc);
