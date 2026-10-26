@@ -169,7 +169,7 @@ impl State {
     /// `new` over `host`: the tests give it a fake so nothing reaches GitHub or the browser.
     pub fn with_host(paths: Paths, host: Arc<dyn ReleaseHost>) -> State {
         let (store, unreadable) = Store::load(&paths);
-        // What the load found at `config_file`, after its portable migration.
+        // What the load found at `config_file`.
         let config = paths.config_file();
         let settings_file = if unreadable.contains(&config) {
             SettingsFile::Unreadable

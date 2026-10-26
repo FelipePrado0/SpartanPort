@@ -52,7 +52,7 @@ const WIDE: [Page; 5] = [
     Page::Log,
 ];
 
-/// A state over `dir` only: data, ini and the legacy config folder all live there.
+/// A state over `dir` only: data, ini and the home folders all live there.
 fn state_in(dir: &Path) -> State {
     let root = dir.display().to_string();
     let env = move |key: &str| match key {
