@@ -114,17 +114,19 @@ static inline SDL_AudioDeviceID ds_speaker_device(void) {
     return found;
 }
 
-/* The pad's own speaker level, which Windows' volume does not reach: speaker volume (byte 5, the
- * top of the range PS5 games use) and the speaker preamp gain (byte 37 bits 0-2, 0..7), each
- * applied only with its enable bit (byte 0 bit 5, byte 1 bit 7). */
-enum { DS_SPEAKER_VOLUME=0x64, DS_SPEAKER_GAIN_DEFAULT=4 };
+/* The pad's own speaker, which Windows does not switch on: the pad starts with its audio routed to
+ * the headset jack only, so nothing played on its output reaches the speaker. Set the output path
+ * to the speaker (byte 7 bits 4-5 = 3: the speaker plays the right channel, the jack is off), the
+ * speaker volume (byte 5, the top of the range PS5 games use) and the speaker preamp gain (byte 37
+ * bits 0-2, 0..7), each applied only with its enable bit (byte 0 bits 7 and 5, byte 1 bit 7). */
+enum { DS_SPEAKER_VOLUME=0x64, DS_SPEAKER_GAIN_DEFAULT=4, DS_PATH_SPEAKER=0x30 };
 static struct { int gain; SDL_Gamepad *sent_to; } ds_speaker_sent __attribute__((unused));
 static inline bool ds_set_speaker(SDL_Gamepad *g, int gain) {
     if (!ds_is_dualsense(g)) return false;
     if (ds_speaker_sent.sent_to==g && ds_speaker_sent.gain==gain) return true;
     uint8_t effects[DS_EFFECTS_SIZE];
     memset(effects,0,sizeof(effects));
-    effects[0]=0x20; effects[5]=DS_SPEAKER_VOLUME;
+    effects[0]=0x80|0x20; effects[5]=DS_SPEAKER_VOLUME; effects[7]=DS_PATH_SPEAKER;
     effects[1]=0x80; effects[37]=(uint8_t)(gain & 7);
     if (!SDL_SendGamepadEffect(g,effects,sizeof(effects))) return false;
     ds_speaker_sent.gain=gain; ds_speaker_sent.sent_to=g;
