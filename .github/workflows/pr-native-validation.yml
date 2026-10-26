@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/pr-native-validation.yml'
       - 'tools/validation/**'
+      - 'tests/test_savedata.c'
   workflow_dispatch:
     inputs:
       baseline:
@@ -28,6 +29,7 @@ env:
   CMAKE_BUILD_PARALLEL_LEVEL: '1'
   CARGO_BUILD_JOBS: '1'
   MAKEFLAGS: '-j1'
+  RAYON_NUM_THREADS: '1'
   TZ: UTC
 
 jobs:
@@ -68,3 +70,90 @@ jobs:
           name: native-pr${{ env.VALIDATION_PR }}-${{ matrix.os }}
           path: out/validation/*.log
           if-no-files-found: warn
+
+  rust:
+    needs: native
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: launcher-rust
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Linux launcher libraries
+        if: runner.os == 'Linux'
+        working-directory: .
+        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked -- --test-threads=1
+      - run: cargo build --release --locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-pr${{ env.VALIDATION_PR }}-${{ matrix.os }}
+          path: launcher-rust/target/release/spartanport-launcher*
+
+  build:
+    needs: rust
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    env:
+      SPARTAN_LTO: OFF
+      SPARTAN_PGO: off
+    steps:
+      - name: Keep source line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: msys2/setup-msys2@v2
+        if: runner.os == 'Windows'
+        with:
+          msystem: CLANG64
+          release: false
+          update: true
+          install: git patch
+          pacboy: >-
+            toolchain:p cmake:p ninja:p pkgconf:p python:p
+            vulkan-headers:p vulkan-loader:p vulkan-memory-allocator:p glslang:p
+            sdl3:p fmt:p boost:p robin-map:p xxhash:p ffmpeg:p zydis:p
+            spirv-tools:p spirv-headers:p spirv-cross:p
+      - name: Linux runtime dependencies and build
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          source tools/validation/serial-build.sh
+          bash packaging/linux/ci-deps.sh
+          bash build.sh
+          ninja -C out/gpu graphics-settings-test
+          timeout 60 out/gpu/graphics-settings-test
+          timeout 30 out/spartanport-probe --cpu-features
+      - name: Windows runtime build
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          source tools/validation/serial-build.sh
+          bash build.sh --test
+          timeout 30 out/spartanport-probe.exe --cpu-features
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-pr${{ env.VALIDATION_PR }}-${{ matrix.os }}
+          path: |
+            out/gpu-build.log
+            out/spartanport-probe*
