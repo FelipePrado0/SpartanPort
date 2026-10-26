@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: isolated-pr-validation
@@ -31,10 +32,6 @@ concurrency:
 env:
   VALIDATION_BASELINE: ${{ inputs.baseline || '9e6c7260a7bf9d80c0ed0748b9efc00e760178b4' }}
   VALIDATION_PR: ${{ inputs.pr || '1070' }}
-  CMAKE_BUILD_PARALLEL_LEVEL: '1'
-  CARGO_BUILD_JOBS: '1'
-  MAKEFLAGS: '-j1'
-  RAYON_NUM_THREADS: '1'
   TZ: UTC
 
 jobs:
@@ -42,7 +39,6 @@ jobs:
     if: ${{ inputs.phase != 'build-linux' }}
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix:
         os: [ubuntu-24.04, windows-2025]
     runs-on: ${{ matrix.os }}
@@ -78,10 +74,9 @@ jobs:
           if-no-files-found: warn
 
   rust:
-    needs: native
+    if: ${{ inputs.phase != 'build-linux' }}
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix:
         os: [ubuntu-24.04, windows-2025]
     runs-on: ${{ matrix.os }}
@@ -92,17 +87,39 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify reusable Rust evidence
+        if: env.VALIDATION_PR == '1070'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -c "import json, subprocess; r=json.loads(subprocess.check_output(['gh','api','repos/FelipePrado0/SpartanPort/actions/runs/40223880591'])); assert r['conclusion']=='success' and r['head_sha']=='b8abfdd68b687fdd636918ea93aa4cd377620864'"
+          git diff --exit-code b8abfdd68b687fdd636918ea93aa4cd377620864 HEAD -- launcher-rust launcher scripts patches
+      - uses: actions/download-artifact@v4
+        if: env.VALIDATION_PR == '1070'
+        with:
+          name: spartanport-launcher-${{ matrix.os }}
+          run-id: 40223880591
+          github-token: ${{ github.token }}
+          path: launcher-rust/target/release
       - uses: dtolnay/rust-toolchain@stable
+        if: env.VALIDATION_PR != '1070'
         with:
           components: clippy, rustfmt
       - name: Linux launcher libraries
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && env.VALIDATION_PR != '1070'
         working-directory: .
         run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev
       - run: cargo fmt --check
+        if: env.VALIDATION_PR != '1070'
       - run: cargo clippy --locked --all-targets -- -D warnings
-      - run: cargo test --locked -- --test-threads=1
+        if: env.VALIDATION_PR != '1070'
+      - run: cargo test --locked
+        if: env.VALIDATION_PR != '1070'
       - run: cargo build --release --locked
+        if: env.VALIDATION_PR != '1070'
       - uses: actions/upload-artifact@v4
         with:
           name: rust-pr${{ env.VALIDATION_PR }}-${{ matrix.os }}
@@ -113,7 +130,6 @@ jobs:
     if: ${{ always() && (needs.rust.result == 'success' || inputs.phase == 'build-linux') }}
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix:
         os: ${{ inputs.phase == 'build-linux' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "windows-2025"]') }}
     runs-on: ${{ matrix.os }}
@@ -149,7 +165,6 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          source tools/validation/serial-build.sh
           bash packaging/linux/ci-deps.sh
           bash build.sh
           ninja -C out/gpu graphics-settings-test
@@ -166,7 +181,6 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          source tools/validation/serial-build.sh
           bash build.sh --test
           timeout 30 out/spartanport-probe.exe --cpu-features
       - uses: actions/upload-artifact@v4

@@ -13,7 +13,7 @@ extra=()
 case $(uname -s) in
 MINGW*|MSYS*)
     source ./msys2-env.sh
-    extra=(src/compat_win.c -lbcrypt)
+    extra=(src/compat_win.c -lbcrypt -lws2_32)
     ;;
 *) compilers=(gcc clang) ;;
 esac
