@@ -60,6 +60,11 @@ int main(void) {
     assert(ds_parse_features("gyroaim")==(DS_GYROAIM|DS_MOTION));
     assert(ds_parse_features("ALL")==(DS_TRIGGERS|DS_HITFLASH|DS_MOTION|DS_GYROAIM|DS_QTE|DS_SPEAKER));
     assert(ds_parse_features("bogus,,speaker")==DS_SPEAKER);
+    assert(ds_parse_features("speaker,speakergain=6")==DS_SPEAKER);
+    assert(ds_parse_speaker_gain("speaker,speakergain=6")==6);
+    assert(ds_parse_speaker_gain("speaker")==DS_SPEAKER_GAIN_DEFAULT);
+    assert(ds_parse_speaker_gain("SpeakerGain=9")==7);
+    assert(ds_parse_speaker_gain(NULL)==DS_SPEAKER_GAIN_DEFAULT);
 
     assert(ds_features()==0);
     puts("dualsense: ok");

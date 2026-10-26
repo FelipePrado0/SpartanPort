@@ -620,6 +620,7 @@ static void update_dualsense(SDL_Gamepad *g, PadData *d) {
         if (d->r2<R2_PRESS_AT) { d->r2=0; d->buttons&=~(uint32_t)BTN_R2; }
     } else if (ds_sent.sent_to==g) { const DsTrigger off=ds_trigger_off(); ds_set_triggers(g,&off,&off); }
     if (features & DS_MOTION) update_motion(g,d);
+    if (features & DS_SPEAKER) ds_set_speaker(g,ds_speaker_gain());
 }
 
 static void sample_host(PadData *d) {
