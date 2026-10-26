@@ -73,6 +73,26 @@ int main(int argc, char **argv) {
     r=run(ctx,instance,mp3,size,small,sizeof(small),multi,&stream,NULL);
     assert(r==RESULT_NOT_ENOUGH_ROOM && stream.output_written==0 && stream.input_consumed==(int32_t)frame_size_of(mp3));
 
+    /* False-positive FGH byte pattern in an audio frame must not trigger OFL or drop samples (#1091). */
+    static unsigned char fake_mp3[1<<16];
+    memcpy(fake_mp3,mp3,size);
+    /* In frame 10 (offset 4178, size 418), inject 0xB4 indicator with matching CRC-8 at byte 390. */
+    unsigned char fgh[10]={0xB4, 0x03, 0xE8, 0x00, 0x00, 0x56, 0x22, 0x00, 0x00, 0};
+    uint8_t crc=0xFF;
+    for (int i=0;i<9;++i) for (int j=7;j>=0;--j) crc=(uint8_t)(((crc>>7)&1)!=((fgh[i]>>j)&1) ? crc*2 : (crc*2)^0x45);
+    fgh[9]=crc;
+    memcpy(fake_mp3+4178+390,fgh,10);
+    Mp3Frame audio_frame;
+    assert(ajm_mp3_parse_frame(fake_mp3+4178,418,1,&audio_frame)==0);
+    assert(audio_frame.ofl_type==0 && audio_frame.encoder_delay==0);
+
+    memset(control,0,sizeof(control));
+    end=job_control(batch,instance,UINT64_C(1)<<13,control,0,control,sizeof(control),NULL);
+    assert(ajm_batch_start(ctx,batch,(uint32_t)(end-batch),0,NULL,&id)==0 && ajm_batch_wait(ctx,id,0,NULL)==0);
+    r=run(ctx,instance,fake_mp3,size,pcm,sizeof(pcm),multi,&stream,&gapless);
+    assert((r & ~RESULT_PARTIAL_INPUT)==0);
+    assert(stream.output_written==22050*2*2 && stream.total_decoded_samples==22050);
+
     /* Garbage is a codec error result, not a crash. */
     static const unsigned char junk[512]={0x12,0x34};
     r=run(ctx,instance,junk,sizeof(junk),pcm,sizeof(pcm),UINT64_C(1)<<47,&stream,NULL);
