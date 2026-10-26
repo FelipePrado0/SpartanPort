@@ -26,9 +26,12 @@ if ($env:SPARTAN_RELEASE_TAG) {
 
 # The same names package.sh refuses to ship: game files and anything a player makes.
 $forbidden = 'eboot.bin', 'sce_module', 'sce_sys', 'savedata', 'user', 'cache', '*.log', 'spartanport.ini',
-    'settings.json', 'game_icon.ico', 'mods.json', 'patches.json', 'fsr4_shaders', 'nvngx_dlss*.dll', '*.spv', '*.pkg',
+    'settings.json', 'game_icon.ico', 'mods.json', 'patches.json', '*.spv', '*.pkg',
     '*.sprx', '*.prx'
+# fsr4_shaders holds the open FSR 4 model's own shaders (MIT), not the game's.
+$models = Join-Path $tree 'fsr4_shaders'
 $found = Get-ChildItem -LiteralPath $tree -Recurse -Force |
+    Where-Object { -not $_.FullName.StartsWith($models) } |
     Where-Object { $name = $_.Name; $forbidden | Where-Object { $name -like $_ } }
 if ($found) { $failed += "files that must not ship: $($found.FullName -join ', ')" }
 
