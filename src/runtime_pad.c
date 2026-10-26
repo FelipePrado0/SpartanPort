@@ -563,9 +563,11 @@ static void update_qte_flash(SDL_Gamepad *g, uint64_t now) {
     else restore_light(g);
 }
 
-/* triggers: R2 gets a click (a wall that gives way near the end of the travel) on a DualSense.
+/* triggers: R2 gets a click (a wall that gives way near the end of the travel) on a DualSense,
+ * and counts as pressed only past it (R2_PRESS_AT of 255, where the wall gives way), so the game's
+ * action starts at the click instead of at the first touch.
  * This is where a trigger effect for something in the game (a chest, a bow) would be chosen. */
-enum { R2_CLICK_START=4, R2_CLICK_END=6, R2_CLICK_STRENGTH=6 };
+enum { R2_CLICK_START=4, R2_CLICK_END=6, R2_CLICK_STRENGTH=6, R2_PRESS_AT=150 };
 static void restore_triggers(void) {
     const DsTrigger off=ds_trigger_off();
     if (gamepad && SDL_WasInit(SDL_INIT_GAMEPAD) && SDL_GamepadConnected(gamepad)) ds_set_triggers(gamepad,&off,&off);
@@ -613,8 +615,10 @@ static void update_dualsense(SDL_Gamepad *g, PadData *d) {
     else if (hit.flashing) { hit.flashing=false; restore_light(g); }
     if (features & DS_QTE) update_qte_flash(g,d->timestamp);
     else if (qte_led.shown>=0) { qte_led.shown=-1; restore_light(g); }
-    if (features & DS_TRIGGERS) update_triggers(g);
-    else if (ds_sent.sent_to==g) { const DsTrigger off=ds_trigger_off(); ds_set_triggers(g,&off,&off); }
+    if (features & DS_TRIGGERS) {
+        update_triggers(g);
+        if (d->r2<R2_PRESS_AT) { d->r2=0; d->buttons&=~(uint32_t)BTN_R2; }
+    } else if (ds_sent.sent_to==g) { const DsTrigger off=ds_trigger_off(); ds_set_triggers(g,&off,&off); }
     if (features & DS_MOTION) update_motion(g,d);
 }
 
