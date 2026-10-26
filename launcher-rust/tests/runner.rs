@@ -213,14 +213,13 @@ impl Port {
     }
 }
 
-/// This process's environment without the variables a run reads (`SPARTAN_*`, the old `GOW3_*`
-/// names and the fake probe's), so the developer's own settings never reach a test.
+/// This process's environment without the variables a run reads (`SPARTAN_*` and the fake probe's), so the developer's own settings never reach a test.
 fn clean_environment() -> IndexMap<String, String> {
     std::env::vars_os()
         .filter_map(|(key, value)| Some((key.into_string().ok()?, value.into_string().ok()?)))
         .filter(|(key, _)| {
             let key = key.to_uppercase();
-            !["SPARTAN_", "GOW3_", "FAKE_PROBE_"]
+            !["SPARTAN_", "FAKE_PROBE_"]
                 .iter()
                 .any(|prefix| key.starts_with(prefix))
         })

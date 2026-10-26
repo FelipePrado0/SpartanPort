@@ -413,30 +413,6 @@ fn vars(pairs: &[(&str, &str)]) -> Vec<(OsString, OsString)> {
 }
 
 #[test]
-fn every_route_forwards_old_names_before_paths() {
-    let dir = tempfile::tempdir().unwrap();
-    let data = dir.path().join("d");
-    let data_text = data.to_string_lossy().into_owned();
-    let routes: [&[&str]; 4] = [
-        &["--run"],
-        &["--play"],
-        &["--install-update", "C:/t", "7"],
-        &[],
-    ];
-    for args in routes {
-        let args: Vec<OsString> = args.iter().map(OsString::from).collect();
-        let (_, context) = start(
-            &args,
-            dir.path(),
-            vars(&[("GOW3_DATA_DIR", &data_text)]),
-            true,
-        );
-        assert_eq!(context.paths.data_dir, data, "{args:?}");
-        assert_eq!(context.env["SPARTAN_DATA_DIR"], data_text, "{args:?}");
-    }
-}
-
-#[test]
 fn run_paths_start_at_the_resolved_port() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir(dir.path().join("a")).unwrap();

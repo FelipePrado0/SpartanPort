@@ -113,7 +113,7 @@ pub fn install_update(source: &Path, target: &Path, pid: u32, lang: &str) -> i32
     }
 }
 
-/// What every route starts from: the folders and the environment, forwarded and upper-cased once.
+/// What every route starts from: the folders and the environment, upper-cased once.
 #[derive(Debug, Clone)]
 pub struct Context {
     pub paths: Paths,
@@ -121,9 +121,8 @@ pub struct Context {
 }
 
 /// The route and its [`Context`], in the Python's order: the environment (on Windows with upper
-/// case names, as `os.environ`), the old `GOW3_*` names forwarded, then the folders from it. The
-/// `--run` folders start at the port the runner resolves. Nothing here touches the process: see
-/// [`apply_to_process`].
+/// case names, as `os.environ`), then the folders from it. The `--run` folders start at the port
+/// the runner resolves. Nothing here touches the process: see [`apply_to_process`].
 pub fn start(
     args: &[OsString],
     exe_dir: &Path,

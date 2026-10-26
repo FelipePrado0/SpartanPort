@@ -11,7 +11,6 @@ use crate::core::catalog::{run_default, setting, Kind};
 use crate::core::controls::{control_map, keyboard_map, Kind as ControlKind};
 use crate::core::i18n::{tr, trophy_text};
 use crate::core::installation::Installation;
-use crate::core::legacy::forward_environment;
 use crate::core::options::Choice;
 use crate::core::paths::Paths;
 use crate::core::settings::Settings;
@@ -27,16 +26,15 @@ const VULKAN_LAYERS_DISABLE: (&str, &str) = (
     "VK_LAYER_AMD_switchable_graphics",
 );
 
-/// What the launcher changes in its own environment before anything reads it, as the Python does
-/// on import: the old `GOW3_*` names are forwarded and, on Windows, the AMD switchable-graphics
-/// layer is disabled unless the player set the variable. The game and the probes inherit it.
+/// What the launcher changes in its own environment before anything reads it: on Windows, the AMD
+/// switchable-graphics layer is disabled unless the player set the variable. The game and the
+/// probes inherit it.
 pub fn start_up_environment(env: &mut IndexMap<String, String>, windows: bool) {
     if windows {
         let (key, value) = VULKAN_LAYERS_DISABLE;
         env.entry(key.to_string())
             .or_insert_with(|| value.to_string());
     }
-    forward_environment(env);
 }
 
 fn one_or_zero(on: bool) -> String {
@@ -300,20 +298,25 @@ mod tests {
 
     #[test]
     fn windows_hides_the_amd_switchable_layer() {
-        let mut env = variables(&[("GOW3_DATA_DIR", "/old")]);
+        let mut env = variables(&[]);
         start_up_environment(&mut env, true);
         assert_eq!(
             env.get("VK_LOADER_LAYERS_DISABLE").map(String::as_str),
             Some("VK_LAYER_AMD_switchable_graphics")
         );
-        // The old names are forwarded in the same step.
-        assert_eq!(
-            env.get("SPARTAN_DATA_DIR").map(String::as_str),
-            Some("/old")
-        );
         let mut env = IndexMap::new();
         start_up_environment(&mut env, false);
         assert!(!env.contains_key("VK_LOADER_LAYERS_DISABLE"));
+    }
+
+    #[test]
+    fn the_old_gow3_names_are_not_forwarded() {
+        for windows in [true, false] {
+            let mut env = variables(&[("GOW3_DATA_DIR", "/old")]);
+            start_up_environment(&mut env, windows);
+            assert_eq!(env.get("SPARTAN_DATA_DIR"), None, "{windows}");
+            assert_eq!(env.get("GOW3_DATA_DIR").map(String::as_str), Some("/old"));
+        }
     }
 
     #[test]
