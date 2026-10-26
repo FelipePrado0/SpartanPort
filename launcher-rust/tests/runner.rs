@@ -710,6 +710,23 @@ fn a_relative_data_dir_is_from_the_port() {
 }
 
 #[test]
+fn a_run_does_not_take_the_old_game_settings() {
+    let port = Port::in_folder("port");
+    let host = FakeHost::default();
+    let mut out = Vec::new();
+    let mut program = port.program(&[]);
+    program
+        .env
+        .insert("SPARTAN_DATA_DIR".into(), "data2".into());
+    fs::create_dir_all(port.root.join("data2")).unwrap();
+    fs::write(port.root.join("data2/gow3.ini"), "[OldName]\nmarker=gow3\n").unwrap();
+    let code = run_with(Port::context(&program, &mut out), &host);
+    assert_eq!(code, 0, "{}", String::from_utf8_lossy(&out));
+    let ini = fs::read_to_string(port.root.join("data2/spartanport.ini")).unwrap_or_default();
+    assert!(!ini.contains("marker=gow3"), "{ini}");
+}
+
+#[test]
 fn run_starts_the_probe_in_the_port() {
     let port = Port::with_probe();
     let file = port.out().join("cwd.txt");

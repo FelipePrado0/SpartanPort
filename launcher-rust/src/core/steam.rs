@@ -332,8 +332,7 @@ pub fn add_to_steam(
         let mut entry = shortcut_entry(app_id, &exe, &start_dir, &shortcut.options, &icon_path);
         let found = shortcuts.iter().find_map(|(key, value)| {
             let Vdf::Map(map) = value else { return None };
-            let named = matches!(map.get("AppName"), Some(Vdf::Str(n))
-                if n == crate::APP_NAME || n == crate::core::legacy::LEGACY_TITLE);
+            let named = matches!(map.get("AppName"), Some(Vdf::Str(n)) if n == crate::APP_NAME);
             (map.get("appid") == Some(&Vdf::U32(app_id)) || named).then(|| key.clone())
         });
         let slot = match found {
@@ -731,7 +730,7 @@ mod tests {
     }
 
     #[test]
-    fn a_shortcut_from_before_the_rename_is_updated_not_doubled() {
+    fn a_shortcut_named_after_the_old_title_is_left_alone() {
         let f = fixture();
         let mut old = IndexMap::new();
         old.insert("appid".to_string(), Vdf::U32(7));
@@ -739,7 +738,7 @@ mod tests {
         old.insert("Exe".to_string(), Vdf::Str("\"/old\"".into()));
         write_shortcuts(&f.root, "1111", vec![("0", old)]);
         let added = add(&f).unwrap();
-        assert!(added.updated);
+        assert!(!added.updated);
         let shortcuts = shortcuts_of(&f.root, "1111");
         let names: Vec<String> = shortcuts
             .values()
@@ -748,7 +747,7 @@ mod tests {
                 other => panic!("{other:?}"),
             })
             .collect();
-        assert_eq!(names, ["SpartanPort"]);
+        assert_eq!(names, ["God of War III", "SpartanPort"]);
     }
 
     #[test]
