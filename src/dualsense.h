@@ -77,7 +77,7 @@ static inline void ds_build_effects(uint8_t out[DS_EFFECTS_SIZE], const DsTrigge
 }
 
 /* What was last sent, so an effect is written once and again after a reconnect. */
-static struct { DsTrigger right, left; SDL_Gamepad *sent_to; } ds_sent;
+static struct { DsTrigger right, left; SDL_Gamepad *sent_to; } ds_sent __attribute__((unused));
 static inline bool ds_set_triggers(SDL_Gamepad *g, const DsTrigger *right, const DsTrigger *left) {
     if (!ds_is_dualsense(g)) return false;
     if (ds_sent.sent_to==g && !memcmp(&ds_sent.right,right,sizeof(*right)) && !memcmp(&ds_sent.left,left,sizeof(*left)))
@@ -100,9 +100,22 @@ static inline bool ds_qte_color(unsigned type, uint8_t rgb[3]) {
     return true;
 }
 
-/* SPARTAN_DUALSENSE="triggers,hitflash,motion,gyroaim,qte" (or "all"): the extras that go beyond
- * what the game asks the pad for. All off by default; gyroaim includes motion. */
-enum { DS_TRIGGERS=1, DS_HITFLASH=2, DS_MOTION=4, DS_GYROAIM=8, DS_QTE=16 };
+/* The playback device of a pad's speaker, or 0. Over USB, Windows lists a DualSense's speaker as
+ * an output of its own, named after the pad; over Bluetooth there is none. */
+static inline SDL_AudioDeviceID ds_speaker_device(void) {
+    int count=0;
+    SDL_AudioDeviceID *devices=SDL_GetAudioPlaybackDevices(&count), found=0;
+    for (int i=0;devices && i<count && !found;++i) {
+        const char *name=SDL_GetAudioDeviceName(devices[i]);
+        if (name && (SDL_strcasestr(name,"DualSense") || SDL_strcasestr(name,"Wireless Controller"))) found=devices[i];
+    }
+    SDL_free(devices);
+    return found;
+}
+
+/* SPARTAN_DUALSENSE="triggers,hitflash,motion,gyroaim,qte,speaker" (or "all"): the extras that go
+ * beyond what the game asks the pad for. All off by default; gyroaim includes motion. */
+enum { DS_TRIGGERS=1, DS_HITFLASH=2, DS_MOTION=4, DS_GYROAIM=8, DS_QTE=16, DS_SPEAKER=32 };
 static inline unsigned ds_features(void) {
     static unsigned features; static bool loaded;
     if (loaded) return features;
@@ -116,8 +129,9 @@ static inline unsigned ds_features(void) {
         next=strchr(name,',');
         if (next) *next++=0;
         while (*name==' ') ++name;
-        if (!SDL_strcasecmp(name,"all")) features|=DS_TRIGGERS|DS_HITFLASH|DS_MOTION|DS_GYROAIM|DS_QTE;
+        if (!SDL_strcasecmp(name,"all")) features|=DS_TRIGGERS|DS_HITFLASH|DS_MOTION|DS_GYROAIM|DS_QTE|DS_SPEAKER;
         else if (!SDL_strcasecmp(name,"qte")) features|=DS_QTE;
+        else if (!SDL_strcasecmp(name,"speaker")) features|=DS_SPEAKER;
         else if (!SDL_strcasecmp(name,"triggers")) features|=DS_TRIGGERS;
         else if (!SDL_strcasecmp(name,"hitflash")) features|=DS_HITFLASH;
         else if (!SDL_strcasecmp(name,"motion")) features|=DS_MOTION;
