@@ -15,10 +15,10 @@ failed=0
 for compiler in "${compilers[@]}"; do
     case $compiler in gcc) cxx=g++ ;; clang) cxx=clang++ ;; esac
     log="out/validation/$compiler-menu-coherence.log"
-    flags=(-O2 -g -ffunction-sections -fdata-sections -pthread -UNDEBUG)
+    flags=(-O2 -g -fno-omit-frame-pointer -ffunction-sections -fdata-sections -pthread -UNDEBUG)
     if "$compiler" -std=c11 "${flags[@]}" -I. -Isrc -c tools/validation/menu-runtime.c \
         -o "out/validation/$compiler-menu-runtime.o" >"$log" 2>&1 && \
-        "$cxx" -std=c++20 "${flags[@]}" -I. -Igpu/shim \
+        "$cxx" -std=gnu++23 "${flags[@]}" -I. -Igpu/shim \
         tools/validation/menu-coherence.cpp gpu/shim/spartanport_settings.cpp \
         "out/validation/$compiler-menu-runtime.o" "${extra[@]}" -Wl,--gc-sections \
         -o "out/validation/$compiler-menu-coherence.exe" >>"$log" 2>&1 && \
