@@ -197,8 +197,8 @@ Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/
 | Corrección de pantalla negra / íconos de botones del control | Incluidos | Incluidos |
 | Discord Rich Presence | No incluido | Opcional en Advanced, desactivado por defecto; nombre del juego y tiempo transcurrido |
 | Corrección de la cola sparse en RADV | No incluida | Integrada en `main` |
-| FSR 3.1, FSR 4.1, TAA | Desactivados | Gráficos → Upscaling y los menús del juego ([detalles](#upscaling)) |
-| FSR 1, FSR 4, DLSS | Desactivados | Desactivados en el flujo de ajustes del launcher/juego |
+| FSR 3.1, FSR 4, FSR 4.1, DLSS, TAA | Desactivados | Gráficos → Upscaling y los menús del juego ([detalles](#upscaling)) |
+| FSR 1 | Desactivados | Desactivados en el flujo de ajustes del launcher/juego |
 | Nitidez RCAS | Disponible | Disponible |
 
 El AppImage Linux se recompiló el 14 de octubre para glibc 2.39 o posterior. Los paquetes
@@ -237,6 +237,13 @@ juego o en el menú **Insert** (**Image**). Los tres muestran los mismos valores
 defecto es Desactivado. El preset renderiza una fracción de la resolución de renderizado y el
 upscaler reconstruye la resolución completa; cada preset muestra la resolución en que renderiza.
 Los cambios se aplican al reiniciar (**Aplicar y reiniciar** en el juego).
+
+- **FSR 3.1:** cualquier tarjeta gráfica.
+- **FSR 4:** el modelo abierto de FSR 4, incluido. Para AMD Radeon RX 6000 o posterior e Intel
+  Arc; Windows y Linux.
+- **DLSS:** tarjetas NVIDIA RTX, en Windows. Los archivos de NVIDIA vienen incluidos, con su
+  licencia en `LICENSES/`.
+- **TAA:** antialiasing a la resolución completa, sin upscaling.
 
 #### FSR 4.1 (AMD, Windows)
 
@@ -577,6 +584,8 @@ deadinside28:
   hace toda la traducción de GPU y shaders a Vulkan en este port.
 - **[WilkPrintes](https://github.com/WilkPrintes)**: diseñó y construyó el
   [sitio de SpartanPort](https://spartanport.com/es). Un agradecimiento especial por darle un hogar al proyecto.
+- **IFreemz** (eFMann en GitHub): [shadPS4 Bloodborne DLSS & FSR](https://github.com/eFMann/shadPS4-Bloodborne-DLSS-FSR). El puente de DLSS y la integración
+  de los upscalers temporales en que se basan DLSS, FSR 3.1 y FSR 4 de este port.
 
 Parches: kvicken y cuesta4 (resolución, corrección de texturas, 120 FPS y saltar videos, sobre los
 parches de PS3 de illusion0001), publicados para shadPS4 en
@@ -591,7 +600,8 @@ También se usan: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmp
 [sirit](https://github.com/shadps4-emu/sirit), [magic_enum](https://github.com/Neargye/magic_enum),
 [miniz](https://github.com/richgel999/miniz), [xbyak](https://github.com/herumi/xbyak),
 [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
-[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) y el AMD FidelityFX SDK,
+[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) y el AMD FidelityFX SDK, [Q2RTX](https://github.com/FireBurn/Q2RTX) (los archivos
+del modelo abierto de FSR 4), el [NVIDIA DLSS SDK](https://github.com/NVIDIA/DLSS),
 [MSYS2](https://www.msys2.org), [LLVM](https://llvm.org) y [Pillow](https://python-pillow.org).
 
 ## Licencia
