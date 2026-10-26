@@ -46,6 +46,17 @@ jobs:
           run-id: 40223880591
           github-token: ${{ github.token }}
           path: launcher-rust/target/release
+      - name: Use the official Ubuntu HTTPS mirror
+        run: |
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          for path in (Path('/etc/apt/sources.list'), Path('/etc/apt/sources.list.d/ubuntu.sources')):
+              if path.exists():
+                  text = path.read_text()
+                  text = text.replace('http://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
+                  text = text.replace('http://security.ubuntu.com/ubuntu', 'https://security.ubuntu.com/ubuntu')
+                  path.write_text(text)
+          PY
       - name: Install runtime and packaging dependencies
         timeout-minutes: 10
         run: |
