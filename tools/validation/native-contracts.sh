@@ -48,6 +48,21 @@ for compiler in "${compilers[@]}"; do
     done
 done
 
+if [[ $pr == 1070 ]]; then
+    for compiler in "${compilers[@]}"; do
+        log="out/validation/$compiler-trophy-process.log"
+        if "$compiler" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc \
+            tools/validation/trophy-process.c "${extra[@]}" \
+            -o "out/validation/$compiler-trophy-process.exe" >"$log" 2>&1 && \
+            python3 tools/validation/trophy-process.py "out/validation/$compiler-trophy-process.exe" >>"$log" 2>&1; then
+            cat "$log"
+        else
+            cat "$log"
+            failed=1
+        fi
+    done
+fi
+
 if [[ $(uname -s) == Linux ]]; then
     for name in savedata services; do
         sources=("tests/test_$name.c")

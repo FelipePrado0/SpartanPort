@@ -19,7 +19,7 @@ on:
         description: Stages to execute
         type: choice
         options: [all, build-linux]
-        default: build-linux
+        default: all
 
 permissions:
   contents: read
@@ -29,8 +29,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  VALIDATION_BASELINE: ${{ inputs.baseline || 'ec468cdb1c950ff0d811ee5d39293b449af5ca22' }}
-  VALIDATION_PR: ${{ inputs.pr || '1009' }}
+  VALIDATION_BASELINE: ${{ inputs.baseline || '9e6c7260a7bf9d80c0ed0748b9efc00e760178b4' }}
+  VALIDATION_PR: ${{ inputs.pr || '1070' }}
   CMAKE_BUILD_PARALLEL_LEVEL: '1'
   CARGO_BUILD_JOBS: '1'
   MAKEFLAGS: '-j1'
@@ -39,7 +39,7 @@ env:
 
 jobs:
   native:
-    if: ${{ inputs.phase == 'all' }}
+    if: ${{ inputs.phase != 'build-linux' }}
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -110,12 +110,12 @@ jobs:
 
   build:
     needs: rust
-    if: ${{ always() && (needs.rust.result == 'success' || inputs.phase != 'all') }}
+    if: ${{ always() && (needs.rust.result == 'success' || inputs.phase == 'build-linux') }}
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        os: ${{ inputs.phase == 'all' && fromJSON('["ubuntu-24.04", "windows-2025"]') || fromJSON('["ubuntu-24.04"]') }}
+        os: ${{ inputs.phase == 'build-linux' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "windows-2025"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     env:
@@ -140,6 +140,11 @@ jobs:
             vulkan-headers:p vulkan-loader:p vulkan-memory-allocator:p glslang:p
             sdl3:p fmt:p boost:p robin-map:p xxhash:p ffmpeg:p zydis:p
             spirv-tools:p spirv-headers:p spirv-cross:p
+      - uses: actions/download-artifact@v4
+        if: runner.os == 'Linux' && env.VALIDATION_PR == '1070'
+        with:
+          name: rust-pr1070-ubuntu-24.04
+          path: launcher-rust/target/release
       - name: Linux runtime dependencies and build
         if: runner.os == 'Linux'
         shell: bash
@@ -152,6 +157,11 @@ jobs:
           export XDG_DATA_HOME="$RUNNER_TEMP/spartanport-xdg"
           mkdir -p "$XDG_DATA_HOME"
           timeout 30 out/spartanport-probe --cpu-features
+          if [[ "$VALIDATION_PR" == 1070 ]]; then
+            chmod +x launcher-rust/target/release/spartanport-launcher
+            CARGO=/usr/bin/true bash packaging/linux/build.sh
+            sudo bash packaging/linux/smoke-test.sh "$PWD/dist/spartanport-x86_64.AppImage"
+          fi
       - name: Windows runtime build
         if: runner.os == 'Windows'
         shell: msys2 {0}
@@ -167,3 +177,4 @@ jobs:
             out/gpu-build.log
             out/spartanport-probe*
             out/gpu/libspartanportgpu.so
+            dist/*.AppImage
