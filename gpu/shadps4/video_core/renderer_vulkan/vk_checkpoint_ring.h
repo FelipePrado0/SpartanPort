@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -69,10 +70,16 @@ public:
         return EncodeMarker(record.serial);
     }
 
+    /// Whether a marker was handed out by Push (its record may have been overwritten since).
+    bool Known(const void* marker) const {
+        const std::uint64_t serial = DecodeMarker(marker);
+        return serial != 0 && serial < next_serial;
+    }
+
     /// The record behind `marker`, unless the marker is empty, unknown or its slot was reused.
     std::optional<CheckpointRecord> Find(const void* marker) const {
         const std::uint64_t serial = DecodeMarker(marker);
-        if (serial == 0 || serial >= next_serial) {
+        if (!Known(marker)) {
             return std::nullopt;
         }
         const CheckpointRecord& slot = slots[serial % slots.size()];
@@ -188,7 +195,8 @@ inline std::string DescribeCheckpointData(const CheckpointRing& ring,
         } else if (marker == nullptr) {
             text += "none";
         } else {
-            text += "#" + std::to_string(DecodeMarker(marker)) + " (overwritten)";
+            text += "#" + std::to_string(DecodeMarker(marker)) +
+                    (ring.Known(marker) ? " (overwritten)" : " (unknown)");
         }
         text += '\n';
     }

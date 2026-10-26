@@ -879,7 +879,8 @@ public:
         priority_pending_ops_cv.notify_one();
     }
 
-    static std::mutex submit_mutex;
+    // spartanport: recursive so Checkpoints::Dump can take it from inside SubmitExecution.
+    static std::recursive_mutex submit_mutex;
 
 private:
     void AllocateWorkerCommandBuffers();

@@ -245,9 +245,9 @@ static void MarkTilingDispatch(Vulkan::Scheduler& scheduler, const ImageInfo& in
     record.x = info.size.width;
     record.y = info.size.height;
     record.z = static_cast<u32>((info.guest_size / (info.num_bits / 8)) / 64);
-    scheduler.Record([record](vk::CommandBuffer cmdbuf) {
-        Vulkan::Checkpoints::Get().Mark(cmdbuf, record);
-    });
+    const void* marker = Vulkan::Checkpoints::Get().Push(record);
+    scheduler.Record(
+        [marker](vk::CommandBuffer cmdbuf) { Vulkan::Checkpoints::Set(cmdbuf, marker); });
 }
 
 std::pair<const Buffer*, u64> TileManager::DetileImage(const VideoCore::Buffer* in_buffer,

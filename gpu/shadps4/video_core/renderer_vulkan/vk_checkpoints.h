@@ -5,6 +5,9 @@
 // last marker each pipeline stage reached, which names the work the GPU was on when it hung
 // (#334). On by default on Intel's Windows driver, SPARTAN_GPU_CHECKPOINTS=1/0 forces it
 // (vk_instance.cpp); Dump runs before each "Device lost" assertion.
+//
+// Push runs on the thread that records the command (the GPU thread, in command order), so a
+// Record closure captures only the marker; with the markers off a draw costs one atomic load.
 
 #pragma once
 
@@ -18,6 +21,7 @@
 #include "shader_recompiler/info.h"
 #include "video_core/renderer_vulkan/vk_checkpoint_ring.h"
 #include "video_core/renderer_vulkan/vk_common.h"
+#include "video_core/renderer_vulkan/vk_scheduler.h"
 
 namespace Vulkan {
 
@@ -50,21 +54,24 @@ public:
 
     /// Whether markers are recorded: the extension is on (Instance::CreateDevice).
     static bool Enabled() {
-        return Get().enabled.load(std::memory_order_relaxed);
+        return enabled.load(std::memory_order_relaxed);
     }
 
-    void Enable(bool on) {
+    static void Enable(bool on) {
         enabled.store(on, std::memory_order_relaxed);
     }
 
-    /// Stores `record` and writes its marker into `cmdbuf`. Callers check Enabled() first.
-    void Mark(vk::CommandBuffer cmdbuf, const CheckpointRecord& record) {
-        const void* marker;
-        {
-            std::scoped_lock lock{mutex};
-            marker = ring.Push(record);
+    /// Stores `record` and returns its marker. Callers check Enabled() first.
+    const void* Push(const CheckpointRecord& record) {
+        std::scoped_lock lock{mutex};
+        return ring.Push(record);
+    }
+
+    /// Writes `marker` into `cmdbuf` ahead of the command it names; a null marker writes nothing.
+    static void Set(vk::CommandBuffer cmdbuf, const void* marker) {
+        if (marker) {
+            cmdbuf.setCheckpointNV(marker);
         }
-        cmdbuf.setCheckpointNV(marker);
     }
 
     /// Prints what the GPU was on when `queue` lost the device, for last_run.log, before the
@@ -77,6 +84,9 @@ public:
             std::fflush(stdout);
             return;
         }
+        // vkGetQueueCheckpointDataNV needs the queue externally synchronized: the submit lock,
+        // recursive because SubmitExecution and the semaphore refresh under it get here too.
+        std::scoped_lock queue_lock{Scheduler::submit_mutex};
         const std::vector<vk::CheckpointDataNV> data = queue.getCheckpointDataNV();
         std::vector<std::string> names;
         names.reserve(data.size());
@@ -100,9 +110,9 @@ public:
     }
 
 private:
+    static inline std::atomic<bool> enabled{false};
     std::mutex mutex;
     CheckpointRing ring{65536};
-    std::atomic<bool> enabled{false};
 };
 
 } // namespace Vulkan

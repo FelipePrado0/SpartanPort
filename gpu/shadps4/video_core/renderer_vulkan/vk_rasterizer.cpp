@@ -1162,13 +1162,14 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     const u32 first_vertex = vertex_offset;
     const u32 first_instance = instance_offset;
     // spartanport: marker naming this draw if the GPU is lost on it (vk_checkpoints.h).
-    const CheckpointRecord checkpoint =
-        StageCheckpoint(pipeline->GetStages(), false, CheckpointKind::Draw,
-                        scheduler.CurrentTick(), num_indices, num_instances, 0);
+    const void* checkpoint =
+        Checkpoints::Enabled()
+            ? Checkpoints::Get().Push(StageCheckpoint(pipeline->GetStages(), false,
+                                                      CheckpointKind::Draw, scheduler.CurrentTick(),
+                                                      num_indices, num_instances, 0))
+            : nullptr;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
-        if (Checkpoints::Enabled()) {
-            Checkpoints::Get().Mark(cmdbuf, checkpoint);
-        }
+        Checkpoints::Set(cmdbuf, checkpoint);
         const auto draw = [&] {
             if (is_indexed) {
                 cmdbuf.drawIndexed(num_indices, num_instances, 0, s32(first_vertex),
@@ -1303,13 +1304,14 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
     const vk::Buffer counts = count_address != 0 ? count_buffer->Handle() : vk::Buffer{};
     const u64 counts_offset = count_address != 0 ? count_offset : 0;
     // spartanport: marker naming this draw if the GPU is lost on it (vk_checkpoints.h).
-    const CheckpointRecord checkpoint =
-        StageCheckpoint(pipeline->GetStages(), false, CheckpointKind::DrawIndirect,
-                        scheduler.CurrentTick(), max_count, 0, 0);
+    const void* checkpoint =
+        Checkpoints::Enabled()
+            ? Checkpoints::Get().Push(StageCheckpoint(pipeline->GetStages(), false,
+                                                      CheckpointKind::DrawIndirect,
+                                                      scheduler.CurrentTick(), max_count, 0, 0))
+            : nullptr;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
-        if (Checkpoints::Enabled()) {
-            Checkpoints::Get().Mark(cmdbuf, checkpoint);
-        }
+        Checkpoints::Set(cmdbuf, checkpoint);
         for (const vk::Pipeline bound : {handle, square}) {
             if (!bound) {
                 break;
@@ -1398,13 +1400,14 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
         FrameCapture::Dispatch(cs.pgm_hash, dim_x, dim_y, dim_z);
     }
     // spartanport: marker naming this dispatch if the GPU is lost on it (vk_checkpoints.h).
-    const CheckpointRecord checkpoint =
-        StageCheckpoint(pipeline->GetStages(), true, CheckpointKind::Dispatch,
-                        scheduler.CurrentTick(), dim_x, dim_y, dim_z);
+    const void* checkpoint =
+        Checkpoints::Enabled()
+            ? Checkpoints::Get().Push(StageCheckpoint(pipeline->GetStages(), true,
+                                                      CheckpointKind::Dispatch,
+                                                      scheduler.CurrentTick(), dim_x, dim_y, dim_z))
+            : nullptr;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
-        if (Checkpoints::Enabled()) {
-            Checkpoints::Get().Mark(cmdbuf, checkpoint);
-        }
+        Checkpoints::Set(cmdbuf, checkpoint);
         if (Scheduler::FullBarriers()) {
             Scheduler::RecordFullBarrier(cmdbuf);
         }
@@ -1477,13 +1480,14 @@ void Rasterizer::DispatchIndirectRecord(const ComputePipeline* pipeline, VAddr a
     const vk::Buffer args = buffer->Handle();
     const u64 args_offset = base;
     // spartanport: marker naming this dispatch if the GPU is lost on it (vk_checkpoints.h).
-    const CheckpointRecord checkpoint =
-        StageCheckpoint(pipeline->GetStages(), true, CheckpointKind::DispatchIndirect,
-                        scheduler.CurrentTick(), 0, 0, 0);
+    const void* checkpoint =
+        Checkpoints::Enabled()
+            ? Checkpoints::Get().Push(StageCheckpoint(pipeline->GetStages(), true,
+                                                      CheckpointKind::DispatchIndirect,
+                                                      scheduler.CurrentTick(), 0, 0, 0))
+            : nullptr;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
-        if (Checkpoints::Enabled()) {
-            Checkpoints::Get().Mark(cmdbuf, checkpoint);
-        }
+        Checkpoints::Set(cmdbuf, checkpoint);
         if (Scheduler::FullBarriers()) {
             Scheduler::RecordFullBarrier(cmdbuf);
         }

@@ -426,7 +426,7 @@ bool Instance::CreateDevice() {
         CheckpointsWanted(checkpoints_env, driver_id == vk::DriverId::eIntelProprietaryWindows);
     diagnostic_checkpoints =
         checkpoints_wanted && add_extension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
-    const char* checkpoints_line;
+    std::string checkpoints_line;
     if (diagnostic_checkpoints) {
         checkpoints_line =
             checkpoints_env && *checkpoints_env
@@ -434,13 +434,14 @@ bool Instance::CreateDevice() {
                 : "on (Intel Windows driver; SPARTAN_GPU_CHECKPOINTS=0 turns them off)";
     } else if (!checkpoints_wanted) {
         checkpoints_line = checkpoints_env && *checkpoints_env
-                               ? "off (SPARTAN_GPU_CHECKPOINTS=0)"
+                               ? std::string{"off (SPARTAN_GPU_CHECKPOINTS="} + checkpoints_env +
+                                     "; only 1 turns them on)"
                                : "off (SPARTAN_GPU_CHECKPOINTS=1 turns them on)";
     } else {
         checkpoints_line =
             "unavailable (VK_NV_device_diagnostic_checkpoints missing or disabled)";
     }
-    std::printf("GPU: checkpoints: %s\n", checkpoints_line);
+    std::printf("GPU: checkpoints: %s\n", checkpoints_line.c_str());
     list_restart = add_extension(VK_EXT_PRIMITIVE_TOPOLOGY_LIST_RESTART_EXTENSION_NAME);
     if (list_restart) {
         list_restart_features =

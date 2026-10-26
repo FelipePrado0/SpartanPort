@@ -91,12 +91,14 @@ int main() {
         {"BottomOfPipe", second},
         {"Transfer", first},
         {"ComputeShader", nullptr},
+        {"Host", EncodeMarker(99)},
     };
     const std::string text = DescribeCheckpointData(ring, data);
     assert(text == "  TopOfPipe: dispatch #5 tick 0 cs 0x3333 12x1x1\n"
                    "  BottomOfPipe: dispatch #2 tick 0 cs 0x3333 12x1x1\n"
                    "  Transfer: #1 (overwritten)\n"
-                   "  ComputeShader: none\n");
+                   "  ComputeShader: none\n"
+                   "  Host: #99 (unknown)\n");
     assert(DescribeCheckpointData(ring, {}) == "  (no checkpoint data)\n");
 
     // SPARTAN_GPU_CHECKPOINTS: unset or empty keeps the default (on for Intel's Windows driver,

@@ -26,7 +26,7 @@
 
 namespace Vulkan {
 
-std::mutex Scheduler::submit_mutex;
+std::recursive_mutex Scheduler::submit_mutex;
 
 Scheduler::Scheduler(const Instance& instance, bool threaded_recording)
     : instance{instance}, work_semaphore{instance}, command_pool{instance, &work_semaphore} {
@@ -474,7 +474,7 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
         CheckpointRecord submit_record{};
         submit_record.kind = CheckpointKind::Submit;
         submit_record.tick = signal_value;
-        Checkpoints::Get().Mark(current_cmdbuf, submit_record);
+        Checkpoints::Set(current_cmdbuf, Checkpoints::Get().Push(submit_record));
     }
     Check(current_cmdbuf.end());
 
