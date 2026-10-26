@@ -218,12 +218,14 @@ bool WindowSDL::PollEvents() {
             UpdateTextTitle();
             continue;
         }
-        // The controller finishes the text dialog too: Cross (A) accepts, Circle (B) cancels.
+        // The controller finishes the text dialog too: Cross (A) accepts, Circle (B) cancels (or swapped).
         if (text_active && event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
             (event.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH ||
              event.gbutton.button == SDL_GAMEPAD_BUTTON_EAST)) {
             std::scoped_lock lock{text_mutex};
-            text_state = event.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH ? 1 : 2;
+            const bool swapped = SpartanSettings::Get().menu_confirm_swap.load(std::memory_order_relaxed) != 0;
+            const u8 confirm_btn = swapped ? SDL_GAMEPAD_BUTTON_EAST : SDL_GAMEPAD_BUTTON_SOUTH;
+            text_state = event.gbutton.button == confirm_btn ? 1 : 2;
             text_active = false;
             SDL_StopTextInput(window);
             UpdateTextTitle();

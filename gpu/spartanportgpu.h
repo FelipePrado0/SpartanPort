@@ -40,6 +40,8 @@ int spartanportgpu_choice_confirm(const char *title, const char *const *items, i
 int spartanportgpu_overlay_captures_input(void);
 /* Controller vibration strength set in the menu, 0 (off) to 100 (the game's own). */
 int spartanportgpu_vibration_percent(void);
+/* Menu confirm button: 0 Cross confirms, Circle cancels; 1 Circle confirms, Cross cancels. */
+int spartanportgpu_menu_confirm_swap(void);
 /* Native Display menu: query (0) or toggle (1); returns 0 off, 1 on, 2 unsupported. */
 int spartanportgpu_enemy_health_bar(int toggle);
 /* Native Cheats: f00+i query/f10+i toggle (8 cheats); f20+i text/f30+i decrease/f40+i increase/

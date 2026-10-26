@@ -1257,6 +1257,20 @@ fn nintendo_names_follow_the_button_positions() {
 }
 
 #[test]
+fn menu_confirm_swap_option_shows_and_updates_in_controls_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = controls_state(dir.path());
+    click(&mut state, "Gamepad");
+    assert_eq!(state.store.text("menu_confirm_swap"), "0");
+    page_has(&state, &["Menu confirmation"]);
+    let _ = app::update(
+        &mut state,
+        Message::Set("menu_confirm_swap".into(), serde_json::json!("1")),
+    );
+    assert_eq!(state.store.text("menu_confirm_swap"), "1");
+}
+
+#[test]
 fn capture_takes_the_mouse_and_gives_up_in_time() {
     let pressed = |button| iced::Event::Mouse(mouse::Event::ButtonPressed(button));
     let wheel = |delta| iced::Event::Mouse(mouse::Event::WheelScrolled { delta });
