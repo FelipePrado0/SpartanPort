@@ -225,6 +225,8 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"Reload sounds", "重新加载声音"},
     {"Trophy unlocked!", "奖杯已解锁！"},
     {"Language", "语言"},
+    {"Pause the game", "暂停游戏"},
+    {"The game stops while this menu or the trophy list is open.", "打开此菜单或奖杯列表时游戏暂停。"},
     {"Same as the launcher", "与启动器相同"},
     {"The language of this menu and of the trophies. Until you choose one, the launcher's is used.", "此菜单和奖杯使用的语言。在你选择之前，使用启动器的语言。"},
     {"none", "无"},

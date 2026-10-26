@@ -28,7 +28,9 @@ Tab changes the order; L1/R1 or Q/E go to the **Notifications** page; F8, Esc, B
 Circle/Cross or R3+R2 close it.
 The **Notifications** page is used like the Insert menu (D-pad or arrows, Cross or Enter, the
 mouse); L1/R1 or Q/E go back to the list; F8, Esc or R3+R2 close it. While the window is open the
-game gets no input (like the Insert menu).
+game gets no input (like the Insert menu), and the game stops until it closes, as it does with
+the Insert menu: Game tab > **Pause the game** (on by default) turns that off. R3 held with R2 or
+L2 never reaches the game, so opening the window or the menu does not use the item or the magic.
 
 The platinum (id 0) is unlocked with the last other trophy, as the PlayStation does.
 

@@ -38,6 +38,8 @@ int spartanportgpu_choice_confirm(const char *title, const char *const *items, i
                                  const unsigned char *png, uint64_t size, const char *caption, const char *unavailable);
 /* 1 while the in-game settings menu is open: the game's pad input is held neutral. */
 int spartanportgpu_overlay_captures_input(void);
+/* Game threads: returns once the game is no longer paused by the menu or the trophy list. */
+void spartanportgpu_wait_while_paused(void);
 /* Controller vibration strength set in the menu, 0 (off) to 100 (the game's own). */
 int spartanportgpu_vibration_percent(void);
 /* Native Display menu: query (0) or toggle (1); returns 0 off, 1 on, 2 unsupported. */

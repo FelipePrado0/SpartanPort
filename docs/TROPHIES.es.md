@@ -29,7 +29,10 @@ estado; Cuadrado o G, el de grado; Triángulo o Tab cambian el orden; L1/R1 o Q/
 **Notificaciones**; F8, Esc, Retroceso, Enter, Círculo/Equis o R3+R2 la cierran.
 La página **Notificaciones** se usa como el menú de Insert (cruceta o flechas, Equis o Enter, el
 ratón); L1/R1 o Q/E vuelven a la lista; F8, Esc o R3+R2 la cierran. Con la ventana abierta el juego
-no recibe controles (como en el menú de Insert).
+no recibe controles (como en el menú de Insert), y el juego se detiene hasta que se cierra, como
+con el menú de Insert: Juego > **Pausar el juego** (activado por defecto) lo desactiva. R3
+pulsado con R2 o L2 no llega al juego, así que abrir la ventana o el menú no usa el objeto ni la
+magia.
 
 El platino (id 0) se desbloquea con el último de los demás trofeos, como en PlayStation.
 

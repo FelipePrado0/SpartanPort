@@ -206,6 +206,8 @@ inline constexpr std::pair<std::string_view, const char*> TurkishText[] = {
     {"Reload sounds", "Sesleri yeniden yükle"},
     {"Trophy unlocked!", "Kupa açıldı!"},
     {"Language", "Dil"},
+    {"Pause the game", "Oyunu duraklat"},
+    {"The game stops while this menu or the trophy list is open.", "Bu menü veya kupa listesi açıkken oyun durur."},
     {"Same as the launcher", "Başlatıcıyla aynı"},
     {"The language of this menu and of the trophies. Until you choose one, the launcher's is used.", "Bu menünün ve kupaların dili. Siz seçene kadar başlatıcının dili kullanılır."},
     {"none", "yok"},
