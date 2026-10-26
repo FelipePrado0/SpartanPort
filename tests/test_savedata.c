@@ -71,9 +71,9 @@ int main(void) {
     /* Symlinks pointing outside the save directory are not followed. */
     snprintf(path,sizeof(path),"%s/external.bin",user_dir); touch(path,99999);
     char link_path[800]; snprintf(link_path,sizeof(link_path),"%s/SAVE0001/symlink.bin",base);
-    symlink(path,link_path);
+    assert(!symlink(path,link_path));
     assert(runtime_savedata_mtime(1,"SAVE0001")==1500);
-    unlink(link_path);
+    assert(!unlink(link_path));
 #endif
 
     remove_tree(user_dir);
