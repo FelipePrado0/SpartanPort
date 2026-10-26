@@ -346,6 +346,7 @@ bool TemporalUpscaler::OnFrameStart() {
 
     // The display pass of an upscaled frame reads the upscaled UI image.
     display_redirect = ui_phase;
+    frame_display = 0;
     ui_phase = false;
     ui_read_barrier = false;
     done_this_frame = false;
@@ -2123,6 +2124,28 @@ bool TemporalUpscaler::RedirectColor(VideoCore::ImageId color,
     std::scoped_lock lock{display_mutex};
     auto& display = displays[address];
     if (!display_redirect) {
+        if (address == frame_display && display.valid) {
+            // A later pass of the same frame (the water refraction redraws the frame it read):
+            // it draws over the upscaled image, which keeps its contents.
+            scheduler.EndRendering();
+            const vk::ImageMemoryBarrier2 b{
+                .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+                .srcAccessMask = vk::AccessFlagBits2::eMemoryWrite | vk::AccessFlagBits2::eMemoryRead,
+                .dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+                .dstAccessMask = vk::AccessFlagBits2::eColorAttachmentRead |
+                                 vk::AccessFlagBits2::eColorAttachmentWrite,
+                .oldLayout = vk::ImageLayout::eGeneral,
+                .newLayout = vk::ImageLayout::eGeneral,
+                .image = vk::Image(display.image),
+                .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1},
+            };
+            scheduler.Record([b](vk::CommandBuffer cmd) {
+                cmd.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &b});
+            });
+            target = {Mirror(vk::Image(display.image), display.views, view_info.format, {}),
+                      vk::ImageLayout::eGeneral, display.width, display.height};
+            return true;
+        }
         display.valid = false; // not upscaled: the presenter shows the guest buffer
         return false;
     }
@@ -2183,6 +2206,7 @@ bool TemporalUpscaler::RedirectColor(VideoCore::ImageId color,
         cmd.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &b});
     });
     display.valid = true;
+    frame_display = address;
     if (ldr_scaled && display.scratch) {
         // The finished UI image is the displayed frame: copied as is (the game's copy shader reads
         // it with render-size coordinates and showed only its top-left part).
@@ -2243,6 +2267,31 @@ bool TemporalUpscaler::RedirectDepth(VideoCore::ImageId depth, Target& target) {
 bool TemporalUpscaler::RedirectSampled(VideoCore::ImageId image,
                                        const VideoCore::ImageViewInfo& info, vk::ImageView& view,
                                        vk::ImageLayout& layout) {
+    if (frame_display && texture_cache.GetImage(image).info.guest_address == frame_display) {
+        // A later pass of the same frame reads the frame it shows: the upscaled image.
+        std::scoped_lock lock{display_mutex};
+        auto& display = displays[frame_display];
+        if (!display.valid) {
+            return false;
+        }
+        scheduler.EndRendering();
+        const vk::ImageMemoryBarrier2 b{
+            .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+            .srcAccessMask = vk::AccessFlagBits2::eMemoryWrite,
+            .dstStageMask = vk::PipelineStageFlagBits2::eAllCommands,
+            .dstAccessMask = vk::AccessFlagBits2::eShaderRead,
+            .oldLayout = vk::ImageLayout::eGeneral,
+            .newLayout = vk::ImageLayout::eGeneral,
+            .image = vk::Image(display.image),
+            .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1},
+        };
+        scheduler.Record([b](vk::CommandBuffer cmd) {
+            cmd.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &b});
+        });
+        view = Mirror(vk::Image(display.image), display.views, info.format, info.mapping);
+        layout = vk::ImageLayout::eGeneral;
+        return true;
+    }
     if (!display_redirect || image != ui_color) {
         return false;
     }
@@ -2266,6 +2315,11 @@ bool TemporalUpscaler::RedirectSampled(VideoCore::ImageId image,
     view = Mirror(vk::Image(ui_image), ui_views, info.format, info.mapping);
     layout = vk::ImageLayout::eGeneral;
     return true;
+}
+
+bool TemporalUpscaler::RedirectsSampled(VideoCore::ImageId image) const {
+    return (display_redirect && image == ui_color) ||
+           (frame_display && texture_cache.GetImage(image).info.guest_address == frame_display);
 }
 
 bool TemporalUpscaler::DisplayOverride(VAddr address, Display& display) {

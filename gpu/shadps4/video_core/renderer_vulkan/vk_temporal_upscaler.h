@@ -73,8 +73,9 @@ public:
     /// spartanport: the state RedirectColor/RedirectDepth/RasterScaling depend on, for memoizing a
     /// draw's render state (Rasterizer::BeginRendering).
     [[nodiscard]] u64 RedirectState() const noexcept {
-        return u64(ui_phase) | u64(display_redirect) << 1 | u64(done_this_frame) << 2 |
-               u64(ui_color.index) << 8 | u64(ui_depth.index) << 36;
+        return (u64(ui_phase) | u64(display_redirect) << 1 | u64(done_this_frame) << 2 |
+                u64(ui_color.index) << 8 | u64(ui_depth.index) << 36) ^
+               u64(frame_display) * 0x9E3779B97F4A7C15ull;
     }
 
 
@@ -120,9 +121,7 @@ public:
     bool RedirectSampled(VideoCore::ImageId image, const VideoCore::ImageViewInfo& info,
                          vk::ImageView& view, vk::ImageLayout& layout);
     /// Whether RedirectSampled would replace `image` (it may record a barrier then).
-    [[nodiscard]] bool RedirectsSampled(VideoCore::ImageId image) const {
-        return display_redirect && image == ui_color;
-    }
+    [[nodiscard]] bool RedirectsSampled(VideoCore::ImageId image) const;
 
     /// Presenter: the output-size display buffer standing in for the guest one at `address`.
     struct Display {
@@ -237,6 +236,9 @@ private:
     VideoCore::ImageId ui_color{}, ui_depth{};
     bool ui_phase = false;         ///< from the upscale to the next display pass
     bool display_redirect = false; ///< the display pass of an upscaled frame
+    /// The display buffer this frame's display pass drew into the upscaled image: later passes
+    /// of the same frame (the water refraction) read and draw that image, not the guest one.
+    VAddr frame_display = 0;
     bool ui_read_barrier = false;
     VideoCore::UniqueImage ui_image;
     VideoCore::UniqueImage ui_depth_image;
