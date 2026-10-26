@@ -5,6 +5,8 @@ pr=${2:?pull request required}
 [[ $baseline =~ ^[0-9a-f]{40}$ && $pr =~ ^[0-9]+$ ]]
 mkdir -p out/validation
 git rev-parse HEAD | tee out/validation/head.log
+printf 'baseline=%s\npr=%s\n' "$baseline" "$pr" | tee out/validation/scope.log
+ulimit -c 0 || true
 
 compilers=(clang)
 extra=()
@@ -45,4 +47,52 @@ for compiler in "${compilers[@]}"; do
         fi
     done
 done
+
+if [[ $(uname -s) == Linux ]]; then
+    for name in savedata services; do
+        sources=("tests/test_$name.c")
+        if [[ $name == services ]]; then sources+=("${stub[@]}"); fi
+        log="out/validation/sanitized-$name.log"
+        if clang -std=c11 -O1 -g -Wall -Wextra -Werror -pthread -I. -Isrc \
+            -fsanitize=address,undefined -fno-omit-frame-pointer "${sources[@]}" \
+            -o "out/validation/sanitized-$name" >"$log" 2>&1 && \
+            timeout 60 "out/validation/sanitized-$name" >>"$log" 2>&1; then
+            printf 'PASS: ASan/UBSan %s\n' "$name"
+        else
+            cat "$log"
+            failed=1
+        fi
+    done
+
+    if [[ $pr == 1009 ]]; then
+        validation_root=$PWD
+        base_dir="${RUNNER_TEMP:?}/pr1009-baseline"
+        git worktree add --detach "$base_dir" "$baseline"
+        log="$validation_root/out/validation/baseline-services.log"
+        (
+            cd "$base_dir"
+            gcc -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc \
+                tests/test_services.c "$validation_root/out/validation/toast-stub.c" \
+                -o "$validation_root/out/validation/baseline-services"
+            timeout 60 "$validation_root/out/validation/baseline-services"
+        ) >"$log" 2>&1
+        cp tests/test_services.c "$base_dir/tests/test_services.c"
+        log="$validation_root/out/validation/regression-without-pr.log"
+        (
+            cd "$base_dir"
+            gcc -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc \
+                tests/test_services.c "$validation_root/out/validation/toast-stub.c" \
+                -o "$validation_root/out/validation/regression-without-pr"
+        ) >"$log" 2>&1
+        if timeout 60 out/validation/regression-without-pr >>"$log" 2>&1; then
+            echo 'FAIL: ordering regression unexpectedly passes without PR #1009'
+            failed=1
+        elif grep -q 'shown_items\[0\].*SAVE0002' "$log"; then
+            echo 'PASS: original main passes; ordering regression fails without PR #1009'
+        else
+            cat "$log"
+            failed=1
+        fi
+    fi
+fi
 exit "$failed"

@@ -112,8 +112,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     env:
-      SPARTAN_LTO: OFF
-      SPARTAN_PGO: off
+      SPARTAN_LTO: 'OFF'
+      SPARTAN_PGO: 'off'
     steps:
       - name: Keep source line endings
         shell: bash
