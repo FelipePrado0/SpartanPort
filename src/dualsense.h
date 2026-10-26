@@ -90,9 +90,19 @@ static inline bool ds_set_triggers(SDL_Gamepad *g, const DsTrigger *right, const
 }
 static inline void ds_forget(void) { ds_sent.sent_to=NULL; }
 
-/* SPARTAN_DUALSENSE="triggers,hitflash,motion,gyroaim" (or "all"): the extras that go beyond what
- * the game asks the pad for. All off by default; gyroaim includes motion. */
-enum { DS_TRIGGERS=1, DS_HITFLASH=2, DS_MOTION=4, DS_GYROAIM=8 };
+/* The light bar colour for a QTE prompt type (qte_hook.h): the PlayStation colour of its button
+ * (0 triangle green, 1 circle red, 2 cross blue, 3 square pink); a stick rotation (4..9) is white.
+ * False for a type the game does not have. */
+static inline bool ds_qte_color(unsigned type, uint8_t rgb[3]) {
+    static const uint8_t colors[5][3]={{0,255,100},{255,0,0},{0,100,255},{255,60,200},{255,255,255}};
+    if (type>9) return false;
+    memcpy(rgb,colors[type<4 ? type : 4],3);
+    return true;
+}
+
+/* SPARTAN_DUALSENSE="triggers,hitflash,motion,gyroaim,qte" (or "all"): the extras that go beyond
+ * what the game asks the pad for. All off by default; gyroaim includes motion. */
+enum { DS_TRIGGERS=1, DS_HITFLASH=2, DS_MOTION=4, DS_GYROAIM=8, DS_QTE=16 };
 static inline unsigned ds_features(void) {
     static unsigned features; static bool loaded;
     if (loaded) return features;
@@ -106,7 +116,8 @@ static inline unsigned ds_features(void) {
         next=strchr(name,',');
         if (next) *next++=0;
         while (*name==' ') ++name;
-        if (!SDL_strcasecmp(name,"all")) features|=DS_TRIGGERS|DS_HITFLASH|DS_MOTION|DS_GYROAIM;
+        if (!SDL_strcasecmp(name,"all")) features|=DS_TRIGGERS|DS_HITFLASH|DS_MOTION|DS_GYROAIM|DS_QTE;
+        else if (!SDL_strcasecmp(name,"qte")) features|=DS_QTE;
         else if (!SDL_strcasecmp(name,"triggers")) features|=DS_TRIGGERS;
         else if (!SDL_strcasecmp(name,"hitflash")) features|=DS_HITFLASH;
         else if (!SDL_strcasecmp(name,"motion")) features|=DS_MOTION;

@@ -518,11 +518,14 @@ static void sample_keyboard(PadData *d, const bool *keys, SDL_MouseButtonFlags m
 extern uintptr_t spartanport_actor_slots_address(void);
 enum { HIT_FLASH_US=180000 };
 static struct { bool seen, flashing; uint32_t seq; float health; uint64_t until; } hit;
+static void restore_light(SDL_Gamepad *g) {
+    if (light_bar.set) { light_bar.applied_to=NULL; apply_light_bar(g); }
+    else SDL_SetGamepadLED(g,0,0,255); /* the pad's own colour: player 1 blue */
+}
 static void update_hit_flash(SDL_Gamepad *g, uint64_t now) {
     if (hit.flashing && now>=hit.until) {
         hit.flashing=false;
-        if (light_bar.set) { light_bar.applied_to=NULL; apply_light_bar(g); }
-        else SDL_SetGamepadLED(g,0,0,255); /* the pad's own colour: player 1 blue */
+        restore_light(g);
     }
     const void *slots=(const void *)spartanport_actor_slots_address();
     if (!slots || !SDL_GetBooleanProperty(SDL_GetGamepadProperties(g),SDL_PROP_GAMEPAD_CAP_RGB_LED_BOOLEAN,false)) return;
@@ -534,6 +537,30 @@ static void update_hit_flash(SDL_Gamepad *g, uint64_t now) {
         if (!hit.flashing) { hit.flashing=true; SDL_SetGamepadLED(g,255,0,0); }
     }
     hit.seen=true; hit.seq=player.seq; hit.health=player.health;
+}
+
+/* qte: while a QTE prompt is up (the same hook as the stick prompts) the light bar blinks in the
+ * colour of its button, and the pad gives a short tap at each new prompt. A hit flash goes first. */
+enum { QTE_BLINK_US=120000, QTE_TAP_MS=90 };
+static struct { uint32_t beat; uint64_t seen; int type, shown; } qte_led={.type=-1,.shown=-1};
+static void update_qte_flash(SDL_Gamepad *g, uint64_t now) {
+    int type=-1;
+    if (spartanport_qte.block) {
+        const uint32_t beat=__atomic_load_n(&spartanport_qte.heartbeat,__ATOMIC_RELAXED);
+        if (beat!=qte_led.beat) { qte_led.beat=beat; qte_led.seen=now; }
+        if (now-qte_led.seen<=QTE_ACTIVE_US)
+            type=(int)*(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET);
+    }
+    uint8_t rgb[3]={0,0,0};
+    if (type>=0 && !ds_qte_color((unsigned)type,rgb)) type=-1;
+    if (type>=0 && type!=qte_led.type) SDL_RumbleGamepad(g,0x4000,0xC000,QTE_TAP_MS);
+    qte_led.type=type;
+    if (hit.flashing) { qte_led.shown=-1; return; }
+    const int shown=type>=0 && (now/QTE_BLINK_US)%2==0 ? type : -1;
+    if (shown==qte_led.shown) return;
+    qte_led.shown=shown;
+    if (shown>=0) SDL_SetGamepadLED(g,rgb[0],rgb[1],rgb[2]);
+    else restore_light(g);
 }
 
 /* triggers: R2 gets a click (a wall that gives way near the end of the travel) on a DualSense.
@@ -582,6 +609,7 @@ static void update_dualsense(SDL_Gamepad *g, PadData *d) {
     if (!ds_is_dualsense(g)) return;
     const unsigned features=ds_features();
     if (features & DS_HITFLASH) update_hit_flash(g,d->timestamp);
+    if (features & DS_QTE) update_qte_flash(g,d->timestamp);
     if (features & DS_TRIGGERS) update_triggers(g);
     if (features & DS_MOTION) update_motion(g,d);
 }
