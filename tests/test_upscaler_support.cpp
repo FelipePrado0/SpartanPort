@@ -141,6 +141,33 @@ int main() {
     label = reinterpret_cast<const char*>(spartanportgpu_native_setting(0xf68));
     assert(std::strstr(label, "[ArrowSelectionL]"));
     s.preset = s.startup_preset;
+    // The open FSR 4 follows FSR 3.1 on every system.
+    s.upscaler = UpscalerFsr3;
+    spartanportgpu_native_setting(0xf65);
+    assert(s.upscaler == UpscalerFsr4);
+#ifdef _WIN32
+    // DLSS follows FSR 4.1 (the launcher's order); without an RTX card the row says so.
+    s.upscaler = UpscalerFsr411;
+    spartanportgpu_native_setting(0xf65);
+    assert(s.upscaler == UpscalerDlss);
+    s.dlss_supported = false;
+    label = reinterpret_cast<const char*>(spartanportgpu_native_setting(0xf61));
+    assert(std::strstr(label, "DLSS") && std::strstr(label, "unavailable"));
+    // Portuguese: the launcher's preset names and the accent.
+    Environment("SPARTAN_LANGUAGE", "pt");
+    label = reinterpret_cast<const char*>(spartanportgpu_native_setting(0xf61));
+    assert(std::strstr(label, "(indisponível)"));
+    s.preset = Quality;
+    label = reinterpret_cast<const char*>(spartanportgpu_native_setting(0xf62));
+    assert(std::strstr(label, "Qualidade") && !std::strstr(label, "Quality"));
+    s.preset = UltraPerformance;
+    label = reinterpret_cast<const char*>(spartanportgpu_native_setting(0xf62));
+    assert(std::strstr(label, "Desempenho máximo"));
+    Environment("SPARTAN_LANGUAGE", nullptr);
+    spartanportgpu_native_setting(0xf65);
+    assert(s.upscaler == UpscalerTaa);
+#endif
+    s.upscaler = s.startup_upscaler;
     std::remove(path);
     std::puts("Upscaler support: saved choices and FSR 3.1 fallback PASS");
 }

@@ -129,6 +129,9 @@ struct Values {
     /// DLSS (spartanport_dlss.dll, NVIDIA RTX) is ready, or why not (null before the device exists).
     std::atomic<bool> dlss_supported{false};
     std::atomic<const char*> dlss_problem{nullptr};
+    /// The running upscaler's mode and sizes for the Insert menu ("DLSS Quality, 1706x960 ->
+    /// 2560x1440"), or null.
+    std::atomic<const char*> upscaler_status{nullptr};
 
     /// Startup settings for the explicit SPARTAN_RENDER_RES compatibility patch only.
     int startup_preset = NativeAA;

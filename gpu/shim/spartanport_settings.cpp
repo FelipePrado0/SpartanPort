@@ -505,9 +505,9 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         };
         // The launcher's order (options.rs UPSCALERS, PRESETS).
 #ifdef _WIN32
-        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerFsr411, UpscalerTaa};
+        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerFsr4, UpscalerFsr411, UpscalerDlss, UpscalerTaa};
 #else
-        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerTaa};
+        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerFsr4, UpscalerTaa};
 #endif
         const std::vector<int> presets{NativeAA, UltraQuality, Quality, Balanced, Performance, UltraPerformance};
         if (direction) {
@@ -519,11 +519,15 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         if (row == 0) {
             const int u = v.upscaler;
             value = u == UpscalerOff ? (pt ? "Desligado" : "Off") : u == UpscalerFsr3 ? "FSR 3.1"
-                  : u == UpscalerFsr411 ? "FSR 4.1" : u == UpscalerTaa ? "TAA" : UpscalerName(u);
-            if (u == UpscalerFsr411 && !v.fsr411_supported) value += pt ? " (indisponivel)" : " (unavailable)";
+                  : u == UpscalerFsr4 ? "FSR 4" : u == UpscalerFsr411 ? "FSR 4.1" : u == UpscalerDlss ? "DLSS" : u == UpscalerTaa ? "TAA" : UpscalerName(u);
+            if ((u == UpscalerFsr4 && !v.fsr4_supported) || (u == UpscalerFsr411 && !v.fsr411_supported) || (u == UpscalerDlss && !v.dlss_supported)) value += pt ? " (indisponível)" : " (unavailable)";
         } else {
             // The name only: the row has no room for the render size (the Insert menu shows it).
-            value = PresetName(v.preset);
+            // The launcher's Portuguese names (spartanport_lang.py), in Preset order.
+            static constexpr const char* br[PresetCount] = {"AA nativo", "Qualidade", "Equilibrado",
+                                                            "Desempenho", "Desempenho máximo",
+                                                            "Qualidade ultra"};
+            value = pt ? br[std::clamp(v.preset.load(), 0, PresetCount - 1)] : PresetName(v.preset);
         }
         const bool selected = function >= 0xf63;
         static thread_local std::string labels[2];

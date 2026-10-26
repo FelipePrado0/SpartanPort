@@ -447,16 +447,17 @@ void ImageTab() {
         // The launcher's choices and order (options.rs UPSCALERS, PRESETS); the same values as the
         // Display menu's rows.
 #ifdef _WIN32
-        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 4.1", "TAA"};
-        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3,
-                                              SpartanSettings::UpscalerFsr411, SpartanSettings::UpscalerTaa};
+        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 4", "FSR 4.1", "DLSS", "TAA"};
+        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3, SpartanSettings::UpscalerFsr4,
+                                              SpartanSettings::UpscalerFsr411, SpartanSettings::UpscalerDlss,
+                                              SpartanSettings::UpscalerTaa};
 #else
-        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "TAA"};
-        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3,
+        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 4", "TAA"};
+        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3, SpartanSettings::UpscalerFsr4,
                                               SpartanSettings::UpscalerTaa};
 #endif
         ChoiceRow("Upscaler", s.upscaler, upscaler_labels, upscaler_values, int(std::size(upscaler_values)),
-                  "FSR 4.1 needs an AMD Radeon with Adrenalin 26.10.1 or newer.");
+                  "FSR 4.1 needs an AMD Radeon with Adrenalin 26.10.1 or newer; DLSS an NVIDIA RTX card.");
         // Each preset's render size at the chosen Render resolution, before the restart too.
         static const int preset_values[] = {SpartanSettings::NativeAA, SpartanSettings::UltraQuality,
                                             SpartanSettings::Quality, SpartanSettings::Balanced,
@@ -502,6 +503,9 @@ void ImageTab() {
         InfoRow("Render resolution", text);
         InfoRow("Upscaler", UpscalerLabel(s.upscaler));
         if (const char* problem = s.fsr4_problem.load()) InfoRow("Upscaler status", problem);
+        else if (const char* problem = s.dlss_problem.load()) InfoRow("Upscaler status", problem);
+        else if (const char* status = s.upscaler_status.load(); status && s.upscaler == SpartanSettings::UpscalerDlss)
+            InfoRow("Upscaler status", status);
         std::snprintf(text, sizeof(text), "%d x %d", iw, ih);
         InfoRow("Game image", text);
         std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
