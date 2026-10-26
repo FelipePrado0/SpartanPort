@@ -119,21 +119,52 @@ static inline SDL_AudioDeviceID ds_speaker_device(void) {
  * to the speaker (byte 7 bits 4-5 = 3: the speaker plays the right channel, the jack is off), the
  * speaker volume (byte 5, the top of the range PS5 games use) and the speaker preamp gain (byte 37
  * bits 0-2, 0..7), each applied only with its enable bit (byte 0 bits 7 and 5, byte 1 bit 7). */
-enum { DS_SPEAKER_VOLUME=0x64, DS_SPEAKER_GAIN_DEFAULT=4, DS_PATH_SPEAKER=0x30 };
-static struct { int gain; SDL_Gamepad *sent_to; } ds_speaker_sent __attribute__((unused));
-static inline bool ds_set_speaker(SDL_Gamepad *g, int gain) {
+enum { DS_SPEAKER_VOLUME=0x64, DS_SPEAKER_GAIN_DEFAULT=4, DS_PATH_HEADSET=0x00, DS_PATH_SPEAKER=0x30 };
+/* With a headset in the pad's jack, its audio stays on the headset (path 0, the pad's own choice). */
+static struct { int gain, jack; SDL_Gamepad *sent_to; } ds_speaker_sent __attribute__((unused));
+static inline bool ds_set_speaker(SDL_Gamepad *g, int gain, bool jack) {
     if (!ds_is_dualsense(g)) return false;
-    if (ds_speaker_sent.sent_to==g && ds_speaker_sent.gain==gain) return true;
+    if (ds_speaker_sent.sent_to==g && ds_speaker_sent.gain==gain && ds_speaker_sent.jack==jack) return true;
     uint8_t effects[DS_EFFECTS_SIZE];
     memset(effects,0,sizeof(effects));
-    effects[0]=0x80|0x20; effects[5]=DS_SPEAKER_VOLUME; effects[7]=DS_PATH_SPEAKER;
+    effects[0]=0x80|0x20; effects[5]=DS_SPEAKER_VOLUME; effects[7]=jack ? DS_PATH_HEADSET : DS_PATH_SPEAKER;
     effects[1]=0x80; effects[37]=(uint8_t)(gain & 7);
     if (!SDL_SendGamepadEffect(g,effects,sizeof(effects))) return false;
-    ds_speaker_sent.gain=gain; ds_speaker_sent.sent_to=g;
-    printf("Runtime: pad speaker volume 0x%x, preamp gain %d\n",DS_SPEAKER_VOLUME,gain);
+    ds_speaker_sent.gain=gain; ds_speaker_sent.jack=jack; ds_speaker_sent.sent_to=g;
+    printf("Runtime: pad audio on its %s (speaker volume 0x%x, preamp gain %d)\n",jack ? "headset jack" : "speaker",
+           DS_SPEAKER_VOLUME,gain);
     return true;
 }
-static inline void ds_forget(void) { ds_sent.sent_to=NULL; ds_speaker_sent.sent_to=NULL; }
+
+/* The headset jack bit of a DualSense USB input report (report id 1, status byte 54 bit 0;
+ * bit 3 there is the USB data link), or -1 for another report. */
+static inline int ds_report_jack(const uint8_t *report, int size) {
+    if (size<56 || report[0]!=0x01) return -1;
+    return report[54] & 1;
+}
+/* SDL keeps the pad's input reports to itself, so a second HID handle (Windows gives each handle
+ * its own copy) reads the jack. Without one the jack reads as empty: the speaker plays. */
+static struct { SDL_hid_device *device; bool tried, jack; } ds_hid __attribute__((unused));
+static inline bool ds_jack_plugged(void) {
+    if (!ds_hid.device && !ds_hid.tried) {
+        ds_hid.tried=true;
+        static const unsigned short products[]={0x0ce6,0x0df2}; /* DualSense, DualSense Edge */
+        for (size_t i=0;i<2 && !ds_hid.device;++i) ds_hid.device=SDL_hid_open(0x054c,products[i],NULL);
+        if (ds_hid.device) SDL_hid_set_nonblocking(ds_hid.device,1);
+    }
+    uint8_t report[128];
+    int size;
+    for (int i=0;ds_hid.device && i<64 && (size=SDL_hid_read(ds_hid.device,report,sizeof(report)))>0;++i) {
+        const int jack=ds_report_jack(report,size);
+        if (jack>=0) ds_hid.jack=jack;
+    }
+    return ds_hid.jack;
+}
+static inline void ds_forget(void) {
+    ds_sent.sent_to=NULL; ds_speaker_sent.sent_to=NULL;
+    if (ds_hid.device) SDL_hid_close(ds_hid.device);
+    ds_hid.device=NULL; ds_hid.tried=false; ds_hid.jack=false;
+}
 /* "speakergain=N" (0..7) among the extras' names, or the default. */
 static inline int ds_parse_speaker_gain(const char *text) {
     const char *at=text ? SDL_strcasestr(text,"speakergain=") : NULL;
