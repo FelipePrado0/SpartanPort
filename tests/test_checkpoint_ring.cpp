@@ -67,8 +67,39 @@ int main() {
     assert(last[1].serial == 5);
     assert(ring.Last(10).size() == 4);
 
-    // One line per record: kind, serial, submission tick, the hashes that matter, the sizes.
-    assert(FormatCheckpoint(*found) == "draw #1 tick 7 vs 0x1111 fs 0x2222 300 indices x1");
+    // Around(marker, before, after): the records whose serials surround the marker's, in order,
+    // skipping the ones the ring no longer holds.
+    const auto around = ring.Around(EncodeMarker(4), 1, 1);
+    assert(around.size() == 3);
+    assert(around[0].serial == 3 && around[1].serial == 4 && around[2].serial == 5);
+    assert(ring.Around(EncodeMarker(2), 5, 5).size() == 4); // serial 1 is gone, 6 never existed
+    assert(ring.Around(nullptr, 2, 2).empty());
+
+    // One line per record: kind, serial, submission tick, the hashes that matter, the sizes; a
+    // draw also names its primitive type and whether the port's tessellation stages expand it.
+    assert(FormatCheckpoint(*found) == "draw #1 tick 7 vs 0x1111 fs 0x2222 300 indices x1 prim 0");
+    CheckpointRecord rect{};
+    rect.kind = CheckpointKind::Draw;
+    rect.serial = 11;
+    rect.stage_hashes[u32(CheckpointStage::Vertex)] = 0x1111;
+    rect.x = 3;
+    rect.y = 1;
+    rect.z = DrawPrimitive(17, true);
+    assert(FormatCheckpoint(rect) == "draw #11 tick 0 vs 0x1111 fs 0x0 3 indices x1 prim 17 tess");
+    CheckpointRecord pass{};
+    pass.kind = CheckpointKind::RenderPass;
+    pass.serial = 12;
+    pass.tick = 7;
+    pass.x = 1280;
+    pass.y = 720;
+    pass.z = RenderPassLayout(2, true, false);
+    assert(FormatCheckpoint(pass) == "render-pass #12 tick 7 1280x720 2 color depth");
+    pass.z = RenderPassLayout(0, true, true);
+    assert(FormatCheckpoint(pass) == "render-pass #12 tick 7 1280x720 0 color depth stencil");
+    pass.z = RenderPassLayout(1, false, false);
+    assert(FormatCheckpoint(pass) == "render-pass #12 tick 7 1280x720 1 color");
+    pass.kind = CheckpointKind::RenderPassEnd;
+    assert(FormatCheckpoint(pass) == "render-pass-end #12 tick 7");
     assert(FormatCheckpoint(*ring.Find(fifth)) == "dispatch #5 tick 0 cs 0x3333 12x1x1");
     CheckpointRecord detile{};
     detile.kind = CheckpointKind::Detile;

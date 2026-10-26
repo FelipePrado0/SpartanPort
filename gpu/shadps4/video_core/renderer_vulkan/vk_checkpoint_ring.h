@@ -30,7 +30,20 @@ enum class CheckpointKind : std::uint8_t {
     Detile,
     Tile,
     Submit,
+    RenderPass,    ///< vkCmdBeginRendering: x, y = size, z = RenderPassLayout().
+    RenderPassEnd, ///< vkCmdEndRendering.
 };
+
+/// CheckpointRecord::z of a draw: the AmdGpu::PrimitiveType value, plus whether the port's own
+/// tessellation stages expand the primitive (rect and quad lists).
+inline std::uint32_t DrawPrimitive(std::uint32_t prim_type, bool aux_tess) {
+    return prim_type | (aux_tess ? 0x100u : 0u);
+}
+
+/// CheckpointRecord::z of a render pass: colour attachment count and depth/stencil presence.
+inline std::uint32_t RenderPassLayout(std::uint32_t num_color, bool depth, bool stencil) {
+    return num_color | (depth ? 0x100u : 0u) | (stencil ? 0x200u : 0u);
+}
 
 /// Index into CheckpointRecord::stage_hashes; the order of Shader::SwStage.
 enum class CheckpointStage : std::uint8_t {
@@ -89,6 +102,26 @@ public:
         return slot;
     }
 
+    /// The records whose serials lie within `before` and `after` of the marker's, oldest first,
+    /// only those the ring still holds; empty for an empty or unknown marker.
+    std::vector<CheckpointRecord> Around(const void* marker, std::uint64_t before,
+                                         std::uint64_t after) const {
+        std::vector<CheckpointRecord> result;
+        if (!Known(marker)) {
+            return result;
+        }
+        const std::uint64_t serial = DecodeMarker(marker);
+        const std::uint64_t first = serial > before ? serial - before : 1;
+        const std::uint64_t last = std::min(serial + after, next_serial - 1);
+        for (std::uint64_t s = first; s <= last; ++s) {
+            const CheckpointRecord& slot = slots[s % slots.size()];
+            if (slot.serial == s) {
+                result.push_back(slot);
+            }
+        }
+        return result;
+    }
+
     /// The newest `count` records still in the ring, oldest first.
     std::vector<CheckpointRecord> Last(std::size_t count) const {
         const std::uint64_t pushed = next_serial - 1;
@@ -134,7 +167,17 @@ inline std::string FormatCheckpoint(const CheckpointRecord& record) {
     switch (record.kind) {
     case CheckpointKind::Draw:
         n = graphics_stages(head("draw"));
-        std::snprintf(buf + n, sizeof(buf) - n, " %u indices x%u", record.x, record.y);
+        std::snprintf(buf + n, sizeof(buf) - n, " %u indices x%u prim %u%s", record.x, record.y,
+                      record.z & 0xffu, (record.z & 0x100u) ? " tess" : "");
+        break;
+    case CheckpointKind::RenderPass:
+        n = head("render-pass");
+        std::snprintf(buf + n, sizeof(buf) - n, " %ux%u %u color%s%s", record.x, record.y,
+                      record.z & 0xffu, (record.z & 0x100u) ? " depth" : "",
+                      (record.z & 0x200u) ? " stencil" : "");
+        break;
+    case CheckpointKind::RenderPassEnd:
+        head("render-pass-end");
         break;
     case CheckpointKind::DrawIndirect:
         n = graphics_stages(head("draw-indirect"));
