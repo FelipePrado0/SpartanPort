@@ -198,7 +198,8 @@ Isto não é aconselhamento jurídico; é como o port mantém o próprio reposit
 - `gpu/shim/spartanport_ui_language.h`, `gpu/shim/ui_language/`: os textos do menu e da janela de
   troféus em cada idioma, com o texto em inglês como chave.
 - `gpu/tools/overlay_preview.cpp` (`overlay-preview`): desenha o menu, a janela de troféus e as
-  notificações fora do jogo, com troféus inventados, para trabalhar na aparência sem o jogo.
+  notificações fora do jogo, com troféus inventados, e a lista de saves do jogo, com saves
+  inventados, para trabalhar na aparência sem o jogo.
 - `launcher-rust/assets/i18n.json`: os textos e rótulos em todos os idiomas, gerados a partir do
   `launcher/spartanport_trophies.py` e do `launcher/spartanport_lang.py` pelo `tools/launcher_i18n.py`.
 - `launcher-rust/src/core/trophies.rs`: o leitor do `.trp` e do `trophies.dat`, e a parcela de

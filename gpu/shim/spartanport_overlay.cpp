@@ -228,6 +228,20 @@ void Separator(const char* text) {
     ImGui::PopStyleColor();
 }
 bool Button(const char* text) { return ImGui::Button(Tr(text)); }
+// The red rule under a window's heading: bright on the left, fading out on the right.
+void HeadingRule() {
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const float px = base_scale;
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    const float width = ImGui::GetContentRegionAvail().x;
+    draw->AddRectFilledMultiColor(ImVec2(at.x, at.y + 2.0f * px), ImVec2(at.x + width * 0.6f, at.y + 4.0f * px),
+                                  ImGui::GetColorU32(Ink::AccentHi), ImGui::GetColorU32(Ink::Accent),
+                                  ImGui::GetColorU32(Ink::Accent), ImGui::GetColorU32(Ink::AccentHi));
+    draw->AddRectFilledMultiColor(ImVec2(at.x + width * 0.6f, at.y + 2.0f * px), ImVec2(at.x + width, at.y + 4.0f * px),
+                                  ImGui::GetColorU32(Ink::Accent), ImGui::GetColorU32(ImVec4(0, 0, 0, 0)),
+                                  ImGui::GetColorU32(ImVec4(0, 0, 0, 0)), ImGui::GetColorU32(Ink::Accent));
+    ImGui::Dummy(ImVec2(width, 14.0f * px));
+}
 
 float PixelDensity(SDL_WindowID id) {
     SDL_Window* window = SDL_GetWindowFromID(id);
@@ -771,17 +785,7 @@ void Menu() {
         draw->AddLine(ImVec2(at.x + c - k, at.y + c - k), ImVec2(at.x + c + k, at.y + c + k), ink, 2.0f * px);
         draw->AddLine(ImVec2(at.x + c + k, at.y + c - k), ImVec2(at.x + c - k, at.y + c + k), ink, 2.0f * px);
     }
-    {
-        const ImVec2 at = ImGui::GetCursorScreenPos();
-        const float width = ImGui::GetContentRegionAvail().x;
-        draw->AddRectFilledMultiColor(ImVec2(at.x, at.y + 2.0f * px), ImVec2(at.x + width * 0.6f, at.y + 4.0f * px),
-                                      ImGui::GetColorU32(Ink::AccentHi), ImGui::GetColorU32(Ink::Accent),
-                                      ImGui::GetColorU32(Ink::Accent), ImGui::GetColorU32(Ink::AccentHi));
-        draw->AddRectFilledMultiColor(ImVec2(at.x + width * 0.6f, at.y + 2.0f * px), ImVec2(at.x + width, at.y + 4.0f * px),
-                                      ImGui::GetColorU32(Ink::Accent), ImGui::GetColorU32(ImVec4(0, 0, 0, 0)),
-                                      ImGui::GetColorU32(ImVec4(0, 0, 0, 0)), ImGui::GetColorU32(Ink::Accent));
-        ImGui::Dummy(ImVec2(width, 14.0f * px));
-    }
+    HeadingRule();
 
     constexpr int TabCount = 4;
     const ImGuiIO& io = ImGui::GetIO();
@@ -928,80 +932,137 @@ void TextEntryBox() {
     ImGui::End();
 }
 
+// One save (or one answer) of the game's save list as a card: its picture on the left when the list
+// has pictures, then its lines: the first is the name, the second the place, the rest (date,
+// difficulty, play time) in grey. `draw` false only measures. Returns the card's height.
+float SaveCard(ImVec2 at, float width, const std::string& text, ImTextureData* picture, bool pictures, bool selected,
+               bool draw) {
+    const float px = base_scale;
+    const float pad = 12.0f * px, gap = 16.0f * px;
+    const ImVec2 picture_size(192.0f * px, 108.0f * px);
+    ImFont* font = ImGui::GetFont();
+    const float size = ImGui::GetFontSize(), name_size = size * 1.15f;
+    const float text_x = pad + (pictures ? picture_size.x + gap : 0.0f);
+    const float wrap = std::max(width - text_x - pad, 40.0f * px);
+    std::vector<std::string_view> lines;
+    for (size_t start = 0; start <= text.size();) {
+        const size_t end = std::min(text.find('\n', start), text.size());
+        lines.emplace_back(text.data() + start, end - start);
+        start = end + 1;
+    }
+    const auto line_gap = [&](size_t i) { return i == 0 && lines.size() > 1 ? 4.0f * px : 1.0f * px; };
+    float text_h = 0.0f;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        const char* begin = lines[i].data();
+        text_h += font->CalcTextSizeA(i == 0 ? name_size : size, FLT_MAX, wrap, begin, begin + lines[i].size()).y +
+                  line_gap(i);
+    }
+    const float height = std::max(pictures ? picture_size.y : 0.0f, text_h) + pad * 2.0f;
+    if (!draw) {
+        return height;
+    }
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 max(at.x + width, at.y + height);
+    const float rounding = 6.0f * px;
+    dl->AddRectFilled(at, max, ImGui::GetColorU32(selected ? Ink::AccentDeep : Ink::Card), rounding);
+    dl->AddRect(at, max, ImGui::GetColorU32(selected ? Ink::AccentHi : Ink::Line), rounding, 0,
+                (selected ? 2.0f : 1.0f) * px);
+    if (selected) {
+        dl->AddRectFilled(ImVec2(at.x, at.y + rounding), ImVec2(at.x + 4.0f * px, max.y - rounding),
+                          ImGui::GetColorU32(Ink::AccentHi));
+    }
+    if (pictures) {
+        const ImVec2 p0(at.x + pad, at.y + (height - picture_size.y) * 0.5f);
+        const ImVec2 p1(p0.x + picture_size.x, p0.y + picture_size.y);
+        if (picture) {
+            dl->AddImage(picture->GetTexRef(), p0, p1);
+        } else { // the new save: no picture yet
+            dl->AddRectFilled(p0, p1, ImGui::GetColorU32(Ink::Panel), 4.0f * px);
+            const ImVec2 c((p0.x + p1.x) * 0.5f, (p0.y + p1.y) * 0.5f);
+            const float k = 16.0f * px;
+            const ImU32 ink = ImGui::GetColorU32(selected ? Ink::AccentHi : Ink::Muted);
+            dl->AddLine(ImVec2(c.x - k, c.y), ImVec2(c.x + k, c.y), ink, 3.0f * px);
+            dl->AddLine(ImVec2(c.x, c.y - k), ImVec2(c.x, c.y + k), ink, 3.0f * px);
+        }
+        dl->AddRect(p0, p1, ImGui::GetColorU32(Ink::Line), 4.0f * px, 0, 1.0f * px);
+    }
+    float y = at.y + (height - text_h) * 0.5f;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        const float s = i == 0 ? name_size : size;
+        const ImVec4 ink = i <= 1 ? Ink::Text : Ink::Muted;
+        const char* begin = lines[i].data();
+        const char* end = begin + lines[i].size();
+        dl->AddText(font, s, ImVec2(at.x + text_x, y), ImGui::GetColorU32(ink), begin, end, wrap);
+        y += font->CalcTextSizeA(s, FLT_MAX, wrap, begin, end).y + line_gap(i);
+    }
+    return height;
+}
+
+// The game's save list (sceSaveDataDialog) in the menu's look: the action ("Load game") in the title
+// face over the red rule, then a card per save, the chosen one in red. Asked to overwrite, the new
+// save is shown first (its picture and the details of the one it replaces), then the answers.
 void ChoiceBox() {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float px = base_scale;
+    const float width = std::min(760.0f * px, viewport->WorkSize.x * 0.92f);
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
                                    viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
                             ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSizeConstraints(ImVec2(viewport->WorkSize.x * 0.36f, 0.0f),
-                                        ImVec2(viewport->WorkSize.x * 0.8f, viewport->WorkSize.y * 0.8f));
-    ImGui::SetNextWindowBgAlpha(0.94f);
+    ImGui::SetNextWindowSize(ImVec2(width, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.97f);
     ImGui::Begin("##choice", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
                      ImGuiWindowFlags_NoFocusOnAppearing);
-    ImGui::PushTextWrapPos(viewport->WorkSize.x * 0.7f);
-    const size_t details = choice_preview_label.empty() ? std::string::npos : choice_title.find("\n\n");
-    ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "%.*s",
-                       int(details == std::string::npos ? choice_title.size() : details), choice_title.c_str());
+    const bool confirm = !choice_preview_label.empty();
+    const size_t details = confirm ? choice_title.find("\n\n") : std::string::npos;
+    const std::string heading = choice_title.substr(0, details);
+    ImGui::PushTextWrapPos(0.0f);
+    if (title_font) ImGui::PushFont(title_font, kTitleSize * 0.85f);
+    ImGui::TextColored(Ink::Text, "%s", heading.c_str());
+    if (title_font) ImGui::PopFont();
     ImGui::PopTextWrapPos();
-    ImGui::Separator();
-    if (!choice_preview_label.empty()) {
-        ImGui::BeginGroup();
-        ImGui::TextUnformatted(choice_preview_label.c_str());
-        const ImVec2 preview_size(228.0f * base_scale, 128.0f * base_scale);
+    HeadingRule();
+    const float inner = ImGui::GetContentRegionAvail().x;
+    const float card_gap = 8.0f * px;
+    if (confirm) {
+        // The new save: its picture, then the save it would replace.
+        std::string text = choice_preview_label;
+        if (details != std::string::npos) text += "\n" + choice_title.substr(details + 2);
         ImTextureData* preview = choice_textures.size() > choice_items.size() ? choice_textures.back() : nullptr;
-        if (preview) ImGui::Image(preview->GetTexRef(), preview_size);
-        else ImGui::Dummy(preview_size);
-        ImGui::EndGroup();
-        if (details != std::string::npos) {
-            ImGui::SameLine();
-            ImGui::BeginGroup();
-            ImGui::PushTextWrapPos(viewport->WorkSize.x * 0.7f);
-            ImGui::TextColored(ImVec4(0.85f, 0.72f, 0.45f, 1.0f), "%s", choice_title.c_str() + details + 2);
-            ImGui::PopTextWrapPos();
-            ImGui::EndGroup();
-        }
-        ImGui::Separator();
+        const float h = SaveCard(ImGui::GetCursorScreenPos(), inner, text, preview, true, false, true);
+        ImGui::Dummy(ImVec2(inner, h + card_gap));
     }
-    // Save pictures are 228x128; rows without one keep the text aligned when others have one.
-    const bool pictures = std::any_of(choice_textures.begin(),
-                                      choice_textures.begin() + std::min(choice_textures.size(), choice_items.size()),
-                                      [](ImTextureData* tex) { return tex != nullptr; });
-    const ImVec2 picture_size(228.0f * base_scale, 128.0f * base_scale);
-    for (int i = 0; i < int(choice_items.size()); ++i) {
+    const int count = int(choice_items.size());
+    const size_t listed = std::min(choice_textures.size(), choice_items.size());
+    const bool pictures = !confirm && std::any_of(choice_textures.begin(), choice_textures.begin() + listed,
+                                                  [](ImTextureData* tex) { return tex != nullptr; });
+    const auto picture_of = [&](int i) { return pictures && i < int(listed) ? choice_textures[i] : nullptr; };
+    float total = 0.0f;
+    for (int i = 0; i < count; ++i) {
+        total += SaveCard(ImVec2(), inner, choice_items[i], picture_of(i), pictures, false, false) +
+                 (i + 1 < count ? card_gap : 0.0f);
+    }
+    // A long list scrolls in its own area, between the heading and the keys.
+    const float most = viewport->WorkSize.y * 0.86f - ImGui::GetCursorPosY() - ImGui::GetFrameHeightWithSpacing() * 2.0f;
+    ImGui::BeginChild("##saves", ImVec2(inner, std::min(total, std::max(most, 120.0f * px))), ImGuiChildFlags_None,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
+    for (int i = 0; i < count; ++i) {
         const bool selected = i == choice_index;
-        ImGui::BeginGroup();
-        ImTextureData* tex = i < int(choice_textures.size()) ? choice_textures[i] : nullptr;
-        if (tex) {
-            ImGui::Image(tex->GetTexRef(), picture_size);
-        } else if (pictures) {
-            ImGui::Dummy(picture_size);
-        }
-        if (pictures) {
-            ImGui::SameLine();
-        }
-        ImGui::PushTextWrapPos(viewport->WorkSize.x * 0.7f);
+        const float h = SaveCard(ImGui::GetCursorScreenPos(), inner, choice_items[i], picture_of(i), pictures,
+                                 selected, true);
+        ImGui::Dummy(ImVec2(inner, h));
         if (selected) {
-            ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.55f, 1.0f), "> %s", choice_items[i].c_str());
-        } else {
-            ImGui::Text("  %s", choice_items[i].c_str());
+            ImGui::SetScrollHereY(0.5f);
         }
-        ImGui::PopTextWrapPos();
-        ImGui::EndGroup();
-        if (selected) {
-            if (pictures) {
-                const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
-                const float pad = 3.0f * base_scale;
-                ImGui::GetWindowDrawList()->AddRect(ImVec2(min.x - pad, min.y - pad),
-                                                    ImVec2(max.x + pad, max.y + pad),
-                                                    IM_COL32(255, 230, 140, 255), 0.0f, 0,
-                                                    2.0f * base_scale);
-            }
-            ImGui::SetScrollHereY();
+        if (i + 1 < count) {
+            ImGui::Dummy(ImVec2(inner, card_gap));
         }
     }
-    ImGui::Separator();
+    ImGui::PopStyleVar();
+    ImGui::EndChild();
+    ImGui::Spacing();
     DisabledText(PadText("Up/Down or D-pad: choose   Enter or Cross (A): OK   Esc or Circle (B): cancel", "Up/Down or D-pad: choose   Enter or A: OK   Esc or B: cancel", "Up/Down or D-pad: choose   Enter or B: OK   Esc or A: cancel"));
     ImGui::End();
 }
