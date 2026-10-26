@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <SDL3/SDL.h>
+#include "dualsense.h"
 
 #define PORTS 25
 #define ERR_NOT_OPENED ((int32_t)0x80260001)
@@ -37,6 +38,7 @@
 typedef struct {
     int used, type, channels, is_float, frames, sample_bytes, std_layout;
     int out_channels; /* what is sent to the device: `channels`, or 2 / 6 for a 7.1 port folded down */
+    int on_pad; /* a pad speaker port playing on the pad's own speaker (SPARTAN_DUALSENSE=speaker) */
     float peak[8]; unsigned peak_buffers, peak_reports; /* levels the game sends, for the log (track_peaks) */
     int state_logged;
     int32_t volume[8];
@@ -187,8 +189,9 @@ static void report_peaks(Port *p, int id) {
 static void shape_buffer(const Port *p, const void *data, void *out, float master) {
     static const int remap[8]={0,1,2,3,6,7,4,5};
     float gain[8];
-    /* Pad speaker ports (type 4) are mastered for the DualShock 4's speaker: PAD_SPEAKER_GAIN. */
-    const float port_gain=master*(p->type==4 ? PAD_SPEAKER_GAIN : 1.0f);
+    /* Pad speaker ports (type 4) are mastered for the DualShock 4's speaker: PAD_SPEAKER_GAIN,
+       unless they play on the DualSense's own speaker. */
+    const float port_gain=master*(p->type==4 && !p->on_pad ? PAD_SPEAKER_GAIN : 1.0f);
     for (int c=0;c<p->channels;++c) gain[c]=(float)p->volume[c]/VOLUME_0DB*port_gain;
     const int fold=p->channels==8 && p->out_channels<8, limit=fold || master>1.0f;
     const int n=fold ? p->out_channels : p->channels;
@@ -290,7 +293,13 @@ static ABI int32_t audio_open(int32_t user, int32_t type, int32_t index, uint32_
     p->out_channels=p->channels==8 ? output_channels(spartanportgpu_audio_channels(),device_channels) : p->channels;
     if (sdl_audio()) {
         SDL_AudioSpec spec={p->is_float ? SDL_AUDIO_F32 : SDL_AUDIO_S16, p->out_channels, 48000};
-        p->stream=OPEN_AUDIO_STREAM(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,NULL,NULL);
+        if (type==4 && (ds_features() & DS_SPEAKER)) {
+            const SDL_AudioDeviceID speaker=ds_speaker_device();
+            if (speaker) p->stream=OPEN_AUDIO_STREAM(speaker,&spec,NULL,NULL);
+            p->on_pad=p->stream!=NULL;
+            printf("Runtime: pad speaker port %d %s\n",id,p->on_pad ? "plays on the pad's speaker" : "found no pad speaker; plays on the main output");
+        }
+        if (!p->stream) p->stream=OPEN_AUDIO_STREAM(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,NULL,NULL);
 #ifdef _WIN32
         if (!p->stream) { try_audio_fallback(p, id); device_channels=default_device_channels(); }
 #endif
