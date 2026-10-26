@@ -46,6 +46,14 @@ int main(void) {
     assert(!ds_is_dualsense(NULL));
     assert(!ds_set_triggers(NULL,&right,&left));
 
+    uint8_t rgb[3];
+    assert(ds_qte_color(0,rgb) && rgb[1]==255 && rgb[0]==0);   /* triangle: green */
+    assert(ds_qte_color(1,rgb) && rgb[0]==255 && rgb[2]==0);   /* circle: red */
+    assert(ds_qte_color(2,rgb) && rgb[2]==255 && rgb[0]==0);   /* cross: blue */
+    assert(ds_qte_color(3,rgb) && rgb[0]==255 && rgb[2]>0);    /* square: pink */
+    for (unsigned t=4;t<10;++t) assert(ds_qte_color(t,rgb) && rgb[0]==255 && rgb[1]==255 && rgb[2]==255);
+    assert(!ds_qte_color(10,rgb));
+
     assert(ds_features()==0);
     puts("dualsense: ok");
     return 0;
