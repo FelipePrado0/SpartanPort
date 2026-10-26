@@ -15,6 +15,11 @@ on:
       pr:
         description: Pull request under validation
         required: true
+      phase:
+        description: Stages to execute
+        type: choice
+        options: [all, build-linux]
+        default: build-linux
 
 permissions:
   contents: read
@@ -34,6 +39,7 @@ env:
 
 jobs:
   native:
+    if: ${{ inputs.phase == 'all' }}
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -104,11 +110,12 @@ jobs:
 
   build:
     needs: rust
+    if: ${{ always() && (needs.rust.result == 'success' || inputs.phase != 'all') }}
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        os: [ubuntu-24.04, windows-2025]
+        os: ${{ inputs.phase == 'all' && fromJSON('["ubuntu-24.04", "windows-2025"]') || fromJSON('["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     env:
@@ -142,6 +149,8 @@ jobs:
           bash build.sh
           ninja -C out/gpu graphics-settings-test
           timeout 60 out/gpu/graphics-settings-test
+          export XDG_DATA_HOME="$RUNNER_TEMP/spartanport-xdg"
+          mkdir -p "$XDG_DATA_HOME"
           timeout 30 out/spartanport-probe --cpu-features
       - name: Windows runtime build
         if: runner.os == 'Windows'
@@ -157,3 +166,4 @@ jobs:
           path: |
             out/gpu-build.log
             out/spartanport-probe*
+            out/gpu/libspartanportgpu.so
