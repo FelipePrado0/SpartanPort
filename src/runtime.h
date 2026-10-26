@@ -105,6 +105,7 @@ void runtime_savedata_report(void);
 #define RUNTIME_SAVE_PARAM_SIZE 1328
 int runtime_savedata_param(int32_t user, const char *dir, void *param);
 int runtime_savedata_icon(int32_t user, const char *dir, char *out, size_t size);
+int64_t runtime_savedata_mtime(int32_t user, const char *dir);
 void runtime_savedata_preview_path(const char *path);
 void runtime_thread_attach_host(const char *name);
 #endif
