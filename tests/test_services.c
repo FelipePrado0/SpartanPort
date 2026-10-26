@@ -10,6 +10,9 @@ void spartanportgpu_trophy_setup(const SpartanGpuTrophyLabels *labels, const Spa
                                 int count, const volatile uint32_t *unlocked) {
     (void)labels; (void)items; (void)count; (void)unlocked;
 }
+void spartanportgpu_toast_trophy(const char *title, const char *detail, const unsigned char *png, uint64_t size) {
+    (void)title; (void)detail; (void)png; (void)size;
+}
 static int preview_file_enabled, preview_file_reads, preview_file_closes;
 static int64_t preview_file_result=8;
 static const unsigned char preview_file_png[8]={137,80,78,71,13,10,26,10};
