@@ -101,7 +101,8 @@ polaco, turco, indonesio, ruso y chino (el chino con una fuente CJK instalada, c
 los nombres de los trofeos siguen llegando en esos idiomas en el launcher.
 
 Idiomas: inglés, ruso, árabe, español, portugués, francés, alemán, italiano, polaco, turco, chino,
-japonés y coreano (`launcher/spartanport_trophies.py`). Los nombres y descripciones son los del
+japonés y coreano (`launcher-rust/assets/i18n.json`, generado a partir de
+`launcher/spartanport_trophies.py` por `tools/launcher_i18n.py`). Los nombres y descripciones son los del
 propio juego, como los muestra la lista de trofeos de PS4 en cada idioma, así que un trofeo se puede
 buscar por el nombre que le da el juego: inglés, portugués (Brasil), español (la lista de
 Latinoamérica), francés, alemán, italiano, polaco, turco, ruso, japonés y coreano. **Árabe y chino
@@ -204,8 +205,13 @@ Esto no es asesoramiento legal; es como el port mantiene limpio su propio reposi
   de trofeos en cada idioma, con el texto en inglés como clave.
 - `gpu/tools/overlay_preview.cpp` (`overlay-preview`): dibuja el menú, la ventana de trofeos y las
   notificaciones fuera del juego, con trofeos inventados, para trabajar en su aspecto sin el juego.
-- `launcher/spartanport_trophies.py`: los textos, el lector del `.trp` y de `trophies.dat`.
-- `launcher/spartanport_launcher_win.py`: la página Trophies y `write_trophy_texts`.
+- `launcher-rust/assets/i18n.json`: los textos y etiquetas en todos los idiomas, generados a partir
+  de `launcher/spartanport_trophies.py` y `launcher/spartanport_lang.py` por `tools/launcher_i18n.py`.
+- `launcher-rust/src/core/trophies.rs`: el lector del `.trp` y de `trophies.dat`, y la parte de
+  jugadores (la misma tabla del juego).
+- `launcher-rust/src/core/env.rs`: `write_trophy_texts`, los archivos que lee el juego.
+- `launcher-rust/src/ui/pages/trophies.rs`: la página Trofeos del launcher, con el mismo orden y
+  rareza que la ventana del juego.
 - `tests/test_trophies.py`, `tests/test_trophy_toast.cpp`, `tests/test_ui_language.cpp`,
   `tests/test_services.c`: pruebas unitarias. Crean sus propios archivos y no necesitan archivos del
   juego; `trophy-toast-test CARPETA_TEMP trophy00.trp` también comprueba los grados de los iconos del
