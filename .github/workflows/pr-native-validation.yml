@@ -31,7 +31,7 @@ concurrency:
 
 env:
   VALIDATION_BASELINE: ${{ inputs.baseline || '9e6c7260a7bf9d80c0ed0748b9efc00e760178b4' }}
-  VALIDATION_PR: ${{ inputs.pr || '1070' }}
+  VALIDATION_PR: ${{ inputs.pr || '1007' }}
   TZ: UTC
 
 jobs:
@@ -74,6 +74,7 @@ jobs:
           if-no-files-found: warn
 
   rust:
+    needs: native
     if: ${{ inputs.phase != 'build-linux' }}
     strategy:
       fail-fast: false

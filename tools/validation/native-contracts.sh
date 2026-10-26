@@ -112,4 +112,7 @@ if [[ $(uname -s) == Linux ]]; then
         fi
     fi
 fi
+if [[ $pr == 1007 ]]; then
+    if ! bash tools/validation/menu-coherence.sh; then failed=1; fi
+fi
 exit "$failed"
