@@ -66,6 +66,15 @@ int main(void) {
     assert(ds_parse_speaker_gain("SpeakerGain=9")==7);
     assert(ds_parse_speaker_gain(NULL)==DS_SPEAKER_GAIN_DEFAULT);
 
+    uint8_t report[64]={0x01};
+    report[54]=0x08; /* USB link, jack empty (read from a pad) */
+    assert(ds_report_jack(report,64)==0);
+    report[54]=0x09;
+    assert(ds_report_jack(report,64)==1);
+    assert(ds_report_jack(report,40)==-1);
+    report[0]=0x31; /* a Bluetooth report */
+    assert(ds_report_jack(report,64)==-1);
+
     assert(ds_features()==0);
     puts("dualsense: ok");
     return 0;
