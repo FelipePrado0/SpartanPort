@@ -54,6 +54,13 @@ int main(void) {
     for (unsigned t=4;t<10;++t) assert(ds_qte_color(t,rgb) && rgb[0]==255 && rgb[1]==255 && rgb[2]==255);
     assert(!ds_qte_color(10,rgb));
 
+    assert(ds_parse_features("")==0);
+    assert(ds_parse_features("triggers, qte")==(DS_TRIGGERS|DS_QTE));
+    assert(ds_parse_features("hitflash\r\nmotion\n")==(DS_HITFLASH|DS_MOTION));
+    assert(ds_parse_features("gyroaim")==(DS_GYROAIM|DS_MOTION));
+    assert(ds_parse_features("ALL")==(DS_TRIGGERS|DS_HITFLASH|DS_MOTION|DS_GYROAIM|DS_QTE|DS_SPEAKER));
+    assert(ds_parse_features("bogus,,speaker")==DS_SPEAKER);
+
     assert(ds_features()==0);
     puts("dualsense: ok");
     return 0;

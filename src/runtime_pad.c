@@ -608,9 +608,13 @@ static void update_motion(SDL_Gamepad *g, PadData *d) {
 static void update_dualsense(SDL_Gamepad *g, PadData *d) {
     if (!ds_is_dualsense(g)) return;
     const unsigned features=ds_features();
+    /* An extra switched off while the game runs leaves the pad as the game set it. */
     if (features & DS_HITFLASH) update_hit_flash(g,d->timestamp);
+    else if (hit.flashing) { hit.flashing=false; restore_light(g); }
     if (features & DS_QTE) update_qte_flash(g,d->timestamp);
+    else if (qte_led.shown>=0) { qte_led.shown=-1; restore_light(g); }
     if (features & DS_TRIGGERS) update_triggers(g);
+    else if (ds_sent.sent_to==g) { const DsTrigger off=ds_trigger_off(); ds_set_triggers(g,&off,&off); }
     if (features & DS_MOTION) update_motion(g,d);
 }
 
