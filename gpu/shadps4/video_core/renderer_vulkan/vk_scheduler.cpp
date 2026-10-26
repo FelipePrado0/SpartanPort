@@ -12,6 +12,7 @@
 #include <functional>
 
 #include "spartanport_copy.h"
+#include "video_core/renderer_vulkan/vk_checkpoints.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "spartanport_toggles.h"
 #include "video_core/renderer_vulkan/vk_wait_diagnostics.h"
@@ -469,6 +470,12 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
     SyncRecording();
     // Guest memory copies into staging read by this submission (copy threads).
     WaitHostCopies();
+    if (Checkpoints::Enabled()) { // spartanport: the last marker of this submission
+        CheckpointRecord submit_record{};
+        submit_record.kind = CheckpointKind::Submit;
+        submit_record.tick = signal_value;
+        Checkpoints::Get().Mark(current_cmdbuf, submit_record);
+    }
     Check(current_cmdbuf.end());
 
     const vk::Semaphore timeline = work_semaphore.Handle();
@@ -499,6 +506,9 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
 
     ImGui::Core::TextureManager::Submit();
     auto submit_result = instance.GetGraphicsQueue().submit(submit_info, info.fence);
+    if (submit_result == vk::Result::eErrorDeviceLost) {
+        Checkpoints::Get().Dump(instance.GetGraphicsQueue(), "submit"); // spartanport
+    }
     ASSERT_MSG(submit_result != vk::Result::eErrorDeviceLost, "Device lost during submit");
 
     work_semaphore.Refresh();

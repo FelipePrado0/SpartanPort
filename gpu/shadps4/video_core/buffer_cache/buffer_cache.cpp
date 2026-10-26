@@ -18,6 +18,7 @@
 #include "video_core/buffer_cache/buffer_cache.h"
 #include "video_core/buffer_cache/memory_tracker.h"
 #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
+#include "video_core/renderer_vulkan/vk_checkpoints.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -713,6 +714,9 @@ void BufferCache::SubmitPendingArenaBinds(Vulkan::SubmitInfo& info) {
 
     info.AddWait(signal_sema, signal_tick);
     auto submit_result = instance.GetSparseQueue().bindSparse(sparse_info);
+    if (submit_result == vk::Result::eErrorDeviceLost) { // spartanport: vk_checkpoints.h
+        Vulkan::Checkpoints::Get().Dump(instance.GetGraphicsQueue(), "sparse bind");
+    }
     ASSERT_MSG(submit_result != vk::Result::eErrorDeviceLost, "Device lost during submit");
 
     pending_binds.clear();

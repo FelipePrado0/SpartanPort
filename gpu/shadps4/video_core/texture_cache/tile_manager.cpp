@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "video_core/renderer_vulkan/vk_checkpoints.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -230,6 +231,25 @@ void TileManager::RecordTilingDispatch(vk::Pipeline pipeline, const vk::Descript
     });
 }
 
+// spartanport: marker naming the tiling dispatch of `info` if the GPU is lost on it
+// (vk_checkpoints.h); recorded ahead of the dispatch and its barriers, with the same group count.
+static void MarkTilingDispatch(Vulkan::Scheduler& scheduler, const ImageInfo& info,
+                               bool is_tiler) {
+    if (!Vulkan::Checkpoints::Enabled()) {
+        return;
+    }
+    Vulkan::CheckpointRecord record{};
+    record.kind = is_tiler ? Vulkan::CheckpointKind::Tile : Vulkan::CheckpointKind::Detile;
+    record.tick = scheduler.CurrentTick();
+    record.stage_hashes[std::size_t(Vulkan::CheckpointStage::Compute)] = info.guest_address;
+    record.x = info.size.width;
+    record.y = info.size.height;
+    record.z = static_cast<u32>((info.guest_size / (info.num_bits / 8)) / 64);
+    scheduler.Record([record](vk::CommandBuffer cmdbuf) {
+        Vulkan::Checkpoints::Get().Mark(cmdbuf, record);
+    });
+}
+
 std::pair<const Buffer*, u64> TileManager::DetileImage(const VideoCore::Buffer* in_buffer,
                                                        u64 in_offset, const ImageInfo& info) {
     if (!info.props.is_tiled) {
@@ -258,6 +278,7 @@ std::pair<const Buffer*, u64> TileManager::DetileImage(const VideoCore::Buffer* 
     const auto staging = runtime.GetStagingPool().Request(info.guest_size, MemoryType::DeviceLocal);
 
     scheduler.EndRendering();
+    MarkTilingDispatch(scheduler, info, false);
     runtime.FlushBarriers();
 
     const vk::DescriptorBufferInfo tiled_buffer_info{
@@ -318,6 +339,7 @@ void TileManager::TileImage(Image& in_image, std::span<vk::BufferImageCopy> buff
     }
 
     runtime.DownloadImage(&in_image, staging.buffer, buffer_copies);
+    MarkTilingDispatch(scheduler, info, true);
     runtime.FlushBarriers();
 
     const vk::DescriptorBufferInfo tiled_buffer_info{

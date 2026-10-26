@@ -19,6 +19,7 @@
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_amd_paths.h"
 #include "video_core/renderer_vulkan/spartanport_vertex_input_default.h"
+#include "video_core/renderer_vulkan/vk_checkpoints.h"
 #include "video_core/renderer_vulkan/vk_dlss.h"
 #include "video_core/renderer_vulkan/vk_extension_policy.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -417,6 +418,29 @@ bool Instance::CreateDevice() {
         vertex_input_line = "unavailable (VK_EXT_vertex_input_dynamic_state missing)";
     }
     std::printf("GPU: vertex input dynamic state %s\n", vertex_input_line);
+    // spartanport: markers naming the draw or dispatch the GPU was on when it was lost (#334),
+    // vk_checkpoints.h. On by default on Intel's Windows driver; SPARTAN_GPU_CHECKPOINTS=1/0
+    // forces it; SPARTAN_VK_DISABLE_EXT still wins inside add_extension.
+    const char* checkpoints_env = std::getenv("SPARTAN_GPU_CHECKPOINTS");
+    const bool checkpoints_wanted =
+        CheckpointsWanted(checkpoints_env, driver_id == vk::DriverId::eIntelProprietaryWindows);
+    diagnostic_checkpoints =
+        checkpoints_wanted && add_extension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
+    const char* checkpoints_line;
+    if (diagnostic_checkpoints) {
+        checkpoints_line =
+            checkpoints_env && *checkpoints_env
+                ? "on (SPARTAN_GPU_CHECKPOINTS=1)"
+                : "on (Intel Windows driver; SPARTAN_GPU_CHECKPOINTS=0 turns them off)";
+    } else if (!checkpoints_wanted) {
+        checkpoints_line = checkpoints_env && *checkpoints_env
+                               ? "off (SPARTAN_GPU_CHECKPOINTS=0)"
+                               : "off (SPARTAN_GPU_CHECKPOINTS=1 turns them on)";
+    } else {
+        checkpoints_line =
+            "unavailable (VK_NV_device_diagnostic_checkpoints missing or disabled)";
+    }
+    std::printf("GPU: checkpoints: %s\n", checkpoints_line);
     list_restart = add_extension(VK_EXT_PRIMITIVE_TOPOLOGY_LIST_RESTART_EXTENSION_NAME);
     if (list_restart) {
         list_restart_features =
@@ -821,6 +845,7 @@ bool Instance::CreateDevice() {
     device = std::move(dev);
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init(*device);
+    Checkpoints::Get().Enable(diagnostic_checkpoints); // spartanport: vk_checkpoints.h
     pipeline_binaries =
         InitializePipelineBinaryCache(*device, pipeline_binaries, pipeline_binary_global_key);
     if (Dlss* dlss = Dlss::Get()) {

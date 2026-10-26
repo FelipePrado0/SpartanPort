@@ -215,6 +215,11 @@ public:
         return list_restart && list_restart_features.primitiveTopologyPatchListRestart;
     }
 
+    /// spartanport: VK_NV_device_diagnostic_checkpoints is on (vk_checkpoints.h).
+    bool IsDiagnosticCheckpointsSupported() const {
+        return diagnostic_checkpoints;
+    }
+
     /// Returns true when VK_EXT_provoking_vertex is supported.
     bool IsProvokingVertexSupported() const {
         return provoking_vertex;
@@ -600,6 +605,7 @@ private:
     bool depth_range_unrestricted{};
     bool vertex_input_dynamic_state{};
     bool list_restart{};
+    bool diagnostic_checkpoints{};
     bool provoking_vertex{};
     bool shader_stencil_export{};
     bool image_load_store_lod{};
