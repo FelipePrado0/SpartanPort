@@ -81,7 +81,7 @@ if [[ $(uname -s) == Linux ]]; then
         (
             cd "$base_dir"
             gcc -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc \
-                tests/test_services.c "$validation_root/out/validation/toast-stub.c" \
+                tests/test_services.c \
                 -o "$validation_root/out/validation/regression-without-pr"
         ) >"$log" 2>&1
         if timeout 60 out/validation/regression-without-pr >>"$log" 2>&1; then
