@@ -1,194 +1,75 @@
-name: Isolated native PR validation
+name: PR1070 Linux package validation
 
 on:
   push:
-    branches: [validation/prs-1009-1070-1007]
-    paths:
-      - '.github/workflows/pr-native-validation.yml'
-      - 'tools/validation/**'
-      - 'tests/test_savedata.c'
-  workflow_dispatch:
-    inputs:
-      baseline:
-        description: Main commit used as the comparison baseline
-        required: true
-      pr:
-        description: Pull request under validation
-        required: true
-      phase:
-        description: Stages to execute
-        type: choice
-        options: [all, build-linux]
-        default: all
+    branches: [validation/pr1070-linux-final]
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: isolated-pr-validation
+  group: pr1070-linux-final
   cancel-in-progress: false
 
-env:
-  VALIDATION_BASELINE: ${{ inputs.baseline || '9e6c7260a7bf9d80c0ed0748b9efc00e760178b4' }}
-  VALIDATION_PR: ${{ inputs.pr || '1070' }}
-  TZ: UTC
-
 jobs:
-  native:
-    if: ${{ inputs.phase != 'build-linux' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, windows-2025]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    steps:
-      - name: Keep source line endings
-        shell: bash
-        run: git config --global core.autocrlf false
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: msys2/setup-msys2@v2
-        if: runner.os == 'Windows'
-        with:
-          msystem: CLANG64
-          release: false
-          update: true
-          install: git
-          pacboy: toolchain:p
-      - name: Native contracts on Linux
-        if: runner.os == 'Linux'
-        shell: bash
-        run: bash tools/validation/native-contracts.sh "$VALIDATION_BASELINE" "$VALIDATION_PR"
-      - name: Native contracts on Windows
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: bash tools/validation/native-contracts.sh "$VALIDATION_BASELINE" "$VALIDATION_PR"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: native-pr${{ env.VALIDATION_PR }}-${{ matrix.os }}
-          path: out/validation/*.log
-          if-no-files-found: warn
-
-  rust:
-    if: ${{ inputs.phase != 'build-linux' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, windows-2025]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    defaults:
-      run:
-        working-directory: launcher-rust
-        shell: bash
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Verify reusable Rust evidence
-        if: env.VALIDATION_PR == '1070'
-        working-directory: .
+          submodules: recursive
+      - name: Verify identical validated inputs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python -c "import json, subprocess; r=json.loads(subprocess.check_output(['gh','api','repos/FelipePrado0/SpartanPort/actions/runs/40223880591'])); assert r['conclusion']=='success' and r['head_sha']=='b8abfdd68b687fdd636918ea93aa4cd377620864'"
+          git diff --exit-code 0419b80e2665362a6f33696ea1758d23f3882e66 HEAD -- src gpu launcher-rust launcher run.py build.sh tests packaging
+          git diff --exit-code 58f9b5eea3019de433f2d3d47d5f09b323eb7bdc HEAD -- gpu ':(glob)src/**/*.h'
           git diff --exit-code b8abfdd68b687fdd636918ea93aa4cd377620864 HEAD -- launcher-rust launcher scripts patches
+          python3 - <<'PY'
+          import json, subprocess
+          for run, head in [(40349615986, '58f9b5eea3019de433f2d3d47d5f09b323eb7bdc'), (40223880591, 'b8abfdd68b687fdd636918ea93aa4cd377620864')]:
+              result = json.loads(subprocess.check_output(['gh', 'api', f'repos/FelipePrado0/SpartanPort/actions/runs/{run}']))
+              assert result['conclusion'] == 'success' and result['head_sha'] == head
+          PY
       - uses: actions/download-artifact@v4
-        if: env.VALIDATION_PR == '1070'
         with:
-          name: spartanport-launcher-${{ matrix.os }}
+          name: build-pr1009-ubuntu-24.04
+          run-id: 40349615986
+          github-token: ${{ github.token }}
+          path: out
+      - uses: actions/download-artifact@v4
+        with:
+          name: spartanport-launcher-ubuntu-24.04
           run-id: 40223880591
           github-token: ${{ github.token }}
           path: launcher-rust/target/release
-      - uses: dtolnay/rust-toolchain@stable
-        if: env.VALIDATION_PR != '1070'
-        with:
-          components: clippy, rustfmt
-      - name: Linux launcher libraries
-        if: runner.os == 'Linux' && env.VALIDATION_PR != '1070'
-        working-directory: .
-        run: sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev
-      - run: cargo fmt --check
-        if: env.VALIDATION_PR != '1070'
-      - run: cargo clippy --locked --all-targets -- -D warnings
-        if: env.VALIDATION_PR != '1070'
-      - run: cargo test --locked
-        if: env.VALIDATION_PR != '1070'
-      - run: cargo build --release --locked
-        if: env.VALIDATION_PR != '1070'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rust-pr${{ env.VALIDATION_PR }}-${{ matrix.os }}
-          path: launcher-rust/target/release/spartanport-launcher*
-
-  build:
-    needs: rust
-    if: ${{ always() && (needs.rust.result == 'success' || inputs.phase == 'build-linux') }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ${{ inputs.phase == 'build-linux' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "windows-2025"]') }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 180
-    env:
-      SPARTAN_LTO: 'OFF'
-      SPARTAN_PGO: 'off'
-    steps:
-      - name: Keep source line endings
-        shell: bash
-        run: git config --global core.autocrlf false
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: msys2/setup-msys2@v2
-        if: runner.os == 'Windows'
-        with:
-          msystem: CLANG64
-          release: false
-          update: true
-          install: git patch
-          pacboy: >-
-            toolchain:p cmake:p ninja:p pkgconf:p python:p
-            vulkan-headers:p vulkan-loader:p vulkan-memory-allocator:p glslang:p
-            sdl3:p fmt:p boost:p robin-map:p xxhash:p ffmpeg:p zydis:p
-            spirv-tools:p spirv-headers:p spirv-cross:p
-      - uses: actions/download-artifact@v4
-        if: runner.os == 'Linux' && env.VALIDATION_PR == '1070'
-        with:
-          name: rust-pr1070-ubuntu-24.04
-          path: launcher-rust/target/release
-      - name: Linux runtime dependencies and build
-        if: runner.os == 'Linux'
-        shell: bash
+      - name: Install runtime and packaging dependencies
+        timeout-minutes: 10
         run: |
+          nproc
+          free -h
+          ninja() { command ninja -j"$(nproc)" "$@"; }
+          export -f ninja
           bash packaging/linux/ci-deps.sh
-          bash build.sh
-          ninja -C out/gpu graphics-settings-test
-          timeout 60 out/gpu/graphics-settings-test
-          export XDG_DATA_HOME="$RUNNER_TEMP/spartanport-xdg"
-          mkdir -p "$XDG_DATA_HOME"
-          timeout 30 out/spartanport-probe --cpu-features
-          if [[ "$VALIDATION_PR" == 1070 ]]; then
-            chmod +x launcher-rust/target/release/spartanport-launcher
-            CARGO=/usr/bin/true bash packaging/linux/build.sh
-            sudo bash packaging/linux/smoke-test.sh "$PWD/dist/spartanport-x86_64.AppImage"
-          fi
-      - name: Windows runtime build
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
+      - name: Recompile production runtime and check startup
+        timeout-minutes: 5
+        run: bash tools/validation/linux-runtime-reuse.sh 2>&1 | tee out/validation/runtime-build.log
+      - name: Package with the verified Rust launcher and GPU
+        timeout-minutes: 5
         run: |
-          bash build.sh --test
-          timeout 30 out/spartanport-probe.exe --cpu-features
+          chmod +x launcher-rust/target/release/spartanport-launcher
+          CARGO=/usr/bin/true bash packaging/linux/build.sh 2>&1 | tee out/validation/appimage-build.log
+          sha256sum dist/spartanport-x86_64.AppImage | tee out/validation/appimage.sha256
+      - name: Open the actual AppImage on a virtual display
+        timeout-minutes: 4
+        run: sudo timeout --kill-after=10s 180 bash packaging/linux/smoke-test.sh "$PWD/dist/spartanport-x86_64.AppImage" 2>&1 | tee out/validation/appimage-startup.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: build-pr${{ env.VALIDATION_PR }}-${{ matrix.os }}
+          name: pr1070-linux-final
           path: |
-            out/gpu-build.log
-            out/spartanport-probe*
-            out/gpu/libspartanportgpu.so
+            out/validation
             dist/*.AppImage
