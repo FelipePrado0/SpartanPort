@@ -50,7 +50,7 @@ public:
         bool operator==(const FeatureDesc&) const = default;
     };
     struct Frame {
-        Resource color, depth, motion, output;
+        Resource color, depth, motion, output, bias_mask;
         float jitter_x, jitter_y;
         bool reset;
         float frame_ms;

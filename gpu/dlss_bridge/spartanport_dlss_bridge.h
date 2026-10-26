@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define SPARTAN_DLSS_BRIDGE_ABI 1
+#define SPARTAN_DLSS_BRIDGE_ABI 2
 
 typedef void (*SpartanDlssLogFn)(int warning, const char* message);
 
@@ -43,6 +43,7 @@ typedef struct SpartanDlssEvaluate {
     SpartanDlssImage depth;  // sampled, hardware depth
     SpartanDlssImage motion; // sampled, render-resolution pixels, current to previous
     SpartanDlssImage output; // storage, general layout
+    SpartanDlssImage bias_mask; // optional sampled R8 mask, 1 favors current color
     float jitter_x;
     float jitter_y;
     int32_t reset;

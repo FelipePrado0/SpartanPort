@@ -377,6 +377,12 @@ set_source_files_properties(../tests/test_taa_shader.cpp PROPERTIES
 target_link_libraries(taa-shader-test PRIVATE spartanportgpu)
 add_dependencies(taa-shader-test host_shaders)
 
+add_executable(reactive-shader-test EXCLUDE_FROM_ALL ../tests/test_reactive_shader.cpp)
+target_include_directories(reactive-shader-test PRIVATE ${SHADER_INCLUDE})
+target_compile_options(reactive-shader-test PRIVATE -UNDEBUG)
+target_link_libraries(reactive-shader-test PRIVATE Vulkan::Vulkan GPUOpen::VulkanMemoryAllocator)
+add_dependencies(reactive-shader-test host_shaders)
+
 add_executable(view-projection-test EXCLUDE_FROM_ALL ../tests/test_view_projection.cpp)
 target_include_directories(view-projection-test PRIVATE shadps4)
 target_compile_options(view-projection-test PRIVATE -UNDEBUG)

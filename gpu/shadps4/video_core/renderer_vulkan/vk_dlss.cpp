@@ -206,7 +206,7 @@ bool Dlss::CreateFeature(vk::CommandBuffer command, const FeatureDesc& desc) {
     impl->feature.reset();
     const SpartanDlssFeature feature{desc.input_width,  desc.input_height, desc.output_width,
                                 desc.output_height, desc.quality,      0,
-                                0,                  desc.hdr ? 1 : 0};
+                                13,                 desc.hdr ? 1 : 0}; // DLSS preset M
     if (!impl->api->CreateFeature(command, &feature)) {
         return false;
     }
@@ -228,7 +228,8 @@ bool Dlss::Evaluate(vk::CommandBuffer command, const Frame& frame) {
                            r.height};
     };
     const SpartanDlssEvaluate parameters{image(frame.color),  image(frame.depth), image(frame.motion),
-                                    image(frame.output), frame.jitter_x,     frame.jitter_y,
+                                    image(frame.output), image(frame.bias_mask),
+                                    frame.jitter_x,     frame.jitter_y,
                                     frame.reset ? 1 : 0, frame.frame_ms,     frame.sharpness};
     return impl->api->Evaluate(command, &parameters) != 0;
 }

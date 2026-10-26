@@ -28,3 +28,8 @@ add_library(spartanport_dlss SHARED spartanport_dlss_bridge.cpp spartanport_dlss
 target_include_directories(spartanport_dlss PRIVATE "${DLSS_SDK_ROOT}/include" "${VULKAN_INCLUDE}")
 target_link_libraries(spartanport_dlss PRIVATE "${DLSS_SDK_ROOT}/lib/Windows_x86_64/x64/nvsdk_ngx_s.lib")
 target_compile_definitions(spartanport_dlss PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+
+add_executable(dlss-bridge-test EXCLUDE_FROM_ALL ../../tests/test_dlss_bridge.cpp)
+target_include_directories(dlss-bridge-test PRIVATE "${DLSS_SDK_ROOT}/include" "${VULKAN_INCLUDE}")
+target_link_libraries(dlss-bridge-test PRIVATE "${DLSS_SDK_ROOT}/lib/Windows_x86_64/x64/nvsdk_ngx_s.lib")
+target_compile_definitions(dlss-bridge-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

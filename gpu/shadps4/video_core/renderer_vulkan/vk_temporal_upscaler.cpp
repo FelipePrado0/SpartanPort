@@ -247,7 +247,7 @@ bool TemporalUpscaler::Active() const {
 
 bool TemporalUpscaler::ReactiveOn() const {
     // FSR 4 takes no reactive mask: the opaque snapshot and the mask pass would be wasted.
-    return SpartanSettings::Get().reactive && !SpartanToggle::Disabled(1u << 27) && !UseFsr4() && !UseDlss() &&
+    return !SpartanToggle::Disabled(1u << 27) && !UseFsr4() &&
            SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa;
 }
 
@@ -393,6 +393,8 @@ void TemporalUpscaler::OnGraphicsDraw(u64 ps_hash, VideoCore::ImageId color) {
         }
     }
     if (ps_hash == ldr_trigger_ps && color && !done_this_frame) {
+        // All HDR effects are complete; capture them before scene_color becomes the LDR target.
+        OnSceneComposite();
         scene_color = color;
         ldr_pending = true;
     }
@@ -401,7 +403,7 @@ void TemporalUpscaler::OnGraphicsDraw(u64 ps_hash, VideoCore::ImageId color) {
 bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore::Image& depth,
                                              vk::Format depth_format, u32 w, u32 h) {
     // Characters and interactive objects (any stencil but the world's) animate without object
-    // motion vectors: a reactive mask keeps FSR from ghosting them. SPARTAN_STENCIL_REACTIVE
+    // motion vectors: a reactive mask keeps FSR/DLSS from ghosting them. SPARTAN_STENCIL_REACTIVE
     // sets the reactivity (0 turns the mask off), toggle 1 << 28 switches it off at run time.
     // The depth is in General layout (both callers transit it for the motion pass).
     static const float stencil_value = [] {
@@ -413,6 +415,7 @@ bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore
         return false;
     }
     const auto all = vk::PipelineStageFlagBits2::eAllCommands;
+    const bool preserve = mask_ready && ReactiveOn();
     const auto barrier = [&](vk::ImageLayout old_layout, vk::PipelineStageFlags2 src_stage,
                              vk::AccessFlags2 src_access, vk::PipelineStageFlags2 dst_stage,
                              vk::AccessFlags2 dst_access) {
@@ -425,8 +428,10 @@ bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore
         };
         cmdbuf.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &b});
     };
-    barrier(vk::ImageLayout::eUndefined, all, vk::AccessFlagBits2::eNone,
-            vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderWrite);
+    barrier(preserve ? vk::ImageLayout::eGeneral : vk::ImageLayout::eUndefined, all,
+            preserve ? vk::AccessFlagBits2::eShaderWrite : vk::AccessFlagBits2::eNone,
+            vk::PipelineStageFlagBits2::eComputeShader,
+            vk::AccessFlagBits2::eShaderRead | vk::AccessFlagBits2::eShaderWrite);
     const vk::DescriptorImageInfo stencil_info{
         .imageView = CachedView(depth, depth_format, vk::ImageAspectFlagBits::eStencil),
         .imageLayout = vk::ImageLayout::eGeneral};
@@ -439,7 +444,7 @@ bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore
          .pImageInfo = &mask_info},
     }};
     // The world's stencil value (frame_20261024-233122_3.txt: 129; characters 0, objects 128).
-    const std::array<u32, 2> push{129u, std::bit_cast<u32>(stencil_value)};
+    const std::array<u32, 3> push{129u, std::bit_cast<u32>(stencil_value), preserve ? 1u : 0u};
     cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, *stencil_reactive_pipeline);
     cmdbuf.pushDescriptorSetKHR(vk::PipelineBindPoint::eCompute, *stencil_reactive_pipeline_layout, 0,
                                 writes);
@@ -519,7 +524,8 @@ void TemporalUpscaler::RunLdr() {
     last_frame = now;
 
     const bool stencil_mask =
-        !UseFsr4() && RecordStencilReactive(cmdbuf, depth, depth_format, w, h);
+        !UseFsr4() && (RecordStencilReactive(cmdbuf, depth, depth_format, w, h) ||
+                       (mask_ready && ReactiveOn()));
     // SPARTAN_DUMP_TRIGGER: the composite before FSR, motion, depth, then FSR's output.
     const int dump = DumpFrame();
     if (dump >= 0) {
@@ -787,6 +793,7 @@ bool TemporalUpscaler::EnsureResources(u32 w, u32 h, u32 ow, u32 oh, bool hdr) {
     taa_next = 0;
     CreatePipelines();
     opaque_valid = false;
+    mask_ready = false;
     reset = true;
     resources_ready = true;
     resources_fsr4 = use_fsr4;
@@ -892,7 +899,7 @@ void TemporalUpscaler::CreatePipelines() {
         }));
         const vk::PushConstantRange push{.stageFlags = vk::ShaderStageFlagBits::eCompute,
                                          .offset = 0,
-                                         .size = 2 * sizeof(u32)};
+                                         .size = 3 * sizeof(u32)};
         stencil_reactive_pipeline_layout = Check(device.createPipelineLayoutUnique({
             .setLayoutCount = 1,
             .pSetLayouts = &*stencil_reactive_desc_layout,
@@ -1116,8 +1123,7 @@ void TemporalUpscaler::ExtraSharpen(vk::CommandBuffer cmdbuf, vk::Image target, 
 }
 
 void TemporalUpscaler::OnBlendedSceneDraw() {
-    // The mask is opt-in (menu, SPARTAN_REACTIVE=1): on thin mist it traded trails for
-    // jitter shimmer, which looked worse. Toggle 1 << 27 switches it off.
+    // Water and particles need color changes beyond the scene stencil.
     if (snapshot_taken || !scene_color || !Active() || !ReactiveOn()) {
         return;
     }
@@ -1370,7 +1376,12 @@ void TemporalUpscaler::Run() {
                 vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderWrite,
                 vk::ImageLayout::eGeneral, all, vk::AccessFlagBits2::eShaderRead);
 
-    const bool has_reactive = mask_ready || RecordReactive(input_color_view);
+    mask_ready = mask_ready || RecordReactive(input_color_view);
+    bool has_reactive = mask_ready;
+    if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerFsr3 &&
+        input_depth == depth.GetImage()) {
+        has_reactive = RecordStencilReactive(cmdbuf, depth, depth_format, w, h) || has_reactive;
+    }
 
     const auto now = std::chrono::steady_clock::now();
     float frame_ms = std::chrono::duration<float, std::milli>(now - last_frame).count();
@@ -1926,6 +1937,8 @@ void TemporalUpscaler::RunScaled() {
 
     // spartanport: FSR 4 writes its HDR-format output, copied into the output-size UI image.
     if (UseFsr4() || UseDlss() || SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+        const auto [fw, fh] = UiComposition::TemporalOutputSize(
+            w, h, ow, oh, UseDlss() && Dlss::QualityForScale(float(ow) / float(w)) == 0);
         barrier(vk::Image(output_image), vk::ImageAspectFlagBits::eColor,
                 vk::ImageLayout::eUndefined, all, vk::AccessFlagBits2::eNone,
                 vk::ImageLayout::eGeneral, all, rw);
@@ -1946,7 +1959,7 @@ void TemporalUpscaler::RunScaled() {
         }
         if (ok4) {
             if (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa) {
-                ExtraSharpen(cmdbuf, vk::Image(output_image), false, ow, oh);
+                ExtraSharpen(cmdbuf, vk::Image(output_image), false, fw, fh);
             }
             barrier(vk::Image(output_image), vk::ImageAspectFlagBits::eColor,
                     vk::ImageLayout::eGeneral, all, rw, vk::ImageLayout::eGeneral,
@@ -1957,7 +1970,7 @@ void TemporalUpscaler::RunScaled() {
             const vk::ImageBlit region{
                 .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
                 .srcOffsets = std::array{vk::Offset3D{0, 0, 0},
-                                         vk::Offset3D{s32(ow), s32(oh), 1}},
+                                         vk::Offset3D{s32(fw), s32(fh), 1}},
                 .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
                 .dstOffsets = std::array{vk::Offset3D{0, 0, 0},
                                          vk::Offset3D{s32(ow), s32(oh), 1}},
@@ -1975,7 +1988,7 @@ void TemporalUpscaler::RunScaled() {
                 DumpImages(instance, scheduler, cmdbuf, dump,
                            {{color_image, source_width, source_height, 4, "input", "rgba"},
                             {vk::Image(motion_image), w, h, 4, "motion", "rg16f"},
-                            {vk::Image(output_image), ow, oh, 8, "output", "rgba16f"}});
+                            {vk::Image(output_image), fw, fh, 8, "output", "rgba16f"}});
                 DumpImages(instance, scheduler, cmdbuf, dump,
                            {{depth_image, source_width, source_height, 4, "depth", "f32",
                              vk::ImageAspectFlagBits::eDepth}});
@@ -2429,7 +2442,9 @@ bool TemporalUpscaler::RecordDlss(vk::CommandBuffer cmdbuf, const Dlss::Resource
                                   const Dlss::Resource& depth, u32 w, u32 h, u32 ow, u32 oh,
                                   float frame_ms, bool hdr) {
     Dlss* dlss = Dlss::Get();
-    const Dlss::FeatureDesc desc{w, h, ow, oh, Dlss::QualityForScale(float(ow) / float(w)), hdr};
+    const int quality = Dlss::QualityForScale(float(ow) / float(w));
+    const auto [fw, fh] = UiComposition::TemporalOutputSize(w, h, ow, oh, quality == 0);
+    const Dlss::FeatureDesc desc{w, h, fw, fh, quality, hdr};
     bool ok = true;
     if (!dlss->HasFeature(desc)) {
         // The previous feature may still be in use by submitted work; `cmdbuf` stays open.
@@ -2437,8 +2452,31 @@ bool TemporalUpscaler::RecordDlss(vk::CommandBuffer cmdbuf, const Dlss::Resource
         dlss->ReleaseFeature();
         ok = dlss->CreateFeature(cmdbuf, desc);
         reset = true;
+        if (ok) {
+            // The Insert menu's status line and the log: the mode DLSS really runs.
+            static constexpr const char* modes[] = {"DLAA", "Quality", "Balanced", "Performance",
+                                                    "Ultra Performance"};
+            static std::string status;
+            status = std::string("DLSS ") + modes[std::clamp(desc.quality, 0, 4)] + ", " +
+                     std::to_string(w) + "x" + std::to_string(h) + " -> " + std::to_string(fw) +
+                     "x" + std::to_string(fh);
+            if (fw != ow || fh != oh) {
+                status += " (display " + std::to_string(ow) + "x" + std::to_string(oh) + ")";
+            }
+            std::printf("Upscaler: %s\n", status.c_str());
+            SpartanSettings::Get().upscaler_status = status.c_str();
+        }
     }
     if (ok) {
+        Dlss::Resource bias_mask{};
+        auto& stencil_depth = texture_cache.GetImage(camera_motion.Depth());
+        // Reduced depth copies do not carry stencil: only read the depth used by this frame.
+        const bool stencil_mask = depth.image == stencil_depth.GetImage() &&
+            RecordStencilReactive(cmdbuf, stencil_depth, depth.format, w, h);
+        if (stencil_mask || (mask_ready && ReactiveOn())) {
+            bias_mask = {vk::Image(reactive_image), *reactive_view, vk::Format::eR8Unorm,
+                         vk::ImageAspectFlagBits::eColor, w, h};
+        }
         // The jitter and motion vectors FSR 3 gets: render pixels, current to previous.
         const float sign = SpartanToggle::Disabled(1u << 26) ? -1.0f : 1.0f;
         const auto& settings = SpartanSettings::Get();
@@ -2449,6 +2487,7 @@ bool TemporalUpscaler::RecordDlss(vk::CommandBuffer cmdbuf, const Dlss::Resource
                        vk::ImageAspectFlagBits::eColor, w, h},
             .output = {vk::Image(output_image), *output_view, vk::Format::eR16G16B16A16Sfloat,
                        vk::ImageAspectFlagBits::eColor, ow, oh},
+            .bias_mask = bias_mask,
             .jitter_x = sign * jitter[0],
             .jitter_y = sign * jitter[1],
             .reset = reset,

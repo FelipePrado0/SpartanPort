@@ -53,12 +53,11 @@ public:
     /// A draw into a full-size RGBA16F target with the scene depth: the scene color.
     void OnSceneColor(VideoCore::ImageId color);
 
-    /// A blended (transparent) draw into the scene color that is not a full-screen pass: the
+    /// A blended (transparent) draw into the scene color:
     /// first one of a frame snapshots the opaque scene for the reactive mask.
     void OnBlendedSceneDraw();
 
-    /// A full-screen pass into the scene color: after a snapshot, the reactive mask is taken
-    /// before it (the fog composite rewrites every pixel).
+    /// Captures the finished HDR transparencies before the LDR composite replaces scene_color.
     void OnSceneComposite();
 
     /// Before a compute dispatch: the post-processing combine shader triggers the upscale.

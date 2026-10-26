@@ -8,11 +8,12 @@
 layout(local_size_x = 8, local_size_y = 8) in;
 
 layout(binding = 0) uniform utexture2D stencil_tex;
-layout(binding = 1, r8) uniform writeonly image2D reactive;
+layout(binding = 1, r8) uniform image2D reactive;
 
 layout(push_constant) uniform Params {
     uint world;  // the static world's stencil value
     float value; // reactivity of everything else
+    uint preserve; // combine with this frame's transparency mask
 };
 
 void main() {
@@ -21,5 +22,6 @@ void main() {
         return;
     }
     const uint s = texelFetch(stencil_tex, pixel, 0).r;
-    imageStore(reactive, pixel, vec4(s == world ? 0.0 : value));
+    const float particles = preserve != 0 ? imageLoad(reactive, pixel).r : 0.0;
+    imageStore(reactive, pixel, vec4(max(particles, s == world ? 0.0 : value)));
 }

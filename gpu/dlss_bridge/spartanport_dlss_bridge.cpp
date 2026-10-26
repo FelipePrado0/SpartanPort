@@ -20,6 +20,7 @@ namespace {
 
 constexpr char ProjectId[] = "42359704-c9f3-4806-9fb5-d469000fdb8a";
 constexpr char EngineVersion[] = "spartanport-windows";
+static_assert(NVSDK_NGX_DLSS_Hint_Render_Preset_M == 13);
 
 struct State {
     SpartanDlssLogFn log{};
@@ -206,12 +207,14 @@ int32_t Evaluate(VkCommandBuffer command, const SpartanDlssEvaluate* evaluate) {
     auto depth = Wrap(evaluate->depth, false);
     auto motion = Wrap(evaluate->motion, false);
     auto output = Wrap(evaluate->output, true);
+    auto bias_mask = Wrap(evaluate->bias_mask, false);
     NVSDK_NGX_VK_DLSS_Eval_Params parameters{};
     parameters.Feature.pInColor = &color;
     parameters.Feature.pInOutput = &output;
     parameters.Feature.InSharpness = evaluate->sharpness;
     parameters.pInDepth = &depth;
     parameters.pInMotionVectors = &motion;
+    parameters.pInBiasCurrentColorMask = evaluate->bias_mask.image ? &bias_mask : nullptr;
     parameters.InRenderSubrectDimensions = {state.feature_desc.input_width,
                                             state.feature_desc.input_height};
     parameters.InJitterOffsetX = evaluate->jitter_x;
