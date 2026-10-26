@@ -89,7 +89,7 @@ static inline bool ds_set_triggers(SDL_Gamepad *g, const DsTrigger *right, const
     ds_sent.right=*right; ds_sent.left=*left; ds_sent.sent_to=g;
     return true;
 }
-static inline void ds_forget(void) { ds_sent.sent_to=NULL; }
+static inline void ds_forget(void);
 
 /* The light bar colour for a QTE prompt type (qte_hook.h): the PlayStation colour of its button
  * (0 triangle green, 1 circle red, 2 cross blue, 3 square pink); a stick rotation (4..9) is white.
@@ -112,6 +112,32 @@ static inline SDL_AudioDeviceID ds_speaker_device(void) {
     }
     SDL_free(devices);
     return found;
+}
+
+/* The pad's own speaker level, which Windows' volume does not reach: speaker volume (byte 5, the
+ * top of the range PS5 games use) and the speaker preamp gain (byte 37 bits 0-2, 0..7), each
+ * applied only with its enable bit (byte 0 bit 5, byte 1 bit 7). */
+enum { DS_SPEAKER_VOLUME=0x64, DS_SPEAKER_GAIN_DEFAULT=4 };
+static struct { int gain; SDL_Gamepad *sent_to; } ds_speaker_sent __attribute__((unused));
+static inline bool ds_set_speaker(SDL_Gamepad *g, int gain) {
+    if (!ds_is_dualsense(g)) return false;
+    if (ds_speaker_sent.sent_to==g && ds_speaker_sent.gain==gain) return true;
+    uint8_t effects[DS_EFFECTS_SIZE];
+    memset(effects,0,sizeof(effects));
+    effects[0]=0x20; effects[5]=DS_SPEAKER_VOLUME;
+    effects[1]=0x80; effects[37]=(uint8_t)(gain & 7);
+    if (!SDL_SendGamepadEffect(g,effects,sizeof(effects))) return false;
+    ds_speaker_sent.gain=gain; ds_speaker_sent.sent_to=g;
+    printf("Runtime: pad speaker volume 0x%x, preamp gain %d\n",DS_SPEAKER_VOLUME,gain);
+    return true;
+}
+static inline void ds_forget(void) { ds_sent.sent_to=NULL; ds_speaker_sent.sent_to=NULL; }
+/* "speakergain=N" (0..7) among the extras' names, or the default. */
+static inline int ds_parse_speaker_gain(const char *text) {
+    const char *at=text ? SDL_strcasestr(text,"speakergain=") : NULL;
+    if (!at) return DS_SPEAKER_GAIN_DEFAULT;
+    const int gain=atoi(at+12);
+    return gain<0 ? 0 : gain>7 ? 7 : gain;
 }
 
 /* SPARTAN_DUALSENSE="triggers,hitflash,motion,gyroaim,qte,speaker" (or "all"): the extras that go
@@ -141,6 +167,7 @@ static inline unsigned ds_parse_features(const char *text) {
 /* The file dualsense.txt in SPARTAN_DATA_DIR (or SPARTAN_DUALSENSE_FILE) overrides the variable
  * while it exists, and is read again every second: the extras can be switched while the game runs.
  * speaker is the exception, taken when the game opens its audio ports at start. */
+static int ds_gain_read __attribute__((unused))=DS_SPEAKER_GAIN_DEFAULT;
 static inline unsigned ds_features(void) {
     static unsigned features, logged;
     static uint64_t checked;
@@ -158,11 +185,15 @@ static inline unsigned ds_features(void) {
         fclose(f);
         text[n]=0;
         features=ds_parse_features(text);
+        ds_gain_read=ds_parse_speaker_gain(text);
     } else {
         const char *text=getenv("SPARTAN_DUALSENSE");
         features=text ? ds_parse_features(text) : 0;
+        ds_gain_read=ds_parse_speaker_gain(text);
     }
     if (features!=logged) { logged=features; printf("Runtime: DualSense extras 0x%x\n",features); }
     return features;
 }
+/* The speaker preamp gain from the same place as the extras. */
+static inline int ds_speaker_gain(void) { ds_features(); return ds_gain_read; }
 #endif
