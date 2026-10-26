@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -116,27 +117,52 @@ static inline SDL_AudioDeviceID ds_speaker_device(void) {
 /* SPARTAN_DUALSENSE="triggers,hitflash,motion,gyroaim,qte,speaker" (or "all"): the extras that go
  * beyond what the game asks the pad for. All off by default; gyroaim includes motion. */
 enum { DS_TRIGGERS=1, DS_HITFLASH=2, DS_MOTION=4, DS_GYROAIM=8, DS_QTE=16, DS_SPEAKER=32 };
-static inline unsigned ds_features(void) {
-    static unsigned features; static bool loaded;
-    if (loaded) return features;
-    loaded=true;
-    const char *text=getenv("SPARTAN_DUALSENSE");
-    if (!text) return features;
-    char copy[128];
-    if (strlen(text)>=sizeof(copy)) return features;
-    strcpy(copy,text);
-    for (char *name=copy,*next;name;name=next) {
-        next=strchr(name,',');
-        if (next) *next++=0;
-        while (*name==' ') ++name;
+/* Names separated by commas, spaces or new lines; unknown names are ignored. */
+static inline unsigned ds_parse_features(const char *text) {
+    unsigned features=0;
+    char name[32];
+    size_t n=0;
+    for (const char *p=text;;++p) {
+        const char c=*p;
+        if (c && c!=',' && c!=' ' && c!='\t' && c!='\r' && c!='\n') { if (n<sizeof(name)-1) name[n++]=c; continue; }
+        name[n]=0;
         if (!SDL_strcasecmp(name,"all")) features|=DS_TRIGGERS|DS_HITFLASH|DS_MOTION|DS_GYROAIM|DS_QTE|DS_SPEAKER;
-        else if (!SDL_strcasecmp(name,"qte")) features|=DS_QTE;
-        else if (!SDL_strcasecmp(name,"speaker")) features|=DS_SPEAKER;
         else if (!SDL_strcasecmp(name,"triggers")) features|=DS_TRIGGERS;
         else if (!SDL_strcasecmp(name,"hitflash")) features|=DS_HITFLASH;
         else if (!SDL_strcasecmp(name,"motion")) features|=DS_MOTION;
         else if (!SDL_strcasecmp(name,"gyroaim")) features|=DS_GYROAIM|DS_MOTION;
+        else if (!SDL_strcasecmp(name,"qte")) features|=DS_QTE;
+        else if (!SDL_strcasecmp(name,"speaker")) features|=DS_SPEAKER;
+        n=0;
+        if (!c) return features;
     }
+}
+
+/* The file dualsense.txt in SPARTAN_DATA_DIR (or SPARTAN_DUALSENSE_FILE) overrides the variable
+ * while it exists, and is read again every second: the extras can be switched while the game runs.
+ * speaker is the exception, taken when the game opens its audio ports at start. */
+static inline unsigned ds_features(void) {
+    static unsigned features, logged;
+    static uint64_t checked;
+    static bool loaded;
+    const uint64_t now=SDL_GetTicks();
+    if (loaded && now-checked<1000) return features;
+    loaded=true; checked=now;
+    char path[1024];
+    const char *file=getenv("SPARTAN_DUALSENSE_FILE"), *dir=getenv("SPARTAN_DATA_DIR");
+    if (!file) { snprintf(path,sizeof(path),"%s%sdualsense.txt",dir ? dir : "",dir ? "/" : ""); file=path; }
+    FILE *f=fopen(file,"rb");
+    if (f) {
+        char text[256];
+        const size_t n=fread(text,1,sizeof(text)-1,f);
+        fclose(f);
+        text[n]=0;
+        features=ds_parse_features(text);
+    } else {
+        const char *text=getenv("SPARTAN_DUALSENSE");
+        features=text ? ds_parse_features(text) : 0;
+    }
+    if (features!=logged) { logged=features; printf("Runtime: DualSense extras 0x%x\n",features); }
     return features;
 }
 #endif
