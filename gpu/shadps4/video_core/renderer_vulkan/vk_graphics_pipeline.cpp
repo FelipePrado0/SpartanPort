@@ -261,11 +261,18 @@ GraphicsPipeline::GraphicsPipeline(
         });
     }
 
-    const vk::PipelineShaderStageRequiredSubgroupSizeCreateInfo subgroup_size_ci = {
-        .requiredSubgroupSize = 64,
-    };
+    // spartanport: one create info per stage, each pinned to the size the policy picks for it.
+    boost::container::static_vector<vk::PipelineShaderStageRequiredSubgroupSizeCreateInfo,
+                                    MaxShaderStages>
+        subgroup_size_cis;
     for (auto& stage : shader_stages) {
-        stage.pNext = instance.IsSubgroupSize64Supported() ? &subgroup_size_ci : nullptr;
+        const auto pinned = instance.PinnedSubgroupSize(stage.stage);
+        if (pinned) {
+            subgroup_size_cis.push_back({.requiredSubgroupSize = *pinned});
+            stage.pNext = &subgroup_size_cis.back();
+        } else {
+            stage.pNext = nullptr;
+        }
     }
 
     const auto depth_format =
