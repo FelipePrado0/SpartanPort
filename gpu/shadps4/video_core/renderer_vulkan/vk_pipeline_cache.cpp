@@ -402,7 +402,8 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
     // spartanport: in last_run.log whatever the GPU log level.
     const char* pin_mode = std::getenv("SPARTAN_SUBGROUP_PIN");
     std::printf("GPU: subgroup policy: compute pinned to %u, fragment pinned to %u, "
-                "LDS barriers %s (device %u lanes, %u to %u, pinnable stages %s, SPARTAN_SUBGROUP_PIN=%s)\n",
+                "LDS barriers %s (device %u lanes, %u to %u, pinnable stages %s, "
+                "SPARTAN_SUBGROUP_PIN=%s)\n",
                 instance.PinnedSubgroupSize(vk::ShaderStageFlagBits::eCompute).value_or(0),
                 instance.PinnedSubgroupSize(vk::ShaderStageFlagBits::eFragment).value_or(0),
                 profile.needs_lds_barriers ? "on" : "off", instance.SubgroupSize(),
