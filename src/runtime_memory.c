@@ -2,8 +2,9 @@
  * protection changes and queries. One sparse memfd backs the whole direct
  * pool, so any mapping of any physical range aliases the same storage.
  * Windows: a pagefile-backed section plays the memfd's part, and the PS4 user range is
- * reserved as one placeholder that views of the section replace (VirtualAlloc2/MapViewOfFile3,
- * as shadPS4 does); see the "host mappings" section below.
+ * reserved as one placeholder (one per free part when something else holds some of it) that
+ * views of the section replace (VirtualAlloc2/MapViewOfFile3, as shadPS4 does); see the
+ * "host mappings" section below.
  * Guest addresses are placed below 1 TiB (PS4 user range): GPU descriptors
  * encode 40-bit addresses, so host-default 0x7f... addresses would not fit. */
 #define _GNU_SOURCE
@@ -94,13 +95,25 @@ static uint64_t live_bytes, flexible_bytes;
 
 static int valid_alignment(uint64_t a) { return a >= PAGE && a <= POOL_SIZE && !(a & (a-1)); }
 static uint64_t align_up(uint64_t n, uint64_t a) { return (n+a-1) & ~(a-1); }
+/* Parts of the guest range something else in the process held before the game started (#1075:
+ * usually a DLL another program loads into every process; Windows only). Guest memory is placed
+ * around them, and a fixed guest mapping there fails as on a full PS4 range. */
+#define FOREIGN_LIMIT 64
+typedef struct { uintptr_t start, end; } Foreign;
+static Foreign foreign[FOREIGN_LIMIT];
+static size_t foreign_count;
+/* End of a foreign range overlapping [start,end), or 0. */
+static uintptr_t foreign_overlap(uintptr_t start, uintptr_t end) {
+    for (size_t i=0;i<foreign_count;++i) if (foreign[i].start<end && start<foreign[i].end) return foreign[i].end;
+    return 0;
+}
 static int host_prot(int prot) {
     /* GPU read/write bits (0x10/0x20) need host access for the future GPU backend. */
     return ((prot & 0x11) ? PROT_READ : 0) | ((prot & 0x22) ? PROT_WRITE|PROT_READ : 0) | ((prot & 4) ? PROT_EXEC|PROT_READ : 0);
 }
 #ifdef _WIN32
 /* ---- host mappings (Windows) ----
- * [USER_MIN,USER_MAX) is covered by regions, each one placeholder or one view of the
+ * [USER_MIN,USER_MAX), less its foreign parts, is covered by regions, each one placeholder or one view of the
  * section. Mapping a range carves it out as a single placeholder first: views overlapping
  * it are unmapped, placeholders coalesced and split, and the parts of views outside the
  * range mapped again with the page protections they had (GPU page tracking included). */
@@ -135,12 +148,57 @@ static void region_insert(size_t at, HostRegion r) {
 static void region_erase(size_t at, size_t n) {
     memmove(regions+at,regions+at+n,(region_count-at-n)*sizeof(*regions)); region_count-=n;
 }
+static void describe_foreign(const MEMORY_BASIC_INFORMATION *m, char *out, size_t size) {
+    char path[MAX_PATH]="";
+    if (m->Type==MEM_IMAGE && GetModuleFileNameA((HMODULE)m->AllocationBase,path,sizeof(path))) {
+        const char *name=strrchr(path,'\\');
+        snprintf(out,size,"module %s",name ? name+1 : path);
+    } else {
+        snprintf(out,size,"%s memory",m->Type==MEM_IMAGE ? "module" : m->Type==MEM_MAPPED ? "mapped" : "private");
+    }
+}
+/* Reserves each free part of the range as its own placeholder. Guest mappings never span a
+ * foreign range (place), so carve_host never coalesces placeholders across one. */
+static void reserve_around_foreign(void) {
+    const uintptr_t grain=UINT64_C(0x10000); /* Windows' allocation granularity */
+    for (uintptr_t at=USER_MIN; at<USER_MAX;) {
+        MEMORY_BASIC_INFORMATION m;
+        if (!VirtualQuery((void *)at,&m,sizeof(m))) win_fail("VirtualQuery",at,0);
+        uintptr_t end=(uintptr_t)m.BaseAddress+m.RegionSize;
+        if (end>USER_MAX) end=USER_MAX;
+        if (m.State==MEM_FREE) {
+            uintptr_t a=align_up(at,grain), b=end & ~(grain-1);
+            if (a<b) {
+                if (!VirtualAlloc2(NULL,(void *)a,b-a,MEM_RESERVE|MEM_RESERVE_PLACEHOLDER,PAGE_NOACCESS,NULL,0))
+                    win_fail("reserving the PS4 address range around memory already in use",a,b-a);
+                region_insert(region_count,(HostRegion){a,b,0,0});
+            }
+        } else {
+            /* Rounded out to the granularity: the free sliver after an allocation's last page
+             * (allocations start on the granularity, not always end on it) is left alone too. */
+            char what[MAX_PATH+16];
+            describe_foreign(&m,what,sizeof(what));
+            uintptr_t a=at & ~(grain-1), b=align_up(end,grain);
+            if (foreign_count && foreign[foreign_count-1].end>=a) foreign[foreign_count-1].end=b;
+            else if (foreign_count==FOREIGN_LIMIT) win_fail("reserving the PS4 address range (too many parts in use)",at,end-at);
+            else foreign[foreign_count++]=(Foreign){a,b};
+            printf("Runtime: %p-%p of the PS4 address range was already in use (%s); the game's "
+                   "memory is placed around it\n",(void *)at,(void *)end,what);
+        }
+        at=end;
+    }
+    if (!region_count) win_fail("reserving the PS4 address range (none of it is free)",USER_MIN,USER_MAX-USER_MIN);
+}
 /* The guest range is reserved before anything else can be placed there (runtime_start). */
 void runtime_memory_reserve(void) {
     if (region_count) return;
-    if (!VirtualAlloc2(NULL,(void *)USER_MIN,USER_MAX-USER_MIN,MEM_RESERVE|MEM_RESERVE_PLACEHOLDER,PAGE_NOACCESS,NULL,0))
+    if (VirtualAlloc2(NULL,(void *)USER_MIN,USER_MAX-USER_MIN,MEM_RESERVE|MEM_RESERVE_PLACEHOLDER,PAGE_NOACCESS,NULL,0)) {
+        region_insert(0,(HostRegion){USER_MIN,USER_MAX,0,0});
+        return;
+    }
+    if (GetLastError()!=ERROR_INVALID_ADDRESS)
         win_fail("reserving the PS4 address range (link with --disable-high-entropy-va)",USER_MIN,USER_MAX-USER_MIN);
-    region_insert(0,(HostRegion){USER_MIN,USER_MAX,0,0});
+    reserve_around_foreign();
 }
 static void view_map(const HostRegion *r, DWORD protect) {
     DWORD initial=protect==PAGE_NOACCESS ? PAGE_READWRITE : protect, old;
@@ -380,9 +438,11 @@ static int overlaps(uintptr_t start, uintptr_t end, int ignore_reserved) {
 /* First-fit search in the PS4 user range, starting from the hint. */
 static uintptr_t find_free(uintptr_t hint, uint64_t size, uint64_t alignment) {
     uintptr_t at=align_up(hint<USER_MIN ? USER_MIN : hint, alignment);
-    for (size_t i=vma_index(at); at+size<=USER_MAX; ++i) {
+    for (size_t i=vma_index(at); at+size<=USER_MAX;) {
+        uintptr_t taken=foreign_overlap(at,at+size);
+        if (taken) { at=align_up(taken,alignment); i=vma_index(at); continue; }
         if (i==vma_count || vmas[i].start>=at+size) return at;
-        at=align_up(vmas[i].end,alignment);
+        at=align_up(vmas[i++].end,alignment);
     }
     return 0;
 }
@@ -404,6 +464,7 @@ static int32_t place(void **inout, uint64_t size, int prot, int flags, uint64_t 
     if (flags & MAP_FIXED_FLAG) {
         if (!address || address%PAGE) return INVALID;
         if ((flags & MAP_NO_OVERWRITE) && overlaps(address,address+size,1)) return NO_MEMORY;
+        if (foreign_overlap(address,address+size)) return NO_MEMORY;
     } else {
         address=find_free(address,size,alignment);
         if (!address) return NO_MEMORY;

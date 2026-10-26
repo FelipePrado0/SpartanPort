@@ -9,6 +9,10 @@
   <a href="https://trendshift.io/repositories/299469?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-299469" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/299469/daily?language=C%2B%2B" alt="FelipePrado0%2FSpartanPort | Trendshift" width="250" height="55"/></a>
 </div>
 
+<p align="center">
+  <a href="https://discord.gg/WYvr634563"><img src="https://img.shields.io/badge/OFFICIAL_DISCORD-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Join the official SpartanPort Discord" height="40"></a>
+</p>
+
 **English** | [Português (Brasil)](https://github.com/FelipePrado0/SpartanPort/blob/main/README.pt-BR.md) | [Español](https://github.com/FelipePrado0/SpartanPort/blob/main/README.es.md)
 
 **SpartanPort** is an unofficial PC port of **God of War III Remastered** (PlayStation 4) for Windows 10/11
