@@ -26,7 +26,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: isolated-pr-validation
+  group: isolated-pr-validation-${{ inputs.pr || '1007' }}
   cancel-in-progress: false
 
 env:
