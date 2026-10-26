@@ -19,11 +19,11 @@ y Linux (AppImage experimental).
 > Este proyecto no está afiliado a Sony Interactive Entertainment ni a Santa Monica Studio, ni cuenta con su respaldo.
 > God of War es una marca registrada de Sony Interactive Entertainment.
 
-> **Antes gow3_pc.** Actualizar desde la 2.5.0 con el launcher conserva tus partidas y ajustes: en el
-> primer inicio, los ajustes del juego (`gow3.ini`), los del launcher y, en Linux, la carpeta de datos
-> (`~/.local/share/gow3`) se copian a sus nombres nuevos. Los archivos viejos quedan donde estaban y
-> los accesos directos existentes siguen funcionando. En Linux, el AppImage ahora es
-> `spartanport-x86_64.AppImage`: actualizá las opciones de inicio de Steam que usan el nombre viejo.
+> **Antes gow3_pc.** Las versiones anteriores a la 2.8.0 no se migran: descargá la 2.8.0 de la
+> [página de releases](https://github.com/FelipePrado0/SpartanPort/releases) e instalala desde cero.
+> En Windows, copiá `user/`, `mods/`, `spartanport.ini` y `settings.json` de la carpeta vieja para
+> conservar tus partidas y ajustes. En Linux, reemplazá el AppImage; los datos de antes del cambio
+> de nombre (`~/.local/share/gow3`) no se mueven.
 
 ## Índice
 

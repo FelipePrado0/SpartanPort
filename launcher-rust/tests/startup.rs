@@ -9,7 +9,7 @@ use spartanport_launcher::core::i18n::launcher_language;
 use spartanport_launcher::core::paths::Paths;
 use spartanport_launcher::core::release::ReleaseId;
 use spartanport_launcher::core::settings::app_defaults;
-use spartanport_launcher::startup::{migrates, route, route_on, start, Route};
+use spartanport_launcher::startup::{route, route_on, start, Route};
 use spartanport_launcher::ui::app::{
     self, centred_position, fitted_window, window_message, Message, State, WINDOW_SIZE,
 };
@@ -18,7 +18,7 @@ use spartanport_launcher::ui::theme::window_zoom;
 #[test]
 fn arguments_route_to_their_roles() {
     let none: [&str; 0] = [];
-    assert_eq!(route(&none), Route::Launcher { migrate: true });
+    assert_eq!(route(&none), Route::Launcher);
     assert_eq!(route(&["--version"]), Route::Version);
     // The update installer: `--install-update TARGET PID`, on Windows only.
     let update = ["--install-update", r"C:\Port", "1234"];
@@ -29,25 +29,22 @@ fn arguments_route_to_their_roles() {
             pid: 1234
         }
     );
-    // Not the installer elsewhere, so it is the window, and it still does not migrate.
-    assert_eq!(route_on(&update, false), Route::Launcher { migrate: false });
+    // Not the installer elsewhere, so it is the window.
+    assert_eq!(route_on(&update, false), Route::Launcher);
     assert_eq!(
         route_on(&["--install-update", "a.zip"], true),
-        Route::Launcher { migrate: false }
+        Route::Launcher
     );
     assert_eq!(
         route_on(&["--install-update", "a", "1", "b"], true),
-        Route::Launcher { migrate: false }
+        Route::Launcher
     );
     // `--script` is an ordinary argument now.
-    assert_eq!(
-        route(&["--script", "prepare.py"]),
-        Route::Launcher { migrate: true }
-    );
+    assert_eq!(route(&["--script", "prepare.py"]), Route::Launcher);
     assert_eq!(route(&["--script", "x.py", "--version"]), Route::Version);
     // Anything else opens the window; the Python ignores unknown arguments too.
-    assert_eq!(route(&["--fullscreen"]), Route::Launcher { migrate: true });
-    assert_eq!(route(&["play"]), Route::Launcher { migrate: true });
+    assert_eq!(route(&["--fullscreen"]), Route::Launcher);
+    assert_eq!(route(&["play"]), Route::Launcher);
 }
 
 #[test]
@@ -84,18 +81,8 @@ fn run_carries_everything_after_it() {
 #[test]
 fn run_and_play_are_their_own_routes() {
     // `--play` counts anywhere, as in the Python `main`.
-    assert_eq!(route(&["--play"]), Route::Play { migrate: true });
-    assert_eq!(
-        route(&["--fullscreen", "--play"]),
-        Route::Play { migrate: true }
-    );
-}
-
-#[test]
-fn the_update_installer_does_not_migrate() {
-    assert!(!migrates(&["--install-update", r"C:\P", "1"]));
-    assert!(migrates(&["--play"]));
-    assert!(migrates::<&str>(&[]));
+    assert_eq!(route(&["--play"]), Route::Play);
+    assert_eq!(route(&["--fullscreen", "--play"]), Route::Play);
 }
 
 #[cfg(windows)]

@@ -38,11 +38,11 @@ fn main() {
             };
             std::process::exit(runner::run(run))
         }
-        Route::Play { migrate } => {
-            // As the Python `main`: the old name's files and the settings first.
+        Route::Play => {
+            // As the Python `main`: the start-up steps and the settings first.
             startup::apply_to_process(&context);
             let paths = &context.paths;
-            startup::prepare(paths, migrate);
+            startup::prepare(paths);
             let settings = load_app_settings(paths);
             // Without a usable game folder there is nothing to play yet: the window opens instead.
             if Installation::read(
@@ -80,10 +80,10 @@ fn main() {
             );
             std::process::exit(code)
         }
-        Route::Launcher { migrate } => {
+        Route::Launcher => {
             // Before the folders below are read from the environment.
             startup::apply_to_process(&context);
-            startup::prepare(&context.paths, migrate);
+            startup::prepare(&context.paths);
             open_window(context.paths);
         }
     }

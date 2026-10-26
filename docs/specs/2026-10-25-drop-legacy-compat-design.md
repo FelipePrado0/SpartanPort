@@ -1,6 +1,6 @@
 # Sem compatibilidade com as instalações anteriores à 2.8.0
 
-Data: 2026-10-25. Estado: proposta.
+Data: 2026-10-25. Estado: implementado (branch worktree-launcher-identity, 2026-10-26).
 
 ## 1. Objetivo
 
@@ -119,3 +119,15 @@ Ficam, por não serem do nome antigo nem do pacote Python, e sim do formato dos 
 - `docs/specs/2026-10-23-rust-cutover-design.md` §4.1: as cópias com os nomes antigos.
 - `launcher-rust/src/core/legacy.rs`: o módulo apagado ("Delete this module (and its callers)
   three releases after the rename").
+
+## 9. Desvios
+
+- O grep final de §5 imprime as linhas de dois testes que fixam que os nomes antigos são ignorados
+  (`env.rs` `the_old_gow3_names_are_not_forwarded`, `settings.rs`
+  `a_settings_file_at_the_old_location_is_ignored`); o resto do código não cita os nomes antigos.
+- Comentários e docs fora da lista de §3.2 também foram corrigidos por descreverem o que saiu: os
+  docs de `Context` e `start` em `startup.rs`, o comentário da rota `Play` em `main.rs`, o de
+  `state_in` em `tests/ui_navigation.rs` e o da exclusão em `patches.rs`.
+- `patches.rs`: o teste `external_patches_skip_builtin_and_other_games` perdeu a linha que gravava
+  `God_of_War_III_Remastered.xml` (o nome deixou de ser especial; o teste
+  `a_file_named_like_an_older_builds_patch_is_external` cobre o caso).

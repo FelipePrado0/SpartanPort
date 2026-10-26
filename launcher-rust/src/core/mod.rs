@@ -15,7 +15,6 @@ pub mod ini;
 pub mod installation;
 pub mod joysticks;
 pub mod launch;
-pub mod legacy;
 pub mod log;
 pub mod mods;
 pub mod options;
