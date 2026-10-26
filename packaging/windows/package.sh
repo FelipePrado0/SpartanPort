@@ -20,11 +20,6 @@ rm -rf -- out/stage
 mkdir -p "$dest/bin" "$dest/launcher"
 cp "$launcher" "$dest/SpartanPort.exe"
 llvm-strip -o "$dest/Play SpartanPort.exe" out/spartanport-play.exe
-# The same launcher and windowless start under their former names, which installed updaters look for in
-# the download and existing shortcuts point to (core::legacy::LEGACY_EXE and legacy::LEGACY_PLAY_EXE;
-# launcher-rust/tests/packaging.rs checks the names).
-cp "$dest/SpartanPort.exe" "$dest/God of War III.exe"
-cp "$dest/Play SpartanPort.exe" "$dest/Play God of War III.exe"
 cp launcher/spartanport.ico launcher/spartanport.png launcher/logo.png launcher/Cinzel-Black.ttf launcher/OFL-Cinzel.txt "$dest/launcher/"
 cp launcher/BodoniModa.ttf launcher/OFL-BodoniModa.txt "$dest/launcher/"
 # The executables without debug information (out/ keeps the symbols for crash reports).
