@@ -746,7 +746,8 @@ static void apply_dodge(PadData *d) {
  * the game does not see it, except with L1 held (the game's evade is L1 + right stick), L2 held (the
  * items' aim) or a QTE prompt up (any of them: the camera goes back to the game's, which frames the
  * scripted moves better, and the stick reaches the game for a turn). The keyboard's dodge action
- * runs after this and still tilts the stick. Reads before the mouse aim, which only works with L2. */
+ * runs after this and still tilts the stick. Reads before the mouse aim, which only works with L2.
+ * The left stick (and the evade with L1) is turned with the camera: camera_turn_stick. */
 enum { CAMERA_DEADZONE=24, CAMERA_TAP_US=400000 };
 static uint64_t camera_last;
 static struct { bool key_held, r3_held, r3_alone; uint64_t r3_since; } camera_toggle;
@@ -755,6 +756,18 @@ static float camera_axis(uint8_t value) {
     if (abs(v)<CAMERA_DEADZONE) return 0;
     const float t=(float)(abs(v)-CAMERA_DEADZONE)/(127-CAMERA_DEADZONE);
     return (v<0 ? -1.0f : 1.0f)*(t>1 ? 1 : t*t);  /* squared: fine control near the centre */
+}
+/* The game moves Kratos (and aims the evade) relative to its own camera, not the turned one: a
+ * stick direction is turned by the camera's yaw so that up is ahead of the camera on screen. */
+static void camera_turn_stick(uint8_t *x, uint8_t *y) {
+    const float yaw=spartanport_camera_yaw();
+    if (yaw==0 || (*x==128 && *y==128)) return;
+    const float c=cosf(yaw), s=sinf(yaw);
+    const float sx=(float)(*x-128), sy=(float)(128-*y);  /* right, up */
+    const float tx=sx*c-sy*s, ty=sx*s+sy*c;              /* a positive yaw turns the camera left */
+    const float nx=128+tx, ny=128-ty;
+    *x=(uint8_t)(nx<0 ? 0 : nx>255 ? 255 : lroundf(nx));
+    *y=(uint8_t)(ny<0 ? 0 : ny>255 ? 255 : lroundf(ny));
 }
 static void apply_free_camera(PadData *d) {
     const bool key=(d->buttons & CAMERA_TOGGLE)!=0;
@@ -773,10 +786,14 @@ static void apply_free_camera(PadData *d) {
     const uint64_t step=camera_last && d->timestamp>camera_last ? d->timestamp-camera_last : 0;
     camera_last=d->timestamp;
     const float seconds=step>100000 ? 0.1f : (float)step/1e6f;
-    if (!spartanport_camera_on() || qte_prompt_up(d->timestamp)) { spartanport_camera_steer(0,0,seconds,1); return; }
-    if (d->buttons & (BTN_L1|BTN_L2)) return;
-    spartanport_camera_steer(camera_axis(d->right_x),camera_axis(d->right_y),seconds,0);
-    d->right_x=d->right_y=128;
+    if (!spartanport_camera_on() || qte_prompt_up(d->timestamp)) spartanport_camera_steer(0,0,seconds,1);
+    else if (d->buttons & (BTN_L1|BTN_L2)) {
+        if (d->buttons & BTN_L1) camera_turn_stick(&d->right_x,&d->right_y);  /* the evade's direction */
+    } else {
+        spartanport_camera_steer(camera_axis(d->right_x),camera_axis(d->right_y),seconds,0);
+        d->right_x=d->right_y=128;
+    }
+    camera_turn_stick(&d->left_x,&d->left_y);
 }
 
 /* The game's menus (the title menu, the pause menu, the Power Up menu) move a list with the

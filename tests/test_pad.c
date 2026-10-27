@@ -23,6 +23,8 @@ static int camera_steers, camera_recenters;
 int spartanport_camera_stick_enabled(void) { return camera_stick; }
 static int camera_on=1, camera_toggles;
 int spartanport_camera_on(void) { return camera_on; }
+static float camera_yaw;
+float spartanport_camera_yaw(void) { return camera_yaw; }
 void spartanport_camera_toggle(void) { camera_on=!camera_on; ++camera_toggles; }
 void spartanport_camera_steer(float x, float y, float seconds, int recenter) {
     (void)seconds;
@@ -182,6 +184,20 @@ int main(void) {
     inject(path,"camera rx=128");  /* a size of its own: on Windows the file is told apart by mtime and size */
     data=read_pad();
     assert(camera_toggles==2 && camera_on);
+    /* Turned camera: the left stick (and the evade with L1) turns with it, so that up goes ahead of
+     * the camera. Behind Kratos (half a turn) up is the game's down; a quarter turn left, its left. */
+    camera_yaw=3.14159265f;
+    inject(path,"ly=0");
+    data=read_pad();
+    assert(data.left_y==255 && data.left_x>=127 && data.left_x<=129);
+    camera_yaw=1.5707963f;
+    inject(path,"ly=0 lx=128");
+    data=read_pad();
+    assert(data.left_x==0 && data.left_y>=127 && data.left_y<=129);
+    inject(path,"l1 rx=255 ry=128");
+    data=read_pad();
+    assert(data.right_y<=1 && data.right_x>=127 && data.right_x<=129);  /* right turns into the game's up */
+    camera_yaw=0;
     camera_stick=0;
     inject(path,"");
     data=read_pad();

@@ -225,6 +225,20 @@ int main(int argc, char** argv) {
     std::memcpy(node + SPARTAN_CAMERA_NODE_MATRIX, cut, sizeof(cut));
     spartanport_camera_node_written(node, manager);
     assert(!std::memcmp(cut, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(cut)));
+
+    // No yaw limit by default: the camera goes all the way around Kratos. Half a turn puts it on
+    // his other side, at the same distance; a whole turn brings it back where the game had it.
+    spartanport_camera_steer(1, 0, 1.5f, 0);  // 180 degrees
+    spartanport_camera_node_written(node, manager);
+    std::memcpy(turned, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(turned));
+    const float back[3] = {turned[12] - kratos[0], turned[13] - kratos[1], turned[14] - kratos[2]};
+    const float front[3] = {cut[12] - kratos[0], cut[13] - kratos[1], cut[14] - kratos[2]};
+    assert(close_to(back[0], -front[0]) && close_to(back[2], -front[2]) && close_to(back[1], front[1]));
+    spartanport_camera_steer(1, 0, 1.5f, 0);  // 360
+    std::memcpy(node + SPARTAN_CAMERA_NODE_MATRIX, cut, sizeof(cut));  // the controller writes the game's camera
+    spartanport_camera_node_written(node, manager);
+    std::memcpy(turned, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(turned));
+    for (int i = 0; i < 16; ++i) assert(std::fabs(turned[i] - cut[i]) < 1e-3f);
     (void)argc;
     (void)argv;
     std::puts("camera-hook-test: OK");

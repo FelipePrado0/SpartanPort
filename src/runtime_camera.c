@@ -85,11 +85,12 @@ int spartanport_camera_configure(void) {
 /* The right stick turns the camera (runtime_pad.c): SPARTAN_FREE_CAMERA=1, and only with the hook in.
  * SPARTAN_FREE_CAMERA_DISTANCE: the pivot's distance ahead of the camera, in game units (0: in
  * place); by default the camera turns around the point it looks at (Kratos in play).
- * SPARTAN_FREE_CAMERA_LIMITS=yaw,pitch: the most it turns from the game's camera, in degrees. */
+ * SPARTAN_FREE_CAMERA_LIMITS=yaw,pitch: the most it turns from the game's camera, in degrees; a
+ * yaw of 180 or more (the default) turns all the way around Kratos. */
 enum { CAMERA_YAW_SPEED = 120, CAMERA_PITCH_SPEED = 80 };  /* degrees per second at full tilt */
 static const float CAMERA_RECENTER_SECONDS = 0.3f;
 static int camera_stick;
-static float camera_limits[2] = {60, 25};
+static float camera_limits[2] = {180, 25};
 
 int spartanport_camera_stick_enabled(void) { return camera_stick; }
 
@@ -97,6 +98,8 @@ int spartanport_camera_stick_enabled(void) { return camera_stick; }
  * back to the game's and the right stick is the game's again. */
 static int camera_off;
 int spartanport_camera_on(void) { return !camera_off; }
+/* The turn from the game's camera around the vertical axis, radians (positive: to the left). */
+float spartanport_camera_yaw(void) { return camera_state.yaw; }
 void spartanport_camera_toggle(void) {
     camera_off = !camera_off;
     printf("Free camera: %s\n", camera_off ? "off (the game's camera)" : "on");
@@ -121,7 +124,11 @@ static void camera_configure_stick(void) {
     camera_state.enabled = 1;
 }
 
+/* Within the limit; with no limit (180 degrees or more) wrapped into -180..180 instead, so the
+ * camera goes on around and a return to the game's camera takes the short way. */
 static float clamp_angle(float value, float limit_degrees) {
+    const float pi = 3.14159265f;
+    if (limit_degrees >= 180) return value > pi ? value - 2 * pi : value < -pi ? value + 2 * pi : value;
     const float limit = limit_degrees * 0.017453292f;
     return value > limit ? limit : value < -limit ? -limit : value;
 }

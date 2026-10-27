@@ -112,7 +112,13 @@ Para uma pessoa que já conhece os hooks do port e faz RE em x86-64 (IDA/Ghidra 
   alterado. Hook na render view (`0x5cc764`): refaz o giro a partir da matriz limpa (frames em que o
   controlador não roda) e escreve a mesma matriz na view. Não acumula; com o analógico no centro a
   câmera volta exatamente à do jogo.
-- **Movimento:** com o nó girado, o movimento do Kratos segue a câmera nova (como numa câmera livre).
+- **Movimento (testado no jogo):** o código de movimento não lê o nó girado (usa a câmera do
+  próprio controlador), então "para frente" ficava preso à câmera original. O pad gira o analógico
+  esquerdo (e a esquiva L1 + analógico direito) pelo yaw da câmera antes de entregá-los ao jogo;
+  a mira com L2 fica como está.
+- **Volta completa (testada no jogo):** o yaw não tem limite por padrão (dá a volta em torno do
+  Kratos); com a câmera atrás dele o cenário não quebrou nas áreas testadas.
+  `SPARTAN_FREE_CAMERA_LIMITS=yaw,pitch` volta a limitar.
 - **Pivô = Kratos (testado no jogo, "relativamente bom").** `[gerente+0xa4]` é só o ponto de foco
   (a meio caminho, ~6 unidades). A posição do Kratos está em `[0x84bf68] + 0x70` (objeto do jogador,
   matriz em `+0x40..+0x70`, 47 referências no código; achado por varredura da memória com
