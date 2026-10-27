@@ -7,6 +7,7 @@
 #include "../src/actor_hook.h"
 #include "../src/damage_hook.h"
 #include "../src/orb_hook.h"
+#include "../src/camera_hook.h"
 
 struct Site { const SpartanSignature* sig; uint64_t reference; };
 
@@ -54,6 +55,11 @@ int main(int argc, char** argv) {
     const uint64_t calls[] = {0x6a775, 0x6fa33, 0x6fbd7};
     for (unsigned i = 0; i < 3; ++i) sites.push_back({&spartanport_orb_call_sites[i], calls[i]});
     for (const auto& site : sites) assert(Find(image, *site.sig) == site.reference);
+    // The free camera sites were taken from the 6e72 build: found once, the code the stub replays there,
+    // and the lea of the gameplay view global.
+    const uint64_t camera = Find(image, spartanport_camera_site), lea = Find(image, spartanport_camera_view_site);
+    assert(camera != UINT64_MAX && lea != UINT64_MAX);
+    assert(spartanport_camera_signature_match(image.data() + camera, image.size() - camera));
     uint64_t found[3];
     assert(spartanport_orb_find(image.data(), image.size(), found) == 0x6a9f0);
     for (unsigned i = 0; i < 3; ++i) assert(found[i] == calls[i]);

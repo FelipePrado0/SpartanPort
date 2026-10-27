@@ -15,6 +15,7 @@
 #include "actor_hook.h"
 #include "damage_hook.h"
 #include "menu_hook.h"
+#include "camera_hook.h"
 #include "gpu/spartanportgpu.h"
 #if !defined(__x86_64__) || !defined(__GNUC__)
 #error This prototype requires x86-64 GCC or Clang (including MinGW).
@@ -385,6 +386,11 @@ extern void spartanport_stat_multipliers_status(int damage, int orb_pickup);
 extern uintptr_t spartanport_qte_state_address(void);
 extern void spartanport_qte_status(int supported);
 extern uintptr_t spartanport_auto_qte_flag(void);
+extern uintptr_t spartanport_camera_state_address(void);
+extern int spartanport_camera_configure(void);
+extern ABI void spartanport_camera_apply(unsigned char *render_view, uint64_t caller);
+extern void spartanport_camera_set_view_global(uintptr_t address);
+extern ABI void spartanport_camera_node_written(unsigned char *node);
 
 /* The hooks below find their sites by signature (src/signature.h), so they work in any region
  * and version of the game whose code matches; a site that is not found leaves its feature off. */
@@ -656,6 +662,50 @@ static int install_jump(uint64_t at, unsigned length, unsigned char *stub) {
     memcpy(image + at + 1, &relative, 4);
     memset(image + at + 5, 0x90, length - 5);
     return 1;
+}
+
+/* Free camera (src/camera_hook.h): the gameplay camera goes through the port when the controller
+ * writes its node and when the view is built from it. Both or neither. Installed whenever the code
+ * matches; it changes nothing until the state is enabled (SPARTAN_FREE_CAMERA, ..._DEBUG). */
+static void install_camera_hook(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t at = spartanport_signature_find(image, size, &spartanport_camera_site);
+    const uint64_t lea = spartanport_signature_find(image, size, &spartanport_camera_view_site);
+    const uint64_t controller = spartanport_signature_find(image, size, &spartanport_camera_controller_site);
+    if (at == UINT64_MAX || lea == UINT64_MAX || controller == UINT64_MAX ||
+        !mapped(segments, count, at, SPARTAN_CAMERA_HOOK_LENGTH) ||
+        !mapped(segments, count, lea, SPARTAN_CAMERA_GLOBAL_NEXT) ||
+        !mapped(segments, count, controller, SPARTAN_CAMERA_CONTROLLER_LENGTH) ||
+        !spartanport_camera_signature_match(image + at, size - at) ||
+        !spartanport_camera_controller_match(image + controller, size - controller)) {
+        printf("Free camera: unavailable (code not found in this eboot.bin)\n");
+        return;
+    }
+    const uint64_t global = spartanport_camera_view_global(image + lea, lea);
+    if (!mapped(segments, count, global, 8)) {
+        printf("Free camera: unavailable (view global outside the image)\n");
+        return;
+    }
+    const uint64_t counter = spartanport_camera_controller_counter(image + controller, controller);
+    unsigned char *stub = allocate(page_size);
+    spartanport_camera_build_stub(stub, (uintptr_t)spartanport_camera_apply,
+                                  (uintptr_t)(image + at + SPARTAN_CAMERA_HOOK_LENGTH));
+    spartanport_camera_build_controller_stub(stub + 128, (uintptr_t)spartanport_camera_node_written,
+                                             (uintptr_t)(image + counter),
+                                             (uintptr_t)(image + controller + SPARTAN_CAMERA_CONTROLLER_LENGTH));
+    spartanport_camera_set_view_global((uintptr_t)(image + global));
+    protect(stub, page_size, 5);
+    const int64_t reach[2] = {(int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + at + 5),
+                              (int64_t)(uintptr_t)(stub + 128) - (int64_t)(uintptr_t)(image + controller + 5)};
+    for (unsigned i = 0; i < 2; ++i) {
+        if (reach[i] < INT32_MIN || reach[i] > INT32_MAX) {
+            printf("Free camera: unavailable (hook outside relative-jump range)\n");
+            return;
+        }
+    }
+    install_jump(at, SPARTAN_CAMERA_HOOK_LENGTH, stub);
+    install_jump(controller, SPARTAN_CAMERA_CONTROLLER_LENGTH, stub + 128);
+    const int debug = spartanport_camera_configure();
+    printf("Free camera: hook ready%s\n", debug ? " (debug offset from SPARTAN_FREE_CAMERA_DEBUG)" : "");
 }
 
 /* Damage dealt/taken and green/blue/gold orb multipliers (src/damage_hook.h, src/orb_hook.h):
@@ -1175,6 +1225,7 @@ int main(int argc, char **argv) {
     if (gpu_enabled) find_engine_fps(segments, ns, size);
     if (gpu_enabled) install_actor_watch(segments, ns, size);
     if (gpu_enabled) install_stat_multipliers(segments, ns, size);
+    if (gpu_enabled) install_camera_hook(segments, ns, size);
     if (gpu_enabled) install_auto_qte_hooks(segments, ns, size, install_qte_hooks(segments, ns, size));
     if (gpu_enabled && pause_menu && app0) install_menu_exit(segments, ns, size, pause_menu);
 #ifdef _WIN32

@@ -88,6 +88,34 @@ Para uma pessoa que já conhece os hooks do port e faz RE em x86-64 (IDA/Ghidra 
 - [ ] **Decisão:** se o culling não acompanha a câmera ou o ângulo útil for < ~30°, parar e registrar
       o resultado neste arquivo.
 
+#### Resultados da fase 0 (build 6e72; endereços = imagem + 0x400000)
+
+- **Render view.** `0x5cc470` atualiza uma render view (`rdi`/`rbx`) a partir do nó de câmera no topo
+  da lista dela (`+0x300`, ordenada por prioridade; `0x5cbc10` insere, `0x5cbce0` remove). Copia a view
+  em cache do nó (`nó+0xf0`, inversa rígida do mundo `nó+0x40`/`+0x90`) para `+0x00..+0x30` e o mundo
+  para `+0x180..+0x1b0`; chama `0x5cbf10` (projeção em `+0xc0`, inversa em `+0x1c0`) e deriva
+  view×proj (`+0x40`), as matrizes de culling (`+0x80`, `+0x100`) e o frustum (`+0x240`, `+0x250`).
+  Matrizes row-major com vetor-linha (`p' = p·M`), posição na linha 3; eixo vertical do mundo = Y.
+  A view é recalculada sob demanda, uma vez por frame (`+0x328` contra o contador global; a view×proj
+  anterior vai para `+0x200`, para o motion blur).
+- **A global `0x84ea50` não é a câmera 3D.** No jogo ela guarda uma view 2D (câmera identidade,
+  projeção ortográfica). A view 3D do gameplay é a de projeção em perspectiva cuja câmera ativa tem
+  prioridade `0x200` (a pilha `0x84ec10`); o port a reconhece em tempo de execução.
+- **Girar só a render view não serve.** Teste no jogo: os personagens giraram e o cenário não, com
+  borrão forte (motion blur/TAA com matrizes que não batem). Breakpoints de hardware no nó
+  (`SPARTAN_FREE_CAMERA_WATCH=1`) mostraram que só o controlador escreve nele (`0x43f070` →
+  `0x43f490`, matriz local `+0x40..+0x70`; a câmera do gameplay não tem pai, `+0x80 = -1`) e que muitos
+  sistemas o leem direto, sem passar pela render view (`0x59a1c2`, `0x59f908`, `0x4db4d5`, `0x5439dd`,
+  `0x5c37e3`, `0x5836b0`…: cenário, culling, distâncias).
+- **Solução (testada no jogo, sem quebra gráfica):** girar o próprio nó. Hook no fim do controlador
+  (`0x43f848`, depois das quatro escritas): guarda a matriz limpa e escreve a girada, marcando o nó
+  alterado. Hook na render view (`0x5cc764`): refaz o giro a partir da matriz limpa (frames em que o
+  controlador não roda) e escreve a mesma matriz na view. Não acumula; com o analógico no centro a
+  câmera volta exatamente à do jogo.
+- **Movimento:** com o nó girado, o movimento do Kratos segue a câmera nova (como numa câmera livre).
+- **Ainda em aberto:** posição do Kratos como pivô (hoje a câmera gira no lugar; `SPARTAN_FREE_CAMERA_DISTANCE`
+  põe o pivô à frente), modo foto, contextos (cinemáticas, QTE de botão).
+
 ### Fase 1 — Hook da câmera
 
 - [ ] `src/camera_hook.h`: sítio por assinatura, stub que lê um bloco compartilhado

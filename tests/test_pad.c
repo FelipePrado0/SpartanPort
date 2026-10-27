@@ -17,6 +17,15 @@ int spartanportgpu_mouse_prompt_distance(void) { return 48; }
 void spartanportgpu_mouse_pause_key(void) {}
 int spartanportgpu_mouse_aim_style(void) { return 0; }
 int spartanportgpu_mouse_aim_sensitivity(void) { return 100; }
+static int camera_stick;
+static float camera_x, camera_y;
+static int camera_steers;
+int spartanport_camera_stick_enabled(void) { return camera_stick; }
+void spartanport_camera_steer(float x, float y, float seconds, int recenter) {
+    (void)seconds;
+    if (recenter) return;
+    camera_x=x; camera_y=y; ++camera_steers;
+}
 
 static bool SDLCALL record_rumble(void *userdata, uint16_t low, uint16_t high) {
     (void)userdata;
@@ -127,6 +136,28 @@ int main(void) {
     usleep(220000);
     data=read_pad();
     assert(data.buttons==0 && data.touch_count==0);
+
+    /* Free camera: the right stick turns the camera and the game sees it centred, except with L1
+     * (the game's evade) or L2 (the items' aim) held. Off, the game sees the stick as it is. */
+    inject(path,"rx=255 ry=0");
+    data=read_pad();
+    assert(data.right_x==255 && data.right_y==0 && camera_steers==0);
+    camera_stick=1;
+    data=read_pad();
+    assert(data.right_x==128 && data.right_y==128 && camera_x==1 && camera_y==-1);
+    inject(path,"rx=140");  /* inside the dead zone */
+    data=read_pad();
+    assert(data.right_x==128 && camera_x==0);
+    inject(path,"l1 rx=255");
+    const int steers=camera_steers;
+    data=read_pad();
+    assert(data.right_x==255 && (data.buttons & BTN_L1) && camera_steers==steers);
+    inject(path,"l2 rx=0");
+    data=read_pad();
+    assert(data.right_x==0 && camera_steers==steers);
+    camera_stick=0;
+    inject(path,"");
+    data=read_pad();
 
     /* R3 + L1 + R1 cycles the engine frame rate once per press; the three stay hidden from
      * the game until each one is released (a stray R1 would grab in the middle of a ledge). */
@@ -242,5 +273,5 @@ int main(void) {
     assert(SDL_DetachVirtualJoystick(id));
     SDL_Quit();
     unlink(path);
-    puts("PASS: pad ABI, staged left/right clicks, L1 chord, engine frame rate combo, SDL touch coordinates, overlay capture");
+    puts("PASS: pad ABI, staged left/right clicks, L1 chord, engine frame rate combo, free camera stick, SDL touch coordinates, overlay capture");
 }

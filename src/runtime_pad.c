@@ -13,6 +13,7 @@
 #include "runtime.h"
 #include "gpu/spartanportgpu.h"
 #include "qte_hook.h"
+#include "camera_hook.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -728,6 +729,29 @@ static void apply_dodge(PadData *d) {
     if (held || d->timestamp<dodge.until) { d->right_x=dodge.x; d->right_y=dodge.y; }
 }
 
+/* Free camera (src/runtime_camera.c, SPARTAN_FREE_CAMERA=1): the right stick turns the camera and
+ * the game does not see it, except with L1 held (the game's evade is L1 + right stick), L2 held (the
+ * items' aim) or a stick prompt up (the camera goes back to the game's). The keyboard's dodge action
+ * runs after this and still tilts the stick. Reads before the mouse aim, which only works with L2. */
+enum { CAMERA_DEADZONE=24 };
+static uint64_t camera_last;
+static float camera_axis(uint8_t value) {
+    const int v=value-128;
+    if (abs(v)<CAMERA_DEADZONE) return 0;
+    const float t=(float)(abs(v)-CAMERA_DEADZONE)/(127-CAMERA_DEADZONE);
+    return (v<0 ? -1.0f : 1.0f)*(t>1 ? 1 : t*t);  /* squared: fine control near the centre */
+}
+static void apply_free_camera(PadData *d) {
+    if (!spartanport_camera_stick_enabled()) return;
+    const uint64_t step=camera_last && d->timestamp>camera_last ? d->timestamp-camera_last : 0;
+    camera_last=d->timestamp;
+    const float seconds=step>100000 ? 0.1f : (float)step/1e6f;
+    if (qte_rotation(d->timestamp)>=0) { spartanport_camera_steer(0,0,seconds,1); return; }
+    if (d->buttons & (BTN_L1|BTN_L2)) return;
+    spartanport_camera_steer(camera_axis(d->right_x),camera_axis(d->right_y),seconds,0);
+    d->right_x=d->right_y=128;
+}
+
 /* The game's menus (the title menu, the pause menu, the Power Up menu) move a list with the
  * d-pad, and nothing here can see them, so they are told by the buttons that open them: a menu is
  * up from the start (the title menu) and after Options (the Power Up menu) or a touchpad click
@@ -820,6 +844,7 @@ static void sample(PadData *d) {
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
     note_game_menu(d); /* before the actions turn into the buttons they press */
     apply_combos(d);
+    apply_free_camera(d);
     apply_dodge(d);
     apply_weapon_cycle(d);
     apply_mouse_aim(d);
