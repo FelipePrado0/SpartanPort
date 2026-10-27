@@ -31,6 +31,14 @@
 
 namespace Vulkan {
 
+static u32 UiColorMask(const GraphicsPipeline* pipeline, bool upscale) {
+    const auto& key = pipeline->GetGraphicsKey();
+    return upscale && key.mrt_mask == 3
+        ? UiComposition::ColorMask(pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
+                                    key.mrt_mask, key.blend_controls[1])
+        : key.mrt_mask;
+}
+
 static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
     // TODO(roamic): Add support for multiple viewports and geometry shaders when ViewportIndex
     // is encountered and implemented in the recompiler.
@@ -223,6 +231,7 @@ VideoCore::ImageId Rasterizer::FindTargetMemoized(VideoCore::TextureCache::Image
 void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
     // Prefetch render targets to handle overlaps with bound textures (e.g. mipgen)
     const auto& key = pipeline->GetGraphicsKey();
+    const u32 color_mask = UiColorMask(pipeline, upscaler->Enabled());
     const auto& regs = Regs();
     if (regs.color_control.degamma_enable) {
         LOG_WARNING(Render_Vulkan, "Color buffers require gamma correction");
@@ -234,7 +243,7 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
         auto& [image_id, desc] = cb_descs[cb];
         const auto& col_buf = regs.color_buffers[cb];
         const u32 target_mask = regs.color_target_mask.GetMask(cb);
-        if (skip_cb_binding || !col_buf || !target_mask || (key.mrt_mask & (1 << cb)) == 0) {
+        if (skip_cb_binding || !col_buf || !target_mask || (color_mask & (1 << cb)) == 0) {
             image_id = {};
             continue;
         }
@@ -1053,7 +1062,7 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         upscaler->OnGraphicsDraw(pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
                                  cb_descs[0].first);
     }
-    if (upscaler->Enabled() && std::popcount(pipeline->GetGraphicsKey().mrt_mask) == 1) {
+    if (upscaler->Enabled() && std::popcount(UiColorMask(pipeline, true)) == 1) {
         const auto& viewport = Regs().viewports[0];
         upscaler->OnDraw(pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash,
                          cb_descs[0].first, db_desc.first,
@@ -1281,7 +1290,7 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
         upscaler->OnGraphicsDraw(pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
                                  cb_descs[0].first);
     }
-    if (upscaler->Enabled() && std::popcount(pipeline->GetGraphicsKey().mrt_mask) == 1) {
+    if (upscaler->Enabled() && std::popcount(UiColorMask(pipeline, true)) == 1) {
         const auto& viewport = Regs().viewports[0];
         upscaler->OnDraw(pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash,
                          cb_descs[0].first, db_desc.first,
@@ -2759,7 +2768,12 @@ bool Rasterizer::BindTexturesFromSet(const Shader::Info& stage, const PreparedSt
 
 RenderState Rasterizer::BeginRendering(const GraphicsPipeline* pipeline) {
     // spartanport: RenderStateMemo (see BeginMemo).
-    const bool memo_on = !SpartanToggle::Disabled(SpartanToggle::RenderStateMemo) && !FrameCapture::Active();
+    // Display composition depends on this draw's sampled source, beyond the attachment memo key.
+    const auto& draw_regs = Regs();
+    const bool display_draw = upscaler->Enabled() && draw_regs.color_buffers[0] &&
+        FrameCapture::IsDisplayBuffer(draw_regs.color_buffers[0].Address());
+    const bool memo_on = !SpartanToggle::Disabled(SpartanToggle::RenderStateMemo) &&
+                         !FrameCapture::Active() && !display_draw;
     if (SpartanStats::enabled && ((begin_memo_hits + begin_memo_misses) & 0x3FFFF) == 0x3FFFF) {
         std::printf("Render state memo: %llu hits, %llu misses; texture sets: %llu hits, %llu "
                     "misses\n",
@@ -2963,7 +2977,14 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
         }
         image->usage.render_target = 1u;
         if (cb == 0 && upscaler->Enabled()) {
-            color_redirected = upscaler->RedirectColor(image_id, desc.view_info, redirect);
+            const auto& blend = key.blend_controls[0];
+            const bool replaces_color = !blend.enable ||
+                (blend.color_src_factor == AmdGpu::BlendControl::BlendFactor::One &&
+                 blend.color_dst_factor == AmdGpu::BlendControl::BlendFactor::Zero &&
+                 blend.color_func == AmdGpu::BlendControl::BlendFunc::Add);
+            color_redirected = upscaler->RedirectColor(image_id, desc.view_info, redirect,
+                pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash, replaces_color,
+                bool(db_desc.first));
             if (color_redirected) {
                 guest_extent = {image->info.size.width, image->info.size.height};
                 original_color = {attachment.image_view, attachment.image_layout};

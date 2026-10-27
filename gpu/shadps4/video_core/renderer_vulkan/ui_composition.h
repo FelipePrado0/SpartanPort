@@ -9,6 +9,40 @@ namespace Vulkan::UiComposition {
 
 enum class Background { None, Copy, Temporal };
 
+template <typename Blend>
+constexpr uint32_t ColorMask(uint64_t shader, uint32_t mask, const Blend& blend) {
+    // Verified backdrop PS exports (0,0,0,0) to RT1; omit only a destination-preserving blend.
+    if (shader != 0xbcb456ff6dd871a8ull || mask != 3 || !blend.enable) {
+        return mask;
+    }
+    using Factor = typename Blend::BlendFactor;
+    using Function = typename Blend::BlendFunc;
+    const auto preserves = [](Function function, Factor destination) {
+        return function == Function::Add &&
+               (destination == Factor::One || destination == Factor::OneMinusSrcAlpha);
+    };
+    const auto alpha_function = blend.separate_alpha_blend ? blend.alpha_func : blend.color_func;
+    const auto alpha_destination =
+        blend.separate_alpha_blend ? blend.alpha_dst_factor : blend.color_dst_factor;
+    if (preserves(blend.color_func, blend.color_dst_factor) &&
+        preserves(alpha_function, alpha_destination)) {
+        return 1;
+    }
+    return mask;
+}
+
+struct DisplayDrawPlan {
+    bool seed;
+    bool discard;
+};
+
+constexpr DisplayDrawPlan PlanDisplayDraw(uint64_t shader, bool samples_ui, bool replaces_color,
+                                          bool has_depth, bool seeded) {
+    // Verified display-copy PS: samples pixel coordinates / actual image size, then decodes sRGB.
+    const bool copy = shader == 0x6d2dc8a47f6d9c23ull && samples_ui && replaces_color && !has_depth;
+    return {copy && !seeded, copy};
+}
+
 // DLAA writes at the scene size; only the final copy stretches the two-pixel inset.
 constexpr std::array<uint32_t, 2> TemporalOutputSize(uint32_t render_width, uint32_t render_height,
                                                   uint32_t output_width, uint32_t output_height,

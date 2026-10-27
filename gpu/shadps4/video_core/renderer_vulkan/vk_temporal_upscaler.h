@@ -115,7 +115,7 @@ public:
     /// `view` is the game's view of the image: redirected views mirror its format (sRGB) and,
     /// for sampling, its channel swizzle.
     bool RedirectColor(VideoCore::ImageId color, const VideoCore::ImageViewInfo& view,
-                       Target& target);
+                       Target& target, u64 shader, bool replaces_color, bool has_depth);
     bool RedirectDepth(VideoCore::ImageId depth, Target& target);
     /// A sampled image replaced by the upscaled frame (the display pass).
     bool RedirectSampled(VideoCore::ImageId image, const VideoCore::ImageViewInfo& info,
@@ -240,6 +240,8 @@ private:
     VideoCore::ImageId ldr_target{};
     VideoCore::ImageId ui_color{}, ui_depth{};
     bool ui_phase = false;         ///< from the upscale to the next display pass
+    bool display_seeded = false;
+    bool sampled_ui = false;
     bool display_redirect = false; ///< the display pass of an upscaled frame
     /// The display buffer this frame's display pass drew into the upscaled image: later passes
     /// of the same frame (the water refraction) read and draw that image, not the guest one.
