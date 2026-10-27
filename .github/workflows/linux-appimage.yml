@@ -121,6 +121,7 @@ jobs:
       - name: Compile and diagnose the standalone graphics test
         env:
           MODE: ${{ matrix.mode }}
+          EXPECTED_FAILURE: ${{ matrix.revision == 'main-96debe8' && matrix.mode != 'sanitizers' }}
         run: |
           set -euxo pipefail
           mkdir -p "$RUNNER_TEMP/graphics-ci"
@@ -142,9 +143,16 @@ jobs:
                 --args "$RUNNER_TEMP/graphics-ci/graphics-settings-test" \
                 > "$RUNNER_TEMP/graphics-ci/backtrace.log" 2>&1 || true
               cat "$RUNNER_TEMP/graphics-ci/backtrace.log"
+              if [[ $EXPECTED_FAILURE == true && ( $status == 139 || $status == 135 ) ]] \
+                && grep -q 'gpu/shim/spartanport_settings.cpp:558' "$RUNNER_TEMP/graphics-ci/backtrace.log" \
+                && grep -q 'spartanportgpu_native_setting' "$RUNNER_TEMP/graphics-ci/backtrace.log"; then
+                echo 'PASS: the unchanged main reproduced the expected display label crash'
+                exit 0
+              fi
               exit "$status"
             fi
           done
+          [[ $EXPECTED_FAILURE == false ]] || { echo 'FAIL: the baseline no longer reproduces the expected crash'; exit 1; }
       - uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
