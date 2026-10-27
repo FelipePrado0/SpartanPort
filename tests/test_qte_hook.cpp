@@ -3,6 +3,7 @@
 // Automatic QTE), and the Automatic QTE stubs answer the button, repeated and held prompts.
 // With the prepared eboot.elf as argument it also finds every site and the state block.
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -19,6 +20,7 @@ extern "C" void qte_update_return();
 extern "C" void qte_rotation_return();
 extern "C" void qte_timed_return();
 extern "C" void qte_repeat_original();
+extern "C" void qte_repeat_released();
 extern "C" void qte_charged_return();
 extern "C" void qte_circle_pressed();
 extern "C" void qte_circle_skip();
@@ -27,6 +29,7 @@ asm(".globl qte_circle_pressed\nqte_circle_pressed:\n    mov $1, %eax\n    ret\n
     ".globl qte_rotation_return\nqte_rotation_return:\n    pop %r14\n    pop %rbp\n    xor %eax, %eax\n    ret\n"
     ".globl qte_timed_return\nqte_timed_return:\n    mov %ecx, %eax\n    ret\n"
     ".globl qte_repeat_original\nqte_repeat_original:\n    mov $7, %eax\n    ret\n"
+    ".globl qte_repeat_released\nqte_repeat_released:\n    xor %eax, %eax\n    ret\n"
     ".globl qte_charged_return\nqte_charged_return:\n    mov %r9d, %eax\n    ret\n");
 
 static void call_update(unsigned char* stub) {
@@ -46,13 +49,18 @@ static uint32_t call_timed(unsigned char* stub, void* block, void* pad) {
     return result;
 }
 
-// rbx: the repeat state, rbp: the update's frame (the frame time at rbp-0x3c).
-static uint32_t call_repeat(unsigned char* stub, void* state, void* frame) {
+// rbx: the repeat state, rbp: the update's frame (the frame time at rbp-0x3c, its copy of the bar
+// at rbp-0x64), r15: the prompt's config (the drain per second at +0x20).
+static uint32_t call_repeat(unsigned char* stub, void* state, void* frame, void* config) {
     uint32_t result;
+    register void* r15 asm("r15") = config;
     asm volatile("push %%rbp\n    mov %3, %%rbp\n    call *%1\n    pop %%rbp"
-                 : "=a"(result) : "r"(stub), "b"(state), "S"(frame) : "xmm0", "memory", "cc");
+                 : "=a"(result) : "r"(stub), "b"(state), "S"(frame), "r"(r15)
+                 : "r11", "xmm0", "xmm1", "xmm2", "xmm3", "memory", "cc");
     return result;
 }
+
+static bool close_to(float value, float expected) { return std::fabs(value - expected) < 1e-6f; }
 
 // rax: the pad; 1 when the stub went on to the press, 0 when it skipped it.
 static uint32_t call_circle(unsigned char* stub, void* pad) {
@@ -81,6 +89,7 @@ int main(int argc, char** argv) {
     unsigned char* repeat = code + 384;
     unsigned char* charged = code + 512;
     unsigned char* circle = code + 640;
+    unsigned char* released = code + 768;
     const auto flag = reinterpret_cast<uintptr_t>(&automatic);
     assert(spartanport_qte_build_update_stub(update, reinterpret_cast<uintptr_t>(&state.heartbeat),
                                       reinterpret_cast<uintptr_t>(&qte_update_return)) < 128);
@@ -88,6 +97,7 @@ int main(int argc, char** argv) {
                                         reinterpret_cast<uintptr_t>(&qte_rotation_return)) < 128);
     assert(spartanport_qte_build_timed_stub(timed, flag, reinterpret_cast<uintptr_t>(&qte_timed_return)) < 128);
     assert(spartanport_qte_build_repeat_stub(repeat, flag, reinterpret_cast<uintptr_t>(&qte_repeat_original)) < 128);
+    assert(spartanport_qte_build_repeat_stub(released, flag, reinterpret_cast<uintptr_t>(&qte_repeat_released)) < 128);
     assert(spartanport_qte_build_charged_stub(charged, flag, reinterpret_cast<uintptr_t>(&qte_charged_return)) < 128);
     assert(spartanport_qte_build_circle_stub(circle, flag, reinterpret_cast<uintptr_t>(&qte_circle_pressed),
                                       reinterpret_cast<uintptr_t>(&qte_circle_skip)) < 128);
@@ -123,13 +133,59 @@ int main(int argc, char** argv) {
     automatic = false;
 
     // Repeat press: the game's own query, or a press every frame credited with the frame's time.
-    alignas(8) float repeat_state[16] = {}, frame[32] = {};
-    char* rbp = reinterpret_cast<char*>(frame) + 0x40;
+    // A press of the player's skips the drain and starts the next interval as a 1/60 s frame
+    // would, at any engine rate: with k = max(0, 1/60 - dt) the bar gains drain * k and the time
+    // since the last press ([state+8]) loses k, not below 0.
+    alignas(8) float repeat_state[16] = {}, frame[64] = {}, config[16] = {};
+    char* rbp = reinterpret_cast<char*>(frame) + 0x80;
+    config[0x1c / 4] = 0.25f;  // credit per press, not the drain
+    config[0x20 / 4] = 0.5f;   // drain per second
+    struct RepeatCase { float dt, since, bar_after, since_after; };
+    const RepeatCase presses[] = {
+        {1.0f / 240, 0.1f, 0.40625f, 0.0875f},         // k = 1/80
+        {1.0f / 360, 0.1f, 0.40694444f, 0.08611111f},  // k = 1/72
+        {1.0f / 60, 0.1f, 0.4f, 0.1f},                 // the game's own rate: unchanged
+        {1.0f / 30, 0.1f, 0.4f, 0.1f},                 // slower frames: unchanged
+        {1.0f / 240, 0.005f, 0.40625f, 0.0f},          // the interval stops at 0
+    };
+    float bar;
+    for (const RepeatCase& c : presses) {
+        bar = 0.4f;
+        std::memcpy(rbp - 0x3c, &c.dt, 4);
+        std::memcpy(rbp - 0x64, &bar, 4);
+        repeat_state[2] = c.since;
+        assert(call_repeat(repeat, repeat_state, rbp, config) == 7);  // the game's own answer
+        std::memcpy(&bar, rbp - 0x64, 4);
+        assert(close_to(bar, c.bar_after) && close_to(repeat_state[2], c.since_after));
+    }
+    // A trigger prompt (pressure written to rbp-0x34) counts as pressed on every held frame and
+    // never drains while held, at any rate: nothing to correct.
+    bar = 0.4f;
+    const float fast = 1.0f / 240, pressure = 0.5f;
+    std::memcpy(rbp - 0x3c, &fast, 4);
+    std::memcpy(rbp - 0x64, &bar, 4);
+    std::memcpy(rbp - 0x34, &pressure, 4);
+    repeat_state[2] = 0.1f;
+    assert(call_repeat(repeat, repeat_state, rbp, config) == 7);
+    std::memcpy(&bar, rbp - 0x64, 4);
+    assert(bar == 0.4f && repeat_state[2] == 0.1f);
+    const float no_pressure = 0.0f;
+    std::memcpy(rbp - 0x34, &no_pressure, 4);
+    // No press this frame: the game drains as usual, nothing to correct.
+    bar = 0.4f;
+    std::memcpy(rbp - 0x3c, &fast, 4);
+    std::memcpy(rbp - 0x64, &bar, 4);
+    repeat_state[2] = 0.1f;
+    assert(call_repeat(released, repeat_state, rbp, config) == 0);
+    std::memcpy(&bar, rbp - 0x64, 4);
+    assert(bar == 0.4f && repeat_state[2] == 0.1f);
+    // Automatic QTE: a press every frame credited with the frame's time, the bar left to the game.
     const float dt = 1.0f / 120;
     std::memcpy(rbp - 0x3c, &dt, 4);
-    assert(call_repeat(repeat, repeat_state, rbp) == 7);
     automatic = true;
-    assert(call_repeat(repeat, repeat_state, rbp) == 1 && repeat_state[2] == dt);  // [state+8]
+    assert(call_repeat(repeat, repeat_state, rbp, config) == 1 && repeat_state[2] == dt);  // [state+8]
+    std::memcpy(&bar, rbp - 0x64, 4);
+    assert(bar == 0.4f);
     automatic = false;
 
     // Circle struggle: a new Circle press goes on to the press, else it is skipped; always pressed

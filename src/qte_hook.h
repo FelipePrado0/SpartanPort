@@ -136,22 +136,53 @@ static inline unsigned spartanport_qte_build_timed_stub(unsigned char *out, uint
  * the last press over the full-credit interval, at most 1) and resets [state+8]; the bar drains only
  * on frames without one. With the byte set the stub presses every frame with that frame's credit:
  * [state+8] = the frame time ([rbp-0x3c] in the update), the most any mashing gets, with no drain.
- * (rbx: the state.) Site: the call, which becomes a call to the stub. */
+ * (rbx: the state.) Site: the call, which becomes a call to the stub.
+ *
+ * Every engine rate plays the prompt as the game's own 60 Hz does: a press frame skips the drain
+ * ([rbp-0x64] is the update's copy of the bar, [r15+0x20] the drain per second, r15: the config)
+ * and ends the interval since the last press, so a 1/240 s frame skips less drain and leaves a
+ * longer interval than a 1/60 s one. After the game's own answer, a button press gets k = max(0,
+ * 1/60 - frame time): the bar gains drain * k and [state+8] loses k (not below 0). At 60 FPS k is
+ * 0. Trigger prompts (types 6-8) write their pressure to [rbp-0x34] and count every held frame
+ * as pressed, never draining while held at any rate: they are left alone. */
 static const SpartanSignature spartanport_qte_repeat_site = {
     "41 0f b6 77 2c 48 8d 55 cc 48 8b 7d b8 e8 ?? ?? ?? ?? 41 89 c4 45 85 e4", 13};
+enum { SPARTAN_QTE_REPEAT_ORIGINAL = 37 };  /* the movabs r11 immediate in the stub below */
 static inline unsigned spartanport_qte_build_repeat_stub(unsigned char *out, uintptr_t automatic, uintptr_t original) {
     static const unsigned char body[] = {
         0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, auto */
         0x80,0x38,0x00,                           /* cmp byte [rax], 0 */
-        0x74,0x10,                                /* je original */
+        0x74,0x10,                                /* je game */
         0xc5,0xfa,0x10,0x45,0xc4,                 /* vmovss xmm0, [rbp-0x3c]: the frame time */
         0xc5,0xfa,0x11,0x43,0x08,                 /* vmovss [rbx+8], xmm0 */
         0xb8,0x01,0x00,0x00,0x00,                 /* mov eax, 1 */
         0xc3,                                     /* ret: pressed */
+        0x48,0x83,0xec,0x08,                      /* game: sub rsp, 8 (the original's alignment) */
+        0x49,0xbb, 0,0,0,0,0,0,0,0,               /* movabs r11, original */
+        0x41,0xff,0xd3,                           /* call r11: the game's own answer in eax */
+        0x48,0x83,0xc4,0x08,                      /* add rsp, 8 */
+        0x85,0xc0,                                /* test eax, eax */
+        0x74,0x41,                                /* jz done: no press, the game drains */
+        0xc5,0xe0,0x57,0xdb,                      /* vxorps xmm3, xmm3, xmm3 */
+        0xc5,0xf8,0x2e,0x5d,0xcc,                 /* vucomiss xmm3, [rbp-0x34]: the pressure */
+        0x75,0x36,                                /* jne done: a trigger prompt */
+        0x41,0xbb,0x89,0x88,0x88,0x3c,            /* mov r11d, 1/60 */
+        0xc4,0xc1,0x79,0x6e,0xcb,                 /* vmovd xmm1, r11d */
+        0xc5,0xf2,0x5c,0x4d,0xc4,                 /* vsubss xmm1, xmm1, [rbp-0x3c]: 1/60 - dt */
+        0xc5,0xf2,0x5f,0xcb,                      /* vmaxss xmm1, xmm1, xmm3: k */
+        0xc4,0xc1,0x72,0x59,0x57,0x20,            /* vmulss xmm2, xmm1, [r15+0x20]: drain * k */
+        0xc5,0xea,0x58,0x55,0x9c,                 /* vaddss xmm2, xmm2, [rbp-0x64] */
+        0xc5,0xfa,0x11,0x55,0x9c,                 /* vmovss [rbp-0x64], xmm2: the bar */
+        0xc5,0xfa,0x10,0x53,0x08,                 /* vmovss xmm2, [rbx+8] */
+        0xc5,0xea,0x5c,0xd1,                      /* vsubss xmm2, xmm2, xmm1 */
+        0xc5,0xea,0x5f,0xd3,                      /* vmaxss xmm2, xmm2, xmm3 */
+        0xc5,0xfa,0x11,0x53,0x08,                 /* vmovss [rbx+8], xmm2: the interval */
+        0xc3,                                     /* done: ret */
     };
     memcpy(out, body, sizeof(body));
     memcpy(out + 2, &automatic, 8);
-    return spartanport_qte_jump(out, sizeof(body), original);  /* original: the game's own answer */
+    memcpy(out + SPARTAN_QTE_REPEAT_ORIGINAL, &original, 8);
+    return sizeof(body);
 }
 /* The call's target, from its rel32. */
 static inline uint64_t spartanport_qte_call_target(const unsigned char *code, uint64_t site) {
