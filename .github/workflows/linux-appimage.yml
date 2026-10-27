@@ -39,7 +39,9 @@ jobs:
         env:
           SDL_AUDIO_DRIVER: dummy
           SDL_AUDIODRIVER: dummy
-        run: timeout 45m bash build.sh --test
+        run: |
+          mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}"
+          timeout 45m bash build.sh --test
       - name: Stamp
         if: inputs.tag != '' && inputs.stamp
         env:
