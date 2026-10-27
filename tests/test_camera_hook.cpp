@@ -36,17 +36,22 @@ static void call_stub(unsigned char* stub, void* view, uint64_t caller) {
                    "xmm15", "memory", "cc");
 }
 
-// The controller's site: rax holds the node; where the stub resumes, rax and rdx are read back.
+// The controller's site: rax holds the node, rbx the camera manager; where the stub resumes, rax
+// and rdx are read back.
 static unsigned char* written_node;
-extern "C" __attribute__((sysv_abi)) void node_written(unsigned char* node) { written_node = node; }
+static const unsigned char* written_manager;
+extern "C" __attribute__((sysv_abi)) void node_written(unsigned char* node, const unsigned char* manager) {
+    written_node = node;
+    written_manager = manager;
+}
 extern "C" void controller_return();
 extern "C" uint64_t returned_rax, returned_rdx;
 uint64_t returned_rax, returned_rdx;
 asm(".globl controller_return\ncontroller_return:\n"
     "    mov %rax, returned_rax(%rip)\n    mov %rdx, returned_rdx(%rip)\n    ret\n");
-static void call_controller(unsigned char* stub, void* node) {
+static void call_controller(unsigned char* stub, void* node, const void* manager) {
     asm volatile("sub $8, %%rsp\n    call *%0\n    add $8, %%rsp"
-                 : : "r"(stub), "a"(node)
+                 : : "r"(stub), "a"(node), "b"(manager)
                  : "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11", "xmm0", "xmm1", "xmm2", "xmm3", "xmm4",
                    "xmm5", "xmm6", "xmm7", "xmm8", "xmm9", "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15",
                    "memory", "cc");
@@ -55,8 +60,9 @@ static void call_controller(unsigned char* stub, void* node) {
 // src/runtime_camera.c, linked in.
 extern "C" {
 int spartanport_camera_configure(void);
+void spartanport_camera_set_player_global(uintptr_t address);
 __attribute__((sysv_abi)) void spartanport_camera_apply(unsigned char* render_view, uint64_t caller);
-__attribute__((sysv_abi)) void spartanport_camera_node_written(unsigned char* node);
+__attribute__((sysv_abi)) void spartanport_camera_node_written(unsigned char* node, const unsigned char* manager);
 }
 
 static float dot(const float* a, const float* b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
@@ -136,15 +142,16 @@ int main(int argc, char** argv) {
         assert(close_to(world[1], 0));  // the right axis stays level: no roll
         check_inverse(render_view);
     }
-    // The controller's stub: the port gets the node, rax comes back, rdx holds the counter.
+    // The controller's stub: the port gets the node and the manager, rax comes back, rdx holds the
+    // counter.
     static uint64_t counter;
-    alignas(64) static unsigned char node[0x160];
+    alignas(64) static unsigned char node[0x160], manager[0x300];
     assert(spartanport_camera_build_controller_stub(code + 128, reinterpret_cast<uintptr_t>(&node_written),
                                                     reinterpret_cast<uintptr_t>(&counter),
                                                     reinterpret_cast<uintptr_t>(&controller_return)) < 128);
     FlushInstructionCache(GetCurrentProcess(), code, 4096);
-    call_controller(code + 128, node);
-    assert(written_node == node && returned_rax == reinterpret_cast<uintptr_t>(node) &&
+    call_controller(code + 128, node, manager);
+    assert(written_node == node && written_manager == manager && returned_rax == reinterpret_cast<uintptr_t>(node) &&
            returned_rdx == reinterpret_cast<uintptr_t>(&counter));
 
     // The port (src/runtime_camera.c) with the stick on: the node and the view take the turned
@@ -165,6 +172,8 @@ int main(int argc, char** argv) {
     std::memcpy(node + SPARTAN_CAMERA_NODE_MATRIX, clean, sizeof(clean));
     const int16_t no_parent = -1;
     std::memcpy(node + SPARTAN_CAMERA_NODE_PARENT, &no_parent, 2);
+    spartanport_camera_apply(gameplay, 0);  // a new camera: the game's framing
+    assert(!std::memcmp(clean, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(clean)));
     spartanport_camera_steer(1, 0, 0.25f, 0);  // 30 degrees to the right
     spartanport_camera_apply(gameplay, 0);
     float turned[16];
@@ -175,12 +184,47 @@ int main(int argc, char** argv) {
     assert(close_to(turned[12], 0) && close_to(turned[13], 2) && close_to(turned[14], 10));
     spartanport_camera_apply(gameplay, 0);  // the second update of the frame
     assert(!std::memcmp(turned, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(turned)));
+    // Until the controller runs the port knows no target and turns the camera in place; then it
+    // orbits the point the game's camera looks at, 10 ahead, (0, 2, 0): same distance, facing it.
     std::memcpy(node + SPARTAN_CAMERA_NODE_MATRIX, clean, sizeof(clean));  // the controller moves it
-    spartanport_camera_node_written(node);
+    const float target = 10;
+    std::memcpy(manager + SPARTAN_CAMERA_MANAGER_DISTANCE, &target, 4);
+    spartanport_camera_node_written(node, manager);
+    std::memcpy(turned, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(turned));
+    const float to_target[3] = {0 - turned[12], 2 - turned[13], 0 - turned[14]};
+    assert(close_to(std::sqrt(dot(to_target, to_target)), 10) && !close_to(turned[12], 0));
+    const float ahead[3] = {-turned[8], -turned[9], -turned[10]};
+    assert(close_to(dot(ahead, to_target), 10));
+    spartanport_camera_apply(gameplay, 0);  // the view takes the same camera
     assert(!std::memcmp(turned, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(turned)));
+    assert(!std::memcmp(turned, gameplay + SPARTAN_CAMERA_WORLD, sizeof(turned)));
     spartanport_camera_steer(-1, 0, 0.25f, 0);  // back to the game's camera
     spartanport_camera_apply(gameplay, 0);
     assert(!std::memcmp(clean, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(clean)));
+    // With the player's object there the camera orbits Kratos, at (3, 0, 0): the same distance to
+    // him, the same height above him.
+    static uint64_t player_global;
+    alignas(16) static unsigned char player[0x100];
+    const float kratos[4] = {3, 0, 0, 1};
+    std::memcpy(player + SPARTAN_CAMERA_PLAYER_POSITION, kratos, sizeof(kratos));
+    player_global = reinterpret_cast<uintptr_t>(player);
+    spartanport_camera_set_player_global(reinterpret_cast<uintptr_t>(&player_global));
+    spartanport_camera_steer(1, 0, 0.25f, 0);
+    std::memcpy(node + SPARTAN_CAMERA_NODE_MATRIX, clean, sizeof(clean));
+    spartanport_camera_node_written(node, manager);
+    std::memcpy(turned, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(turned));
+    const float before[3] = {clean[12] - kratos[0], clean[13] - kratos[1], clean[14] - kratos[2]};
+    const float after[3] = {turned[12] - kratos[0], turned[13] - kratos[1], turned[14] - kratos[2]};
+    assert(close_to(dot(before, before), dot(after, after)) && close_to(after[1], before[1]));
+    assert(!close_to(turned[12], clean[12]));
+
+    // A cut (the game's camera jumped): back to the game's framing, the stick's turn dropped.
+    float cut[16];
+    std::memcpy(cut, clean, sizeof(cut));
+    cut[14] += 20;
+    std::memcpy(node + SPARTAN_CAMERA_NODE_MATRIX, cut, sizeof(cut));
+    spartanport_camera_node_written(node, manager);
+    assert(!std::memcmp(cut, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(cut)));
     (void)argc;
     (void)argv;
     std::puts("camera-hook-test: OK");

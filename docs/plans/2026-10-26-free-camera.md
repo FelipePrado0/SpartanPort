@@ -113,8 +113,20 @@ Para uma pessoa que já conhece os hooks do port e faz RE em x86-64 (IDA/Ghidra 
   controlador não roda) e escreve a mesma matriz na view. Não acumula; com o analógico no centro a
   câmera volta exatamente à do jogo.
 - **Movimento:** com o nó girado, o movimento do Kratos segue a câmera nova (como numa câmera livre).
-- **Ainda em aberto:** posição do Kratos como pivô (hoje a câmera gira no lugar; `SPARTAN_FREE_CAMERA_DISTANCE`
-  põe o pivô à frente), modo foto, contextos (cinemáticas, QTE de botão).
+- **Pivô = Kratos (testado no jogo, "relativamente bom").** `[gerente+0xa4]` é só o ponto de foco
+  (a meio caminho, ~6 unidades). A posição do Kratos está em `[0x84bf68] + 0x70` (objeto do jogador,
+  matriz em `+0x40..+0x70`, 47 referências no código; achado por varredura da memória com
+  `SPARTAN_FREE_CAMERA_FIND=1`, o que fica à frente da câmera em movimento). A câmera gira em volta
+  dele (até 60 unidades; senão, do foco). Distâncias vistas: 5 a 56 unidades conforme a área.
+- **Cortes:** o giro volta a 0° quando a câmera do jogo salta (> 4 unidades ou > 30° numa
+  atualização) ou troca de nó: cada cena começa no enquadramento do jogo.
+- **QTE:** com qualquer prompt na tela a câmera volta à do jogo e o analógico vai para o jogo.
+- **Problemas vistos no teste:**
+  - a câmera entra no cenário quando há parede ao lado do Kratos e se gira para esse lado
+    (falta colisão: encurtar a distância até o Kratos quando algo fica entre ele e a câmera);
+  - em lutas de chefe a câmera do jogo é melhor: falta um sinal de "luta de chefe";
+  - em quedas/sequências roteirizadas o giro continua valendo (o foco do jogo vai a 0 nelas).
+- **Ainda em aberto:** modo foto, mouse, opção no menu/launcher.
 
 ### Fase 1 — Hook da câmera
 

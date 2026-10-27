@@ -19,11 +19,11 @@ int spartanportgpu_mouse_aim_style(void) { return 0; }
 int spartanportgpu_mouse_aim_sensitivity(void) { return 100; }
 static int camera_stick;
 static float camera_x, camera_y;
-static int camera_steers;
+static int camera_steers, camera_recenters;
 int spartanport_camera_stick_enabled(void) { return camera_stick; }
 void spartanport_camera_steer(float x, float y, float seconds, int recenter) {
     (void)seconds;
-    if (recenter) return;
+    if (recenter) { ++camera_recenters; return; }
     camera_x=x; camera_y=y; ++camera_steers;
 }
 
@@ -155,6 +155,18 @@ int main(void) {
     inject(path,"l2 rx=0");
     data=read_pad();
     assert(data.right_x==0 && camera_steers==steers);
+    /* A QTE prompt (a button one) on screen: the camera goes back to the game's, the stick reaches
+     * the game; once the prompt is gone the stick turns the camera again. */
+    static uint8_t prompt[0x20];
+    spartanport_qte.block=(uint64_t)(uintptr_t)prompt;
+    ++spartanport_qte.heartbeat;
+    inject(path,"rx=255");
+    data=read_pad();
+    assert(data.right_x==255 && camera_recenters==1 && camera_steers==steers);
+    usleep(200000);  /* past QTE_ACTIVE_US without a frame */
+    data=read_pad();
+    assert(data.right_x==128 && camera_steers==steers+1);
+    spartanport_qte.block=0;
     camera_stick=0;
     inject(path,"");
     data=read_pad();

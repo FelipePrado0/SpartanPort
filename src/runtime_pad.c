@@ -415,6 +415,12 @@ static int qte_rotation(uint64_t now) {
     return type-QTE_FIRST_ROTATION<QTE_ROTATIONS ? (int)(type-QTE_FIRST_ROTATION) : -1;
 }
 
+/* Any prompt on screen: a button, mashing, holding or a turn of the stick. */
+static bool qte_prompt_up(uint64_t now) {
+    if (qte_rotation(now)>=0) return true;
+    return spartanport_qte.block && qte.seen && now-qte.seen<=QTE_ACTIVE_US;
+}
+
 /* A direction key (pressed or drawn) in the minigame: the next step, or back to the start. */
 static void qte_advance(int key, const int *sequence, unsigned length) {
     if (qte.passed) return;
@@ -731,7 +737,8 @@ static void apply_dodge(PadData *d) {
 
 /* Free camera (src/runtime_camera.c, SPARTAN_FREE_CAMERA=1): the right stick turns the camera and
  * the game does not see it, except with L1 held (the game's evade is L1 + right stick), L2 held (the
- * items' aim) or a stick prompt up (the camera goes back to the game's). The keyboard's dodge action
+ * items' aim) or a QTE prompt up (any of them: the camera goes back to the game's, which frames the
+ * scripted moves better, and the stick reaches the game for a turn). The keyboard's dodge action
  * runs after this and still tilts the stick. Reads before the mouse aim, which only works with L2. */
 enum { CAMERA_DEADZONE=24 };
 static uint64_t camera_last;
@@ -746,7 +753,7 @@ static void apply_free_camera(PadData *d) {
     const uint64_t step=camera_last && d->timestamp>camera_last ? d->timestamp-camera_last : 0;
     camera_last=d->timestamp;
     const float seconds=step>100000 ? 0.1f : (float)step/1e6f;
-    if (qte_rotation(d->timestamp)>=0) { spartanport_camera_steer(0,0,seconds,1); return; }
+    if (qte_prompt_up(d->timestamp)) { spartanport_camera_steer(0,0,seconds,1); return; }
     if (d->buttons & (BTN_L1|BTN_L2)) return;
     spartanport_camera_steer(camera_axis(d->right_x),camera_axis(d->right_y),seconds,0);
     d->right_x=d->right_y=128;

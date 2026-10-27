@@ -42,7 +42,13 @@ static const SpartanSignature spartanport_camera_site = {"c5 f8 29 83 b0 01 00 0
 /* lea r15, [rip+disp]: the gameplay view's global, in the camera stack's update. */
 static const SpartanSignature spartanport_camera_view_site = {"4c 89 f7 e8 ?? ?? ?? ?? 4c 8d 3d ?? ?? ?? ?? 49 8b 0f", 8};
 
-/* The global's image offset, from the lea at its signature site. */
+/* lea rax, [rip+disp] in the camera manager's update (0x3f273, one of 47 references): the player's
+ * object, whose matrix is at +0x40..+0x70 like a scene node's, so Kratos's position is at +0x70.
+ * Found in play by looking for what stays in front of the moving camera (SPARTAN_FREE_CAMERA_FIND). */
+enum { SPARTAN_CAMERA_PLAYER_POSITION = 0x70 };
+static const SpartanSignature spartanport_camera_player_site = {"81 e2 00 00 00 01 85 f2 74 45 48 8d 05 ?? ?? ?? ?? 48 8b 00", 10};
+
+/* The global's image offset, from a 7-byte lea at its signature site. */
 static inline uint64_t spartanport_camera_view_global(const unsigned char *code, uint64_t site) {
     int32_t displacement;
     memcpy(&displacement, code + SPARTAN_CAMERA_GLOBAL_DISPLACEMENT, 4);
@@ -88,11 +94,13 @@ static inline unsigned spartanport_camera_build_stub(unsigned char *out, uintptr
  * distances), not the render view, so the free camera turns the node itself.
  * Site: right after the four stores, lea rdx,[rip+disp] (the version counter; 7 bytes) with the node
  * in rax, the stack 16-byte aligned (five pushes and 0x48 after rbp) and rdx, rcx written next. The
- * stub saves rax, calls the port with the node, and loads rdx with the counter's address. */
+ * stub saves rax, calls the port with the node and the camera manager (rbx: 0x3f070 and 0x3f490 take
+ * it in rdi; [manager+0x10] is the node, +0xa4 the distance to the point the camera looks at, the
+ * one 0x3f214 puts the camera target at), and loads rdx with the counter's address. */
 enum { SPARTAN_CAMERA_NODE_MATRIX = 0x40, SPARTAN_CAMERA_NODE_PARENT = 0x80, SPARTAN_CAMERA_NODE_STALE = 0x130,
        SPARTAN_CAMERA_NODE_FLAGS = 0x140, SPARTAN_CAMERA_CONTROLLER_LENGTH = 7,
-       SPARTAN_CAMERA_CONTROLLER_DISPLACEMENT = 3, SPARTAN_CAMERA_NODE_IMMEDIATE = 7,
-       SPARTAN_CAMERA_COUNTER_IMMEDIATE = 21 };
+       SPARTAN_CAMERA_CONTROLLER_DISPLACEMENT = 3, SPARTAN_CAMERA_NODE_IMMEDIATE = 10,
+       SPARTAN_CAMERA_COUNTER_IMMEDIATE = 24, SPARTAN_CAMERA_MANAGER_DISTANCE = 0xa4 };
 static const SpartanSignature spartanport_camera_controller_site = {
     "c5 f8 29 60 50 c5 f8 29 40 60 c5 f8 29 48 70 48 8d 15 ?? ?? ?? ?? 48 8b 0a 48 ff c1 48 89 0a", 15};
 
@@ -108,12 +116,14 @@ static inline uint64_t spartanport_camera_controller_counter(const unsigned char
     return site + SPARTAN_CAMERA_CONTROLLER_LENGTH + (int64_t)displacement;
 }
 
-/* node_written: void node_written(unsigned char *node) (System V); counter: the replaced lea's target. */
+/* node_written: void node_written(unsigned char *node, const unsigned char *manager) (System V);
+ * counter: the replaced lea's target. */
 static inline unsigned spartanport_camera_build_controller_stub(unsigned char *out, uintptr_t node_written,
                                                                 uintptr_t counter, uintptr_t resume) {
     static const unsigned char body[] = {
         0x50, 0x50,                               /* push rax twice: rax kept, the stack still aligned */
         0x48,0x89,0xc7,                           /* mov rdi, rax */
+        0x48,0x89,0xde,                           /* mov rsi, rbx: the manager */
         0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, node_written */
         0xff,0xd0,                                /* call rax */
         0x58, 0x58,                               /* pop rax twice */
@@ -154,20 +164,14 @@ static inline void spartanport_camera_rotate(float *v, const float *k, float c, 
     for (int i = 0; i < 3; ++i) v[i] = v[i] * c + cross[i] * s + k[i] * dot * (1 - c);
 }
 
-/* Orbits a camera's world matrix (16 floats, row vectors) in place by the state's angles. sign: -1
- * when the camera looks down its third axis (the projection's [2][3]), +1 when it looks up it. up:
- * the world's vertical axis (unit). */
-static inline void spartanport_camera_orbit_world(float *world, float sign, const SpartanCameraState *state,
+/* Orbits a camera's world matrix (16 floats, row vectors) in place by the state's angles around a
+ * point of the world: yaw around the vertical axis through it, pitch around the camera's right
+ * axis through it. up: the world's vertical axis (unit). */
+static inline void spartanport_camera_orbit_about(float *world, const float *pivot, const SpartanCameraState *state,
                                                   const float *up) {
     float *position = world + 12;
-    float forward[3] = {world[8] * sign, world[9] * sign, world[10] * sign};
-    const float length = sqrtf(forward[0] * forward[0] + forward[1] * forward[1] + forward[2] * forward[2]);
-    if (!(length > 0)) return;
-    float pivot[3], offset[3];
-    for (int i = 0; i < 3; ++i) {
-        pivot[i] = position[i] + forward[i] / length * state->distance;
-        offset[i] = position[i] - pivot[i];
-    }
+    float offset[3];
+    for (int i = 0; i < 3; ++i) offset[i] = position[i] - pivot[i];
     float right[3] = {world[0], world[1], world[2]};
     const float right_length = sqrtf(right[0] * right[0] + right[1] * right[1] + right[2] * right[2]);
     if (!(right_length > 0)) return;
@@ -180,6 +184,18 @@ static inline void spartanport_camera_orbit_world(float *world, float sign, cons
     spartanport_camera_rotate(offset, right, pc, ps);
     spartanport_camera_rotate(offset, up, yc, ys);
     for (int i = 0; i < 3; ++i) position[i] = pivot[i] + offset[i];
+}
+
+/* The same around the point `state->distance` ahead of the camera. sign: -1 when the camera looks
+ * down its third axis (the projection's [2][3]), +1 when it looks up it. */
+static inline void spartanport_camera_orbit_world(float *world, float sign, const SpartanCameraState *state,
+                                                  const float *up) {
+    const float forward[3] = {world[8] * sign, world[9] * sign, world[10] * sign};
+    const float length = sqrtf(forward[0] * forward[0] + forward[1] * forward[1] + forward[2] * forward[2]);
+    if (!(length > 0)) return;
+    float pivot[3];
+    for (int i = 0; i < 3; ++i) pivot[i] = world[12 + i] + forward[i] / length * state->distance;
+    spartanport_camera_orbit_about(world, pivot, state, up);
 }
 
 /* view = [R^T 0; -p R^T 1], the rigid inverse of a world matrix. */

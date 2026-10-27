@@ -390,7 +390,9 @@ extern uintptr_t spartanport_camera_state_address(void);
 extern int spartanport_camera_configure(void);
 extern ABI void spartanport_camera_apply(unsigned char *render_view, uint64_t caller);
 extern void spartanport_camera_set_view_global(uintptr_t address);
-extern ABI void spartanport_camera_node_written(unsigned char *node);
+extern void spartanport_camera_set_image(uintptr_t image, uint64_t size);
+extern void spartanport_camera_set_player_global(uintptr_t address);
+extern ABI void spartanport_camera_node_written(unsigned char *node, const unsigned char *manager);
 
 /* The hooks below find their sites by signature (src/signature.h), so they work in any region
  * and version of the game whose code matches; a site that is not found leaves its feature off. */
@@ -693,6 +695,12 @@ static void install_camera_hook(Segment *segments, uint64_t count, uint64_t size
                                              (uintptr_t)(image + counter),
                                              (uintptr_t)(image + controller + SPARTAN_CAMERA_CONTROLLER_LENGTH));
     spartanport_camera_set_view_global((uintptr_t)(image + global));
+    spartanport_camera_set_image((uintptr_t)image, size);
+    const uint64_t player = spartanport_signature_find(image, size, &spartanport_camera_player_site);
+    if (player != UINT64_MAX && mapped(segments, count, player, SPARTAN_CAMERA_GLOBAL_NEXT)) {
+        const uint64_t player_global = spartanport_camera_view_global(image + player, player);
+        if (mapped(segments, count, player_global, 8)) spartanport_camera_set_player_global((uintptr_t)(image + player_global));
+    }
     protect(stub, page_size, 5);
     const int64_t reach[2] = {(int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + at + 5),
                               (int64_t)(uintptr_t)(stub + 128) - (int64_t)(uintptr_t)(image + controller + 5)};
