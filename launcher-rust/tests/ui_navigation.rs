@@ -52,14 +52,9 @@ const WIDE: [Page; 5] = [
     Page::Log,
 ];
 
-/// A state over `dir` only: data, ini and the home folders all live there.
+/// A state over `dir` only: data and ini live there.
 fn state_in(dir: &Path) -> State {
-    let root = dir.display().to_string();
-    let env = move |key: &str| match key {
-        "APPDATA" | "USERPROFILE" | "HOME" | "XDG_CONFIG_HOME" => Some(root.clone()),
-        _ => None,
-    };
-    let mut state = State::new(Paths::from_env(dir, &env));
+    let mut state = State::new(Paths::from_env(dir, &|_| None));
     // These tests are about the tabs, not the splash that covers them at start.
     state.splash.done = true;
     state

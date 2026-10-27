@@ -25,8 +25,8 @@ fn main() {
         .ok()
         .and_then(|exe| exe.parent().map(Path::to_path_buf))
         .unwrap_or_else(|| PathBuf::from("."));
-    // The environment forwarded and the folders derived once, for every route; a packaged port,
-    // or the checkout a cargo build sits in (`launcher-rust/target/...`).
+    // The environment and the folders derived once, for every route; a packaged port, or the
+    // checkout a cargo build sits in (`launcher-rust/target/...`).
     let (route, context) = startup::start(&args, &exe_dir, std::env::vars_os(), cfg!(windows));
     match route {
         Route::Version => println!("{APP_NAME} {}", ReleaseId::this().plain()),

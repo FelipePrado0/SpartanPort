@@ -748,6 +748,9 @@ mod tests {
             })
             .collect();
         assert_eq!(names, ["God of War III", "SpartanPort"]);
+        let old = entry(&shortcuts, "0");
+        assert_eq!(text(old, "Exe"), "\"/old\"");
+        assert!(matches!(old["appid"], Vdf::U32(7)));
     }
 
     #[test]
