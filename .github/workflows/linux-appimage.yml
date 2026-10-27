@@ -138,7 +138,7 @@ jobs:
               > "$RUNNER_TEMP/graphics-ci/run-$attempt.log" 2>&1 || status=$?
             cat "$RUNNER_TEMP/graphics-ci/run-$attempt.log"
             if [[ $status != 0 ]]; then
-              timeout 45 gdb --batch -ex run -ex 'bt full' \
+              timeout 45 gdb --batch -ex run -ex 'bt full' -ex 'info registers' -ex 'x/12i $pc-24' \
                 --args "$RUNNER_TEMP/graphics-ci/graphics-settings-test" \
                 > "$RUNNER_TEMP/graphics-ci/backtrace.log" 2>&1 || true
               cat "$RUNNER_TEMP/graphics-ci/backtrace.log"

@@ -342,6 +342,18 @@ int main() {
     assert(v.fps_limit == 30);
     spartanportgpu_native_setting(0xfd2);
     assert(v.fps_limit == 0);
+    for (const char* language : {"1", "17"}) {
+        SetEnvironment("SPARTAN_LANGUAGE", language);
+        const char* english[] = {"Windowed", "Borderless", "Fullscreen"};
+        const char* portuguese[] = {"Janela", "Sem bordas", "Tela cheia"};
+        for (int mode = -1; mode <= G::DisplayModeCount; ++mode) {
+            v.display_mode = mode;
+            const int expected = std::clamp(mode, 0, G::DisplayModeCount - 1);
+            const char* label = language[0] == '1' && language[1] == '7' ? portuguese[expected] : english[expected];
+            assert(std::string(text(0xfc5)) == std::string("[ArrowSpacer]") + label + "[ArrowSpacer]");
+        }
+    }
+    SetEnvironment("SPARTAN_LANGUAGE", "");
     v.display_mode = G::Windowed;
     spartanportgpu_native_setting(0xfe5);
     assert(v.display_mode == G::Borderless);
