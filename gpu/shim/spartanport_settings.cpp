@@ -553,9 +553,10 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         else if (index == 3) value = engine_supported ? std::to_string(v.engine_fps.load()) : "-";
         else if (index == 4) value = v.monitor < 0 ? (pt ? "Principal" : "Primary") : std::to_string(v.monitor + 1);
         else if (index == 5) {
+            const int mode = std::clamp(v.display_mode.load(), 0, 2);
             const char* en[] = {"Windowed", "Borderless", "Fullscreen"};
             const char* br[] = {"Janela", "Sem bordas", "Tela cheia"};
-            value = (pt ? br : en)[std::clamp(v.display_mode.load(), 0, 2)];
+            value = pt ? br[mode] : en[mode];
         } else value = (index == 6 ? v.vsync.load() : v.hdr.load()) ? (pt ? "Ligado" : "On") : (pt ? "Desligado" : "Off");
         const bool selected = group != 0xfc0 && (index != 3 || engine_supported);
         static thread_local std::string labels[8];
