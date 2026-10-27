@@ -111,7 +111,10 @@ public:
             return result;
         }
         const std::uint64_t serial = DecodeMarker(marker);
-        const std::uint64_t first = serial > before ? serial - before : 1;
+        // Serials older than the ring's capacity are gone: never walk them.
+        const std::uint64_t oldest =
+            next_serial > slots.size() ? next_serial - slots.size() : std::uint64_t{1};
+        const std::uint64_t first = std::max(serial > before ? serial - before : 1, oldest);
         const std::uint64_t last = std::min(serial + after, next_serial - 1);
         for (std::uint64_t s = first; s <= last; ++s) {
             const CheckpointRecord& slot = slots[s % slots.size()];

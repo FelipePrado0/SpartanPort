@@ -38,7 +38,8 @@ static u32 DrawPrimitiveOf(const GraphicsPipeline& pipeline) {
     const auto prim = pipeline.GetGraphicsKey().prim_type;
     const bool aux_tess =
         (prim == AmdGpu::PrimitiveType::RectList || prim == AmdGpu::PrimitiveType::QuadList) &&
-        !pipeline.GetStages()[u32(Shader::SwStage::TessellationControl)];
+        (!pipeline.GetStages()[u32(Shader::SwStage::TessellationControl)] ||
+         !pipeline.GetStages()[u32(Shader::SwStage::TessellationEval)]);
     return DrawPrimitive(static_cast<u32>(prim), aux_tess);
 }
 

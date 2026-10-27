@@ -103,9 +103,10 @@ public:
         std::fputs(DescribeCheckpointData(ring, stages).c_str(), stdout);
         // The commands around the last one the front of the pipe reached: the hang is between
         // that marker and the next.
-        const void* hung = data.empty() ? nullptr : data.front().pCheckpointMarker;
+        const void* hung = nullptr;
         for (const auto& entry : data) {
-            if (entry.stage == vk::PipelineStageFlagBits::eTopOfPipe) {
+            if (entry.stage == vk::PipelineStageFlagBits::eTopOfPipe &&
+                DecodeMarker(entry.pCheckpointMarker) > DecodeMarker(hung)) {
                 hung = entry.pCheckpointMarker;
             }
         }
@@ -116,6 +117,8 @@ public:
                 std::printf("%s %s\n", record.serial == DecodeMarker(hung) ? " >" : "  ",
                             FormatCheckpoint(record).c_str());
             }
+        } else {
+            std::puts("GPU: no TopOfPipe checkpoint reported");
         }
         const auto last = ring.Last(16);
         std::printf("GPU: last %zu checkpoints recorded by the CPU:\n", last.size());
