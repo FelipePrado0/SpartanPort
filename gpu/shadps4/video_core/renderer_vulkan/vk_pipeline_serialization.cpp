@@ -1024,6 +1024,11 @@ bool PipelineCache::CheckCacheProfile() {
         LOG_WARNING(Render, "Pipeline cache skipped: SPARTAN_VK_DISABLE_EXT is active");
         return false;
     }
+    // spartanport: SPARTAN_EMPTY_FS=1 changes pipelines without changing their keys.
+    if (EmulatorSettings.IsEmptyFragmentShader()) {
+        LOG_WARNING(Render, "Pipeline cache skipped: SPARTAN_EMPTY_FS is active");
+        return false;
+    }
 
     Storage::DataBase::Instance().Open();
 

@@ -10,6 +10,7 @@
 #include "common/assert.h"
 #include "shader_recompiler/backend/spirv/emit_spirv_discard_frag.h"
 #include "shader_recompiler/backend/spirv/emit_spirv_quad_rect.h"
+#include "core/emulator_settings.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_blend_rewrite.h"
 #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
@@ -248,11 +249,17 @@ GraphicsPipeline::GraphicsPipeline(
             .module = modules[stage],
             .pName = "main",
         });
-    } else if (runtime_infos[u32(Shader::SwStage::Fragment)].hw.fs.clip_distance_emulation) {
+    } else if (runtime_infos[u32(Shader::SwStage::Fragment)].hw.fs.clip_distance_emulation ||
+               EmulatorSettings.IsEmptyFragmentShader()) {
         if (!preloading) {
             const auto& vs = runtime_infos[static_cast<u32>(Shader::SwStage::Vertex)].hw.vs;
 
-            sdata.fragment = Shader::Backend::SPIRV::EmitDiscardFragmentShader(vs.outputs);
+            // spartanport: SPARTAN_EMPTY_FS=1 gives every pipeline a fragment stage, to test a
+            // driver that hangs on a tessellated pipeline without one (#334).
+            sdata.fragment =
+                runtime_infos[u32(Shader::SwStage::Fragment)].hw.fs.clip_distance_emulation
+                    ? Shader::Backend::SPIRV::EmitDiscardFragmentShader(vs.outputs)
+                    : Shader::Backend::SPIRV::EmitEmptyFragmentShader();
         }
         shader_stages.emplace_back(vk::PipelineShaderStageCreateInfo{
             .stage = vk::ShaderStageFlagBits::eFragment,

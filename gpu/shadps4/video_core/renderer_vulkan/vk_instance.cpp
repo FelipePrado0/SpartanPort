@@ -16,6 +16,7 @@
 #include "sdl_window.h"
 #include "video_core/amdgpu/spartanport_msaa.h"
 #include "video_core/amdgpu/spartanport_msaa_default.h"
+#include "core/emulator_settings.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_amd_paths.h"
 #include "video_core/renderer_vulkan/spartanport_vertex_input_default.h"
@@ -442,6 +443,10 @@ bool Instance::CreateDevice() {
             "unavailable (VK_NV_device_diagnostic_checkpoints missing or disabled)";
     }
     std::printf("GPU: checkpoints: %s\n", checkpoints_line.c_str());
+    if (EmulatorSettings.IsEmptyFragmentShader()) { // spartanport: vk_graphics_pipeline.cpp
+        std::printf("GPU: empty fragment shader on every pipeline without one (SPARTAN_EMPTY_FS=1; "
+                    "disk pipeline cache off)\n");
+    }
     list_restart = add_extension(VK_EXT_PRIMITIVE_TOPOLOGY_LIST_RESTART_EXTENSION_NAME);
     if (list_restart) {
         list_restart_features =
@@ -614,7 +619,8 @@ bool Instance::CreateDevice() {
     // SPARTAN_VK_DISABLE_EXT has turned something off they may not match, so leave binaries out.
     // Checked after the last optional request, the DLSS ones included, so that every disabled
     // extension counts.
-    pipeline_binaries = pipeline_binaries && disabled_extensions.empty();
+    pipeline_binaries = pipeline_binaries && disabled_extensions.empty() &&
+                        !EmulatorSettings.IsEmptyFragmentShader(); // spartanport: SPARTAN_EMPTY_FS
     vk::StructureChain device_chain = {
         vk::DeviceCreateInfo{
             .queueCreateInfoCount = queue_family_index == sparse_queue_family_index ? 1u : 2u,
