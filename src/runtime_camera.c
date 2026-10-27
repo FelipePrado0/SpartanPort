@@ -93,6 +93,16 @@ static float camera_limits[2] = {60, 25};
 
 int spartanport_camera_stick_enabled(void) { return camera_stick; }
 
+/* The player's switch (G, a tap of R3: runtime_pad.c), for the boss fights: off, the camera goes
+ * back to the game's and the right stick is the game's again. */
+static int camera_off;
+int spartanport_camera_on(void) { return !camera_off; }
+void spartanport_camera_toggle(void) {
+    camera_off = !camera_off;
+    printf("Free camera: %s\n", camera_off ? "off (the game's camera)" : "on");
+    fflush(stdout);
+}
+
 static void camera_configure_stick(void) {
     const char *on = getenv("SPARTAN_FREE_CAMERA");
     camera_stick = on && *on && strcmp(on, "0");

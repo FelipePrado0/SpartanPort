@@ -8,7 +8,8 @@
  *   IJKL d-pad (I up, K down, J left, L right).
  * SPARTAN_KEY_MAP also takes the mouse: Mouse Left, Mouse Right, Mouse Middle, Mouse Back,
  * Mouse Forward, Wheel Up and Wheel Down (see mouse_names). The wheel cycles the weapons
- * (weapon_next, weapon_prev: apply_weapon_cycle). */
+ * (weapon_next, weapon_prev: apply_weapon_cycle). G turns the free camera off and on (camera:
+ * apply_free_camera). */
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "gpu/spartanportgpu.h"
@@ -38,8 +39,9 @@ enum {
     CLICK_LEFT=0x40000000, CLICK_RIGHT=0x80000000,
     /* Host-only actions of the keyboard map: dodge tilts the right stick (apply_dodge); rage and
      * grab press two buttons together (apply_combos); weapon_next and weapon_prev press the
-     * d-pad button of the next or previous weapon (apply_weapon_cycle). */
-    DODGE=0x20000000, RAGE=0x10000000, GRAB=0x08000000,
+     * d-pad button of the next or previous weapon (apply_weapon_cycle); camera turns the free
+     * camera off and on (apply_free_camera; bit 0 is not a button of the pad). */
+    DODGE=0x20000000, RAGE=0x10000000, GRAB=0x08000000, CAMERA_TOGGLE=0x1,
     WEAPON_NEXT=0x04000000, WEAPON_PREV=0x02000000,
     MOVE_UP=0x00010000, MOVE_DOWN=0x00020000, MOVE_LEFT=0x00040000, MOVE_RIGHT=0x00080000,
     LOOK_UP=0x00200000, LOOK_DOWN=0x00400000, LOOK_LEFT=0x00800000, LOOK_RIGHT=0x01000000,
@@ -93,6 +95,7 @@ static uint16_t touch_axis(float v, int max) {
  * right source with L1 held is a left click (photo mode on pads without a touchpad). */
 enum { CLICK_LEAD_US=50000, CLICK_HOLD_US=50000, CLICK_TAIL_US=100000 };
 static struct { int side; uint64_t pressed, released; } click={-1,0,0};
+static uint32_t pad_held; /* the buttons of the last read that came from the gamepad */
 static void play_click(PadData *d) {
     const uint64_t now=d->timestamp;
     uint32_t sources=d->buttons & (CLICK_LEFT|CLICK_RIGHT);
@@ -148,6 +151,7 @@ static const struct { const char *name; uint32_t ps; } ps_names[]={
     {"options",BTN_OPTIONS}, {"touchpad",CLICK_LEFT}, {"touchpad_left",CLICK_LEFT}, {"touchpad_right",CLICK_RIGHT},
     {"up",BTN_UP}, {"down",BTN_DOWN}, {"left",BTN_LEFT}, {"right",BTN_RIGHT},
     {"dodge",DODGE}, {"rage",RAGE}, {"grab",GRAB}, {"weapon_next",WEAPON_NEXT}, {"weapon_prev",WEAPON_PREV},
+    {"camera",CAMERA_TOGGLE},
     {"move_up",MOVE_UP}, {"move_down",MOVE_DOWN}, {"move_left",MOVE_LEFT}, {"move_right",MOVE_RIGHT},
     {"look_up",LOOK_UP}, {"look_down",LOOK_DOWN}, {"look_left",LOOK_LEFT}, {"look_right",LOOK_RIGHT},
 };
@@ -172,7 +176,8 @@ static ButtonMap key_map={{
     {SDL_SCANCODE_W,MOVE_UP}, {SDL_SCANCODE_S,MOVE_DOWN}, {SDL_SCANCODE_A,MOVE_LEFT}, {SDL_SCANCODE_D,MOVE_RIGHT},
     {SDL_SCANCODE_UP,LOOK_UP}, {SDL_SCANCODE_DOWN,LOOK_DOWN},
     {SDL_SCANCODE_LEFT,LOOK_LEFT}, {SDL_SCANCODE_RIGHT,LOOK_RIGHT},
-},25};
+    {SDL_SCANCODE_G,CAMERA_TOGGLE},
+},26};
 
 static char *trim(char *text) {
     while (*text==' ' || *text=='\t') ++text;
@@ -509,6 +514,7 @@ static void sample_host(PadData *d) {
     d->connected=1; d->connected_count=connected_count ? connected_count : 1;
     d->timestamp=now_us();
     SDL_Gamepad *g=current_gamepad();
+    pad_held=0;
     watch_wheel();
     if (spartanportgpu_overlay_captures_input()) { drop_wheel(); return; } /* settings menu open: neutral input */
     const bool *k=SDL_WasInit(SDL_INIT_VIDEO) ? SDL_GetKeyboardState(NULL) : NULL;
@@ -517,6 +523,7 @@ static void sample_host(PadData *d) {
         for (size_t i=0;i<pad_map.count;++i)
             if (SDL_GetGamepadButton(g,(SDL_GamepadButton)pad_map.entries[i].source)) d->buttons|=pad_map.entries[i].ps;
         const uint32_t mapped=d->buttons;
+        pad_held=mapped;
         d->left_x=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFTX)); d->left_y=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFTY));
         d->right_x=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHTX)); d->right_y=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHTY));
         d->l2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFT_TRIGGER)); d->r2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
@@ -740,8 +747,9 @@ static void apply_dodge(PadData *d) {
  * items' aim) or a QTE prompt up (any of them: the camera goes back to the game's, which frames the
  * scripted moves better, and the stick reaches the game for a turn). The keyboard's dodge action
  * runs after this and still tilts the stick. Reads before the mouse aim, which only works with L2. */
-enum { CAMERA_DEADZONE=24 };
+enum { CAMERA_DEADZONE=24, CAMERA_TAP_US=400000 };
 static uint64_t camera_last;
+static struct { bool key_held, r3_held, r3_alone; uint64_t r3_since; } camera_toggle;
 static float camera_axis(uint8_t value) {
     const int v=value-128;
     if (abs(v)<CAMERA_DEADZONE) return 0;
@@ -749,11 +757,23 @@ static float camera_axis(uint8_t value) {
     return (v<0 ? -1.0f : 1.0f)*(t>1 ? 1 : t*t);  /* squared: fine control near the centre */
 }
 static void apply_free_camera(PadData *d) {
+    const bool key=(d->buttons & CAMERA_TOGGLE)!=0;
+    d->buttons&=~CAMERA_TOGGLE;
     if (!spartanport_camera_stick_enabled()) return;
+    /* The toggle: the keyboard's camera key, or a tap of the pad's R3 alone (R3 with L3 is Rage of
+     * Sparta, with L2 the settings menu, with L1 and R1 the frame rate; R3 still reaches the game). */
+    if (key && !camera_toggle.key_held) spartanport_camera_toggle();
+    camera_toggle.key_held=key;
+    const bool r3=(pad_held & BTN_R3)!=0;
+    if (r3 && !camera_toggle.r3_held) { camera_toggle.r3_since=d->timestamp; camera_toggle.r3_alone=true; }
+    if (r3 && (d->buttons & (BTN_L1|BTN_R1|BTN_L2|BTN_L3))) camera_toggle.r3_alone=false;
+    if (!r3 && camera_toggle.r3_held && camera_toggle.r3_alone && d->timestamp-camera_toggle.r3_since<CAMERA_TAP_US)
+        spartanport_camera_toggle();
+    camera_toggle.r3_held=r3;
     const uint64_t step=camera_last && d->timestamp>camera_last ? d->timestamp-camera_last : 0;
     camera_last=d->timestamp;
     const float seconds=step>100000 ? 0.1f : (float)step/1e6f;
-    if (qte_prompt_up(d->timestamp)) { spartanport_camera_steer(0,0,seconds,1); return; }
+    if (!spartanport_camera_on() || qte_prompt_up(d->timestamp)) { spartanport_camera_steer(0,0,seconds,1); return; }
     if (d->buttons & (BTN_L1|BTN_L2)) return;
     spartanport_camera_steer(camera_axis(d->right_x),camera_axis(d->right_y),seconds,0);
     d->right_x=d->right_y=128;

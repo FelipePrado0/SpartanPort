@@ -121,6 +121,10 @@ Para uma pessoa que já conhece os hooks do port e faz RE em x86-64 (IDA/Ghidra 
 - **Cortes:** o giro volta a 0° quando a câmera do jogo salta (> 4 unidades ou > 30° numa
   atualização) ou troca de nó: cada cena começa no enquadramento do jogo.
 - **QTE:** com qualquer prompt na tela a câmera volta à do jogo e o analógico vai para o jogo.
+- **Liga/desliga (testado no jogo):** G no teclado (ação `camera` do `SPARTAN_KEY_MAP`; F já é o
+  Rage of Sparta) ou um toque no R3 do controle (sem L1/R1/L2/L3 junto, para não disparar com o Rage
+  L3+R3, o menu R3+L2 ou o combo de FPS). Desligada, a câmera volta à do jogo e o analógico direito
+  volta a ser a esquiva. É a saída para as lutas de chefe até haver uma detecção automática.
 - **Problemas vistos no teste:**
   - a câmera entra no cenário quando há parede ao lado do Kratos e se gira para esse lado
     (falta colisão: encurtar a distância até o Kratos quando algo fica entre ele e a câmera);

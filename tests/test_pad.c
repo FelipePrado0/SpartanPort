@@ -21,6 +21,9 @@ static int camera_stick;
 static float camera_x, camera_y;
 static int camera_steers, camera_recenters;
 int spartanport_camera_stick_enabled(void) { return camera_stick; }
+static int camera_on=1, camera_toggles;
+int spartanport_camera_on(void) { return camera_on; }
+void spartanport_camera_toggle(void) { camera_on=!camera_on; ++camera_toggles; }
 void spartanport_camera_steer(float x, float y, float seconds, int recenter) {
     (void)seconds;
     if (recenter) { ++camera_recenters; return; }
@@ -167,6 +170,18 @@ int main(void) {
     data=read_pad();
     assert(data.right_x==128 && camera_steers==steers+1);
     spartanport_qte.block=0;
+    /* The keyboard's camera key (G) turns it off: the game's camera, and the stick is the game's
+     * again; the key itself never reaches the game. Again, on. */
+    inject(path,"camera rx=255");
+    data=read_pad();
+    assert(camera_toggles==1 && !camera_on && data.right_x==255 && !(data.buttons & CAMERA_TOGGLE));
+    data=read_pad();  /* still held: no second toggle */
+    assert(camera_toggles==1);
+    inject(path,"rx=255");
+    data=read_pad();
+    inject(path,"camera rx=128");  /* a size of its own: on Windows the file is told apart by mtime and size */
+    data=read_pad();
+    assert(camera_toggles==2 && camera_on);
     camera_stick=0;
     inject(path,"");
     data=read_pad();

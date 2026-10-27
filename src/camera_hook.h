@@ -152,6 +152,8 @@ typedef struct {
 extern "C" {
 #endif
 int spartanport_camera_stick_enabled(void);
+int spartanport_camera_on(void);
+void spartanport_camera_toggle(void);
 void spartanport_camera_steer(float x, float y, float seconds, int recenter);
 #ifdef __cplusplus
 }
