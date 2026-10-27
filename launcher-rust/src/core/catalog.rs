@@ -3,8 +3,9 @@
 
 use crate::core::options::{
     Choice, AIM_STYLES, ANISOTROPY, DISPLAY_MODES, DRAW_PIPE, ENGINE_FPS_CHOICES, FPS_LIMITS,
-    FRAMES_QUEUED, GLYPH_STYLES, LANGUAGES, LIVE_RESOLUTION, NO_MSAA, OUTPUTS, PRESETS, READBACKS,
-    STICK_PROMPTS, STREAM_MEMORY, UI_LANGUAGES, UI_SCALES, UPSCALERS, VIDEO_BACKENDS,
+    FRAMES_QUEUED, FRAME_GENERATION, FRAME_GENERATION_FRAMES, GLYPH_STYLES, LANGUAGES,
+    LIVE_RESOLUTION, NO_MSAA, OUTPUTS, PRESETS, READBACKS, STICK_PROMPTS, STREAM_MEMORY,
+    UI_LANGUAGES, UI_SCALES, UPSCALERS, VIDEO_BACKENDS,
 };
 
 /// The file a setting lives in.
@@ -345,6 +346,20 @@ pub static SETTINGS: &[Setting] = &[
     ini("vibration", Kind::Int, Int(100), true, 21),
     ini("upscaler", Pick(UPSCALERS), Text("off"), true, 0),
     ini("preset", Pick(PRESETS), Text("1"), true, 1),
+    ini(
+        "frame_generation",
+        Pick(FRAME_GENERATION),
+        Text("off"),
+        true,
+        26,
+    ),
+    ini(
+        "frame_generation_frames",
+        Pick(FRAME_GENERATION_FRAMES),
+        Text("1"),
+        true,
+        27,
+    ),
     ini("object_motion", Flag, Bool(true), false, 2),
     ini("output_res", Pick(OUTPUTS), Text("1920x1080"), false, 4),
     ini(
@@ -487,26 +502,27 @@ mod tests {
                 "cheat_very_hard"
             ]
         );
-        assert_eq!(keys.last(), Some(&"mouse_aim_sensitivity"));
+        assert_eq!(keys.last(), Some(&"frame_generation_frames"));
         let shown: Vec<_> = rows.iter().filter(|s| s.written).map(|s| s.key).collect();
         assert_eq!(shown, SHOWN_INI_KEYS.iter().copied().collect::<Vec<_>>());
     }
 
     #[test]
-    fn shown_ini_keys_are_the_23_controls_of_the_window() {
-        assert_eq!(SHOWN_INI_KEYS.len(), 23);
+    fn shown_ini_keys_are_the_25_controls_of_the_window() {
+        assert_eq!(SHOWN_INI_KEYS.len(), 25);
         for seeded in ["monitor", "hdr", "glyph_style"] {
             assert!(SHOWN_INI_KEYS.contains(&seeded), "{seeded}");
         }
         assert!(INI_FLAGS.contains(&"hdr"));
-        for shown in ["upscaler", "preset"] {
+        for shown in [
+            "upscaler",
+            "preset",
+            "frame_generation",
+            "frame_generation_frames",
+        ] {
             assert!(SHOWN_INI_KEYS.contains(&shown), "{shown}");
         }
-        for parked in [
-            "object_motion",
-            "output_res",
-            "live_resolution",
-        ] {
+        for parked in ["object_motion", "output_res", "live_resolution"] {
             assert!(!SHOWN_INI_KEYS.contains(&parked), "{parked}");
         }
     }

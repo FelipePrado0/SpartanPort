@@ -321,6 +321,7 @@ std::string OverlayText() {
     sample.fps = frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f;
     sample.frame_ms = frame_ms_avg;
     sample.upscaler = UpscalerLabel(s.upscaler);
+    sample.game_fps = s.frame_generation != 0 ? s.fg_game_fps.load() : 0.0f;
     return P::Format(sample, items, s.overlay_layout == 0);
 }
 
@@ -477,6 +478,27 @@ void ImageTab() {
         ChoiceRow("Quality preset", s.preset, preset_labels, preset_values, int(std::size(preset_values)),
                   "Share of the Render resolution the game renders at; the upscaler rebuilds the full "
                   "Render resolution. Lower renders faster.");
+        // Frame generation (frame_generation_policy.h): AMD FSR switches live, DLSS on restart.
+        static const int fg_values[] = {0, 1, 2};
+        const char* const fg_labels[] = {
+            "Off", "AMD FSR",
+            s.fg_dlss_supported ? "NVIDIA DLSS (restart)" : "NVIDIA DLSS (unavailable)"};
+#ifdef _WIN32
+        const int fg_count = 3;
+#else
+        const int fg_count = 2;
+#endif
+        ChoiceRow("Frame generation", s.frame_generation, fg_labels, fg_values, fg_count,
+                  "A generated frame between game frames: up to twice the frames on screen. Needs "
+                  "an upscaler. AMD FSR: any graphics card, applied at once. NVIDIA DLSS: RTX 40/50, "
+                  "on restart.");
+        static const int frames_values[] = {1, 2, 3};
+        static const char* const frames_labels[] = {"2x", "3x", "4x"};
+        ImGui::BeginDisabled(s.frame_generation != 2 || !s.fg_dlss_supported);
+        ChoiceRow("Generated frames", s.frame_generation_frames, frames_labels, frames_values,
+                  std::min(3, std::max(1, s.fg_dlss_max_frames.load())),
+                  "NVIDIA DLSS only. 3x and 4x need an RTX 50.");
+        ImGui::EndDisabled();
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
@@ -506,6 +528,9 @@ void ImageTab() {
         else if (const char* problem = s.dlss_problem.load()) InfoRow("Upscaler status", problem);
         else if (const char* status = s.upscaler_status.load(); status && s.upscaler == SpartanSettings::UpscalerDlss)
             InfoRow("Upscaler status", status);
+        if (s.frame_generation == 0) InfoRow("Frame generation", "Off");
+        else if (const char* problem = s.fg_problem.load()) InfoRow("Frame generation", problem);
+        else if (const char* status = s.fg_status.load()) InfoRow("Frame generation", status);
         std::snprintf(text, sizeof(text), "%d x %d", iw, ih);
         InfoRow("Game image", text);
         std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
@@ -658,7 +683,10 @@ int RestartChanges() {
            (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
            (s.anisotropy != s.startup_anisotropy) + (s.preset != s.startup_preset) +
            ((s.upscaler == SpartanSettings::UpscalerOff) != (s.startup_upscaler == SpartanSettings::UpscalerOff) ||
-            (s.upscaler == SpartanSettings::UpscalerTaa) != (s.startup_upscaler == SpartanSettings::UpscalerTaa));
+            (s.upscaler == SpartanSettings::UpscalerTaa) != (s.startup_upscaler == SpartanSettings::UpscalerTaa)) +
+           // DLSS frame generation loads with the device; FSR's switches live.
+           ((s.frame_generation == 2) != (s.startup_frame_generation == 2) ||
+            (s.frame_generation == 2 && s.frame_generation_frames != s.startup_frame_generation_frames));
 }
 
 void Menu() {

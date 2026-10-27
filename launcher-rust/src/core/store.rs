@@ -74,7 +74,9 @@ impl Store {
         // The old "Enable the upscaler" switch kept the upscaler off whatever the ini named (the
         // game always saves one); the Upscaler choice's Off does that now, in the game's menus too.
         if let Some(on) = app.0.remove("experimental_upscaler") {
-            if on != Value::Bool(true) && ini.values.get("upscaler").map(String::as_str) != Some("off") {
+            if on != Value::Bool(true)
+                && ini.values.get("upscaler").map(String::as_str) != Some("off")
+            {
                 ini.values.insert("upscaler".into(), "off".into());
                 let off = IndexMap::from([("upscaler".to_string(), "off".to_string())]);
                 let _ = crate::core::graphics_options::write_keys(&paths.ini_path(), &off);
@@ -273,7 +275,7 @@ mod tests {
         // A parked key is not written; the upscaler and its preset are shown, so they are.
         assert!(!out.contains_key("object_motion"));
         assert!(out.contains_key("upscaler") && out.contains_key("preset"));
-        assert_eq!(out.len(), 23);
+        assert_eq!(out.len(), 25);
         assert_eq!(out.keys().next().unwrap(), "display_mode");
     }
 
@@ -326,7 +328,9 @@ mod tests {
         std::fs::write(paths.ini_path(), "upscaler=fsr3\npreset=1\n").unwrap();
         let (store, _) = Store::load(&paths);
         assert_eq!(store.text("upscaler"), "off");
-        assert!(std::fs::read_to_string(paths.ini_path()).unwrap().contains("upscaler=off"));
+        assert!(std::fs::read_to_string(paths.ini_path())
+            .unwrap()
+            .contains("upscaler=off"));
         assert!(store.json("experimental_upscaler").is_none());
         // Once: a later choice in the game or the launcher stays.
         std::fs::write(paths.ini_path(), "upscaler=fsr411\npreset=1\n").unwrap();

@@ -116,6 +116,18 @@ pub static UPSCALERS: &[Choice] = &[
     ),
 ];
 
+/// spartanport.ini frame_generation; the game reads the same values (frame_generation_policy.h).
+pub static FRAME_GENERATION: &[Choice] = &[
+    cr("off", "Off", "Выключен"),
+    c("fsr", "AMD FSR (every GPU)"),
+    #[cfg(windows)]
+    c("dlss", "NVIDIA DLSS (RTX 40/50)"),
+];
+
+/// spartanport.ini frame_generation_frames: generated frames per game frame (DLSS only above 1).
+pub static FRAME_GENERATION_FRAMES: &[Choice] =
+    &[c("1", "2x"), c("2", "3x (RTX 50)"), c("3", "4x (RTX 50)")];
+
 /// Ordered by render scale; the values are the ini's preset numbers (Ultra Quality was added as 5).
 pub static PRESETS: &[Choice] = &[
     c("0", "Native AA (100%)"),
@@ -479,7 +491,9 @@ mod tests {
 
     #[test]
     fn every_table_has_unique_values() {
-        let tables: [&[Choice]; 20] = [
+        let tables: [&[Choice]; 22] = [
+            FRAME_GENERATION,
+            FRAME_GENERATION_FRAMES,
             DISPLAY_MODES,
             ANISOTROPY,
             FPS_LIMITS,

@@ -8,7 +8,9 @@ use iced::widget::{button, column, text};
 use iced::Element;
 
 use crate::core::i18n::tr;
-use crate::core::options::{ANISOTROPY, DISPLAY_MODES, PRESETS, UPSCALERS};
+use crate::core::options::{
+    ANISOTROPY, DISPLAY_MODES, FRAME_GENERATION, FRAME_GENERATION_FRAMES, PRESETS, UPSCALERS,
+};
 use crate::ui::app::{Message, State};
 use crate::ui::theme;
 use crate::ui::widgets::{checkbox, choice_pairs, row, section, select, select_pairs};
@@ -19,11 +21,15 @@ pub fn view(state: &State) -> Element<'_, Message> {
     let ini = |key: &str| state.store.text(key);
     // Each preset with the size the game renders at for the chosen Render resolution (Performance
     // page), as the game's menus show it: "Quality (1706x960)".
-    let output = crate::core::options::resolution_size(&ini("render_resolution")).unwrap_or((1920, 1080));
+    let output =
+        crate::core::options::resolution_size(&ini("render_resolution")).unwrap_or((1920, 1080));
     let preset_pairs: Vec<(String, String)> = choice_pairs(PRESETS, lang)
         .into_iter()
         .map(|(value, label)| {
-            let name = label.rsplit_once(" (").map_or(label.as_str(), |(name, _)| name).to_string();
+            let name = label
+                .rsplit_once(" (")
+                .map_or(label.as_str(), |(name, _)| name)
+                .to_string();
             match crate::core::graphics_options::upscale_render_size(&value, output) {
                 Some((w, h)) => (value, format!("{name} ({w}x{h})")),
                 None => (value, label),
@@ -111,6 +117,25 @@ pub fn view(state: &State) -> Element<'_, Message> {
             Some(&hint(
                 "Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution."
             )),
+        ),
+        row(
+            state.rtl,
+            &tr(lang, "Frame generation"),
+            select("frame_generation", FRAME_GENERATION, &ini("frame_generation"), lang),
+            Some(&hint(
+                "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows; 3x and 4x need an RTX 50."
+            )),
+        ),
+        row(
+            state.rtl,
+            &tr(lang, "Generated frames"),
+            select(
+                "frame_generation_frames",
+                FRAME_GENERATION_FRAMES,
+                &ini("frame_generation_frames"),
+                lang,
+            ),
+            None,
         ),
         section(state.rtl, &tr(lang, "Textures")),
         row(

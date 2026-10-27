@@ -22,6 +22,7 @@
 #include "common/types.h"
 #include "video_core/renderer_vulkan/vk_common.h"
 #include "video_core/renderer_vulkan/vk_dlss.h"
+#include "video_core/renderer_vulkan/vk_frame_generation.h"
 #include "video_core/renderer_vulkan/vk_fsr4.h"
 #include "video_core/texture_cache/image.h"
 
@@ -121,6 +122,11 @@ public:
                          vk::ImageView& view, vk::ImageLayout& layout);
     /// Whether RedirectSampled would replace `image` (it may record a barrier then).
     [[nodiscard]] bool RedirectsSampled(VideoCore::ImageId image) const;
+
+    /// spartanport: frame generation, fed after the upscale (RunScaled), asked by the presenter.
+    [[nodiscard]] FrameGeneration& GetFrameGeneration() noexcept {
+        return *frame_generation;
+    }
 
     /// Presenter: the output-size display buffer standing in for the guest one at `address`.
     struct Display {
@@ -276,6 +282,7 @@ private:
     bool resources_fsr4 = false;  ///< made for FSR 4 (no FSR 3 context)
     bool resources_taa = false;
     std::unique_ptr<Fsr4Upscaler> fsr4;
+    std::unique_ptr<FrameGeneration> frame_generation;
     bool fsr4_failed = false;
     bool dlss_failed = false;
     VideoCore::UniqueImage motion_image;

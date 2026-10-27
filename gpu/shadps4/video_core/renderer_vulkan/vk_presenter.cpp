@@ -22,6 +22,7 @@
 #include "video_core/texture_cache/image.h"
 
 #include <miniz.h>
+#include <thread>
 
 #include <algorithm>
 #include <array>
@@ -203,7 +204,7 @@ bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, 
     }
 }
 
-std::filesystem::path ScreenshotPath() {
+std::filesystem::path ScreenshotPath(bool generated) {
     const auto& dir = Common::FS::GetUserPath(Common::FS::PathType::ScreenshotsDir);
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
@@ -222,9 +223,9 @@ std::filesystem::path ScreenshotPath() {
     const auto ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
     char name[96];
-    std::snprintf(name, sizeof(name), "%s_%04d%02d%02d_%02d%02d%02d_%03d.png", serial.c_str(),
+    std::snprintf(name, sizeof(name), "%s_%04d%02d%02d_%02d%02d%02d_%03d%s.png", serial.c_str(),
                   local.tm_year + 1900, local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min,
-                  local.tm_sec, int(ms));
+                  local.tm_sec, int(ms), generated ? "-fg" : "");
     return dir / name;
 }
 
@@ -256,7 +257,7 @@ void CaptureScreenshot(const Instance& instance, Scheduler& scheduler, vk::Comma
                            vk::DependencyFlags{}, to_host, {}, {});
     scheduler.DeferPriorityOperation([allocator = instance.GetAllocator(), buffer, allocation, info,
                                       width = frame.width, height = frame.height, format = frame.format,
-                                      hdr = frame.is_hdr, path = ScreenshotPath()] {
+                                      hdr = frame.is_hdr, path = ScreenshotPath(frame.is_generated)] {
         vmaInvalidateAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
         std::vector<u8> rgba;
         const bool converted =
@@ -567,6 +568,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     }
 
     Frame* frame = GetRenderFrame();
+    frame->is_generated = false;
 
     const auto frame_subresources = vk::ImageSubresourceRange{
         .aspectMask = vk::ImageAspectFlagBits::eColor,
@@ -593,6 +595,10 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         .imageMemoryBarrierCount = 1,
         .pImageMemoryBarriers = &pre_barrier,
     });
+    // spartanport: frame generation, the frame between the previous one and this one.
+    const vk::Image generated_image = rasterizer->GetUpscaler().GetFrameGeneration().Generate(
+        cmdbuf, upscaled, upscaled ? display.image : vk::Image{},
+        upscaled ? display.format : vk::Format::eUndefined);
 
     VideoCore::ImageViewInfo view_info{};
     view_info.format = GetFrameViewFormat(attribute.attrib.pixel_format);
@@ -667,6 +673,29 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     pp_settings.picture = MovieBars::Cutscenes().Bars(image_size.width, image_size.height,
                                                       MovieBars::NowMs());
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
+    if (generated_image) {
+        // The same passes over the generated frame, into a frame of its own.
+        Frame* generated = GetRenderFrame();
+        const auto generated_barrier = vk::ImageMemoryBarrier2{
+            .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+            .srcAccessMask = vk::AccessFlagBits2::eColorAttachmentRead,
+            .dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+            .dstAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
+            .oldLayout = vk::ImageLayout::eUndefined,
+            .newLayout = vk::ImageLayout::eColorAttachmentOptimal,
+            .image = generated->image,
+            .subresourceRange{frame_subresources},
+        };
+        cmdbuf.pipelineBarrier2({.imageMemoryBarrierCount = 1,
+                                 .pImageMemoryBarriers = &generated_barrier});
+        const vk::ImageView generated_view = fsr_pass.Render(
+            cmdbuf,
+            rasterizer->GetUpscaler().GetFrameGeneration().GeneratedView(view_info.format),
+            image_size, {generated->width, generated->height}, fsr_settings, generated->is_hdr);
+        pp_pass.Render(cmdbuf, generated_view, image_size, *generated, pp_settings);
+        generated->is_generated = true;
+        frame->generated = generated;
+    }
     if (frame_dump) {
         // The presented image as the swapchain blit reads it (General after the pass).
         const vk::MemoryBarrier2 done{.srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
@@ -682,6 +711,10 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     // Flush frame creation commands.
     frame->ready_semaphore = draw_scheduler.GetWorkSemaphore()->Handle();
     frame->ready_tick = draw_scheduler.CurrentTick();
+    if (frame->generated) {
+        frame->generated->ready_semaphore = frame->ready_semaphore;
+        frame->generated->ready_tick = frame->ready_tick;
+    }
     SubmitInfo info{};
     draw_scheduler.Flush(info);
 
@@ -845,6 +878,18 @@ void Presenter::PresentLoadingFrame() {
 }
 
 void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame) {
+    // spartanport: frame generation: the generated frame first, the real one halfway to the next.
+    if (Frame* generated = std::exchange(frame->generated, nullptr)) {
+        using Clock = std::chrono::steady_clock;
+        const auto now = Clock::now();
+        const double since = std::chrono::duration<double, std::milli>(now - last_real_present).count();
+        if (since > 4.0 && since < 50.0) {
+            real_interval_ms = real_interval_ms * 0.9 + since * 0.1;
+        }
+        Present(generated, false, false);
+        std::this_thread::sleep_until(now + std::chrono::microseconds(
+                                                s64(real_interval_ms * 500.0)));
+    }
     // Free the frame for reuse
     const auto free_frame = [&] {
         if (!is_reusing_frame) {
@@ -1020,6 +1065,7 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     free_frame();
     if (!is_reusing_frame && is_game_frame) {
         DebugState.IncFlipFrameNum();
+        last_real_present = std::chrono::steady_clock::now();
     }
 }
 

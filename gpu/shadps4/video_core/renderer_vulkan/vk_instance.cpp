@@ -543,7 +543,10 @@ bool Instance::CreateDevice() {
                 .shaderImageGatherExtended = features.shaderImageGatherExtended,
                 .shaderStorageImageExtendedFormats = features.shaderStorageImageExtendedFormats,
                 .shaderStorageImageMultisample = features.shaderStorageImageMultisample,
-                // spartanport: required by the FSR 3 accumulate shaders (vk_temporal_upscaler).
+                // spartanport: required by the FSR 3 accumulate shaders (vk_temporal_upscaler)
+                // and FSR 3.1 frame generation (vk_frame_generation), which reads them too.
+                .shaderStorageImageReadWithoutFormat =
+                    features.shaderStorageImageReadWithoutFormat,
                 .shaderStorageImageWriteWithoutFormat =
                     features.shaderStorageImageWriteWithoutFormat,
                 .shaderClipDistance = features.shaderClipDistance,

@@ -164,6 +164,7 @@ TemporalUpscaler::TemporalUpscaler(const Instance& instance_, Scheduler& schedul
       runtime{runtime_}, camera_motion{camera_motion_}, scene_targets{scene_targets_} {
     // Reject unsupported shaders before allocating resources or recording a frame.
     fsr4 = std::make_unique<Fsr4Upscaler>(instance, scheduler);
+    frame_generation = std::make_unique<FrameGeneration>(instance, scheduler);
 #ifdef _WIN32
     SpartanSettings::ConfigureUpscalerSupport(instance.IsFsr4Int8Supported(),
                                             fsr4->DriverAvailable(), fsr4->DriverProblem());
@@ -1895,8 +1896,31 @@ void TemporalUpscaler::RunScaled() {
         runtime.FlushBarriers();
     }
 
+    const bool frame_reset = reset; // the dispatches below clear it
     scheduler.EndRendering();
     const auto cmdbuf = scheduler.CommandBuffer();
+    // spartanport: the scene without the HUD for frame generation, once the upscale wrote it.
+    const auto capture_for_frame_generation = [&](float frame_ms) {
+        const float sign = SpartanToggle::Disabled(1u << 26) ? -1.0f : 1.0f;
+        // Characters (the stencil reactive mask), only on the guest depth that has the stencil.
+        const bool characters = (scaled_session || (w == iw && h == ih)) &&
+                                RecordStencilReactive(cmdbuf, depth, depth_format, w, h);
+        frame_generation->Capture(cmdbuf, {.scene = vk::Image(ui_image), .scene_format = ui_format,
+                                           .output_width = ow, .output_height = oh,
+                                           .depth = depth_view, .motion = vk::Image(motion_image),
+                                           .motion_view = *motion_view,
+                                           .character_mask = characters ? *reactive_view
+                                                                        : vk::ImageView{},
+                                           .object_motion = camera_motion.ObjectMotionImage(w, h)
+                                               ? camera_motion.ObjectMotionView() : vk::ImageView{},
+                                           .width = w, .height = h,
+                                           .jitter_x = sign * jitter[0], .jitter_y = sign * jitter[1],
+                                           .frame_ms = frame_ms,
+                                           .near_plane = camera_motion.Near(),
+                                           .vertical_fov = camera_motion.VerticalFov(),
+                                           .projection_z = camera_motion.TaaDepthParameters()[0][2],
+                                           .reset = frame_reset});
+    };
     const auto barrier = [&](vk::Image image, vk::ImageAspectFlags aspect,
                              vk::ImageLayout old_layout, vk::PipelineStageFlags2 src_stage,
                              vk::AccessFlags2 src_access, vk::ImageLayout new_layout,
@@ -2009,6 +2033,7 @@ void TemporalUpscaler::RunScaled() {
         }
         done_this_frame = true;
         if (ok4) {
+            capture_for_frame_generation(frame_ms);
             ui_phase = true;
             ui_color = ldr_target;
             ui_depth = camera_motion.Depth();
@@ -2092,6 +2117,7 @@ void TemporalUpscaler::RunScaled() {
 
     done_this_frame = true; // the UI is not jittered
     if (ok) {
+        capture_for_frame_generation(frame_ms);
         ui_phase = true;
         ui_color = ldr_target;
         ui_depth = camera_motion.Depth();

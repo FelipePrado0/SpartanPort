@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <initializer_list>
 #include <unistd.h>
 #ifdef _WIN32
@@ -168,6 +169,64 @@ int main() {
     assert(s.upscaler == UpscalerTaa);
 #endif
     s.upscaler = s.startup_upscaler;
+
+    // Frame generation: saved, read back, invalid values off; only DLSS waits for a restart.
+    s.frame_generation = 1;
+    s.frame_generation_frames = 1;
+    Save();
+    s.frame_generation = 0;
+    Load();
+    assert(s.frame_generation == 1 && s.frame_generation_frames == 1);
+    assert(!GraphicsNeedRestart());
+    for (const char* bad : {"frame_generation=fast\n", "frame_generation=fsr\nframe_generation_frames=9\n"}) {
+        FILE* config = std::fopen(path, "w");
+        assert(config);
+        std::fputs(bad, config);
+        std::fclose(config);
+        s.frame_generation = 1;
+        s.frame_generation_frames = 2;
+        Load();
+        assert(s.frame_generation_frames >= 1 && s.frame_generation_frames <= 3);
+    }
+    assert(s.frame_generation == 1 && s.frame_generation_frames == 1);
+    FILE* config = std::fopen(path, "w");
+    assert(config);
+    std::fputs("frame_generation=fast\n", config);
+    std::fclose(config);
+    Load();
+    assert(s.frame_generation == 0);
+    s.frame_generation = 1; // FSR switches live
+    assert(!GraphicsNeedRestart());
+#ifdef _WIN32
+    s.frame_generation = 2;
+    assert(GraphicsNeedRestart());
+#endif
+    // Display menu's Frame Generation row: Off, AMD FSR 2x, then DLSS 2x..4x on Windows.
+    s.frame_generation = 0;
+    s.frame_generation_frames = 1;
+    const auto fg_label = [](unsigned function) {
+        return std::string(reinterpret_cast<const char*>(spartanportgpu_native_setting(function)));
+    };
+    assert(fg_label(0xf69).find("Off") != std::string::npos);
+    assert(fg_label(0xf6b).find("AMD FSR 2x") != std::string::npos && s.frame_generation == 1);
+    assert(fg_label(0xf6c).find("[ArrowSelectionL]") == 0);
+#ifdef _WIN32
+    s.fg_dlss_supported = true;
+    s.fg_dlss_max_frames = 1; // an RTX 40
+    assert(fg_label(0xf6b).find("NVIDIA DLSS 2x") != std::string::npos && s.frame_generation == 2);
+    std::string fg = fg_label(0xf6b);
+    assert(fg.find("DLSS 3x (unavailable)") != std::string::npos && s.frame_generation_frames == 2);
+    fg = fg_label(0xf6b);
+    assert(fg.find("DLSS 4x") != std::string::npos && s.frame_generation_frames == 3);
+    assert(fg_label(0xf6b).find("Off") != std::string::npos && s.frame_generation == 0);
+    Environment("SPARTAN_LANGUAGE", "pt");
+    assert(fg_label(0xf6a).find("DLSS 4x (indisponível)") != std::string::npos);
+    Environment("SPARTAN_LANGUAGE", nullptr);
+    s.fg_dlss_supported = false;
+#else
+    assert(fg_label(0xf6b).find("Off") != std::string::npos && s.frame_generation == 0);
+#endif
+    s.frame_generation = s.startup_frame_generation;
     std::remove(path);
     std::puts("Upscaler support: saved choices and FSR 3.1 fallback PASS");
 }

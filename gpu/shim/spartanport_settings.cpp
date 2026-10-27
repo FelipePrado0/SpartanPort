@@ -82,6 +82,20 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         }
     } else if (key == "preset") {
         v.preset = std::clamp(i, 0, PresetCount - 1);
+    } else if (key == "frame_generation") {
+        const int mode = value == "fsr" ? 1 : value == "dlss" ? 2 : value == "off" ? 0 : -1;
+#ifndef _WIN32
+        if (mode == 2) std::printf("FG: DLSS frame generation is Windows only, off\n");
+#endif
+        if (mode < 0) std::printf("FG: invalid frame_generation=%s, off\n", value.c_str());
+#ifdef _WIN32
+        v.frame_generation = std::max(mode, 0);
+#else
+        v.frame_generation = mode == 1 ? 1 : 0;
+#endif
+    } else if (key == "frame_generation_frames") {
+        if (i < 1 || i > 3) std::printf("FG: invalid frame_generation_frames=%s, 1\n", value.c_str());
+        v.frame_generation_frames = i >= 1 && i <= 3 ? i : 1;
     } else if (key == "sharpen") {
         v.sharpen = i != 0;
     } else if (key == "sharpness") {
@@ -228,6 +242,8 @@ void Load() {
     }
     v.startup_preset = v.preset;
     v.startup_upscaler = v.upscaler;
+    v.startup_frame_generation = v.frame_generation;
+    v.startup_frame_generation_frames = v.frame_generation_frames;
     v.startup_object_motion = v.object_motion;
     v.startup_output_res = v.output_res;
     v.startup_live_resolution = v.live_resolution;
@@ -287,7 +303,11 @@ bool GraphicsNeedRestart() {
            // The launcher patches the render size of the preset (or none without an upscaler).
            v.preset != v.startup_preset ||
            (v.upscaler == UpscalerOff) != (v.startup_upscaler == UpscalerOff) ||
-           (v.upscaler == UpscalerTaa) != (v.startup_upscaler == UpscalerTaa);
+           (v.upscaler == UpscalerTaa) != (v.startup_upscaler == UpscalerTaa) ||
+           // DLSS frame generation is loaded with the Vulkan device; FSR's switches live.
+           (v.frame_generation == 2) != (v.startup_frame_generation == 2) ||
+           (v.frame_generation == 2 &&
+            v.frame_generation_frames != v.startup_frame_generation_frames);
 }
 
 void ConfigureUpscalerSupport(bool fsr4, bool fsr411, const char* fsr411_problem) {
@@ -360,6 +380,10 @@ void Save() {
                  v.reactive_scale.load(), v.reactive_threshold.load(), v.reactive_max.load(),
                  v.debug_view.load(), int(v.show_fps.load()),
                  int(v.fsr4_auto_exposure.load()), int(v.fsr4_invert_jitter.load()));
+    static constexpr const char* fg_names[] = {"off", "fsr", "dlss"};
+    std::fprintf(file, "frame_generation=%s\nframe_generation_frames=%d\n",
+                 fg_names[std::clamp(v.frame_generation.load(), 0, 2)],
+                 v.frame_generation_frames.load());
     std::fprintf(file, "output_res=%dx%d\n", OutputWidths[v.output_res], OutputHeights[v.output_res]);
     std::fprintf(file, "red_orb_multiplier=%.3f\n", v.red_orb_multiplier.load());
     std::fprintf(file, "damage_dealt=%.3f\n", v.damage_dealt.load());
@@ -534,6 +558,47 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         labels[row] = std::string(selected ? "[ArrowSelectionL]" : "[ArrowSpacer]") + value
                     + (selected ? "[ArrowSelectionR]" : "[ArrowSpacer]");
         return text(labels[row].c_str());
+    }
+    // Display menu, Frame Generation: value 0xf69, left 0xf6a, right 0xf6b, selected 0xf6c. One row
+    // for mode and frame count (the hook has no four more ids in a row for a second one).
+    // AMD FSR applies at once; NVIDIA DLSS on Apply and Restart (GraphicsNeedRestart).
+    if (function >= 0xf69 && function <= 0xf6c) {
+        const int direction = function == 0xf6a ? -1 : function == 0xf6b ? 1 : 0;
+        const char* language = std::getenv("SPARTAN_LANGUAGE");
+        const bool pt = language && (std::strcmp(language, "7") == 0 || std::strcmp(language, "17") == 0
+                                    || std::strncmp(language, "pt", 2) == 0 || std::strcmp(language, "br") == 0);
+        // (mode, frames): Off, AMD FSR 2x, then NVIDIA DLSS 2x, 3x, 4x on Windows.
+#ifdef _WIN32
+        static constexpr std::pair<int, int> choices[] = {{0, 1}, {1, 1}, {2, 1}, {2, 2}, {2, 3}};
+#else
+        static constexpr std::pair<int, int> choices[] = {{0, 1}, {1, 1}};
+#endif
+        constexpr int count = int(std::size(choices));
+        int pos = 0;
+        for (int i = 0; i < count; ++i) {
+            if (choices[i].first == v.frame_generation &&
+                (choices[i].first != 2 || choices[i].second == v.frame_generation_frames)) {
+                pos = i;
+            }
+        }
+        if (direction) {
+            pos = (pos + direction + count) % count;
+            v.frame_generation = choices[pos].first;
+            v.frame_generation_frames = choices[pos].second;
+            SpartanSettings::Save();
+        }
+        const auto [mode, frames] = choices[pos];
+        std::string value = mode == 0 ? (pt ? "Desligado" : "Off")
+                          : mode == 1 ? "AMD FSR 2x"
+                                      : "NVIDIA DLSS " + std::to_string(frames + 1) + "x";
+        if (mode == 2 && (!v.fg_dlss_supported || frames > v.fg_dlss_max_frames)) {
+            value += pt ? " (indisponível)" : " (unavailable)";
+        }
+        const bool selected = function != 0xf69;
+        static thread_local std::string label;
+        label = std::string(selected ? "[ArrowSelectionL]" : "[ArrowSpacer]") + value
+              + (selected ? "[ArrowSelectionR]" : "[ArrowSpacer]");
+        return text(label.c_str());
     }
     if (function >= 0xfc0 && function <= 0xff7) {
         const bool restart = std::getenv("SPARTAN_RESTART_COMMAND") &&

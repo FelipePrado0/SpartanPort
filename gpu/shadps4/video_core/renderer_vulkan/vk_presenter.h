@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <deque>
 
 #include <condition_variable>
@@ -38,6 +39,9 @@ struct Frame {
     bool is_hdr{false};
     u8 id{};
     vk::Format format{}; ///< spartanport: of `image` (screenshots)
+    /// spartanport: frame generation's frame, shown before this one (Present), or null.
+    Frame* generated = nullptr;
+    bool is_generated = false; ///< spartanport: a frame generation frame (screenshots say so)
 };
 
 enum SchedulerType {
@@ -138,6 +142,9 @@ private:
     std::condition_variable free_cv;
     std::condition_variable_any frame_cv;
     std::vector<VAddr> vo_buffers_addr;
+    /// spartanport: frame generation pacing, the generated frame halfway between real ones.
+    std::chrono::steady_clock::time_point last_real_present{};
+    double real_interval_ms = 16.6;
 };
 
 } // namespace Vulkan
