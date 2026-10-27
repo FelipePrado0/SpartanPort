@@ -135,7 +135,21 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
         .pStencilAttachment = db.has_stencil ? &stencil_attachment : nullptr,
     };
 
+    // spartanport: marker naming this render pass if the GPU is lost inside it (vk_checkpoints.h).
+    const void* checkpoint = nullptr;
+    if (Checkpoints::Enabled()) {
+        CheckpointRecord pass_record{};
+        pass_record.kind = CheckpointKind::RenderPass;
+        pass_record.tick = CurrentTick();
+        pass_record.x = render_state.width;
+        pass_record.y = render_state.height;
+        pass_record.z =
+            RenderPassLayout(render_state.num_color_attachments, db.has_depth, db.has_stencil);
+        checkpoint = Checkpoints::Get().Push(pass_record);
+    }
+
     if (!recording_threaded) {
+        Checkpoints::Set(current_cmdbuf, checkpoint);
         if (FullBarriers()) {
             RecordFullBarrier(current_cmdbuf);
         }
@@ -143,8 +157,9 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
         return;
     }
     // The attachment infos live on this stack frame: the recorded closure keeps copies.
-    Record([info = rendering_info, color_attachments, depth_attachment,
-            stencil_attachment](vk::CommandBuffer cmdbuf) mutable {
+    Record([info = rendering_info, color_attachments, depth_attachment, stencil_attachment,
+            checkpoint](vk::CommandBuffer cmdbuf) mutable {
+        Checkpoints::Set(cmdbuf, checkpoint);
         info.pColorAttachments = color_attachments.data();
         if (info.pDepthAttachment) {
             info.pDepthAttachment = &depth_attachment;
@@ -164,7 +179,15 @@ void Scheduler::EndRendering() {
         return;
     }
     is_rendering = false;
-    Record([](vk::CommandBuffer cmdbuf) {
+    const void* checkpoint = nullptr;
+    if (Checkpoints::Enabled()) { // spartanport: vk_checkpoints.h
+        CheckpointRecord end_record{};
+        end_record.kind = CheckpointKind::RenderPassEnd;
+        end_record.tick = CurrentTick();
+        checkpoint = Checkpoints::Get().Push(end_record);
+    }
+    Record([checkpoint](vk::CommandBuffer cmdbuf) {
+        Checkpoints::Set(cmdbuf, checkpoint);
         cmdbuf.endRendering();
         if (FullBarriers()) {
             RecordFullBarrier(cmdbuf);

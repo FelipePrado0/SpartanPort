@@ -101,6 +101,22 @@ public:
         std::scoped_lock lock{mutex};
         std::printf("GPU: device lost at %s; last checkpoint each stage reached:\n", where);
         std::fputs(DescribeCheckpointData(ring, stages).c_str(), stdout);
+        // The commands around the last one the front of the pipe reached: the hang is between
+        // that marker and the next.
+        const void* hung = data.empty() ? nullptr : data.front().pCheckpointMarker;
+        for (const auto& entry : data) {
+            if (entry.stage == vk::PipelineStageFlagBits::eTopOfPipe) {
+                hung = entry.pCheckpointMarker;
+            }
+        }
+        if (hung) {
+            std::printf("GPU: checkpoints around #%llu (> marks it):\n",
+                        static_cast<unsigned long long>(DecodeMarker(hung)));
+            for (const auto& record : ring.Around(hung, 12, 4)) {
+                std::printf("%s %s\n", record.serial == DecodeMarker(hung) ? " >" : "  ",
+                            FormatCheckpoint(record).c_str());
+            }
+        }
         const auto last = ring.Last(16);
         std::printf("GPU: last %zu checkpoints recorded by the CPU:\n", last.size());
         for (const auto& record : last) {

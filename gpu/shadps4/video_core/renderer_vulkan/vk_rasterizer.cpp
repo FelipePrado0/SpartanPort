@@ -32,6 +32,16 @@
 
 namespace Vulkan {
 
+// spartanport: CheckpointRecord::z of a draw of `pipeline`: its primitive type and whether the
+// port's own tessellation stages expand it (rect and quad lists without a game TCS).
+static u32 DrawPrimitiveOf(const GraphicsPipeline& pipeline) {
+    const auto prim = pipeline.GetGraphicsKey().prim_type;
+    const bool aux_tess =
+        (prim == AmdGpu::PrimitiveType::RectList || prim == AmdGpu::PrimitiveType::QuadList) &&
+        !pipeline.GetStages()[u32(Shader::SwStage::TessellationControl)];
+    return DrawPrimitive(static_cast<u32>(prim), aux_tess);
+}
+
 static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
     // TODO(roamic): Add support for multiple viewports and geometry shaders when ViewportIndex
     // is encountered and implemented in the recompiler.
@@ -1166,7 +1176,8 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         Checkpoints::Enabled()
             ? Checkpoints::Get().Push(StageCheckpoint(pipeline->GetStages(), false,
                                                       CheckpointKind::Draw, scheduler.CurrentTick(),
-                                                      num_indices, num_instances, 0))
+                                                      num_indices, num_instances,
+                                                      DrawPrimitiveOf(*pipeline)))
             : nullptr;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
         Checkpoints::Set(cmdbuf, checkpoint);
@@ -1308,7 +1319,8 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
         Checkpoints::Enabled()
             ? Checkpoints::Get().Push(StageCheckpoint(pipeline->GetStages(), false,
                                                       CheckpointKind::DrawIndirect,
-                                                      scheduler.CurrentTick(), max_count, 0, 0))
+                                                      scheduler.CurrentTick(), max_count, 0,
+                                                      DrawPrimitiveOf(*pipeline)))
             : nullptr;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
         Checkpoints::Set(cmdbuf, checkpoint);
