@@ -16,10 +16,6 @@ on:
         description: Attach the release stamp
         type: boolean
         default: true
-      graphics_only:
-        description: Run only the isolated graphics diagnostics
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -30,7 +26,6 @@ concurrency:
 
 jobs:
   build:
-    if: ${{ !inputs.graphics_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     steps:
@@ -62,13 +57,10 @@ jobs:
           mkdir -p dist && cp release.json dist/release-linux.json
           cat release.json
       - name: AppImage
-        id: package
-        if: ${{ !cancelled() }}
         run: |
           bash packaging/linux/build.sh
           cd dist && sha256sum spartanport-x86_64.AppImage | sed 's/  / */' > spartanport-x86_64.AppImage.sha256
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         with:
           name: spartanport-x86_64.AppImage
           path: |
@@ -78,7 +70,6 @@ jobs:
 
   smoke:
     needs: build
-    if: ${{ !cancelled() && !inputs.graphics_only }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -99,69 +90,9 @@ jobs:
           chmod +x dist/spartanport-x86_64.AppImage
           docker run --rm -e SPARTAN_RELEASE_TAG -v "$PWD:/w:ro" "${{ matrix.image }}" bash /w/packaging/linux/smoke-test.sh /w/dist/spartanport-x86_64.AppImage
 
-  graphics-baseline:
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [lto, no-lto, sanitizers]
-        revision: [main-96debe8, pr792-integration]
-        include:
-          - revision: main-96debe8
-            ref: 96debe8fac86c518990b20deb3df77eead1844fa
-          - revision: pr792-integration
-            ref: ${{ github.sha }}
-    name: Graphics baseline (${{ matrix.revision }}, ${{ matrix.mode }})
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ matrix.ref }}
-      - name: Install the matching compiler and debugger
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq g++-14 gdb
-      - name: Compile and diagnose the standalone graphics test
-        env:
-          MODE: ${{ matrix.mode }}
-          EXPECTED_FAILURE: ${{ matrix.revision == 'main-96debe8' && matrix.mode != 'sanitizers' }}
-        run: |
-          set -euxo pipefail
-          mkdir -p "$RUNNER_TEMP/graphics-ci"
-          flags=(-std=gnu++23 -O2 -g -DNDEBUG -fPIC -fno-omit-frame-pointer -UNDEBUG)
-          case "$MODE" in
-            lto) flags+=(-flto=auto -fno-fat-lto-objects) ;;
-            sanitizers) flags+=(-fsanitize=address,undefined) ;;
-          esac
-          g++-14 --version | tee "$RUNNER_TEMP/graphics-ci/compiler.log"
-          g++-14 "${flags[@]}" -Igpu/shim tests/test_graphics_settings.cpp \
-            gpu/shim/spartanport_settings.cpp -o "$RUNNER_TEMP/graphics-ci/graphics-settings-test"
-          for attempt in 1 2 3; do
-            status=0
-            timeout 30 "$RUNNER_TEMP/graphics-ci/graphics-settings-test" \
-              > "$RUNNER_TEMP/graphics-ci/run-$attempt.log" 2>&1 || status=$?
-            cat "$RUNNER_TEMP/graphics-ci/run-$attempt.log"
-            if [[ $status != 0 ]]; then
-              timeout 45 gdb --batch -ex run -ex 'bt full' -ex 'info registers' -ex 'x/12i $pc-24' \
-                --args "$RUNNER_TEMP/graphics-ci/graphics-settings-test" \
-                > "$RUNNER_TEMP/graphics-ci/backtrace.log" 2>&1 || true
-              cat "$RUNNER_TEMP/graphics-ci/backtrace.log"
-              if [[ $EXPECTED_FAILURE == true && ( $status == 139 || $status == 135 ) ]] \
-                && grep -q 'gpu/shim/spartanport_settings.cpp:558' "$RUNNER_TEMP/graphics-ci/backtrace.log" \
-                && grep -q 'spartanportgpu_native_setting' "$RUNNER_TEMP/graphics-ci/backtrace.log"; then
-                echo 'PASS: the unchanged main reproduced the expected display label crash'
-                exit 0
-              fi
-              exit "$status"
-            fi
-          done
-          [[ $EXPECTED_FAILURE == false ]] || { echo 'FAIL: the baseline no longer reproduces the expected crash'; exit 1; }
-      - uses: actions/upload-artifact@v4
-        if: ${{ always() }}
-        with:
-          name: graphics-${{ matrix.revision }}-${{ matrix.mode }}
-          path: ${{ runner.temp }}/graphics-ci/*.log
-
   publish:
     needs: smoke
-    if: inputs.tag != '' && !inputs.graphics_only
+    if: inputs.tag != ''
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
