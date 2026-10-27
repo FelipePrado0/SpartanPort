@@ -57,10 +57,13 @@ jobs:
           mkdir -p dist && cp release.json dist/release-linux.json
           cat release.json
       - name: AppImage
+        id: package
+        if: ${{ !cancelled() }}
         run: |
           bash packaging/linux/build.sh
           cd dist && sha256sum spartanport-x86_64.AppImage | sed 's/  / */' > spartanport-x86_64.AppImage.sha256
       - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         with:
           name: spartanport-x86_64.AppImage
           path: |
@@ -70,6 +73,7 @@ jobs:
 
   smoke:
     needs: build
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -89,6 +93,27 @@ jobs:
         run: |
           chmod +x dist/spartanport-x86_64.AppImage
           docker run --rm -e SPARTAN_RELEASE_TAG -v "$PWD:/w:ro" "${{ matrix.image }}" bash /w/packaging/linux/smoke-test.sh /w/dist/spartanport-x86_64.AppImage
+
+  graphics-baseline:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: main-96debe8
+            ref: 96debe8fac86c518990b20deb3df77eead1844fa
+          - name: pr792-integration
+            ref: ${{ github.sha }}
+    name: Graphics baseline (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
+      - name: Compile and diagnose the standalone graphics test
+        run: |
+          g++ -std=c++20 -O2 -g -UNDEBUG -pthread -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Igpu/shim tests/test_graphics_settings.cpp gpu/shim/spartanport_settings.cpp -o /tmp/graphics-settings-test
+          timeout 30 /tmp/graphics-settings-test
 
   publish:
     needs: smoke
