@@ -200,6 +200,8 @@ roda em `startup::prepare` quando `installed` (Windows, exe empacotado, fora de
   `tools/xvag_voice_swap.py`. `tools/` sai se ficar vazia.
 - `scripts/controller_diagrams/` fica, porque o runner a lê (§4.1).
 - Falhas são ignoradas e a limpeza tenta de novo na próxima abertura, como `remove_leftovers`.
+- Desde 2026-10-26 essa limpeza não existe mais
+  (`docs/specs/2026-10-25-drop-legacy-compat-design.md`).
 
 ### 3.7 Pasta do port e arquivos exigidos
 
@@ -230,7 +232,8 @@ roda em `startup::prepare` quando `installed` (Windows, exe empacotado, fora de
 - `Play SpartanPort.exe` (de `play.c`) e a cópia `Play God of War III.exe` não mudam. Os dois nomes
   antigos ficam escritos no script, e um teste Rust confere que batem com `legacy::LEGACY_EXE` e
   `legacy::LEGACY_PLAY_EXE`.
-- Desde 2026-10-25 o pacote não grava mais as cópias com os nomes antigos (`docs/specs/2026-10-25-drop-legacy-compat-design.md`).
+- Desde 2026-10-25 o pacote não grava mais as cópias com os nomes antigos
+  (`docs/specs/2026-10-25-drop-legacy-compat-design.md`).
 - Saem: venv, PyInstaller, imports ocultos, `run.py`, `scripts/*.py`, `tools/` e a checagem do
   `CLIENT_ID` em `discord_presence.py` (o id é a constante `runner::discord::CLIENT_ID`).
 - Ficam: `bin/` com as DLLs, `patches/`, os arquivos de `launcher/`,

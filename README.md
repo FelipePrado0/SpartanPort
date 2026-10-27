@@ -20,10 +20,17 @@ and Linux (experimental AppImage).
 > God of War is a trademark of Sony Interactive Entertainment.
 
 > **Formerly gow3_pc.** Versions before 2.8.0 do not carry over: download 2.8.0 from the
-> [releases page](https://github.com/FelipePrado0/SpartanPort/releases) and install it fresh. On
-> Windows, copy `user/`, `mods/`, `spartanport.ini` and `settings.json` from the old folder to keep
-> your saves and settings. On Linux, replace the AppImage; data from before the rename
-> (`~/.local/share/gow3`) is not moved.
+> [releases page](https://github.com/FelipePrado0/SpartanPort/releases) and install it fresh. To
+> keep your saves and settings on Windows, copy these from the old folder to the new one, when you
+> have them: `user/`, `mods/`, `spartanport.ini`, `settings.json`, `mods.json`,
+> `mods_presets.json`, `patches.json` and `gamecontrollerdb.txt`. From 2.5.0 or older, copy
+> `gow3.ini` as `spartanport.ini`, and take `settings.json` from `%APPDATA%\gow3-launcher`. On
+> Linux, replace the AppImage (now `spartanport-x86_64.AppImage`: update Steam launch options that
+> use the old file name). From 2.5.0 or older, also copy `~/.local/share/gow3` into
+> `~/.local/share/spartanport` (without `user/cache` and `out/`), rename `gow3.ini` there to
+> `spartanport.ini`, and copy `~/.config/gow3-launcher/settings.json` next to it. If you updated
+> 2.6.0 or 2.7.0 from inside the launcher, delete `God of War III.exe` and `_internal/` from its
+> folder, and the old `God of War III` desktop shortcut: they still start the old launcher.
 
 ## Contents
 

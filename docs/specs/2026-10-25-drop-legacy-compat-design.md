@@ -104,8 +104,15 @@ Ficam, por não serem do nome antigo nem do pacote Python, e sim do formato dos 
 
 - Um jogador que vem da 2.5.0 ou anterior e instala a 2.8.0 perde, sem aviso, os ajustes e saves
   da pasta antiga se não seguir o README.
-- Um launcher Python 2.6/2.7 que achar a 2.8.0 como `latest` ainda a instala por
-  `--install-update`; `_internal/`, `run.py` e `scripts/*.py` ficam na pasta, inertes.
+- Um launcher Python 2.6/2.7 ainda instala a 2.8.0 por `--install-update`, que copia por cima e
+  não apaga nada. `God of War III.exe` (o launcher Python com o nome antigo) e `_internal/` ficam
+  e ainda funcionam: o atalho `God of War III.lnk` da área de trabalho, criado pela 2.5.0, abre o
+  launcher 2.7, que oferece a 2.8.0 de novo a cada abertura. O README manda o jogador apagá-los.
+  `Play God of War III.exe` (a cópia de `play.c`) chama `SpartanPort.exe --play` e chega ao
+  launcher Rust.
+- O atualizador da 2.5.0 baixa o zip da 2.8.0, falha com "God of War III.exe is missing from the
+  download" e oferece a atualização de novo a cada abertura (nada fica migrado pela metade).
+- No Linux, o menu `gow3.desktop` da 2.5.0 continua, apontando para a AppImage antiga.
 - Instalações de teste ≥ 2.8.0 que já têm as cópias com os nomes antigos (`windows-v2.8.0-intel-test1`)
   ficam com elas: a atualização copia por cima e não apaga nada. Esta mudança entra antes de
   publicar o DRAFT `windows-v2.8.0`, para que nenhuma 2.8.0 estável as tenha.
@@ -131,3 +138,12 @@ Ficam, por não serem do nome antigo nem do pacote Python, e sim do formato dos 
 - `patches.rs`: o teste `external_patches_skip_builtin_and_other_games` perdeu a linha que gravava
   `God_of_War_III_Remastered.xml` (o nome deixou de ser especial; o teste
   `a_file_named_like_an_older_builds_patch_is_external` cobre o caso).
+- A nota do README vai além do texto de §4: lista todo arquivo do jogador (`USER_FILES` em
+  `launcher-rust/src/core/update.rs`, menos os regenerados), os caminhos da 2.5.0 (`gow3.ini`,
+  `gow3-launcher/settings.json`, `~/.local/share/gow3`), o novo nome da AppImage e as sobras da
+  2.6/2.7, porque o texto de §4 perdia os ajustes de quem vem da 2.5.0.
+- `tests/ui_navigation.rs`: `state_in` não passa mais variáveis de home, porque `Paths::from_env`
+  não lê mais `APPDATA`, `USERPROFILE`, `HOME` nem `XDG_CONFIG_HOME`.
+- Além dos dois testes do item 1, um terceiro, `tests/runner.rs`
+  `a_run_does_not_take_the_old_game_settings`, também fixa um nome antigo (`gow3.ini`) sem casar
+  com o grep.

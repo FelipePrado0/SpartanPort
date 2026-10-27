@@ -21,9 +21,17 @@ y Linux (AppImage experimental).
 
 > **Antes gow3_pc.** Las versiones anteriores a la 2.8.0 no se migran: descargá la 2.8.0 de la
 > [página de releases](https://github.com/FelipePrado0/SpartanPort/releases) e instalala desde cero.
-> En Windows, copiá `user/`, `mods/`, `spartanport.ini` y `settings.json` de la carpeta vieja para
-> conservar tus partidas y ajustes. En Linux, reemplazá el AppImage; los datos de antes del cambio
-> de nombre (`~/.local/share/gow3`) no se mueven.
+> Para conservar tus partidas y ajustes en Windows, copiá estos elementos de la carpeta vieja a la
+> nueva, si existen: `user/`, `mods/`, `spartanport.ini`, `settings.json`, `mods.json`,
+> `mods_presets.json`, `patches.json` y `gamecontrollerdb.txt`. Desde la 2.5.0 o anterior, copiá
+> `gow3.ini` como `spartanport.ini` y sacá el `settings.json` de `%APPDATA%\gow3-launcher`. En
+> Linux, reemplazá el AppImage (ahora `spartanport-x86_64.AppImage`: actualizá las opciones de
+> lanzamiento de Steam que usan el nombre viejo del archivo). Desde la 2.5.0 o anterior, copiá
+> también `~/.local/share/gow3` a `~/.local/share/spartanport` (sin `user/cache` ni `out/`),
+> renombrá ahí el `gow3.ini` a `spartanport.ini` y copiá `~/.config/gow3-launcher/settings.json` al
+> lado. Si actualizaste la 2.6.0 o la 2.7.0 desde el propio launcher, borrá `God of War III.exe` y
+> `_internal/` de su carpeta, y el viejo acceso directo `God of War III` del escritorio: todavía
+> abren el launcher viejo.
 
 ## Índice
 
