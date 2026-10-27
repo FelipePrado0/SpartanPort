@@ -33,7 +33,6 @@ use crate::core::env::{game_environment, Lookup};
 use crate::core::graphics_options::{self, DEFAULT_VBLANK_HZ};
 use crate::core::i18n::{launcher_language, system_language, tr};
 use crate::core::launch::{run_command, spawn_game, GameEvent, Group, Launch, LaunchError};
-use crate::core::legacy;
 use crate::core::log::RunLog;
 use crate::core::mods::{self, Overlay};
 use crate::core::options::RESOLUTIONS;
@@ -339,7 +338,6 @@ impl<'a> Runner<'a> {
         self.port.clone_from(&port);
         // 3. The data folder, its out/ and the ini.
         let (data, out) = (&plan.data, &plan.out);
-        legacy::copy_game_settings(data);
         if let Err(error) = fs::create_dir_all(out) {
             return self.fail(&format!("{}: {error}", python_path(out)));
         }

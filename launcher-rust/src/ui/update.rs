@@ -11,7 +11,7 @@ use std::sync::Arc;
 use iced::Task;
 
 use crate::core::i18n::{tr, tr_fmt};
-use crate::core::release::{newer_stable, version_tuple, Release, ReleaseId};
+use crate::core::release::{newer, version_tuple, Release, ReleaseId};
 use crate::core::update::{InstallTarget, ReleaseHost};
 use crate::ui::app::{Message, State};
 use crate::ui::play::{self, WORKER_LOST};
@@ -73,12 +73,12 @@ impl Updater {
         }
     }
 
-    /// The newest listed stable above the installed release.
+    /// The newest listed stable above the installed release, else the next build of its series.
     pub fn newer(&self) -> Option<&Release> {
-        newer_stable(self.releases(), &self.installed)
+        newer(self.releases(), &self.installed)
     }
 
-    /// The installed release: the stamp beside the launcher, or this version.
+    /// The release this binary is.
     pub fn installed(&self) -> &ReleaseId {
         &self.installed
     }

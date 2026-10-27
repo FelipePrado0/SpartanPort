@@ -3,19 +3,16 @@
 # (Actions > Linux AppImage > Run workflow), on the branch to build:
 #   - no tag: build and test only (the AppImage is kept as a workflow artifact).
 #   - tag of an existing release (e.g. windows-v2.2.0): the AppImage replaces the one attached to it.
-#   - new tag (e.g. linux-v2.2.1-test1): test build, published as a pre-release on that commit.
+#   - new tag (e.g. linux-v2.8.0-issue1-test2): test build, published as a pre-release on that commit.
+#     Name it <system>-v<version>-<issue>-test<N>: the launcher offers the next build of the same series.
 name: Linux AppImage
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release to attach the AppImage to; a new tag makes a test pre-release. Empty builds only.
+        description: Release to attach the AppImage to; a new tag makes a test pre-release, named <system>-v<version>-<issue>-test<N> (e.g. windows-v2.8.0-issue1-test2). Empty builds only.
         required: false
-      stamp:
-        description: Attach the release stamp
-        type: boolean
-        default: true
 
 permissions:
   contents: write
@@ -37,21 +34,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build
         run: bash build.sh
-      - name: Stamp
-        if: inputs.tag != '' && inputs.stamp
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ inputs.tag }}
-        run: |
-          if pre=$(gh release view "$TAG" --json isPrerelease -q .isPrerelease 2>gh.err); then :
-          elif grep -qi 'not found' gh.err; then pre=true
-          else cat gh.err >&2; echo "::error::gh release view failed for $TAG"; exit 1
-          fi
-          python3 packaging/release_stamp.py "$TAG" --prerelease "$pre" > release.json
-          mkdir -p dist && cp release.json dist/release-linux.json
-          cat release.json
       - name: AppImage
+        env:
+          SPARTAN_RELEASE_TAG: ${{ inputs.tag }}
         run: |
           bash packaging/linux/build.sh
           cd dist && sha256sum spartanport-x86_64.AppImage | sed 's/  / */' > spartanport-x86_64.AppImage.sha256
@@ -60,7 +45,6 @@ jobs:
           name: spartanport-x86_64.AppImage
           path: |
             dist/spartanport-x86_64.AppImage*
-            dist/release-linux.json
           if-no-files-found: error
 
   smoke:
@@ -80,7 +64,7 @@ jobs:
           path: dist
       - name: Open the launcher on ${{ matrix.image }}
         env:
-          SPARTAN_RELEASE_TAG: ${{ inputs.stamp && inputs.tag || '' }}
+          SPARTAN_RELEASE_TAG: ${{ inputs.tag }}
         run: |
           chmod +x dist/spartanport-x86_64.AppImage
           docker run --rm -e SPARTAN_RELEASE_TAG -v "$PWD:/w:ro" "${{ matrix.image }}" bash /w/packaging/linux/smoke-test.sh /w/dist/spartanport-x86_64.AppImage
@@ -104,4 +88,4 @@ jobs:
             gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Linux test build $TAG" \
               --notes "Linux test build from \`${GITHUB_SHA::7}\`. Download \`spartanport-x86_64.AppImage\`, then \`chmod +x spartanport-x86_64.AppImage\` and run it. Not a final release: please report in the linked issue whether it opens and runs."
           fi
-          gh release upload "$TAG" dist/spartanport-x86_64.AppImage dist/spartanport-x86_64.AppImage.sha256 $( [[ -f dist/release-linux.json ]] && echo dist/release-linux.json ) --clobber
+          gh release upload "$TAG" dist/spartanport-x86_64.AppImage dist/spartanport-x86_64.AppImage.sha256 --clobber

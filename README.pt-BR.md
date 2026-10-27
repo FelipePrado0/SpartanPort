@@ -22,11 +22,19 @@ e Linux (AppImage experimental).
 > CUSA01623 e CUSA01715, versões 01.00 e 01.02). Este projeto não tem relação com a Sony Interactive Entertainment nem com o
 > Santa Monica Studio, nem é endossado por elas. God of War é marca registrada da Sony Interactive Entertainment.
 
-> **Antes gow3_pc.** Atualizar a partir da 2.5.0 pelo launcher mantém seus saves e configurações:
-> na primeira abertura, as configurações do jogo (`gow3.ini`), as do launcher e, no Linux, a pasta de
-> dados (`~/.local/share/gow3`) são copiadas para os nomes novos. Os arquivos antigos continuam onde
-> estavam, e os atalhos existentes continuam funcionando. No Linux, a AppImage agora é
-> `spartanport-x86_64.AppImage`: atualize as opções de inicialização do Steam que usam o nome antigo.
+> **Antes gow3_pc.** As versões anteriores à 2.8.0 não são migradas: baixe a 2.8.0 na
+> [página de releases](https://github.com/FelipePrado0/SpartanPort/releases) e instale do zero. Para
+> manter seus saves e configurações no Windows, copie estes itens da pasta antiga para a nova, se
+> existirem: `user/`, `mods/`, `spartanport.ini`, `settings.json`, `mods.json`,
+> `mods_presets.json`, `patches.json` e `gamecontrollerdb.txt`. Da 2.5.0 ou anterior, copie
+> `gow3.ini` como `spartanport.ini` e pegue o `settings.json` em `%APPDATA%\gow3-launcher`. No
+> Linux, troque a AppImage (agora `spartanport-x86_64.AppImage`: atualize as opções de inicialização
+> da Steam que usam o nome antigo do arquivo). Da 2.5.0 ou anterior, copie também
+> `~/.local/share/gow3` para `~/.local/share/spartanport` (sem `user/cache` e `out/`), renomeie
+> lá o `gow3.ini` para `spartanport.ini` e copie `~/.config/gow3-launcher/settings.json` para o
+> lado dele. Se você atualizou a 2.6.0 ou a 2.7.0 por dentro do launcher, apague
+> `God of War III.exe` e `_internal/` da pasta dele, e o atalho antigo `God of War III` da área de
+> trabalho: eles ainda abrem o launcher antigo.
 
 ## Sumário
 

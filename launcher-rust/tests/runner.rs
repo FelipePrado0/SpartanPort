@@ -213,14 +213,14 @@ impl Port {
     }
 }
 
-/// This process's environment without the variables a run reads (`SPARTAN_*`, the old `GOW3_*`
-/// names and the fake probe's), so the developer's own settings never reach a test.
+/// This process's environment without the variables a run reads (`SPARTAN_*` and the fake
+/// probe's), so the developer's own settings never reach a test.
 fn clean_environment() -> IndexMap<String, String> {
     std::env::vars_os()
         .filter_map(|(key, value)| Some((key.into_string().ok()?, value.into_string().ok()?)))
         .filter(|(key, _)| {
             let key = key.to_uppercase();
-            !["SPARTAN_", "GOW3_", "FAKE_PROBE_"]
+            !["SPARTAN_", "FAKE_PROBE_"]
                 .iter()
                 .any(|prefix| key.starts_with(prefix))
         })
@@ -708,6 +708,23 @@ fn a_relative_data_dir_is_from_the_port() {
     for call in calls.iter() {
         assert_eq!(call.cwd.as_deref(), Some(port.root.as_path()), "{call:?}");
     }
+}
+
+#[test]
+fn a_run_does_not_take_the_old_game_settings() {
+    let port = Port::in_folder("port");
+    let host = FakeHost::default();
+    let mut out = Vec::new();
+    let mut program = port.program(&[]);
+    program
+        .env
+        .insert("SPARTAN_DATA_DIR".into(), "data2".into());
+    fs::create_dir_all(port.root.join("data2")).unwrap();
+    fs::write(port.root.join("data2/gow3.ini"), "[OldName]\nmarker=gow3\n").unwrap();
+    let code = run_with(Port::context(&program, &mut out), &host);
+    assert_eq!(code, 0, "{}", String::from_utf8_lossy(&out));
+    let ini = fs::read_to_string(port.root.join("data2/spartanport.ini")).unwrap_or_default();
+    assert!(!ini.contains("marker=gow3"), "{ini}");
 }
 
 #[test]

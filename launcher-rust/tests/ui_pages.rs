@@ -2415,7 +2415,6 @@ mod update_flow {
     use spartanport_launcher::ui::splash::{self, Check, SplashMessage};
     use spartanport_launcher::ui::update::{start_up_check, Listing, UpdateMessage};
     use spartanport_launcher::ui::widgets::ModalKind;
-    use spartanport_launcher::VERSION;
 
     use spartanport_launcher::core::update::{InstallTarget, RELEASES_PAGE};
 
@@ -2462,7 +2461,7 @@ mod update_flow {
         let status = state.status.clone();
         let list = vec![
             release("999.0.0", None, false),
-            release(VERSION, None, false),
+            release(&ReleaseId::this().version, None, false),
         ];
         let _ = app::update(&mut state, checked(false, Ok(list.clone())));
         assert_eq!(state.updater.listing(), Listing::Listed);
@@ -2476,12 +2475,15 @@ mod update_flow {
     fn manual_check_with_latest_shows_the_info() {
         let dir = tempfile::tempdir().unwrap();
         let mut state = state(dir.path());
-        let list = vec![release(VERSION, None, false)];
+        let list = vec![release(&ReleaseId::this().version, None, false)];
         let _ = app::update(&mut state, checked(true, Ok(list.clone())));
         assert_eq!(state.updater.releases(), list.as_slice());
         assert_eq!(
             modal_text(&state),
-            format!("You have the latest version ({VERSION}).")
+            format!(
+                "You have the latest version ({}).",
+                ReleaseId::this().version
+            )
         );
         assert!(matches!(
             state.modal.as_ref().map(|m| &m.kind),
@@ -2541,7 +2543,7 @@ mod update_flow {
         let fetching = release("2.7.0", None, false);
         let mut state = downloading_state(
             dir.path(),
-            release(VERSION, None, false).id,
+            release(&ReleaseId::this().version, None, false).id,
             fetching.clone(),
             0,
         );
@@ -2554,7 +2556,10 @@ mod update_flow {
     fn installing_the_installed_release_does_nothing() {
         let dir = tempfile::tempdir().unwrap();
         let mut state = state(dir.path());
-        let installed = release(VERSION, None, false);
+        let installed = Release {
+            id: ReleaseId::this(),
+            ..release("x", None, false)
+        };
         assert_eq!(installed.id, *state.updater.installed());
         let task = app::update(
             &mut state,
@@ -2563,7 +2568,7 @@ mod update_flow {
         assert!(state.modal.is_none());
         assert_eq!(task.units(), 0);
 
-        // The stamp's channel is frozen at build time; the list's follows the API.
+        // The channel compiled in is frozen; the list's follows the API.
         let mut state = state_installed(dir.path(), release("2.7.0", None, true).id);
         let task = app::update(
             &mut state,
@@ -2716,7 +2721,7 @@ mod update_flow {
         let fetching = release("2.7.0", None, false);
         let mut state = downloading_state(
             dir.path(),
-            release(VERSION, None, false).id,
+            release(&ReleaseId::this().version, None, false).id,
             fetching.clone(),
             0,
         );
@@ -2735,7 +2740,7 @@ mod update_flow {
         let fetched = release("2.7.0", None, false);
         let mut state = downloading_state(
             dir.path(),
-            release(VERSION, None, false).id,
+            release(&ReleaseId::this().version, None, false).id,
             fetched.clone(),
             0,
         );
@@ -2759,7 +2764,7 @@ mod update_flow {
         let fetching = release("2.7.0", None, false);
         let mut state = downloading_state(
             dir.path(),
-            release(VERSION, None, false).id,
+            release(&ReleaseId::this().version, None, false).id,
             fetching.clone(),
             0,
         );

@@ -1,6 +1,6 @@
 # Opens dist/spartanport-windows.zip as a player gets it, on a Windows without MSYS2: no game or player
 # file ships, no Python file ships, spartanport-probe.exe finds every DLL it links, the Rust launcher
-# answers --version and --voice-swap --help and its window stays open (.github/workflows/windows-zip.yml).
+# answers --version with the release tag it was built with and --voice-swap --help, and its window stays open (.github/workflows/windows-zip.yml).
 # Usage: powershell -File smoke-test.ps1 path\to\spartanport-windows.zip
 param([Parameter(Mandatory)][string]$Package)
 $ErrorActionPreference = 'Stop'
@@ -10,19 +10,6 @@ $work = Join-Path ([IO.Path]::GetTempPath()) ("spartanport-smoke-" + [guid]::New
 Expand-Archive -LiteralPath $Package -DestinationPath $work
 $tree = Join-Path $work 'spartanport-windows'
 $failed = @()
-
-# A tagged build must carry the stamp the launcher's version menu reads.
-if ($env:SPARTAN_RELEASE_TAG) {
-    $stamp = $null
-    try { $stamp = Get-Content -Raw -LiteralPath (Join-Path $tree 'release.json') | ConvertFrom-Json } catch { }
-    if ($stamp -and $stamp.version) {
-        Write-Host "release.json: $($stamp.version)"
-    } else {
-        $msg = "release.json is missing or invalid in the package (tag $env:SPARTAN_RELEASE_TAG)"
-        Write-Host "FAIL: $msg"
-        $failed += $msg
-    }
-}
 
 # The same names package.sh refuses to ship: game files and anything a player makes.
 $forbidden = 'eboot.bin', 'sce_module', 'sce_sys', 'savedata', 'user', 'cache', '*.log', 'spartanport.ini',
@@ -56,8 +43,16 @@ if (-not $version.WaitForExit(30000)) {
     $failed += 'SpartanPort.exe --version did not finish in 30 s'
 } elseif ($version.ExitCode -ne 0) {
     $failed += ('SpartanPort.exe --version exited 0x{0:X}' -f $version.ExitCode)
-} elseif ((Get-Content -Raw (Join-Path $work 'version.log')) -notmatch '^SpartanPort \d+\.\d+\.\d+') {
-    $failed += 'SpartanPort.exe --version did not print "SpartanPort <version>"'
+} else {
+    $printed = "$(Get-Content -Raw (Join-Path $work 'version.log'))".Trim()
+    if ($env:SPARTAN_RELEASE_TAG) {
+        $expected = 'SpartanPort ' + ($env:SPARTAN_RELEASE_TAG -replace '^[a-z]+-v', '')
+        if ($printed -cne $expected) {
+            $failed += "SpartanPort.exe --version printed '$printed', not '$expected'"
+        }
+    } elseif ($printed -notmatch '^SpartanPort \d+\.\d+\.\d+') {
+        $failed += 'SpartanPort.exe --version did not print "SpartanPort <version>"'
+    }
 }
 Get-Content (Join-Path $work 'version.log')
 

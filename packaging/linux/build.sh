@@ -38,7 +38,6 @@ stray=$(find "$appdir" \( -name '*.py' -o -name _internal \) -print)
 install -m755 packaging/linux/AppRun "$appdir/AppRun"
 install -m644 packaging/linux/spartanport.desktop "$appdir/spartanport.desktop"
 install -m644 "$icon" "$appdir/spartanport.png"
-if [[ -f release.json ]]; then install -m644 release.json "$appdir/release.json"; fi
 
 # Host-provided libraries: bundling any of these breaks drivers or the display connection.
 excluded='^(ld-linux.*|libc|libm|libdl|librt|libpthread|libresolv|libutil|libnsl|libanl|libvulkan|libGL|libGLX|libGLdispatch|libEGL|libOpenGL|libgbm|libdrm.*|libX11|libX11-xcb|libxcb.*|libXau|libXdmcp|libXext|libXfixes|libXrender|libXi|libXcursor|libXrandr|libwayland-.*|libasound|libudev|libpulse.*|libfontconfig|libfreetype|libOpenCL|libva.*|libvdpau|libvpl|libnvidia-.*|libcuda|libz|libstdc\+\+|libgcc_s)\.so'

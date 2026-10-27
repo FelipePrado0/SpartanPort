@@ -1,6 +1,5 @@
-//! The launcher's own settings (`settings.json`): defaults, load, save and the portable migration.
+//! The launcher's own settings (`settings.json`): defaults, load and save.
 
-use std::fs;
 use std::io;
 use std::path::Path;
 
@@ -79,31 +78,12 @@ pub fn app_defaults(env: &dyn Fn(&str) -> Option<String>) -> Map<String, Value> 
         .collect()
 }
 
-/// Copies the previous launcher's `settings.json` into the data folder, once. Never overwrites;
-/// every error is ignored. (`game_icon.ico` is not copied: the runner writes the window icon.)
-pub fn migrate_portable_settings(target: &Path, legacy: &Path) {
-    if target == legacy {
-        return;
-    }
-    copy_if_missing(legacy, target);
-}
-
-fn copy_if_missing(from: &Path, to: &Path) {
-    if to.is_file() || !from.is_file() {
-        return;
-    }
-    if let Some(parent) = to.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    let _ = fs::copy(from, to);
-}
-
 /// Defaults overlaid with the saved file; see `read_app_settings`.
 pub fn load_app_settings(paths: &Paths) -> Settings {
     read_app_settings(paths).0
 }
 
-/// What `read_app_settings` found at `paths.config_file()` after the portable migration.
+/// What `read_app_settings` found at `paths.config_file()`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsFile {
     Missing,
@@ -116,7 +96,6 @@ pub enum SettingsFile {
 /// and is left untouched until the next save; a `Missing` one is no problem.
 pub fn read_app_settings(paths: &Paths) -> (Settings, SettingsFile) {
     let config = paths.config_file();
-    migrate_portable_settings(&config, &paths.legacy_config_file());
     let (saved, file) = match read_json::<Value>(&config) {
         Ok(Some(Value::Object(map))) => (map, SettingsFile::Read),
         Ok(None) => (Map::new(), SettingsFile::Missing),
@@ -272,13 +251,9 @@ mod tests {
     }
 
     #[test]
-    fn a_legacy_settings_file_counts_as_read() {
-        // A settings file only at the old location: the portable migration copies it before the
-        // file is looked for, so it counts as read.
+    fn a_settings_file_at_the_old_location_is_ignored() {
         let dir = tempfile::tempdir().unwrap();
         let data = dir.path().join("data");
-        // `Paths::legacy_config_file` is `<APPDATA>/gow3-launcher/settings.json` on Windows and
-        // `<XDG_CONFIG_HOME>/gow3-launcher/settings.json` elsewhere.
         let legacy = dir.path().join("legacy").join("gow3-launcher");
         fs::create_dir_all(&legacy).unwrap();
         fs::write(legacy.join("settings.json"), r#"{"ui_language": "de"}"#).unwrap();
@@ -289,34 +264,8 @@ mod tests {
             _ => None,
         });
         let (settings, file) = read_app_settings(&paths);
-        assert_eq!(file, SettingsFile::Read);
-        assert_eq!(settings.get_str("ui_language"), "de");
-        assert!(paths.config_file().is_file(), "the migration copied it");
-    }
-
-    #[test]
-    fn portable_migration_copies_only_settings() {
-        let dir = tempfile::tempdir().unwrap();
-        let legacy_dir = dir.path().join("legacy");
-        let target_dir = dir.path().join("data");
-        fs::create_dir_all(&legacy_dir).unwrap();
-        let legacy = legacy_dir.join("settings.json");
-        let target = target_dir.join("settings.json");
-        fs::write(&legacy, "old").unwrap();
-        fs::write(legacy_dir.join("game_icon.ico"), "ico").unwrap();
-
-        migrate_portable_settings(&target, &legacy);
-        assert_eq!(fs::read_to_string(&target).unwrap(), "old");
-        assert!(
-            !target_dir.join("game_icon.ico").exists(),
-            "the runner writes the window icon itself"
-        );
-
-        fs::write(&legacy, "newer").unwrap();
-        migrate_portable_settings(&target, &legacy);
-        assert_eq!(fs::read_to_string(&target).unwrap(), "old");
-
-        migrate_portable_settings(&legacy, &legacy);
-        assert_eq!(fs::read_to_string(&legacy).unwrap(), "newer");
+        assert_eq!(file, SettingsFile::Missing);
+        assert_ne!(settings.get_str("ui_language"), "de");
+        assert!(!paths.config_file().exists());
     }
 }
