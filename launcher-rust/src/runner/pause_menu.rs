@@ -45,7 +45,7 @@ use crate::core::python::python_json;
 use crate::runner::glyphs::{entries, Entry};
 
 /// Of the patch: a change rebuilds the cached copy.
-pub const VERSION: u32 = 22;
+pub const VERSION: u32 = 23;
 pub const WAD: &str = "EXEC/WAD/PS4_LE/R_UI.WAD";
 
 /// The Exit to Desktop row's text in one language.
@@ -272,6 +272,9 @@ struct Texts {
     restore_controls: &'static str,
     /// The rows Display adds after the game's four: eight settings and Apply.
     display_names: [&'static str; 9],
+    /// The Live Graphics page: its title and four controls.
+    live_graphics_title: &'static str,
+    live_graphics_names: [&'static str; 4],
 }
 
 /// Every language but Portuguese.
@@ -312,6 +315,8 @@ static ENGLISH: Texts = Texts {
         "HDR",
         "Apply and Restart",
     ],
+    live_graphics_title: "Graphics",
+    live_graphics_names: ["Texture Quality", "Shadows", "Motion Blur", "Bloom"],
 };
 
 static PORTUGUESE: Texts = Texts {
@@ -350,6 +355,13 @@ static PORTUGUESE: Texts = Texts {
         "VSync",
         "HDR",
         "Aplicar e reiniciar",
+    ],
+    live_graphics_title: "Gráficos",
+    live_graphics_names: [
+        "Qualidade de texturas",
+        "Sombras",
+        "Desfoque de movimento",
+        "Bloom",
     ],
 };
 
@@ -1931,6 +1943,7 @@ pub fn native_cheats(
     // after theirs, the pages after the pause menu's states.
     let option_specs = vec![
         Spec::new("HLNativeGraphics", "options", link()),
+        Spec::new("HLNativeLiveGraphics", "options", link()),
         Spec::new("HLNativeCheats", "options", link()),
     ];
     let mut controls_specs: Vec<Spec> = (0..6)
@@ -1990,6 +2003,19 @@ pub fn native_cheats(
     specs.push(Spec::new("NativeDisplayConfirm", "pause", back()));
     for name in ["NativeDisplayYes", "NativeDisplayNo"] {
         specs.push(Spec::new(name, "NativeDisplayConfirm", link()));
+    }
+    specs.push(Spec::new("NativeLiveGraphics", "pause", back()));
+    for i in 0..4 {
+        let events = if i == 0 {
+            vec![left.clone(), right.clone(), up.clone(), down.clone()]
+        } else {
+            vec![toggle.clone(), up.clone(), down.clone()]
+        };
+        specs.push(Spec::new(
+            &format!("NativeLiveGraphic{i}"),
+            "NativeLiveGraphics",
+            events,
+        ));
     }
     for page in [
         "NativeGraphicsRestart",
@@ -2106,19 +2132,26 @@ pub fn native_cheats(
         relocated: &relocated,
         texts,
     };
-    // Graphics Settings, then Cheats, between Game Settings and Audio.
+    // Graphics Settings, then Live Graphics, then Cheats, between Game Settings and Audio.
     for (name, index, up, down, page) in [
         (
             "HLNativeGraphics",
             2,
             Target::Old(game.at - 4),
-            Target::New("HLNativeCheats"),
+            Target::New("HLNativeLiveGraphics"),
             "NativeGraphics",
         ),
         (
-            "HLNativeCheats",
+            "HLNativeLiveGraphics",
             3,
             Target::New("HLNativeGraphics"),
+            Target::New("HLNativeCheats"),
+            "NativeLiveGraphics",
+        ),
+        (
+            "HLNativeCheats",
+            4,
+            Target::New("HLNativeLiveGraphics"),
             Target::Old(audio.at - 4),
             "NativeCheats",
         ),
@@ -2341,6 +2374,42 @@ pub fn native_cheats(
         }
     }
 
+    // Live Graphics: four controls (f75..f78 query, f85..f88 toggle/next, f8d prev step for Texture Quality).
+    let live_graphics_rows: Vec<String> = (0..4).map(|i| format!("NativeLiveGraphic{i}")).collect();
+    e.begin("NativeLiveGraphics", "entry");
+    e.page_entry(texts.live_graphics_title, &texts.live_graphics_names[..])?;
+    e.blank(LOWER_LINES)?;
+    for index in 0..4 {
+        e.query(index, 0xf75 + index, false)?;
+    }
+    e.goto_new(&live_graphics_rows[0])?;
+    e.end();
+    e.begin("NativeLiveGraphics", "update");
+    e.end();
+    e.begin("NativeLiveGraphics", "back");
+    e.sound(b"SND_MM_BACK")?;
+    e.goto_new("HLNativeLiveGraphics")?;
+    e.end();
+    let targets = new_states(&live_graphics_rows);
+    for (index, name) in live_graphics_rows.iter().enumerate() {
+        let function = 0xf75 + index;
+        e.selection(name, index, Some(function), true, Redraw::Row)?;
+        e.selection(name, index, Some(function), false, Redraw::Row)?;
+        e.navigation(name, index, &targets)?;
+        let actions = if index == 0 {
+            vec![("left", 0xf8d), ("right", 0xf85 + index)]
+        } else {
+            vec![("toggle", 0xf85 + index)]
+        };
+        for (kind, func) in actions {
+            e.begin(name, kind);
+            e.call(repeat);
+            e.query(index, func, true)?;
+            e.sound(b"SND_MM_NAV_LR")?;
+            e.end();
+        }
+    }
+
     // Controls: the game's three rows, then six controls (builtins 0xfaa + i and 0xfb1 + i change
     // them), Restore Defaults and Apply and Restart; eight rows show at a time.
     let controls_originals = ["HLContDis", "HLFreeCamera", "HLFlightControl"]
@@ -2479,22 +2548,23 @@ pub fn native_cheats(
         hide_bars: false,
     })?;
 
-    // Clone Options' entry, adding Graphics Settings at line2 and Cheats at line3 and shifting
-    // Audio/Display/Exit down two rows.
+    // Clone Options' entry, adding Graphics Settings, Live Graphics and Cheats and shifting
+    // Audio/Display/Exit down three rows.
     let old_entry = first_block(&options, 1)?;
     let original_entry = s.block_bytes(old_entry)?;
     let mut replacements: HashMap<u8, Vec<u8>> = HashMap::from([
         (3, texts.graphics_title.as_bytes().to_vec()),
-        (4, b"Cheats".to_vec()),
+        (4, texts.live_graphics_title.as_bytes().to_vec()),
+        (5, b"Cheats".to_vec()),
     ]);
     for old_local in [3u8, 4, 5] {
         let value = assigned(original_entry, old_local)?;
         // The Python reads it as Latin-1 and writes it back as UTF-8.
-        replacements.insert(old_local + 2, s.string(s.lit + value)?.into_bytes());
+        replacements.insert(old_local + 3, s.string(s.lit + value)?.into_bytes());
     }
     // Keep existing non-ASCII Exit labels as bytes (their source encoding is UTF-8).
     let exit = assigned(original_entry, 5)?;
-    replacements.insert(7, until_nul(s.data, base + s.lit + exit).to_vec());
+    replacements.insert(8, until_nul(s.data, base + s.lit + exit).to_vec());
 
     // The entries the existing states run instead of theirs, by state: Audio's clears the rows it
     // inherits from Options (its five rows, values and footer stay), Display's and Controls'
@@ -2614,7 +2684,7 @@ pub fn native_cheats(
             let bytes = s.block_bytes(block.code)?;
             let source = push(s.literal(format!("menuItem{old_index}Select").as_bytes())?)?;
             let destination =
-                push(s.literal(format!("menuItem{}Select", old_index + 2).as_bytes())?)?;
+                push(s.literal(format!("menuItem{}Select", old_index + 3).as_bytes())?)?;
             let at = find(bytes, &source, 0, bytes.len())
                 .filter(|_| count(bytes, &source) == 1)
                 .ok_or_else(|| script("Options selection animation not found"))?;
@@ -2684,17 +2754,25 @@ pub fn native_cheats(
             .name
             .strip_prefix("NativeGraphic")
             .and_then(|index| index.parse::<usize>().ok());
+        let live_graphic = spec
+            .name
+            .strip_prefix("NativeLiveGraphic")
+            .and_then(|index| index.parse::<usize>().ok());
         let event_names: &[&'static str] = if spec.parent == "pause" {
             &["back"]
         } else if (spec.name.starts_with("NativeMultiplier") && numbered)
             || graphic.is_some_and(|index| SLIDING_GRAPHICS.contains(&index))
+            || live_graphic == Some(0)
             || (["NativeDisplay", "NativeControl"]
                 .iter()
                 .any(|page| spec.name.starts_with(page))
                 && numbered)
         {
             &["left", "right", "up", "down"]
-        } else if (spec.name.starts_with("NativeCheat") && numbered) || graphic.is_some() {
+        } else if (spec.name.starts_with("NativeCheat") && numbered)
+            || graphic.is_some()
+            || live_graphic.is_some()
+        {
             &["toggle", "up", "down"]
         } else {
             &["up", "down", "confirm"]
@@ -4349,8 +4427,9 @@ mod tests {
     fn graphics_and_cheats_follow_game_settings_before_audio() {
         let data = native("en");
         let s = Script::parse(&data).unwrap();
-        let (graphics, cheats) = (
+        let (graphics, live, cheats) = (
             state_ref(&s, "HLNativeGraphics"),
+            state_ref(&s, "HLNativeLiveGraphics"),
             state_ref(&s, "HLNativeCheats"),
         );
         assert_eq!(target(&s, "HLGSettings", &DOWN), graphics);
@@ -4358,9 +4437,11 @@ mod tests {
             target(&s, "HLNativeGraphics", &UP),
             state_ref(&s, "HLGSettings")
         );
-        assert_eq!(target(&s, "HLNativeGraphics", &DOWN), cheats);
+        assert_eq!(target(&s, "HLNativeGraphics", &DOWN), live);
+        assert_eq!(target(&s, "HLNativeLiveGraphics", &UP), graphics);
+        assert_eq!(target(&s, "HLNativeLiveGraphics", &DOWN), cheats);
         assert_eq!(target(&s, "HLAudio", &UP), cheats);
-        assert_eq!(target(&s, "HLNativeCheats", &UP), graphics);
+        assert_eq!(target(&s, "HLNativeCheats", &UP), live);
         assert_eq!(
             target(&s, "HLNativeCheats", &DOWN),
             state_ref(&s, "HLAudio")
@@ -4369,6 +4450,39 @@ mod tests {
         assert_eq!(
             target(&s, "HLGSettings", &CONFIRM),
             state_ref(&s, "PauseGSettings")
+        );
+    }
+
+    #[test]
+    fn live_graphics_rows_query_and_toggle_their_settings() {
+        let data = native("en");
+        let s = Script::parse(&data).unwrap();
+        let page = s.one("NativeLiveGraphics").unwrap();
+        let queries = calls(&block(&s, page, 1, None));
+        let live_rows = ["Texture Quality", "Shadows", "Motion Blur", "Bloom"];
+        for (index, label) in live_rows.iter().enumerate() {
+            assert!(queries.contains(&(0xf75 + index)));
+            let row = s.one(&format!("NativeLiveGraphic{index}")).unwrap();
+            assert_eq!(row.parent, page.at - 4);
+            if *label == "Texture Quality" {
+                let left = block(&s, row, 3, Some(&[0xe6, 0xf2]));
+                let right = block(&s, row, 3, Some(&[0xe2, 0xee]));
+                assert!(calls(&left).contains(&0xf8d));
+                assert!(calls(&right).contains(&(0xf85 + index)));
+            } else {
+                let toggle = block(&s, row, 3, Some(&[0xe6, 0xe2, 0xee, 0xf2, 0xe9]));
+                assert!(calls(&toggle).contains(&(0xf85 + index)));
+            }
+        }
+    }
+
+    #[test]
+    fn live_graphics_returns_to_its_link() {
+        let data = native("en");
+        let s = Script::parse(&data).unwrap();
+        assert_eq!(
+            target(&s, "NativeLiveGraphics", &[0xeb]),
+            state_ref(&s, "HLNativeLiveGraphics")
         );
     }
 
@@ -4443,8 +4557,13 @@ mod tests {
         let entry = block(&s, s.one("PauseOptions").unwrap(), 1, None);
         let assigned = assignments(&s, &entry);
         assert_eq!(assigned[&3], "Graphics Settings");
-        assert_eq!(assigned[&4], "Cheats");
-        for (name, index) in [("HLNativeGraphics", 2), ("HLNativeCheats", 3)] {
+        assert_eq!(assigned[&4], "Graphics");
+        assert_eq!(assigned[&5], "Cheats");
+        for (name, index) in [
+            ("HLNativeGraphics", 2),
+            ("HLNativeLiveGraphics", 3),
+            ("HLNativeCheats", 4),
+        ] {
             for kind in [1, 2] {
                 let code = block(&s, s.one(name).unwrap(), kind, None);
                 let item = format!("menuItem{index}Select");

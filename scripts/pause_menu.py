@@ -744,7 +744,7 @@ def native_cheats(data, spans, language=None):
     end()
     begin('NativeLiveGraphics', 'back')
     sound('SND_MM_BACK')
-    goto(options['at'] - 4)
+    goto('HLNativeLiveGraphics')
     end()
     for index, name in enumerate(live_graphics_rows):
         selection(name, index, 0xf75 + index)

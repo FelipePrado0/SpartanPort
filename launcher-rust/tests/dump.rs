@@ -951,16 +951,22 @@ fn real_menu_options_row() {
         new.one("PauseOptions").unwrap(),
         new.by_name("HLDisplay")[1],
     );
-    assert_eq!(new.records.len(), old.records.len() + 62);
+    assert_eq!(new.records.len(), old.records.len() + 68);
     assert_eq!(row.parent, options.at - 4);
     let cheats = new.one("HLNativeCheats").unwrap();
     let graphics = new.one("HLNativeGraphics").unwrap();
+    let live_graphics = new.one("HLNativeLiveGraphics").unwrap();
     assert_eq!(
         options.size,
-        old.one("PauseOptions").unwrap().size + pause_menu::ROW_SIZE + cheats.size + graphics.size
+        old.one("PauseOptions").unwrap().size
+            + pause_menu::ROW_SIZE
+            + cheats.size
+            + graphics.size
+            + live_graphics.size
     );
     assert_eq!(row.at + row.size, graphics.at);
-    assert_eq!(graphics.at + graphics.size, cheats.at);
+    assert_eq!(graphics.at + graphics.size, live_graphics.at);
+    assert_eq!(live_graphics.at + live_graphics.size, cheats.at);
     // The WAD entry, the script header and the padding agree with the new size.
     let size = le32(&m.data, new.base - 0x40 + 4);
     let old_size = le32(&m.original, old.base - 0x40 + 4);
@@ -1168,7 +1174,13 @@ fn native_names(with_link: bool) -> Vec<String> {
     names.extend(
         [
             "HLNativeGraphics",
+            "HLNativeLiveGraphics",
             "NativeGraphics",
+            "NativeLiveGraphics",
+            "NativeLiveGraphic0",
+            "NativeLiveGraphic1",
+            "NativeLiveGraphic2",
+            "NativeLiveGraphic3",
             "NativeGraphicsReset",
             "NativeGraphicsConfirm",
             "NativeGraphicsResetYes",
@@ -1198,12 +1210,18 @@ fn real_menu_graphics_and_cheats_follow_game_settings_before_audio() {
     let s = Script::parse(&m.data).unwrap();
     let state = |name: &str| s.one(name).unwrap().at - 4;
     let (up, down) = (&pause_menu::UP, &pause_menu::DOWN);
-    let (graphics, cheats) = (state("HLNativeGraphics"), state("HLNativeCheats"));
+    let (graphics, live_graphics, cheats) = (
+        state("HLNativeGraphics"),
+        state("HLNativeLiveGraphics"),
+        state("HLNativeCheats"),
+    );
     assert_eq!(target(&s, "HLGSettings", down), graphics);
     assert_eq!(target(&s, "HLNativeGraphics", up), state("HLGSettings"));
-    assert_eq!(target(&s, "HLNativeGraphics", down), cheats);
+    assert_eq!(target(&s, "HLNativeGraphics", down), live_graphics);
+    assert_eq!(target(&s, "HLNativeLiveGraphics", up), graphics);
+    assert_eq!(target(&s, "HLNativeLiveGraphics", down), cheats);
     assert_eq!(target(&s, "HLAudio", up), cheats);
-    assert_eq!(target(&s, "HLNativeCheats", up), graphics);
+    assert_eq!(target(&s, "HLNativeCheats", up), live_graphics);
     assert_eq!(target(&s, "HLNativeCheats", down), state("HLAudio"));
 }
 
