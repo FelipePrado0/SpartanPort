@@ -405,6 +405,11 @@ extern "C" void spartanport_engine_fps_globals(uintptr_t fps, uintptr_t rounded)
     s.engine_fps_global = reinterpret_cast<float*>(fps);
 }
 
+// src/probe.c: the inPowerUpMenu script global (the Texture Quality bias skips the upgrade menu).
+extern "C" void spartanport_power_up_menu_global(uintptr_t flag) {
+    SpartanSettings::Get().power_up_menu_global = reinterpret_cast<int32_t*>(flag);
+}
+
 extern "C" int spartanportgpu_text_input_begin(const char* initial, const char* prompt) {
     if (!g_window) return 0;
     g_window->BeginTextInput(initial ? initial : "", prompt ? prompt : "Text");

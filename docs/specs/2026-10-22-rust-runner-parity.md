@@ -331,6 +331,8 @@ The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discove
 | `tests/test_native_cheats.py::NativeCheats::test_graphics_labels_follow_the_game_language` | `src/runner/pause_menu.rs::tests::graphics_labels_follow_the_game_language` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_graphics_options_label_animation_and_confirmation_focus` | `src/runner/pause_menu.rs::tests::graphics_options_label_animation_and_confirmation_focus` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_graphics_rows_wrap_and_only_strength_uses_a_slider` | `src/runner/pause_menu.rs::tests::graphics_rows_wrap_and_only_strength_uses_a_slider` | ported |
+| `tests/test_native_cheats.py::NativeCheats::test_graphics_live_rows_query_and_change_their_settings` | `src/runner/pause_menu.rs::tests::graphics_live_rows_query_and_change_their_settings` | ported |
+| `tests/test_native_cheats.py::NativeCheats::test_graphics_scrolls_and_hides_the_slider_and_its_scrollbar` | `src/runner/pause_menu.rs::tests::graphics_scrolls_and_hides_the_slider_and_its_scrollbar` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_audio_clears_unused_rows_inherited_from_options` | `src/runner/pause_menu.rs::tests::audio_clears_unused_rows_inherited_from_options` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_display_contains_eight_new_controls_and_keeps_its_original_rows` | `src/runner/pause_menu.rs::tests::display_contains_eight_new_controls_and_keeps_its_original_rows` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_display_scrolls_without_overwriting_original_setting_values` | `src/runner/pause_menu.rs::tests::display_scrolls_without_overwriting_original_setting_values` | ported |

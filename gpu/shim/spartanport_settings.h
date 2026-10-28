@@ -28,6 +28,14 @@ inline constexpr int OutputHeights[] = {720, 1080, 1440, 2160};
 inline constexpr int OutputCount = 4;
 inline constexpr int OutputDefault = 1; ///< 1920x1080, the game's own size
 
+/// Texture Quality steps: their labels, and the extra mip LOD bias each one adds.
+inline constexpr int TextureQualityCount = 4;
+inline constexpr const char* TextureQualityNames[TextureQualityCount] = {"High", "Medium", "Low", "Very Low"};
+inline constexpr const char* TextureQualityNamesPt[TextureQualityCount] = {"Alto", "Médio", "Baixo", "Muito Baixo"};
+inline float TextureLodBias(int quality) {
+    return quality > 0 && quality < TextureQualityCount ? float(quality) : 0.0f;
+}
+
 struct Values {
     std::atomic<int> upscaler{UpscalerFsr3};
     std::atomic<int> preset{NativeAA};
@@ -62,6 +70,15 @@ struct Values {
     /// QTE prompts answered in the game's own checks (src/qte_hook.h), off by default. Live.
     std::atomic<bool> auto_qte{false};
     std::atomic<bool> qte_supported{false};
+    /// Options > Graphics (src/graphics_hook.h): the game's bloom and motion blur, on by default.
+    /// The hooks read these bytes every frame. graphics_supported: bit per SPARTAN_GRAPHICS_* id.
+    std::atomic<bool> bloom{true};
+    std::atomic<bool> motion_blur{true};
+    std::atomic<bool> shadows{true};
+    std::atomic<uint32_t> graphics_supported{0};
+    /// Options > Graphics > Texture Quality: 0 High (the game's own) .. TextureQualityCount - 1.
+    /// Each step reads mipmapped textures one mip level smaller (texture_cache.cpp). Live.
+    std::atomic<int> texture_quality{0};
     // Graphics (spartanport_graphics.h). Live: applied on the next frame.
     std::atomic<int> display_mode{0};
     std::atomic<bool> vsync{true};
@@ -112,6 +129,9 @@ struct Values {
     /// rounded. Null when this eboot.bin's code does not match. engine_fps is written there live.
     std::atomic<float*> engine_fps_global{nullptr};
     std::atomic<int32_t*> engine_fps_int_global{nullptr};
+    /// The script global inPowerUpMenu (src/probe.c finds it): non-zero while the upgrade menu is
+    /// open. Texture Quality adds no LOD bias then. Null when this eboot.bin's code does not match.
+    std::atomic<int32_t*> power_up_menu_global{nullptr};
     bool startup_deferred_readback = true, startup_stale_readback = true;
     // FSR 4 checks (menu): the provider's auto exposure, the jitter sign it is given.
     std::atomic<bool> fsr4_auto_exposure{true};

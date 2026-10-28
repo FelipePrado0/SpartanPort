@@ -180,7 +180,9 @@ fn refresh_monitors(state: &mut State) -> bool {
     if cfg!(windows) || backend == state.displays_backend {
         return false;
     }
-    let displays = list_displays(&SystemTools, &state.paths, &backend);
+    let displays = list_displays(&SystemTools, &state.paths, &backend, &|key| {
+        std::env::var(key).ok()
+    });
     state.monitor_pairs = monitor_options(&displays);
     let visible = state.store.text("monitor");
     let selected = if state

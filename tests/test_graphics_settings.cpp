@@ -9,6 +9,11 @@
 #include "spartanport_graphics.h"
 #include "spartanport_settings.h"
 #include "../gpu/spartanportgpu.h"
+#include "../src/graphics_hook.h"
+
+// src/probe.c's side of Options > Graphics (src/graphics_hook.h).
+extern "C" uintptr_t spartanport_graphics_flag(unsigned id);
+extern "C" void spartanport_graphics_status(unsigned id);
 
 namespace G = SpartanGraphics;
 
@@ -391,6 +396,38 @@ int main() {
     SpartanSettings::Load();
     assert(v.glyph_style == 1 && !SpartanSettings::GraphicsNeedRestart());
     assert(std::string(text(0xfa4)).find("Xbox") != std::string::npos);
+
+    // Options > Graphics: f75+i query, f85+i toggle/next, f95 (and f8d) prev; "Unavailable" until the hook reports in.
+    // Rows: 0 Texture Quality (f75, f85 next, f95/f8d prev), 1 Shadows (f76, f86), 2 Motion Blur (f77, f87), 3 Bloom (f78, f88).
+    assert(std::string(text(0xf78)) == "Unavailable" && std::string(text(0xf87)) == "Unavailable");
+    assert(v.bloom && v.motion_blur);
+    spartanport_graphics_status(SPARTAN_GRAPHICS_BLOOM);
+    spartanport_graphics_status(SPARTAN_GRAPHICS_MOTION_BLUR);
+    spartanport_graphics_status(SPARTAN_GRAPHICS_TEXTURE_QUALITY);  // no toggle (no hook): ignored
+    spartanport_graphics_status(7);  // no such toggle: ignored
+    assert(v.graphics_supported == ((1u << SPARTAN_GRAPHICS_BLOOM) | (1u << SPARTAN_GRAPHICS_MOTION_BLUR)));
+    assert(spartanport_graphics_flag(SPARTAN_GRAPHICS_BLOOM) == reinterpret_cast<uintptr_t>(&v.bloom) &&
+           spartanport_graphics_flag(SPARTAN_GRAPHICS_TEXTURE_QUALITY) == 0);
+    assert(std::string(text(0xf78)) == "On" && std::string(text(0xf88)) == "Off" && !v.bloom);
+    assert(std::string(text(0xf87)) == "Off" && !v.motion_blur && std::string(text(0xf77)) == "Off");
+    assert(Read(path).find("bloom=0\n") != std::string::npos && Read(path).find("motion_blur=0\n") != std::string::npos);
+    assert(std::string(text(0xf88)) == "On" && v.bloom);
+    assert(std::string(text(0xf76)) == "Unavailable");  // Shadows not reported
+    // Texture Quality: no hook, always available. f85 steps toward Very Low, f95 (and f8d) toward High;
+    // both stop at the ends.
+    assert(std::string(text(0xf75)) == "High" && SpartanSettings::TextureLodBias(v.texture_quality) == 0.0f);
+    assert(std::string(text(0xf95)) == "High" && v.texture_quality == 0);
+    assert(std::string(text(0xf85)) == "Medium" && SpartanSettings::TextureLodBias(v.texture_quality) == 1.0f);
+    assert(std::string(text(0xf85)) == "Low" && std::string(text(0xf85)) == "Very Low");
+    assert(std::string(text(0xf85)) == "Very Low" && SpartanSettings::TextureLodBias(v.texture_quality) == 3.0f);
+    assert(Read(path).find("texture_quality=3\n") != std::string::npos);
+    assert(std::string(text(0xf95)) == "Low" && std::string(text(0xf95)) == "Medium");
+    assert(std::string(text(0xf95)) == "High" && v.texture_quality == 0);
+    assert(std::string(text(0xf85)) == "Medium");
+    assert(std::string(text(0xf8d)) == "High" && v.texture_quality == 0);
+    const bool blur_before = v.motion_blur;
+    assert(std::string(text(0xf97)) == "On" && v.motion_blur != blur_before);  // toggles toggle with f90 too
+    assert(SpartanSettings::TextureLodBias(-1) == 0.0f && SpartanSettings::TextureLodBias(9) == 0.0f);
     std::remove(path);
     std::puts("PASS: graphics settings");
 }

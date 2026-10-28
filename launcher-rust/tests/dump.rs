@@ -951,7 +951,7 @@ fn real_menu_options_row() {
         new.one("PauseOptions").unwrap(),
         new.by_name("HLDisplay")[1],
     );
-    assert_eq!(new.records.len(), old.records.len() + 62);
+    assert_eq!(new.records.len(), old.records.len() + 66);
     assert_eq!(row.parent, options.at - 4);
     let cheats = new.one("HLNativeCheats").unwrap();
     let graphics = new.one("HLNativeGraphics").unwrap();
@@ -1176,7 +1176,7 @@ fn native_names(with_link: bool) -> Vec<String> {
         ]
         .map(String::from),
     );
-    names.extend((0..4).map(|i| format!("NativeGraphic{i}")));
+    names.extend((0..9).map(|i| format!("NativeGraphic{i}")));
     names.extend((0..8).map(|i| format!("NativeDisplay{i}")));
     names.extend(
         [

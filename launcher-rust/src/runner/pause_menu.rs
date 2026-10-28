@@ -45,7 +45,7 @@ use crate::core::python::python_json;
 use crate::runner::glyphs::{entries, Entry};
 
 /// Of the patch: a change rebuilds the cached copy.
-pub const VERSION: u32 = 22;
+pub const VERSION: u32 = 23;
 pub const WAD: &str = "EXEC/WAD/PS4_LE/R_UI.WAD";
 
 /// The Exit to Desktop row's text in one language.
@@ -257,9 +257,9 @@ const MULTIPLIER_NAMES: [&str; 7] = [
 
 /// The texts of the native pages that follow the game's language.
 struct Texts {
-    /// The Graphics Settings page: its title, its five controls, Restore Defaults and Apply.
+    /// The Graphics Settings page: its title, its nine controls, Restore Defaults and Apply.
     graphics_title: &'static str,
-    graphics_names: [&'static str; 7],
+    graphics_names: [&'static str; 11],
     /// The question Restore Defaults asks, and its answers.
     restore_graphics: &'static str,
     yes_no: [&'static str; 2],
@@ -283,6 +283,10 @@ static ENGLISH: Texts = Texts {
         "RCAS Sharpening",
         "Sharpening Strength",
         "Anisotropic Filtering",
+        "Texture Quality",
+        "Shadows",
+        "Motion Blur",
+        "Bloom",
         "Restore Graphics Defaults",
         "Apply and Restart",
     ],
@@ -322,6 +326,10 @@ static PORTUGUESE: Texts = Texts {
         "Nitidez RCAS",
         "Intensidade da nitidez",
         "Filtragem anisotrópica",
+        "Qualidade das texturas",
+        "Sombras",
+        "Desfoque de movimento",
+        "Bloom",
         "Restaurar padrões gráficos",
         "Aplicar e reiniciar",
     ],
@@ -1374,8 +1382,6 @@ enum Redraw {
     Row,
     /// The Cheats page's visible rows (they scroll), then its value.
     Cheats,
-    /// The Graphics Settings page's titles and values.
-    Graphics,
 }
 
 /// A page whose rows scroll, with the names of the rows it keeps from the game.
@@ -1622,21 +1628,43 @@ impl Emitter<'_, '_> {
         self.scrollbar(11, first, 8, 7)
     }
 
-    /// The Graphics Settings page's title, rows and values (`selected` with its arrows), and the
-    /// Sharpening Strength slider, the only one it shows.
-    fn graphics_values(&mut self, selected: Option<usize>) -> Result<(), MenuError> {
+    /// The Graphics Settings page's title and the eight rows it shows from row `first` (`selected`
+    /// with its arrows; `change`, the builtin that changes it, runs instead of its query). The
+    /// Sharpening Strength slider shows only while the page is at the top; scrollbar 13 follows the
+    /// 8 rows of 11.
+    fn graphics_window(
+        &mut self,
+        first: usize,
+        selected: Option<usize>,
+        change: Option<usize>,
+    ) -> Result<(), MenuError> {
         self.string(self.texts.graphics_title.as_bytes())?;
         self.assign(0)?;
         for slot in 0..8 {
-            let name = self.texts.graphics_names.get(slot).copied().unwrap_or("");
+            let row = first + slot;
+            let name = self
+                .texts
+                .graphics_names
+                .get(row)
+                .ok_or_else(|| script("list index out of range"))?;
             self.string(name.as_bytes())?;
             self.assign(1 + slot)?;
+            if row < 9 {
+                let read = match change {
+                    Some(change) if selected == Some(row) => change,
+                    _ => 0xf70 + row,
+                };
+                self.query(slot, read, selected == Some(row))?;
+            } else {
+                self.string(b"")?;
+                self.assign(9 + slot)?;
+            }
         }
-        for index in 0..5 {
-            self.query(index, 0xf70 + index, selected == Some(index))?;
+        if first == 0 {
+            self.slider(3, Some(0xfa3))?;
         }
-        self.slider(3, Some(0xfa3))?;
-        self.bars(true, &[3])
+        self.bars(first == 0, &[3])?;
+        self.scrollbar(13, first, 11, 8)
     }
 
     fn selection(
@@ -1659,9 +1687,7 @@ impl Emitter<'_, '_> {
                         .is_some_and(|digit| digit >= 6);
                 self.cheat_window(usize::from(scrolled))?;
             }
-            if redraw == Redraw::Graphics {
-                self.graphics_values(Some(index))?;
-            } else if let Some(function) = function {
+            if let Some(function) = function {
                 self.query(index, function, true)?;
             }
         } else if function.is_some() {
@@ -1897,8 +1923,8 @@ fn kept_labels(
 }
 
 /// The Graphics Settings controls that move left and right (Frames Queued, Sharpening Strength,
-/// Anisotropic Filtering); the two others toggle.
-const SLIDING_GRAPHICS: [usize; 3] = [0, 3, 4];
+/// Anisotropic Filtering, Texture Quality); the others toggle.
+const SLIDING_GRAPHICS: [usize; 4] = [0, 3, 4, 5];
 
 /// Native Options > Graphics Settings and Options > Cheats > Multipliers, and the port's display
 /// and control settings after the game's rows of Display and Controls (both pages scroll), sharing
@@ -1968,7 +1994,7 @@ pub fn native_cheats(
         link(),
     ));
     specs.push(Spec::new("NativeGraphics", "pause", back()));
-    for i in 0..5 {
+    for i in 0..9 {
         let events = if SLIDING_GRAPHICS.contains(&i) {
             vec![left.clone(), right.clone(), up.clone(), down.clone()]
         } else {
@@ -2242,10 +2268,11 @@ pub fn native_cheats(
         }
     }
 
-    // Graphics Settings: five controls (builtins 0xf70 + i read them, 0xf80 + i and 0xf90 + i
-    // change them), Restore Defaults behind a Yes/No question (0xfb0 restores) and Apply and
-    // Restart, which asks only when a change waits for a restart (0xfc9).
-    let graphics_rows: Vec<String> = (0..5)
+    // Graphics Settings: nine controls (builtins 0xf70 + i read them, 0xf80 + i and 0xf90 + i
+    // change them; Texture Quality, Shadows, Motion Blur and Bloom apply live), Restore Defaults
+    // behind a Yes/No question (0xfb0 restores) and Apply and Restart, which asks only when a
+    // change waits for a restart (0xfc9); eight rows show at a time.
+    let graphics_rows: Vec<String> = (0..9)
         .map(|i| format!("NativeGraphic{i}"))
         .chain(["NativeGraphicsReset", "NativeGraphicsApply"].map(String::from))
         .collect();
@@ -2272,13 +2299,16 @@ pub fn native_cheats(
         e.blank(LOWER_LINES)?;
         e.bars(false, &ALL_BARS)?;
         if graphics {
-            e.graphics_values(None)?;
+            e.graphics_window(0, None, None)?;
         }
         // The question starts on No.
         e.goto_new(&rows[usize::from(!graphics)])?;
         e.end();
         e.begin(page, "update");
         e.bars(false, &ALL_BARS)?;
+        if graphics {
+            e.hide_scrollbar(13)?;
+        }
         e.end();
         e.begin(page, "back");
         e.sound(b"SND_MM_BACK")?;
@@ -2288,18 +2318,28 @@ pub fn native_cheats(
             "NativeGraphicsReset"
         })?;
         e.end();
-        let redraw = if graphics {
-            Redraw::Graphics
-        } else {
-            Redraw::Row
-        };
         let targets = new_states(rows);
         for (index, name) in rows.iter().enumerate() {
-            let function = (graphics && index < 5).then_some(0xf70 + index);
-            e.selection(name, index, function, true, redraw)?;
-            e.selection(name, index, function, false, Redraw::Row)?;
+            let control = graphics && index < 9;
+            let first = index.saturating_sub(7);
+            if graphics {
+                e.begin(name, "entry");
+                e.builtin(0x6b, true)?;
+                e.graphics_window(first, Some(index), None)?;
+                e.animation(index - first, 8)?;
+                e.end();
+                e.begin(name, "update");
+                if control {
+                    e.value(index - first, false)?;
+                }
+                e.animation(index - first, 9)?;
+                e.end();
+            } else {
+                e.selection(name, index, None, true, Redraw::Row)?;
+                e.selection(name, index, None, false, Redraw::Row)?;
+            }
             e.navigation(name, index, &targets)?;
-            if function.is_none() {
+            if !control {
                 e.begin(name, "confirm");
                 e.sound(b"SND_MM_SELECT")?;
                 if name == "NativeGraphicsResetYes" {
@@ -2326,15 +2366,7 @@ pub fn native_cheats(
             for (kind, function) in actions {
                 e.begin(name, kind);
                 e.call(repeat);
-                for other in 0..5 {
-                    let read = if other == index {
-                        function
-                    } else {
-                        0xf70 + other
-                    };
-                    e.query(other, read, other == index)?;
-                }
-                e.slider(3, Some(0xfa3))?;
+                e.graphics_window(first, Some(index), Some(function))?;
                 e.sound(b"SND_MM_NAV_LR")?;
                 e.end();
             }
@@ -2743,10 +2775,11 @@ pub fn native_cheats(
     put_le32(data, base - 0x40 + 4, old_size + grown)?;
     repad(data, base + old_size + grown, old_size, old_size + grown);
     native_multiplier_bars(data)?;
-    // Display's rows, Cheats' unpinned rows and Controls' rows.
+    // Display's rows, Cheats' unpinned rows, Controls' rows and Graphics Settings' rows.
     native_scrollbar(data, 10, 13, 8)?;
     native_scrollbar(data, 11, 8, 7)?;
-    native_scrollbar(data, 12, 11, 8)
+    native_scrollbar(data, 12, 11, 8)?;
+    native_scrollbar(data, 13, 11, 8)
 }
 
 /// The highest id of the WAD's object instances (148-byte entries of kind 0x1f) that is in the
@@ -4474,14 +4507,77 @@ mod tests {
         let entry = texts(&s, &block(&s, s.one("NativeGraphics").unwrap(), 1, None));
         // Hidden with the others, positioned, shown.
         assert_eq!(entry.iter().filter(|t| *t == "sliderBar7").count(), 3);
-        assert!(entry.iter().any(|t| t == "Restore Graphics Defaults"));
-        for name in ["NativeGraphic1", "NativeGraphic2"] {
-            let toggle = Script::blocks(s.one(name).unwrap())
+        // Row 9: shown once the page scrolls.
+        assert!(!entry.iter().any(|t| t == "Restore Graphics Defaults"));
+        for index in [1, 2, 6, 7, 8] {
+            let name = format!("NativeGraphic{index}");
+            let toggle = Script::blocks(s.one(&name).unwrap())
                 .into_iter()
                 .find(|b| b.kind == 3 && b.triggers.contains(&0xe9))
                 .unwrap();
             assert_eq!(toggle.triggers, [0xe6, 0xe2, 0xee, 0xf2, 0xe9], "{name}");
         }
+    }
+
+    #[test]
+    fn graphics_live_rows_query_and_change_their_settings() {
+        let data = native("en");
+        let s = Script::parse(&data).unwrap();
+        let page = s.one("NativeGraphics").unwrap();
+        for index in 5..9 {
+            let row = s.one(&format!("NativeGraphic{index}")).unwrap();
+            assert_eq!(row.parent, page.at - 4);
+            assert!(calls(&block(&s, row, 1, None)).contains(&(0xf70 + index)));
+            if SLIDING_GRAPHICS.contains(&index) {
+                // Texture Quality: left steps toward High, right toward Very Low.
+                let left = calls(&block(&s, row, 3, Some(&[0xe6, 0xf2])));
+                let right = calls(&block(&s, row, 3, Some(&[0xe2, 0xee])));
+                assert!(left.contains(&(0xf80 + index)), "{index}");
+                assert!(right.contains(&(0xf90 + index)), "{index}");
+                assert!(!left.contains(&(0xf90 + index)), "{index}");
+            } else {
+                let toggle = block(&s, row, 3, Some(&[0xe6, 0xe2, 0xee, 0xf2, 0xe9]));
+                assert!(calls(&toggle).contains(&(0xf90 + index)), "{index}");
+            }
+        }
+    }
+
+    #[test]
+    fn graphics_scrolls_and_hides_the_slider_and_its_scrollbar() {
+        let data = native("en");
+        let s = Script::parse(&data).unwrap();
+        let entry = |name: &str| block(&s, s.one(name).unwrap(), 1, None);
+        // The eight first rows fit; Bloom, Restore Defaults and Apply scroll the page by one row
+        // each.
+        let tops = [
+            "Frames Queued",
+            "Async Shader Compilation",
+            "RCAS Sharpening",
+            "Sharpening Strength",
+        ];
+        for (name, first) in [
+            ("NativeGraphic0", 0),
+            ("NativeGraphic7", 0),
+            ("NativeGraphic8", 1),
+            ("NativeGraphicsReset", 2),
+            ("NativeGraphicsApply", 3),
+        ] {
+            let code = entry(name);
+            let shown = assignments(&s, &code);
+            assert_eq!(shown[&0], "Graphics Settings", "{name}");
+            assert_eq!(shown[&1], tops[first], "{name}");
+            let pushed = texts(&s, &code);
+            assert!(pushed.iter().any(|t| t == "sliderBar13"), "{name}");
+            // The Sharpening Strength slider only lines up with its row at the top.
+            let sliders = pushed.iter().filter(|t| *t == "sliderBar7").count();
+            assert_eq!(sliders, if first == 0 { 2 } else { 1 }, "{name}");
+        }
+        assert_eq!(
+            assignments(&s, &entry("NativeGraphicsApply"))[&8],
+            "Apply and Restart"
+        );
+        let update = block(&s, s.one("NativeGraphics").unwrap(), 2, None);
+        assert!(texts(&s, &update).iter().any(|t| t == "sliderBar13"));
     }
 
     #[test]
@@ -4491,7 +4587,7 @@ mod tests {
         let names = ["NativeGraphics", "NativeGraphicsReset"]
             .map(String::from)
             .into_iter()
-            .chain((0..4).map(|i| format!("NativeGraphic{i}")));
+            .chain((0..9).map(|i| format!("NativeGraphic{i}")));
         for name in names {
             let record = s.one(&name).unwrap();
             for b in Script::blocks(record) {

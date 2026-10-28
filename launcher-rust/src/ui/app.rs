@@ -580,7 +580,12 @@ fn browse(state: &State, key: String) -> Task<Message> {
 pub fn start_monitor_listing(state: &State) -> Task<Message> {
     let paths = state.paths.clone();
     let backend = state.store.text("video_backend");
-    blocking(move || list_displays(&SystemTools, &paths, &backend)).map(Message::MonitorsListed)
+    blocking(move || {
+        list_displays(&SystemTools, &paths, &backend, &|key| {
+            std::env::var(key).ok()
+        })
+    })
+    .map(Message::MonitorsListed)
 }
 
 /// Advances the clock, the fire and the splash.
