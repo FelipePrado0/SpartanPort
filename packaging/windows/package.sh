@@ -23,6 +23,23 @@ if [[ -z $dlss ]]; then
     echo 'Package: no DLSS (packaging/windows/build_dlss.sh makes it)' >&2
 fi
 
+# Streamline is optional; an incomplete NVIDIA FG package is never shipped.
+streamline=
+if [[ -d out/streamline ]]; then
+    for file in spartanport_streamline.dll sl.interposer.dll sl.common.dll sl.dlss_g.dll \
+                sl.reflex.dll sl.pcl.dll nvngx_dlssg.dll NvLowLatencyVk.dll; do
+        [[ -f out/streamline/$file ]] || { echo "Incomplete Streamline package: $file" >&2; exit 1; }
+    done
+    for license in NVIDIA-Streamline.txt NVIDIA-Streamline-third-party.txt reflex.license.txt \
+                   nvngx_dlss.license.txt spartanport_streamline-MIT.txt; do
+        [[ -f out/streamline/LICENSES/$license ]] || { echo "Streamline license missing: $license" >&2; exit 1; }
+    done
+    streamline=yes
+elif [[ ${REQUIRE_STREAMLINE:-0} == 1 ]]; then
+    echo 'Run python packaging/windows/build_streamline.py before packaging' >&2
+    exit 1
+fi
+
 # The package is assembled in a fresh staging folder and zipped from there; dist/spartanport-windows
 # (a playable copy that may hold saves and settings) is only refreshed afterwards.
 dest=out/stage/spartanport-windows
@@ -61,6 +78,13 @@ if [[ -n $dlss ]]; then
     cp out/spartanport_dlss.dll out/nvngx_dlss.dll "$dest/bin/"
     cp out/NVIDIA-DLSS-LICENSE.txt "$dest/LICENSES/NVIDIA-DLSS-SDK.txt"
     cp gpu/dlss_bridge/LICENSE.txt "$dest/LICENSES/spartanport_dlss-MIT.txt"
+fi
+if [[ -n $streamline ]]; then
+    for file in spartanport_streamline.dll sl.interposer.dll sl.common.dll sl.dlss_g.dll \
+                sl.reflex.dll sl.pcl.dll nvngx_dlssg.dll NvLowLatencyVk.dll; do
+        cp "out/streamline/$file" "$dest/bin/"
+    done
+    cp out/streamline/LICENSES/* "$dest/LICENSES/"
 fi
 # No game files and nothing a player made (saves, shader caches built from the game's shaders,
 # settings, logs) may ship: stop when one is found.

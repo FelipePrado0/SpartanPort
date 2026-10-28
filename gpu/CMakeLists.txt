@@ -120,6 +120,7 @@ add_host_shader(upscale_reactive.comp upscale_reactive_comp)
 add_host_shader(stencil_reactive.comp stencil_reactive_comp)
 add_host_shader(fg_depth.comp fg_depth_comp)
 add_host_shader(fg_hud.comp fg_hud_comp)
+add_host_shader(fg_ui.comp fg_ui_comp)
 add_host_shader(taa.comp taa_comp)
 add_host_shader(taa_sharpen.comp taa_sharpen_comp)
 add_host_shader(taa_sharpen.comp taa_sharpen_ldr_comp LDR_OUTPUT=1)
@@ -392,6 +393,14 @@ set_source_files_properties(../tests/test_taa_shader.cpp PROPERTIES
     COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
 target_link_libraries(taa-shader-test PRIVATE spartanportgpu)
 add_dependencies(taa-shader-test host_shaders)
+
+add_executable(dlss-frame-composition-test EXCLUDE_FROM_ALL
+    ../tests/test_dlss_frame_composition.cpp ../tests/test_gpu_runtime_stubs.cpp)
+target_include_directories(dlss-frame-composition-test PRIVATE shim shadps4 third_party/gcn/include)
+target_compile_options(dlss-frame-composition-test PRIVATE -UNDEBUG -fPIC)
+set_source_files_properties(../tests/test_dlss_frame_composition.cpp PROPERTIES
+    COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
+target_link_libraries(dlss-frame-composition-test PRIVATE spartanportgpu)
 
 add_executable(reactive-shader-test EXCLUDE_FROM_ALL ../tests/test_reactive_shader.cpp)
 target_include_directories(reactive-shader-test PRIVATE ${SHADER_INCLUDE})

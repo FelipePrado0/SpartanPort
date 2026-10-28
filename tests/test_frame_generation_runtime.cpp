@@ -10,6 +10,7 @@
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
+#include "video_core/renderer_vulkan/vk_dlss_frame_generation.h"
 #include <vk_mem_alloc.h>
 
 int main(int argc, char** argv) {
@@ -19,7 +20,22 @@ int main(int argc, char** argv) {
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
 #endif
     using namespace Vulkan;
+    const bool nvidia_unavailable = argc > 1 && std::strcmp(argv[1], "nvidia-unavailable") == 0;
+    if (nvidia_unavailable) {
+        SpartanSettings::Get().startup_frame_generation = 2;
+        SpartanSettings::Get().frame_generation = 2;
+    }
     Instance instance(0, argc > 2 && std::strcmp(argv[2], "validation") == 0);
+    if (nvidia_unavailable) {
+        if (instance.GetVendorID() != 0x10de) {
+            assert(!DlssFrameGeneration::Get().Ready());
+            assert(!SpartanSettings::Get().fg_dlss_supported);
+            assert(SpartanSettings::Get().fg_problem.load());
+            assert(SpartanSettings::Get().frame_generation == 2);
+            std::puts("NVIDIA unavailable: native device kept, no AMD FG substitution PASS");
+        }
+        return 0;
+    }
     Scheduler scheduler(instance);
     const bool profile = argc > 1 && std::strcmp(argv[1], "profile") == 0;
     if (profile) {

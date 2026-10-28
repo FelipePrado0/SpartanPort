@@ -21,6 +21,7 @@
 #include "core/memory.h"
 #include "core/platform.h"
 #include "video_core/amdgpu/liverpool.h"
+#include "video_core/renderer_vulkan/vk_dlss_frame_generation.h"
 #include "video_core/amdgpu/pm4_cmds.h"
 #include "video_core/renderer_vulkan/vk_presenter.h"
 
@@ -2177,6 +2178,7 @@ static inline s32 PerformSubmit(u32 count, const u32* dcb_gpu_addrs[], u32* dcb_
         DebugState.PauseGuestThreads();
     }
 
+    void* frame_token = Vulkan::DlssFrameGeneration::Get().SubmissionToken();
     if (send_init_packet) {
         if (sdk_version < Common::ElfInfo::FW_200) {
             liverpool->SubmitGfx(InitSequence, {});
@@ -2241,7 +2243,7 @@ static inline s32 PerformSubmit(u32 count, const u32* dcb_gpu_addrs[], u32* dcb_
                 .base_addr = reinterpret_cast<uintptr_t>(ccb),
             });
         }
-        liverpool->SubmitGfx(dcb_span, ccb_span);
+        liverpool->SubmitGfx(dcb_span, ccb_span, frame_token);
     }
     return ORBIS_OK;
 }
@@ -2364,6 +2366,7 @@ s32 PS4_SYSV_ABI sceGnmSubmitDone() {
     send_init_packet = true;
     ++frames_submitted;
     DebugState.IncGnmFrameNum();
+    Vulkan::DlssFrameGeneration::Get().StartSimulation();
     return ORBIS_OK;
 }
 

@@ -12,6 +12,7 @@
 #include "video_core/renderer_vulkan/vk_common.h"
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/texture_cache/image.h"
+#include "../../../streamline_bridge/spartanport_streamline.h"
 
 namespace VideoCore {
 class TextureCache;
@@ -66,6 +67,18 @@ public:
     /// Vertical field of view and near/far planes of the current camera.
     [[nodiscard]] float VerticalFov() const noexcept;
     [[nodiscard]] float Near() const noexcept;
+    [[nodiscard]] SpartanSlCamera FrameGenerationCamera() const noexcept {
+        SpartanSlCamera result{};
+        std::copy(current.view.begin(), current.view.end(), result.view);
+        std::copy(current.inv_view.begin(), current.inv_view.end(), result.inverse_view);
+        std::copy(previous.view.begin(), previous.view.end(), result.previous_view);
+        std::copy(current.proj.begin(), current.proj.end(), result.projection);
+        std::copy(previous.proj.begin(), previous.proj.end(), result.previous_projection);
+        result.near_plane = Near();
+        result.far_plane = current.proj[2] > 1.0f ? -current.proj[3] / (current.proj[2] - 1.0f) : 3000.0f;
+        result.fov = VerticalFov();
+        return result;
+    }
     // Current projection, previous projection, and row Z of previous-view * inverse-view.
     [[nodiscard]] std::array<std::array<float, 4>, 3> TaaDepthParameters() const noexcept;
 

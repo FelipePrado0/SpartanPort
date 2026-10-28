@@ -322,6 +322,9 @@ std::string OverlayText() {
     sample.frame_ms = frame_ms_avg;
     sample.upscaler = UpscalerLabel(s.upscaler);
     sample.game_fps = s.frame_generation != 0 ? s.fg_game_fps.load() : 0.0f;
+    if (s.startup_frame_generation == 2 && sample.game_fps > 0.0f) {
+        sample.fps = s.fg_presented_fps.load();
+    }
     return P::Format(sample, items, s.overlay_layout == 0);
 }
 

@@ -17,6 +17,7 @@
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_amd_paths.h"
 #include "video_core/renderer_vulkan/vk_dlss.h"
+#include "video_core/renderer_vulkan/vk_dlss_frame_generation.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 
@@ -108,7 +109,7 @@ Instance::Instance(s32 index, bool validation)
 
 Instance::Instance(const Frontend::WindowSystemInfo& window_info, s32 physical_device_index,
                    bool enable_validation, bool enable_crash_diagnostic)
-    : instance{CreateInstance(window_info.type, enable_validation, enable_crash_diagnostic)},
+    : instance{CreateInstance(window_info.type, enable_validation, enable_crash_diagnostic, physical_device_index)},
       physical_devices{EnumeratePhysicalDevices(instance)} {
     if (enable_validation) {
         debug_callback = CreateDebugCallback(*instance);
@@ -129,57 +130,7 @@ Instance::Instance(const Frontend::WindowSystemInfo& window_info, s32 physical_d
         physical_device_index = -1;
     }
 
-    if (physical_device_index < 0) {
-        std::vector<
-            std::tuple<size_t, vk::PhysicalDeviceProperties2, vk::PhysicalDeviceMemoryProperties>>
-            properties2{};
-        for (auto const& physical : physical_devices) {
-            properties2.emplace_back(properties2.size(), physical.getProperties2(),
-                                     physical.getMemoryProperties());
-        }
-        std::sort(properties2.begin(), properties2.end(), [](const auto& left, const auto& right) {
-            const vk::PhysicalDeviceProperties& left_prop = std::get<1>(left).properties;
-            const vk::PhysicalDeviceProperties& right_prop = std::get<1>(right).properties;
-            const bool left_supports_api = left_prop.apiVersion >= TargetVulkanApiVersion;
-            const bool right_supports_api = right_prop.apiVersion >= TargetVulkanApiVersion;
-            if (left_supports_api != right_supports_api) {
-                return left_supports_api;
-            }
-
-            const bool left_is_discrete =
-                left_prop.deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
-            const bool right_is_discrete =
-                right_prop.deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
-            if (left_is_discrete != right_is_discrete) {
-                return left_is_discrete;
-            }
-
-            // Software renderers advertise system memory as device local, so they
-            // would win the memory comparison below against real hardware.
-            const bool left_is_cpu = left_prop.deviceType == vk::PhysicalDeviceType::eCpu;
-            const bool right_is_cpu = right_prop.deviceType == vk::PhysicalDeviceType::eCpu;
-            if (left_is_cpu != right_is_cpu) {
-                return right_is_cpu;
-            }
-
-            constexpr auto get_mem = [](const vk::PhysicalDeviceMemoryProperties& mem) -> size_t {
-                size_t max = 0;
-                for (u32 i = 0; i < mem.memoryHeapCount; i++) {
-                    const vk::MemoryHeap& heap = mem.memoryHeaps[i];
-                    if (heap.flags & vk::MemoryHeapFlagBits::eDeviceLocal && heap.size > max) {
-                        max = heap.size;
-                    }
-                }
-                return max;
-            };
-            size_t left_mem_size = get_mem(std::get<2>(left));
-            size_t right_mem_size = get_mem(std::get<2>(right));
-            return left_mem_size > right_mem_size;
-        });
-        physical_device = physical_devices[std::get<0>(properties2[0])];
-    } else {
-        physical_device = physical_devices[physical_device_index];
-    }
+    physical_device = physical_devices[SelectPhysicalDevice(physical_devices, physical_device_index)];
     std::printf("GPU: using %s\n", physical_device.getProperties().deviceName.data());
 
     available_extensions = GetSupportedExtensions(physical_device);
@@ -199,6 +150,7 @@ Instance::Instance(const Frontend::WindowSystemInfo& window_info, s32 physical_d
 }
 
 Instance::~Instance() {
+    DlssFrameGeneration::Get().Shutdown();
     ImGui::Core::Shutdown(GetDevice());
     vmaDestroyAllocator(allocator);
 }
@@ -756,6 +708,7 @@ bool Instance::CreateDevice() {
     graphics_queue = device->getQueue(queue_family_index, 0);
     sparse_queue = device->getQueue(sparse_queue_family_index, 0);
     present_queue = device->getQueue(queue_family_index, 0);
+    DlssFrameGeneration::Get().Initialize(physical_device, graphics_queue, present_queue);
 
     if (calibrated_timestamps) {
         const auto [time_domains_result, time_domains] =

@@ -23,6 +23,7 @@
 #include "sdl_window.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 #include "video_core/renderer_vulkan/vk_dlss.h"
+#include "video_core/renderer_vulkan/vk_dlss_frame_generation.h"
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -255,8 +256,62 @@ std::vector<const char*> GetInstanceLayers(bool enable_validation, bool enable_c
     return layers;
 }
 
+s32 SelectPhysicalDevice(const std::vector<vk::PhysicalDevice>& physical_devices, s32 physical_device_index) {
+    if (physical_device_index < 0 || physical_device_index >= s32(physical_devices.size())) {
+        std::vector<
+            std::tuple<size_t, vk::PhysicalDeviceProperties2, vk::PhysicalDeviceMemoryProperties>>
+            properties2{};
+        for (auto const& physical : physical_devices) {
+            properties2.emplace_back(properties2.size(), physical.getProperties2(),
+                                     physical.getMemoryProperties());
+        }
+        std::sort(properties2.begin(), properties2.end(), [](const auto& left, const auto& right) {
+            const vk::PhysicalDeviceProperties& left_prop = std::get<1>(left).properties;
+            const vk::PhysicalDeviceProperties& right_prop = std::get<1>(right).properties;
+            const bool left_supports_api = left_prop.apiVersion >= TargetVulkanApiVersion;
+            const bool right_supports_api = right_prop.apiVersion >= TargetVulkanApiVersion;
+            if (left_supports_api != right_supports_api) {
+                return left_supports_api;
+            }
+
+            const bool left_is_discrete =
+                left_prop.deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
+            const bool right_is_discrete =
+                right_prop.deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
+            if (left_is_discrete != right_is_discrete) {
+                return left_is_discrete;
+            }
+
+            // Software renderers advertise system memory as device local, so they
+            // would win the memory comparison below against real hardware.
+            const bool left_is_cpu = left_prop.deviceType == vk::PhysicalDeviceType::eCpu;
+            const bool right_is_cpu = right_prop.deviceType == vk::PhysicalDeviceType::eCpu;
+            if (left_is_cpu != right_is_cpu) {
+                return right_is_cpu;
+            }
+
+            constexpr auto get_mem = [](const vk::PhysicalDeviceMemoryProperties& mem) -> size_t {
+                size_t max = 0;
+                for (u32 i = 0; i < mem.memoryHeapCount; i++) {
+                    const vk::MemoryHeap& heap = mem.memoryHeaps[i];
+                    if (heap.flags & vk::MemoryHeapFlagBits::eDeviceLocal && heap.size > max) {
+                        max = heap.size;
+                    }
+                }
+                return max;
+            };
+            size_t left_mem_size = get_mem(std::get<2>(left));
+            size_t right_mem_size = get_mem(std::get<2>(right));
+            return left_mem_size > right_mem_size;
+        });
+        return s32(std::get<0>(properties2[0]));
+    } else {
+        return physical_device_index;
+    }
+}
+
 vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool enable_validation,
-                                  bool enable_crash_diagnostic) {
+                                  bool enable_crash_diagnostic, s32 physical_device_index) {
     LOG_INFO(Render_Vulkan, "Creating vulkan instance");
 
 #if defined(__APPLE__)
@@ -424,6 +479,20 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init(*instance);
 
+    auto& nvidia = DlssFrameGeneration::Get();
+    if (physical_device_index != -2) {
+        const auto devices = instance->enumeratePhysicalDevices();
+        if (devices.result == vk::Result::eSuccess && !devices.value.empty() &&
+            nvidia.Prepare(devices.value[SelectPhysicalDevice(devices.value, physical_device_index)])) {
+            // The first native instance only identifies the selected adapter. SL creates the final instance.
+            instance.reset();
+            VULKAN_HPP_DEFAULT_DISPATCHER.init(nvidia.Resolver());
+            auto result = vk::createInstanceUnique(instance_ci_chain.get());
+            ASSERT_MSG(result.result == vk::Result::eSuccess, "Failed to create Streamline Vulkan instance");
+            instance = std::move(result.value);
+            VULKAN_HPP_DEFAULT_DISPATCHER.init(*instance);
+        }
+    }
     return std::move(instance);
 }
 

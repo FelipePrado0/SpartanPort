@@ -144,6 +144,7 @@ struct Values {
     std::atomic<const char*> fg_status{nullptr};
     /// Frame generation running: the game's frames per second (the overlay shows both), else 0.
     std::atomic<float> fg_game_fps{0.0f};
+    std::atomic<float> fg_presented_fps{0.0f};
 
     /// Startup settings for the explicit SPARTAN_RENDER_RES compatibility patch only.
     int startup_preset = NativeAA;

@@ -1928,7 +1928,8 @@ void TemporalUpscaler::RunScaled() {
                                            .near_plane = camera_motion.Near(),
                                            .vertical_fov = camera_motion.VerticalFov(),
                                            .projection_z = camera_motion.TaaDepthParameters()[0][2],
-                                           .reset = frame_reset});
+                                           .reset = frame_reset,
+                                           .camera = camera_motion.FrameGenerationCamera()});
         if (profiler) profiler->Resume(resume);
     };
     const auto barrier = [&](vk::Image image, vk::ImageAspectFlags aspect,

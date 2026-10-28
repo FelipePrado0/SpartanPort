@@ -12,6 +12,7 @@
 #include "sdl_window.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_swapchain.h"
+#include "video_core/renderer_vulkan/vk_dlss_frame_generation.h"
 
 namespace Vulkan {
 
@@ -59,6 +60,12 @@ void Swapchain::Create(u32 width_, u32 height_) {
     const vk::SharingMode sharing_mode =
         exclusive ? vk::SharingMode::eExclusive : vk::SharingMode::eConcurrent;
     const auto format = needs_hdr ? SURFACE_FORMAT_HDR : surface_format;
+    const bool nvidia_sampled = DlssFrameGeneration::Get().Ready() && bool(
+        instance.GetPhysicalDevice().getSurfaceCapabilitiesKHR(surface).value.supportedUsageFlags &
+        vk::ImageUsageFlagBits::eSampled);
+    if (DlssFrameGeneration::Get().Ready() && !nvidia_sampled) {
+        DlssFrameGeneration::Get().Fail("the surface cannot provide sampled backbuffers for NVIDIA frame generation");
+    }
     const vk::SwapchainCreateInfoKHR swapchain_info = {
         .surface = surface,
         .minImageCount = image_count,
@@ -67,7 +74,8 @@ void Swapchain::Create(u32 width_, u32 height_) {
         .imageExtent = extent,
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment |
-                      vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
+                      vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst |
+                      (nvidia_sampled ? vk::ImageUsageFlagBits::eSampled : vk::ImageUsageFlags{}),
         .imageSharingMode = sharing_mode,
         .queueFamilyIndexCount = queue_family_indices_count,
         .pQueueFamilyIndices = queue_family_indices.data(),
@@ -331,6 +339,7 @@ bool Swapchain::SetSurfaceProperties() {
 }
 
 void Swapchain::Destroy() {
+    DlssFrameGeneration::Get().Pause();
     vk::Device device = instance.GetDevice();
     const auto wait_result = device.waitIdle();
     if (wait_result != vk::Result::eSuccess) {
