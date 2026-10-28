@@ -6,6 +6,7 @@
 #include "video_core/amdgpu/liverpool.h"
 
 #include "spartanport_toggles.h"
+#include "spartanport_settings.h"
 #include "common/assert.h"
 #include "common/debug.h"
 #include "common/div_ceil.h"
@@ -1439,6 +1440,18 @@ void TextureCache::RefreshImage(Image& image) {
 vk::Sampler TextureCache::GetSampler(const AmdGpu::Sampler& sampler,
                                      AmdGpu::BorderColorBuffer border_color_base,
                                      const bool is_depth, float extra_lod_bias) {
+    // spartanport: Options > Graphics > Texture Quality reads filtered, mipmapped textures some
+    // mip levels smaller (the anisotropy override's filter: not point lookups, unmipmapped render
+    // targets or depth compares). Part of the key below, so a change makes new samplers: live.
+    // Not while the upgrade menu is open (the game's inPowerUpMenu script global): its red orb
+    // medallion smears at the low steps. The flag is written by the game thread; read it fresh.
+    const auto& spartan = SpartanSettings::Get();
+    const volatile int32_t* power_up_menu = spartan.power_up_menu_global.load();
+    const bool in_power_up_menu = power_up_menu && *power_up_menu != 0;
+    if (!is_depth && !in_power_up_menu && sampler.xy_min_filter != AmdGpu::Filter::Point &&
+        sampler.mip_filter != AmdGpu::MipFilter::None) {
+        extra_lod_bias += SpartanSettings::TextureLodBias(spartan.texture_quality.load());
+    }
     // Compare and plain uses of one S# need separate samplers; so do extra LOD biases.
     const u64 hash = HashCombine(HashCombine(XXH3_64bits(&sampler, sizeof(sampler)), is_depth),
                                  u64(std::bit_cast<u32>(extra_lod_bias)));

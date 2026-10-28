@@ -230,14 +230,16 @@ class GameScript(unittest.TestCase):
 
     def test_options_row(self):
         options, row = self.new.one('PauseOptions'), self.new.by_name['HLDisplay'][1]
-        self.assertEqual(len(self.new.records), len(self.old.records) + 62)
+        self.assertEqual(len(self.new.records), len(self.old.records) + 68)
         self.assertEqual(row['parent'], options['at'] - 4)
         cheats = self.new.one('HLNativeCheats')
         graphics = self.new.one('HLNativeGraphics')
+        live_graphics = self.new.one('HLNativeLiveGraphics')
         self.assertEqual(options['size'], self.old.one('PauseOptions')['size'] + pause_menu.ROW_SIZE
-                         + cheats['size'] + graphics['size'])
+                         + cheats['size'] + graphics['size'] + live_graphics['size'])
         self.assertEqual(row['at'] + row['size'], graphics['at'])
-        self.assertEqual(graphics['at'] + graphics['size'], cheats['at'])
+        self.assertEqual(graphics['at'] + graphics['size'], live_graphics['at'])
+        self.assertEqual(live_graphics['at'] + live_graphics['size'], cheats['at'])
         # The WAD entry, the script header and the padding agree with the new size.
         size = struct.unpack_from('<I', self.data, self.base - 0x40 + 4)[0]
         old_size = struct.unpack_from('<I', self.original, self.old_base - 0x40 + 4)[0]
@@ -272,6 +274,7 @@ class GameScript(unittest.TestCase):
         controls_apply = self.new.records.index(self.new.one('NativeControlsApply'))
         self.assertEqual(sorted(changed.values()), sorted([wad_choose, wad_choose, inserted, inserted, health,
                                                           apply, graphics, cheats, controls_first, controls_apply]))
+
 
     def test_japanese_fallback(self):
         data = bytearray(self.original)

@@ -35,7 +35,14 @@ import struct
 
 from glyphs import entries
 
-VERSION = 22  # of the patch: a change rebuilds the cached copy
+VERSION = 23  # of the patch: a change rebuilds the cached copy
+# Options > Graphics rows, in the order of src/graphics_hook.h's SPARTAN_GRAPHICS_* ids.
+LIVE_GRAPHICS_ROWS = ['Texture Quality', 'Shadows', 'Motion Blur', 'Bloom']
+GRAPHICS_ROWS = LIVE_GRAPHICS_ROWS
+# Rows with more than two values: left steps back (f8d / f88+5), right steps on (f85+i), both stop at
+# the ends. The others toggle On/Off with left, right or confirm (f85+i).
+LIVE_GRAPHICS_STEPPED = {'Texture Quality'}
+GRAPHICS_STEPPED = LIVE_GRAPHICS_STEPPED
 WAD = 'EXEC/WAD/PS4_LE/R_UI.WAD'
 LABELS = {
     'en': b'Exit to Desktop',
@@ -470,6 +477,7 @@ def native_cheats(data, spans, language=None):
     left, right = [0xe6, 0xf2], [0xe2, 0xee]
     toggle = [0xe6, 0xe2, 0xee, 0xf2, 0xe9]
     specs = [('HLNativeGraphics', 'options', [UP, DOWN, CONFIRM]),
+             ('HLNativeLiveGraphics', 'options', [UP, DOWN, CONFIRM]),
              ('HLNativeCheats', 'options', [UP, DOWN, CONFIRM]),
              ('NativeCheats', 'pause', [[0xeb]])]
     specs += [(f'NativeCheat{i}', 'NativeCheats', [toggle, UP, DOWN]) for i in range(8)]
@@ -485,12 +493,16 @@ def native_cheats(data, spans, language=None):
               ('NativeGraphicsConfirm', 'pause', [[0xeb]]),
               ('NativeGraphicsResetYes', 'NativeGraphicsConfirm', [UP, DOWN, CONFIRM]),
               ('NativeGraphicsResetNo', 'NativeGraphicsConfirm', [UP, DOWN, CONFIRM])]
+    specs += [('NativeLiveGraphics', 'pause', [[0xeb]])]
+    specs += [(f'NativeLiveGraphic{i}', 'NativeLiveGraphics',
+               [left, right, UP, DOWN] if label in LIVE_GRAPHICS_STEPPED else [toggle, UP, DOWN])
+              for i, label in enumerate(LIVE_GRAPHICS_ROWS)]
     display_specs = [(f'NativeDisplay{i}', 'display', [left, right, UP, DOWN]) for i in range(8)]
     display_specs += [('NativeDisplayApply', 'display', [UP, DOWN, CONFIRM])]
     controls_specs = [(f'NativeControl{i}', 'controls', [left, right, UP, DOWN]) for i in range(6)]
     controls_specs += [('NativeControlsReset', 'controls', [UP, DOWN, CONFIRM]),
                       ('NativeControlsApply', 'controls', [UP, DOWN, CONFIRM])]
-    specs[2:2] = controls_specs + display_specs
+    specs[3:3] = controls_specs + display_specs
     specs += [('NativeDisplayConfirm', 'pause', [[0xeb]]),
               ('NativeDisplayYes', 'NativeDisplayConfirm', [UP, DOWN, CONFIRM]),
               ('NativeDisplayNo', 'NativeDisplayConfirm', [UP, DOWN, CONFIRM])]
@@ -498,7 +510,7 @@ def native_cheats(data, spans, language=None):
         specs += [(page, 'pause', [[0xeb]]), (page + 'Yes', page, [UP, DOWN, CONFIRM]),
                   (page + 'No', page, [UP, DOWN, CONFIRM])]
     sizes = {name: 20 + sum(4 + 4 * len(t) for t in events) for name, parent, events in specs}
-    option_size = sizes['HLNativeGraphics'] + sizes['HLNativeCheats']
+    option_size = sizes['HLNativeGraphics'] + sizes['HLNativeLiveGraphics'] + sizes['HLNativeCheats']
     display_size = sum(sizes[name] for name, parent, events in display_specs)
     controls_size = sum(sizes[name] for name, parent, events in controls_specs)
     pages_size = sum(sizes.values()) - option_size - display_size - controls_size
@@ -507,10 +519,11 @@ def native_cheats(data, spans, language=None):
     refs = {'options': final(options['at']) - 4, 'pause': final(enter['at']) - 4,
             'display': final(display['at']) - 4, 'controls': final(controls['at']) - 4}
     refs['HLNativeGraphics'] = opt_at - 4
-    refs['HLNativeCheats'] = opt_at + sizes['HLNativeGraphics'] - 4
+    refs['HLNativeLiveGraphics'] = opt_at + sizes['HLNativeGraphics'] - 4
+    refs['HLNativeCheats'] = opt_at + sizes['HLNativeGraphics'] + sizes['HLNativeLiveGraphics'] - 4
     for subset, start_at in ((controls_specs, controls_at + option_size),
                              (display_specs, display_at + option_size + controls_size),
-                             (specs[2 + len(controls_specs) + len(display_specs):],
+                             (specs[3 + len(controls_specs) + len(display_specs):],
                               pages_at + option_size + controls_size + display_size)):
         at = start_at
         for name, parent, events in subset:
@@ -627,6 +640,9 @@ def native_cheats(data, spans, language=None):
                        'Aplicar e reiniciar'] if portuguese else
                       ['Frames Queued', 'Async Shader Compilation', 'RCAS Sharpening',
                        'Sharpening Strength', 'Anisotropic Filtering', 'Restore Graphics Defaults', 'Apply and Restart'])
+    live_graphics_title = 'Gráficos' if portuguese else 'Graphics'
+    live_graphics_names = (['Qualidade de texturas', 'Sombras', 'Desfoque de movimento', 'Bloom'] if portuguese else
+                           LIVE_GRAPHICS_ROWS)
     controls_names = (['Tipo de controle', 'Intensidade da vibração', 'Sensibilidade da mira', 'Estilo da mira',
                        'Distância do mouse nos QTEs', 'Prender cursor à janela', 'Restaurar padrões dos controles',
                        'Aplicar e reiniciar'] if portuguese else
@@ -693,8 +709,9 @@ def native_cheats(data, spans, language=None):
             end()
 
     for name, index, up, down, page in (
-            ('HLNativeGraphics', 2, game['at'] - 4, 'HLNativeCheats', 'NativeGraphics'),
-            ('HLNativeCheats', 3, 'HLNativeGraphics', audio['at'] - 4, 'NativeCheats')):
+            ('HLNativeGraphics', 2, game['at'] - 4, 'HLNativeLiveGraphics', 'NativeGraphics'),
+            ('HLNativeLiveGraphics', 3, 'HLNativeGraphics', 'HLNativeCheats', 'NativeLiveGraphics'),
+            ('HLNativeCheats', 4, 'HLNativeLiveGraphics', audio['at'] - 4, 'NativeCheats')):
         selection(name, index)
         selection(name, index, selected=False)
         for kind, target in (('up', up), ('down', down)):
@@ -706,6 +723,41 @@ def native_cheats(data, spans, language=None):
         sound('SND_MM_SELECT')
         goto(page)
         end()
+    # Live Graphics page: one row per LIVE_GRAPHICS_ROWS entry (f75+i query, f85+i toggle/next, f8d prev).
+    live_graphics_rows = [f'NativeLiveGraphic{i}' for i in range(len(LIVE_GRAPHICS_ROWS))]
+    begin('NativeLiveGraphics', 1)
+    string(live_graphics_title)
+    assign(0)
+    for index in range(8):
+        string(live_graphics_names[index] if index < len(live_graphics_names) else '')
+        assign(1 + index)
+        string('')
+        assign(9 + index)
+    for local in range(0x19, 0x1d):
+        string('')
+        assign(local)
+    for index in range(len(LIVE_GRAPHICS_ROWS)):
+        query(index, 0xf75 + index)
+    goto(live_graphics_rows[0])
+    end()
+    begin('NativeLiveGraphics', 2)
+    end()
+    begin('NativeLiveGraphics', 'back')
+    sound('SND_MM_BACK')
+    goto(options['at'] - 4)
+    end()
+    for index, name in enumerate(live_graphics_rows):
+        selection(name, index, 0xf75 + index)
+        selection(name, index, 0xf75 + index, False)
+        navigation(name, index, live_graphics_rows)
+        steps = ((('left', 0xf8d), ('right', 0xf85 + index)) if LIVE_GRAPHICS_ROWS[index] in LIVE_GRAPHICS_STEPPED
+                 else (('toggle', 0xf85 + index),))
+        for kind, function in steps:
+            begin(name, kind)
+            call(repeat)
+            query(index, function, True)
+            sound('SND_MM_NAV_LR')
+            end()
 
     cheat_rows = [f'NativeCheat{i}' for i in range(8)] + ['NativeMultipliersLink']
     multiplier_rows = [f'NativeMultiplier{i}' for i in range(6)] + ['NativeMultiplierReset']
@@ -1023,20 +1075,22 @@ def native_cheats(data, spans, language=None):
         goto('NativeDisplayApply')
         end()
 
-    # Clone Options' entry, inserting Graphics/Cheats before Audio/Display/Exit.
+    # Clone Options' entry, inserting Graphics Settings, Graphics and Cheats before Audio/Display/Exit.
+    shift = 3
     old_entry = next(v for k, v, t in s.blocks(options) if k == 1)
     original_entry = s.block_bytes(old_entry)
-    replacements = {3: graphics_title, 4: 'Cheats'}
+    replacements = {3: graphics_title, 4: live_graphics_title, 5: 'Cheats'}
+
     for old_local in (3, 4, 5):
         setter = b'\x09\xe0' + bytes([old_local]) + b'\x43'
         at = original_entry.index(setter)
         value_ref = int.from_bytes(original_entry[at - 2:at], 'big')
-        replacements[old_local + 2] = s.string(s.lit + value_ref).encode('utf-8')
+        replacements[old_local + shift] = s.string(s.lit + value_ref).encode('utf-8')
     # Keep existing non-ASCII Exit labels as bytes (their source encoding is UTF-8).
     exit_at = original_entry.index(b'\x09\xe0\x05\x43')
     exit_ref = int.from_bytes(original_entry[exit_at - 2:exit_at], 'big')
     raw = bytes(data[base + s.lit + exit_ref:]).split(b'\0', 1)[0]
-    replacements[7] = raw
+    replacements[5 + shift] = raw
     def copy_entry(ref, replacements, window=None):
         body = s.block_bytes(ref)
         for at, op, arg in decode(data, base + s.lit + ref, base + s.lit + ref + len(body)):
@@ -1060,6 +1114,7 @@ def native_cheats(data, spans, language=None):
         string('')
         assign(local)
     copy_entry(audio_entry, {})
+
     labels['options_entry'] = len(code)
     copy_entry(old_entry, replacements)
     redirects = [(options, 'options_entry'), (audio_page, 'audio_entry')]
@@ -1117,12 +1172,13 @@ def native_cheats(data, spans, language=None):
               retarget(s, controls_originals[0], UP, controls_originals[-1]['at'] - 4, refs['NativeControlsApply'])]
     edits += [retarget(s, originals[-1], DOWN, originals[0]['at'] - 4, refs['NativeDisplay0']),
               retarget(s, originals[0], UP, originals[-1]['at'] - 4, refs['NativeDisplayApply'])]
+
     for record, old_index in ((audio, 2), (s.by_name['HLDisplay'][0], 3), (s.by_name['HLDisplay'][1], 4)):
         for kind, ref, triggers in s.blocks(record):
             if kind in (1, 2):
                 block = s.block_bytes(ref)
                 source = b'\x16' + be(s.literal(f'menuItem{old_index}Select'.encode()), 2)
-                destination = b'\x16' + be(s.literal(f'menuItem{old_index + 2}Select'.encode()), 2)
+                destination = b'\x16' + be(s.literal(f'menuItem{old_index + shift}Select'.encode()), 2)
                 if block.count(source) != 1:
                     raise ValueError('Options selection animation not found')
                 edits.append((base + s.lit + ref + block.index(source), destination))
@@ -1148,12 +1204,15 @@ def native_cheats(data, spans, language=None):
         record = bytearray(be(0x04000000 | size) + be(refs[parent]) + be(symbol_ids[name]))
         for kind in (1, 2):
             record += be((kind << 24) | (code_start + handlers[name, kind]))
+        stepped = name.startswith('NativeLiveGraphic') and name[-1:].isdigit() and LIVE_GRAPHICS_ROWS[int(name[17:])] in LIVE_GRAPHICS_STEPPED
         event_names = ['back'] if parent == 'pause' else (
             ['left', 'right', 'up', 'down'] if (name.startswith('NativeMultiplier') and name[-1:].isdigit())
             or name in ('NativeGraphic0', 'NativeGraphic3', 'NativeGraphic4')
+            or stepped
             or name.startswith(('NativeDisplay', 'NativeControl')) and name[-1:].isdigit()
             else ['toggle', 'up', 'down'] if (name.startswith('NativeCheat') and name[-1:].isdigit())
             or name in ('NativeGraphic1', 'NativeGraphic2')
+            or (name.startswith('NativeLiveGraphic') and name[-1:].isdigit())
             else ['up', 'down', 'confirm'])
         for event_name, triggers in zip(event_names, events):
             record += be(0x03000000 | (code_start + handlers[name, event_name]))

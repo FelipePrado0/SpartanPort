@@ -43,8 +43,11 @@ int spartanportgpu_vibration_percent(void);
 /* Native Display menu: query (0) or toggle (1); returns 0 off, 1 on, 2 unsupported. */
 int spartanportgpu_enemy_health_bar(int toggle);
 /* Native Cheats: f00+i query/f10+i toggle (8 cheats); f20+i text/f30+i decrease/f40+i increase/
- * f50+i slider position (6 multipliers); f60 resets multipliers. Graphics: f70+i query,
- * f80+i decrease/f90+i increase (5 controls), fa3 strength position, fb0 defaults.
+/* Native Cheats: f00+i query/f10+i toggle (8 cheats); f20+i text/f30+i decrease/f40+i increase/
+ * f50+i slider position (6 multipliers); f60 resets multipliers. Graphics Settings: f70+i query,
+ * f80+i decrease/f90+i increase (5 controls), fa3 strength position, fb0 defaults. Live Graphics:
+ * f75+i query, f85+i toggle or next step, f95 previous step (0 texture quality, 1 shadows,
+ * 2 motion blur, 3 bloom; ids in src/graphics_hook.h).
  * Controls: fa4+i query/faa+i decrease/fb1+i increase/fb8+i selected query (6 controls),
  * fb7 restores only the port's controls defaults.
  * Display: fc0+i query/fd0+i decrease/fe0+i increase/ff0+i selected query (8 controls;
