@@ -608,39 +608,42 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
             v.rcas = true;
             v.rcas_strength = 75;
             v.anisotropy = 0;
+            v.texture_quality = 0;
+            v.shadows = true;
+            v.motion_blur = true;
+            v.bloom = true;
             SpartanSettings::Save();
             return 0;
         }
-        // Live Graphics settings: indices 5..8 (Texture Quality, Shadows, Motion Blur, Bloom).
-        // f75..f78 query, f85..f88 toggle/next, f95 (and f8d) previous step for Texture Quality.
-        if (index >= 5 && index <= 8) {
-            const int live_index = index - 5;
-            if (live_index == SPARTAN_GRAPHICS_TEXTURE_QUALITY) {
-                int quality = std::clamp(v.texture_quality.load(), 0, SpartanSettings::TextureQualityCount - 1);
-                if (group == 0xf80) {
-                    quality = std::min(quality + 1, SpartanSettings::TextureQualityCount - 1);
-                    v.texture_quality = quality;
-                    SpartanSettings::Save();
-                } else if (group == 0xf90) {
-                    quality = std::max(quality - 1, 0);
-                    v.texture_quality = quality;
-                    SpartanSettings::Save();
-                }
-                return text(SpartanSettings::TextureQualityNames[quality]);
-            }
-            auto* toggle = GraphicsToggle(live_index);
-            if (!toggle || !(v.graphics_supported.load() & (1u << live_index))) return text("Unavailable");
-            if (group == 0xf80 || group == 0xf90) {
-                *toggle = !toggle->load();
-                SpartanSettings::Save();
-            }
-            return text(toggle->load() ? label("On", "Ligado") : label("Off", "Desligado"));
-        }
+        // Rows 5..8 apply live (src/graphics_hook.h ids, offset by 5): Texture Quality steps and
+        // stops at both ends (0xf85 toward High, 0xf95 toward Very Low); the others toggle.
         if (group == 0xf80 && index == 0xd) { // 0xf8d = 0xf88 + 5: prev step for Texture Quality
             const int quality = std::clamp(v.texture_quality.load() - 1, 0, SpartanSettings::TextureQualityCount - 1);
             v.texture_quality = quality;
             SpartanSettings::Save();
-            return text(SpartanSettings::TextureQualityNames[quality]);
+            return text(portuguese ? SpartanSettings::TextureQualityNamesPt[quality]
+                                   : SpartanSettings::TextureQualityNames[quality]);
+        }
+        if (index >= 5 && index < 5 + SPARTAN_GRAPHICS_COUNT && group < 0xfa0) {
+            const unsigned id = index - 5;
+            if (id == SPARTAN_GRAPHICS_TEXTURE_QUALITY) {
+                const int step = group == 0xf80 ? 1 : group == 0xf90 ? -1 : 0;
+                const int quality = std::clamp(v.texture_quality.load() + step, 0,
+                                               SpartanSettings::TextureQualityCount - 1);
+                if (step) {
+                    v.texture_quality = quality;
+                    SpartanSettings::Save();
+                }
+                return text(portuguese ? SpartanSettings::TextureQualityNamesPt[quality]
+                                       : SpartanSettings::TextureQualityNames[quality]);
+            }
+            auto* toggle = GraphicsToggle(id);
+            if (!toggle || !(v.graphics_supported.load() & (1u << id))) return label("Unavailable", "Indisponível");
+            if (group != 0xf70) {
+                *toggle = !toggle->load();
+                SpartanSettings::Save();
+            }
+            return toggle->load() ? label("On", "Ligado") : label("Off", "Desligado");
         }
         if (index >= 5 || group > 0xfa0) return 0;
         if (group == 0xfa0) return index == 3 ? std::clamp(v.rcas_strength.load(), 0, 100) : 0;

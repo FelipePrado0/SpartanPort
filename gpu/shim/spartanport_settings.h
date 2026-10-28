@@ -31,6 +31,7 @@ inline constexpr int OutputDefault = 1; ///< 1920x1080, the game's own size
 /// Texture Quality steps: their labels, and the extra mip LOD bias each one adds.
 inline constexpr int TextureQualityCount = 4;
 inline constexpr const char* TextureQualityNames[TextureQualityCount] = {"High", "Medium", "Low", "Very Low"};
+inline constexpr const char* TextureQualityNamesPt[TextureQualityCount] = {"Alto", "Médio", "Baixo", "Muito Baixo"};
 inline float TextureLodBias(int quality) {
     return quality > 0 && quality < TextureQualityCount ? float(quality) : 0.0f;
 }
