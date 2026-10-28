@@ -68,7 +68,7 @@ inline std::string Format(const Sample& s, unsigned mask, bool row) {
     };
     if (mask & Fps) {
         if (s.game_fps > 0.0f) {
-            std::snprintf(part, sizeof(part), "%.0f FPS (game %.0f, FG)", s.fps, s.game_fps);
+            std::snprintf(part, sizeof(part), "FG %.0f FPS (%.0fFPS Game)", s.fps, s.game_fps);
         } else {
             std::snprintf(part, sizeof(part), "%.0f FPS", s.fps);
         }
