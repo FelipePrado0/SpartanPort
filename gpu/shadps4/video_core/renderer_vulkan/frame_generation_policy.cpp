@@ -7,8 +7,6 @@ namespace Vulkan::FrameGenerationPolicy {
 // Above this share of changed pixels a pass after the HUD rewrote the frame (the water attack
 // distorts the whole screen): interpolating it would smear the HUD into the scene.
 constexpr float kMaxUiCoverage = 0.30f;
-// Below 40 FPS generated frames look wrong and the added latency is felt.
-constexpr float kMaxFrameMs = 25.0f;
 
 Skip Decide(const Input& in) {
     if (!in.enabled) return Skip::Off;
@@ -16,7 +14,6 @@ Skip Decide(const Input& in) {
     if (!in.upscaled) return Skip::NoUpscale;
     if (in.reset) return Skip::Reset;
     if (in.ui_coverage > kMaxUiCoverage) return Skip::FullScreenPass;
-    if (in.frame_ms > kMaxFrameMs) return Skip::SlowFrame;
     return Skip::None;
 }
 

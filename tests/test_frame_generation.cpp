@@ -27,7 +27,9 @@ int main() {
     assert(Decide(in) == Skip::None);
     in = happy;
     in.frame_ms = 25.1f;
-    assert(Decide(in) == Skip::SlowFrame);
+    assert(Decide(in) == Skip::None);
+    in.frame_ms = 100.0f;
+    assert(Decide(in) == Skip::None);
     in.frame_ms = 25.0f;
     assert(Decide(in) == Skip::None);
     in = happy;

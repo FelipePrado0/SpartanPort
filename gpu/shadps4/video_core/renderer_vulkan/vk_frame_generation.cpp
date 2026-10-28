@@ -436,7 +436,7 @@ vk::Image FrameGeneration::Generate(vk::CommandBuffer cmdbuf, bool upscaled, vk:
          .ui_coverage = ui_coverage, .frame_ms = capture_frame_ms, .failed = failed});
     ++real;
     if (skip != Policy::None) {
-        ++skips[std::min<u32>(u32(skip), 6)];
+        ++skips[std::min<u32>(u32(skip), u32(Policy::Failed))];
     }
     if (!prepared || failed) {
         Report();
@@ -555,9 +555,7 @@ void FrameGeneration::Report() {
          : generated ? "FSR FG 2x, " + std::to_string(real_fps) + " -> " +
                            std::to_string(shown_fps) + " fps"
                      : "FSR FG 2x, inactive (" +
-                           std::string(skips[u32(Policy::NoUpscale)] ? "no upscaler"
-                                       : skips[u32(Policy::SlowFrame)] ? "below 40 fps"
-                                                                       : "skipping") + ")";
+                           std::string(skips[u32(Policy::NoUpscale)] ? "no upscaler" : "skipping") + ")";
     SpartanSettings::Get().fg_status = status.c_str();
     report_start = now;
     real = generated = 0;

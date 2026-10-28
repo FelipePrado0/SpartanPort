@@ -8,7 +8,7 @@ namespace Vulkan::FrameGenerationPolicy {
 /// spartanport.ini frame_generation: off, fsr, dlss.
 enum Mode : int { FgOff = 0, FgFsr = 1, FgDlss = 2 };
 
-enum class Skip { None, Off, NoUpscale, Reset, FullScreenPass, SlowFrame, Failed };
+enum class Skip { None, Off, NoUpscale, Reset, FullScreenPass, Failed };
 
 struct Input {
     bool enabled;      ///< frame generation on and supported

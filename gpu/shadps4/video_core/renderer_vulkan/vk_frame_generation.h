@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "common/types.h"
+#include "video_core/renderer_vulkan/frame_generation_policy.h"
 #include "video_core/renderer_vulkan/vk_common.h"
 #include "video_core/texture_cache/image.h"
 
@@ -95,7 +96,7 @@ private:
 
     // Once a second: real and generated frames, skips by reason.
     std::chrono::steady_clock::time_point report_start = std::chrono::steady_clock::now();
-    u32 real = 0, generated = 0, skips[7] = {};
+    u32 real = 0, generated = 0, skips[u32(FrameGenerationPolicy::Skip::Failed) + 1] = {};
     /// Two buffers: the Insert menu reads one while the other is written.
     std::string status[2];
     u32 status_index = 0;
