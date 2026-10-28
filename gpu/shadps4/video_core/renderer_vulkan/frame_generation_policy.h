@@ -3,6 +3,8 @@
 // (tests/test_frame_generation.cpp).
 #pragma once
 
+#include <chrono>
+
 namespace Vulkan::FrameGenerationPolicy {
 
 /// spartanport.ini frame_generation: off, fsr, dlss.
@@ -23,5 +25,17 @@ Skip Decide(const Input& in);
 
 /// Exactly one generated frame per real frame (2x) for either provider.
 int GeneratedFrames(int mode);
+
+class Pacing {
+public:
+    using Clock = std::chrono::steady_clock;
+    /// Called once per new real frame, before presenting either member of its pair.
+    Clock::time_point RealDeadline(Clock::time_point ready);
+
+private:
+    Clock::time_point previous{};
+    Clock::duration interval{};
+    bool has_previous = false;
+};
 
 } // namespace Vulkan::FrameGenerationPolicy

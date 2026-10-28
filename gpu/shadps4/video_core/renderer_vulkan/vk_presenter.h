@@ -12,6 +12,7 @@
 #include "video_core/renderer_vulkan/host_passes/fsr_pass.h"
 #include "video_core/renderer_vulkan/host_passes/pp_pass.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
+#include "video_core/renderer_vulkan/frame_generation_policy.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_swapchain.h"
@@ -143,8 +144,7 @@ private:
     std::condition_variable_any frame_cv;
     std::vector<VAddr> vo_buffers_addr;
     /// spartanport: frame generation pacing, the generated frame halfway between real ones.
-    std::chrono::steady_clock::time_point last_real_present{};
-    double real_interval_ms = 16.6;
+    FrameGenerationPolicy::Pacing frame_pacing;
 };
 
 } // namespace Vulkan

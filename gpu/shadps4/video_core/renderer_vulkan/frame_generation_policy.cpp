@@ -20,4 +20,21 @@ int GeneratedFrames(int mode) {
     return mode == FgFsr || mode == FgDlss ? 1 : 0;
 }
 
+Pacing::Clock::time_point Pacing::RealDeadline(Clock::time_point ready) {
+    // Menus, pauses and clock discontinuities must not carry a long wait into gameplay.
+    if (!has_previous || ready <= previous || ready - previous > std::chrono::milliseconds(250)) {
+        interval = Clock::duration::zero();
+        has_previous = true;
+    } else {
+        const auto sample = ready - previous;
+        if (interval == Clock::duration::zero() || sample < interval) {
+            interval = sample;
+        } else {
+            interval += (sample - interval) / 10;
+        }
+    }
+    previous = ready;
+    return ready + interval / 2;
+}
+
 } // namespace Vulkan::FrameGenerationPolicy

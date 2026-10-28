@@ -880,6 +880,8 @@ void Presenter::PresentLoadingFrame() {
 
 void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame) {
     using Clock = std::chrono::steady_clock;
+    const auto real_deadline = !is_reusing_frame && is_game_frame
+        ? frame_pacing.RealDeadline(Clock::now()) : Clock::time_point{};
     struct Profile {
         Clock::time_point window = Clock::now(), last_present{};
         double pacing_ms = 0, acquire_ms = 0, submit_ms = 0, present_ms = 0;
@@ -893,15 +895,9 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     }
     // spartanport: frame generation: the generated frame first, the real one halfway to the next.
     if (Frame* generated = std::exchange(frame->generated, nullptr)) {
-        const auto now = Clock::now();
-        const double since = std::chrono::duration<double, std::milli>(now - last_real_present).count();
-        if (since > 4.0 && since < 50.0) {
-            real_interval_ms = real_interval_ms * 0.9 + since * 0.1;
-        }
         Present(generated, false, false);
         const auto sleep_start = profile ? Clock::now() : Clock::time_point{};
-        std::this_thread::sleep_until(now + std::chrono::microseconds(
-                                                s64(real_interval_ms * 500.0)));
+        std::this_thread::sleep_until(real_deadline);
         if (profile) {
             profile->pacing_ms += std::chrono::duration<double, std::milli>(
                 Clock::now() - sleep_start).count();
@@ -1127,7 +1123,6 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     free_frame();
     if (!is_reusing_frame && is_game_frame) {
         DebugState.IncFlipFrameNum();
-        last_real_present = std::chrono::steady_clock::now();
     }
 }
 
