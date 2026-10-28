@@ -29,7 +29,7 @@ inline constexpr std::pair<std::string_view, const char*> RussianText[] = {
     {"5120 × 2160 · 21:9 (beta)", "5120 × 2160 · 21:9 (бета)"},
     {"60 (original)", "60 (оригинал)"},
     {"60 FPS: the frame rate patch is not available for this game build", "60 FPS: патч частоты кадров недоступен для этой версии игры"},
-    {"A thin bar at the top for the last enemy hit.", "Тонкая полоска сверху для последнего задетого врага."},
+    {"A bar at the top for the last enemy hit.", "Полоска сверху для последнего задетого врага."},
     {"About", "О программе"},
     {"Absolute", "Абсолютный"},
     {"Anisotropic filtering", "Анизотропная фильтрация"},

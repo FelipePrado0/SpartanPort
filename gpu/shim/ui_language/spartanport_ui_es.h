@@ -29,7 +29,7 @@ inline constexpr std::pair<std::string_view, const char*> SpanishText[] = {
     {"5120 × 2160 · 21:9 (beta)", "5120 × 2160 · 21:9 (beta)"},
     {"60 (original)", "60 (original)"},
     {"60 FPS: the frame rate patch is not available for this game build", "60 FPS: el parche de velocidad de fotogramas no está disponible para esta versión del juego"},
-    {"A thin bar at the top for the last enemy hit.", "Una barra fina arriba para el último enemigo golpeado."},
+    {"A bar at the top for the last enemy hit.", "Una barra arriba para el último enemigo golpeado."},
     {"About", "Acerca de"},
     {"Absolute", "Absoluto"},
     {"Anisotropic filtering", "Filtrado anisotrópico"},

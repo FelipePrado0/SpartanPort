@@ -29,7 +29,7 @@ inline constexpr std::pair<std::string_view, const char*> PolishText[] = {
     {"5120 × 2160 · 21:9 (beta)", "5120 × 2160 · 21:9 (beta)"},
     {"60 (original)", "60 (oryginalnie)"},
     {"60 FPS: the frame rate patch is not available for this game build", "60 FPS: łatka liczby klatek jest niedostępna dla tej wersji gry"},
-    {"A thin bar at the top for the last enemy hit.", "Cienki pasek u góry dla ostatnio trafionego przeciwnika."},
+    {"A bar at the top for the last enemy hit.", "Pasek u góry dla ostatnio trafionego przeciwnika."},
     {"About", "Informacje"},
     {"Absolute", "Bezwzględny"},
     {"Anisotropic filtering", "Filtrowanie anizotropowe"},

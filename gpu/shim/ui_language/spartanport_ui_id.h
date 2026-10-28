@@ -29,7 +29,7 @@ inline constexpr std::pair<std::string_view, const char*> IndonesianText[] = {
     {"5120 × 2160 · 21:9 (beta)", "5120 × 2160 · 21:9 (beta)"},
     {"60 (original)", "60 (asli)"},
     {"60 FPS: the frame rate patch is not available for this game build", "60 FPS: patch frame rate tidak tersedia untuk versi game ini"},
-    {"A thin bar at the top for the last enemy hit.", "Bar tipis di atas untuk musuh yang terakhir dipukul."},
+    {"A bar at the top for the last enemy hit.", "Bar di atas untuk musuh yang terakhir dipukul."},
     {"About", "Tentang"},
     {"Absolute", "Absolut"},
     {"Anisotropic filtering", "Penyaringan anisotropik"},
