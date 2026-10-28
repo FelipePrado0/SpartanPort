@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include "spartanport_settings.h"
 #include "video_core/renderer_vulkan/vk_frame_generation.h"
+#include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include <vk_mem_alloc.h>
@@ -20,6 +21,18 @@ int main(int argc, char** argv) {
     using namespace Vulkan;
     Instance instance(0, argc > 2 && std::strcmp(argv[2], "validation") == 0);
     Scheduler scheduler(instance);
+    const bool profile = argc > 1 && std::strcmp(argv[1], "profile") == 0;
+    if (profile) {
+#ifdef _WIN32
+        _putenv_s("SPARTAN_GPU_PROFILE", "1");
+#else
+        setenv("SPARTAN_GPU_PROFILE", "1", 1);
+#endif
+        GpuProfiler::Init(instance, scheduler);
+    }
+    auto* profiler = GpuProfiler::Get();
+    constexpr u64 parent_key = 0xF6AF0000;
+
     auto& settings = SpartanSettings::Get();
     settings.frame_generation = 1;
     settings.fg_problem = nullptr;
@@ -107,10 +120,17 @@ int main(int argc, char** argv) {
         fg.Generate(scheduler.CommandBuffer(), true, vk::Image(images[3]), formats[3]);
     } else {
         vk::Image generated{};
-        for (int i = 0; i < 8; ++i) {
+        const auto profile_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(5200);
+        for (int i = 0; i < 8 || (profile && std::chrono::steady_clock::now() < profile_end); ++i) {
+            if (profiler) {
+                profiler->BeginFrame();
+                profiler->Mark(parent_key, [] { return std::string{"FG test parent"}; });
+            }
             fg.Capture(scheduler.CommandBuffer(), info);
+            if (profiler && i > 0) assert(profiler->Current() == parent_key);
             const auto result = fg.Generate(scheduler.CommandBuffer(), true,
                                             vk::Image(images[3]), formats[3]);
+            if (profiler && i > 0) assert(profiler->Current() == parent_key);
             scheduler.Finish();
             if (i >= 4) generated = result;
             assert(settings.fg_problem.load() == nullptr);

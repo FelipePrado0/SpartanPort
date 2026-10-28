@@ -7,6 +7,9 @@
 
 #include <vk_mem_alloc.h>
 
+#include "common/scope_exit.h"
+#include "video_core/renderer_vulkan/vk_gpu_profiler.h"
+
 #include "ffx_vk_fsr3_3_1_5_bridge.h"
 #include "spartanport_settings.h"
 #include "video_core/host_shaders/fg_depth_comp.h"
@@ -236,6 +239,14 @@ void FrameGeneration::Capture(vk::CommandBuffer cmdbuf, const CaptureInfo& info)
     const auto General = vk::ImageLayout::eGeneral;
     const auto Read = vk::ImageLayout::eShaderReadOnlyOptimal;
 
+    auto* profiler = GpuProfiler::Get();
+    if (profiler && !profiler->Records(&scheduler)) profiler = nullptr;
+    const u64 resume = profiler ? profiler->Current() : 0;
+    SCOPE_EXIT { if (profiler) profiler->Resume(resume); };
+    if (profiler) {
+        profiler->Mark(0xF6A00001, [] { return std::string{"FG scene copy"}; });
+        cmdbuf = scheduler.CommandBuffer();
+    }
     // The scene without the HUD: the HUD draws into the same image next.
     Barrier(cmdbuf, info.scene, General, General, all, vk::AccessFlagBits2::eMemoryWrite,
             vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferRead);
@@ -255,6 +266,10 @@ void FrameGeneration::Capture(vk::CommandBuffer cmdbuf, const CaptureInfo& info)
             vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferWrite, all,
             vk::AccessFlagBits2::eShaderRead);
 
+    if (profiler) {
+        profiler->Mark(0xF6A00002, [] { return std::string{"FG depth and motion"}; });
+        cmdbuf = scheduler.CommandBuffer();
+    }
     // The depth as an R32 float color image, with valid object vectors kept on characters.
     for (const vk::Image image : {vk::Image(depth_image), vk::Image(motion_image)}) {
         Barrier(cmdbuf, image, vk::ImageLayout::eUndefined, General, all,
@@ -311,6 +326,10 @@ void FrameGeneration::Capture(vk::CommandBuffer cmdbuf, const CaptureInfo& info)
     capture_reset = info.reset || !prepared_last_frame;
     ++frame_id;
 
+    if (profiler) {
+        profiler->Mark(0xF6A00003, [] { return std::string{"FG prepare"}; });
+        cmdbuf = scheduler.CommandBuffer();
+    }
     using Usage = vk::ImageUsageFlagBits;
     FfxVkFsr3_3_1_6FrameGenerationPrepareInfo prepare{};
     prepare.commandBuffer = VkCommandBuffer(cmdbuf);
@@ -354,6 +373,10 @@ void FrameGeneration::Capture(vk::CommandBuffer cmdbuf, const CaptureInfo& info)
                     unsigned(prepare.cameraNear < prepare.cameraFar));
         Fail("FSR 3.1 frame generation prepare failed");
         return;
+    }
+    if (profiler) {
+        profiler->Mark(0xF6A00004, [] { return std::string{"FG interpolation"}; });
+        cmdbuf = scheduler.CommandBuffer();
     }
     // A scene can be rendered without a flip. Complete the API pair before another capture.
     Barrier(cmdbuf, vk::Image(generated_image), vk::ImageLayout::eUndefined, General, all,
@@ -452,6 +475,14 @@ vk::Image FrameGeneration::Generate(vk::CommandBuffer cmdbuf, bool upscaled, vk:
     if (!composite) {
         Report();
         return {};
+    }
+    auto* profiler = GpuProfiler::Get();
+    if (profiler && !profiler->Records(&scheduler)) profiler = nullptr;
+    const u64 resume = profiler ? profiler->Current() : 0;
+    SCOPE_EXIT { if (profiler) profiler->Resume(resume); };
+    if (profiler) {
+        profiler->Mark(0xF6A00005, [] { return std::string{"FG HUD composition"}; });
+        cmdbuf = scheduler.CommandBuffer();
     }
     // The HUD (and anything else drawn after the upscale): counted every frame, copied from
     // the real frame over the generated one.

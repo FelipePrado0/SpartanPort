@@ -12,6 +12,7 @@
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
+#include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "spartanport_overlay.h"
 #include "spartanport_settings.h"
 #include "spartanport_graphics.h"
@@ -878,17 +879,33 @@ void Presenter::PresentLoadingFrame() {
 }
 
 void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame) {
+    using Clock = std::chrono::steady_clock;
+    struct Profile {
+        Clock::time_point window = Clock::now(), last_present{};
+        double pacing_ms = 0, acquire_ms = 0, submit_ms = 0, present_ms = 0;
+        double real_gap_ms = 0, generated_gap_ms = 0;
+        u64 real = 0, generated = 0, real_gaps = 0, generated_gaps = 0;
+    };
+    Profile* profile = nullptr;
+    if (GpuProfiler::Get() && !is_reusing_frame) {
+        static thread_local Profile totals;
+        profile = &totals;
+    }
     // spartanport: frame generation: the generated frame first, the real one halfway to the next.
     if (Frame* generated = std::exchange(frame->generated, nullptr)) {
-        using Clock = std::chrono::steady_clock;
         const auto now = Clock::now();
         const double since = std::chrono::duration<double, std::milli>(now - last_real_present).count();
         if (since > 4.0 && since < 50.0) {
             real_interval_ms = real_interval_ms * 0.9 + since * 0.1;
         }
         Present(generated, false, false);
+        const auto sleep_start = profile ? Clock::now() : Clock::time_point{};
         std::this_thread::sleep_until(now + std::chrono::microseconds(
                                                 s64(real_interval_ms * 500.0)));
+        if (profile) {
+            profile->pacing_ms += std::chrono::duration<double, std::milli>(
+                Clock::now() - sleep_start).count();
+        }
     }
     // Free the frame for reuse
     const auto free_frame = [&] {
@@ -913,6 +930,7 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
     }
 
+    const auto acquire_start = profile ? Clock::now() : Clock::time_point{};
     if (!swapchain.AcquireNextImage()) {
         if (!window.IsMinimized() && window.GetWidth() > 0 && window.GetHeight() > 0) {
             swapchain.Recreate(window.GetWidth(), window.GetHeight());
@@ -925,6 +943,10 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
         }
     }
 
+    if (profile) {
+        profile->acquire_ms += std::chrono::duration<double, std::milli>(
+            Clock::now() - acquire_start).count();
+    }
     // Reset fence for queue submission. Do it here instead of GetRenderFrame() because we may
     // skip frame because of slow swapchain recreation. If a frame skip occurs, we skip signal
     // the frame's present fence and future GetRenderFrame() call will hang waiting for this frame.
@@ -1051,7 +1073,13 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     info.AddWait(frame->ready_semaphore, frame->ready_tick);
     info.AddSignal(swapchain.GetPresentReadySemaphore());
     info.AddSignal(frame->present_done);
+    const auto submit_start = profile ? Clock::now() : Clock::time_point{};
     scheduler.Flush(info);
+    const auto present_start = profile ? Clock::now() : Clock::time_point{};
+    if (profile) {
+        profile->submit_ms += std::chrono::duration<double, std::milli>(
+            present_start - submit_start).count();
+    }
 
     // Present to swapchain.
     {
@@ -1062,6 +1090,40 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
         }
     }
 
+    if (profile) {
+        const auto now = Clock::now();
+        profile->present_ms += std::chrono::duration<double, std::milli>(now - present_start).count();
+        const bool has_gap = profile->last_present != Clock::time_point{};
+        const double gap = has_gap ? std::chrono::duration<double, std::milli>(
+            now - profile->last_present).count() : 0.0;
+        profile->last_present = now;
+        if (is_game_frame) {
+            ++profile->real;
+            profile->real_gap_ms += gap;
+            profile->real_gaps += has_gap;
+        } else {
+            ++profile->generated;
+            profile->generated_gap_ms += gap;
+            profile->generated_gaps += has_gap;
+        }
+        const double seconds = std::chrono::duration<double>(now - profile->window).count();
+        if (seconds >= 5.0) {
+            const double calls = double(profile->real + profile->generated);
+            std::printf("FG CPU profile: mode=%d real_calls/s=%.1f generated_calls/s=%.1f "
+                        "real=%llu generated=%llu pacing=%.3f ms/real "
+                        "acquire=%.3f submit=%.3f present=%.3f ms/call "
+                        "gap_to_real=%.3f gap_to_generated=%.3f ms\n",
+                        SpartanSettings::Get().frame_generation.load(), profile->real / seconds,
+                        profile->generated / seconds, static_cast<unsigned long long>(profile->real),
+                        static_cast<unsigned long long>(profile->generated),
+                        profile->pacing_ms / double(std::max<u64>(1, profile->real)),
+                        profile->acquire_ms / calls, profile->submit_ms / calls,
+                        profile->present_ms / calls,
+                        profile->real_gap_ms / double(std::max<u64>(1, profile->real_gaps)),
+                        profile->generated_gap_ms / double(std::max<u64>(1, profile->generated_gaps)));
+            *profile = {};
+        }
+    }
     free_frame();
     if (!is_reusing_frame && is_game_frame) {
         DebugState.IncFlipFrameNum();
@@ -1070,6 +1132,9 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
 }
 
 Frame* Presenter::GetRenderFrame() {
+    using Clock = std::chrono::steady_clock;
+    const bool profile = GpuProfiler::Get() != nullptr;
+    const auto wait_start = profile ? Clock::now() : Clock::time_point{};
     // Wait for free presentation frames
     Frame* frame;
     {
@@ -1082,6 +1147,7 @@ Frame* Presenter::GetRenderFrame() {
         free_queue.pop();
     }
 
+    const auto queue_ready = profile ? Clock::now() : Clock::time_point{};
     const vk::Device device = instance.GetDevice();
     vk::Result result{};
 
@@ -1100,6 +1166,24 @@ Frame* Presenter::GetRenderFrame() {
         }
     }
 
+    if (profile) {
+        const auto now = Clock::now();
+        static thread_local auto window = wait_start;
+        static thread_local double queue_ms = 0, fence_ms = 0;
+        static thread_local u64 calls = 0;
+        queue_ms += std::chrono::duration<double, std::milli>(queue_ready - wait_start).count();
+        fence_ms += std::chrono::duration<double, std::milli>(now - queue_ready).count();
+        ++calls;
+        const double seconds = std::chrono::duration<double>(now - window).count();
+        if (seconds >= 5.0) {
+            std::printf("FG frame wait profile: mode=%d calls/s=%.1f queue=%.3f fence=%.3f ms/call\n",
+                        SpartanSettings::Get().frame_generation.load(), calls / seconds,
+                        queue_ms / double(calls), fence_ms / double(calls));
+            window = now;
+            queue_ms = fence_ms = 0;
+            calls = 0;
+        }
+    }
     if (frame->width != expected_frame_width || frame->height != expected_frame_height ||
         frame->is_hdr != swapchain.GetHDR()) {
         RecreateFrame(frame, expected_frame_width, expected_frame_height);

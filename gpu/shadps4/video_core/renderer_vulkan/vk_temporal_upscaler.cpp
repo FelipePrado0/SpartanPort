@@ -1903,6 +1903,13 @@ void TemporalUpscaler::RunScaled() {
     const auto cmdbuf = scheduler.CommandBuffer();
     // spartanport: the scene without the HUD for frame generation, once the upscale wrote it.
     const auto capture_for_frame_generation = [&](float frame_ms) {
+        auto* profiler = GpuProfiler::Get();
+        if (profiler && !profiler->Records(&scheduler)) profiler = nullptr;
+        const u64 resume = profiler ? profiler->Current() : 0;
+        if (profiler) {
+            profiler->Mark(0xF6A00000, [] { return std::string{"FG input mask"}; });
+            scheduler.CommandBuffer();
+        }
         const float sign = SpartanToggle::Disabled(1u << 26) ? -1.0f : 1.0f;
         // Characters (the stencil reactive mask), only on the guest depth that has the stencil.
         const bool characters = (scaled_session || (w == iw && h == ih)) &&
@@ -1922,6 +1929,7 @@ void TemporalUpscaler::RunScaled() {
                                            .vertical_fov = camera_motion.VerticalFov(),
                                            .projection_z = camera_motion.TaaDepthParameters()[0][2],
                                            .reset = frame_reset});
+        if (profiler) profiler->Resume(resume);
     };
     const auto barrier = [&](vk::Image image, vk::ImageAspectFlags aspect,
                              vk::ImageLayout old_layout, vk::PipelineStageFlags2 src_stage,
