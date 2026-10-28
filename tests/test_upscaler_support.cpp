@@ -178,15 +178,17 @@ int main() {
     Load();
     assert(s.frame_generation == 1 && s.frame_generation_frames == 1);
     assert(!GraphicsNeedRestart());
-    for (const char* bad : {"frame_generation=fast\n", "frame_generation=fsr\nframe_generation_frames=9\n"}) {
+    for (const char* bad : {"frame_generation=fast\n", "frame_generation=fsr\nframe_generation_frames=2\n",
+                            "frame_generation=fsr\nframe_generation_frames=3\n",
+                            "frame_generation=fsr\nframe_generation_frames=9\n"}) {
         FILE* config = std::fopen(path, "w");
         assert(config);
         std::fputs(bad, config);
         std::fclose(config);
         s.frame_generation = 1;
-        s.frame_generation_frames = 2;
+        s.frame_generation_frames = 1;
         Load();
-        assert(s.frame_generation_frames >= 1 && s.frame_generation_frames <= 3);
+        assert(s.frame_generation_frames == 1);
     }
     assert(s.frame_generation == 1 && s.frame_generation_frames == 1);
     FILE* config = std::fopen(path, "w");
@@ -201,7 +203,7 @@ int main() {
     s.frame_generation = 2;
     assert(GraphicsNeedRestart());
 #endif
-    // Display menu's Frame Generation row: Off, AMD FSR 2x, then DLSS 2x..4x on Windows.
+    // Display menu's Frame Generation row: Off, AMD FSR 2x, then DLSS 2x on Windows.
     s.frame_generation = 0;
     s.frame_generation_frames = 1;
     const auto fg_label = [](unsigned function) {
@@ -212,15 +214,11 @@ int main() {
     assert(fg_label(0xf6c).find("[ArrowSelectionL]") == 0);
 #ifdef _WIN32
     s.fg_dlss_supported = true;
-    s.fg_dlss_max_frames = 1; // an RTX 40
     assert(fg_label(0xf6b).find("NVIDIA DLSS 2x") != std::string::npos && s.frame_generation == 2);
-    std::string fg = fg_label(0xf6b);
-    assert(fg.find("DLSS 3x (unavailable)") != std::string::npos && s.frame_generation_frames == 2);
-    fg = fg_label(0xf6b);
-    assert(fg.find("DLSS 4x") != std::string::npos && s.frame_generation_frames == 3);
     assert(fg_label(0xf6b).find("Off") != std::string::npos && s.frame_generation == 0);
     Environment("SPARTAN_LANGUAGE", "pt");
-    assert(fg_label(0xf6a).find("DLSS 4x (indisponível)") != std::string::npos);
+    s.fg_dlss_supported = false;
+    assert(fg_label(0xf6a).find("DLSS 2x (indisponível)") != std::string::npos);
     Environment("SPARTAN_LANGUAGE", nullptr);
     s.fg_dlss_supported = false;
 #else

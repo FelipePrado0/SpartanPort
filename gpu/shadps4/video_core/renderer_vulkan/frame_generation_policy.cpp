@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-#include <algorithm>
 #include "video_core/renderer_vulkan/frame_generation_policy.h"
 
 namespace Vulkan::FrameGenerationPolicy {
@@ -17,10 +16,8 @@ Skip Decide(const Input& in) {
     return Skip::None;
 }
 
-int GeneratedFrames(int mode, int requested, int dlss_max) {
-    if (mode == FgFsr) return 1;
-    if (mode == FgDlss) return std::clamp(std::min(requested, dlss_max), 1, 3);
-    return 0;
+int GeneratedFrames(int mode) {
+    return mode == FgFsr || mode == FgDlss ? 1 : 0;
 }
 
 } // namespace Vulkan::FrameGenerationPolicy

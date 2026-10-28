@@ -2427,7 +2427,7 @@
    "Generated frames": "Quadros gerados",
    "AMD FSR (every GPU)": "AMD FSR (qualquer placa)",
    "NVIDIA DLSS (RTX 40/50)": "NVIDIA DLSS (RTX 40/50)",
-   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows; 3x and 4x need an RTX 50.": "Um quadro gerado entre os quadros do jogo: até o dobro de quadros na tela. Precisa de um upscaler. AMD FSR: qualquer placa de vídeo. NVIDIA DLSS: RTX 40/50, Windows; 3x e 4x precisam de uma RTX 50.",
+   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows.": "Um quadro gerado entre os quadros do jogo: até o dobro de quadros na tela. Precisa de um upscaler. AMD FSR: qualquer placa de vídeo. NVIDIA DLSS: RTX 40/50, Windows.",
    "Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.": "Desligado (padrão): sem upscaling temporal. Ligado: usa o upscaler e a predefinição selecionados. Personagens animados ainda podem mostrar algum rastro."
   },
   "es": {
@@ -2767,7 +2767,7 @@
    "Generated frames": "Fotogramas generados",
    "AMD FSR (every GPU)": "AMD FSR (cualquier GPU)",
    "NVIDIA DLSS (RTX 40/50)": "NVIDIA DLSS (RTX 40/50)",
-   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows; 3x and 4x need an RTX 50.": "Un fotograma generado entre los fotogramas del juego: hasta el doble de fotogramas en pantalla. Requiere un escalador. AMD FSR: cualquier tarjeta gráfica. NVIDIA DLSS: RTX 40/50, Windows; 3x y 4x requieren una RTX 50.",
+   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows.": "Un fotograma generado entre los fotogramas del juego: hasta el doble de fotogramas en pantalla. Requiere un escalador. AMD FSR: cualquier tarjeta gráfica. NVIDIA DLSS: RTX 40/50, Windows.",
    "Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.": "Desactivado (predeterminado): sin escalado temporal. Activado: usa el escalador y el ajuste seleccionados. Los personajes animados aún pueden mostrar estelas."
   },
   "pl": {
@@ -3278,7 +3278,7 @@
    "Generated frames": "生成帧数",
    "AMD FSR (every GPU)": "AMD FSR（所有显卡）",
    "NVIDIA DLSS (RTX 40/50)": "NVIDIA DLSS（RTX 40/50）",
-   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows; 3x and 4x need an RTX 50.": "在游戏帧之间插入生成的帧：屏幕帧数最多翻倍。需要启用超分辨率。AMD FSR：所有显卡。NVIDIA DLSS：RTX 40/50，仅 Windows；3x 和 4x 需要 RTX 50。",
+   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows.": "在游戏帧之间插入生成的帧：屏幕帧数最多翻倍。需要启用超分辨率。AMD FSR：所有显卡。NVIDIA DLSS：RTX 40/50，仅 Windows。",
    "Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.": "默认关闭：不使用时域超分辨率。开启：使用所选超分辨率和预设。动画角色仍可能出现拖影。"
   },
   "ja": {
@@ -3671,7 +3671,7 @@
    "Generated frames": "Frame yang dibuat",
    "AMD FSR (every GPU)": "AMD FSR (semua GPU)",
    "NVIDIA DLSS (RTX 40/50)": "NVIDIA DLSS (RTX 40/50)",
-   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows; 3x and 4x need an RTX 50.": "Frame buatan di antara frame game: hingga dua kali frame di layar. Memerlukan upscaler. AMD FSR: semua kartu grafis. NVIDIA DLSS: RTX 40/50, Windows; 3x dan 4x memerlukan RTX 50.",
+   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows.": "Frame buatan di antara frame game: hingga dua kali frame di layar. Memerlukan upscaler. AMD FSR: semua kartu grafis. NVIDIA DLSS: RTX 40/50, Windows.",
    "Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.": "Mati (bawaan): tanpa upscaling temporal. Nyala: memakai upscaler dan preset pilihan. Karakter yang bergerak masih dapat berbayang."
   }
  },

@@ -8,9 +8,7 @@ use iced::widget::{button, column, text};
 use iced::Element;
 
 use crate::core::i18n::tr;
-use crate::core::options::{
-    ANISOTROPY, DISPLAY_MODES, FRAME_GENERATION, FRAME_GENERATION_FRAMES, PRESETS, UPSCALERS,
-};
+use crate::core::options::{ANISOTROPY, DISPLAY_MODES, FRAME_GENERATION, PRESETS, UPSCALERS};
 use crate::ui::app::{Message, State};
 use crate::ui::theme;
 use crate::ui::widgets::{checkbox, choice_pairs, row, section, select, select_pairs};
@@ -123,19 +121,8 @@ pub fn view(state: &State) -> Element<'_, Message> {
             &tr(lang, "Frame generation"),
             select("frame_generation", FRAME_GENERATION, &ini("frame_generation"), lang),
             Some(&hint(
-                "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows; 3x and 4x need an RTX 50."
+                "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows."
             )),
-        ),
-        row(
-            state.rtl,
-            &tr(lang, "Generated frames"),
-            select(
-                "frame_generation_frames",
-                FRAME_GENERATION_FRAMES,
-                &ini("frame_generation_frames"),
-                lang,
-            ),
-            None,
         ),
         section(state.rtl, &tr(lang, "Textures")),
         row(

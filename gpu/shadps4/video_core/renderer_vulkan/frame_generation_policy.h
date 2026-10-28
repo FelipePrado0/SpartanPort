@@ -21,8 +21,7 @@ struct Input {
 
 Skip Decide(const Input& in);
 
-/// Generated frames per real frame. `requested` is frame_generation_frames (1..3); DLSS also
-/// needs the card to allow them (`dlss_max`: 1 on an RTX 40, 3 on an RTX 50).
-int GeneratedFrames(int mode, int requested, int dlss_max);
+/// Exactly one generated frame per real frame (2x) for either provider.
+int GeneratedFrames(int mode);
 
 } // namespace Vulkan::FrameGenerationPolicy

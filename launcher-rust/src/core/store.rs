@@ -106,6 +106,9 @@ impl Store {
     }
 
     pub fn text(&self, key: &str) -> String {
+        if key == "frame_generation_frames" {
+            return "1".to_string();
+        }
         match ini_setting(key) {
             Some(row) => self
                 .ini
@@ -173,11 +176,13 @@ impl Store {
     }
 
     /// What a save writes to the ini: the keys the window has a control for, a switch as
-    /// `"1"`/`"0"` (anything but "1" reads as off).
+    /// `"1"`/`"0"` (anything but "1" reads as off). The retired FG multiplier is saved as 2x.
     pub fn ini_to_write(&self) -> IndexMap<String, String> {
         SETTINGS
             .iter()
-            .filter(|row| row.file == File::Ini && row.written)
+            .filter(|row| {
+                row.file == File::Ini && (row.written || row.key == "frame_generation_frames")
+            })
             .map(|row| {
                 let value = if matches!(row.kind, Kind::Flag) {
                     if self.flag(row.key) { "1" } else { "0" }.to_string()
@@ -200,6 +205,23 @@ mod tests {
         let (store, unreadable) = Store::load(&Paths::from_env(dir.path(), &|_| None));
         assert!(unreadable.is_empty());
         (dir, store)
+    }
+
+    #[test]
+    fn legacy_frame_generation_multipliers_are_saved_as_2x() {
+        for frames in ["1", "2", "3", "9"] {
+            let (dir, _) = fresh();
+            std::fs::write(
+                dir.path().join("spartanport.ini"),
+                format!("frame_generation=dlss\nframe_generation_frames={frames}\n"),
+            )
+            .unwrap();
+            let (store, unreadable) = Store::load(&Paths::from_env(dir.path(), &|_| None));
+            assert!(unreadable.is_empty());
+            assert_eq!(store.text("frame_generation_frames"), "1");
+            assert_eq!(store.ini_to_write()["frame_generation_frames"], "1");
+            assert_eq!(store.ini_to_write()["frame_generation"], "dlss");
+        }
     }
 
     #[test]

@@ -492,13 +492,6 @@ void ImageTab() {
                   "A generated frame between game frames: up to twice the frames on screen. Needs "
                   "an upscaler. AMD FSR: any graphics card, applied at once. NVIDIA DLSS: RTX 40/50, "
                   "on restart.");
-        static const int frames_values[] = {1, 2, 3};
-        static const char* const frames_labels[] = {"2x", "3x", "4x"};
-        ImGui::BeginDisabled(s.frame_generation != 2 || !s.fg_dlss_supported);
-        ChoiceRow("Generated frames", s.frame_generation_frames, frames_labels, frames_values,
-                  std::min(3, std::max(1, s.fg_dlss_max_frames.load())),
-                  "NVIDIA DLSS only. 3x and 4x need an RTX 50.");
-        ImGui::EndDisabled();
         ImGui::EndDisabled();
         ImGui::EndTable();
     }

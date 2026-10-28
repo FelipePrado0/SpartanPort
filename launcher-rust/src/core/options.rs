@@ -124,10 +124,6 @@ pub static FRAME_GENERATION: &[Choice] = &[
     c("dlss", "NVIDIA DLSS (RTX 40/50)"),
 ];
 
-/// spartanport.ini frame_generation_frames: generated frames per game frame (DLSS only above 1).
-pub static FRAME_GENERATION_FRAMES: &[Choice] =
-    &[c("1", "2x"), c("2", "3x (RTX 50)"), c("3", "4x (RTX 50)")];
-
 /// Ordered by render scale; the values are the ini's preset numbers (Ultra Quality was added as 5).
 pub static PRESETS: &[Choice] = &[
     c("0", "Native AA (100%)"),
@@ -491,9 +487,8 @@ mod tests {
 
     #[test]
     fn every_table_has_unique_values() {
-        let tables: [&[Choice]; 22] = [
+        let tables: [&[Choice]; 21] = [
             FRAME_GENERATION,
-            FRAME_GENERATION_FRAMES,
             DISPLAY_MODES,
             ANISOTROPY,
             FPS_LIMITS,

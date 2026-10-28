@@ -35,7 +35,7 @@ struct Values {
     std::atomic<int> preset{NativeAA};
     /// Frame generation (frame_generation_policy.h Mode): off, fsr, dlss in spartanport.ini.
     std::atomic<int> frame_generation{0};
-    /// Generated frames per real frame, 1..3 (2x..4x); only DLSS on an RTX 50 goes above 1.
+    /// Legacy ini key, normalized to one generated frame per real frame (2x).
     std::atomic<int> frame_generation_frames{1};
     std::atomic<bool> sharpen{true};
     std::atomic<float> sharpness{0.3f};
@@ -138,7 +138,6 @@ struct Values {
     std::atomic<const char*> upscaler_status{nullptr};
     /// DLSS frame generation is ready (and how many frames the card generates), or why not.
     std::atomic<bool> fg_dlss_supported{false};
-    std::atomic<int> fg_dlss_max_frames{1};
     /// Why frame generation stopped or cannot run, or null; its rates for the Insert menu
     /// ("FSR FG 2x, 60 -> 120 fps"), or null.
     std::atomic<const char*> fg_problem{nullptr};

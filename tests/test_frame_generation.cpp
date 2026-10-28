@@ -39,12 +39,11 @@ int main() {
     in.reset = true;
     assert(Decide(in) == Skip::Failed);
 
-    // Frames shown per real frame: 1 generated frame per real one for FSR, 1 to 3 for DLSS.
-    assert(GeneratedFrames(FgFsr, 3, 3) == 1);
-    assert(GeneratedFrames(FgDlss, 3, 3) == 3);
-    assert(GeneratedFrames(FgDlss, 3, 1) == 1); // an RTX 40 runs 2x only
-    assert(GeneratedFrames(FgDlss, 0, 3) == 1);
-    assert(GeneratedFrames(FgOff, 2, 3) == 0);
+    // Both providers generate exactly one frame per real frame (2x).
+    assert(GeneratedFrames(FgFsr) == 1);
+    assert(GeneratedFrames(FgDlss) == 1);
+    assert(GeneratedFrames(FgOff) == 0);
+    assert(GeneratedFrames(-1) == 0);
     std::puts("Frame generation: decisions and frame counts PASS");
     return 0;
 }

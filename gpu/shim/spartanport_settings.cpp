@@ -94,8 +94,7 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.frame_generation = mode == 1 ? 1 : 0;
 #endif
     } else if (key == "frame_generation_frames") {
-        if (i < 1 || i > 3) std::printf("FG: invalid frame_generation_frames=%s, 1\n", value.c_str());
-        v.frame_generation_frames = i >= 1 && i <= 3 ? i : 1;
+        v.frame_generation_frames = 1;
     } else if (key == "sharpen") {
         v.sharpen = i != 0;
     } else if (key == "sharpness") {
@@ -567,9 +566,9 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         const char* language = std::getenv("SPARTAN_LANGUAGE");
         const bool pt = language && (std::strcmp(language, "7") == 0 || std::strcmp(language, "17") == 0
                                     || std::strncmp(language, "pt", 2) == 0 || std::strcmp(language, "br") == 0);
-        // (mode, frames): Off, AMD FSR 2x, then NVIDIA DLSS 2x, 3x, 4x on Windows.
+        // (mode, frames): Off, AMD FSR 2x, then NVIDIA DLSS 2x on Windows.
 #ifdef _WIN32
-        static constexpr std::pair<int, int> choices[] = {{0, 1}, {1, 1}, {2, 1}, {2, 2}, {2, 3}};
+        static constexpr std::pair<int, int> choices[] = {{0, 1}, {1, 1}, {2, 1}};
 #else
         static constexpr std::pair<int, int> choices[] = {{0, 1}, {1, 1}};
 #endif
@@ -591,7 +590,7 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         std::string value = mode == 0 ? (pt ? "Desligado" : "Off")
                           : mode == 1 ? "AMD FSR 2x"
                                       : "NVIDIA DLSS " + std::to_string(frames + 1) + "x";
-        if (mode == 2 && (!v.fg_dlss_supported || frames > v.fg_dlss_max_frames)) {
+        if (mode == 2 && !v.fg_dlss_supported) {
             value += pt ? " (indisponível)" : " (unavailable)";
         }
         const bool selected = function != 0xf69;

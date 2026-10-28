@@ -3,9 +3,9 @@
 
 use crate::core::options::{
     Choice, AIM_STYLES, ANISOTROPY, DISPLAY_MODES, DRAW_PIPE, ENGINE_FPS_CHOICES, FPS_LIMITS,
-    FRAMES_QUEUED, FRAME_GENERATION, FRAME_GENERATION_FRAMES, GLYPH_STYLES, LANGUAGES,
-    LIVE_RESOLUTION, NO_MSAA, OUTPUTS, PRESETS, READBACKS, STICK_PROMPTS, STREAM_MEMORY,
-    UI_LANGUAGES, UI_SCALES, UPSCALERS, VIDEO_BACKENDS,
+    FRAMES_QUEUED, FRAME_GENERATION, GLYPH_STYLES, LANGUAGES, LIVE_RESOLUTION, NO_MSAA, OUTPUTS,
+    PRESETS, READBACKS, STICK_PROMPTS, STREAM_MEMORY, UI_LANGUAGES, UI_SCALES, UPSCALERS,
+    VIDEO_BACKENDS,
 };
 
 /// The file a setting lives in.
@@ -353,13 +353,7 @@ pub static SETTINGS: &[Setting] = &[
         true,
         26,
     ),
-    ini(
-        "frame_generation_frames",
-        Pick(FRAME_GENERATION_FRAMES),
-        Text("1"),
-        true,
-        27,
-    ),
+    ini("frame_generation_frames", Kind::Int, Text("1"), false, 27),
     ini("object_motion", Flag, Bool(true), false, 2),
     ini("output_res", Pick(OUTPUTS), Text("1920x1080"), false, 4),
     ini(
@@ -508,21 +502,21 @@ mod tests {
     }
 
     #[test]
-    fn shown_ini_keys_are_the_25_controls_of_the_window() {
-        assert_eq!(SHOWN_INI_KEYS.len(), 25);
+    fn shown_ini_keys_are_the_24_controls_of_the_window() {
+        assert_eq!(SHOWN_INI_KEYS.len(), 24);
         for seeded in ["monitor", "hdr", "glyph_style"] {
             assert!(SHOWN_INI_KEYS.contains(&seeded), "{seeded}");
         }
         assert!(INI_FLAGS.contains(&"hdr"));
-        for shown in [
-            "upscaler",
-            "preset",
-            "frame_generation",
-            "frame_generation_frames",
-        ] {
+        for shown in ["upscaler", "preset", "frame_generation"] {
             assert!(SHOWN_INI_KEYS.contains(&shown), "{shown}");
         }
-        for parked in ["object_motion", "output_res", "live_resolution"] {
+        for parked in [
+            "object_motion",
+            "output_res",
+            "live_resolution",
+            "frame_generation_frames",
+        ] {
             assert!(!SHOWN_INI_KEYS.contains(&parked), "{parked}");
         }
     }
