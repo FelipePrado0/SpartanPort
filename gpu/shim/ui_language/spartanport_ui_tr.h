@@ -29,7 +29,7 @@ inline constexpr std::pair<std::string_view, const char*> TurkishText[] = {
     {"5120 × 2160 · 21:9 (beta)", "5120 × 2160 · 21:9 (beta)"},
     {"60 (original)", "60 (orijinal)"},
     {"60 FPS: the frame rate patch is not available for this game build", "60 FPS: bu oyun sürümü için kare hızı yaması yok"},
-    {"A thin bar at the top for the last enemy hit.", "Son vurulan düşman için üstte ince bir çubuk."},
+    {"A bar at the top for the last enemy hit.", "Son vurulan düşman için üstte bir çubuk."},
     {"About", "Hakkında"},
     {"Absolute", "Mutlak"},
     {"Anisotropic filtering", "Anizotropik filtreleme"},

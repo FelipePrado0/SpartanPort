@@ -543,6 +543,7 @@ int main(void) {
 #else
         setenv("SPARTAN_USER_DIR",".",1);
 #endif
+        memset(trophy_label,0,sizeof(trophy_label)); /* not what an earlier load left (a user/ folder here) */
         trophy_load_names();
         const char *label_texts[TROPHY_LABELS];
         for (int k=0;k<TROPHY_LABELS;k++) label_texts[k]=trophy_label[k][0] ? trophy_label[k] : 0;

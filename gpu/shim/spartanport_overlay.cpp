@@ -489,7 +489,7 @@ void GameTab() {
     if (BeginRows("##hud")) {
         ImGui::BeginDisabled(!s.actor_watch_supported.load());
         CheckRow("Enemy health bar", s.enemy_health_bar,
-                 s.actor_watch_supported.load() ? "A thin bar at the top for the last enemy hit." : Unsupported);
+                 s.actor_watch_supported.load() ? "A bar at the top for the last enemy hit." : Unsupported);
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
@@ -859,53 +859,107 @@ void Menu() {
     }
 }
 
-// Enemy health bar from the damage hook's records (spartanport_actors.cpp).
+// Enemy health bar from the damage hook's records (spartanport_actors.cpp), in the menu's look: a dark
+// plate centered on the screen's top edge, the bar in the menu's red shrinking toward the center, the
+// health just lost in gold draining after it, and the health in numbers below in the title face.
 // Only the copied values are read, never the game's memory: an actor may be gone by now.
+double health_clock_ms = -1.0; // a fixed clock (tools/overlay_preview.cpp); negative: the real one
 void HealthDisplay() {
+    using Clock = std::chrono::steady_clock;
     struct Seen {
         uint32_t seq = 0;
-        std::chrono::steady_clock::time_point at{};
+        Clock::time_point at{};
     };
     static Seen seen[2];
+    // The gold part: from where the bar was before the last hit, down to the health now.
+    static uint64_t actor = 0;
+    static float trail_from = 0.0f, last_fraction = 0.0f;
+    static Clock::time_point shown_at{};
+    constexpr std::chrono::milliseconds kShown{4000}, kHold{350};
+    constexpr float kDrainMs = 450.0f, kFadeInMs = 150.0f, kFadeOutMs = 500.0f;
     const auto& s = SpartanSettings::Get();
     if (!s.actor_watch_supported.load()) {
         return;
     }
-    const auto now = std::chrono::steady_clock::now();
+    const auto now = health_clock_ms >= 0.0
+                         ? Clock::time_point(std::chrono::microseconds(int64_t(health_clock_ms * 1000.0)))
+                         : Clock::now();
+    const auto ms = [](Clock::duration d) { return std::chrono::duration<float, std::milli>(d).count(); };
+    const auto recent = [&](int i) { return seen[i].seq != 0 && now - seen[i].at < kShown; };
     SpartanActorSlot slot[2];
     for (int i = 0; i < 2; ++i) {
         std::memcpy(&slot[i], const_cast<const SpartanActorSlot*>(&spartanport_actor_slots[i]), sizeof(slot[i]));
-        if (slot[i].seq != seen[i].seq) {
-            seen[i] = {slot[i].seq, now};
+        if (slot[i].seq == seen[i].seq) {
+            continue;
         }
+        if (i == 1) {
+            const float fraction = SpartanActors::Fraction(slot[1].health, slot[1].max_health);
+            const bool same = recent(1) && slot[1].actor == actor;
+            if (!same) {
+                shown_at = now; // a new enemy, or the bar had gone: no gold, and it fades in
+                trail_from = fraction;
+            } else {
+                // Hit again while the gold drains: it goes on from where it is.
+                const float drain = std::clamp((ms(now - seen[1].at - kHold)) / kDrainMs, 0.0f, 1.0f);
+                trail_from = std::max(trail_from + (last_fraction - trail_from) * drain, fraction);
+            }
+            actor = slot[1].actor;
+            last_fraction = fraction;
+        }
+        seen[i] = {slot[i].seq, now};
     }
-    const auto recent = [&](int i, int seconds) {
-        return seen[i].seq != 0 && now - seen[i].at < std::chrono::seconds(seconds);
-    };
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (!s.enemy_health_bar || !recent(1) || !SpartanActors::Valid(slot[1].health, slot[1].max_health)) {
+        return;
+    }
+    const float since = ms(now - seen[1].at);
+    const float alpha = std::min(std::clamp(ms(now - shown_at) / kFadeInMs, 0.0f, 1.0f),
+                                 std::clamp((ms(kShown) - since) / kFadeOutMs, 0.0f, 1.0f));
+    const auto ink = [&](ImVec4 c, float a = 1.0f) { return ImGui::GetColorU32(ImVec4(c.x, c.y, c.z, c.w * a * alpha)); };
+    const float fraction = SpartanActors::Fraction(slot[1].health, slot[1].max_health);
+    const float drain = std::clamp((since - ms(kHold)) / kDrainMs, 0.0f, 1.0f);
+    const float trail = std::max(trail_from + (fraction - trail_from) * drain, fraction);
+
     ImDrawList* draw = ImGui::GetForegroundDrawList();
-    const float scale = base_scale;
-    if (s.enemy_health_bar && recent(1, 4) && SpartanActors::Valid(slot[1].health, slot[1].max_health)) {
-        // Minimal: a thin green bar centered on the screen's top edge; it shrinks toward the center
-        // so it stays symmetric, with the health in numbers below.
-        const ImVec2 display = ImGui::GetIO().DisplaySize;
-        const float width = 260.0f * scale, height = 5.0f * scale, center = display.x * 0.5f;
-        const float top = 36.0f * scale;
-        const float fraction = SpartanActors::Fraction(slot[1].health, slot[1].max_health);
-        draw->AddRectFilled(ImVec2(center - width * 0.5f - scale, top - scale),
-                            ImVec2(center + width * 0.5f + scale, top + height + scale),
-                            IM_COL32(0, 0, 0, 140), 2 * scale);
-        const float half = width * 0.5f * fraction;
-        draw->AddRectFilled(ImVec2(center - half, top), ImVec2(center + half, top + height),
-                            IM_COL32(70, 190, 80, 220), 2 * scale);
-        char text[48];
-        std::snprintf(text, sizeof(text), "%.0f / %.0f", std::ceil(slot[1].health), slot[1].max_health);
-        const float font = ImGui::GetFontSize() * 0.9f;
-        const ImVec2 size = ImGui::GetFont()->CalcTextSizeA(font, FLT_MAX, 0.0f, text);
-        const ImVec2 at{center - size.x * 0.5f, top + height + 4.0f * scale};
-        draw->AddText(ImGui::GetFont(), font, ImVec2(at.x + scale, at.y + scale), IM_COL32(0, 0, 0, 160), text);
-        draw->AddText(ImGui::GetFont(), font, at, IM_COL32(225, 235, 220, 220), text);
+    const float px = base_scale;
+    const float center = ImGui::GetIO().DisplaySize.x * 0.5f;
+    ImFont* font = title_font ? title_font : ImGui::GetFont();
+    const float font_size = 16.0f * px;
+    char text[48];
+    std::snprintf(text, sizeof(text), "%.0f / %.0f", std::ceil(slot[1].health), slot[1].max_health);
+    const ImVec2 text_size = font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, text);
+
+    // The plate, with the red rule of the menu's headings on its top edge, bright in the middle.
+    const float width = 360.0f * px, pad = 12.0f * px, bar_height = 8.0f * px, top = 28.0f * px;
+    const float height = pad * 0.9f + bar_height + 5.0f * px + text_size.y + pad * 0.6f;
+    const ImVec2 p0(center - width * 0.5f, top), p1(center + width * 0.5f, top + height);
+    const float rounding = 6.0f * px;
+    draw->AddRectFilled(p0, p1, ink(Ink::Bg, 0.82f), rounding);
+    draw->AddRect(p0, p1, ink(Ink::Line), rounding, 0, 1.0f * px);
+    const ImU32 clear = ink(Ink::Accent, 0.0f), red = ink(Ink::AccentHi);
+    const float rule = top + 1.0f * px, half = width * 0.5f - rounding;
+    draw->AddRectFilledMultiColor(ImVec2(center - half, rule), ImVec2(center, rule + 2.0f * px), clear, red, red, clear);
+    draw->AddRectFilledMultiColor(ImVec2(center, rule), ImVec2(center + half, rule + 2.0f * px), red, clear, clear, red);
+
+    // The bar: the track, the gold just lost, then the health left, all shrinking toward the center.
+    const float bar_half = width * 0.5f - pad, bar_top = top + pad * 0.9f, bar_bottom = bar_top + bar_height;
+    draw->AddRectFilled(ImVec2(center - bar_half, bar_top), ImVec2(center + bar_half, bar_bottom), ink(Ink::Panel), 2.0f * px);
+    if (trail > fraction) {
+        draw->AddRectFilled(ImVec2(center - bar_half * trail, bar_top), ImVec2(center + bar_half * trail, bar_bottom),
+                            ink(Ink::Gold, 0.9f), 2.0f * px);
     }
+    if (fraction > 0.0f) {
+        const float x = std::max(bar_half * fraction, 1.0f * px);
+        draw->AddRectFilledMultiColor(ImVec2(center - x, bar_top), ImVec2(center + x, bar_bottom), ink(Ink::AccentHi),
+                                      ink(Ink::AccentHi), ink(Ink::Accent), ink(Ink::Accent));
+        draw->AddLine(ImVec2(center - x, bar_top + 0.5f * px), ImVec2(center + x, bar_top + 0.5f * px),
+                      ink(ImVec4(1, 1, 1, 1), 0.18f), 1.0f * px);
+    }
+    draw->AddRect(ImVec2(center - bar_half, bar_top), ImVec2(center + bar_half, bar_bottom), ink(Ink::Raised), 2.0f * px, 0,
+                  1.0f * px);
+
+    const ImVec2 at(center - text_size.x * 0.5f, bar_bottom + 5.0f * px);
+    draw->AddText(font, font_size, ImVec2(at.x + px, at.y + px), ink(ImVec4(0, 0, 0, 1), 0.6f), text);
+    draw->AddText(font, font_size, at, ink(Ink::Text), text);
 }
 
 // The game's text dialog: what is typed, and how to finish (keyboard or controller).

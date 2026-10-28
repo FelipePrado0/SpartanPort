@@ -7,7 +7,8 @@
 //   overlay-preview OUT.bmp SCENE [WIDTH HEIGHT]
 // SCENE: menu (SPARTAN_PREVIEW_TAB 0-3), trophies, notifications (the trophy window's pages, with
 // SPARTAN_PREVIEW_ORDER 0-2, SPARTAN_PREVIEW_FILTER 0-2 and SPARTAN_PREVIEW_GRADE 0-4), saves (the
-// game's save list, SPARTAN_PREVIEW_SAVE=1 to save), overwrite (its question), or toast.
+// game's save list, SPARTAN_PREVIEW_SAVE=1 to save), overwrite (its question), health (the enemy
+// health bar, after a hit down to SPARTAN_PREVIEW_HEALTH percent; with frames, three hits), or toast.
 // SPARTAN_PREVIEW_TOAST=1..4 (bronze..platinum, or several: "1234") adds notifications, over any
 // scene, in SPARTAN_PREVIEW_THEME (original, card, card_cinematic, corner), drawn
 // SPARTAN_PREVIEW_TOAST_MS after they start; with SPARTAN_PREVIEW_FRAMES=N and SPARTAN_PREVIEW_STEP_MS,
@@ -255,9 +256,32 @@ void DemoSaves(const std::string& scene, bool portuguese) {
 
 } // namespace
 
+// The enemy health bar's made-up enemy: the hits so far at `ms` on the bar's clock. One picture: a hit
+// at 0 ms down to SPARTAN_PREVIEW_HEALTH percent; frames: full, then a hit to half, then one to almost none.
+void DemoHealth(double ms, bool frames) {
+    struct Hit {
+        double at;
+        float health;
+    };
+    constexpr float kMax = 1200.0f;
+    const float health = kMax * float(std::clamp(Env("SPARTAN_PREVIEW_HEALTH", 100), 0, 100)) / 100.0f;
+    const Hit one[] = {{0.0, health}};
+    const Hit three[] = {{0.0, kMax}, {700.0, kMax * 0.5f}, {1900.0, kMax * 0.08f}};
+    const Hit* hits = frames ? three : one;
+    const int count = frames ? 3 : 1;
+    int last = 0;
+    while (last + 1 < count && hits[last + 1].at <= ms) ++last;
+    SpartanActorSlot& slot = spartanport_actor_slots[1];
+    slot.actor = 1;
+    slot.health = hits[last].health;
+    slot.max_health = kMax;
+    slot.seq = uint32_t(last + 1);
+    health_clock_ms = ms;
+}
+
 int main(int argc, char** argv) {
     if (argc < 3) {
-        std::fprintf(stderr, "overlay-preview OUT.bmp menu|trophies|notifications|saves|overwrite|toast [WIDTH HEIGHT]\n");
+        std::fprintf(stderr, "overlay-preview OUT.bmp menu|trophies|notifications|saves|overwrite|health|toast [WIDTH HEIGHT]\n");
         return 2;
     }
     const std::string out = argv[1], scene = argv[2];
@@ -307,6 +331,8 @@ int main(int argc, char** argv) {
     } else if (scene == "saves" || scene == "overwrite") {
         const char* language = std::getenv("SPARTAN_PREVIEW_LANG");
         DemoSaves(scene, language && std::string(language) == "pt");
+    } else if (scene == "health") {
+        SpartanSettings::Get().enemy_health_bar = true;
     }
     // One grade, or several in a row ("1234": bronze, silver, gold, platinum).
     const char* grades = std::getenv("SPARTAN_PREVIEW_TOAST");
@@ -339,6 +365,7 @@ int main(int argc, char** argv) {
         UpdateToastTextures();
         UpdateTrophyTextures();
         UpdateChoiceTextures();
+        if (scene == "health") DemoHealth(ms, frames > 1);
         io.DisplaySize = ImVec2(float(width), float(height));
         io.DeltaTime = frames > 1 ? float(step_ms) / 1000.0f : 1.0f / 60.0f; // ImGui's clock (the platinum's light)
         ImGui_ImplSDLRenderer3_NewFrame();

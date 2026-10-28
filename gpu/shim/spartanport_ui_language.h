@@ -47,7 +47,7 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"5120 × 2160 · 21:9 (beta)", "5120 × 2160 · 21:9（测试）"},
     {"60 (original)", "60（原始）"},
     {"60 FPS: the frame rate patch is not available for this game build", "60 帧：此游戏版本无法使用帧率补丁"},
-    {"A thin bar at the top for the last enemy hit.", "在顶部显示最近击中敌人的细血条。"},
+    {"A bar at the top for the last enemy hit.", "在顶部显示最近击中敌人的血条。"},
     {"About", "关于"},
     {"Absolute", "绝对位置"},
     {"Anisotropic filtering", "各向异性过滤"},
