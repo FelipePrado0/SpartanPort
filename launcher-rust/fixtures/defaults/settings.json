@@ -41,5 +41,6 @@
   "rage_one_input": true,
   "stick_prompts": "keyboard",
   "controls_layout": 4,
+  "switch_attacks": false,
   "glyph_style": "off"
 }

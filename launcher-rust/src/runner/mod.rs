@@ -15,6 +15,7 @@ pub mod plan;
 pub mod prepare;
 pub mod probe_image;
 pub mod sce;
+pub mod switch_text;
 pub mod window_icon;
 
 /// The synthetic probe inputs the runner's tests build (`tests/test_probe.py::package` and more).
@@ -756,9 +757,10 @@ impl<'a> Runner<'a> {
             .map_err(|error| self.fail(&format!("Patches: {error}")))
     }
 
-    /// Step 13: the probe arguments of the glyph copies and of the pause menu's copy; sets
-    /// `SPARTAN_GLYPHS` (the in-game menu names the buttons the same way). Failures only reach the
-    /// output: the game then keeps its own icons, or starts without the row.
+    /// Step 13: the probe arguments of the glyph copies, of the pause menu's copy and of the
+    /// switch attacks' tutorial texts; sets `SPARTAN_GLYPHS` (the in-game menu names the buttons the
+    /// same way). Failures only reach the output: the game then keeps its own icons, starts without
+    /// the row, or keeps its tutorial texts.
     fn mounts(&mut self, plan: &RunPlan, probe: &str, game: &Path) -> Vec<String> {
         let (port, out) = (&plan.port, &plan.out);
         let assets = glyphs::Assets::in_port(port);
@@ -792,7 +794,8 @@ impl<'a> Runner<'a> {
             &lookup,
             &mut |line| say(log, &line),
         );
-        [glyph_args, menu_args].concat()
+        let text_args = switch_text_mounts(env, game, out, &mut |line| say(log, &line));
+        [glyph_args, menu_args, text_args].concat()
     }
 
     /// Starts the probe with `command` and waits for it, with the Discord presence while it runs:
@@ -1005,6 +1008,41 @@ pub fn pause_menu_args(
             Vec::new()
         }
     }
+}
+
+/// Probe arguments for the Weapon Switching tutorials that match the switch attacks (`run.py`
+/// `switch_text_mounts`): patched copies of the language WADs (`switch_text::build`), only with
+/// `SPARTAN_SWITCH_ATTACKS=1`; without it old copies are removed. The game folder is never written;
+/// what fails only reaches the Log, and the tutorials then keep their own text.
+pub fn switch_text_mounts(
+    env: &IndexMap<String, String>,
+    game: &Path,
+    out: &Path,
+    log: &mut dyn FnMut(String),
+) -> Vec<String> {
+    if env.get("SPARTAN_SWITCH_ATTACKS").map(String::as_str) != Some("1") {
+        let _ = std::fs::remove_dir_all(out.join("switch_text"));
+        return Vec::new();
+    }
+    let mounts = match switch_text::build(game, out, log) {
+        Ok(mounts) => mounts,
+        Err(error) => {
+            log(format!(
+                "Switch attacks: {error}; the tutorials keep their own text"
+            ));
+            return Vec::new();
+        }
+    };
+    if !mounts.is_empty() {
+        log(format!(
+            "Switch attacks: tutorial text on copies in {}; game files untouched",
+            out.join("switch_text").display()
+        ));
+    }
+    mounts
+        .iter()
+        .flat_map(|(guest, path)| ["--mount".to_string(), format!("{guest}={}", path.display())])
+        .collect()
 }
 
 #[cfg(test)]
@@ -1322,5 +1360,83 @@ mod tests {
                 && log[0].ends_with("; no Exit to Desktop row"),
             "{log:?}"
         );
+    }
+
+    // -- switch_text_mounts (run.py): the tutorials' copies, only with SPARTAN_SWITCH_ATTACKS=1 ----
+
+    /// A game folder with the synthetic English language WAD, and an `out` holding a copy left
+    /// from an earlier run.
+    fn text_run() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let temp = tempfile::tempdir().unwrap();
+        let (game, out) = (temp.path().join("game"), temp.path().join("out"));
+        let folder = game.join(switch_text::FOLDER);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("R_LANG_EN.WAD"), switch_text::tests::wad()).unwrap();
+        std::fs::create_dir_all(out.join("switch_text")).unwrap();
+        std::fs::write(out.join("switch_text/R_LANG_EN.WAD"), b"old").unwrap();
+        (temp, game, out)
+    }
+
+    /// What `switch_text_mounts` returned and the Log lines.
+    fn text_mounts(env: &[(&str, &str)], game: &Path, out: &Path) -> (Vec<String>, Vec<String>) {
+        let mut log = Vec::new();
+        let args = switch_text_mounts(&env_map(env), game, out, &mut |line| log.push(line));
+        (args, log)
+    }
+
+    #[test]
+    fn switch_text_off_mounts_nothing_and_removes_old_copies() {
+        for env in [vec![], vec![("SPARTAN_SWITCH_ATTACKS", "0")]] {
+            let (_temp, game, out) = text_run();
+            let (args, log) = text_mounts(&env, &game, &out);
+            assert!(args.is_empty() && log.is_empty(), "{args:?} {log:?}");
+            assert!(!out.join("switch_text").exists());
+        }
+    }
+
+    #[test]
+    fn switch_text_on_mounts_the_copies() {
+        let (_temp, game, out) = text_run();
+        let (args, log) = text_mounts(&[("SPARTAN_SWITCH_ATTACKS", "1")], &game, &out);
+        let copy = out.join("switch_text").join("R_LANG_EN.WAD");
+        assert_eq!(
+            args,
+            [
+                "--mount".to_string(),
+                format!("/app0/EXEC/WAD/PS4_LE/R_LANG_EN.WAD={}", copy.display()),
+            ]
+        );
+        assert_eq!(
+            log,
+            [format!(
+                "Switch attacks: tutorial text on copies in {}; game files untouched",
+                out.join("switch_text").display()
+            )]
+        );
+        let mut expected = switch_text::tests::wad();
+        assert_eq!(switch_text::patch(&mut expected, &switch_text::ENGLISH), 2);
+        assert_eq!(std::fs::read(&copy).unwrap(), expected);
+        assert_eq!(
+            std::fs::read(game.join(switch_text::FOLDER).join("R_LANG_EN.WAD")).unwrap(),
+            switch_text::tests::wad()
+        );
+    }
+
+    #[test]
+    fn switch_text_failures_start_the_game_with_its_own_text() {
+        let (_temp, game, out) = text_run();
+        // out/ is a file, so out/switch_text cannot be made.
+        let file = out.join("switch_text").join("R_LANG_EN.WAD");
+        let (args, log) = text_mounts(&[("SPARTAN_SWITCH_ATTACKS", "1")], &game, &file);
+        assert!(args.is_empty());
+        assert!(
+            log.len() == 1
+                && log[0].starts_with("Switch attacks: ")
+                && log[0].ends_with("; the tutorials keep their own text"),
+            "{log:?}"
+        );
+        // No language of the game in the folder: nothing to mount, nothing said.
+        let (args, log) = text_mounts(&[("SPARTAN_SWITCH_ATTACKS", "1")], &out, &out);
+        assert!(args.is_empty() && log.is_empty(), "{args:?} {log:?}");
     }
 }

@@ -308,6 +308,13 @@ pub static SETTINGS: &[Setting] = &[
         env("SPARTAN_STICK_PROMPTS", ""),
     ),
     app("controls_layout", Kind::Int, Int(4), None),
+    // Off unless set: the runner patches the tutorials only for "1" (`run.py` `switch_text_mounts`).
+    app(
+        "switch_attacks",
+        Flag,
+        Bool(false),
+        env("SPARTAN_SWITCH_ATTACKS", ""),
+    ),
     app(
         "glyph_style",
         Pick(GLYPH_STYLES),
@@ -530,6 +537,7 @@ mod tests {
         assert_eq!(run_default("SPARTAN_MODS_ENABLED"), Some("1"));
         assert_eq!(run_default("SPARTAN_STREAM_MEMORY"), Some("cached"));
         assert_eq!(run_default("SPARTAN_GLYPH_STYLE"), Some("off"));
+        assert_eq!(run_default("SPARTAN_SWITCH_ATTACKS"), Some(""));
         assert_eq!(run_default("SPARTAN_NOT_A_SETTING"), None);
     }
 
