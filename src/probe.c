@@ -392,6 +392,7 @@ extern ABI void spartanport_camera_apply(unsigned char *render_view, uint64_t ca
 extern void spartanport_camera_set_view_global(uintptr_t address);
 extern void spartanport_camera_set_image(uintptr_t image, uint64_t size);
 extern void spartanport_camera_set_player_global(uintptr_t address);
+extern void spartanport_camera_status(int supported);
 extern ABI void spartanport_camera_node_written(unsigned char *node, const unsigned char *manager);
 
 /* The hooks below find their sites by signature (src/signature.h), so they work in any region
@@ -713,6 +714,7 @@ static void install_camera_hook(Segment *segments, uint64_t count, uint64_t size
     install_jump(at, SPARTAN_CAMERA_HOOK_LENGTH, stub);
     install_jump(controller, SPARTAN_CAMERA_CONTROLLER_LENGTH, stub + 128);
     const int debug = spartanport_camera_configure();
+    spartanport_camera_status(1);
     printf("Free camera: hook ready%s\n", debug ? " (debug offset from SPARTAN_FREE_CAMERA_DEBUG)" : "");
 }
 

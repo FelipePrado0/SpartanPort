@@ -10,7 +10,7 @@
   "SPARTAN_GAME_DIR": "D:\\Games\\GOW3",
   "SPARTAN_GPU_ID": "0",
   "SPARTAN_HDR": "1",
-  "SPARTAN_KEY_MAP": "square=F,triangle=Mouse Right,l1=Q,r1=E,r2=Mouse Forward,l3=None,r3=None,rage=Mouse Middle,options=Tab,touchpad_left=P,touchpad_right=Escape,up=1,down=3,left=4,right=2,grab=C,dodge=Mouse Back,weapon_next=Wheel Up,weapon_prev=Wheel Down",
+  "SPARTAN_KEY_MAP": "square=F,triangle=Mouse Right,l1=Q,r1=E,r2=Mouse Forward,l3=None,r3=None,rage=Mouse Middle,options=Tab,touchpad_left=P,touchpad_right=Escape,up=1,down=3,left=4,right=2,grab=C,dodge=Mouse Back,weapon_next=Wheel Up,weapon_prev=Wheel Down,camera=G",
   "SPARTAN_LANGUAGE": "1",
   "SPARTAN_MODS_CONFIG": "<DATA_DIR>\\mods.json",
   "SPARTAN_MODS_DIR": "<DATA_DIR>\\mods",

@@ -18,7 +18,7 @@ use serde_json::Value;
 
 use crate::core::controls::{
     at_defaults, bind_key, control_values, default_input, sdl_key_name, table_rows, Kind, CONTROLS,
-    PAD_STYLES, RAGE_BUTTONS,
+    CAMERA_ROW, PAD_STYLES, RAGE_BUTTONS,
 };
 use crate::core::gpu::connected_gamepad;
 use crate::core::i18n::{tr, tr_fmt};
@@ -66,6 +66,7 @@ pub const ACTION_NAMES: &[(&str, &str)] = &[
     ("dodge", "Dodge"),
     ("weapon_next", "Next weapon"),
     ("weapon_prev", "Previous weapon"),
+    ("camera", "Free camera on/off"),
     ("move_up", "Move forward"),
     ("move_down", "Move backward"),
     ("move_left", "Move left"),
@@ -92,6 +93,7 @@ const DISTANCE_HINT: &str =
 const AIM_STYLE_HINT: &str = "Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.";
 const SENSITIVITY_HINT: &str = "Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.";
 const MOUSE_LOCK_HINT: &str = "While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.";
+const FREE_CAMERA_HINT: &str = "Experimental. The right stick turns the camera all the way around Kratos and Kratos moves the way the camera looks; L1 + right stick dodges. In play, the Free camera key (G) or a tap of R3 on the gamepad switches it off and on, for boss fights; quick-time events and the game's camera cuts go back to the game's camera. Also in the in-game menu.";
 const VIBRATION_HINT: &str = "Strength of the gamepad's vibration; 0% turns it off.";
 const PAD_NOTE: &str = "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.";
 
@@ -625,7 +627,7 @@ pub fn pad_labels(style: &str, lang: &str) -> Vec<(String, String)> {
 pub fn pad_rows(state: &State, lang: &str) -> Vec<PadRow> {
     let view = &state.controls;
     let pairs = pad_labels(&view.pad_style, lang);
-    CONTROLS
+    let mut rows: Vec<PadRow> = CONTROLS
         .iter()
         .map(|row| {
             let chosen = view.pad.get(row.button).cloned().unwrap_or_default();
@@ -659,7 +661,15 @@ pub fn pad_rows(state: &State, lang: &str) -> Vec<PadRow> {
                 choice,
             }
         })
-        .collect()
+        .collect();
+    // The free camera's switch is a tap of R3 alone, not remapped (R3 still reaches the game).
+    rows.push(PadRow {
+        button: CAMERA_ROW.button,
+        title: tr(lang, button_name(CAMERA_ROW.button)),
+        icon: "rightstick".to_string(),
+        choice: PadChoice::Fixed(tr(lang, "Tap R3")),
+    });
+    rows
 }
 
 /// Choosing `label` in the gamepad box of `button`: its SDL name, or the label itself when no
@@ -937,6 +947,14 @@ pub fn view(state: &State) -> Element<'_, Message> {
                 lang
             ),
             Some(&tr(lang, GLYPH_HINT)),
+        ),
+        // Both devices turn the free camera, so it stays above the device's section.
+        checkbox(
+            state.rtl,
+            "free_camera",
+            &tr(lang, "Free camera (experimental)"),
+            state.store.flag("free_camera"),
+            Some(&tr(lang, FREE_CAMERA_HINT)),
         ),
         row(state.rtl, &tr(lang, "Device"), devices.into(), None),
         device_section,

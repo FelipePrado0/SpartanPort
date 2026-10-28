@@ -742,7 +742,7 @@ static void apply_dodge(PadData *d) {
     if (held || d->timestamp<dodge.until) { d->right_x=dodge.x; d->right_y=dodge.y; }
 }
 
-/* Free camera (src/runtime_camera.c, SPARTAN_FREE_CAMERA=1): the right stick turns the camera and
+/* Free camera (src/runtime_camera.c, on in the menu or the launcher): the right stick turns the camera and
  * the game does not see it, except with L1 held (the game's evade is L1 + right stick), L2 held (the
  * items' aim) or a QTE prompt up (any of them: the camera goes back to the game's, which frames the
  * scripted moves better, and the stick reaches the game for a turn). The keyboard's dodge action

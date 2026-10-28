@@ -35,7 +35,7 @@ import struct
 
 from glyphs import entries
 
-VERSION = 22  # of the patch: a change rebuilds the cached copy
+VERSION = 23  # of the patch: a change rebuilds the cached copy
 WAD = 'EXEC/WAD/PS4_LE/R_UI.WAD'
 LABELS = {
     'en': b'Exit to Desktop',
@@ -91,6 +91,22 @@ ROW_SIZE = 0x3c  # of the row's state record
 # Quit Game's reaction to the dialog being hidden by "no" (the message's first parameter is 0): input back on.
 REPLY_TEMPLATE = bytes.fromhex('01 00000000 130047 01 00000000 3f 170005 19 130069 43 49')
 MARK = 5  # the exit rows' third message parameter (Restart and Quit send two)
+
+
+def control_read(index, selected):
+    """Builtin reading Controls' control `index` (`selected`: with arrows): 0xfa4 + i (0xfb8 + i) for
+    the first six, 0xf68 (0xf69) for the free camera, the seventh."""
+    if index == 6:
+        return 0xf69 if selected else 0xf68
+    return (0xfb8 if selected else 0xfa4) + index
+
+
+def control_change(index, direction):
+    """Builtin moving Controls' control `index` left (-1) or right: 0xfaa + i and 0xfb1 + i for the
+    first six; 0xf6a toggles the free camera either way."""
+    if index == 6:
+        return 0xf6a
+    return (0xfaa if direction < 0 else 0xfb1) + index
 # Opening of FailSafeDisplay's block for message 75 ("show" when the first parameter is 1) and of
 # FailSafeYes' confirm block (it branches on the action's kind).
 SHOW_BLOCK = bytes.fromhex('01 00000000 130047 01 00000001 3f 170084')
@@ -487,7 +503,7 @@ def native_cheats(data, spans, language=None):
               ('NativeGraphicsResetNo', 'NativeGraphicsConfirm', [UP, DOWN, CONFIRM])]
     display_specs = [(f'NativeDisplay{i}', 'display', [left, right, UP, DOWN]) for i in range(8)]
     display_specs += [('NativeDisplayApply', 'display', [UP, DOWN, CONFIRM])]
-    controls_specs = [(f'NativeControl{i}', 'controls', [left, right, UP, DOWN]) for i in range(6)]
+    controls_specs = [(f'NativeControl{i}', 'controls', [left, right, UP, DOWN]) for i in range(7)]
     controls_specs += [('NativeControlsReset', 'controls', [UP, DOWN, CONFIRM]),
                       ('NativeControlsApply', 'controls', [UP, DOWN, CONFIRM])]
     specs[2:2] = controls_specs + display_specs
@@ -628,10 +644,11 @@ def native_cheats(data, spans, language=None):
                       ['Frames Queued', 'Async Shader Compilation', 'RCAS Sharpening',
                        'Sharpening Strength', 'Anisotropic Filtering', 'Restore Graphics Defaults', 'Apply and Restart'])
     controls_names = (['Tipo de controle', 'Intensidade da vibração', 'Sensibilidade da mira', 'Estilo da mira',
-                       'Distância do mouse nos QTEs', 'Prender cursor à janela', 'Restaurar padrões dos controles',
-                       'Aplicar e reiniciar'] if portuguese else
+                       'Distância do mouse nos QTEs', 'Prender cursor à janela', 'Câmera livre (experimental)',
+                       'Restaurar padrões dos controles', 'Aplicar e reiniciar'] if portuguese else
                       ['Controller Type', 'Vibration Strength', 'Mouse Aim Sensitivity', 'Mouse Aim Style',
-                       'Mouse QTE Distance', 'Keep Mouse in Window', 'Restore Controls Defaults', 'Apply and Restart'])
+                       'Mouse QTE Distance', 'Keep Mouse in Window', 'Free Camera (Experimental)',
+                       'Restore Controls Defaults', 'Apply and Restart'])
     display_names = (['Resolução', 'Proporção', 'Limite de FPS', 'FPS do motor', 'Monitor',
                       'Modo de exibição', 'VSync', 'HDR', 'Aplicar e reiniciar'] if portuguese else
                      ['Resolution', 'Aspect Ratio', 'Frame Rate Limit', 'Engine Frame Rate', 'Monitor',
@@ -866,8 +883,8 @@ def native_cheats(data, spans, language=None):
             row = first + slot
             string(controls_labels[row] if row < 3 else controls_names[row - 3])
             assign(1 + slot)
-            if 3 <= row < 9:
-                builtin((0xfb8 if row == selected else 0xfa4) + row - 3, pop=False)
+            if 3 <= row < 10:
+                builtin(control_read(row - 3, row == selected), pop=False)
                 assign(9 + slot)
             else:
                 edge = ('ArrowSelectionL', 'ArrowSelectionR') if row == selected else ('ArrowSpacer', 'ArrowSpacer')
@@ -876,7 +893,7 @@ def native_cheats(data, spans, language=None):
         string('PauseText')
         integer(1)
         builtin(0x58)
-        scrollbar(12, first, 11, 8)
+        scrollbar(12, first, 12, 8)
 
     for index, name in enumerate(n for n, p, e in controls_specs):
         row, first = index + 3, max(0, index + 3 - 7)
@@ -889,8 +906,8 @@ def native_cheats(data, spans, language=None):
         animation(row - first, 9)
         end()
         navigation(name, row, controls_rows)
-        if index < 6:
-            for kind, function in (('left', 0xfaa + index), ('right', 0xfb1 + index)):
+        if index < 7:
+            for kind, function in (('left', control_change(index, -1)), ('right', control_change(index, 1))):
                 begin(name, kind)
                 call(repeat)
                 builtin(function)
@@ -1175,7 +1192,7 @@ def native_cheats(data, spans, language=None):
     native_multiplier_bars(data)
     native_scrollbar(data, 10, 13, 8)
     native_scrollbar(data, 11, 8, 7)
-    native_scrollbar(data, 12, 11, 8)
+    native_scrollbar(data, 12, 12, 8)
 
 
 def native_scrollbar(data, index, total, visible):

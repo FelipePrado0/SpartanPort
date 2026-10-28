@@ -64,6 +64,8 @@ void spartanportgpu_mouse_pause_key(void);
 int spartanportgpu_mouse_aim_style(void);
 /* L2 aim sensitivity in percent (10 to 200), set in the menu. */
 int spartanportgpu_mouse_aim_sensitivity(void);
+/* Free camera (src/runtime_camera.c) on in the menu or the launcher; G and R3 switch it in play. */
+int spartanportgpu_free_camera(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */
 unsigned spartanportgpu_symbol_count(void);
 /* Yields of threads waiting for guest memory copies (CPU report, #209). */

@@ -307,7 +307,7 @@ pub static SETTINGS: &[Setting] = &[
         Text("keyboard"),
         env("SPARTAN_STICK_PROMPTS", ""),
     ),
-    app("controls_layout", Kind::Int, Int(4), None),
+    app("controls_layout", Kind::Int, Int(5), None),
     app(
         "glyph_style",
         Pick(GLYPH_STYLES),
@@ -348,6 +348,7 @@ pub static SETTINGS: &[Setting] = &[
     ini("mouse_aim_style", Pick(AIM_STYLES), Text("0"), true, 24),
     ini("mouse_aim_sensitivity", Kind::Int, Int(100), true, 25),
     ini("mouse_lock", Kind::Int, Int(1), true, 23),
+    ini("free_camera", Flag, Bool(false), true, 26),
     ini("vibration", Kind::Int, Int(100), true, 21),
     ini("upscaler", Pick(UPSCALERS), Text("fsr3"), false, 0),
     ini("preset", Pick(PRESETS), Text("1"), false, 1),
@@ -493,14 +494,14 @@ mod tests {
                 "cheat_very_hard"
             ]
         );
-        assert_eq!(keys.last(), Some(&"mouse_aim_sensitivity"));
+        assert_eq!(keys.last(), Some(&"free_camera"));
         let shown: Vec<_> = rows.iter().filter(|s| s.written).map(|s| s.key).collect();
         assert_eq!(shown, SHOWN_INI_KEYS.iter().copied().collect::<Vec<_>>());
     }
 
     #[test]
-    fn shown_ini_keys_are_the_21_controls_of_the_window() {
-        assert_eq!(SHOWN_INI_KEYS.len(), 21);
+    fn shown_ini_keys_are_the_22_controls_of_the_window() {
+        assert_eq!(SHOWN_INI_KEYS.len(), 22);
         for seeded in ["monitor", "hdr", "glyph_style"] {
             assert!(SHOWN_INI_KEYS.contains(&seeded), "{seeded}");
         }
@@ -561,7 +562,7 @@ mod tests {
     fn text_reads_the_default_of_an_absent_key() {
         let mut s = Settings(serde_json::Map::new());
         assert_eq!(s.text("stream_memory"), "cached");
-        assert_eq!(s.text("controls_layout"), "4");
+        assert_eq!(s.text("controls_layout"), "5");
         s.set("stream_memory", json!("host"));
         assert_eq!(s.text("stream_memory"), "host");
     }

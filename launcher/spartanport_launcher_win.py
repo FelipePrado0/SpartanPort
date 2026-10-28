@@ -472,7 +472,7 @@ def heading_font(size, fallback=None, every_language=False):
 # launcher's own settings.json (passed to run.py as environment variables).
 
 INI_FLAGS = {'cheat_double_jumps', 'cheat_very_hard', 'object_motion', 'show_fps', 'vsync', 'async_shaders', 'deferred_readback',
-             'stale_readback', 'hdr'}
+             'stale_readback', 'hdr', 'free_camera'}
 # The graphics keys are also in the in-game menu (Insert / R3+L2); run.py reads the startup ones.
 INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
@@ -481,7 +481,7 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'render_resolution': graphics_options.DEFAULTS['render_resolution'], 'engine_fps': '120',
                 'frames_queued': '1', 'monitor': '', 'hdr': '0', 'glyph_style': 'off', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
                 'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1',
-                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100'}
+                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100', 'free_camera': '0'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('100', ('100',)), ('120', ('120',)), ('144', ('144',)), ('180', ('180',)), ('240', ('240',)), ('0', ('Unlimited',))]
@@ -490,7 +490,7 @@ PAGES = ('home', 'graphics', 'performance', 'game', 'controls', 'mods', 'trophie
 PAGE_REFRESH = {'home': ('refresh_status',), 'game': ('refresh_game_patches',), 'mods': ('refresh_lists',),
                 'trophies': ('refresh_trophies',)}
 UI_SCALES = [('auto', ('Auto',)), ('1', ('1x',)), ('2', ('2x',))]
-CONTROLS_LAYOUT = 4  # settings layout: 4 = remappable keyboard stick directions (migrate_controls)
+CONTROLS_LAYOUT = 5  # settings layout: 4 = remappable keyboard stick directions, 5 = the free camera's key (migrate_controls)
 APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.get('SPARTAN_GAME_DIR', str(PORT_DIR.parent / 'CUSA01623') if WINDOWS else ''), 'update_dir': '', 'experimental_upscaler': False,
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
@@ -651,9 +651,12 @@ STICK_ROWS = (('move_up', 'W', None), ('move_down', 'S', None),
               ('move_left', 'A', None), ('move_right', 'D', None),
               ('look_up', 'Up', None), ('look_down', 'Down', None),
               ('look_left', 'Left', None), ('look_right', 'Right', None))
-KEY_ACTIONS = [*STICK_ROWS, RAGE_ROW, GRAB_ROW, DODGE_ROW, *WEAPON_ROWS]
+# Switches the free camera off and on in play (the port's camera action); on the gamepad a tap of R3
+# does it, which is not remapped.
+CAMERA_ROW = ('camera', 'G', None)
+KEY_ACTIONS = [*STICK_ROWS, RAGE_ROW, GRAB_ROW, DODGE_ROW, *WEAPON_ROWS, CAMERA_ROW]
 ACTION_NAMES = {'rage': 'Rage of Sparta', 'grab': 'Grab', 'dodge': 'Dodge',
-                'weapon_next': 'Next weapon', 'weapon_prev': 'Previous weapon',
+                'weapon_next': 'Next weapon', 'weapon_prev': 'Previous weapon', 'camera': 'Free camera on/off',
                 'move_up': 'Move forward', 'move_down': 'Move backward',
                 'move_left': 'Move left', 'move_right': 'Move right',
                 'look_up': 'Right stick up', 'look_down': 'Right stick down',
@@ -670,7 +673,7 @@ def table_rows(kind):
         rows.append(row)
         if row[0] == 'r3':
             rows.append(RAGE_ROW)
-    return rows + [GRAB_ROW, DODGE_ROW, *WEAPON_ROWS]
+    return rows + [GRAB_ROW, DODGE_ROW, *WEAPON_ROWS, CAMERA_ROW]
 MOUSE_NAMES = {name.casefold() for name in (*TK_TO_MOUSE.values(), 'Wheel Up', 'Wheel Down')}
 
 
@@ -775,6 +778,13 @@ def migrate_controls(saved):
     current_table = previous_layout in (2, 3)
     saved = dict(saved)
     controls = dict(saved['controls']) if isinstance(saved.get('controls'), dict) else {}
+    if previous_layout == 4:  # it only lacks the free camera's key
+        if isinstance(controls.get('key'), dict):
+            controls['key'] = dict(controls['key'])
+        claim_new_actions(controls, saved.get('rage_one_input', True), (CAMERA_ROW,))
+        saved['controls'] = controls
+        saved['controls_layout'] = CONTROLS_LAYOUT
+        return saved
     native = controls.pop('native', None)
     if current_table:
         if isinstance(controls.get('key'), dict):
@@ -799,6 +809,7 @@ def migrate_controls(saved):
     if 'native_rage' in saved:
         saved['rage_one_input'] = saved.pop('native_rage')
     claim_new_actions(controls, saved.get('rage_one_input', True), STICK_ROWS)
+    claim_new_actions(controls, saved.get('rage_one_input', True), (CAMERA_ROW,))
     saved['controls'] = controls
     saved['controls_layout'] = CONTROLS_LAYOUT
     return saved
@@ -2581,6 +2592,12 @@ class Launcher:
                  hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
                         'Works on a copy of up to three game files in the port\'s data folder (about 410 MB); your game folder '
                         'is never changed. Applied when the game starts.'))
+        # Both devices turn the free camera, so it stays above the device's section.
+        self.check(page, 'free_camera', 'ini', _('Free camera (experimental)'),
+                   _('Experimental. The right stick turns the camera all the way around Kratos and Kratos moves the '
+                     'way the camera looks; L1 + right stick dodges. In play, the Free camera key (G) or a tap of R3 '
+                     'on the gamepad switches it off and on, for boss fights; quick-time events and the game\'s '
+                     'camera cuts go back to the game\'s camera. Also in the in-game menu.'))
         saved_device = self.app.get('controls_device')
         self.device = tk.StringVar(value=saved_device if saved_device in dict(CONTROL_DEVICES) else 'keyboard')
         self.device_chosen = saved_device in dict(CONTROL_DEVICES)
@@ -2689,6 +2706,10 @@ class Launcher:
                 box = ttk.Label(table, text=fixed, style='Muted.TLabel')
             box.grid(row=r, column=3, sticky='w')
             self.draw_pad_icon(button)
+        # The free camera's switch: a tap of R3 alone, not remapped (R3 still reaches the game).
+        r = len(CONTROLS) + 1
+        game_button(table, r, 'camera')
+        ttk.Label(table, text=_('Tap R3'), style='Muted.TLabel').grid(row=r, column=3, sticky='w')
         self.note(f, _('L2/R2 stay on the triggers. Touchpad right opens the game\'s pause menu; Touchpad left '
                        '(photo mode) is L1 + Touchpad right. R3+L2 always opens the port\'s menu. '
                        'Applied when the game starts.'))

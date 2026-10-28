@@ -57,7 +57,8 @@ static void call_controller(unsigned char* stub, void* node, const void* manager
                    "memory", "cc");
 }
 
-// src/runtime_camera.c, linked in.
+// src/runtime_camera.c, linked in; the menu's Free camera is on.
+extern "C" int spartanportgpu_free_camera(void) { return 1; }
 extern "C" {
 int spartanport_camera_configure(void);
 void spartanport_camera_set_player_global(uintptr_t address);

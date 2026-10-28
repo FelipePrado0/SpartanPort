@@ -9,6 +9,7 @@
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "camera_hook.h"
+#include "gpu/spartanportgpu.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,7 +83,8 @@ int spartanport_camera_configure(void) {
     return 1;
 }
 
-/* The right stick turns the camera (runtime_pad.c): SPARTAN_FREE_CAMERA=1, and only with the hook in.
+/* The right stick turns the camera (runtime_pad.c) while the menu's or the launcher's Free camera is on
+ * (free_camera in spartanport.ini, SPARTAN_FREE_CAMERA) and the hook is in.
  * SPARTAN_FREE_CAMERA_DISTANCE: the pivot's distance ahead of the camera, in game units (0: in
  * place); by default the camera turns around the point it looks at (Kratos in play).
  * SPARTAN_FREE_CAMERA_LIMITS=yaw,pitch: the most it turns from the game's camera, in degrees; a
@@ -97,19 +99,18 @@ int spartanport_camera_stick_enabled(void) { return camera_stick; }
 /* The player's switch (G, a tap of R3: runtime_pad.c), for the boss fights: off, the camera goes
  * back to the game's and the right stick is the game's again. */
 static int camera_off;
-int spartanport_camera_on(void) { return !camera_off; }
+int spartanport_camera_on(void) { return spartanportgpu_free_camera() && !camera_off; }
 /* The turn from the game's camera around the vertical axis, radians (positive: to the left). */
 float spartanport_camera_yaw(void) { return camera_state.yaw; }
 void spartanport_camera_toggle(void) {
+    if (!spartanportgpu_free_camera()) return;  /* off in the menu: nothing to switch */
     camera_off = !camera_off;
     printf("Free camera: %s\n", camera_off ? "off (the game's camera)" : "on");
     fflush(stdout);
 }
 
 static void camera_configure_stick(void) {
-    const char *on = getenv("SPARTAN_FREE_CAMERA");
-    camera_stick = on && *on && strcmp(on, "0");
-    if (!camera_stick) return;
+    camera_stick = 1;
     const char *distance = getenv("SPARTAN_FREE_CAMERA_DISTANCE");
     if (distance) {
         camera_state.distance = strtof(distance, NULL);

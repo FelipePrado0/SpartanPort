@@ -22,12 +22,12 @@ class NativeCheats(unittest.TestCase):
             target = next(int.from_bytes(arg, 'big') for _, op, arg in entry if op == 0x47)
             self.assertEqual(target, self.script.one(no)['at'] - 4)
         self.script.one('NativeGraphic4')
-        for index in range(6):
+        for index in range(7):
             row = self.script.one(f'NativeControl{index}')
             self.assertEqual(row['parent'], self.script.one('PauseControls')['at'] - 4)
             for trigger, function in (([0xe6, 0xf2], 0xfaa), ([0xe2, 0xee], 0xfb1)):
-                self.assertIn(function + index, [int.from_bytes(arg, 'big') for _, op, arg
-                                               in self.block(row, 3, trigger) if op == 0x13])
+                self.assertIn(0xf6a if index == 6 else function + index,
+                              [int.from_bytes(arg, 'big') for _, op, arg in self.block(row, 3, trigger) if op == 0x13])
         for name in ('HLContDis', 'HLFreeCamera', 'HLFlightControl'):
             self.script.one(name)
         self.assertEqual(self.target('HLFlightControl', pause_menu.DOWN), self.script.one('NativeControl0')['at'] - 4)
