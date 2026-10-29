@@ -404,13 +404,18 @@ static void qte_reset(void) {
     __atomic_store_n(&spartanport_qte.pass,0,__ATOMIC_RELAXED);
 }
 
-/* The rotation (0..5) the prompt on screen asks for, else -1. A prompt is up while its update
- * keeps counting frames; QTE_ACTIVE_US without a frame ends it (and resets the minigame). */
-static int qte_rotation(uint64_t now) {
-    if (!spartanport_qte.block) return -1;
+/* A prompt is up while its update keeps counting frames: one within QTE_ACTIVE_US. */
+static bool qte_active(uint64_t now) {
+    if (!spartanport_qte.block) return false;
     const uint32_t beat=__atomic_load_n(&spartanport_qte.heartbeat,__ATOMIC_RELAXED);
     if (beat!=qte.heartbeat) { qte.heartbeat=beat; qte.seen=now; }
-    if (now-qte.seen>QTE_ACTIVE_US) { qte_reset(); return -1; }
+    return now-qte.seen<=QTE_ACTIVE_US;
+}
+
+/* The rotation (0..5) the prompt on screen asks for, else -1. A prompt that ends resets the minigame. */
+static int qte_rotation(uint64_t now) {
+    if (!spartanport_qte.block) return -1;
+    if (!qte_active(now)) { qte_reset(); return -1; }
     const unsigned type=*(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET);
     return type-QTE_FIRST_ROTATION<QTE_ROTATIONS ? (int)(type-QTE_FIRST_ROTATION) : -1;
 }
@@ -479,6 +484,25 @@ static bool qte_play(const bool *keys, uint64_t now) {
     }
     qte.fresh=false;
     return true;
+}
+
+/* The engine at 60 FPS during QTEs (gpu: spartanportgpu_engine_fps_cap, which does nothing when the
+ * menu's option is off or the engine already runs at 60): down on a prompt's first frame, back after
+ * QTE_FPS_HOLD_US more without one, so prompts in a row keep it. Atomics only on this thread. */
+enum { QTE_FPS_HOLD_US=500000 };
+static bool qte_fps_capped;
+static void qte_fps_cap(uint64_t now) {
+    if (qte_active(now)) {
+        if (!qte_fps_capped) {
+            qte_fps_capped=true;
+            spartanportgpu_engine_fps_cap_qte_type(
+                *(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET));
+            spartanportgpu_engine_fps_cap(60);
+        }
+    } else if (qte_fps_capped && now-qte.seen>QTE_ACTIVE_US+QTE_FPS_HOLD_US) {
+        qte_fps_capped=false;
+        spartanportgpu_engine_fps_cap(0);
+    }
 }
 
 static void sample_keyboard(PadData *d, const bool *keys, SDL_MouseButtonFlags mouse, const bool wheel[2]) {
@@ -968,6 +992,7 @@ static void overlay_chords(PadData *d) {
 static int hold_after_capture;
 static void sample(PadData *d) {
     sample_host(d);
+    qte_fps_cap(d->timestamp);
     if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); reset_switch_attack(); return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */
     read_inject();
