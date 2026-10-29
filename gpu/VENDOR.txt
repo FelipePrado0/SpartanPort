@@ -12,3 +12,4 @@ Backported from upstream after b4e7ae7 (2026-10-02), correctness fixes:
   359234bbb SlotVector allocation bitset bounds check (#5158).
   ca36c7e31 subresource extents compared per dimension (#5524).
   7ea677e56 packet sizes read before the packet runs (#5541).
+  2338a06f9 device-scaled texture GC floors only (#5193), via Julio Cacko c7d495ce3d.
