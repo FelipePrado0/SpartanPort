@@ -429,6 +429,11 @@ add_executable(graphics-settings-test EXCLUDE_FROM_ALL ../tests/test_graphics_se
     shim/spartanport_settings.cpp)
 target_include_directories(graphics-settings-test PRIVATE shim)
 target_compile_options(graphics-settings-test PRIVATE -UNDEBUG)
+add_executable(menu-confirm-swap-test EXCLUDE_FROM_ALL ../tests/test_menu_confirm_swap.cpp
+    shim/spartanport_settings.cpp)
+target_include_directories(menu-confirm-swap-test PRIVATE shim third_party/imgui)
+target_link_libraries(menu-confirm-swap-test PRIVATE PkgConfig::SDL3)
+target_compile_options(menu-confirm-swap-test PRIVATE -UNDEBUG)
 add_executable(actor-hook-test EXCLUDE_FROM_ALL ../tests/test_actor_hook.cpp)
 target_include_directories(actor-hook-test PRIVATE shim)
 target_compile_options(actor-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)

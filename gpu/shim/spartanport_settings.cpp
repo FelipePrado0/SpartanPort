@@ -31,6 +31,20 @@ float Clamp(float v, float lo, float hi) {
     return std::clamp(v, lo, hi);
 }
 
+bool EqualsIgnoreCase(std::string_view a, std::string_view b) {
+    const size_t start = a.find_first_not_of(" \t\r\n");
+    if (start == std::string_view::npos) return b.empty();
+    const size_t end = a.find_last_not_of(" \t\r\n");
+    a = a.substr(start, end - start + 1);
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void Set(Values& v, const std::string& key, const std::string& value) {
     const float f = float(std::atof(value.c_str()));
     const int i = std::atoi(value.c_str());
@@ -136,6 +150,19 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         for (int style = 0; style < 5; ++style) if (value == GlyphStyles[style]) v.glyph_style = style;
     } else if (key == "vibration") {
         v.vibration = value.empty() ? 100 : std::clamp(i, 0, 100);
+    } else if (key == "menu_confirm_swap") {
+        v.menu_confirm_swap = (i != 0 || EqualsIgnoreCase(value, "1") ||
+                               EqualsIgnoreCase(value, "circle") || EqualsIgnoreCase(value, "swapped") ||
+                               EqualsIgnoreCase(value, "true") || EqualsIgnoreCase(value, "yes") ||
+                               EqualsIgnoreCase(value, "on")) ? 1 : 0;
+        v.menu_confirm_swap_explicit = true;
+    } else if (key == "menu_confirm") {
+        if (!v.menu_confirm_swap_explicit) {
+            v.menu_confirm_swap = (EqualsIgnoreCase(value, "circle") || EqualsIgnoreCase(value, "swapped") ||
+                                   EqualsIgnoreCase(value, "1") || EqualsIgnoreCase(value, "true") ||
+                                   EqualsIgnoreCase(value, "yes") || EqualsIgnoreCase(value, "on") ||
+                                   i == 1) ? 1 : 0;
+        }
     } else if (key == "mouse_prompt_distance") {
         v.mouse_prompt_distance = value.empty() ? 48 : std::clamp(i, 16, 200);
     } else if (key == "mouse_lock") {
@@ -194,6 +221,8 @@ Values& Get() {
 
 void Load() {
     auto& v = Get();
+    v.menu_confirm_swap = 0;
+    v.menu_confirm_swap_explicit = false;
     if (FILE* file = std::fopen(Path(), "r")) {
         char line[256];
         while (std::fgets(line, sizeof(line), file)) {
@@ -234,6 +263,15 @@ void Load() {
         if (const char* value = std::getenv(env); value && value[0]) {
             Set(v, key, value);
         }
+    }
+    // Menu confirm button environment overrides: primary SPARTAN_MENU_CONFIRM_SWAP takes
+    // precedence over alias SPARTAN_MENU_CONFIRM.
+    if (const char* env = std::getenv("SPARTAN_MENU_CONFIRM_SWAP"); env && env[0]) {
+        v.menu_confirm_swap_explicit = false;
+        Set(v, "menu_confirm_swap", env);
+    } else if (const char* env = std::getenv("SPARTAN_MENU_CONFIRM"); env && env[0]) {
+        v.menu_confirm_swap_explicit = false;
+        Set(v, "menu_confirm", env);
     }
     v.startup_preset = v.preset;
     v.startup_upscaler = v.upscaler;
@@ -400,9 +438,9 @@ void Save() {
                  resolution_names[std::clamp(v.render_resolution.load(), 0, int(resolution_names.size()) - 1)].c_str(),
                  v.engine_fps.load(), int(v.deferred_readback.load()), int(v.stale_readback.load()),
                  int(v.restart_unconfirmed.load()));
-    std::fprintf(file, "anisotropy=%d\nvibration=%d\nmouse_prompt_distance=%d\nmouse_lock=%d\nmouse_aim_style=%d\n"
+    std::fprintf(file, "anisotropy=%d\nvibration=%d\nmenu_confirm_swap=%d\nmouse_prompt_distance=%d\nmouse_lock=%d\nmouse_aim_style=%d\n"
                        "mouse_aim_sensitivity=%d\n",
-                 v.anisotropy.load(), v.vibration.load(), v.mouse_prompt_distance.load(), int(v.mouse_lock.load()),
+                 v.anisotropy.load(), v.vibration.load(), v.menu_confirm_swap.load(), v.mouse_prompt_distance.load(), int(v.mouse_lock.load()),
                  v.mouse_aim_style.load(), v.mouse_aim_sensitivity.load());
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
@@ -456,6 +494,10 @@ extern "C" uintptr_t spartanport_graphics_flag(unsigned id) {
 
 extern "C" void spartanport_graphics_status(unsigned id) {
     if (GraphicsToggle(id)) SpartanSettings::Get().graphics_supported.fetch_or(1u << id);
+}
+
+extern "C" int spartanportgpu_menu_confirm_swap(void) {
+    return SpartanSettings::Get().menu_confirm_swap.load(std::memory_order_relaxed);
 }
 
 extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {

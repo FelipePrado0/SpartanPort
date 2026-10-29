@@ -23,7 +23,7 @@ use crate::core::controls::{
 use crate::core::gpu::connected_gamepad;
 use crate::core::i18n::{tr, tr_fmt};
 use crate::core::ini::INI_DEFAULTS;
-use crate::core::options::{AIM_STYLES, GLYPH_STYLES, STICK_PROMPTS};
+use crate::core::options::{AIM_STYLES, GLYPH_STYLES, MENU_CONFIRM_STYLES, STICK_PROMPTS};
 use crate::core::platform::tool::SystemTools;
 use crate::core::settings::Settings;
 use crate::ui::app::{apply_set, Message, State};
@@ -95,6 +95,7 @@ const AIM_STYLE_HINT: &str = "Aiming with the mouse while L2 is held (Head of He
 const SENSITIVITY_HINT: &str = "Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.";
 const MOUSE_LOCK_HINT: &str = "While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.";
 const VIBRATION_HINT: &str = "Strength of the gamepad's vibration; 0% turns it off.";
+const CONFIRM_HINT: &str = "Which button confirms choices in save/load dialogs and menu lists. Default: Cross confirms, Circle cancels. Swapped: Circle confirms, Cross cancels. Does not change gameplay or combat controls.";
 const PAD_NOTE: &str = "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.";
 
 /// Side of a button icon.
@@ -893,6 +894,17 @@ fn gamepad_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
             &tr(lang, "Vibration"),
             slider("vibration", 0.0, 100.0, "%", ini_number(state, "vibration")),
             Some(&tr(lang, VIBRATION_HINT)),
+        ),
+        row(
+            state.rtl,
+            &tr(lang, "Menu confirmation"),
+            select(
+                "menu_confirm_swap",
+                MENU_CONFIRM_STYLES,
+                &state.store.text("menu_confirm_swap"),
+                lang,
+            ),
+            Some(&tr(lang, CONFIRM_HINT)),
         ),
         container(lines).padding(Padding::ZERO.top(12)),
         note(tr(lang, PAD_NOTE)),

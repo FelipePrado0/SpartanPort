@@ -72,6 +72,16 @@ static ABI int32_t user_event(int32_t *event) {
 
 /* ---- SystemService ---- */
 static int language(void) { const char *v=getenv("SPARTAN_LANGUAGE"); return v ? atoi(v) : 1; }
+static int menu_confirm_is_swapped(const char *s) {
+    if (!s) return 0;
+    while (*s==' ' || *s=='\t') s++;
+    if (!strcmp(s,"1")) return 1;
+#ifdef _WIN32
+    return !_stricmp(s,"circle") || !_stricmp(s,"swapped") || !_stricmp(s,"true") || !_stricmp(s,"yes") || !_stricmp(s,"on");
+#else
+    return !strcasecmp(s,"circle") || !strcasecmp(s,"swapped") || !strcasecmp(s,"true") || !strcasecmp(s,"yes") || !strcasecmp(s,"on");
+#endif
+}
 static ABI int32_t system_param(int32_t id,int32_t *value) {
     if (!value) return SYSTEM_PARAMETER;
     switch (id) {
@@ -85,7 +95,18 @@ static ABI int32_t system_param(int32_t id,int32_t *value) {
 #endif
     case 5: *value=0; break;                    /* summer time */
     case 7: *value=0; break;                    /* parental level off */
-    case 1000: *value=1; break;                 /* enter button = cross */
+    case 1000: {
+        const char *v=getenv("SPARTAN_MENU_CONFIRM_SWAP");
+        if (!v || !*v) v=getenv("SPARTAN_MENU_CONFIRM");
+        int swapped=0;
+        if (v && *v) {
+            swapped=menu_confirm_is_swapped(v);
+        } else {
+            swapped=spartanportgpu_menu_confirm_swap();
+        }
+        *value=swapped ? 0 : 1;                 /* enter button: 1 = cross, 0 = circle */
+        break;
+    }
     default: fprintf(stderr,"STOP: unsupported system parameter %d\n",id); exit(21);
     }
     return 0;

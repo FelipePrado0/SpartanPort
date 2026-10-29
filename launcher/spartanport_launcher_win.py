@@ -481,7 +481,7 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'render_resolution': graphics_options.DEFAULTS['render_resolution'], 'engine_fps': '120',
                 'frames_queued': '1', 'monitor': '', 'hdr': '0', 'glyph_style': 'off', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
                 'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1',
-                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100'}
+                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100', 'menu_confirm_swap': '0'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('100', ('100',)), ('120', ('120',)), ('144', ('144',)), ('180', ('180',)), ('240', ('240',)), ('0', ('Unlimited',))]
@@ -500,7 +500,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
                 'rage_one_input': True, 'stick_prompts': 'keyboard', 'controls_layout': CONTROLS_LAYOUT,
-                'switch_attacks': False, 'glyph_style': 'off'}
+                'switch_attacks': False, 'glyph_style': 'off', 'menu_confirm_swap': '0'}
 
 # PS4 button, default key, default gamepad button (SDL names; src/runtime_pad.c). L2/R2 come
 # from the analog triggers and the left touchpad click (photo mode) from L1 + the right click's
@@ -566,6 +566,8 @@ STICK_PROMPTS = [('keyboard', ('Keyboard (native)',)), ('mouse', ('Adaptive mous
 AIM_STYLES = [('0', ('Relative',)), ('1', ('Absolute',))]
 GLYPH_STYLES = [('off', ('Original (default)',)), ('auto', ('Match my controller',)), ('xbox', ('Xbox',)),
                 ('nintendo', ('Nintendo',)), ('keyboard', ('Keyboard',))]
+MENU_CONFIRM_STYLES = [('0', ('Cross confirms, Circle cancels (default)',)),
+                       ('1', ('Circle confirms, Cross cancels',))]
 
 
 # Keyboard capture on the Controls page: the Tk keysym of a pressed key and the SDL scancode
@@ -890,14 +892,33 @@ def load_ini():
         legacy = {}
     values.update(monitor=str(legacy.get('monitor') or ''), hdr='1' if legacy.get('hdr') else '0')
     values['glyph_style'] = legacy.get('glyph_style', 'off')
+    if 'menu_confirm_swap' in legacy:
+        leg_val = str(legacy['menu_confirm_swap']).strip().lower()
+        values['menu_confirm_swap'] = '1' if leg_val in ('1', 'true', 'circle', 'swapped', 'yes', 'on') else '0'
+    elif 'menu_confirm' in legacy:
+        leg_val = str(legacy['menu_confirm']).strip().lower()
+        values['menu_confirm_swap'] = '1' if leg_val in ('circle', 'swapped', '1', 'true', 'yes', 'on') else '0'
+    else:
+        values['menu_confirm_swap'] = '0'
     try:
         lines = ini_path().read_text(encoding='utf-8').splitlines()
     except OSError:
         pass
+    ini_swap = None
+    ini_alias = None
     for line in lines:
         if '=' in line and not line.lstrip().startswith('#'):
             key, value = line.split('=', 1)
-            values[key.strip()] = value.strip()
+            k, v = key.strip(), value.strip()
+            values[k] = v
+            if k == 'menu_confirm_swap':
+                ini_swap = v
+            elif k == 'menu_confirm':
+                ini_alias = v
+    if ini_swap is not None:
+        values['menu_confirm_swap'] = '1' if str(ini_swap).strip().lower() in ('1', 'true', 'circle', 'swapped', 'yes', 'on') else '0'
+    elif ini_alias is not None:
+        values['menu_confirm_swap'] = '1' if str(ini_alias).strip().lower() in ('circle', 'swapped', '1', 'true', 'yes', 'on') else '0'
     return values, lines
 
 
@@ -1353,6 +1374,17 @@ def game_environment(s):
     env.pop('SPARTAN_GLYPH_STYLE', None)
     if glyph_style in ('auto', 'xbox', 'nintendo', 'keyboard'):
         env['SPARTAN_GLYPH_STYLE'] = glyph_style
+    menu_confirm_swap = s.get('menu_confirm_swap')
+    if menu_confirm_swap is None:
+        if 'menu_confirm' in s:
+            menu_confirm_swap = '1' if str(s['menu_confirm']).strip().lower() in ('circle', 'swapped', '1', 'true', 'yes', 'on') else '0'
+        else:
+            ini_vals, _ = load_ini()
+            menu_confirm_swap = ini_vals.get('menu_confirm_swap', '0')
+    env.pop('SPARTAN_MENU_CONFIRM_SWAP', None)
+    env.pop('SPARTAN_MENU_CONFIRM', None)
+    if str(menu_confirm_swap).strip().lower() in ('1', 'true', 'circle', 'swapped', 'yes', 'on'):
+        env['SPARTAN_MENU_CONFIRM_SWAP'] = '1'
     env['PYTHONUNBUFFERED'] = '1'
     env['PYTHONIOENCODING'] = 'utf-8'
     return env
@@ -2672,6 +2704,10 @@ class Launcher:
                             command=self.relabel_pad_controls).pack(side='left', padx=self.px((0, 14)))
         self.row(f, _('Controller type'), names)
         self.row(f, _('Vibration'), slider('vibration', 0, 100, '%', f), _("Strength of the gamepad's vibration; 0% turns it off."))
+        self.row(f, 'Menu confirmation', self.choice(f, 'menu_confirm_swap', 'ini', MENU_CONFIRM_STYLES),
+                 hint='Which button confirms choices in save/load dialogs and menu lists. '
+                      'Default: Cross confirms, Circle cancels. Swapped: Circle confirms, Cross cancels. '
+                      'Does not change gameplay or combat controls.')
         table = mapping_table(f)
         for r, (button, _key, pad) in enumerate(CONTROLS, start=1):
             game_button(table, r, button)
@@ -3255,6 +3291,7 @@ class Launcher:
         app['controls'] = {kind: control_changes({b: v.get() for b, v in vars_.items()}, kind)
                            for kind, vars_ in self.control_vars.items()}
         app['pad_style'] = self.pad_style.get()
+        app['menu_confirm_swap'] = ini.get('menu_confirm_swap', '0')
         if getattr(self, 'device_chosen', False):  # an untouched first choice stays automatic
             app['controls_device'] = self.device.get()
         mods = {'order': list(self.mod_order),
