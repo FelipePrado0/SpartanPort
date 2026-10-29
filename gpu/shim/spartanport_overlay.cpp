@@ -539,8 +539,6 @@ void ImageTab() {
     }
     Separator("Effects");
     if (BeginRows("##effects")) {
-        CheckRow("Motion blur", s.motion_blur,
-                 "The game's own motion blur on fast moving objects and the camera. Off removes it.");
         CheckRow("Depth of field", s.depth_of_field,
                  "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.");
         ImGui::EndTable();
