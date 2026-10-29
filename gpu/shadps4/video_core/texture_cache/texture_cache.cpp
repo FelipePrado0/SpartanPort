@@ -503,13 +503,8 @@ void TextureCache::SynchronizeAlias(ImageId image_id) {
         return;
     }
     AliasState& state = state_it.value();
-    if (!IsLiveImage(state.backing, state.backing_uid)) {
-        if (!IsLiveImage(state.writer, state.writer_uid)) {
-            state.ResetAuthority();
-            return;
-        }
-        state.backing = state.writer, state.backing_uid = state.writer_uid;
-        state.writer = {}, state.writer_uid = 0;
+    if (!ResolveAliasBacking(state, [this](ImageId id, u64 uid) { return IsLiveImage(id, uid); })) {
+        return;
     }
     if (state.writer == image_id && state.writer_uid == dst.image_uid) {
         return;
@@ -1834,10 +1829,7 @@ void TextureCache::DeleteImage(ImageId image_id) {
         AliasState& state = alias_it.value();
         // ponytail: no copy here (DeleteImage also runs on guest threads through UnmapMemory,
         // which must not record commands); the aliases then re-read guest memory.
-        if ((state.writer == image_id && state.writer_uid == image.image_uid) ||
-            (state.backing == image_id && state.backing_uid == image.image_uid)) {
-            state.ResetAuthority();
-        }
+        ForgetAliasMember(state, image_id, image.image_uid);
         if (state.members <= 2) {
             ForEachAlias(image, [](ImageId, Image& candidate) {
                 candidate.flags &= ~ImageFlagBits::Aliased;

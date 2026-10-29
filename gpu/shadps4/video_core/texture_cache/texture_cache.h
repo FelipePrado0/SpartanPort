@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include "video_core/texture_cache/alias_state.h"
 #include "video_core/texture_cache/readback_queue.h"
 #include "video_core/texture_cache/readback_sources.h"
 #include <chrono>
@@ -537,20 +538,6 @@ private:
     std::mutex backing_writes_mutex;
     std::vector<std::pair<VAddr, u64>> backing_writes;
     std::atomic<bool> has_backing_writes{false};
-    /// spartanport: images with the same guest address (guarded by `mutex`). `backing` holds the
-    /// complete contents; `writer` is a newer write not yet copied into it.
-    struct AliasState {
-        u64 backing_uid{};
-        u64 writer_uid{};
-        ImageId backing{};
-        ImageId writer{};
-        u32 members{};
-        void ResetAuthority() {
-            const u32 count = members;
-            *this = {};
-            members = count;
-        }
-    };
     tsl::robin_map<VAddr, AliasState> alias_states;
     std::atomic<u64> alias_generation{};
     [[nodiscard]] bool IsLiveImage(ImageId image_id, u64 image_uid) const {
