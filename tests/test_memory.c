@@ -255,7 +255,7 @@ static void hook_queue_grows(void) {
     for (unsigned i = 0; i < PIECES; i += 2) CHECK(kernel_mprotect(m + i * PAGE, PAGE, 1) == 0);
     const size_t before = pending_capacity;
     write_lock();
-    CHECK(unmap_locked((uintptr_t)m, PIECES * PAGE) == 0); /* one HOOK_UNMAP per piece */
+    CHECK(unmap_locked((uintptr_t)m, PIECES * PAGE, "munmap") == 0); /* one HOOK_UNMAP per piece */
     CHECK(pending_count >= PIECES && pending_capacity >= pending_count && pending_capacity > before);
     write_unlock();
     flush_hooks();

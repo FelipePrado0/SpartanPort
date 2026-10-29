@@ -108,6 +108,8 @@ if [[ ${1:-} == --test ]]; then
     out/runtime-test
     "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_memory.c -o out/memory-test
     out/memory-test
+    "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_memory_trace.c -o out/memory-trace-test
+    out/memory-trace-test
     "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_low_handles.c src/runtime_memory.c src/runtime_mutex.c -o out/low-handles-test
     out/low-handles-test
     "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_memory_read_backing.c -o out/memory-read-backing-test
