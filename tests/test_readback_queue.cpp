@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cassert>
 #include <vector>
+#include <cstring>
 #include "video_core/texture_cache/readback_queue.h"
 
 int main() {
@@ -71,4 +72,52 @@ int main() {
     published.clear();
     queue.Retire([](auto) { return true; }, complete);
     assert((published == std::vector<int>{8}));
+    // Integrity: copies publish bytes into a model of guest memory (as RetireReadbacks does with
+    // TryWriteBacking). Payload = fill byte.
+    {
+        constexpr std::uint64_t base = 0x40000000, page = 0x4000; // runtime_memory unmaps 16 KiB pages
+        std::vector<std::uint8_t> ram(4 * page, 0);
+        VideoCore::ReadbackQueue<int> copies;
+        auto publish = [&](auto& entry) {
+            if (entry.valid) std::memset(&ram[entry.address - base], entry.payload, entry.size);
+        };
+        auto all = [](auto) { return true; };
+        auto at = [&](std::uint64_t address) { return ram[address - base]; };
+
+        // Remap: generation A's pending copy, then UnmapMemory (CancelReadbacks over the unmapped
+        // pages) and generation B written by the new mapping. Draining the old copy afterwards
+        // must not overwrite B; a neighbor's copy outside the unmapped pages still lands.
+        copies.Push(base + page, 0x1000, 20, 0xA1);
+        copies.Push(base + 2 * page + 0x100, 0x200, 20, 0xC3);
+        copies.Cancel(base + page, page, [](auto&) {});
+        std::memset(&ram[page], 0xB2, page);
+        copies.Retire(all, publish);
+        assert(at(base + page) == 0xB2 && at(base + page + 0xfff) == 0xB2);
+        assert(at(base + 2 * page + 0x100) == 0xC3 && at(base + 2 * page + 0xff) == 0);
+
+        // Two copies of the same bytes (an older and a newer generation): the newer one wins, and
+        // a newer copy never retires before an older one still on the GPU.
+        copies.Push(base, 0x100, 21, 0x11);
+        copies.Push(base, 0x100, 22, 0x22);
+        copies.Retire([](auto tick) { return tick == 22; }, publish);
+        assert(at(base) == 0);
+        copies.Retire(all, publish);
+        assert(at(base) == 0x22);
+
+        // Neighbors on one page: freeing image A (FreeImage resolves A, DeleteImage cancels A's
+        // exact bytes) neither waits for nor cancels B's copy, and B's bytes stay B's.
+        const std::uint64_t a = base + 3 * page, b = a + 0x800;
+        copies.Push(a, 0x800, 23, 0xAA);
+        copies.Push(b, 0x800, 24, 0xBB);
+        assert(copies.RequiredTick(a, 0x800, true) == 23);
+        copies.Retire([](auto tick) { return tick <= 23; }, publish);   // A resolved
+        unsigned dropped = 0;
+        copies.Cancel(a, 0x800, [&](auto&) { ++dropped; }, true);       // A deleted
+        assert(dropped == 0 && copies.RequiredTick(b, 0x800, true) == 24);
+        std::memset(&ram[a - base], 0x5A, 0x800);                       // guest reuses A's bytes
+        copies.Retire(all, publish);
+        assert(at(a) == 0x5A && at(a + 0x7ff) == 0x5A);
+        assert(at(b) == 0xBB && at(b + 0x7ff) == 0xBB);
+        assert(copies.Bytes() == 0);
+    }
 }
