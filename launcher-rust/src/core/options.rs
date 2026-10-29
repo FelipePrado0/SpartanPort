@@ -74,15 +74,21 @@ pub static FPS_LIMITS: &[Choice] = &[
     c("0", "Unlimited"),
 ];
 
-/// GUI Scale (R90): absolute zooms, 1x by default.
-pub static UI_SCALES: &[Choice] = &[c("1", "1x"), c("1.5", "1.5x")];
+/// GUI Scale: Auto by default (the desktop's scale, fitted to the screen), or the absolute zooms
+/// of R90.
+pub static UI_SCALES: &[Choice] = &[
+    c("auto", "Auto (fits the screen)"),
+    c("1", "1x"),
+    c("1.5", "1.5x"),
+];
 
-/// The GUI Scale choice a stored value stands for: an older file's "2" is 1.5x, and its "auto"
-/// (which followed the desktop) or anything unknown is 1x.
+/// The GUI Scale choice a stored value stands for: an older file's "2" is 1.5x, and anything
+/// unknown is Auto.
 pub fn ui_scale_choice(stored: &str) -> &'static str {
     match stored {
+        "1" => "1",
         "1.5" | "2" => "1.5",
-        _ => "1",
+        _ => "auto",
     }
 }
 
@@ -504,17 +510,18 @@ mod tests {
     }
 
     #[test]
-    fn gui_scale_is_1x_or_1_5x() {
-        // R90: two choices, 1x first; what an older file stored is shown as the closest one.
+    fn gui_scale_is_auto_1x_or_1_5x() {
+        // Auto first (the default), then the absolute zooms of R90; what an older file stored is
+        // shown as the closest one, and anything unknown as Auto.
         let values: Vec<&str> = UI_SCALES.iter().map(|choice| choice.value).collect();
-        assert_eq!(values, ["1", "1.5"]);
+        assert_eq!(values, ["auto", "1", "1.5"]);
         for (stored, shown) in [
             ("1", "1"),
             ("1.5", "1.5"),
-            ("auto", "1"),
+            ("auto", "auto"),
             ("2", "1.5"),
-            ("", "1"),
-            ("bogus", "1"),
+            ("", "auto"),
+            ("bogus", "auto"),
         ] {
             assert_eq!(ui_scale_choice(stored), shown, "{stored:?}");
         }

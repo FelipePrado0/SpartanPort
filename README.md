@@ -209,13 +209,13 @@ Settings are kept in `spartanport.ini` (the game and the in-game menu) and in
 `settings.json` (the launcher), in the port folder. Saves, the shader cache and
 `last_run.log` go to the project's `user` folder.
 
-**GUI Scale:** choose **Auto**, **1x** or **2x** under **Advanced → Launcher**,
-then click **Save**. Text, controls and layout resize together, without changing
-game resolution. Auto follows the desktop scale the window system reports to the Rust
-launcher (Windows display scaling; the Wayland or X11 scale on Linux). On macOS, Retina
-scaling stays with the operating system. Manual 1x/2x sets the launcher's logical size, including text,
-icons, controls, scrollbars and spacing. Screen resolution alone does not select
-a scale. The choice is saved in `settings.json`.
+**GUI Scale:** choose **Auto (fits the screen)** (the default), **1x** or **1.5x** under
+**Advanced → Launcher**, then click **Save**. Text, controls and layout resize together, without
+changing game resolution. Auto follows the desktop scale the window system reports (Windows display
+scaling, Retina on macOS, the Wayland or X11 scale on Linux), lowered when needed so the
+1280 × 800 window fits in 90 % of the monitor, and never below 1x. It is worked out again when
+the window moves to a monitor with another scale. 1x and 1.5x are fixed sizes in screen pixels,
+whatever the desktop scale. The choice is saved in `settings.json`.
 
 On **Performance → GPU data → Stream buffer memory**, choose **System RAM (cached, default)**,
 **System RAM (uncached)** or **GPU memory (previous behavior)**. System RAM can improve frame
