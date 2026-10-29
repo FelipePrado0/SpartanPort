@@ -10,8 +10,25 @@
 #include <atomic>
 #include <cstdint>
 #include <vector>
+#include <string_view>
 
 namespace SpartanSettings {
+
+/// Speaker layout the game's 7.1 audio is mixed down to (src/runtime_audio.c): the playback
+/// device's own, stereo, 5.1 or 7.1. spartanport.ini and SPARTAN_AUDIO_CHANNELS name them as below.
+enum AudioChannels : int { AudioChannelsAuto = 0, AudioStereo, Audio51, Audio71, AudioChannelsCount };
+inline constexpr std::string_view AudioChannelKeys[AudioChannelsCount] = {"auto", "stereo", "5.1", "7.1"};
+/// A layout key (also "2.0", "6" and "8"); anything else is automatic.
+inline int ParseAudioChannels(std::string_view value) {
+    for (int c = 0; c < AudioChannelsCount; ++c) {
+        if (value == AudioChannelKeys[c]) return c;
+    }
+    if (value == "2.0" || value == "2") return AudioStereo;
+    if (value == "6") return Audio51;
+    if (value == "8") return Audio71;
+    return AudioChannelsAuto;
+}
+inline constexpr int MasterVolumeMin = 0, MasterVolumeMax = 200, MasterVolumeDefault = 100;
 
 enum Upscaler : int { UpscalerOff = 0, UpscalerFsr3 = 1, UpscalerFsr4 = 2, UpscalerFsr411 = 3,
                       UpscalerTaa = 4, UpscalerDlss = 5, UpscalerCount };
@@ -78,6 +95,8 @@ struct Values {
     /// Options > Graphics (src/graphics_hook.h): the game's bloom and motion blur, on by default.
     /// The hooks read these bytes every frame. graphics_supported: bit per SPARTAN_GRAPHICS_* id.
     std::atomic<bool> bloom{true};
+    /// The one motion blur setting (ini key motion_blur, SPARTAN_MOTION_BLUR): read by the game hook
+    /// and by the renderer, which also skips the blur's draws when it is off (spartanport_motion_blur.h).
     std::atomic<bool> motion_blur{true};
     std::atomic<bool> shadows{true};
     std::atomic<uint32_t> graphics_supported{0};
@@ -97,6 +116,8 @@ struct Values {
     std::atomic<bool> fsr1{false};
     std::atomic<bool> rcas{true};
     std::atomic<int> rcas_strength{75};
+    /// The game's depth of field (spartanport_depth_of_field.h); off keeps the whole picture sharp. Live.
+    std::atomic<bool> depth_of_field{true};
     /// Set by the presenter: sharpening ran on the last frame (it needs FSR 1 when the game's
     /// image is smaller than the window).
     std::atomic<bool> rcas_applied{false};
@@ -110,6 +131,12 @@ struct Values {
     bool menu_confirm_swap_explicit{false};
     std::atomic<int> glyph_style{0}; ///< PlayStation, Xbox, Nintendo, keyboard, legacy automatic
     int startup_glyph_style = 0;
+    /// Master volume of the game's audio in percent, 0 to 200: above 100 boosts the mix behind a
+    /// soft limiter (src/runtime_audio.c). Live.
+    std::atomic<int> master_volume{MasterVolumeDefault};
+    /// Speaker layout of the game's 7.1 audio (AudioChannels). Read when the game opens its
+    /// audio ports, so a change applies from the next start.
+    std::atomic<int> audio_channels{AudioChannelsAuto};
     /// Mouse movement in px that counts as one step of a stick prompt (runtime_pad.c). Live.
     std::atomic<int> mouse_prompt_distance{48};
     /// Keep the mouse in the game window while the game has it (window.cpp). Live.

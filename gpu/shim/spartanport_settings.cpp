@@ -138,6 +138,8 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.fsr1 = false;
     } else if (key == "rcas") {
         v.rcas = i != 0;
+    } else if (key == "depth_of_field") {
+        v.depth_of_field = i != 0;
     } else if (key == "rcas_strength") {
         v.rcas_strength = SpartanGraphics::ParseRcasStrength(value.empty() ? -1 : i);
     } else if (key == "frames_queued") {
@@ -170,6 +172,10 @@ void Set(Values& v, const std::string& key, const std::string& value) {
                                    EqualsIgnoreCase(value, "yes") || EqualsIgnoreCase(value, "on") ||
                                    i == 1) ? 1 : 0;
         }
+    } else if (key == "master_volume") {
+        v.master_volume = value.empty() ? MasterVolumeDefault : std::clamp(i, MasterVolumeMin, MasterVolumeMax);
+    } else if (key == "audio_channels") {
+        v.audio_channels = ParseAudioChannels(value);
     } else if (key == "mouse_prompt_distance") {
         v.mouse_prompt_distance = value.empty() ? 48 : std::clamp(i, 16, 200);
     } else if (key == "mouse_lock") {
@@ -262,9 +268,11 @@ void Load() {
         {"SPARTAN_STALE_READBACK", "stale_readback"},     {"SPARTAN_FSR1", "fsr1"},
         {"SPARTAN_RCAS", "rcas"},                        {"SPARTAN_FRAMES_AHEAD", "frames_queued"},
         {"SPARTAN_ANISOTROPY", "anisotropy"},            {"SPARTAN_VIBRATION", "vibration"},
+        {"SPARTAN_AUDIO_VOLUME", "master_volume"},       {"SPARTAN_AUDIO_CHANNELS", "audio_channels"},
         {"SPARTAN_MOUSE_PROMPT_DISTANCE", "mouse_prompt_distance"}, {"SPARTAN_MOUSE_LOCK", "mouse_lock"},
         {"SPARTAN_MOUSE_AIM_STYLE", "mouse_aim_style"}, {"SPARTAN_MOUSE_AIM_SENSITIVITY", "mouse_aim_sensitivity"},
-        {"SPARTAN_AUTO_QTE", "auto_qte"},
+        {"SPARTAN_AUTO_QTE", "auto_qte"},                {"SPARTAN_MOTION_BLUR", "motion_blur"},
+        {"SPARTAN_DEPTH_OF_FIELD", "depth_of_field"},
         {"SPARTAN_MONITOR", "monitor"}, {"SPARTAN_HDR", "hdr"},
         {"SPARTAN_GLYPH_STYLE", "glyph_style"},
     };
@@ -455,6 +463,9 @@ void Save() {
                        "mouse_aim_sensitivity=%d\n",
                  v.anisotropy.load(), v.vibration.load(), v.menu_confirm_swap.load(), v.mouse_prompt_distance.load(), int(v.mouse_lock.load()),
                  v.mouse_aim_style.load(), v.mouse_aim_sensitivity.load());
+    std::fprintf(file, "depth_of_field=%d\n", int(v.depth_of_field.load()));
+    std::fprintf(file, "master_volume=%d\naudio_channels=%s\n", v.master_volume.load(),
+                 AudioChannelKeys[std::clamp(v.audio_channels.load(), 0, AudioChannelsCount - 1)].data());
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");
