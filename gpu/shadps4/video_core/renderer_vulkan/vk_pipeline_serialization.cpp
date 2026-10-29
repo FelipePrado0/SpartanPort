@@ -853,6 +853,10 @@ bool PipelineCache::LoadComputePipeline(Serialization::Archive& ar) {
             auto pipeline = std::make_unique<ComputePipeline>(instance, scheduler, desc_heap,
                                                               profile, *pipeline_cache, key, *info,
                                                               module, sdata, true);
+            // spartanport: leave a null reservation so the failed-slot sweep can remove it.
+            if (!pipeline->IsValid()) {
+                return false;
+            }
             std::scoped_lock lock{warmup_results_mutex};
             warmup_compute.emplace_back(key, std::move(pipeline));
             return true;
@@ -866,6 +870,11 @@ bool PipelineCache::LoadComputePipeline(Serialization::Archive& ar) {
     sel.infos.fill(nullptr);
     sel.modules.fill(nullptr);
 
+    // spartanport: drop refused preload entries so runtime can retry with the live shaders.
+    if (!warmup_pool && !it.value()->IsValid()) {
+        compute_pipelines.erase(compute_key);
+        return false;
+    }
     return true;
 }
 
@@ -941,6 +950,10 @@ bool PipelineCache::LoadGraphicsPipeline(Serialization::Archive& ar) {
             auto pipeline = std::make_unique<GraphicsPipeline>(
                 instance, scheduler, desc_heap, profile, key, *pipeline_cache, infos,
                 runtime_infos, fetch, modules, sdata, true);
+            // spartanport: an invalid object would survive the null-slot sweep and be reused.
+            if (!pipeline->IsValid()) {
+                return false;
+            }
             std::scoped_lock lock{warmup_results_mutex};
             warmup_graphics.emplace_back(key, std::move(pipeline));
             return true;
@@ -955,6 +968,11 @@ bool PipelineCache::LoadGraphicsPipeline(Serialization::Archive& ar) {
     sel.modules.fill(nullptr);
     sel.fetch_shader.reset();
 
+    // spartanport: a refused preload must not become a usable cache entry.
+    if (!warmup_pool && !it.value()->IsValid()) {
+        graphics_pipelines.erase(sel.graphics_key);
+        return false;
+    }
     return true;
 }
 
@@ -1748,10 +1766,19 @@ void PipelineCache::PumpWarmUp() {
                 built.compute = std::make_unique<ComputePipeline>(
                     instance, scheduler, desc_heap, profile, *pipeline_cache, compute_key,
                     *infos[0], modules[0], compute_data, true);
+                // spartanport: count refused background builds as failures and keep them
+                // unpublished.
+                if (!built.compute->IsValid()) {
+                    return false;
+                }
             } else {
                 built.graphics = std::make_unique<GraphicsPipeline>(
                     instance, scheduler, desc_heap, profile, graphics_key, *pipeline_cache, infos,
                     no_runtime_infos, fetch, modules, sdata, true);
+                // spartanport: leave a refused background graphics build out of the ready queue.
+                if (!built.graphics->IsValid()) {
+                    return false;
+                }
             }
             warm.built.Push(std::move(built));
             return true;

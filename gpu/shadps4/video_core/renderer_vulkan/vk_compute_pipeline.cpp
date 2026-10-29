@@ -108,8 +108,14 @@ ComputePipeline::ComputePipeline(const Instance& instance, Scheduler& scheduler,
     };
     auto [pipeline_result, pipe] =
         instance.GetDevice().createComputePipelineUnique(pipeline_cache, compute_pipeline_ci);
-    ASSERT_MSG(pipeline_result == vk::Result::eSuccess, "Failed to create compute pipeline: {}",
-               vk::to_string(pipeline_result));
+    // spartanport: a refused pipeline skips its dispatches instead of ending the game.
+    if (pipeline_result != vk::Result::eSuccess) {
+        LOG_ERROR(Render_Vulkan,
+                  "Failed to create compute pipeline {:#x} ({}): {}; its dispatches are skipped",
+                  std::hash<ComputePipelineKey>{}(compute_key), debug_str,
+                  vk::to_string(pipeline_result));
+        return;
+    }
     pipeline = std::move(pipe);
     SetObjectName(device, *pipeline, "Compute Pipeline {}", debug_str);
     RecordWaveSizes();

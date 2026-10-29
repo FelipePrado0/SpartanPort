@@ -627,6 +627,12 @@ void PipelineCache::PublishGraphics(bool wait) {
             continue;
         }
         const auto key = it.key();
+        // spartanport: keep a null refusal marker; do not publish stages or save a failed key.
+        if (!build->pipeline || !build->pipeline->IsValid()) {
+            graphics_pipelines.try_emplace(key);
+            it = pending_graphics.erase(it);
+            continue;
+        }
         build->pipeline->PublishStages(build->live_infos);
         const auto hash = std::hash<GraphicsPipelineKey>{}(key);
         if (NewPipelineKey(fmt::format("g_{:#018x}", hash))) {
@@ -718,7 +724,9 @@ const GraphicsPipeline* PipelineCache::TryPreparedPipeline(const PreparedDraw& p
         }
     }
     const auto it = graphics_pipelines.find(prepared.key);
-    return it != graphics_pipelines.end() ? it->second.get() : nullptr;
+    // spartanport: prepared draws must skip refused pipelines on every lookup.
+    return it != graphics_pipelines.end() && it->second && it->second->IsValid() ? it->second.get()
+                                                                                 : nullptr;
 }
 
 const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectParams params,
@@ -746,7 +754,8 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
     if (AsyncCompilation() && !sel.regs->stage_enable.hs_en && !EmulatorSettings.IsShaderCollect()) {
         const auto found = graphics_pipelines.find(sel.graphics_key);
         if (found != graphics_pipelines.end()) {
-            return found->second.get();
+            // spartanport: a refused async build stays empty so later draws also skip it.
+            return found->second && found->second->IsValid() ? found->second.get() : nullptr;
         }
         if (!pending_graphics.contains(sel.graphics_key) && compiler->HasCapacity()) {
             PhaseTimer capture{g_spartanport_snapshot_ns};
@@ -792,6 +801,13 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
             instance, scheduler, desc_heap, profile, sel.graphics_key, *pipeline_cache, sel.infos,
             sel.runtime_infos, sel.fetch_shader, sel.modules, sdata, false);
 
+        // spartanport: remember the refusal without retrying every draw or persisting its key.
+        if (!it.value()->IsValid()) {
+            it.value().reset();
+            sel.fetch_shader.reset();
+            return nullptr;
+        }
+
         if (NewPipelineKey(fmt::format("g_{:#018x}", pipeline_hash))) {
             RegisterPipelineData(sel.graphics_key, pipeline_hash, sdata);
         }
@@ -807,7 +823,8 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
         }
         sel.fetch_shader.reset();
     }
-    return it->second.get();
+    // spartanport: skip cached refusals on every synchronous lookup too.
+    return it->second && it->second->IsValid() ? it->second.get() : nullptr;
 }
 
 const ComputePipeline* PipelineCache::GetComputePipeline() {
@@ -828,6 +845,11 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
         it.value() = std::make_unique<ComputePipeline>(instance, scheduler, desc_heap, profile,
                                                        *pipeline_cache, compute_key, *sel.infos[0],
                                                        sel.modules[0], sdata, false);
+        // spartanport: a null marker skips repeated dispatches and never saves a refused key.
+        if (!it.value()->IsValid()) {
+            it.value().reset();
+            return nullptr;
+        }
         if (NewPipelineKey(fmt::format("c_{:#018x}", compute_key.value))) {
             RegisterPipelineData(compute_key, sdata);
         }
@@ -838,7 +860,8 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
             module_related_pipelines[m].emplace_back(compute_key);
         }
     }
-    return it->second.get();
+    // spartanport: a cached empty handle is not a dispatchable pipeline.
+    return it->second && it->second->IsValid() ? it->second.get() : nullptr;
 }
 
 bool PipelineCache::RefreshGraphicsKey(PipelineSelection& sel) {
