@@ -9,3 +9,4 @@ Backported from upstream after b4e7ae7 (2026-10-02), correctness fixes:
   fb6367d29 32-bit literals in the high dword of 64-bit floats (#5114), 94e217781 V_BFM_B32 (#5185),
   d1cb90dbb ADDC (#5200), dd43d1cac V_CVT_PK_U8_F32 (#5194), ef08b1e1f V_ALIGNBIT/ALIGNBYTE (#5186).
   0f6d1b870 stable SlotVector address-space reservation (#5212), adapted to the existing API.
+  359234bbb SlotVector allocation bitset bounds check (#5158).

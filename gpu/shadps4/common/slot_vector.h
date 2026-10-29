@@ -131,7 +131,8 @@ public:
     }
 
     bool is_allocated(SlotId id) const {
-        return ReadStorageBit(id.index);
+        // spartanport: reject out-of-range IDs before reading the allocation bitset.
+        return (id.index / 64) < stored_bitset.size() && ReadStorageBit(id.index);
     }
 
     template <typename... Args>

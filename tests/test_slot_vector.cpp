@@ -53,14 +53,27 @@ int main() {
         Common::SlotVector<Item> pool;
         assert(pool.size() == 0);
         assert(pool.begin() == pool.end());
+        // The first 2 MiB chunk rounds its allocation bitset up to a full word.
+        constexpr u32 initial_capacity = (2u << 20) / sizeof(Item);
+        constexpr u32 bitset_end = ((initial_capacity + 63) / 64) * 64;
+        assert(!pool.is_allocated(Common::SlotId{0}));
+        assert(!pool.is_allocated(Common::SlotId{63}));
+        assert(!pool.is_allocated(Common::SlotId{64}));
+        assert(!pool.is_allocated(Common::SlotId{bitset_end - 1}));
+        assert(!pool.is_allocated(Common::SlotId{bitset_end}));
+        assert(!pool.is_allocated(Common::SlotId{}));
+        assert(!pool.is_allocated(Common::SlotId{Common::SlotId::INVALID_INDEX - 1}));
         for (unsigned i = 0; i < count; ++i) {
             ids.push_back(pool.insert(i));
+            assert(pool.is_allocated(ids.back()));
             addresses.push_back(&pool[ids.back()]);
             assert(reinterpret_cast<std::uintptr_t>(addresses.back()) % alignof(Item) == 0);
             assert(&pool[ids.front()] == addresses.front());
         }
         assert(pool.size() == count);
         assert(Item::live == count);
+        assert(!pool.is_allocated(Common::SlotId{}));
+        assert(!pool.is_allocated(Common::SlotId{Common::SlotId::INVALID_INDEX - 1}));
         unsigned visited = 0;
         for (auto& item : pool) {
             assert(item.value == visited);
@@ -84,6 +97,7 @@ int main() {
         assert(visited == count / 2);
         for (unsigned i = 0; i < count / 2; ++i) {
             const auto id = pool.insert(count + i);
+            assert(pool.is_allocated(id));
             assert(id.index % 2 == 0);
             assert(&pool[id] == addresses[id.index]);
         }
