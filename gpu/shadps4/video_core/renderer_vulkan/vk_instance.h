@@ -3,10 +3,13 @@
 
 #pragma once
 
+#include <cstdlib>
+#include <optional>
 #include <span>
 #include <unordered_map>
 
 #include "video_core/renderer_vulkan/vk_platform.h"
+#include "video_core/renderer_vulkan/vk_subgroup_policy.h"
 
 #define TRACY_VK_USE_SYMBOL_TABLE
 #include <tracy/TracyVulkan.hpp>
@@ -212,6 +215,11 @@ public:
         return list_restart && list_restart_features.primitiveTopologyPatchListRestart;
     }
 
+    /// spartanport: VK_NV_device_diagnostic_checkpoints is on (vk_checkpoints.h).
+    bool IsDiagnosticCheckpointsSupported() const {
+        return diagnostic_checkpoints;
+    }
+
     /// Returns true when VK_EXT_provoking_vertex is supported.
     bool IsProvokingVertexSupported() const {
         return provoking_vertex;
@@ -255,9 +263,26 @@ public:
         return vk12_features.shaderSharedInt64Atomics;
     }
 
-    /// Returns true if the subgroup size can be set to match guest subgroup size
-    bool IsSubgroupSize64Supported() const {
-        return vk13_features.subgroupSizeControl && vk13_props.maxSubgroupSize >= 64;
+    u32 MinSubgroupSize() const {
+        return vk13_props.minSubgroupSize;
+    }
+    u32 MaxSubgroupSize() const {
+        return vk13_props.maxSubgroupSize;
+    }
+    vk::ShaderStageFlags PinnableSubgroupStages() const {
+        return vk13_props.requiredSubgroupSizeStages;
+    }
+
+    /// spartanport: the subgroup size `stage` is pinned to, if any (vk_subgroup_policy.h).
+    /// SPARTAN_SUBGROUP_PIN=auto|all|allowed|none selects the policy.
+    std::optional<u32> PinnedSubgroupSize(vk::ShaderStageFlagBits stage) const {
+        static const SubgroupPinMode mode =
+            ParseSubgroupPinMode(std::getenv("SPARTAN_SUBGROUP_PIN"));
+        return ChoosePinnedSubgroupSize(
+            vk13_features.subgroupSizeControl, vk13_props.minSubgroupSize,
+            vk13_props.maxSubgroupSize,
+            static_cast<bool>(vk13_props.requiredSubgroupSizeStages & stage),
+            stage == vk::ShaderStageFlagBits::eCompute, vk11_props.subgroupSize, mode);
     }
 
     /// spartanport: VK_KHR_pipeline_executable_properties is on (SPARTAN_WAVE_STATS=1, vk_wave_stats.h).
@@ -351,6 +376,12 @@ public:
     /// Returns the list of available extensions.
     std::span<const std::string> GetAvailableExtensions() const {
         return available_extensions;
+    }
+
+    /// spartanport: optional extensions turned off by SPARTAN_VK_DISABLE_EXT, in request order;
+    /// empty when the variable disabled nothing.
+    const std::vector<std::string>& GetDisabledExtensions() const {
+        return disabled_extensions;
     }
 
     /// Returns the device name.
@@ -560,6 +591,8 @@ private:
     vk::Queue sparse_queue;
     std::vector<vk::PhysicalDevice> physical_devices;
     std::vector<std::string> available_extensions;
+    std::vector<std::string> disabled_extensions; // spartanport: applied by SPARTAN_VK_DISABLE_EXT
+    std::string disable_ext_env;                  // spartanport: raw SPARTAN_VK_DISABLE_EXT or empty
     std::unordered_map<vk::Format, vk::FormatProperties3> format_properties;
     TracyVkCtx profiler_context{};
     u32 queue_family_index{0};
@@ -572,6 +605,7 @@ private:
     bool depth_range_unrestricted{};
     bool vertex_input_dynamic_state{};
     bool list_restart{};
+    bool diagnostic_checkpoints{};
     bool provoking_vertex{};
     bool shader_stencil_export{};
     bool image_load_store_lod{};

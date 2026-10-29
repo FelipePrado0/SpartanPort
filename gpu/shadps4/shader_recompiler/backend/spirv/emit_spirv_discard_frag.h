@@ -11,4 +11,8 @@ namespace Shader::Backend::SPIRV {
 
 [[nodiscard]] std::vector<u32> EmitDiscardFragmentShader(std::array<Shader::OutputMap, 3> outputs);
 
+/// spartanport: a fragment shader that does nothing, for pipelines the game runs without one
+/// (SPARTAN_EMPTY_FS=1, vk_graphics_pipeline.cpp).
+[[nodiscard]] std::vector<u32> EmitEmptyFragmentShader();
+
 } // namespace Shader::Backend::SPIRV

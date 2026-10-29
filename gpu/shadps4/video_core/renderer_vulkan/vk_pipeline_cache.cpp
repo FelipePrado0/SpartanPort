@@ -35,6 +35,8 @@
 #include "video_core/renderer_vulkan/vk_pipeline_serialization.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
+#include "video_core/renderer_vulkan/vk_subgroup_policy.h"
+#include "video_core/renderer_vulkan/vk_vertex_format.h"
 
 namespace Vulkan {
 
@@ -383,14 +385,31 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
             return !instance.IsFragmentShaderBarycentricSupported() &&
                    instance.GetDriverID() == vk::DriverId::eNvidiaProprietary;
         }(),
-        .needs_lds_barriers = instance.GetDriverID() == vk::DriverId::eNvidiaProprietary ||
-                              instance.GetDriverID() == vk::DriverId::eMesaKosmickrisp,
+        // spartanport: a host that cannot run a 64-thread workgroup as one wave needs the LDS
+        // barriers the PS4 compiler omitted: NVIDIA (32 lanes), Intel (pinned to 32), anything
+        // unpinned. SPARTAN_LDS_BARRIERS=0/1 forces the value (vk_subgroup_policy.h).
+        .needs_lds_barriers = NeedsLdsBarriers(
+            instance.PinnedSubgroupSize(vk::ShaderStageFlagBits::eCompute).value_or(0) != 64,
+            std::getenv("SPARTAN_LDS_BARRIERS")),
         .needs_buffer_offsets = instance.StorageMinAlignment() > 4,
         .needs_unorm_fixup = instance.GetDriverID() == vk::DriverId::eMesaKosmickrisp,
         .needs_clip_distance_emulation = instance.GetDriverID() == vk::DriverId::eNvidiaProprietary,
         .supports_shader_stencil_export = instance_.IsShaderStencilExportSupported(),
+        .vertex_input = instance_.IsVertexInputDynamicState() ? 1u : 2u,
         .dref_broadcast = LightingTest::Current().dref,
     };
+
+    // spartanport: in last_run.log whatever the GPU log level.
+    const char* pin_mode = std::getenv("SPARTAN_SUBGROUP_PIN");
+    std::printf("GPU: subgroup policy: compute pinned to %u, fragment pinned to %u, "
+                "LDS barriers %s (device %u lanes, %u to %u, pinnable stages %s, "
+                "SPARTAN_SUBGROUP_PIN=%s)\n",
+                instance.PinnedSubgroupSize(vk::ShaderStageFlagBits::eCompute).value_or(0),
+                instance.PinnedSubgroupSize(vk::ShaderStageFlagBits::eFragment).value_or(0),
+                profile.needs_lds_barriers ? "on" : "off", instance.SubgroupSize(),
+                instance.MinSubgroupSize(), instance.MaxSubgroupSize(),
+                vk::to_string(instance.PinnableSubgroupStages()).c_str(),
+                pin_mode && *pin_mode ? pin_mode : "auto");
 
     auto [cache_result, cache] = instance.GetDevice().createPipelineCacheUnique({});
     ASSERT_MSG(cache_result == vk::Result::eSuccess, "Failed to create pipeline cache: {}",
@@ -1145,8 +1164,22 @@ bool PipelineCache::RefreshGraphicsStages(PipelineSelection& sel) {
             ASSERT_MSG(vertex_binding < MaxVertexBufferCount,
                        "Vertex attribute binding count exceeded limit: {} >= {}", vertex_binding,
                        MaxVertexBufferCount);
-            key.vertex_buffer_formats[vertex_binding++] =
-                Vulkan::LiverpoolToVK::SurfaceFormat(buffer.GetDataFmt(), buffer.GetNumberFmt());
+            // spartanport: a worker reads user data the guest may still be writing (see
+            // vk_draw_prep.cpp): an unknown format fails the worker's key, and the GPU thread
+            // builds it again once the draw is submitted. There the V# is final, so the
+            // asserting SurfaceFormat keeps its message for a format the table really lacks.
+            const auto format = Vulkan::LiverpoolToVK::VertexAttributeFormat(
+                buffer.GetDataFmt(), buffer.GetNumberFmt());
+            if (!format) {
+                if (sel.worker) {
+                    sel.worker->failed = true;
+                    return false;
+                }
+                key.vertex_buffer_formats[vertex_binding++] = Vulkan::LiverpoolToVK::SurfaceFormat(
+                    buffer.GetDataFmt(), buffer.GetNumberFmt());
+                continue;
+            }
+            key.vertex_buffer_formats[vertex_binding++] = *format;
         }
     }
 

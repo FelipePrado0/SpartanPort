@@ -11,6 +11,7 @@
 #include "sdl_window.h"
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/renderdoc.h"
+#include "video_core/renderer_vulkan/vk_checkpoints.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 #include "spartanport_overlay.h"
 #include "spartanport_settings.h"
@@ -456,6 +457,9 @@ Frame* Presenter::PrepareLastFrame() {
         }
         if (result == vk::Result::eTimeout) {
             continue;
+        }
+        if (result == vk::Result::eErrorDeviceLost) { // spartanport: vk_checkpoints.h
+            Checkpoints::Get().Dump(instance.GetGraphicsQueue(), "frame wait");
         }
         ASSERT_MSG(result != vk::Result::eErrorDeviceLost,
                    "Device lost during waiting for a frame");
@@ -1046,6 +1050,9 @@ Frame* Presenter::GetRenderFrame() {
 
     // Wait for the presentation to be finished so all frame resources are free
     while (wait() != vk::Result::eSuccess) {
+        if (result == vk::Result::eErrorDeviceLost) { // spartanport: vk_checkpoints.h
+            Checkpoints::Get().Dump(instance.GetGraphicsQueue(), "present wait");
+        }
         ASSERT_MSG(result != vk::Result::eErrorDeviceLost,
                    "Device lost during waiting for a frame");
         // Retry if the waiting times out

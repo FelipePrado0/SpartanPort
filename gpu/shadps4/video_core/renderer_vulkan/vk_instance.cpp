@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <string_view>
 #include <boost/container/static_vector.hpp>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -14,9 +16,13 @@
 #include "sdl_window.h"
 #include "video_core/amdgpu/spartanport_msaa.h"
 #include "video_core/amdgpu/spartanport_msaa_default.h"
+#include "core/emulator_settings.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_amd_paths.h"
+#include "video_core/renderer_vulkan/spartanport_vertex_input_default.h"
+#include "video_core/renderer_vulkan/vk_checkpoints.h"
 #include "video_core/renderer_vulkan/vk_dlss.h"
+#include "video_core/renderer_vulkan/vk_extension_policy.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 
@@ -262,6 +268,13 @@ bool InitializePipelineBinaryCache(vk::Device device, bool supported,
 }
 
 bool Instance::CreateDevice() {
+    // spartanport: SPARTAN_VK_DISABLE_EXT turns optional extensions off as if the device lacked
+    // them (vk_extension_policy.h).
+    const char* disable_ext_value = std::getenv("SPARTAN_VK_DISABLE_EXT");
+    const bool disable_ext_set = disable_ext_value != nullptr;
+    disable_ext_env = disable_ext_set ? disable_ext_value : "";
+    const auto ext_policy = ParseExtensionPolicy(disable_ext_value);
+    std::vector<std::string> optional_queried;
     const vk::StructureChain feature_chain = physical_device.getFeatures2<
         vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features,
         vk::PhysicalDeviceVulkan12Features, vk::PhysicalDeviceVulkan13Features,
@@ -286,7 +299,9 @@ bool Instance::CreateDevice() {
     vk12_props = properties_chain.get<vk::PhysicalDeviceVulkan12Properties>();
     vk13_props = properties_chain.get<vk::PhysicalDeviceVulkan13Properties>();
     push_descriptor_props = properties_chain.get<vk::PhysicalDevicePushDescriptorPropertiesKHR>();
-    LOG_INFO(Render_Vulkan, "Physical device subgroup size {}", vk11_props.subgroupSize);
+    LOG_INFO(Render_Vulkan, "Physical device subgroup size {} ({} to {}, pinnable stages {})",
+             vk11_props.subgroupSize, vk13_props.minSubgroupSize, vk13_props.maxSubgroupSize,
+             vk::to_string(vk13_props.requiredSubgroupSizeStages));
 
     if (available_extensions.empty()) {
         LOG_CRITICAL(Render_Vulkan, "No extensions supported by device.");
@@ -294,30 +309,39 @@ bool Instance::CreateDevice() {
     }
 
     boost::container::static_vector<const char*, 64> enabled_extensions;
-    const auto add_extension = [&](std::string_view extension) -> bool {
+    const auto add_extension = [&](std::string_view extension, bool required = false) -> bool {
+        if (!required) {
+            optional_queried.emplace_back(extension);
+        }
         const auto result =
             std::find_if(available_extensions.begin(), available_extensions.end(),
                          [&](const std::string& name) { return name == extension; });
 
-        if (result != available_extensions.end()) {
-            LOG_INFO(Render_Vulkan, "Enabling extension: {}", extension);
-            enabled_extensions.push_back(extension.data());
-            return true;
+        if (result == available_extensions.end()) {
+            LOG_WARNING(Render_Vulkan, "Extension {} unavailable.", extension);
+            return false;
+        }
+        if (!required && ext_policy.IsDisabled(extension)) {
+            LOG_WARNING(Render_Vulkan, "Extension {} disabled by SPARTAN_VK_DISABLE_EXT",
+                        extension);
+            disabled_extensions.emplace_back(extension);
+            return false;
         }
 
-        LOG_WARNING(Render_Vulkan, "Extension {} unavailable.", extension);
-        return false;
+        LOG_INFO(Render_Vulkan, "Enabling extension: {}", extension);
+        enabled_extensions.push_back(extension.data());
+        return true;
     };
 
     // Required
-    ASSERT_MSG(add_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME),
+    ASSERT_MSG(add_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME, true),
                "Required Vulkan extension unavailable: {}", VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-    ASSERT_MSG(add_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME),
+    ASSERT_MSG(add_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, true),
                "Required Vulkan extension unavailable: {}", VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
-    ASSERT_MSG(add_extension(VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME),
+    ASSERT_MSG(add_extension(VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME, true),
                "Required Vulkan extension unavailable: {}",
                VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME);
-    ASSERT_MSG(add_extension(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME),
+    ASSERT_MSG(add_extension(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME, true),
                "Required Vulkan extension unavailable: {}", VK_EXT_ROBUSTNESS_2_EXTENSION_NAME);
 
     const auto robustness2_features = feature_chain.get<vk::PhysicalDeviceRobustness2FeaturesEXT>();
@@ -355,7 +379,74 @@ bool Instance::CreateDevice() {
     custom_border_color = add_extension(VK_EXT_CUSTOM_BORDER_COLOR_EXTENSION_NAME);
     depth_clip_control = add_extension(VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
     depth_clip_enable = add_extension(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
-    vertex_input_dynamic_state = add_extension(VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME);
+    // spartanport: off by default on Intel's Windows driver (#861), SPARTAN_VERTEX_INPUT_DYNAMIC
+    // overrides it (spartanport_vertex_input_default.h); SPARTAN_VK_DISABLE_EXT still wins inside
+    // add_extension.
+    const char* vertex_input_env = std::getenv("SPARTAN_VERTEX_INPUT_DYNAMIC");
+    const bool vertex_input_wanted =
+        spartanport_vertex_input_dynamic(vertex_input_env, static_cast<VkDriverId>(driver_id)) != 0;
+    // spartanport: the knob must still see the request so it can record it in disabled_extensions.
+    vertex_input_dynamic_state =
+        (vertex_input_wanted ||
+         ext_policy.IsDisabled(VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME)) &&
+        add_extension(VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME);
+    const char* vertex_input_line;
+    // spartanport: why the default kept the extension off, for the "extensions off" summary.
+    std::string_view vertex_input_off_reason;
+    if (vertex_input_dynamic_state) {
+        vertex_input_line = vertex_input_env && std::string_view{vertex_input_env} == "1"
+                                ? "on (SPARTAN_VERTEX_INPUT_DYNAMIC=1)"
+                                : "on";
+    } else if (std::find(disabled_extensions.begin(), disabled_extensions.end(),
+                         VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME) !=
+               disabled_extensions.end()) {
+        vertex_input_line = "off (SPARTAN_VK_DISABLE_EXT)";
+    } else if (!vertex_input_wanted) {
+        vertex_input_line =
+            vertex_input_env && *vertex_input_env
+                ? "off (SPARTAN_VERTEX_INPUT_DYNAMIC=0)"
+                : "off (Intel Windows driver; SPARTAN_VERTEX_INPUT_DYNAMIC=1 turns it on)";
+        // spartanport: add_extension never ran here, so look the extension up before calling it
+        // off.
+        if (std::find(available_extensions.begin(), available_extensions.end(),
+                      VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME) !=
+            available_extensions.end()) {
+            vertex_input_off_reason = vertex_input_env && *vertex_input_env
+                                          ? "SPARTAN_VERTEX_INPUT_DYNAMIC=0"
+                                          : "Intel Windows driver";
+        }
+    } else {
+        vertex_input_line = "unavailable (VK_EXT_vertex_input_dynamic_state missing)";
+    }
+    std::printf("GPU: vertex input dynamic state %s\n", vertex_input_line);
+    // spartanport: markers naming the draw or dispatch the GPU was on when it was lost (#334),
+    // vk_checkpoints.h. On by default on Intel's Windows driver; SPARTAN_GPU_CHECKPOINTS=1/0
+    // forces it; SPARTAN_VK_DISABLE_EXT still wins inside add_extension.
+    const char* checkpoints_env = std::getenv("SPARTAN_GPU_CHECKPOINTS");
+    const bool checkpoints_wanted =
+        CheckpointsWanted(checkpoints_env, driver_id == vk::DriverId::eIntelProprietaryWindows);
+    diagnostic_checkpoints =
+        checkpoints_wanted && add_extension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
+    std::string checkpoints_line;
+    if (diagnostic_checkpoints) {
+        checkpoints_line =
+            checkpoints_env && *checkpoints_env
+                ? "on (SPARTAN_GPU_CHECKPOINTS=1)"
+                : "on (Intel Windows driver; SPARTAN_GPU_CHECKPOINTS=0 turns them off)";
+    } else if (!checkpoints_wanted) {
+        checkpoints_line = checkpoints_env && *checkpoints_env
+                               ? std::string{"off (SPARTAN_GPU_CHECKPOINTS="} + checkpoints_env +
+                                     "; only 1 turns them on)"
+                               : "off (SPARTAN_GPU_CHECKPOINTS=1 turns them on)";
+    } else {
+        checkpoints_line =
+            "unavailable (VK_NV_device_diagnostic_checkpoints missing or disabled)";
+    }
+    std::printf("GPU: checkpoints: %s\n", checkpoints_line.c_str());
+    if (EmulatorSettings.IsEmptyFragmentShader()) { // spartanport: vk_graphics_pipeline.cpp
+        std::printf("GPU: empty fragment shader on every pipeline without one (SPARTAN_EMPTY_FS=1; "
+                    "disk pipeline cache off)\n");
+    }
     list_restart = add_extension(VK_EXT_PRIMITIVE_TOPOLOGY_LIST_RESTART_EXTENSION_NAME);
     if (list_restart) {
         list_restart_features =
@@ -506,13 +597,30 @@ bool Instance::CreateDevice() {
     if (Dlss* dlss = Dlss::Get()) {
         dlss->AppendDeviceExtensions(*instance, physical_device, dlss_extensions);
         for (const char* name : dlss_extensions) {
-            if (std::none_of(enabled_extensions.begin(), enabled_extensions.end(),
-                             [&](const char* e) { return std::string_view{e} == name; }) &&
-                enabled_extensions.size() < enabled_extensions.capacity()) {
+            if (std::any_of(enabled_extensions.begin(), enabled_extensions.end(),
+                            [&](const char* e) { return std::string_view{e} == name; })) {
+                continue;
+            }
+            if (ext_policy.IsDisabled(name)) {
+                if (std::find(disabled_extensions.begin(), disabled_extensions.end(), name) ==
+                    disabled_extensions.end()) {
+                    LOG_WARNING(Render_Vulkan, "Extension {} disabled by SPARTAN_VK_DISABLE_EXT",
+                                name);
+                    disabled_extensions.emplace_back(name);
+                }
+                continue;
+            }
+            if (enabled_extensions.size() < enabled_extensions.capacity()) {
                 enabled_extensions.push_back(name);
             }
         }
     }
+    // spartanport: binary keys on disk were written under another extension set; while
+    // SPARTAN_VK_DISABLE_EXT has turned something off they may not match, so leave binaries out.
+    // Checked after the last optional request, the DLSS ones included, so that every disabled
+    // extension counts.
+    pipeline_binaries = pipeline_binaries && disabled_extensions.empty() &&
+                        !EmulatorSettings.IsEmptyFragmentShader(); // spartanport: SPARTAN_EMPTY_FS
     vk::StructureChain device_chain = {
         vk::DeviceCreateInfo{
             .queueCreateInfoCount = queue_family_index == sparse_queue_family_index ? 1u : 2u,
@@ -744,6 +852,7 @@ bool Instance::CreateDevice() {
     device = std::move(dev);
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init(*device);
+    Checkpoints::Get().Enable(diagnostic_checkpoints); // spartanport: vk_checkpoints.h
     pipeline_binaries =
         InitializePipelineBinaryCache(*device, pipeline_binaries, pipeline_binary_global_key);
     if (Dlss* dlss = Dlss::Get()) {
@@ -784,6 +893,31 @@ bool Instance::CreateDevice() {
                         vk::to_string(time_domains_result));
         }
     }
+
+    // spartanport: printed at any log level so that a user's console output shows what the device
+    // got.
+    std::vector<std::string> unavailable;
+    for (const std::string& name : optional_queried) {
+        if (std::none_of(enabled_extensions.begin(), enabled_extensions.end(),
+                         [&](const char* e) { return std::string_view{e} == name; })) {
+            unavailable.push_back(name);
+        }
+    }
+    // spartanport: the list printed also names the extension the vertex input default kept off
+    // (#861); disabled_extensions itself stays SPARTAN_VK_DISABLE_EXT only, as it gates the caches.
+    const std::vector<std::string> off_names = OffNamesForLog(
+        disabled_extensions,
+        vertex_input_off_reason.empty() ? std::string_view{}
+                                        : VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
+        vertex_input_off_reason);
+    std::printf("GPU: device %s, driver %s %s, Vulkan %s; extensions off: %s "
+                "(SPARTAN_VK_DISABLE_EXT=%s)\n",
+                properties.deviceName.data(), vk::to_string(driver_id).c_str(),
+                GetDriverVersionName().c_str(), GetReadableVersion(properties.apiVersion).c_str(),
+                JoinNames(off_names).c_str(), disable_ext_set ? disable_ext_env.c_str() : "unset");
+    std::printf("GPU: optional extensions unavailable: %s; ignored names: %s\n",
+                JoinNames(unavailable).c_str(),
+                JoinNames(IgnoredNames(ext_policy, disabled_extensions)).c_str());
 
     CreateAllocator();
     return true;

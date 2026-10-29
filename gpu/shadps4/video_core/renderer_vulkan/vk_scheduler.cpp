@@ -12,6 +12,7 @@
 #include <functional>
 
 #include "spartanport_copy.h"
+#include "video_core/renderer_vulkan/vk_checkpoints.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "spartanport_toggles.h"
 #include "video_core/renderer_vulkan/vk_wait_diagnostics.h"
@@ -25,7 +26,7 @@
 
 namespace Vulkan {
 
-std::mutex Scheduler::submit_mutex;
+std::recursive_mutex Scheduler::submit_mutex;
 
 Scheduler::Scheduler(const Instance& instance, bool threaded_recording)
     : instance{instance}, work_semaphore{instance}, command_pool{instance, &work_semaphore} {
@@ -134,7 +135,21 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
         .pStencilAttachment = db.has_stencil ? &stencil_attachment : nullptr,
     };
 
+    // spartanport: marker naming this render pass if the GPU is lost inside it (vk_checkpoints.h).
+    const void* checkpoint = nullptr;
+    if (Checkpoints::Enabled()) {
+        CheckpointRecord pass_record{};
+        pass_record.kind = CheckpointKind::RenderPass;
+        pass_record.tick = CurrentTick();
+        pass_record.x = render_state.width;
+        pass_record.y = render_state.height;
+        pass_record.z =
+            RenderPassLayout(render_state.num_color_attachments, db.has_depth, db.has_stencil);
+        checkpoint = Checkpoints::Get().Push(pass_record);
+    }
+
     if (!recording_threaded) {
+        Checkpoints::Set(current_cmdbuf, checkpoint);
         if (FullBarriers()) {
             RecordFullBarrier(current_cmdbuf);
         }
@@ -142,8 +157,9 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
         return;
     }
     // The attachment infos live on this stack frame: the recorded closure keeps copies.
-    Record([info = rendering_info, color_attachments, depth_attachment,
-            stencil_attachment](vk::CommandBuffer cmdbuf) mutable {
+    Record([info = rendering_info, color_attachments, depth_attachment, stencil_attachment,
+            checkpoint](vk::CommandBuffer cmdbuf) mutable {
+        Checkpoints::Set(cmdbuf, checkpoint);
         info.pColorAttachments = color_attachments.data();
         if (info.pDepthAttachment) {
             info.pDepthAttachment = &depth_attachment;
@@ -163,7 +179,15 @@ void Scheduler::EndRendering() {
         return;
     }
     is_rendering = false;
-    Record([](vk::CommandBuffer cmdbuf) {
+    const void* checkpoint = nullptr;
+    if (Checkpoints::Enabled()) { // spartanport: vk_checkpoints.h
+        CheckpointRecord end_record{};
+        end_record.kind = CheckpointKind::RenderPassEnd;
+        end_record.tick = CurrentTick();
+        checkpoint = Checkpoints::Get().Push(end_record);
+    }
+    Record([checkpoint](vk::CommandBuffer cmdbuf) {
+        Checkpoints::Set(cmdbuf, checkpoint);
         cmdbuf.endRendering();
         if (FullBarriers()) {
             RecordFullBarrier(cmdbuf);
@@ -469,6 +493,12 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
     SyncRecording();
     // Guest memory copies into staging read by this submission (copy threads).
     WaitHostCopies();
+    if (Checkpoints::Enabled()) { // spartanport: the last marker of this submission
+        CheckpointRecord submit_record{};
+        submit_record.kind = CheckpointKind::Submit;
+        submit_record.tick = signal_value;
+        Checkpoints::Set(current_cmdbuf, Checkpoints::Get().Push(submit_record));
+    }
     Check(current_cmdbuf.end());
 
     const vk::Semaphore timeline = work_semaphore.Handle();
@@ -499,6 +529,9 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
 
     ImGui::Core::TextureManager::Submit();
     auto submit_result = instance.GetGraphicsQueue().submit(submit_info, info.fence);
+    if (submit_result == vk::Result::eErrorDeviceLost) {
+        Checkpoints::Get().Dump(instance.GetGraphicsQueue(), "submit"); // spartanport
+    }
     ASSERT_MSG(submit_result != vk::Result::eErrorDeviceLost, "Device lost during submit");
 
     work_semaphore.Refresh();

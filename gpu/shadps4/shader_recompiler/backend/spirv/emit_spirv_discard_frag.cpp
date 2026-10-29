@@ -120,4 +120,24 @@ std::vector<u32> EmitDiscardFragmentShader(std::array<Shader::OutputMap, 3> outp
     return ctx.Assemble();
 }
 
+// spartanport: no inputs, no outputs, one OpReturn.
+struct EmptyShaderEmitter : public Sirit::Module {
+    EmptyShaderEmitter() : Sirit::Module{SPIRV_VERSION_1_5} {
+        AddCapability(spv::Capability::Shader);
+        SetMemoryModel(spv::AddressingModel::Logical, spv::MemoryModel::GLSL450);
+        const Id void_id{TypeVoid()};
+        const Id main{OpFunction(void_id, spv::FunctionControlMask::MaskNone, TypeFunction(void_id))};
+        AddEntryPoint(spv::ExecutionModel::Fragment, main, "main", std::span<const Id>{});
+        AddExecutionMode(main, spv::ExecutionMode::OriginUpperLeft);
+        AddLabel(OpLabel());
+        OpReturn();
+        OpFunctionEnd();
+    }
+};
+
+std::vector<u32> EmitEmptyFragmentShader() {
+    EmptyShaderEmitter ctx;
+    return ctx.Assemble();
+}
+
 } // namespace Shader::Backend::SPIRV
