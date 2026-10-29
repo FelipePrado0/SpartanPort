@@ -41,11 +41,16 @@ template <typename IsLive>
 }
 
 /// An image leaves the cache (TextureCache::DeleteImage). Its slot is erased later, so it still
-/// looks live: the state must stop naming it here.
-inline void ForgetAliasMember(AliasState& state, ImageId image_id, u64 image_uid) {
-    if ((state.writer == image_id && state.writer_uid == image_uid) ||
-        (state.backing == image_id && state.backing_uid == image_uid)) {
+/// looks live: the state must stop naming it here. A deleted backing gives way to a live writer,
+/// as in ResolveAliasBacking: resetting dropped the writer's newer contents for the other aliases
+/// until it was written again.
+template <typename IsLive>
+void ForgetAliasMember(AliasState& state, ImageId image_id, u64 image_uid, IsLive&& is_live) {
+    if (state.writer == image_id && state.writer_uid == image_uid) {
         state.ResetAuthority();
+    } else if (state.backing == image_id && state.backing_uid == image_uid) {
+        state.backing = {}, state.backing_uid = 0;
+        (void)ResolveAliasBacking(state, is_live);
     }
 }
 

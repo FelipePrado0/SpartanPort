@@ -1829,7 +1829,8 @@ void TextureCache::DeleteImage(ImageId image_id) {
         AliasState& state = alias_it.value();
         // ponytail: no copy here (DeleteImage also runs on guest threads through UnmapMemory,
         // which must not record commands); the aliases then re-read guest memory.
-        ForgetAliasMember(state, image_id, image.image_uid);
+        ForgetAliasMember(state, image_id, image.image_uid,
+                          [this](ImageId id, u64 uid) { return IsLiveImage(id, uid); });
         if (state.members <= 2) {
             ForEachAlias(image, [](ImageId, Image& candidate) {
                 candidate.flags &= ~ImageFlagBits::Aliased;
