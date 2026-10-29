@@ -904,7 +904,7 @@ fn a_pool_above_ram_warns() {
     host.memory_mb = Some(4096);
     let ran = port.run_on(host, &[("SPARTAN_DMEM_MB", "11200")], &[]);
     assert_eq!(ran.code, 0, "{ran}");
-    let warning = "Memory: the guest memory pool commits 12224 MiB and the game needs about \
+    let warning = "Memory: the guest memory pool holds up to 12224 MiB and the game needs about \
                    16320 MiB in all, more than the 4096 MiB of RAM.";
     assert!(
         ran.out.lines().any(|line| line.starts_with(warning)),

@@ -340,8 +340,9 @@ def main():
         mount_args = (glyph_args + pause_menu_args(game, out, glyph_args, env.get('SPARTAN_LANGUAGE'))
                       + switch_text_mounts(env, game, out))
         env['SPARTAN_DERIVED'] = ','.join(derived)
-        # The guest memory pool is committed in full at start: a resolution patch above 1080p
-        # can need more than 16 GB of RAM, and the game then closes when the page file cannot grow.
+        # The guest memory pool is committed at start, or as the game maps it when Windows refuses:
+        # a resolution patch above 1080p can need more than 16 GB of RAM, and the game then closes
+        # when the page file cannot grow.
         import guest_memory
         if warning := guest_memory.memory_warning(env.get('SPARTAN_DMEM_MB'), guest_memory.physical_memory_mb(),
                                                   env.get('SPARTAN_STREAM_MEMORY', 'cached')):

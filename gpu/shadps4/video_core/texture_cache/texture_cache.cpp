@@ -79,6 +79,23 @@ TextureCache::~TextureCache() {
     }
 }
 
+bool TextureCache::ReadbackBlocksRead(VAddr address, u64 size) {
+    // Stale readbacks only watch writes: reads of a pending page see the previous copy.
+    if (!deferred_readbacks || stale_readbacks ||
+        !has_pending_readbacks.load(std::memory_order_acquire)) {
+        return false;
+    }
+    std::scoped_lock lock{readback_mutex};
+    return pending_readbacks.RequiredTick(address, size) != 0;
+}
+
+u64 TextureCache::ReadbackGeneration() const {
+    if (!deferred_readbacks || stale_readbacks) {
+        return 0;
+    }
+    return readback_generation.load(std::memory_order_acquire);
+}
+
 template <bool track>
 void TextureCache::WatchReadback(VAddr address, u64 size) {
     if (stale_readbacks) {
@@ -277,6 +294,7 @@ void TextureCache::ProcessDownloadImages() {
                     pending_readbacks.Push(copy->guest_address, copy->size,
                         scheduler.CurrentTick(), copy->staging);
                     has_pending_readbacks.store(true, std::memory_order_release);
+                    readback_generation.fetch_add(1, std::memory_order_release);
                     ++readbacks_queued;
                     readbacks_peak_bytes = std::max(readbacks_peak_bytes, pending_readbacks.Bytes());
                 }

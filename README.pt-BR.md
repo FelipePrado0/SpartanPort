@@ -330,7 +330,7 @@ uma correção para todas as configurações de overlay.
 - Tela preta ao abrir: use a release mais recente, que inclui o patch do deadlock na abertura.
   Se persistir, informe GPU, driver, build do jogo e a saída de **Advanced → Log**. Apagar o
   cache de shaders não é uma solução geral e exige reconstruí-lo na próxima abertura.
-- O jogo fecha com "cannot create ... guest memory (error 1450)": o Windows ficou sem memória virtual para alocar o pool de memória do jogo. Aumente o arquivo de paginação: pressione **Win + R**, digite `SystemPropertiesAdvanced`, vá em Configurações de **Desempenho** → guia **Avançado** → **Memória virtual** Alterar, desmarque o gerenciamento automático, selecione a unidade **C:**, defina um tamanho personalizado (ex.: 16384 MB inicial, 24576 MB máximo), clique em **Definir**, **OK** e reinicie o PC.
+- O jogo fecha com "cannot create ... guest memory (error 1450)", ou mais tarde com "cannot commit ... guest memory": o Windows ficou sem memória virtual para alocar o pool de memória do jogo. Aumente o arquivo de paginação: pressione **Win + R**, digite `SystemPropertiesAdvanced`, vá em Configurações de **Desempenho** → guia **Avançado** → **Memória virtual** Alterar, desmarque o gerenciamento automático, selecione a unidade **C:**, defina um tamanho personalizado (ex.: 16384 MB inicial, 24576 MB máximo), clique em **Definir**, **OK** e reinicie o PC.
 - O **Idioma do jogo** do launcher não muda nada: ele só vale no primeiro início do jogo. Depois, o
   jogo restaura os próprios idiomas de texto e de falas do save de configurações, então troque no
   jogo: **Opções → Configurações de jogo → Texto de jogo** e **Opções → Áudio → Falas** (por exemplo,
