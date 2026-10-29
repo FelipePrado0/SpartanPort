@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+// spartanport: declare the exception type caught during speculative specialization.
+#include <exception>
 #include <mutex>
 #include <ranges>
 #include <string>
@@ -1248,10 +1250,24 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
             return {};
         }
         runtime_fault_recover = &recover;
-        info.RefreshFlatBuf();
-        auto spec = Shader::StageSpecialization(info, runtime_info, profile, binding);
+        // spartanport: torn guest data can throw; abandon preparation like a fault, without
+        // changing the non-unwinding fault jump out of this try block.
+        std::optional<Shader::StageSpecialization> spec;
+        try {
+            info.RefreshFlatBuf();
+            spec.emplace(info, runtime_info, profile, binding);
+        } catch (const std::exception& e) {
+            runtime_fault_recover = nullptr;
+            static std::atomic<u32> logged{0};
+            if (logged.fetch_add(1, std::memory_order_relaxed) < 8) {
+                LOG_WARNING(Render_Vulkan, "Draw preparation ahead of the GPU thread stopped: {}",
+                            e.what());
+            }
+            worker.failed = true;
+            return {};
+        }
         runtime_fault_recover = nullptr;
-        const auto it = std::ranges::find(program->modules, spec, &Program::Module::spec);
+        const auto it = std::ranges::find(program->modules, *spec, &Program::Module::spec);
         if (it == program->modules.end()) {
             worker.failed = true;
             return {};
