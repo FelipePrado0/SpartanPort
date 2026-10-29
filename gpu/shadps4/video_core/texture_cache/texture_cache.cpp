@@ -1068,6 +1068,26 @@ ImageId TextureCache::ExpandImage(const ImageInfo& info, ImageId image_id) {
     return new_image_id;
 }
 
+// spartanport: clamp views to the resolved image to prevent invalid views and barrier asserts.
+static void ClampViewRange(TextureCache::ImageDesc& desc, const Image& image) {
+    auto& range = desc.view_info.range;
+    const auto requested = range;
+    if (!range.ClampTo(image.info.resources)) {
+        return;
+    }
+    static std::atomic<u32> reported{0};
+    if (reported.fetch_add(1, std::memory_order_relaxed) < 8) {
+        std::printf("Texture cache: view mips %u+%u layers %u+%u clamped to image %#llx "
+                    "(%u mips, %u layers, %s; requested %s)\n",
+                    requested.base.level, requested.extent.levels, requested.base.layer,
+                    requested.extent.layers, (unsigned long long)image.info.guest_address,
+                    std::max(image.info.resources.levels, 1u),
+                    std::max(image.info.resources.layers, 1u),
+                    vk::to_string(image.info.pixel_format).c_str(),
+                    vk::to_string(desc.info.pixel_format).c_str());
+    }
+}
+
 ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
     const auto& info = desc.info;
     ASSERT(info.guest_address != 0);
@@ -1109,6 +1129,8 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
         if (cached.view_slice > 0) {
             desc.view_info.range.base.layer = cached.view_slice;
         }
+        // spartanport: cached images must also bound descriptor mip and layer ranges.
+        ClampViewRange(desc, image);
         return cached.image_id;
     }
 
@@ -1227,6 +1249,9 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
     if (view_slice > 0) {
         desc.view_info.range.base.layer = view_slice;
     }
+
+    // spartanport: overlap offsets can leave the view past the resolved image.
+    ClampViewRange(desc, image);
 
     cached = FindImageCacheEntry{
         .address = info.guest_address,

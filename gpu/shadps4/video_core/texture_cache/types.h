@@ -3,6 +3,8 @@
 
 #pragma once
 
+// spartanport: clamp view ranges with standard min/max helpers.
+#include <algorithm>
 #include "common/slot_vector.h"
 #include "common/types.h"
 
@@ -76,6 +78,21 @@ struct SubresourceRange {
     SubresourceExtent extent;
 
     auto operator<=>(const SubresourceRange&) const = default;
+
+    // spartanport: bound views to the resolved image, keeping counts positive without overflow.
+    bool ClampTo(const SubresourceExtent& resources) noexcept {
+        const u32 levels = std::max(resources.levels, 1u);
+        const u32 layers = std::max(resources.layers, 1u);
+        if (base.level < levels && base.layer < layers && extent.levels > 0 && extent.layers > 0 &&
+            extent.levels <= levels - base.level && extent.layers <= layers - base.layer) {
+            return false;
+        }
+        base.level = std::min(base.level, levels - 1);
+        base.layer = std::min(base.layer, layers - 1);
+        extent.levels = std::clamp(extent.levels, 1u, levels - base.level);
+        extent.layers = std::clamp(extent.layers, 1u, layers - base.layer);
+        return true;
+    }
 };
 
 struct ImageCopy {
