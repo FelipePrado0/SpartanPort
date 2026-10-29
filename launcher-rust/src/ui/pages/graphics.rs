@@ -1,4 +1,4 @@
-//! The Graphics page: window, textures, overlay and screenshots.
+//! The Graphics page: window, effects, textures, overlay and screenshots.
 //!
 //! Ruling R35: like Python 2.6.0, the Experimental and Upscaling sections (`experimental_upscaler`,
 //! `upscaler`, `preset`, `output_res`, `live_resolution`, `object_motion`) stay parked until the
@@ -83,6 +83,25 @@ pub fn view(state: &State) -> Element<'_, Message> {
             &tr(lang, "Allow HDR output"),
             state.store.flag("hdr"),
             Some(&hint("When HDR is on in Windows and the display supports it.")),
+        ),
+        section(state.rtl, &tr(lang, "Effects")),
+        checkbox(
+            state.rtl,
+            "motion_blur",
+            &tr(lang, "Motion blur"),
+            state.store.flag("motion_blur"),
+            Some(&hint(
+                "The game's own motion blur on fast moving objects and the camera. Off removes it."
+            )),
+        ),
+        checkbox(
+            state.rtl,
+            "depth_of_field",
+            &tr(lang, "Depth of field"),
+            state.store.flag("depth_of_field"),
+            Some(&hint(
+                "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp."
+            )),
         ),
         section(state.rtl, &tr(lang, "Textures")),
         row(

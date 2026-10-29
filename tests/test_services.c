@@ -19,6 +19,8 @@
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *nid) { (void)table; (void)count; (void)nid; return 0; }
 int spartanportgpu_text_input_begin(const char *text, const char *prompt) { (void)text; (void)prompt; return 0; }
 int spartanportgpu_text_input_poll(char *text, uint64_t size) { (void)text; (void)size; return 0; }
+static int stub_menu_confirm_swap = 0;
+int spartanportgpu_menu_confirm_swap(void) { return stub_menu_confirm_swap; }
 void spartanportgpu_trophy_setup(const SpartanGpuTrophyLabels *labels, const SpartanGpuTrophyInfo *items,
                                 int count, const volatile uint32_t *unlocked) {
     (void)labels; (void)items; (void)count; (void)unlocked;
@@ -26,8 +28,8 @@ void spartanportgpu_trophy_setup(const SpartanGpuTrophyLabels *labels, const Spa
 static char mock_user_dir[512]="user";
 const char *runtime_file_user_dir(void) { return mock_user_dir; }
 static char last_toast_title[128], last_toast_detail[256];
-void spartanportgpu_toast_trophy(const char *title, const char *detail, const unsigned char *png, uint64_t png_size) {
-    (void)png; (void)png_size;
+void spartanportgpu_toast_trophy(int id, const char *title, const char *detail, const unsigned char *png, uint64_t png_size) {
+    (void)id; (void)png; (void)png_size;
     if (title) snprintf(last_toast_title, sizeof(last_toast_title), "%s", title);
     else last_toast_title[0] = 0;
     if (detail) snprintf(last_toast_detail, sizeof(last_toast_detail), "%s", detail);
@@ -530,6 +532,36 @@ int main(void) {
     remove(test_txt);
     test_rmdir(test_user);
     snprintf(mock_user_dir,sizeof(mock_user_dir),"user");
+    /* Trophy texts: every label key, the new ones of the list's order and rarity included, lands in its
+     * SpartanGpuTrophyLabels field (the struct is one pointer per key, in the keys' order). */
+    {
+        FILE *texts=fopen("trophy_texts.txt","wb");
+        assert(texts);
+        fputs("\xEF\xBB\xBF# comment\n@heading=Trof\xC3\xA9us\n@rarity={}% dos jogadores\n@ultra_rare=Ultrarraro\n"
+              "@hint_notifications=L1/R1: trof\xC3\xA9us\n@unknown=x\n3=Sr. M\xC3\xA3o | Ache a sala\n",texts);
+        fclose(texts);
+#ifdef _WIN32
+        _putenv("SPARTAN_USER_DIR=.");
+#else
+        setenv("SPARTAN_USER_DIR",".",1);
+#endif
+        memset(trophy_label,0,sizeof(trophy_label)); /* not what an earlier load left (a user/ folder here) */
+        trophy_load_names();
+        const char *label_texts[TROPHY_LABELS];
+        for (int k=0;k<TROPHY_LABELS;k++) label_texts[k]=trophy_label[k][0] ? trophy_label[k] : 0;
+        SpartanGpuTrophyLabels labels;
+        memcpy(&labels,label_texts,sizeof(labels));
+        assert(!strcmp(labels.heading,"Trof\xC3\xA9us") && !strcmp(labels.rarity,"{}% dos jogadores"));
+        assert(!strcmp(labels.ultra_rare,"Ultrarraro") && !strcmp(labels.hint_notifications,"L1/R1: trof\xC3\xA9us"));
+        assert(!labels.notice && !labels.order_list && !labels.common);
+        assert(!strcmp(trophy_names[3],"Sr. M\xC3\xA3o") && !strcmp(trophy_details[3],"Ache a sala"));
+        remove("trophy_texts.txt");
+#ifdef _WIN32
+        _putenv("SPARTAN_USER_DIR=");
+#else
+        unsetenv("SPARTAN_USER_DIR");
+#endif
+    }
 
     float ratio=0; assert(safe_area(&ratio)==0 && ratio==1.0f && safe_area(NULL)==SYSTEM_PARAMETER);
 
@@ -548,6 +580,76 @@ int main(void) {
     unsetenv("SPARTAN_LANGUAGE");
 #endif
     assert(system_param(1,&lang)==0 && lang==1);
+
+    /* System parameter 1000: enter button assignment (default 1 = Cross, 0 = Circle) */
+    int32_t enter_btn=0;
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==1);
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=1");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","1",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0);
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=0");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","0",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==1);
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=");
+    _putenv("SPARTAN_MENU_CONFIRM=circle");
+#else
+    unsetenv("SPARTAN_MENU_CONFIRM_SWAP");
+    setenv("SPARTAN_MENU_CONFIRM","circle",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0);
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM=");
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=");
+#else
+    unsetenv("SPARTAN_MENU_CONFIRM");
+    unsetenv("SPARTAN_MENU_CONFIRM_SWAP");
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==1);
+    /* Conflicting environment variables: primary SPARTAN_MENU_CONFIRM_SWAP overrides alias SPARTAN_MENU_CONFIRM */
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=0");
+    _putenv("SPARTAN_MENU_CONFIRM=circle");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","0",1);
+    setenv("SPARTAN_MENU_CONFIRM","circle",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==1); /* Primary 0 wins (Cross) */
+
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=1");
+    _putenv("SPARTAN_MENU_CONFIRM=cross");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","1",1);
+    setenv("SPARTAN_MENU_CONFIRM","cross",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0); /* Primary 1 wins (Circle) */
+
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=true");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","true",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0); /* Truthy 'true' wins (Circle) */
+
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=");
+    _putenv("SPARTAN_MENU_CONFIRM=");
+#else
+    unsetenv("SPARTAN_MENU_CONFIRM_SWAP");
+    unsetenv("SPARTAN_MENU_CONFIRM");
+#endif
+
+    stub_menu_confirm_swap = 1;
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0);
+    stub_menu_confirm_swap = 0;
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==1);
 
     puts("services test: ok");
     return 0;

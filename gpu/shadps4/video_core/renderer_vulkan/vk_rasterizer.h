@@ -5,6 +5,7 @@
 
 #include "common/recursive_lock.h"
 #include "common/shared_first_mutex.h"
+#include "spartanport_motion_blur.h"
 #include "video_core/buffer_cache/buffer_cache.h"
 #include "video_core/page_manager.h"
 #include "video_core/renderer_vulkan/vk_bind_helper.h"
@@ -210,6 +211,8 @@ private:
 
     bool FilterDraw();
     bool FilterDrawPasses() const;
+    /// True for a draw of the game's motion blur while the motion blur setting is off.
+    bool MotionBlurSkipped(const GraphicsPipeline& pipeline);
     /// Everything of a direct draw after the pipeline selection (GPU thread or stage B).
     void DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw* used_prepared,
                     bool is_indexed, u32 index_offset);
@@ -336,6 +339,9 @@ private:
     bool motion_draw = false;
     u64 motion_geometry{};    ///< vertex-stream identity of the current direct draw
     bool gbuffer_draw = false;
+    /// spartanport: the draws of the game's motion blur skipped when the setting is off
+    /// (spartanport_motion_blur.h). Only touched by the thread that selects pipelines.
+    SpartanMotionBlur::Rule motion_blur_rule;
     std::unique_ptr<TemporalUpscaler> upscaler; // spartanport: FSR (docs/upscaler.md)
     std::array<float, 2> draw_jitter{};         ///< viewport offset of the current draw, pixels
     std::array<float, 2> target_scale{1.0f, 1.0f}; ///< pass drawn into the upscaler's output-size images

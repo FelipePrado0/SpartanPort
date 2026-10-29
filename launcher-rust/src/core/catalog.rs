@@ -2,9 +2,10 @@
 //! Only the table; reading and writing live in `settings` and `store`.
 
 use crate::core::options::{
-    Choice, AIM_STYLES, ANISOTROPY, DISPLAY_MODES, DRAW_PIPE, ENGINE_FPS_CHOICES, FPS_LIMITS,
-    FRAMES_QUEUED, GLYPH_STYLES, LANGUAGES, LIVE_RESOLUTION, NO_MSAA, OUTPUTS, PRESETS, READBACKS,
-    STICK_PROMPTS, STREAM_MEMORY, UI_LANGUAGES, UI_SCALES, UPSCALERS, VIDEO_BACKENDS,
+    Choice, AIM_STYLES, ANISOTROPY, AUDIO_CHANNELS, DISPLAY_MODES, DRAW_PIPE, ENGINE_FPS_CHOICES,
+    FPS_LIMITS, FRAMES_QUEUED, GLYPH_STYLES, LANGUAGES, LIVE_RESOLUTION, MENU_CONFIRM_STYLES,
+    NO_MSAA, OUTPUTS, PRESETS, READBACKS, STICK_PROMPTS, STREAM_MEMORY, UI_LANGUAGES, UI_SCALES,
+    UPSCALERS, VIDEO_BACKENDS,
 };
 
 /// The file a setting lives in.
@@ -356,6 +357,25 @@ pub static SETTINGS: &[Setting] = &[
     ini("mouse_aim_sensitivity", Kind::Int, Int(100), true, 25),
     ini("mouse_lock", Kind::Int, Int(1), true, 23),
     ini("vibration", Kind::Int, Int(100), true, 21),
+    ini(
+        "menu_confirm_swap",
+        Pick(MENU_CONFIRM_STYLES),
+        Text("0"),
+        true,
+        26,
+    ),
+    // #968: read by the game itself (gpu/shim/spartanport_settings.cpp). motion_blur is the same
+    // key as the in-game Options > Graphics > Motion Blur.
+    ini("master_volume", Kind::Int, Int(100), true, 27),
+    ini(
+        "audio_channels",
+        Pick(AUDIO_CHANNELS),
+        Text("auto"),
+        true,
+        28,
+    ),
+    ini("motion_blur", Flag, Bool(true), true, 29),
+    ini("depth_of_field", Flag, Bool(true), true, 30),
     ini("upscaler", Pick(UPSCALERS), Text("fsr3"), false, 0),
     ini("preset", Pick(PRESETS), Text("1"), false, 1),
     ini("object_motion", Flag, Bool(true), false, 2),
@@ -500,14 +520,14 @@ mod tests {
                 "cheat_very_hard"
             ]
         );
-        assert_eq!(keys.last(), Some(&"mouse_aim_sensitivity"));
+        assert_eq!(keys.last(), Some(&"depth_of_field"));
         let shown: Vec<_> = rows.iter().filter(|s| s.written).map(|s| s.key).collect();
         assert_eq!(shown, SHOWN_INI_KEYS.iter().copied().collect::<Vec<_>>());
     }
 
     #[test]
-    fn shown_ini_keys_are_the_21_controls_of_the_window() {
-        assert_eq!(SHOWN_INI_KEYS.len(), 21);
+    fn shown_ini_keys_are_the_26_controls_of_the_window() {
+        assert_eq!(SHOWN_INI_KEYS.len(), 26);
         for seeded in ["monitor", "hdr", "glyph_style"] {
             assert!(SHOWN_INI_KEYS.contains(&seeded), "{seeded}");
         }

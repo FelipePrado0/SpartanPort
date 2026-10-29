@@ -164,6 +164,101 @@ int main() {
     assert(v.rcas_strength == 75 && v.frames_queued == 1);
     assert(v.async_shaders);
     {
+        // Audio (src/runtime_audio.c): the master volume is 0 to 200 percent, the speaker layout is
+        // named by key, anything unknown is automatic; both survive a save and the environment wins.
+        namespace S = SpartanSettings;
+        assert(S::ParseAudioChannels("auto") == S::AudioChannelsAuto && S::ParseAudioChannels("stereo") == S::AudioStereo);
+        assert(S::ParseAudioChannels("5.1") == S::Audio51 && S::ParseAudioChannels("7.1") == S::Audio71);
+        assert(S::ParseAudioChannels("2.0") == S::AudioStereo && S::ParseAudioChannels("6") == S::Audio51);
+        assert(S::ParseAudioChannels("8") == S::Audio71 && S::ParseAudioChannels("") == S::AudioChannelsAuto);
+        assert(S::ParseAudioChannels("bogus") == S::AudioChannelsAuto && S::ParseAudioChannels("7") == S::AudioChannelsAuto);
+        for (int c = 0; c < S::AudioChannelsCount; ++c) assert(S::ParseAudioChannels(S::AudioChannelKeys[c]) == c);
+        {
+            std::ofstream out(path);
+            out << "master_volume=150\naudio_channels=5.1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 150 && v.audio_channels == S::Audio51);
+        SpartanSettings::Save();
+        const std::string audio_ini = Read(path);
+        assert(audio_ini.find("master_volume=150\n") != std::string::npos);
+        assert(audio_ini.find("audio_channels=5.1\n") != std::string::npos);
+        {
+            std::ofstream out(path);
+            out << "master_volume=900\naudio_channels=7.1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 200 && v.audio_channels == S::Audio71);
+        {
+            std::ofstream out(path);
+            out << "master_volume=-5\naudio_channels=bogus\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 0 && v.audio_channels == S::AudioChannelsAuto);
+        {
+            std::ofstream out(path);
+            out << "master_volume=\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 100);
+        SetEnvironment("SPARTAN_AUDIO_VOLUME", "80");
+        SetEnvironment("SPARTAN_AUDIO_CHANNELS", "stereo");
+        SpartanSettings::Load();
+        assert(v.master_volume == 80 && v.audio_channels == S::AudioStereo);
+        SetEnvironment("SPARTAN_AUDIO_VOLUME", "");
+        SetEnvironment("SPARTAN_AUDIO_CHANNELS", "");
+    }
+
+    {
+        // The game's motion blur (spartanport_motion_blur.h): on by default, a saved 0 turns it off,
+        // the environment wins, and an empty value is off like any other flag.
+        {
+            std::ofstream out(path);
+            out << "motion_blur=0\n";
+        }
+        SpartanSettings::Load();
+        assert(!v.motion_blur);
+        SpartanSettings::Save();
+        assert(Read(path).find("motion_blur=0\n") != std::string::npos);
+        SetEnvironment("SPARTAN_MOTION_BLUR", "1");
+        SpartanSettings::Load();
+        assert(v.motion_blur);
+        SetEnvironment("SPARTAN_MOTION_BLUR", "");
+        {
+            std::ofstream out(path);
+            out << "motion_blur=1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.motion_blur);
+        SpartanSettings::Save();
+        assert(Read(path).find("motion_blur=1\n") != std::string::npos);
+    }
+
+    {
+        // The game's depth of field (spartanport_depth_of_field.h): the same way.
+        {
+            std::ofstream out(path);
+            out << "depth_of_field=0\n";
+        }
+        SpartanSettings::Load();
+        assert(!v.depth_of_field);
+        SpartanSettings::Save();
+        assert(Read(path).find("depth_of_field=0\n") != std::string::npos);
+        SetEnvironment("SPARTAN_DEPTH_OF_FIELD", "1");
+        SpartanSettings::Load();
+        assert(v.depth_of_field);
+        SetEnvironment("SPARTAN_DEPTH_OF_FIELD", "");
+        {
+            std::ofstream out(path);
+            out << "depth_of_field=1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.depth_of_field);
+        SpartanSettings::Save();
+        assert(Read(path).find("depth_of_field=1\n") != std::string::npos);
+    }
+
+    {
         std::ofstream out(path);
         out << "cheat_double_jumps=1\ncheat_very_hard=1\n";
     }
@@ -185,6 +280,56 @@ int main() {
     assert(spartanportgpu_enemy_health_bar(0) == 1);
     assert(spartanportgpu_enemy_health_bar(1) == 0 && !v.enemy_health_bar);
     assert(Read(path).find("enemy_health_bar=0\n") != std::string::npos);
+
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=1\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1 && spartanportgpu_menu_confirm_swap() == 1);
+    SpartanSettings::Save();
+    assert(Read(path).find("menu_confirm_swap=1\n") != std::string::npos);
+
+    {
+        std::ofstream out(path);
+        out << "menu_confirm=circle\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1);
+
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=0\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 0 && spartanportgpu_menu_confirm_swap() == 0);
+    SpartanSettings::Save();
+    assert(Read(path).find("menu_confirm_swap=0\n") != std::string::npos);
+
+    // Conflicting keys in INI: primary menu_confirm_swap always overrides alias menu_confirm
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=0\nmenu_confirm=circle\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 0);
+    {
+        std::ofstream out(path);
+        out << "menu_confirm=circle\nmenu_confirm_swap=0\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 0);
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=1\nmenu_confirm=cross\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1);
+
+    SetEnvironment("SPARTAN_MENU_CONFIRM_SWAP", "1");
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1);
+    SetEnvironment("SPARTAN_MENU_CONFIRM_SWAP", "");
     const auto text = [](unsigned id) { return reinterpret_cast<const char*>(spartanportgpu_native_setting(id)); };
     v.anisotropy = 0;
     assert(spartanportgpu_native_setting(0xf74) != 0);

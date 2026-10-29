@@ -1,4 +1,6 @@
-//! Memory check for the guest memory pool (Python `scripts/guest_memory.py`).
+//! Memory check for the guest memory pool (Python `scripts/guest_memory.py`). The pool is committed
+//! in full at start when Windows allows it, and otherwise as the game maps it (`runtime_memory.c`
+//! `pool_create`), so the warning is about the page file growing, not only about the start.
 
 /// `runtime_memory.c` `pool_size_bytes` default.
 pub const DMEM_RETAIL_MB: u64 = 5056;
@@ -17,7 +19,7 @@ fn headroom_mb(stream_memory: &str) -> u64 {
     }
 }
 
-/// The section `runtime_memory.c` commits for `SPARTAN_DMEM_MB` (0 or out of range: the retail size).
+/// The section `runtime_memory.c` creates for `SPARTAN_DMEM_MB` (0 or out of range: the retail size).
 pub fn pool_mb(dmem_mb: u64) -> u64 {
     let mb = if (DMEM_RETAIL_MB..=16384).contains(&dmem_mb) {
         dmem_mb
@@ -48,7 +50,7 @@ pub fn memory_warning(
         "set Performance -> Stream buffer memory to GPU memory, "
     };
     Some(format!(
-        "Memory: the guest memory pool commits {pool} MiB and the game needs about {needed} MiB in all, more than the {physical} MiB of RAM. The game may close at start (error 1450): {advice}make sure the Windows page file can grow, or choose a lower render resolution."
+        "Memory: the guest memory pool holds up to {pool} MiB and the game needs about {needed} MiB in all, more than the {physical} MiB of RAM. The game may close or run out of memory when the page file cannot grow: {advice}make sure the Windows page file can grow, or choose a lower render resolution."
     ))
 }
 
@@ -103,7 +105,7 @@ mod tests {
     #[test]
     fn warning_text_is_the_pythons() {
         // `guest_memory.memory_warning(8128, 8000, 'cached')` of scripts/guest_memory.py.
-        let python = "Memory: the guest memory pool commits 9152 MiB and the game needs about 13248 MiB in all, more than the 8000 MiB of RAM. The game may close at start (error 1450): set Performance -> Stream buffer memory to GPU memory, make sure the Windows page file can grow, or choose a lower render resolution.";
+        let python = "Memory: the guest memory pool holds up to 9152 MiB and the game needs about 13248 MiB in all, more than the 8000 MiB of RAM. The game may close or run out of memory when the page file cannot grow: set Performance -> Stream buffer memory to GPU memory, make sure the Windows page file can grow, or choose a lower render resolution.";
         assert_eq!(
             memory_warning(8128, Some(8000), "cached").as_deref(),
             Some(python)

@@ -18,6 +18,7 @@
 #include "spartanport_toggles.h"
 #include "spartanport_settings.h"
 #include "spartanport_graphics.h"
+#include "spartanport_overlay.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
 #include "common/debug.h"
 #include "common/thread.h"
@@ -694,6 +695,7 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
     // spartanport: with a frame limit (uncapped presets) a queued flip is presented as soon as it
     // arrives and its slot allows, between vblanks, instead of on the next vblank tick.
     bool immediate_flips = frame_limit != 0;
+    auto next_paused_draw = std::chrono::steady_clock::now();
 
     while (!token.stop_requested()) {
         SpartanSettings::SyncEngineFps();
@@ -727,6 +729,12 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
                     if (!main_port.is_open) {
                         DrawBlankFrame();
                     } else if (ImGui::Core::MustKeepDrawing()) {
+                        DrawLastFrame();
+                    } else if (SpartanOverlay::GamePaused() && now >= next_paused_draw) {
+                        // spartanport: the game waits while the menu or the trophy list pauses it
+                        // (SpartanOverlay::WaitWhilePaused): its last frame is drawn again, about
+                        // 60 times a second, for the overlay over it.
+                        next_paused_draw = now + std::chrono::milliseconds(16);
                         DrawLastFrame();
                     }
                 }

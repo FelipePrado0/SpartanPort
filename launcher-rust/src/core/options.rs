@@ -99,6 +99,20 @@ pub static STICK_PROMPTS: &[Choice] = &[
 
 pub static AIM_STYLES: &[Choice] = &[c("0", "Relative"), c("1", "Absolute")];
 
+pub static MENU_CONFIRM_STYLES: &[Choice] = &[
+    c("0", "Cross confirms, Circle cancels (default)"),
+    c("1", "Circle confirms, Cross cancels"),
+];
+
+/// Speaker layout of the game's 7.1 mix (`audio_channels`): the values the runtime reads
+/// (`SpartanSettings::AudioChannelKeys`).
+pub static AUDIO_CHANNELS: &[Choice] = &[
+    c("auto", "Automatic"),
+    c("stereo", "Stereo"),
+    c("5.1", "5.1 surround"),
+    c("7.1", "7.1 surround"),
+];
+
 pub static GLYPH_STYLES: &[Choice] = &[
     c("off", "Original (default)"),
     c("auto", "Match my controller"),
@@ -478,13 +492,15 @@ mod tests {
 
     #[test]
     fn every_table_has_unique_values() {
-        let tables: [&[Choice]; 20] = [
+        let tables: [&[Choice]; 22] = [
             DISPLAY_MODES,
             ANISOTROPY,
             FPS_LIMITS,
             UI_SCALES,
             STICK_PROMPTS,
             AIM_STYLES,
+            MENU_CONFIRM_STYLES,
+            AUDIO_CHANNELS,
             GLYPH_STYLES,
             UPSCALERS,
             PRESETS,

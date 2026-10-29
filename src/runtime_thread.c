@@ -62,6 +62,33 @@ static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
 static ThreadAttr *attributes;
 static GuestThread *threads;
 static _Thread_local GuestThread *current;
+
+static int slow_wait_ms(void) {
+    static int threshold_ms=-1;
+    if (threshold_ms<0) { const char *e=getenv("SPARTAN_SLOW_WAITS"); threshold_ms=e ? atoi(e) : 0; }
+    return threshold_ms;
+}
+uint64_t runtime_wait_begin(void) {
+    if (slow_wait_ms()<=0) return 0;
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC,&t);
+    return (uint64_t)t.tv_sec*1000000000ull+(uint64_t)t.tv_nsec;
+}
+void runtime_wait_end(const char *what,uint64_t start,const char *detail,long long arg) {
+    if (!start) return;
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC,&t);
+    const uint64_t ns=(uint64_t)t.tv_sec*1000000000ull+(uint64_t)t.tv_nsec-start;
+    if (ns<(uint64_t)slow_wait_ms()*1000000ull) return;
+    static unsigned logged;
+    if (__atomic_fetch_add(&logged,1,__ATOMIC_RELAXED)>=4000) return;
+    /* Callers read errno after this (a failed read returns -errno); a failed log write must not
+     * change it. */
+    const int saved_errno=errno;
+    fprintf(stderr,"Slow wait: %s %.1f ms, thread '%s' %s %lld\n",what,ns/1e6,
+            current ? current->name : "host",detail ? detail : "",arg);
+    errno=saved_errno;
+}
 static _Thread_local int32_t guest_errno;
 static const unsigned char *tls_template;
 static uint64_t tls_filesz, tls_memsz, tls_align=16;
@@ -86,18 +113,16 @@ static void set_gs(void *base) {
     runtime_thread_tcb_offset();
     if (!TlsSetValue(tls_slot,base)) { fprintf(stderr,"STOP: TlsSetValue failed (%lu)\n",GetLastError()); exit(21); }
 }
-#define tls_block_alloc(size) _aligned_malloc(size,64)
 #else
 static void set_gs(void *base) {
     if (syscall(SYS_arch_prctl,ARCH_SET_GS,(unsigned long)base)) { perror("STOP: arch_prctl(ARCH_SET_GS)"); exit(21); }
 }
-#define tls_block_alloc(size) aligned_alloc(64,size)
 #endif
 /* Build TCB/static TLS for the calling host thread and point GS at it. */
 static void attach(GuestThread *t) {
     uint64_t offset=tls_offset();
     size_t total=offset+256;
-    unsigned char *block=tls_block_alloc((total+63)&~(size_t)63);
+    unsigned char *block=runtime_low_alloc(total);
     if (!block) { fputs("Cannot allocate guest TLS\n",stderr); exit(1); }
     memset(block,0,total);
     if (tls_filesz) memcpy(block,tls_template,tls_filesz);
@@ -111,7 +136,7 @@ static void attach(GuestThread *t) {
     current=t;
 }
 static GuestThread *new_thread(void) {
-    GuestThread *t=calloc(1,sizeof(*t));
+    GuestThread *t=runtime_low_alloc(sizeof(*t));
     if (!t) return NULL;
     t->attr=(ThreadAttr){.magic=ATTR_MAGIC,.policy=1,.prio=DEFAULT_PRIO,.stack=DEFAULT_STACK,.affinity=0x7f};
     return t;
@@ -141,10 +166,22 @@ void runtime_thread_attach_main(void) {
     snprintf(t->name,sizeof(t->name),"main");
     set_host_name(t->name);
 }
+/* Records are never removed (games create threads again during every load), so a found
+ * thread moves to the front: the threads the game asks about (priorities, affinity) are not
+ * behind every finished one (from Awakenchan 0.9.34 beta 9.9). SPARTAN_THREAD_FRONT=0: the list
+ * keeps its order, as before. */
 static GuestThread *find_thread(void *handle) {
+    static int front=-1;
+    if (front<0) { const char *e=getenv("SPARTAN_THREAD_FRONT"); front=!(e && e[0]=='0'); }
     GuestThread *found=NULL;
     pthread_mutex_lock(&lock);
-    for (GuestThread *t=threads;t;t=t->next) if (t==handle) { found=t; break; }
+    GuestThread **link=&threads;
+    for (GuestThread *t=threads;t;link=&t->next,t=t->next) {
+        if (t!=handle) continue;
+        found=t;
+        if (front && link!=&threads) { *link=t->next; t->next=threads; threads=t; }
+        break;
+    }
     pthread_mutex_unlock(&lock);
     return found;
 }
@@ -163,7 +200,7 @@ int32_t *runtime_errno(void) { return &guest_errno; }
 
 static ABI int32_t attr_init(ThreadAttr **out) {
     if (!out) return ERR(22);
-    ThreadAttr *a=calloc(1,sizeof(*a));
+    ThreadAttr *a=runtime_low_alloc(sizeof(*a));
     if (!a) return ERR(12);
     *a=(ThreadAttr){.magic=ATTR_MAGIC,.policy=1,.prio=DEFAULT_PRIO,.inherit=4,.stack=DEFAULT_STACK,.guard=4096,.affinity=0x7f};
     pthread_mutex_lock(&lock); a->next=attributes; attributes=a; pthread_mutex_unlock(&lock);
@@ -177,7 +214,7 @@ static ABI int32_t attr_destroy(ThreadAttr **slot) {
     while (*link!=a) link=&(*link)->next;
     *link=a->next; a->magic=0;
     pthread_mutex_unlock(&lock);
-    free(a); *slot=NULL; return 0;
+    runtime_low_free(a); *slot=NULL; return 0;
 }
 static ABI int32_t attr_get(void *thread,ThreadAttr **out) {
     ThreadAttr *a=find_attr(out);
@@ -282,8 +319,24 @@ static void set_host_priority(const char *name,int guest_prio) {
 #define exit_setjmp(t) setjmp((t)->exit_jump)
 #define exit_longjmp(t) longjmp((t)->exit_jump,1)
 #endif
+/* The PS4 runs its threads with flush-to-zero and denormals-are-zero set in MXCSR, and the x87
+ * control word Linux also uses; a Linux or Windows thread starts with both flags clear (MXCSR
+ * 0x1f80). Game code gets different results with them clear (very small values stay as denormals
+ * instead of becoming 0, and a physics step can drift or blow up from there) and runs slower on
+ * denormals. The values are the ones dumped from real hardware, as in shadPS4 (shadPS4#3568,
+ * StevenMiller123, found by red-prig): set on the game's main thread before its first code, and
+ * on each thread it creates. */
+void runtime_orbis_fpu(void) {
+#if defined(__x86_64__)
+    const uint32_t mxcsr=0x9fc0;
+    const uint16_t fpucw=0x037f;
+    __asm__ volatile("ldmxcsr %0" : : "m"(mxcsr));
+    __asm__ volatile("fldcw %0" : : "m"(fpucw));
+#endif
+}
 static void *host_start(void *p) {
     GuestThread *t=p;
+    runtime_orbis_fpu();
     attach(t);
     set_host_name(t->name);
     set_host_priority(t->name,t->attr.prio);
@@ -335,7 +388,9 @@ static ABI int32_t thread_join(GuestThread *t,void **result) {
     if (t->detached || t->joined) return ERR(22);
     t->joined=1;
     void *value=NULL;
+    const uint64_t wait_start=runtime_wait_begin();
     int e=pthread_join(t->host,&value);
+    runtime_wait_end("thread join",wait_start,t->name,0);
     if (e) { fprintf(stderr,"STOP: host pthread_join failed: %d\n",e); exit(21); }
     if (result) *result=t->result;
     pthread_mutex_lock(&lock); ++joined_count; pthread_mutex_unlock(&lock);

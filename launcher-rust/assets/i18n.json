@@ -2340,6 +2340,17 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Bloquear de novo os {} troféus desbloqueados? Uma cópia fica guardada como trophies.dat.bak.",
    "No trophy is unlocked.": "Nenhum troféu está desbloqueado.",
    "Could not reset the trophies: {}": "Não foi possível redefinir os troféus: {}",
+   "Notifications": "Notificações",
+   "List order": "Ordem da lista",
+   "Most earned first": "Mais conquistados primeiro",
+   "Rarest first": "Mais raros primeiro",
+   "{}% of players": "{}% dos jogadores",
+   "Common": "Comum",
+   "Rare": "Raro",
+   "Very rare": "Muito raro",
+   "Ultra rare": "Ultrarraro",
+   "Triangle/Tab: order   L1/R1: notifications": "Triângulo/Tab: ordem   L1/R1: notificações",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: troféus   F8 / R3+R2 / Esc: fechar",
    "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Vale no primeiro início do jogo. Depois, o jogo guarda os próprios idiomas de texto e de falas no save de configurações: troque no jogo, em Opções → Configurações de jogo → Texto de jogo e Opções → Áudio → Falas.",
    "Move forward": "Mover para frente",
    "Move backward": "Mover para trás",
@@ -2409,7 +2420,19 @@
    "Controller ready": "Controle pronto",
    "Mapping saved for the next game start. Any game button remapping in Controls still applies.": "Mapeamento salvo para a próxima inicialização. Os remapeamentos de botões na seção Controles continuam valendo.",
    "Stop the game before setting up a controller.": "Feche o jogo antes de configurar um controle.",
-   "SDL3 was not found. Use a complete port installation or build the project first.": "A SDL3 não foi encontrada. Use uma instalação completa do port ou compile o projeto primeiro."
+   "SDL3 was not found. Use a complete port installation or build the project first.": "A SDL3 não foi encontrada. Use uma instalação completa do port ou compile o projeto primeiro.",
+   "Audio": "Áudio",
+   "Volume": "Volume",
+   "Speakers": "Alto-falantes",
+   "Stereo": "Estéreo",
+   "5.1 surround": "Surround 5.1",
+   "7.1 surround": "Surround 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Volume geral do áudio do jogo. 100% é a mixagem original do jogo; mais é mais alto, com um limitador suave para que cenas altas não distorçam. Também no menu do jogo.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Formato em que a mixagem 7.1 do jogo é enviada. Automático segue o seu dispositivo de som: estéreo, 5.1 ou 7.1. Aplicado quando o jogo inicia.",
+   "Motion blur": "Desfoque de movimento",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "O desfoque de movimento do próprio jogo em objetos rápidos e na câmera. Desligado, ele é removido.",
+   "Depth of field": "Profundidade de campo",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "O desfoque do próprio jogo em objetos distantes, mais forte nas cenas. Desligado, a imagem inteira fica nítida."
   },
   "es": {
    "The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?": "El launcher no puede escribir en {}, así que no puede reemplazarse ahí. ¿Abrir la página de releases para descargar la versión nueva a mano?",
@@ -2718,6 +2741,17 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "¿Volver a bloquear los {} trofeos desbloqueados? Se guarda una copia como trophies.dat.bak.",
    "No trophy is unlocked.": "No hay ningún trofeo desbloqueado.",
    "Could not reset the trophies: {}": "No se pudieron restablecer los trofeos: {}",
+   "Notifications": "Notificaciones",
+   "List order": "Orden de la lista",
+   "Most earned first": "Más obtenidos primero",
+   "Rarest first": "Más raros primero",
+   "{}% of players": "{}% de los jugadores",
+   "Common": "Común",
+   "Rare": "Raro",
+   "Very rare": "Muy raro",
+   "Ultra rare": "Ultrarraro",
+   "Triangle/Tab: order   L1/R1: notifications": "Triángulo/Tab: orden   L1/R1: notificaciones",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofeos   F8 / R3+R2 / Esc: cerrar",
    "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Se usa en el primer inicio del juego. Después, el juego guarda sus propios idiomas de texto y de diálogos en su partida de ajustes: cambialos en el juego, en Opciones → Ajustes de juego → Texto del juego y Opciones → Audio → Diálogos.",
    "Move forward": "Mover hacia delante",
    "Move backward": "Mover hacia atrás",
@@ -2730,7 +2764,19 @@
    "Clear input": "Borrar entrada",
    "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.": "Teclado: introduce la rotación con tus entradas de movimiento. Con las teclas predeterminadas, las secuencias son A W D / D W A, D S A / A S D y D S A W / A S D W. Reasignar el movimiento también cambia estas entradas. Ratón adaptativo: dibuja la rotación con el ratón.",
    "Set up a controller": "Configurar un mando",
-   "Stop the game before setting up a controller.": "Cierra el juego antes de configurar un mando."
+   "Stop the game before setting up a controller.": "Cierra el juego antes de configurar un mando.",
+   "Audio": "Audio",
+   "Volume": "Volumen",
+   "Speakers": "Altavoces",
+   "Stereo": "Estéreo",
+   "5.1 surround": "Envolvente 5.1",
+   "7.1 surround": "Envolvente 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Volumen general del audio del juego. 100% es la mezcla original del juego; más es más alto, con un limitador suave para que las escenas fuertes no distorsionen. También en el menú del juego.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Formato en que se envía la mezcla 7.1 del juego. Automático sigue tu dispositivo de sonido: estéreo, 5.1 o 7.1. Se aplica al iniciar el juego.",
+   "Motion blur": "Desenfoque de movimiento",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "El desenfoque de movimiento del propio juego en objetos rápidos y en la cámara. Desactivado, se elimina.",
+   "Depth of field": "Profundidad de campo",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "El desenfoque del propio juego en objetos lejanos, más fuerte en las escenas. Desactivado, toda la imagen se ve nítida."
   },
   "pl": {
    "Polish": "Polski",
@@ -2756,7 +2802,33 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Zablokować ponownie wszystkie odblokowane trofea ({})? Kopia zostanie zachowana jako trophies.dat.bak.",
    "No trophy is unlocked.": "Żadne trofeum nie jest odblokowane.",
    "Could not reset the trophies: {}": "Nie udało się zresetować trofeów: {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Używany przy pierwszym uruchomieniu gry. Potem gra zapisuje własny język tekstu i dialogów w zapisie ustawień: zmień je w grze, w Opcje → Ustawienia gry → Tekst gry oraz Opcje → Dźwięk → Dialogi."
+   "Notifications": "Powiadomienia",
+   "List order": "Kolejność listy",
+   "Most earned first": "Najczęściej zdobywane najpierw",
+   "Rarest first": "Najrzadsze najpierw",
+   "{}% of players": "{}% graczy",
+   "Common": "Powszechne",
+   "Rare": "Rzadkie",
+   "Very rare": "Bardzo rzadkie",
+   "Ultra rare": "Ultrarzadkie",
+   "Triangle/Tab: order   L1/R1: notifications": "Trójkąt/Tab: kolejność   L1/R1: powiadomienia",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofea   F8 / R3+R2 / Esc: zamknij",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Używany przy pierwszym uruchomieniu gry. Potem gra zapisuje własny język tekstu i dialogów w zapisie ustawień: zmień je w grze, w Opcje → Ustawienia gry → Tekst gry oraz Opcje → Dźwięk → Dialogi.",
+   "Audio": "Dźwięk",
+   "Volume": "Głośność",
+   "Speakers": "Głośniki",
+   "Stereo": "Stereo",
+   "5.1 surround": "Przestrzenny 5.1",
+   "7.1 surround": "Przestrzenny 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Główna głośność dźwięku gry. 100% to oryginalny miks gry; więcej jest głośniej, z łagodnym limiterem, aby głośne sceny nie przesterowywały. Także w menu w grze.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Układ, w jakim wysyłany jest miks 7.1 gry. Automatycznie dopasowuje się do urządzenia dźwiękowego: stereo, 5.1 lub 7.1. Stosowane przy uruchomieniu gry.",
+   "Effects": "Efekty",
+   "Motion blur": "Rozmycie ruchu",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Własne rozmycie ruchu gry na szybko poruszających się obiektach i kamerze. Wyłączone usuwa je.",
+   "Depth of field": "Głębia ostrości",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Własne rozmycie gry na odległych obiektach, najsilniejsze w przerywnikach. Wyłączone zachowuje ostrość całego obrazu.",
+   "Automatic": "Automatycznie",
+   "restart": "restart"
   },
   "fr": {
    "Polish": "Polonais",
@@ -2782,7 +2854,33 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Verrouiller de nouveau les {} trophées débloqués ? Une copie est conservée sous le nom trophies.dat.bak.",
    "No trophy is unlocked.": "Aucun trophée n'est débloqué.",
    "Could not reset the trophies: {}": "Impossible de réinitialiser les trophées : {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Utilisée au premier lancement du jeu. Ensuite, le jeu garde ses propres langues de texte et de voix dans sa sauvegarde de réglages : changez-les dans le jeu, dans Options → Paramètres jeu → Texte du jeu et Options → Audio → Voix."
+   "Notifications": "Notifications",
+   "List order": "Ordre de la liste",
+   "Most earned first": "Les plus obtenus d'abord",
+   "Rarest first": "Les plus rares d'abord",
+   "{}% of players": "{} % des joueurs",
+   "Common": "Commun",
+   "Rare": "Rare",
+   "Very rare": "Très rare",
+   "Ultra rare": "Ultra rare",
+   "Triangle/Tab: order   L1/R1: notifications": "Triangle/Tab : ordre   L1/R1 : notifications",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1 : trophées   F8 / R3+R2 / Échap : fermer",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Utilisée au premier lancement du jeu. Ensuite, le jeu garde ses propres langues de texte et de voix dans sa sauvegarde de réglages : changez-les dans le jeu, dans Options → Paramètres jeu → Texte du jeu et Options → Audio → Voix.",
+   "Audio": "Audio",
+   "Volume": "Volume",
+   "Speakers": "Haut-parleurs",
+   "Stereo": "Stéréo",
+   "5.1 surround": "Surround 5.1",
+   "7.1 surround": "Surround 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Volume général du son du jeu. 100 % correspond au mixage d'origine du jeu ; au-delà, le son est plus fort, avec un limiteur doux pour que les scènes bruyantes ne saturent pas. Aussi dans le menu en jeu.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Format dans lequel le mixage 7.1 du jeu est envoyé. Automatique suit votre périphérique audio : stéréo, 5.1 ou 7.1. Appliqué au démarrage du jeu.",
+   "Effects": "Effets",
+   "Motion blur": "Flou de mouvement",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Le flou de mouvement propre au jeu sur les objets rapides et la caméra. Désactivé, il est supprimé.",
+   "Depth of field": "Profondeur de champ",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Le flou propre au jeu sur les objets lointains, plus fort dans les cinématiques. Désactivé, toute l'image reste nette.",
+   "Automatic": "Automatique",
+   "restart": "redémarrage"
   },
   "de": {
    "Polish": "Polnisch",
@@ -2808,7 +2906,33 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Alle {} freigeschalteten Trophäen wieder sperren? Eine Kopie bleibt als trophies.dat.bak erhalten.",
    "No trophy is unlocked.": "Keine Trophäe ist freigeschaltet.",
    "Could not reset the trophies: {}": "Die Trophäen konnten nicht zurückgesetzt werden: {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Gilt beim ersten Start des Spiels. Danach speichert das Spiel seine eigene Text- und Sprachausgabe-Sprache im Einstellungsspeicherstand: ändere sie im Spiel unter Optionen → Spieleinstellungen → Spieltext und Optionen → Audio → Sprachausgabe."
+   "Notifications": "Benachrichtigungen",
+   "List order": "Listenreihenfolge",
+   "Most earned first": "Häufigste zuerst",
+   "Rarest first": "Seltenste zuerst",
+   "{}% of players": "{} % der Spieler",
+   "Common": "Häufig",
+   "Rare": "Selten",
+   "Very rare": "Sehr selten",
+   "Ultra rare": "Extrem selten",
+   "Triangle/Tab: order   L1/R1: notifications": "Dreieck/Tab: Reihenfolge   L1/R1: Benachrichtigungen",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: Trophäen   F8 / R3+R2 / Esc: schließen",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Gilt beim ersten Start des Spiels. Danach speichert das Spiel seine eigene Text- und Sprachausgabe-Sprache im Einstellungsspeicherstand: ändere sie im Spiel unter Optionen → Spieleinstellungen → Spieltext und Optionen → Audio → Sprachausgabe.",
+   "Audio": "Audio",
+   "Volume": "Lautstärke",
+   "Speakers": "Lautsprecher",
+   "Stereo": "Stereo",
+   "5.1 surround": "5.1-Surround",
+   "7.1 surround": "7.1-Surround",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Gesamtlautstärke des Spielsounds. 100 % ist die originale Abmischung des Spiels; mehr ist lauter, mit einem sanften Limiter, damit laute Szenen nicht übersteuern. Auch im Menü im Spiel.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Format, in dem die 7.1-Abmischung des Spiels ausgegeben wird. Automatisch folgt dem Audiogerät: Stereo, 5.1 oder 7.1. Gilt ab dem nächsten Spielstart.",
+   "Effects": "Effekte",
+   "Motion blur": "Bewegungsunschärfe",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Die eigene Bewegungsunschärfe des Spiels bei schnellen Objekten und der Kamera. Aus entfernt sie.",
+   "Depth of field": "Tiefenschärfe",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Die eigene Unschärfe des Spiels bei entfernten Objekten, am stärksten in Zwischensequenzen. Aus hält das ganze Bild scharf.",
+   "Automatic": "Automatisch",
+   "restart": "Neustart"
   },
   "it": {
    "Polish": "Polacco",
@@ -2834,7 +2958,33 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Bloccare di nuovo i {} trofei sbloccati? Una copia viene conservata come trophies.dat.bak.",
    "No trophy is unlocked.": "Nessun trofeo è sbloccato.",
    "Could not reset the trophies: {}": "Impossibile reimpostare i trofei: {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Usata al primo avvio del gioco. Poi il gioco conserva le proprie lingue di testo e dei dialoghi nel salvataggio delle impostazioni: cambiale nel gioco, in Opzioni → Impostazioni di gioco → Testo di gioco e Opzioni → Audio → Dialoghi."
+   "Notifications": "Notifiche",
+   "List order": "Ordine della lista",
+   "Most earned first": "Più ottenuti prima",
+   "Rarest first": "Più rari prima",
+   "{}% of players": "{}% dei giocatori",
+   "Common": "Comune",
+   "Rare": "Raro",
+   "Very rare": "Molto raro",
+   "Ultra rare": "Ultra raro",
+   "Triangle/Tab: order   L1/R1: notifications": "Triangolo/Tab: ordine   L1/R1: notifiche",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofei   F8 / R3+R2 / Esc: chiudi",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Usata al primo avvio del gioco. Poi il gioco conserva le proprie lingue di testo e dei dialoghi nel salvataggio delle impostazioni: cambiale nel gioco, in Opzioni → Impostazioni di gioco → Testo di gioco e Opzioni → Audio → Dialoghi.",
+   "Audio": "Audio",
+   "Volume": "Volume",
+   "Speakers": "Altoparlanti",
+   "Stereo": "Stereo",
+   "5.1 surround": "Surround 5.1",
+   "7.1 surround": "Surround 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Volume generale dell'audio del gioco. 100% è il mix originale del gioco; di più è più forte, con un limitatore morbido perché le scene rumorose non distorcano. Anche nel menu nel gioco.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Formato in cui viene inviato il mix 7.1 del gioco. Automatico segue il tuo dispositivo audio: stereo, 5.1 o 7.1. Applicato all'avvio del gioco.",
+   "Effects": "Effetti",
+   "Motion blur": "Sfocatura di movimento",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "La sfocatura di movimento del gioco sugli oggetti veloci e sulla telecamera. Disattivata, viene rimossa.",
+   "Depth of field": "Profondità di campo",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "La sfocatura del gioco sugli oggetti lontani, più forte nelle scene d'intermezzo. Disattivata, tutta l'immagine resta nitida.",
+   "Automatic": "Automatico",
+   "restart": "riavvio"
   },
   "tr": {
    "Polish": "Lehçe",
@@ -2860,7 +3010,33 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Açılmış {} kupanın tümü yeniden kilitlensin mi? Bir kopya trophies.dat.bak olarak saklanır.",
    "No trophy is unlocked.": "Açılmış kupa yok.",
    "Could not reset the trophies: {}": "Kupalar sıfırlanamadı: {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Oyunun ilk açılışında kullanılır. Sonrasında oyun kendi metin ve konuşma dillerini ayar kaydında tutar: bunları oyunda, Seçenekler → Oyun Ayarları → Oyun Metni ve Seçenekler → Ses → Konuşma bölümünden değiştirin."
+   "Notifications": "Bildirimler",
+   "List order": "Liste sırası",
+   "Most earned first": "En çok kazanılan önce",
+   "Rarest first": "En nadir önce",
+   "{}% of players": "Oyuncuların %{}",
+   "Common": "Yaygın",
+   "Rare": "Nadir",
+   "Very rare": "Çok nadir",
+   "Ultra rare": "Ultra nadir",
+   "Triangle/Tab: order   L1/R1: notifications": "Üçgen/Tab: sıra   L1/R1: bildirimler",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: kupalar   F8 / R3+R2 / Esc: kapat",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Oyunun ilk açılışında kullanılır. Sonrasında oyun kendi metin ve konuşma dillerini ayar kaydında tutar: bunları oyunda, Seçenekler → Oyun Ayarları → Oyun Metni ve Seçenekler → Ses → Konuşma bölümünden değiştirin.",
+   "Audio": "Ses",
+   "Volume": "Ses düzeyi",
+   "Speakers": "Hoparlörler",
+   "Stereo": "Stereo",
+   "5.1 surround": "5.1 surround",
+   "7.1 surround": "7.1 surround",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Oyun sesinin ana ses düzeyi. %100 oyunun kendi miksidir; daha yüksek değer daha yüksek sestir ve gürültülü sahnelerin bozulmaması için yumuşak bir sınırlayıcı kullanılır. Oyun içi menüde de bulunur.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Oyunun 7.1 miksinin gönderildiği düzen. Otomatik, ses aygıtınızı izler: stereo, 5.1 veya 7.1. Oyun başlarken uygulanır.",
+   "Effects": "Efektler",
+   "Motion blur": "Hareket bulanıklığı",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Oyunun hızlı hareket eden nesnelerde ve kamerada kendi hareket bulanıklığı. Kapalı olduğunda kaldırılır.",
+   "Depth of field": "Alan derinliği",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Oyunun uzaktaki nesnelerdeki kendi bulanıklığı, en güçlüsü ara sahnelerde. Kapalı olduğunda tüm görüntü net kalır.",
+   "Automatic": "Otomatik",
+   "restart": "yeniden başlatma"
   },
   "ar": {
    "Polish": "البولندية",
@@ -2885,7 +3061,33 @@
    "Close the game before resetting the trophies.": "أغلق اللعبة قبل إعادة ضبط الكؤوس.",
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "هل تريد إقفال جميع الكؤوس المفتوحة ({}) من جديد؟ سيتم الاحتفاظ بنسخة باسم trophies.dat.bak.",
    "No trophy is unlocked.": "لا يوجد أي كأس مفتوح.",
-   "Could not reset the trophies: {}": "تعذّرت إعادة ضبط الكؤوس: {}"
+   "Could not reset the trophies: {}": "تعذّرت إعادة ضبط الكؤوس: {}",
+   "Notifications": "الإشعارات",
+   "List order": "ترتيب القائمة",
+   "Most earned first": "الأكثر حصولًا أولًا",
+   "Rarest first": "الأندر أولًا",
+   "{}% of players": "{}% من اللاعبين",
+   "Common": "شائعة",
+   "Rare": "نادرة",
+   "Very rare": "نادرة جدًا",
+   "Ultra rare": "نادرة للغاية",
+   "Triangle/Tab: order   L1/R1: notifications": "المثلث/Tab: الترتيب   L1/R1: الإشعارات",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: الكؤوس   F8 / R3+R2 / Esc: إغلاق",
+   "Audio": "الصوت",
+   "Volume": "مستوى الصوت",
+   "Speakers": "مكبرات الصوت",
+   "Stereo": "ستيريو",
+   "5.1 surround": "محيطي 5.1",
+   "7.1 surround": "محيطي 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "مستوى الصوت الرئيسي لصوت اللعبة. 100% هو مزج اللعبة الأصلي؛ الأعلى أعلى صوتًا، مع محدِّد ناعم كي لا تتشوّه المشاهد الصاخبة. موجود أيضًا في قائمة اللعبة.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "التوزيع الذي يُرسَل به مزج 7.1 الخاص باللعبة. التلقائي يتبع جهاز الصوت لديك: ستيريو أو 5.1 أو 7.1. يُطبَّق عند بدء اللعبة.",
+   "Effects": "المؤثرات",
+   "Motion blur": "ضبابية الحركة",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "ضبابية الحركة الخاصة باللعبة على الأجسام السريعة والكاميرا. الإيقاف يزيلها.",
+   "Depth of field": "عمق المجال",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "ضبابية اللعبة الخاصة على الأجسام البعيدة، وهي الأقوى في المشاهد السينمائية. الإيقاف يُبقي الصورة كلها واضحة.",
+   "Automatic": "تلقائي",
+   "restart": "إعادة التشغيل"
   },
   "zh": {
    "Polish": "波兰语",
@@ -3191,6 +3393,17 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "要将已解锁的 {} 个奖杯全部重新锁定吗？会保留一份副本 trophies.dat.bak。",
    "No trophy is unlocked.": "没有已解锁的奖杯。",
    "Could not reset the trophies: {}": "无法重置奖杯：{}",
+   "Notifications": "通知",
+   "List order": "列表顺序",
+   "Most earned first": "获得最多的在前",
+   "Rarest first": "最稀有的在前",
+   "{}% of players": "{}% 的玩家",
+   "Common": "普通",
+   "Rare": "稀有",
+   "Very rare": "非常稀有",
+   "Ultra rare": "极其稀有",
+   "Triangle/Tab: order   L1/R1: notifications": "三角/Tab：顺序   L1/R1：通知",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1：奖杯   F8 / R3+R2 / Esc：关闭",
    "Version {} is out, but it has no Linux build yet.": "版本 {} 已发布，但还没有 Linux 版本。",
    "The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?": "启动器无法写入 {}，因此无法在此处替换自身。是否打开发布页面手动下载新版本？",
    "Monitor": "显示器",
@@ -3222,7 +3435,20 @@
    "Right stick left": "右摇杆向左",
    "Right stick right": "右摇杆向右",
    "Clear input": "清除绑定",
-   "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.": "键盘：使用移动绑定输入旋转。默认按键序列为 A W D / D W A、D S A / A S D 和 D S A W / A S D W。重新绑定移动按键后，这些输入也会随之改变。自适应鼠标：用鼠标画出旋转。"
+   "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.": "键盘：使用移动绑定输入旋转。默认按键序列为 A W D / D W A、D S A / A S D 和 D S A W / A S D W。重新绑定移动按键后，这些输入也会随之改变。自适应鼠标：用鼠标画出旋转。",
+   "Audio": "音频",
+   "Volume": "音量",
+   "Speakers": "扬声器",
+   "Stereo": "立体声",
+   "5.1 surround": "5.1 环绕声",
+   "7.1 surround": "7.1 环绕声",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "游戏音频的主音量。100% 为游戏自带的混音；调高会更响亮，并带有软限幅，避免嘈杂场景出现削波失真。游戏内菜单中也有此选项。",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "游戏的 7.1 混音输出所用的声道布局。“自动”会跟随你的声音设备：立体声、5.1 或 7.1。游戏启动时生效。",
+   "Effects": "画面效果",
+   "Motion blur": "动态模糊",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "游戏自带的动态模糊（快速移动的物体和镜头）。关闭后将其移除。",
+   "Depth of field": "景深",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "游戏自带的远景模糊，过场动画中最明显。关闭后整个画面保持清晰。"
   },
   "ja": {
    "Polish": "ポーランド語",
@@ -3248,7 +3474,33 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "獲得済みの {} 個のトロフィーをすべて未獲得に戻しますか？コピーが trophies.dat.bak として残ります。",
    "No trophy is unlocked.": "獲得済みのトロフィーはありません。",
    "Could not reset the trophies: {}": "トロフィーをリセットできませんでした：{}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "ゲームの初回起動時に使われます。その後は、ゲームが設定セーブにテキストと台詞の言語を保存します。ゲーム内の オプション → ゲーム設定 → テキスト表示 と オプション → 音声設定 → 台詞 で変更してください。"
+   "Notifications": "通知",
+   "List order": "リスト順",
+   "Most earned first": "獲得率が高い順",
+   "Rarest first": "レア度が高い順",
+   "{}% of players": "プレイヤーの {}%",
+   "Common": "コモン",
+   "Rare": "レア",
+   "Very rare": "ベリーレア",
+   "Ultra rare": "ウルトラレア",
+   "Triangle/Tab: order   L1/R1: notifications": "トライアングル/Tab：並び順   L1/R1：通知",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1：トロフィー   F8 / R3+R2 / Esc：閉じる",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "ゲームの初回起動時に使われます。その後は、ゲームが設定セーブにテキストと台詞の言語を保存します。ゲーム内の オプション → ゲーム設定 → テキスト表示 と オプション → 音声設定 → 台詞 で変更してください。",
+   "Audio": "オーディオ",
+   "Volume": "音量",
+   "Speakers": "スピーカー",
+   "Stereo": "ステレオ",
+   "5.1 surround": "5.1 サラウンド",
+   "7.1 surround": "7.1 サラウンド",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "ゲーム音声のマスター音量。100% はゲーム本来のミックスです。上げると音が大きくなり、大きな音の場面で音割れしないようソフトリミッターがかかります。ゲーム内メニューにもあります。",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "ゲームの 7.1 ミックスを出力する形式。自動はサウンドデバイスに合わせます：ステレオ、5.1、7.1。ゲームの起動時に適用されます。",
+   "Effects": "エフェクト",
+   "Motion blur": "モーションブラー",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "速く動く物体やカメラにかかるゲーム本来のモーションブラー。オフにすると取り除かれます。",
+   "Depth of field": "被写界深度",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "遠くの物体にかかるゲーム本来のぼかし。カットシーンで最も強くなります。オフにすると画面全体がくっきりします。",
+   "Automatic": "自動",
+   "restart": "再起動"
   },
   "ko": {
    "Polish": "폴란드어",
@@ -3274,7 +3526,33 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "획득한 트로피 {}개를 모두 다시 잠글까요? 복사본이 trophies.dat.bak으로 보관됩니다.",
    "No trophy is unlocked.": "획득한 트로피가 없습니다.",
    "Could not reset the trophies: {}": "트로피를 초기화하지 못했습니다: {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "게임을 처음 시작할 때 사용됩니다. 그 후에는 게임이 설정 저장 데이터에 텍스트와 음성 언어를 저장합니다. 게임 안의 옵션 → 게임 설정 → 게임 텍스트 및 옵션 → 오디오 → 음성에서 변경하세요."
+   "Notifications": "알림",
+   "List order": "목록 순서",
+   "Most earned first": "많이 획득한 순",
+   "Rarest first": "희귀한 순",
+   "{}% of players": "플레이어의 {}%",
+   "Common": "일반",
+   "Rare": "희귀",
+   "Very rare": "매우 희귀",
+   "Ultra rare": "극히 희귀",
+   "Triangle/Tab: order   L1/R1: notifications": "세모/Tab: 정렬   L1/R1: 알림",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: 트로피   F8 / R3+R2 / Esc: 닫기",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "게임을 처음 시작할 때 사용됩니다. 그 후에는 게임이 설정 저장 데이터에 텍스트와 음성 언어를 저장합니다. 게임 안의 옵션 → 게임 설정 → 게임 텍스트 및 옵션 → 오디오 → 음성에서 변경하세요.",
+   "Audio": "오디오",
+   "Volume": "볼륨",
+   "Speakers": "스피커",
+   "Stereo": "스테레오",
+   "5.1 surround": "5.1 서라운드",
+   "7.1 surround": "7.1 서라운드",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "게임 오디오의 마스터 볼륨입니다. 100%는 게임 원래의 믹스이며, 높이면 더 커지고 큰 장면에서 소리가 찢어지지 않도록 소프트 리미터가 적용됩니다. 게임 내 메뉴에도 있습니다.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "게임의 7.1 믹스를 내보내는 방식입니다. 자동은 사운드 장치를 따릅니다: 스테레오, 5.1 또는 7.1. 게임을 시작할 때 적용됩니다.",
+   "Effects": "효과",
+   "Motion blur": "모션 블러",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "빠르게 움직이는 물체와 카메라에 적용되는 게임 자체의 모션 블러입니다. 끄면 제거됩니다.",
+   "Depth of field": "피사계 심도",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "먼 물체에 적용되는 게임 자체의 흐림 효과로, 컷신에서 가장 강합니다. 끄면 화면 전체가 선명하게 유지됩니다.",
+   "Automatic": "자동",
+   "restart": "재시작"
   },
   "id": {
    "Polish": "Polandia",
@@ -3300,6 +3578,17 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Kunci kembali semua {} trofi yang terbuka? Salinan akan disimpan sebagai trophies.dat.bak.",
    "No trophy is unlocked.": "Tidak ada trofi yang terbuka.",
    "Could not reset the trophies: {}": "Tidak dapat mengatur ulang trofi: {}",
+   "Notifications": "Notifikasi",
+   "List order": "Urutan daftar",
+   "Most earned first": "Paling banyak diraih dulu",
+   "Rarest first": "Paling langka dulu",
+   "{}% of players": "{}% pemain",
+   "Common": "Umum",
+   "Rare": "Langka",
+   "Very rare": "Sangat langka",
+   "Ultra rare": "Ultra langka",
+   "Triangle/Tab: order   L1/R1: notifications": "Segitiga/Tab: urutan   L1/R1: notifikasi",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofi   F8 / R3+R2 / Esc: tutup",
    "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Digunakan pada saat pertama kali game dimulai. Setelah itu, game menyimpan bahasa teks dan suaranya sendiri di penyimpanan pengaturan: ubah di dalam game, di Options → Game Settings → Game Text dan Options → Audio → Speech.",
    "The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?": "Launcher tidak dapat menulis ke {}, sehingga tidak dapat mengganti dirinya di sana. Buka halaman rilis untuk mengunduh versi baru secara manual?",
    "Version {} is out, but it has no Linux build yet.": "Versi {} telah tersedia, tetapi belum memiliki build Linux.",
@@ -3596,7 +3885,20 @@
    "Right stick left": "Stik kanan ke kiri",
    "Right stick right": "Stik kanan ke kanan",
    "Clear input": "Hapus input",
-   "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.": "Keyboard: masukkan putaran dengan input gerakan Anda. Dengan tombol default, urutannya adalah A W D / D W A, D S A / A S D dan D S A W / A S D W. Mengubah pemetaan gerakan juga mengubah input ini. Mouse adaptif: gambar putaran dengan mouse."
+   "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.": "Keyboard: masukkan putaran dengan input gerakan Anda. Dengan tombol default, urutannya adalah A W D / D W A, D S A / A S D dan D S A W / A S D W. Mengubah pemetaan gerakan juga mengubah input ini. Mouse adaptif: gambar putaran dengan mouse.",
+   "Audio": "Audio",
+   "Volume": "Volume",
+   "Speakers": "Speaker",
+   "Stereo": "Stereo",
+   "5.1 surround": "Surround 5.1",
+   "7.1 surround": "Surround 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Volume utama audio game. 100% adalah campuran asli game; lebih tinggi berarti lebih keras, dengan pembatas lembut agar adegan yang keras tidak terpotong (clipping). Tersedia juga di menu dalam game.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Tata letak saluran untuk campuran 7.1 game. Otomatis mengikuti perangkat suara Anda: stereo, 5.1, atau 7.1. Diterapkan saat game dimulai.",
+   "Effects": "Efek",
+   "Motion blur": "Motion blur",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Motion blur bawaan game pada objek yang bergerak cepat dan kamera. Jika dimatikan, efek ini dihilangkan.",
+   "Depth of field": "Depth of field",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Blur bawaan game pada objek yang jauh, paling kuat di cutscene. Jika dimatikan, seluruh gambar tetap tajam."
   }
  },
  "ru": {
@@ -3612,6 +3914,17 @@
   "Locked": "Закрыты",
   "{} of {} unlocked": "{} из {} получено",
   "Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close": "Вверх/Вниз: прокрутка   Влево/Вправо: фильтр   F8 / R3+R2 / Esc: закрыть",
+  "Notifications": "Уведомления",
+  "List order": "Порядок списка",
+  "Most earned first": "Сначала частые",
+  "Rarest first": "Сначала редкие",
+  "{}% of players": "{}% игроков",
+  "Common": "Обычный",
+  "Rare": "Редкий",
+  "Very rare": "Очень редкий",
+  "Ultra rare": "Ультраредкий",
+  "Triangle/Tab: order   L1/R1: notifications": "Треугольник/Tab: порядок   L1/R1: уведомления",
+  "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: трофеи   F8 / R3+R2 / Esc: закрыть",
   "Graphics": "Графика",
   "Game": "Игра",
   "Controls": "Управление",
@@ -3740,7 +4053,21 @@
   "You have the latest version ({}).": "У вас последняя версия ({}).",
   "Update failed: {}": "Не удалось обновить: {}",
   "Trophy {}": "Трофей {}",
-  "Could not check for updates: {}": "Не удалось проверить обновления: {}"
+  "Could not check for updates: {}": "Не удалось проверить обновления: {}",
+  "Audio": "Звук",
+  "Volume": "Громкость",
+  "Speakers": "Колонки",
+  "Stereo": "Стерео",
+  "5.1 surround": "Объёмный 5.1",
+  "7.1 surround": "Объёмный 7.1",
+  "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Общая громкость звука игры. 100% — собственное сведение игры; больше — громче, с мягким лимитером, чтобы громкие сцены не искажались. Также в меню игры.",
+  "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Формат, в котором выводится сведение 7.1 игры. «Автоматически» следует за звуковым устройством: стерео, 5.1 или 7.1. Применяется при запуске игры.",
+  "Motion blur": "Размытие в движении",
+  "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Собственное размытие в движении игры на быстрых объектах и камере. Выключено — убирается.",
+  "Depth of field": "Глубина резкости",
+  "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Собственное размытие игры на дальних объектах, сильнее всего в роликах. Выключено — вся картинка остаётся чёткой.",
+  "Automatic": "Автоматически",
+  "restart": "перезапуск"
  },
  "windows_languages": {
   "25": "ru",
@@ -3791,7 +4118,7 @@
     ],
     [
      "Handy Man",
-     "Sever Gaia's hand"
+     "Sever Gaia’s hand"
     ],
     [
      "Open Sesame",
@@ -3810,7 +4137,7 @@
      "Perform a 1000-hit combo"
     ],
     [
-     "Rip One!",
+     "Torn Up",
      "Rip apart 1 Olympus Sentry"
     ],
     [
@@ -3822,7 +4149,7 @@
      "Deliver 50 kicks to Hounds"
     ],
     [
-     "It's getting hot in here...",
+     "It’s getting hot in here...",
      "Burn 100 enemies with the Bow of Apollo"
     ],
     [
@@ -3854,7 +4181,7 @@
      "Kill Zeus"
     ],
     [
-     "Hooker",
+     "Depths Below",
      "Kill Hades"
     ],
     [
@@ -3862,7 +4189,7 @@
      "Acquire the Boreas Icestorm"
     ],
     [
-     "Seeing Things From a Different Perspective",
+     "Seeing things from a different perspective",
      "Solve Hera's Gardens"
     ],
     [
@@ -3874,7 +4201,7 @@
      "Collect all of the Phoenix Feathers"
     ],
     [
-     "Are You Horny to Win?",
+     "Horn of Plenty",
      "Collect all of the Minotaur Horns"
     ],
     [
@@ -3895,7 +4222,7 @@
     ],
     [
      "Priceless",
-     "Collect all of the 'Godly Possessions'"
+     "Collect all of the ‘Godly Possessions’"
     ],
     [
      "aMAZEd",
@@ -3905,143 +4232,143 @@
    "ru": [
     [
      "Царь горы",
-     "Получить все трофеи"
+     "Получите доступ ко всем призам"
     ],
     [
-     "Открытие шлюзов",
-     "Убить Посейдона"
+     "Открыть шлюзы!",
+     "Сразите Посейдона"
     ],
     [
-     "Поджарен до хруста",
-     "Получить Лук Аполлона"
+     "Хрустящая корочка",
+     "Добудьте лук Аполлона"
     ],
     [
-     "Мистер Рука",
-     "Найти тайную комнату «Рука Аида»"
+     "Ищейка",
+     "Найдите тайную комнату с Дланью Аида"
     ],
     [
-     "Властелин света",
-     "Убить Гелиоса"
+     "Ваше сиятельство",
+     "Убейте Гелиоса"
     ],
     [
-     "Доставка обуви",
-     "Убить Гермеса и получить его Сапоги"
+     "Обувь с доставкой",
+     "Убейте Гермеса и заберите его сандалии"
     ],
     [
      "Дамский угодник",
-     "Развлечь Афродиту"
+     "Развлеките Афродиту"
     ],
     [
-     "Мастер на все руки",
-     "Отрубить руку Гее"
+     "Ручная работа",
+     "Отрубите руку Гее"
     ],
     [
-     "Сезам, откройся",
-     "Открыть Врата Тисифоны"
+     "Сезам, откройся!",
+     "Откройте Врата Тизифоны"
     ],
     [
-     "Спаси меня",
-     "Спасти Пандору"
+     "Спаси меня!",
+     "Спасите Пандору"
     ],
     [
      "Три мудреца",
-     "Разгадать загадку Трёх судей"
+     "Заберите цепь у Трех Судей"
     ],
     [
-     "Мастер комбо",
-     "Выполнить комбо из 1000 ударов"
+     "Киллер",
+     "Выполните серию из 1000 ударов"
     ],
     [
-     "Разорванный",
-     "Разорвать 1 Стража Олимпа"
+     "Растерзание",
+     "Разорвите часового Олимпа"
     ],
     [
-     "Красивый загар",
-     "Ослепить 100 врагов Головой Гелиоса"
+     "Работай головой!",
+     "Ослепите 100 противников с помощью головы Гелиоса"
     ],
     [
-     "Школа послушания",
-     "Дать 50 пинков гончим"
+     "Урок послушания",
+     "50 раз пните диких псов"
     ],
     [
-     "Становится жарко...",
-     "Поджечь 100 врагов Луком Аполлона"
+     "Обстановка накаляется...",
+     "Сожгите 100 противников с помощью лука Аполлона"
     ],
     [
-     "Бездушный",
-     "Призвать все Души Когтями Аида"
+     "Душевный король",
+     "Призовите все души с помощью Когтей Аида"
     ],
     [
-     "Кровавый ад",
-     "Облить Кратоса кровью из 500 вёдер, убивая врагов"
+     "Кровавая пелена",
+     "Убивая противников, покройте Кратоса 500 ведрами крови"
     ],
     [
-     "Без кишок нет славы",
-     "Выпотрошить 3 Кентавров-генералов"
+     "Кишка тонка",
+     "Вырвите внутренности у 3 генералов-кентавров"
     ],
     [
-     "Шаг за шагом",
-     "Улучшить любое оружие до следующего уровня"
+     "Иди в рост!",
+     "Усильте любое оружие до следующего уровня"
     ],
     [
      "Братская вражда",
-     "Убить Геракла"
+     "Сразите Геракла"
     ],
     [
      "Убийца титанов",
-     "Убить Кроноса"
+     "Сразите Крона"
     ],
     [
      "Возмездие",
-     "Убить Зевса"
+     "Сразите Зевса"
     ],
     [
-     "В глубинах",
-     "Убить Аида"
+     "Глубина бездны",
+     "Сразите Аида"
     ],
     [
-     "Ледяной ожог",
-     "Получить Ледяную бурю Борея"
+     "Отмороженный",
+     "Добудьте ледяной дождь Борея"
     ],
     [
-     "Взгляд под другим углом",
-     "Разгадать загадку Садов Геры"
+     "C разных точек зрения",
+     "Решите головоломку садов Геры"
     ],
     [
-     "Радость для глаз",
-     "Собрать все Глаза Горгоны"
+     "Глаз радуется!",
+     "Соберите все глаза горгон"
     ],
     [
-     "Ощипывание",
-     "Собрать все Перья Феникса"
+     "Пух и перья",
+     "Соберите все перья феникса"
     ],
     [
-     "Рога изобилия",
-     "Собрать все Рога Минотавра"
+     "Рог изобилия",
+     "Соберите все рога минотавров"
     ],
     [
      "По максимуму!",
-     "Полностью улучшить всё оружие"
+     "Усильте все оружие до максимума"
     ],
     [
-     "Месть свершилась",
-     "Пройти игру"
+     "Мститель",
+     "Пройдите игру"
     ],
     [
-     "Под стать испытанию",
-     "Пройти Испытание Олимпа"
+     "Испытанный",
+     "Пройдите все испытания Олимпа"
     ],
     [
-     "Нечеловек",
-     "Пройти режим «Титан»"
+     "Титанический",
+     "Пройдите игру в режиме \"Титан\""
     ],
     [
-     "Бесценно",
-     "Собрать все «Сокровища богов»"
+     "Неслыханно богатый",
+     "Соберите все сокровища богов"
     ],
     [
-     "Лабиринтит",
-     "Пройти Лабиринт, ни разу не погибнув и не потерпев неудачу"
+     "Неудержимый",
+     "Пройдите через лабиринт, ни разу не погибнув и не потерпев поражение"
     ]
    ],
    "ar": [
@@ -4188,91 +4515,91 @@
    ],
    "es": [
     [
-     "Rey de la colina",
+     "El rey de la colina",
      "Desbloquea todos los trofeos"
     ],
     [
-     "Abriendo las compuertas",
-     "Elimina a Poseidón"
+     "Abrir las compuertas",
+     "Mata a Poseidón"
     ],
     [
-     "Churruscado",
-     "Consigue el Arco de Apolo"
+     "Reducido a cenizas",
+     "Obtén el Arco de Apolo"
     ],
     [
      "Señor Mano",
-     "Descubre la sala secreta del «Brazo de Hades»"
+     "Descubre la sala secreta de los brazos de Hades"
     ],
     [
-     "El señor del resplandor",
-     "Elimina a Helios"
+     "Señor del esplendor",
+     "Mata a Helios"
     ],
     [
-     "Reparto de calzado",
-     "Elimina a Hermes y consigue sus Botas"
+     "Entrega de zapatos",
+     "Mata a Hermes y consigue sus botas"
     ],
     [
      "Mujeriego",
-     "Entretén a Afrodita"
+     "Logra complacer a Afrodita"
     ],
     [
-     "Echando una mano",
-     "Mutila la mano de Gaia"
+     "Siempre a mano",
+     "Córtale la mano a Gaia"
     ],
     [
-     "Ábrete, sésamo",
+     "Ábrete, Sésamo",
      "Abre las Puertas de Tisífone"
     ],
     [
-     "Sálvame",
+     "Rescátame",
      "Salva a Pandora"
     ],
     [
      "Los tres sabios",
-     "Resuelve el enigma de los Tres Jueces"
+     "Libera la cadena de los tres jueces"
     ],
     [
-     "Golpeador",
+     "Sicario",
      "Realiza un combo de 1000 golpes"
     ],
     [
-     "Despedazado",
-     "Despedaza a 1 Centinela del Olimpo"
+     "Desgarrado",
+     "Destroza a 1 centinela del Olimpo"
     ],
     [
-     "Buen bronceado",
+     "Lindo bronceado",
      "Ciega a 100 enemigos con la Cabeza de Helios"
     ],
     [
      "Adiestramiento",
-     "Da 50 patadas a los sabuesos"
+     "Da 50 patadas a los perros"
     ],
     [
-     "Qué calor hace aquí...",
+     "Hace calor aquí...",
      "Quema a 100 enemigos con el Arco de Apolo"
     ],
     [
-     "Sin alma",
-     "Invoca todas las Almas con las Garras de Hades"
+     "Desalmado",
+     "Invoca todas las almas con las Garras de Hades"
     ],
     [
      "Infierno sangriento",
-     "Cubre a Kratos con 500 cubos de sangre matando enemigos"
+     "Cubre a Kratos con 500 cubos de sangre matando a enemigos"
     ],
     [
-     "Sin agallas no hay gloria",
-     "Destripa a 3 Generales Centauro"
+     "Sin entrañas, no hay gloria",
+     "Destripa a 3 generales centauro"
     ],
     [
-     "Paso a paso",
-     "Mejora cualquier arma al siguiente nivel"
+     "Un paso hacia la perfección",
+     "Mejora cualquier arma hasta el siguiente nivel"
     ],
     [
-     "Rivalidad entre hermanos",
+     "Rivalidad fraternal",
      "Mata a Hércules"
     ],
     [
-     "Matador de titanes",
+     "Asesino de Titanes",
      "Mata a Cronos"
     ],
     [
@@ -4284,48 +4611,48 @@
      "Mata a Hades"
     ],
     [
-     "Quemadura de hielo",
-     "Consigue la Tormenta de hielo de Bóreas"
+     "Quemadura glacial",
+     "Obtén la Tormenta de hielo de Bóreas"
     ],
     [
-     "Viendo las cosas desde otro ángulo",
-     "Resuelve el enigma de los Jardines de Hera"
+     "Ver las cosas desde una perspectiva diferente",
+     "Resuelve el jardín de Hera"
     ],
     [
-     "Un regalo para la vista",
-     "Recoge todos los Ojos de Gorgona"
+     "Con buenos ojos",
+     "Recoge todos los ojos de Gorgona"
     ],
     [
-     "Desplumando",
-     "Recoge todas las Plumas de Fénix"
+     "El desplumador",
+     "Recoge todas las plumas de fénix"
     ],
     [
-     "Cuerno de la abundancia",
-     "Recoge todos los Cuernos de Minotauro"
+     "Cuerno de plenitud",
+     "Recoge todos los cuernos de Minotauro"
     ],
     [
      "¡Al máximo!",
      "Mejora por completo todas las armas"
     ],
     [
-     "Venganza completada",
-     "Completa el juego"
+     "Venganza completa",
+     "Supera el juego"
     ],
     [
      "A la altura del desafío",
-     "Completa el Desafío del Olimpo"
+     "Supera el Desafío del Olimpo"
     ],
     [
      "Inhumano",
-     "Completa el modo Titán"
+     "Supera el modo Titán"
     ],
     [
-     "No tiene precio",
-     "Recoge todas las «Posesiones divinas»"
+     "Invaluable",
+     "Recoge todas las \"Posesiones divinas\""
     ],
     [
-     "Laberintitis",
-     "Completa el Laberinto sin morir ni fallar"
+     "Laberíntico",
+     "Atraviesa el laberinto sin morir ni fracasar"
     ]
    ],
    "pt": [
@@ -4473,540 +4800,540 @@
    "fr": [
     [
      "Roi de la colline",
-     "Débloquer tous les trophées"
+     "Débloquez tous les trophées"
     ],
     [
-     "Ouverture des vannes",
-     "Tuer Poséidon"
+     "Ouvrez les vannes",
+     "Tuez Poséidon"
     ],
     [
-     "Grillé à point",
-     "Obtenir l'Arc d'Apollon"
+     "Chaud devant",
+     "Acquérez l'arc d'Apollon"
     ],
     [
-     "Monsieur Main",
-     "Découvrir la salle secrète du « Bras d'Hadès »"
+     "M. Sbire",
+     "Découvrez la pièce secrète \"Bras d'Hadès\""
     ],
     [
-     "Seigneur de la lumière",
-     "Tuer Hélios"
+     "Soleil ardent",
+     "Tuez Hélios"
     ],
     [
      "Livraison de chaussures",
-     "Tuer Hermès et obtenir ses Bottes"
+     "Tuez Hermès et acquérez ses bottes"
     ],
     [
-     "Homme à femmes",
-     "Divertir Aphrodite"
+     "Tombeur",
+     "Distrayez Aphrodite"
     ],
     [
-     "Coup de main",
-     "Trancher la main de Gaïa"
+     "Homme de main",
+     "Tranchez la main de Gaïa"
     ],
     [
-     "Sésame, ouvre-toi",
-     "Ouvrir les Portes de Tisiphone"
+     "Sésame ouvre-toi",
+     "Ouvrez les portes de Tisiphone"
     ],
     [
-     "Sauvez-moi",
-     "Sauver Pandore"
+     "À la rescousse",
+     "Sauvez Pandore"
     ],
     [
-     "Les trois sages",
-     "Résoudre l'énigme des Trois Juges"
+     "Trois sages",
+     "Libérez la chaîne des trois juges"
     ],
     [
-     "Cogneur",
-     "Réaliser un combo de 1 000 coups"
+     "Forcené",
+     "Faites un combo de 1000 coups"
     ],
     [
-     "Mis en pièces",
-     "Mettre en pièces 1 Sentinelle de l'Olympe"
+     "Fracas",
+     "Mettez en pièces une sentinelle olympienne"
     ],
     [
-     "Beau bronzage",
-     "Aveugler 100 ennemis avec la Tête d'Hélios"
+     "Joli bronzage",
+     "Aveuglez 100 ennemis avec la tête d'Hélios"
     ],
     [
      "Dressage",
-     "Donner 50 coups de pied aux chiens"
+     "Donnez 50 coups de pied aux chiens sauvages"
     ],
     [
      "Il fait chaud ici...",
-     "Brûler 100 ennemis avec l'Arc d'Apollon"
+     "Brûlez 100 ennemis avec l'arc d'Apollon"
     ],
     [
-     "Sans âme",
-     "Invoquer toutes les Âmes avec les Griffes d'Hadès"
+     "Âmes à gogo",
+     "Invoquez toutes les âmes avec les griffes d'Hadès"
     ],
     [
-     "Enfer sanglant",
-     "Couvrir Kratos de 500 seaux de sang en tuant des ennemis"
+     "Bain de sang",
+     "Couvrez Kratos de 500 seaux remplis du sang de ses ennemis"
     ],
     [
-     "Pas de tripes, pas de gloire",
-     "Éventrer 3 Généraux Centaures"
+     "Affaire de tripes",
+     "Arrachez les entrailles de 3 généraux centaures"
     ],
     [
-     "Un pas à la fois",
-     "Améliorer n'importe quelle arme au niveau suivant"
+     "Toujours plus fort",
+     "Améliorez n'importe quelle arme d'un niveau"
     ],
     [
-     "Rivalité fraternelle",
-     "Tuer Hercule"
+     "Lutte fraternelle",
+     "Tuez Hercule"
     ],
     [
-     "Tueur de Titan",
-     "Tuer Cronos"
+     "Massacre titanesque",
+     "Tuez Chronos"
     ],
     [
-     "Rétribution",
-     "Tuer Zeus"
+     "Châtiment",
+     "Tuez Zeus"
     ],
     [
-     "Dans les profondeurs",
-     "Tuer Hadès"
+     "Entrailles infernales",
+     "Tuez Hadès"
     ],
     [
-     "Brûlure glaciale",
-     "Obtenir la Tempête de glace de Borée"
+     "Coup de froid",
+     "Acquérez la tempête de glace de Borias"
     ],
     [
-     "Un autre point de vue",
-     "Résoudre l'énigme des Jardins d'Héra"
+     "Une perspective différente",
+     "Résolvez le puzzle des jardins d'Héra"
     ],
     [
-     "Un régal pour les yeux",
-     "Collecter tous les Yeux de Gorgone"
+     "Collection de billes",
+     "Collectez tous les yeux de gorgone"
     ],
     [
-     "Plumage",
-     "Collecter toutes les Plumes de Phénix"
+     "Plumer le phénix",
+     "Collectez toutes les plumes de phénix"
     ],
     [
-     "Corne d'abondance",
-     "Collecter toutes les Cornes du Minotaure"
+     "Cornes en abondance",
+     "Collectez toutes les cornes de minotaures"
     ],
     [
-     "Au maximum !",
-     "Améliorer complètement toutes les armes"
+     "Puissance max !",
+     "Améliorez toutes les armes au maximum"
     ],
     [
      "Vengeance accomplie",
-     "Terminer le jeu"
+     "Terminez le jeu"
     ],
     [
-     "À la hauteur du défi",
-     "Terminer le Défi de l'Olympe"
+     "Jusqu'au bout",
+     "Terminez le défi de l'Olympe"
     ],
     [
      "Inhumain",
-     "Terminer le mode Titan"
+     "Terminez le mode Titan"
     ],
     [
-     "Sans prix",
-     "Collecter toutes les « Possessions divines »"
+     "Inestimable",
+     "Collectez tous les \"biens divins\""
     ],
     [
-     "Labyrinthite",
-     "Terminer le Labyrinthe sans mourir ni échouer"
+     "Sens de l'orientation",
+     "Réussissez le labyrinthe sans mourir ou échouer"
     ]
    ],
    "de": [
     [
-     "König des Berges",
-     "Alle Trophäen freischalten"
+     "Supersammler",
+     "Schalten Sie alle Trophäen frei."
     ],
     [
-     "Die Schleusen öffnen",
-     "Poseidon töten"
+     "Öffnung der Schleusentore",
+     "Erledigen Sie Poseidon."
     ],
     [
-     "Knusprig gebraten",
-     "Den Bogen des Apollon erhalten"
+     "Verkohlt",
+     "Bringen Sie den Bogen des Apollo in Ihren Besitz."
     ],
     [
-     "Herr Hand",
-     "Den Geheimraum „Arm des Hades“ entdecken"
+     "Forschung",
+     "Entdecken Sie den geheimen \"Hades-Arm\"-Raum."
     ],
     [
-     "Herr des Lichts",
-     "Helios töten"
+     "Einfach glänzend",
+     "Erledigen Sie Helios."
     ],
     [
      "Schuhlieferung",
-     "Hermes töten und seine Stiefel erhalten"
+     "Erledigen Sie Hermes und bringen Sie seine Stiefel in Ihren Besitz."
     ],
     [
      "Frauenheld",
-     "Aphrodite unterhalten"
+     "Unterhalten Sie Aphrodite erfolgreich."
     ],
     [
-     "Eine helfende Hand",
-     "Gaias Hand abtrennen"
+     "Gib mir deine Hand",
+     "Trennen Sie Gaias Hand ab."
     ],
     [
-     "Sesam, öffne dich",
-     "Die Tore der Tisiphone öffnen"
+     "Sesam öffne dich",
+     "Öffnen Sie die Tore von Tisiphone."
     ],
     [
      "Rette mich",
-     "Pandora retten"
+     "Retten Sie Pandora."
     ],
     [
-     "Die drei Weisen",
-     "Das Rätsel der Drei Richter lösen"
+     "Drei weise Männer",
+     "Sorgen Sie dafür, dass die drei Richter die Kette loslassen."
     ],
     [
-     "Schlagmeister",
-     "Eine 1000-Treffer-Combo ausführen"
+     "Unermüdlich",
+     "Führen Sie eine 1000-Treffer-Kombo aus."
     ],
     [
-     "Zerfetzt",
-     "1 Wächter des Olymp zerreißen"
+     "Entzweit",
+     "Nehmen Sie 1 Olympwächter auseinander."
     ],
     [
-     "Schöne Bräune",
-     "100 Gegner mit dem Haupt des Helios blenden"
+     "Blendend",
+     "Blenden Sie 100 Gegner mit Helios' Kopf."
     ],
     [
-     "Gehorsamsschule",
-     "50 Tritte gegen Hunde austeilen"
+     "Schule des Gehorsams",
+     "Versetzen Sie den Hunden 50 Tritte."
     ],
     [
-     "Es wird heiß hier ...",
-     "100 Gegner mit dem Bogen des Apollon verbrennen"
+     "Es wird heiß ...",
+     "Stecken Sie 100 Gegner mit dem Bogen des Apollo in Brand."
     ],
     [
      "Seelenlos",
-     "Alle Seelen mit den Klauen des Hades beschwören"
+     "Beschwören Sie alle Seelen mit den Hadesklauen."
     ],
     [
-     "Blutige Hölle",
-     "Kratos durch das Töten von Gegnern mit 500 Eimern Blut bedecken"
+     "Rote Hölle",
+     "Bedecken Sie Kratos mit 500 Kübeln Blut seiner Gegner."
     ],
     [
-     "Ohne Mumm kein Ruhm",
-     "3 Zentaurengeneräle ausweiden"
+     "Kein Mut, kein Ruhm",
+     "Weiden Sie 3 Zentaurengeneräle aus."
     ],
     [
-     "Schritt für Schritt",
-     "Eine beliebige Waffe auf die nächste Stufe verbessern"
+     "Richtig loslegen",
+     "Verbessern Sie eine Waffe um eine Stufe."
     ],
     [
-     "Brüderzwist",
-     "Herkules töten"
+     "Rivalität unter Geschwistern",
+     "Erledigen Sie Herkules."
     ],
     [
      "Titanentöter",
-     "Kronos töten"
+     "Erledigen Sie Kronos."
     ],
     [
      "Vergeltung",
-     "Zeus töten"
+     "Erledigen Sie Zeus."
     ],
     [
-     "In den Tiefen",
-     "Hades töten"
+     "Ganz unten",
+     "Erledigen Sie Hades."
     ],
     [
-     "Eisbrand",
-     "Den Eissturm des Boreas erhalten"
+     "Gefrierbrand",
+     "Bringen Sie Boreas' Eissturm in Ihren Besitz."
     ],
     [
-     "Andere Perspektive",
-     "Das Rätsel der Gärten der Hera lösen"
+     "Eine andere Sicht der Dinge",
+     "Lösen Sie das Rätsel von Heras Gärten."
     ],
     [
      "Augenweide",
-     "Alle Gorgonenaugen sammeln"
+     "Sammeln Sie alle Gorgonenaugen."
     ],
     [
-     "Federn lassen",
-     "Alle Phönixfedern sammeln"
+     "Federnrupfen",
+     "Sammeln Sie alle Phönixfedern."
     ],
     [
      "Füllhorn",
-     "Alle Minotaurushörner sammeln"
+     "Sammeln Sie alle Minotaurenhörner."
     ],
     [
-     "Voll aufgerüstet!",
-     "Alle Waffen vollständig verbessern"
+     "Voll ausgerüstet!",
+     "Verbessern Sie alle Waffen vollständig."
     ],
     [
-     "Rache vollendet",
-     "Das Spiel durchspielen"
+     "Gerächt",
+     "Schließen Sie das Spiel ab."
     ],
     [
      "Der Herausforderung gewachsen",
-     "Die Herausforderung des Olymp abschließen"
+     "Schließen Sie die Olymp-Herausforderung ab."
     ],
     [
      "Unmenschlich",
-     "Den Titanenmodus abschließen"
+     "Schließen Sie das Spiel im Titanen-Modus ab."
     ],
     [
      "Unbezahlbar",
-     "Alle „Göttlichen Besitztümer“ sammeln"
+     "Sammeln Sie alle \"Göttlichen Besitztümer\"."
     ],
     [
-     "Labyrinthitis",
-     "Das Labyrinth ohne Sterben oder Scheitern abschließen"
+     "Orientierungssinn",
+     "Schließen Sie das Labyrinth ab, ohne Ihr Leben zu lassen oder zu scheitern."
     ]
    ],
    "it": [
     [
      "Re della collina",
-     "Sblocca tutti i trofei"
+     "Sblocca tutti i trofei."
     ],
     [
-     "Aprire le chiuse",
-     "Uccidi Poseidone"
+     "Aprendo le chiuse",
+     "Uccidi Poseidone."
     ],
     [
-     "Ben cotto",
-     "Ottieni l'Arco di Apollo"
+     "Ridotto in cenere",
+     "Acquisisci l'Arco di Apollo."
     ],
     [
-     "Signor Mano",
-     "Scopri la stanza segreta del «Braccio di Ade»"
+     "Manolesta",
+     "Scopri la stanza segreta dentro Ade."
     ],
     [
      "Signore della luce",
-     "Uccidi Elio"
+     "Uccidi Elio."
     ],
     [
-     "Consegna di scarpe",
-     "Uccidi Ermes e ottieni i suoi Stivali"
+     "Ali ai piedi",
+     "Uccidi Ermes e acquisisci i suoi Sandali."
     ],
     [
-     "Rubacuori",
-     "Intrattieni Afrodite"
+     "Donnaiolo",
+     "Soddisfa Afrodite."
     ],
     [
-     "Dare una mano",
-     "Mozza la mano di Gaia"
+     "Qua la mano!",
+     "Taglia la mano di Gaia."
     ],
     [
      "Apriti sesamo",
-     "Apri le Porte di Tisifone"
+     "Apri i Cancelli di Tisifone."
     ],
     [
      "Salvami",
-     "Salva Pandora"
+     "Salva Pandora."
     ],
     [
-     "I tre saggi",
-     "Risolvi l'enigma dei Tre Giudici"
+     "Tre uomini saggi",
+     "Fai rilasciare la catena ai Tre giudici."
     ],
     [
-     "Picchiatore",
-     "Esegui una combo da 1.000 colpi"
+     "Killer",
+     "Esegui una combo da 1.000 colpi."
     ],
     [
-     "Fatto a pezzi",
-     "Fai a pezzi 1 Sentinella dell'Olimpo"
+     "Senza pietà",
+     "Fai a pezzi una Sentinella dell'Olimpo."
     ],
     [
-     "Bella abbronzatura",
-     "Acceca 100 nemici con la Testa di Elio"
+     "A bocca aperta",
+     "Acceca 100 nemici con la Testa di Elio."
     ],
     [
-     "Addestramento",
-     "Dai 50 calci ai segugi"
+     "Scuola d'obbedienza",
+     "Sferra 50 calci ai Cani selvatici."
     ],
     [
-     "Qui fa caldo...",
-     "Brucia 100 nemici con l'Arco di Apollo"
+     "Inizia a far caldo...",
+     "Dai fuoco a 100 nemici con l'Arco di Apollo."
     ],
     [
-     "Senz'anima",
-     "Evoca tutte le Anime con gli Artigli di Ade"
+     "Mettici l'anima",
+     "Evoca tutte le anime con gli Artigli di Ade."
     ],
     [
      "Inferno di sangue",
-     "Copri Kratos con 500 secchi di sangue uccidendo i nemici"
+     "Ricopri Kratos con 500 secchi di sangue dei suoi nemici."
     ],
     [
-     "Senza budella niente gloria",
-     "Sventra 3 Generali Centauri"
+     "Odio viscerale",
+     "Eviscera 3 Generali Centauri."
     ],
     [
-     "Un passo alla volta",
-     "Potenzia qualsiasi arma al livello successivo"
+     "La strada per il successo",
+     "Porta un'arma qualsiasi al livello successivo."
     ],
     [
-     "Rivalità tra fratelli",
-     "Uccidi Ercole"
+     "Rivalità fraterna",
+     "Uccidi Ercole."
     ],
     [
      "Ammazzatitani",
-     "Uccidi Crono"
+     "Uccidi Crono."
     ],
     [
-     "Retribuzione",
-     "Uccidi Zeus"
+     "Vendetta",
+     "Uccidi Zeus."
     ],
     [
-     "Nelle profondità",
-     "Uccidi Ade"
+     "De profundis",
+     "Uccidi Ade."
     ],
     [
-     "Bruciatura di ghiaccio",
-     "Ottieni la Tempesta di ghiaccio di Borea"
+     "Ghiaccio che scotta",
+     "Acquisisci la Tempesta di Borea."
     ],
     [
-     "Un altro punto di vista",
-     "Risolvi l'enigma dei Giardini di Era"
+     "Guardare le cose da un'altra prospettiva",
+     "Vieni a capo del Giardino di Era."
     ],
     [
-     "Un piacere per gli occhi",
-     "Raccogli tutti gli Occhi di Gorgone"
+     "Occhio per occhio",
+     "Raccogli tutti gli Occhi di Gorgone."
     ],
     [
-     "Spennando",
-     "Raccogli tutte le Piume di Fenice"
+     "Occhio alla penna!",
+     "Raccogli tutte le Piume di Fenice."
     ],
     [
-     "Corno dell'abbondanza",
-     "Raccogli tutte le Corna del Minotauro"
+     "Cornucopia",
+     "Raccogli tutti i Corni di Minotauro."
     ],
     [
-     "Al massimo!",
-     "Potenzia completamente tutte le armi"
+     "Vado al massimo!",
+     "Potenzia al massimo tutte le armi."
     ],
     [
      "Vendetta compiuta",
-     "Completa il gioco"
+     "Completa il gioco."
     ],
     [
-     "All'altezza della sfida",
-     "Completa la Sfida dell'Olimpo"
+     "L'ultima sfida",
+     "Completa la Sfida di Olimpo."
     ],
     [
-     "Disumano",
-     "Completa la modalità Titano"
+     "Inumano",
+     "Completa il gioco in modalità Titano."
     ],
     [
      "Inestimabile",
-     "Raccogli tutti i «Possedimenti divini»"
+     "Raccogli tutti i \"Tesori degli Dei\"."
     ],
     [
-     "Labirintite",
-     "Completa il Labirinto senza morire né fallire"
+     "Labirinto",
+     "Supera il Labirinto senza morire o fallire."
     ]
    ],
    "pl": [
     [
-     "Król wzgórza",
+     "Pan i władca",
      "Odblokuj wszystkie trofea"
     ],
     [
-     "Otwarcie śluz",
+     "Przerwanie tamy",
      "Zabij Posejdona"
     ],
     [
-     "Przypieczony",
+     "Grzanka",
      "Zdobądź Łuk Apolla"
     ],
     [
-     "Pan Ręka",
-     "Odkryj sekretną komnatę „Ramię Hadesa”"
+     "Ręce do góry!",
+     "Znajdź tajną komnatę \"Ręki Hadesa\""
     ],
     [
-     "Pan blasku",
+     "Władca światłości",
      "Zabij Heliosa"
     ],
     [
-     "Dostawa obuwia",
-     "Zabij Hermesa i zdobądź jego Buty"
+     "Dostawa butów",
+     "Zabij Hermesa i zdobądź jego buty"
     ],
     [
-     "Podrywacz",
+     "Kochaś",
      "Zabaw Afrodytę"
     ],
     [
-     "Pomocna dłoń",
-     "Odetnij dłoń Gai"
+     "Złota rączka",
+     "Oderwij rękę Gai"
     ],
     [
-     "Sezamie, otwórz się",
+     "Sezamie otwórz się",
      "Otwórz Wrota Tyzyfone"
     ],
     [
-     "Uratuj mnie",
+     "Na ratunek",
      "Uratuj Pandorę"
     ],
     [
-     "Trzej mędrcy",
-     "Rozwiąż zagadkę Trzech Sędziów"
+     "Trzech mędrców",
+     "Uwolnij Łańcuch z rąk Trzech Sędziów"
     ],
     [
-     "Mistrz uderzeń",
-     "Wykonaj kombinację 1000 uderzeń"
+     "Zabójca",
+     "Wykonaj combo 1000 trafień"
     ],
     [
-     "Rozerwany",
-     "Rozerwij 1 Strażnika Olimpu"
+     "Rozdarty",
+     "Rozerwij olimpijskiego strażnika na kawałki"
     ],
     [
-     "Piękna opalenizna",
-     "Oślep 100 przeciwników Głową Heliosa"
+     "Ładna opalenizna",
+     "Oślep 100 przeciwników za pomocą Głowy Heliosa"
     ],
     [
      "Tresura",
-     "Kopnij 50 razy ogary"
+     "Kopnij 50 wściekłych psów"
     ],
     [
-     "Gorąco tu...",
-     "Podpal 100 przeciwników Łukiem Apolla"
+     "Robi się gorąco...",
+     "Podpal 100 przeciwników za pomocą Łuku Apolla"
     ],
     [
-     "Bez duszy",
-     "Przywołaj wszystkie Dusze Szponami Hadesa"
+     "Co mi w duszy gra",
+     "Przyzwij wszystkie dusze Szponami Hadesa"
     ],
     [
-     "Krwawe piekło",
-     "Pokryj Kratosa 500 wiadrami krwi, zabijając przeciwników"
+     "Krwawa jatka",
+     "Zbryzgaj Kratosa 500 wiadrami krwi przeciwników"
     ],
     [
-     "Bez flaków nie ma chwały",
-     "Wypatrosz 3 Generałów Centaurów"
+     "Ktoś zamawiał flaczki?",
+     "Wypatrosz 3 generałów centaurów"
     ],
     [
-     "Krok po kroku",
-     "Ulepsz dowolną broń do następnego poziomu"
+     "Rozwój to podstawa",
+     "Zmodyfikuj dowolną broń na następny poziom"
     ],
     [
-     "Braterska rywalizacja",
+     "Rywalizacja rodzeństwa",
      "Zabij Herkulesa"
     ],
     [
-     "Pogromca tytanów",
+     "Zabójca Tytanów",
      "Zabij Kronosa"
     ],
     [
-     "Odwet",
+     "Zemsta",
      "Zabij Zeusa"
     ],
     [
-     "W głębinach",
+     "Podziemna otchłań",
      "Zabij Hadesa"
     ],
     [
-     "Lodowe oparzenie",
-     "Zdobądź Lodową Burzę Boreasza"
+     "Odmrażacz",
+     "Zdobądź Burzę Lodową Boreasza"
     ],
     [
-     "Z innej perspektywy",
-     "Rozwiąż zagadkę Ogrodów Hery"
+     "Inna perspektywa",
+     "Przejdź Ogrody Hery"
     ],
     [
-     "Uczta dla oczu",
+     "Okulista",
      "Zbierz wszystkie Oczy Gorgony"
     ],
     [
-     "Skubanie",
+     "Potęga pióra",
      "Zbierz wszystkie Pióra Feniksa"
     ],
     [
@@ -5015,169 +5342,169 @@
     ],
     [
      "Na maksa!",
-     "Całkowicie ulepsz całą broń"
+     "Całkowicie zmodyfikuj całe uzbrojenie"
     ],
     [
      "Zemsta dokonana",
-     "Ukończ grę"
+     "Przejdź grę"
     ],
     [
-     "Sprostać wyzwaniu",
+     "Pokonać wyzwanie",
      "Ukończ Wyzwanie Olimpu"
     ],
     [
      "Nieludzki",
-     "Ukończ tryb Tytana"
+     "Przejdź grę w trybie Tytana"
     ],
     [
-     "Bezcenne",
-     "Zbierz wszystkie „Boskie Skarby”"
+     "Bezcenny",
+     "Zbierz cały \"boski dobytek\""
     ],
     [
-     "Labiryntyt",
-     "Przejdź Labirynt bez śmierci i porażki"
+     "W labiryncie",
+     "Przejdź Labirynt nie ginąc i nie spadając"
     ]
    ],
    "tr": [
     [
      "Tepenin Kralı",
-     "Tüm kupaları aç"
+     "Tüm kupaların kilidini aç"
     ],
     [
-     "Savakları açmak",
+     "Baraj Kapakları Açılsın",
      "Poseidon'u öldür"
     ],
     [
-     "Kızarmış",
-     "Apollon'un Yayı'nı edin"
+     "Çıtır Çıtır Kızarmış",
+     "Apollo'nun yayını ele geçir"
     ],
     [
-     "Bay El",
-     "\"Hades'in Kolu\" gizli odasını keşfet"
+     "El Ele Kol Kola",
+     "Gizli 'Hades'in Kolu' odasını keşfet"
     ],
     [
-     "Işığın efendisi",
+     "Işık Saçıyorsun",
      "Helios'u öldür"
     ],
     [
-     "Ayakkabı teslimatı",
-     "Hermes'i öldür ve Çizmelerini edin"
+     "Ayakkabı Teslimatı",
+     "Hermes'i öldürüp çizmelerini ele geçir"
     ],
     [
-     "Kadın düşkünü",
-     "Afrodit'i eğlendir"
+     "Kadınların Gözdesi",
+     "Afrodit'i zevkten bulutlara çıkar"
     ],
     [
-     "Yardım eli",
+     "El Elden Üstündür",
      "Gaia'nın elini kopar"
     ],
     [
-     "Açıl susam açıl",
-     "Tisifone'nin Kapıları'nı aç"
+     "Açıl Susam Açıl",
+     "Tisifon'un Kapıları'nı aç"
     ],
     [
-     "Kurtar beni",
+     "Kurtar Beni",
      "Pandora'yı kurtar"
     ],
     [
-     "Üç bilge",
-     "Üç Yargıç'ın bilmecesini çöz"
+     "Üç Bilge Adam",
+     "Üç Yargıç bulmacasını çöz"
     ],
     [
-     "Vurucu",
-     "1000 vuruşluk bir kombo yap"
+     "Vur Kaç",
+     "1000 vuruşluk bir kombo gerçekleştir"
     ],
     [
-     "Parçalanmış",
-     "1 Olimpos Nöbetçisi'ni parçala"
+     "Paramparça",
+     "1 Olimpos nöbetçisini parçalara ayır"
     ],
     [
-     "Güzel bronzluk",
-     "Helios'un Başı ile 100 düşmanı kör et"
+     "Güzel Yanmışsın",
+     "Helios'un kafası ile 100 düşmanı kör et"
     ],
     [
-     "İtaat okulu",
-     "Tazılara 50 tekme at"
+     "Köpek Eğitimi",
+     "Köpeklere 50 tekme indir"
     ],
     [
-     "Burası ısındı...",
-     "Apollon'un Yayı ile 100 düşmanı yak"
+     "Burası Sıcak Mı Oldu Ne...",
+     "Apollo’nun yayı ile 100 düşman yak"
     ],
     [
-     "Ruhsuz",
-     "Hades'in Pençeleri ile tüm Ruhları çağır"
+     "Ruh Güzelliği",
+     "Hades'in pençeleri ile tüm ruhları çağır"
     ],
     [
-     "Kanlı cehennem",
-     "Düşmanları öldürerek Kratos'u 500 kova kanla kapla"
+     "Kan Banyosu",
+     "Düşmanları öldürerek Kratos'un üzerini 500 kova kanla kapla"
     ],
     [
-     "Cesaret yoksa zafer yok",
-     "3 Centaur Generali'nin bağırsaklarını çıkar"
+     "Bağırsak Temizliği",
+     "3 Sentor generalinin karnını deş"
     ],
     [
-     "Adım adım",
-     "Herhangi bir silahı bir sonraki seviyeye yükselt"
+     "Formunun Zirvesinde",
+     "Tüm silahları bir sonraki seviyeye yükselt"
     ],
     [
-     "Kardeş rekabeti",
+     "Kardeş Rekabeti",
      "Herkül'ü öldür"
     ],
     [
-     "Titan avcısı",
+     "Titan Katili",
      "Kronos'u öldür"
     ],
     [
-     "Karşılık",
+     "Öç",
      "Zeus'u öldür"
     ],
     [
-     "Derinliklerde",
+     "Derinlerde Bir Yerde",
      "Hades'i öldür"
     ],
     [
-     "Buz yanığı",
-     "Boreas'ın Buz Fırtınası'nı edin"
+     "Ayaz Yanığı",
+     "Boreas'ın buz fırtınasını ele geçir"
     ],
     [
-     "Farklı bir açıdan",
-     "Hera'nın Bahçeleri bilmecesini çöz"
+     "Olaylara Farklı Bir Açıdan Bakmak Gerek",
+     "Hera'nın Bahçeleri bulmacasını çöz"
     ],
     [
-     "Göze hoş gelen",
-     "Tüm Gorgon Gözleri'ni topla"
+     "Göze Hitap Eden",
+     "Tüm Gorgon gözlerini topla"
     ],
     [
-     "Tüy yolma",
-     "Tüm Anka Kuşu Tüyleri'ni topla"
+     "Tüy Yolucu",
+     "Tüm Zümrüdüanka tüylerini topla"
     ],
     [
-     "Bereket boynuzu",
-     "Tüm Minotor Boynuzları'nı topla"
+     "Bereket Boynuzu",
+     "Tüm Minotor boynuzlarını topla"
     ],
     [
-     "Sonuna kadar!",
-     "Tüm silahları tamamen yükselt"
+     "Maksimumda!",
+     "Silahların hepsini sonuna kadar geliştir"
     ],
     [
-     "İntikam tamam",
-     "Oyunu bitir"
+     "İntikam Sona Erdi",
+     "Oyunu tamamla"
     ],
     [
-     "Meydan okumaya hazır",
-     "Olimpos Meydan Okuması'nı tamamla"
+     "Mücadeleye Hazır",
+     "Olimpos'un Düellosu'nu tamamla"
     ],
     [
-     "İnsanlık dışı",
-     "Titan Modu'nu tamamla"
+     "İnsanlık Dışı",
+     "Titan modunu tamamla"
     ],
     [
-     "Paha biçilemez",
-     "Tüm \"Tanrısal Eşyalar\"ı topla"
+     "Paha Biçilmez",
+     "Tüm 'Tanrısal Eşyalar'ı topla"
     ],
     [
-     "Labirentit",
-     "Labirent'i ölmeden veya başarısız olmadan tamamla"
+     "Koridor Faresi",
+     "Ölmeden ya da başarısızlığa uğramadan Labirent'i tamamla"
     ]
    ],
    "zh": [
@@ -5324,286 +5651,286 @@
    ],
    "ja": [
     [
-     "丘の王者",
-     "すべてのトロフィーを獲得する"
+     "お山の大将",
+     "全部のトロフィーを集める"
     ],
     [
-     "水門を開け",
-     "ポセイドンを倒す"
+     "水門開放",
+     "ポセイドンを殺す"
     ],
     [
-     "こんがり焼ける",
-     "アポロンの弓を入手する"
+     "徹底燃焼",
+     "アポロの弓矢を手に入れる"
     ],
     [
-     "ミスター・ハンド",
-     "隠し部屋「ハデスの腕」を見つける"
+     "ザ・ハンド",
+     "冥界で秘密の部屋を見つける"
     ],
     [
-     "光の主",
-     "ヘリオスを倒す"
+     "輝く主",
+     "ヘリオスを殺す"
     ],
     [
-     "靴のお届け",
-     "ヘルメスを倒してブーツを入手する"
+     "靴の配達",
+     "ヘルメスを殺し、ブーツを手に入れる"
     ],
     [
-     "女たらし",
-     "アフロディーテをもてなす"
+     "色男",
+     "アフロディーテを楽しませることに成功する"
     ],
     [
-     "手を貸す",
-     "ガイアの手を切り落とす"
+     "手相占い",
+     "ガイアの手を切断する"
     ],
     [
-     "開け、ごま",
-     "ティシポネの門を開く"
+     "開けゴマ",
+     "ティシポネの扉を開ける"
     ],
     [
-     "助けて",
-     "パンドラを救出する"
+     "私を助けて",
+     "パンドラを助ける"
     ],
     [
      "三賢者",
-     "三人の審判の謎を解く"
+     "裁きの三神の鎖を解く"
     ],
     [
-     "コンボの達人",
-     "1000ヒットのコンボを決める"
+     "ヒットマン",
+     "1000 ヒットコンボを繰り出す"
     ],
     [
-     "バラバラ",
-     "オリンポスの衛兵を1体引き裂く"
+     "裂け！",
+     "オリュンポスの番兵を1匹引き裂く"
     ],
     [
-     "きれいな日焼け",
-     "ヘリオスの首で敵100体を盲目にする"
+     "ヘッドをどうぞ",
+     "ヘリオスの頭で敵100体の目をくらます"
     ],
     [
-     "しつけ教室",
-     "猟犬を50回蹴る"
+     "訓練学校",
+     "野良猟犬たちを50回蹴る"
     ],
     [
-     "ここは暑いな…",
-     "アポロンの弓で敵100体を燃やす"
+     "暑くなってきた...",
+     "敵100体アポロの弓矢で燃やす"
     ],
     [
-     "魂の抜け殻",
-     "ハデスの爪ですべての魂を召喚する"
+     "魂切れ",
+     "すべての魂をハデスの鉤爪で招集する"
     ],
     [
-     "血まみれの地獄",
-     "敵を倒してクレイトスに500杯分の血を浴びせる"
+     "なんてこった",
+     "バケツ500個分の返り血をクレイトスに浴びせる"
     ],
     [
-     "度胸なくして栄光なし",
-     "ケンタウロス将軍3体の腸を引きずり出す"
+     "勇気なくして栄光なし",
+     "ケンタウロス3匹の内臓をえぐり出す"
     ],
     [
-     "一歩ずつ",
-     "任意の武器を次のレベルに強化する"
+     "本領発揮",
+     "武器をどれかパワーアップする"
     ],
     [
-     "兄弟の争い",
-     "ヘラクレスを倒す"
+     "兄弟喧嘩",
+     "ヘラクレスを殺す"
     ],
     [
-     "タイタンスレイヤー",
-     "クロノスを倒す"
+     "タイタン スレイヤー",
+     "クロノスを殺す"
     ],
     [
-     "報い",
-     "ゼウスを倒す"
+     "報復",
+     "ゼウスを殺す"
     ],
     [
-     "深淵にて",
-     "ハデスを倒す"
+     "歌妓",
+     "ハデスを殺す"
     ],
     [
-     "凍傷",
-     "ボレアスのアイスストームを入手する"
+     "冷凍焼け",
+     "ボリアス・アイスストームを手に入れる"
     ],
     [
-     "別の角度から",
-     "ヘラの庭園の謎を解く"
+     "視点の転換",
+     "ヘラの庭園を解く"
     ],
     [
      "目の保養",
-     "ゴルゴンの目をすべて集める"
+     "ゴルゴンの目を全部集める"
     ],
     [
-     "羽むしり",
-     "フェニックスの羽をすべて集める"
+     "羽根突き",
+     "フェニックスの羽根を全部集める"
     ],
     [
-     "豊穣の角",
-     "ミノタウロスの角をすべて集める"
+     "募る",
+     "ミノタウロスの角を全部集める"
     ],
     [
-     "最大まで！",
-     "すべての武器を完全に強化する"
+     "最高！",
+     "すべての武器を最高レベルまでパワーアップする"
     ],
     [
-     "復讐完了",
+     "復讐達成",
      "ゲームをクリアする"
     ],
     [
-     "挑戦を受けて立つ",
-     "オリンポスの試練をクリアする"
+     "挑戦準備完了",
+     "オリュンポスの試練をクリアする"
     ],
     [
-     "非人間",
-     "タイタンモードをクリアする"
+     "超人的",
+     "タイタンモードでクリアする"
     ],
     [
      "プライスレス",
-     "すべての「神々の所持品」を集める"
+     "”神々の所有物”を全部集める"
     ],
     [
-     "迷宮病",
-     "死なず失敗せずに迷宮をクリアする"
+     "スバラシイ",
+     "死なずにラビリンスを抜ける"
     ]
    ],
    "ko": [
     [
-     "언덕의 왕",
-     "모든 트로피 획득"
+     "언덕 위의 제왕",
+     "모든 트로피 해제하기"
     ],
     [
-     "수문 열기",
-     "포세이돈 처치"
+     "대박 물난리",
+     "포세이돈 죽이기"
     ],
     [
-     "바싹 구워짐",
-     "아폴로의 활 획득"
+     "바짝 태워볼까",
+     "아폴로의 활 확보"
     ],
     [
-     "미스터 핸드",
-     "비밀의 방 '하데스의 팔' 발견"
+     "손을 위로 흔들어!",
+     "하데스의 '팔'이 있는 비밀의 방을 찾기"
     ],
     [
-     "빛의 군주",
-     "헬리오스 처치"
+     "빛나리 군주",
+     "헬리오스 죽이기"
     ],
     [
-     "신발 배달",
-     "헤르메스를 처치하고 그의 부츠 획득"
+     "택배를 해도 되겠군",
+     "헤르메스를 죽이고 군화를 획득"
     ],
     [
-     "바람둥이",
-     "아프로디테 접대"
+     "정력맨 납시다",
+     "아프로디테 만족시키기"
     ],
     [
-     "일손 돕기",
-     "가이아의 손 절단"
+     "손 쓸 데 없나?",
+     "가이아의 손 회손"
     ],
     [
      "열려라 참깨",
-     "티시포네의 문 열기"
+     "티시포네의 문을 열기"
     ],
     [
-     "구해줘",
-     "판도라 구출"
+     "살려줘요",
+     "판도라 구하기"
     ],
     [
-     "세 현자",
-     "세 심판관의 수수께끼 풀기"
+     "세명의 현자",
+     "세명의 재판관의 손에서 체인을 놓게 하기"
     ],
     [
-     "타격왕",
-     "1000타 콤보 달성"
+     "청부업자",
+     "1000개의 히트 콤보를 달성하기"
     ],
     [
-     "갈기갈기",
-     "올림푸스 파수병 1명 찢어 죽이기"
+     "만신창이",
+     "올림푸스 보초 한명 찟기"
     ],
     [
-     "멋진 태닝",
-     "헬리오스의 머리로 적 100명 실명시키기"
+     "선탠",
+     "헬리오스의 머리로 적 100명의 눈을 멀게 하기"
     ],
     [
-     "복종 훈련",
-     "사냥개 50마리 걷어차기"
+     "개 버릇 들이기",
+     "50마리의 개를 발로 걷어차기"
     ],
     [
-     "여기 덥네...",
-     "아폴로의 활로 적 100명 태우기"
+     "여기 완전 더워",
+     "100명의 적을 아폴로의 활로 태워버리기"
     ],
     [
-     "영혼이 없네",
-     "하데스의 발톱으로 모든 영혼 소환"
+     "혼이 빠졌네",
+     "하데스의 갈고리로 모든 영혼을 소환하기"
     ],
     [
-     "피의 지옥",
-     "적을 처치해 크레이토스에게 피 500통 뒤집어씌우기"
+     "피바다",
+     "적을 죽여서 크레토스가 바가지 500개분의 적의 피에 젖게 하기"
     ],
     [
-     "배짱 없인 영광도 없다",
-     "켄타우로스 장군 3명 내장 뽑기"
+     "막창 드실 분",
+     "3 마리의 켄타루스 장군의 내장을 뽑아 내기"
     ],
     [
-     "한 걸음씩",
-     "아무 무기나 다음 단계로 강화"
+     "쓸만해졌는데?",
+     "아무 무기나 다음 레벨로 업그레이드 하기"
     ],
     [
-     "형제의 경쟁",
-     "헤라클레스 처치"
+     "라이벌 형제",
+     "헤라클레스 죽이기"
     ],
     [
-     "타이탄 학살자",
-     "크로노스 처치"
+     "타이탄 헌터",
+     "크로노스 죽이기"
     ],
     [
-     "응징",
-     "제우스 처치"
+     "복수혈전",
+     "제우스 죽이기"
     ],
     [
-     "심연 속에서",
-     "하데스 처치"
+     "깊은 심연",
+     "하데스 죽이기"
     ],
     [
-     "동상",
-     "보레아스의 얼음 폭풍 획득"
+     "동상에 걸리다",
+     "보레아스 얼음폭풍우 획득하기"
     ],
     [
-     "다른 관점에서",
-     "헤라의 정원 수수께끼 풀기"
+     "다른 시점에서 사물 바라보기",
+     "헤라의 정원을 빠져 나오기"
     ],
     [
-     "눈요기",
-     "모든 고르곤의 눈 수집"
+     "눈깔 사탕",
+     "고르곤의 눈을 모두 모으기"
     ],
     [
-     "깃털 뽑기",
-     "모든 불사조 깃털 수집"
+     "깃털 달기",
+     "피닉스 날개를 모두 모으기"
     ],
     [
      "풍요의 뿔",
-     "모든 미노타우로스 뿔 수집"
+     "미노타우르스의 뿔을 모두 모으기"
     ],
     [
-     "최대로!",
-     "모든 무기를 완전히 강화"
+     "완전 대박 최고!",
+     "모든 무기를 완전히 업그레이드 하기"
     ],
     [
-     "복수 완료",
-     "게임 클리어"
+     "복수는 이루어지다",
+     "게임을 완수하기"
     ],
     [
-     "도전에 걸맞게",
-     "올림푸스의 도전 클리어"
+     "도전 완수",
+     "올림푸스의 도전을 완수하기"
     ],
     [
-     "비인간",
-     "타이탄 모드 클리어"
+     "인간을 넘어서",
+     "타이탄 모드를 완수하기"
     ],
     [
-     "값을 매길 수 없는",
-     "모든 '신들의 소유물' 수집"
+     "돈하고 바꿀 수 없는",
+     "신의 재물을 모두 모으기"
     ],
     [
-     "미로병",
-     "죽거나 실패하지 않고 미로 클리어"
+     "미궁은 없다",
+     "미궁에서 죽거나 실패 없이 살아 나오기"
     ]
    ]
   },
@@ -5630,7 +5957,18 @@
     "Close the game before resetting the trophies.": "أغلق اللعبة قبل إعادة ضبط الكؤوس.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "هل تريد إقفال جميع الكؤوس المفتوحة ({}) من جديد؟ سيتم الاحتفاظ بنسخة باسم trophies.dat.bak.",
     "No trophy is unlocked.": "لا يوجد أي كأس مفتوح.",
-    "Could not reset the trophies: {}": "تعذّرت إعادة ضبط الكؤوس: {}"
+    "Could not reset the trophies: {}": "تعذّرت إعادة ضبط الكؤوس: {}",
+    "Notifications": "الإشعارات",
+    "List order": "ترتيب القائمة",
+    "Most earned first": "الأكثر حصولًا أولًا",
+    "Rarest first": "الأندر أولًا",
+    "{}% of players": "{}% من اللاعبين",
+    "Common": "شائعة",
+    "Rare": "نادرة",
+    "Very rare": "نادرة جدًا",
+    "Ultra rare": "نادرة للغاية",
+    "Triangle/Tab: order   L1/R1: notifications": "المثلث/Tab: الترتيب   L1/R1: الإشعارات",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: الكؤوس   F8 / R3+R2 / Esc: إغلاق"
    },
    "es": {
     "Trophies": "Trofeos",
@@ -5654,7 +5992,18 @@
     "Close the game before resetting the trophies.": "Cierra el juego antes de restablecer los trofeos.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "¿Volver a bloquear los {} trofeos desbloqueados? Se guarda una copia como trophies.dat.bak.",
     "No trophy is unlocked.": "No hay ningún trofeo desbloqueado.",
-    "Could not reset the trophies: {}": "No se pudieron restablecer los trofeos: {}"
+    "Could not reset the trophies: {}": "No se pudieron restablecer los trofeos: {}",
+    "Notifications": "Notificaciones",
+    "List order": "Orden de la lista",
+    "Most earned first": "Más obtenidos primero",
+    "Rarest first": "Más raros primero",
+    "{}% of players": "{}% de los jugadores",
+    "Common": "Común",
+    "Rare": "Raro",
+    "Very rare": "Muy raro",
+    "Ultra rare": "Ultrarraro",
+    "Triangle/Tab: order   L1/R1: notifications": "Triángulo/Tab: orden   L1/R1: notificaciones",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofeos   F8 / R3+R2 / Esc: cerrar"
    },
    "pt": {
     "Trophies": "Troféus",
@@ -5678,7 +6027,18 @@
     "Close the game before resetting the trophies.": "Feche o jogo antes de redefinir os troféus.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Bloquear de novo os {} troféus desbloqueados? Uma cópia fica guardada como trophies.dat.bak.",
     "No trophy is unlocked.": "Nenhum troféu está desbloqueado.",
-    "Could not reset the trophies: {}": "Não foi possível redefinir os troféus: {}"
+    "Could not reset the trophies: {}": "Não foi possível redefinir os troféus: {}",
+    "Notifications": "Notificações",
+    "List order": "Ordem da lista",
+    "Most earned first": "Mais conquistados primeiro",
+    "Rarest first": "Mais raros primeiro",
+    "{}% of players": "{}% dos jogadores",
+    "Common": "Comum",
+    "Rare": "Raro",
+    "Very rare": "Muito raro",
+    "Ultra rare": "Ultrarraro",
+    "Triangle/Tab: order   L1/R1: notifications": "Triângulo/Tab: ordem   L1/R1: notificações",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: troféus   F8 / R3+R2 / Esc: fechar"
    },
    "fr": {
     "Trophies": "Trophées",
@@ -5702,7 +6062,18 @@
     "Close the game before resetting the trophies.": "Fermez le jeu avant de réinitialiser les trophées.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Verrouiller de nouveau les {} trophées débloqués ? Une copie est conservée sous le nom trophies.dat.bak.",
     "No trophy is unlocked.": "Aucun trophée n'est débloqué.",
-    "Could not reset the trophies: {}": "Impossible de réinitialiser les trophées : {}"
+    "Could not reset the trophies: {}": "Impossible de réinitialiser les trophées : {}",
+    "Notifications": "Notifications",
+    "List order": "Ordre de la liste",
+    "Most earned first": "Les plus obtenus d'abord",
+    "Rarest first": "Les plus rares d'abord",
+    "{}% of players": "{} % des joueurs",
+    "Common": "Commun",
+    "Rare": "Rare",
+    "Very rare": "Très rare",
+    "Ultra rare": "Ultra rare",
+    "Triangle/Tab: order   L1/R1: notifications": "Triangle/Tab : ordre   L1/R1 : notifications",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1 : trophées   F8 / R3+R2 / Échap : fermer"
    },
    "de": {
     "Trophies": "Trophäen",
@@ -5726,7 +6097,18 @@
     "Close the game before resetting the trophies.": "Beenden Sie das Spiel, bevor Sie die Trophäen zurücksetzen.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Alle {} freigeschalteten Trophäen wieder sperren? Eine Kopie bleibt als trophies.dat.bak erhalten.",
     "No trophy is unlocked.": "Keine Trophäe ist freigeschaltet.",
-    "Could not reset the trophies: {}": "Die Trophäen konnten nicht zurückgesetzt werden: {}"
+    "Could not reset the trophies: {}": "Die Trophäen konnten nicht zurückgesetzt werden: {}",
+    "Notifications": "Benachrichtigungen",
+    "List order": "Listenreihenfolge",
+    "Most earned first": "Häufigste zuerst",
+    "Rarest first": "Seltenste zuerst",
+    "{}% of players": "{} % der Spieler",
+    "Common": "Häufig",
+    "Rare": "Selten",
+    "Very rare": "Sehr selten",
+    "Ultra rare": "Extrem selten",
+    "Triangle/Tab: order   L1/R1: notifications": "Dreieck/Tab: Reihenfolge   L1/R1: Benachrichtigungen",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: Trophäen   F8 / R3+R2 / Esc: schließen"
    },
    "it": {
     "Trophies": "Trofei",
@@ -5750,7 +6132,18 @@
     "Close the game before resetting the trophies.": "Chiudi il gioco prima di reimpostare i trofei.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Bloccare di nuovo i {} trofei sbloccati? Una copia viene conservata come trophies.dat.bak.",
     "No trophy is unlocked.": "Nessun trofeo è sbloccato.",
-    "Could not reset the trophies: {}": "Impossibile reimpostare i trofei: {}"
+    "Could not reset the trophies: {}": "Impossibile reimpostare i trofei: {}",
+    "Notifications": "Notifiche",
+    "List order": "Ordine della lista",
+    "Most earned first": "Più ottenuti prima",
+    "Rarest first": "Più rari prima",
+    "{}% of players": "{}% dei giocatori",
+    "Common": "Comune",
+    "Rare": "Raro",
+    "Very rare": "Molto raro",
+    "Ultra rare": "Ultra raro",
+    "Triangle/Tab: order   L1/R1: notifications": "Triangolo/Tab: ordine   L1/R1: notifiche",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofei   F8 / R3+R2 / Esc: chiudi"
    },
    "pl": {
     "Trophies": "Trofea",
@@ -5774,7 +6167,18 @@
     "Close the game before resetting the trophies.": "Zamknij grę przed zresetowaniem trofeów.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Zablokować ponownie wszystkie odblokowane trofea ({})? Kopia zostanie zachowana jako trophies.dat.bak.",
     "No trophy is unlocked.": "Żadne trofeum nie jest odblokowane.",
-    "Could not reset the trophies: {}": "Nie udało się zresetować trofeów: {}"
+    "Could not reset the trophies: {}": "Nie udało się zresetować trofeów: {}",
+    "Notifications": "Powiadomienia",
+    "List order": "Kolejność listy",
+    "Most earned first": "Najczęściej zdobywane najpierw",
+    "Rarest first": "Najrzadsze najpierw",
+    "{}% of players": "{}% graczy",
+    "Common": "Powszechne",
+    "Rare": "Rzadkie",
+    "Very rare": "Bardzo rzadkie",
+    "Ultra rare": "Ultrarzadkie",
+    "Triangle/Tab: order   L1/R1: notifications": "Trójkąt/Tab: kolejność   L1/R1: powiadomienia",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofea   F8 / R3+R2 / Esc: zamknij"
    },
    "tr": {
     "Trophies": "Kupalar",
@@ -5798,7 +6202,18 @@
     "Close the game before resetting the trophies.": "Kupaları sıfırlamadan önce oyunu kapatın.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Açılmış {} kupanın tümü yeniden kilitlensin mi? Bir kopya trophies.dat.bak olarak saklanır.",
     "No trophy is unlocked.": "Açılmış kupa yok.",
-    "Could not reset the trophies: {}": "Kupalar sıfırlanamadı: {}"
+    "Could not reset the trophies: {}": "Kupalar sıfırlanamadı: {}",
+    "Notifications": "Bildirimler",
+    "List order": "Liste sırası",
+    "Most earned first": "En çok kazanılan önce",
+    "Rarest first": "En nadir önce",
+    "{}% of players": "Oyuncuların %{}",
+    "Common": "Yaygın",
+    "Rare": "Nadir",
+    "Very rare": "Çok nadir",
+    "Ultra rare": "Ultra nadir",
+    "Triangle/Tab: order   L1/R1: notifications": "Üçgen/Tab: sıra   L1/R1: bildirimler",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: kupalar   F8 / R3+R2 / Esc: kapat"
    },
    "zh": {
     "Trophies": "奖杯",
@@ -5822,7 +6237,18 @@
     "Close the game before resetting the trophies.": "重置奖杯前请先关闭游戏。",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "要将已解锁的 {} 个奖杯全部重新锁定吗？会保留一份副本 trophies.dat.bak。",
     "No trophy is unlocked.": "没有已解锁的奖杯。",
-    "Could not reset the trophies: {}": "无法重置奖杯：{}"
+    "Could not reset the trophies: {}": "无法重置奖杯：{}",
+    "Notifications": "通知",
+    "List order": "列表顺序",
+    "Most earned first": "获得最多的在前",
+    "Rarest first": "最稀有的在前",
+    "{}% of players": "{}% 的玩家",
+    "Common": "普通",
+    "Rare": "稀有",
+    "Very rare": "非常稀有",
+    "Ultra rare": "极其稀有",
+    "Triangle/Tab: order   L1/R1: notifications": "三角/Tab：顺序   L1/R1：通知",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1：奖杯   F8 / R3+R2 / Esc：关闭"
    },
    "ja": {
     "Trophies": "トロフィー",
@@ -5846,7 +6272,18 @@
     "Close the game before resetting the trophies.": "トロフィーをリセットする前にゲームを終了してください。",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "獲得済みの {} 個のトロフィーをすべて未獲得に戻しますか？コピーが trophies.dat.bak として残ります。",
     "No trophy is unlocked.": "獲得済みのトロフィーはありません。",
-    "Could not reset the trophies: {}": "トロフィーをリセットできませんでした：{}"
+    "Could not reset the trophies: {}": "トロフィーをリセットできませんでした：{}",
+    "Notifications": "通知",
+    "List order": "リスト順",
+    "Most earned first": "獲得率が高い順",
+    "Rarest first": "レア度が高い順",
+    "{}% of players": "プレイヤーの {}%",
+    "Common": "コモン",
+    "Rare": "レア",
+    "Very rare": "ベリーレア",
+    "Ultra rare": "ウルトラレア",
+    "Triangle/Tab: order   L1/R1: notifications": "トライアングル/Tab：並び順   L1/R1：通知",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1：トロフィー   F8 / R3+R2 / Esc：閉じる"
    },
    "ko": {
     "Trophies": "트로피",
@@ -5870,7 +6307,18 @@
     "Close the game before resetting the trophies.": "트로피를 초기화하기 전에 게임을 종료하세요.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "획득한 트로피 {}개를 모두 다시 잠글까요? 복사본이 trophies.dat.bak으로 보관됩니다.",
     "No trophy is unlocked.": "획득한 트로피가 없습니다.",
-    "Could not reset the trophies: {}": "트로피를 초기화하지 못했습니다: {}"
+    "Could not reset the trophies: {}": "트로피를 초기화하지 못했습니다: {}",
+    "Notifications": "알림",
+    "List order": "목록 순서",
+    "Most earned first": "많이 획득한 순",
+    "Rarest first": "희귀한 순",
+    "{}% of players": "플레이어의 {}%",
+    "Common": "일반",
+    "Rare": "희귀",
+    "Very rare": "매우 희귀",
+    "Ultra rare": "극히 희귀",
+    "Triangle/Tab: order   L1/R1: notifications": "세모/Tab: 정렬   L1/R1: 알림",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: 트로피   F8 / R3+R2 / Esc: 닫기"
    },
    "id": {
     "Trophies": "Trofi",
@@ -5894,7 +6342,18 @@
     "Close the game before resetting the trophies.": "Tutup game sebelum mengatur ulang trofi.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Kunci kembali semua {} trofi yang terbuka? Salinan akan disimpan sebagai trophies.dat.bak.",
     "No trophy is unlocked.": "Tidak ada trofi yang terbuka.",
-    "Could not reset the trophies: {}": "Tidak dapat mengatur ulang trofi: {}"
+    "Could not reset the trophies: {}": "Tidak dapat mengatur ulang trofi: {}",
+    "Notifications": "Notifikasi",
+    "List order": "Urutan daftar",
+    "Most earned first": "Paling banyak diraih dulu",
+    "Rarest first": "Paling langka dulu",
+    "{}% of players": "{}% pemain",
+    "Common": "Umum",
+    "Rare": "Langka",
+    "Very rare": "Sangat langka",
+    "Ultra rare": "Ultra langka",
+    "Triangle/Tab: order   L1/R1: notifications": "Segitiga/Tab: urutan   L1/R1: notifikasi",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofi   F8 / R3+R2 / Esc: tutup"
    }
   }
  }

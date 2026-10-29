@@ -36,6 +36,7 @@ extern "C" {
 // runtime_memory.c
 int runtime_memory_is_mapped(uintptr_t address, uint64_t size);
 int runtime_memory_write_backing(uintptr_t address, const void* data, uint64_t size);
+void runtime_memory_read_backing(uintptr_t address, void* data, uint64_t size);
 uint64_t runtime_memory_clamp(uintptr_t address, uint64_t size);
 int runtime_memory_region(uintptr_t address, uintptr_t* start, uintptr_t* end, int* mapped);
 void runtime_memory_gpu_protect(uintptr_t address, uint64_t size, int read, int write);
@@ -108,18 +109,10 @@ void MemoryManager::InvalidateMemory(VAddr address, u64 size) {
 u64 MemoryManager::ClampRangeSize(VAddr virtual_addr, u64 size) {
     return runtime_memory_clamp(virtual_addr, size);
 }
+// Through the backing view: with SPARTAN_READBACKS=2 (precise) GPU-written pages are also
+// read-protected, and a copy thread faulting there would wait for the GPU thread waiting for it.
 static void CopySparseSerial(VAddr source, u8* dest, u64 size) {
-    while (size) {
-        uintptr_t start = 0, end = 0;
-        int mapped = 0;
-        if (!runtime_memory_region(source, &start, &end, &mapped)) {
-            end = source + size;
-        }
-        const u64 n = std::min<u64>(size, end - source);
-        if (mapped) std::memcpy(dest, reinterpret_cast<const void*>(source), n);
-        else std::memset(dest, 0, n);
-        source += n; dest += n; size -= n;
-    }
+    runtime_memory_read_backing(source, dest, size);
 }
 void MemoryManager::CopySparseMemory(VAddr source, u8* dest, u64 size) {
     // spartanport: large uploads (streaming) are split across the copy threads.
@@ -360,6 +353,14 @@ extern "C" int spartanportgpu_vibration_percent(void) {
     return SpartanSettings::Get().vibration.load(std::memory_order_relaxed);
 }
 
+extern "C" int spartanportgpu_audio_volume_percent(void) {
+    return SpartanSettings::Get().master_volume.load(std::memory_order_relaxed);
+}
+
+extern "C" int spartanportgpu_audio_channels(void) {
+    return SpartanSettings::Get().audio_channels.load(std::memory_order_relaxed);
+}
+
 extern "C" void spartanportgpu_movie_picture(void) {
     Vulkan::MovieBars::Cutscenes().NotePicture(Vulkan::MovieBars::NowMs());
 }
@@ -392,6 +393,10 @@ extern "C" void spartanportgpu_mouse_pause_key(void) {
 
 extern "C" int spartanportgpu_overlay_captures_input(void) {
     return SpartanOverlay::CapturesInput() ? 1 : 0;
+}
+
+extern "C" void spartanportgpu_wait_while_paused(void) {
+    SpartanOverlay::WaitWhilePaused();
 }
 
 extern "C" void spartanportgpu_engine_fps_cycle(void) {

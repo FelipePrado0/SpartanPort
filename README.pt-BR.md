@@ -187,6 +187,14 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
     CPU, RAM e VRAM, cada um opcional, com tamanho da fonte, canto, transparência e formato. Os
     números são o uso do próprio jogo, não do sistema inteiro.
 
+  O menu segue o idioma do launcher (inglês, português, espanhol, francês, alemão, italiano,
+  polonês, turco, indonésio, russo ou chinês), ou o escolhido no topo da aba **Jogo**, na hora.
+  A escolha fica em `spartanport.ini` (`ui_language`).
+- **Troféus** (F8, ou R3+R2 no controle): todos os troféus com o nome oficial e o que pedem, a
+  classe, quantos jogadores conseguiram, e filtros por estado e por classe; notificações de troféu
+  em quatro temas, com sons e imagens seus se você quiser. Veja
+  [docs/TROPHIES.pt-BR.md](docs/TROPHIES.pt-BR.md).
+
 ## Disponibilidade dos recursos
 
 Disponibilidade conferida na [release 2.2.0](https://github.com/FelipePrado0/SpartanPort/releases/tag/windows-v2.2.0) e no código em 14 de outubro de 2026.
@@ -330,7 +338,7 @@ uma correção para todas as configurações de overlay.
 - Tela preta ao abrir: use a release mais recente, que inclui o patch do deadlock na abertura.
   Se persistir, informe GPU, driver, build do jogo e a saída de **Advanced → Log**. Apagar o
   cache de shaders não é uma solução geral e exige reconstruí-lo na próxima abertura.
-- O jogo fecha com "cannot create ... guest memory (error 1450)": o Windows ficou sem memória virtual para alocar o pool de memória do jogo. Aumente o arquivo de paginação: pressione **Win + R**, digite `SystemPropertiesAdvanced`, vá em Configurações de **Desempenho** → guia **Avançado** → **Memória virtual** Alterar, desmarque o gerenciamento automático, selecione a unidade **C:**, defina um tamanho personalizado (ex.: 16384 MB inicial, 24576 MB máximo), clique em **Definir**, **OK** e reinicie o PC.
+- O jogo fecha com "cannot create ... guest memory (error 1450)", ou mais tarde com "cannot commit ... guest memory": o Windows ficou sem memória virtual para alocar o pool de memória do jogo. Aumente o arquivo de paginação: pressione **Win + R**, digite `SystemPropertiesAdvanced`, vá em Configurações de **Desempenho** → guia **Avançado** → **Memória virtual** Alterar, desmarque o gerenciamento automático, selecione a unidade **C:**, defina um tamanho personalizado (ex.: 16384 MB inicial, 24576 MB máximo), clique em **Definir**, **OK** e reinicie o PC.
 - O **Idioma do jogo** do launcher não muda nada: ele só vale no primeiro início do jogo. Depois, o
   jogo restaura os próprios idiomas de texto e de falas do save de configurações, então troque no
   jogo: **Opções → Configurações de jogo → Texto de jogo** e **Opções → Áudio → Falas** (por exemplo,
