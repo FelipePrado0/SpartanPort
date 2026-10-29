@@ -387,6 +387,10 @@ extern "C" int spartanportgpu_overlay_captures_input(void) {
     return SpartanOverlay::CapturesInput() ? 1 : 0;
 }
 
+extern "C" void spartanportgpu_wait_while_paused(void) {
+    SpartanOverlay::WaitWhilePaused();
+}
+
 extern "C" void spartanportgpu_engine_fps_cycle(void) {
     SpartanOverlay::CycleEngineFps();
 }

@@ -8,6 +8,7 @@
  * ports only follow the clock. */
 #define _GNU_SOURCE
 #include "runtime.h"
+#include "gpu/spartanportgpu.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -225,6 +226,8 @@ static ABI int32_t audio_close(int32_t handle) {
 }
 /* `pace`: wait for this port's next period. sceAudioOutOutputs waits once for all its ports. */
 static int32_t output_port(int32_t handle, const void *data, int pace) {
+    /* The menu or the trophy list pauses the game: its sound waits with it (the cadence restarts). */
+    if (pace) spartanportgpu_wait_while_paused();
     int32_t error=0;
     pthread_mutex_lock(&table_lock);
     Port *p=port_of(handle,&error);

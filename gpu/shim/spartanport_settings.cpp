@@ -2,6 +2,7 @@
 #include "spartanport_settings.h"
 #include "spartanport_orbs.h"
 #include "spartanport_graphics.h"
+#include "spartanport_ui_language.h"
 #include "../spartanportgpu.h"
 #include "../../src/graphics_hook.h"
 
@@ -79,6 +80,12 @@ void Set(Values& v, const std::string& key, const std::string& value) {
     }
     if (key == "menu_tab") {
         v.menu_tab = i >= 0 && i <= 3 ? i : 0;
+        return;
+    }
+    if (key == "ui_language") {
+        // A code ("pt"); empty or unknown: the launcher's language.
+        const int index = SpartanUi::FindLanguage(value);
+        v.ui_language = value.empty() || (index == 0 && value != "en") ? -1 : index;
         return;
     }
     const char* cheat_keys[] = {"cheat_health", "cheat_magic", "cheat_item", "cheat_rage", "cheat_orbs",
@@ -185,6 +192,8 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.shadows = i != 0;
     } else if (key == "texture_quality") {
         v.texture_quality = std::clamp(i, 0, TextureQualityCount - 1);
+    } else if (key == "pause_game") {
+        v.pause_game = i != 0;
     } else if (key == "red_orb_multiplier") {
         v.red_orb_multiplier = SpartanOrbs::ClampMultiplier(f);
     } else if (key == "damage_dealt") {
@@ -412,12 +421,16 @@ void Save() {
                  int(v.cheats[0].load()), int(v.cheats[1].load()), int(v.cheats[2].load()),
                  int(v.cheats[3].load()), int(v.cheats[4].load()),
                  int(v.cheats[5].load()), int(v.cheats[6].load()));
+    const int language = v.ui_language;
+    std::fprintf(file, "ui_language=%s\n",
+                 language >= 0 && language < SpartanUi::LanguageCount ? SpartanUi::Languages[language].code.data() : "");
     std::fprintf(file, "enemy_health_bar=%d\n", int(v.enemy_health_bar.load()));
     std::fprintf(file, "auto_qte=%d\n", int(v.auto_qte.load()));
     std::fprintf(file, "bloom=%d\n", int(v.bloom.load()));
     std::fprintf(file, "motion_blur=%d\n", int(v.motion_blur.load()));
     std::fprintf(file, "texture_quality=%d\n", v.texture_quality.load());
     std::fprintf(file, "shadows=%d\n", int(v.shadows.load()));
+    std::fprintf(file, "pause_game=%d\n", int(v.pause_game.load()));
     std::fprintf(file,
                  "overlay_fps=%d\noverlay_frametime=%d\noverlay_upscaler=%d\noverlay_gpu=%d\n"
                  "overlay_cpu=%d\noverlay_ram=%d\noverlay_vram=%d\noverlay_scale=%d\noverlay_corner=%d\n"

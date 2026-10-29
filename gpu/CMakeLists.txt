@@ -163,9 +163,10 @@ target_sources(spartanportgpu PRIVATE third_party/imgui/imgui.cpp third_party/im
     third_party/imgui/backends/imgui_impl_vulkan.cpp)
 target_include_directories(spartanportgpu PRIVATE third_party/imgui third_party/imgui/backends)
 target_compile_definitions(spartanportgpu PRIVATE IMGUI_IMPL_VULKAN_NO_PROTOTYPES
-    SPARTAN_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf")
+    SPARTAN_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf"
+    SPARTAN_TITLE_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../launcher/Cinzel-Black.ttf")
 set_source_files_properties(shim/spartanport_overlay.cpp PROPERTIES
-    OBJECT_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf)
+    OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf;${CMAKE_CURRENT_SOURCE_DIR}/../launcher/Cinzel-Black.ttf")
 target_include_directories(spartanportgpu PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include third_party/half/include)
 target_compile_definitions(spartanportgpu PRIVATE BOOST_ASIO_STANDALONE NDEBUG)
 target_compile_options(spartanportgpu PRIVATE -Wno-deprecated-declarations -Wno-missing-field-initializers)
@@ -308,6 +309,28 @@ target_link_libraries(motion-shader-test PRIVATE spartanportgpu)
 add_executable(png-decode-test EXCLUDE_FROM_ALL ../tests/test_png_decode.cpp shim/spartanport_png.cpp)
 target_compile_options(png-decode-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_link_libraries(png-decode-test PRIVATE PkgConfig::FFMPEG)
+add_executable(trophy-toast-test EXCLUDE_FROM_ALL ../tests/test_trophy_toast.cpp
+    shim/spartanport_trophy_toast_model.cpp shim/spartanport_trophy_media.cpp shim/spartanport_trophy_texts.cpp
+    shim/spartanport_png.cpp)
+target_include_directories(trophy-toast-test PRIVATE shim)
+target_compile_options(trophy-toast-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+target_link_libraries(trophy-toast-test PRIVATE PkgConfig::FFMPEG)
+# The overlay drawn offscreen (tools/overlay_preview.cpp): its own code through ImGui's SDL software
+# renderer, for working on its look without the game and for the documentation's pictures.
+add_executable(overlay-preview EXCLUDE_FROM_ALL tools/overlay_preview.cpp
+    third_party/imgui/backends/imgui_impl_sdlrenderer3.cpp)
+# The overlay's source is compiled here as in the library: same definitions, includes and options.
+target_include_directories(overlay-preview PRIVATE $<TARGET_PROPERTY:spartanportgpu,INCLUDE_DIRECTORIES>)
+target_compile_definitions(overlay-preview PRIVATE $<TARGET_PROPERTY:spartanportgpu,COMPILE_DEFINITIONS>)
+target_compile_options(overlay-preview PRIVATE $<TARGET_PROPERTY:spartanportgpu,COMPILE_OPTIONS>)
+target_link_libraries(overlay-preview PRIVATE spartanportgpu)
+if (WIN32)
+    target_sources(overlay-preview PRIVATE ../src/compat_win.c)
+    target_link_libraries(overlay-preview PRIVATE onecore bcrypt ws2_32 -pthread)
+endif()
+add_executable(ui-language-test EXCLUDE_FROM_ALL ../tests/test_ui_language.cpp)
+target_include_directories(ui-language-test PRIVATE shim)
+target_compile_options(ui-language-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 add_executable(aliasing-test EXCLUDE_FROM_ALL ../tests/test_aliasing.cpp
     shadps4/video_core/texture_cache/aliasing.cpp shadps4/video_core/texture_cache/host_compatibility.cpp)
 target_compile_options(aliasing-test PRIVATE -UNDEBUG)

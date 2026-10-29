@@ -9,6 +9,8 @@
 
 #include "../src/runtime_audio.c"
 
+void spartanportgpu_wait_while_paused(void) {}
+
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *name) {
     (void)table; (void)count; (void)name;
     return 0;

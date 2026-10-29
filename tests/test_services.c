@@ -28,8 +28,8 @@ void spartanportgpu_trophy_setup(const SpartanGpuTrophyLabels *labels, const Spa
 static char mock_user_dir[512]="user";
 const char *runtime_file_user_dir(void) { return mock_user_dir; }
 static char last_toast_title[128], last_toast_detail[256];
-void spartanportgpu_toast_trophy(const char *title, const char *detail, const unsigned char *png, uint64_t png_size) {
-    (void)png; (void)png_size;
+void spartanportgpu_toast_trophy(int id, const char *title, const char *detail, const unsigned char *png, uint64_t png_size) {
+    (void)id; (void)png; (void)png_size;
     if (title) snprintf(last_toast_title, sizeof(last_toast_title), "%s", title);
     else last_toast_title[0] = 0;
     if (detail) snprintf(last_toast_detail, sizeof(last_toast_detail), "%s", detail);
@@ -532,6 +532,36 @@ int main(void) {
     remove(test_txt);
     test_rmdir(test_user);
     snprintf(mock_user_dir,sizeof(mock_user_dir),"user");
+    /* Trophy texts: every label key, the new ones of the list's order and rarity included, lands in its
+     * SpartanGpuTrophyLabels field (the struct is one pointer per key, in the keys' order). */
+    {
+        FILE *texts=fopen("trophy_texts.txt","wb");
+        assert(texts);
+        fputs("\xEF\xBB\xBF# comment\n@heading=Trof\xC3\xA9us\n@rarity={}% dos jogadores\n@ultra_rare=Ultrarraro\n"
+              "@hint_notifications=L1/R1: trof\xC3\xA9us\n@unknown=x\n3=Sr. M\xC3\xA3o | Ache a sala\n",texts);
+        fclose(texts);
+#ifdef _WIN32
+        _putenv("SPARTAN_USER_DIR=.");
+#else
+        setenv("SPARTAN_USER_DIR",".",1);
+#endif
+        memset(trophy_label,0,sizeof(trophy_label)); /* not what an earlier load left (a user/ folder here) */
+        trophy_load_names();
+        const char *label_texts[TROPHY_LABELS];
+        for (int k=0;k<TROPHY_LABELS;k++) label_texts[k]=trophy_label[k][0] ? trophy_label[k] : 0;
+        SpartanGpuTrophyLabels labels;
+        memcpy(&labels,label_texts,sizeof(labels));
+        assert(!strcmp(labels.heading,"Trof\xC3\xA9us") && !strcmp(labels.rarity,"{}% dos jogadores"));
+        assert(!strcmp(labels.ultra_rare,"Ultrarraro") && !strcmp(labels.hint_notifications,"L1/R1: trof\xC3\xA9us"));
+        assert(!labels.notice && !labels.order_list && !labels.common);
+        assert(!strcmp(trophy_names[3],"Sr. M\xC3\xA3o") && !strcmp(trophy_details[3],"Ache a sala"));
+        remove("trophy_texts.txt");
+#ifdef _WIN32
+        _putenv("SPARTAN_USER_DIR=");
+#else
+        unsetenv("SPARTAN_USER_DIR");
+#endif
+    }
 
     float ratio=0; assert(safe_area(&ratio)==0 && ratio==1.0f && safe_area(NULL)==SYSTEM_PARAMETER);
 
