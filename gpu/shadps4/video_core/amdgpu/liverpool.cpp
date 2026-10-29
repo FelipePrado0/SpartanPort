@@ -86,8 +86,14 @@ Liverpool::~Liverpool() {
 }
 
 void Liverpool::ProcessCommands() {
-    if (num_commands && rasterizer) {
-        rasterizer->DrainDrawPipe(Vulkan::DrawPipe::ReasonCommands); // spartanport: commands touch the caches
+    if (num_commands == 0) {
+        return;
+    }
+    // spartanport: commands touch the caches and the scheduler. No command may run before the
+    // drain: one queued by a guest thread after a check that saw none would run beside the draw
+    // recording thread (both recording into the scheduler: null record chunk).
+    if (rasterizer) {
+        rasterizer->DrainDrawPipe(Vulkan::DrawPipe::ReasonCommands);
     }
     // Process incoming commands with high priority
     while (num_commands) {
