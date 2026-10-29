@@ -1741,6 +1741,8 @@ void TextureCache::GarbageCollectImages() {
     bool aggresive = false;
     u64 ticks_to_destroy = 0;
     size_t num_deletions = 0;
+    // spartanport: bound work even when most old images cannot be evicted.
+    u32 visited = 0;
 
     const auto configure = [&](bool allow_aggressive) {
         pressured = total_used_memory >= pressure_gc_memory;
@@ -1748,12 +1750,15 @@ void TextureCache::GarbageCollectImages() {
         ticks_to_destroy = aggresive ? 160 : pressured ? 80 : 16;
         ticks_to_destroy = std::min(ticks_to_destroy, gc_tick);
         num_deletions = aggresive ? 40 : pressured ? 20 : 10;
+        // spartanport: each pass has its own visit limit and kept-image report.
+        visited = 0;
+        gc_kept = gc_kept_bytes = 0;
     };
     const auto clean_up = [&](ImageId image_id) {
-        if (num_deletions == 0) {
+        // spartanport: stop at the deletion budget or the visit limit.
+        if (num_deletions == 0 || ++visited > 256) {
             return true;
         }
-        --num_deletions;
         auto& image = slot_images[image_id];
         ResolveReadbacks(image.info.guest_address, image.info.guest_size, true,
                          ReadbackSource::CacheCleanup);
@@ -1761,11 +1766,19 @@ void TextureCache::GarbageCollectImages() {
         const bool tiled = image.info.IsTiled();
         if (tiled && download) {
             // This is a workaround for now. We can't handle non-linear image downloads.
+            // spartanport: report kept tiled images and move them behind evictable entries.
+            ++gc_kept;
+            gc_kept_bytes += image.info.guest_size;
+            lru_cache.Touch(image.lru_id, gc_tick);
             return false;
         }
         if (download && !pressured) {
+            // spartanport: kept linear images must not block the next pass either.
+            lru_cache.Touch(image.lru_id, gc_tick);
             return false;
         }
+        // spartanport: only actual evictions spend the deletion budget.
+        --num_deletions;
         if (download) {
             // spartanport: synchronously, while the image still protects its pages. A deferred
             // write-back landed after FreeImage had unprotected them, over whatever the game
@@ -1802,12 +1815,15 @@ void TextureCache::GarbageCollectImages() {
     if (pressured || gc_downloads != 0) {
         const auto now = std::chrono::steady_clock::now();
         if (now - gc_report_time >= std::chrono::seconds(5)) {
+            // spartanport: expose tiled images that the latest pass cannot evict.
             std::printf("Texture cache: memory pressure, %llu of %llu MiB (critical %llu): "
-                        "%llu images evicted, %llu written back since the last report\n",
+                        "%llu images evicted, %llu written back since the last report; "
+                        "%llu old GPU-written tiled images kept (%llu MiB)\n",
                         (unsigned long long)(total_used_memory >> 20),
                         (unsigned long long)(pressure_gc_memory >> 20),
                         (unsigned long long)(critical_gc_memory >> 20),
-                        (unsigned long long)gc_evictions, (unsigned long long)gc_downloads);
+                        (unsigned long long)gc_evictions, (unsigned long long)gc_downloads,
+                        (unsigned long long)gc_kept, (unsigned long long)(gc_kept_bytes >> 20));
             gc_report_time = now;
             gc_evictions = gc_downloads = 0;
         }
