@@ -261,7 +261,7 @@ mod tests {
         assert_eq!(out["show_fps"], "1");
         assert_eq!(out["fps_limit"], "60");
         assert!(!out.contains_key("upscaler"));
-        assert_eq!(out.len(), 26);
+        assert_eq!(out.len(), 27);
         assert_eq!(out.keys().next().unwrap(), "display_mode");
     }
 

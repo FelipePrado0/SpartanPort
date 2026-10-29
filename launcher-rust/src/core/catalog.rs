@@ -376,6 +376,8 @@ pub static SETTINGS: &[Setting] = &[
     ),
     ini("motion_blur", Flag, Bool(true), true, 29),
     ini("depth_of_field", Flag, Bool(true), true, 30),
+    // F2: the engine at 60 FPS while a QTE prompt is up, read by the game itself.
+    ini("auto_safe_fps", Flag, Bool(true), true, 31),
     ini("upscaler", Pick(UPSCALERS), Text("fsr3"), false, 0),
     ini("preset", Pick(PRESETS), Text("1"), false, 1),
     ini("object_motion", Flag, Bool(true), false, 2),
@@ -520,14 +522,14 @@ mod tests {
                 "cheat_very_hard"
             ]
         );
-        assert_eq!(keys.last(), Some(&"depth_of_field"));
+        assert_eq!(keys.last(), Some(&"auto_safe_fps"));
         let shown: Vec<_> = rows.iter().filter(|s| s.written).map(|s| s.key).collect();
         assert_eq!(shown, SHOWN_INI_KEYS.iter().copied().collect::<Vec<_>>());
     }
 
     #[test]
-    fn shown_ini_keys_are_the_26_controls_of_the_window() {
-        assert_eq!(SHOWN_INI_KEYS.len(), 26);
+    fn shown_ini_keys_are_the_27_controls_of_the_window() {
+        assert_eq!(SHOWN_INI_KEYS.len(), 27);
         for seeded in ["monitor", "hdr", "glyph_style"] {
             assert!(SHOWN_INI_KEYS.contains(&seeded), "{seeded}");
         }

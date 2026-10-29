@@ -2432,7 +2432,9 @@
    "Motion blur": "Desfoque de movimento",
    "The game's own motion blur on fast moving objects and the camera. Off removes it.": "O desfoque de movimento do próprio jogo em objetos rápidos e na câmera. Desligado, ele é removido.",
    "Depth of field": "Profundidade de campo",
-   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "O desfoque do próprio jogo em objetos distantes, mais forte nas cenas. Desligado, a imagem inteira fica nítida."
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "O desfoque do próprio jogo em objetos distantes, mais forte nas cenas. Desligado, a imagem inteira fica nítida.",
+   "60 FPS during QTEs": "60 FPS durante QTEs",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "Enquanto um comando de QTE está na tela, o motor roda a 60 e depois volta à taxa do motor."
   },
   "es": {
    "The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?": "El launcher no puede escribir en {}, así que no puede reemplazarse ahí. ¿Abrir la página de releases para descargar la versión nueva a mano?",
@@ -2776,7 +2778,9 @@
    "Motion blur": "Desenfoque de movimiento",
    "The game's own motion blur on fast moving objects and the camera. Off removes it.": "El desenfoque de movimiento del propio juego en objetos rápidos y en la cámara. Desactivado, se elimina.",
    "Depth of field": "Profundidad de campo",
-   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "El desenfoque del propio juego en objetos lejanos, más fuerte en las escenas. Desactivado, toda la imagen se ve nítida."
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "El desenfoque del propio juego en objetos lejanos, más fuerte en las escenas. Desactivado, toda la imagen se ve nítida.",
+   "60 FPS during QTEs": "60 FPS durante los QTE",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "Mientras un QTE está en pantalla, el motor funciona a 60 y luego vuelve a la velocidad del motor."
   },
   "pl": {
    "Polish": "Polski",
@@ -2828,7 +2832,9 @@
    "Depth of field": "Głębia ostrości",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Własne rozmycie gry na odległych obiektach, najsilniejsze w przerywnikach. Wyłączone zachowuje ostrość całego obrazu.",
    "Automatic": "Automatycznie",
-   "restart": "restart"
+   "restart": "restart",
+   "60 FPS during QTEs": "60 FPS podczas QTE",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "Gdy na ekranie jest QTE, silnik działa w 60 FPS, a potem wraca do liczby klatek silnika."
   },
   "fr": {
    "Polish": "Polonais",
@@ -2880,7 +2886,9 @@
    "Depth of field": "Profondeur de champ",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Le flou propre au jeu sur les objets lointains, plus fort dans les cinématiques. Désactivé, toute l'image reste nette.",
    "Automatic": "Automatique",
-   "restart": "redémarrage"
+   "restart": "redémarrage",
+   "60 FPS during QTEs": "60 FPS pendant les QTE",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "Tant qu'un QTE est à l'écran, le moteur tourne à 60, puis revient à la fréquence du moteur."
   },
   "de": {
    "Polish": "Polnisch",
@@ -2932,7 +2940,9 @@
    "Depth of field": "Tiefenschärfe",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Die eigene Unschärfe des Spiels bei entfernten Objekten, am stärksten in Zwischensequenzen. Aus hält das ganze Bild scharf.",
    "Automatic": "Automatisch",
-   "restart": "Neustart"
+   "restart": "Neustart",
+   "60 FPS during QTEs": "60 FPS während QTEs",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "Solange ein QTE auf dem Bildschirm ist, läuft die Engine mit 60 und kehrt danach zur Engine-Bildrate zurück."
   },
   "it": {
    "Polish": "Polacco",
@@ -2984,7 +2994,9 @@
    "Depth of field": "Profondità di campo",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "La sfocatura del gioco sugli oggetti lontani, più forte nelle scene d'intermezzo. Disattivata, tutta l'immagine resta nitida.",
    "Automatic": "Automatico",
-   "restart": "riavvio"
+   "restart": "riavvio",
+   "60 FPS during QTEs": "60 FPS durante i QTE",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "Finché un QTE è sullo schermo, il motore gira a 60, poi torna alla frequenza del motore."
   },
   "tr": {
    "Polish": "Lehçe",
@@ -3036,7 +3048,9 @@
    "Depth of field": "Alan derinliği",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Oyunun uzaktaki nesnelerdeki kendi bulanıklığı, en güçlüsü ara sahnelerde. Kapalı olduğunda tüm görüntü net kalır.",
    "Automatic": "Otomatik",
-   "restart": "yeniden başlatma"
+   "restart": "yeniden başlatma",
+   "60 FPS during QTEs": "QTE sırasında 60 FPS",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "Ekranda bir QTE varken motor 60'ta çalışır, sonra motor kare hızına geri döner."
   },
   "ar": {
    "Polish": "البولندية",
@@ -3087,7 +3101,9 @@
    "Depth of field": "عمق المجال",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "ضبابية اللعبة الخاصة على الأجسام البعيدة، وهي الأقوى في المشاهد السينمائية. الإيقاف يُبقي الصورة كلها واضحة.",
    "Automatic": "تلقائي",
-   "restart": "إعادة التشغيل"
+   "restart": "إعادة التشغيل",
+   "60 FPS during QTEs": "‏60 إطارًا أثناء أحداث QTE",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "أثناء ظهور حدث QTE على الشاشة يعمل المحرك بمعدل 60، ثم يعود إلى معدل إطارات المحرك."
   },
   "zh": {
    "Polish": "波兰语",
@@ -3448,7 +3464,9 @@
    "Motion blur": "动态模糊",
    "The game's own motion blur on fast moving objects and the camera. Off removes it.": "游戏自带的动态模糊（快速移动的物体和镜头）。关闭后将其移除。",
    "Depth of field": "景深",
-   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "游戏自带的远景模糊，过场动画中最明显。关闭后整个画面保持清晰。"
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "游戏自带的远景模糊，过场动画中最明显。关闭后整个画面保持清晰。",
+   "60 FPS during QTEs": "QTE 期间 60 FPS",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "快速反应提示在屏幕上时，引擎以 60 运行，结束后回到引擎帧率。"
   },
   "ja": {
    "Polish": "ポーランド語",
@@ -3500,7 +3518,9 @@
    "Depth of field": "被写界深度",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "遠くの物体にかかるゲーム本来のぼかし。カットシーンで最も強くなります。オフにすると画面全体がくっきりします。",
    "Automatic": "自動",
-   "restart": "再起動"
+   "restart": "再起動",
+   "60 FPS during QTEs": "QTE 中は 60 FPS",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "QTE が表示されている間はエンジンを 60 で動かし、終わるとエンジンのフレームレートに戻します。"
   },
   "ko": {
    "Polish": "폴란드어",
@@ -3552,7 +3572,9 @@
    "Depth of field": "피사계 심도",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "먼 물체에 적용되는 게임 자체의 흐림 효과로, 컷신에서 가장 강합니다. 끄면 화면 전체가 선명하게 유지됩니다.",
    "Automatic": "자동",
-   "restart": "재시작"
+   "restart": "재시작",
+   "60 FPS during QTEs": "QTE 중 60 FPS",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "QTE가 화면에 있는 동안 엔진은 60으로 실행되고, 끝나면 엔진 프레임 레이트로 돌아갑니다."
   },
   "id": {
    "Polish": "Polandia",
@@ -3898,7 +3920,9 @@
    "Motion blur": "Motion blur",
    "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Motion blur bawaan game pada objek yang bergerak cepat dan kamera. Jika dimatikan, efek ini dihilangkan.",
    "Depth of field": "Depth of field",
-   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Blur bawaan game pada objek yang jauh, paling kuat di cutscene. Jika dimatikan, seluruh gambar tetap tajam."
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Blur bawaan game pada objek yang jauh, paling kuat di cutscene. Jika dimatikan, seluruh gambar tetap tajam.",
+   "60 FPS during QTEs": "60 FPS saat QTE",
+   "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "Selama QTE tampil di layar, mesin berjalan di 60, lalu kembali ke frame rate mesin."
   }
  },
  "ru": {
@@ -4067,7 +4091,9 @@
   "Depth of field": "Глубина резкости",
   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Собственное размытие игры на дальних объектах, сильнее всего в роликах. Выключено — вся картинка остаётся чёткой.",
   "Automatic": "Автоматически",
-  "restart": "перезапуск"
+  "restart": "перезапуск",
+  "60 FPS during QTEs": "60 FPS во время QTE",
+  "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate.": "Пока на экране QTE, движок работает на 60, а затем возвращается к частоте движка."
  },
  "windows_languages": {
   "25": "ru",
