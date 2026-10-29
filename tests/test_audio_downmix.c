@@ -15,6 +15,8 @@ uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *n
 static int stub_volume=100, stub_mode=MODE_AUTO;
 int spartanportgpu_audio_volume_percent(void) { return stub_volume; }
 int spartanportgpu_audio_channels(void) { return stub_mode; }
+/* The menu's pause (spartanportgpu.cpp): never paused here. */
+void spartanportgpu_wait_while_paused(void) {}
 
 static int near(float a, float b) { return fabsf(a-b)<1e-3f; }
 static void set_env(const char *name, const char *value) {
