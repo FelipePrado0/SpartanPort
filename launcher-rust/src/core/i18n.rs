@@ -232,6 +232,14 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     ),
     // The word of the native render resolution's label, when the tables have no whole label.
     ("Native", &[("pt", "Nativa")]),
+    // GUI Scale's default choice (Advanced → Launcher).
+    (
+        "Auto (fits the screen)",
+        &[
+            ("pt", "Automático (cabe na tela)"),
+            ("es", "Automático (se ajusta a la pantalla)"),
+        ],
+    ),
     // The Home saves chip (the Python's "• No saves yet: the game creates them in {}" and
     // "✓ Saves found in {}" without the folder) and the splash hint.
     ("• No saves yet", &[("pt", "• Nenhum save ainda")]),

@@ -448,6 +448,9 @@ Aberto a partir de um checkout, ele acha sozinho as ferramentas de `out/`; `SPAR
 aponta para um port empacotado (com `bin/`). O PLAY inicia o próprio exe do launcher com `--run`,
 então nada precisa de Python.
 
+No macOS, a `main` compila só o launcher (o PLAY ainda não tem jogo para iniciar); veja os passos em
+[launcher-rust/README.md](launcher-rust/README.md#macos) (em inglês).
+
 ## Testes
 
 Execute na raiz do repositório depois de compilar. Os primeiros testes C++ abaixo não precisam de um dump do jogo.

@@ -144,7 +144,7 @@ pub static SETTINGS: &[Setting] = &[
         Text("en"),
         env("SPARTAN_UI_LANGUAGE", ""),
     ),
-    app("ui_scale", Pick(UI_SCALES), Text("1"), None),
+    app("ui_scale", Pick(UI_SCALES), Text("auto"), None),
     app(
         "game_dir",
         Kind::Text,

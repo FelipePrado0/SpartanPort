@@ -1932,8 +1932,8 @@ fn language_and_scale_rows_change_settings() {
     let pick = pick_row(&state, "ui_scale", "1.5");
     let _ = app::update(&mut state, pick);
     assert_eq!(state.store.text("ui_scale"), "1.5");
-    // R90: a file from before shows its closest choice, "auto" as 1x and "2" as 1.5x.
-    for (stored, shown) in [("auto", "1"), ("2", "1.5")] {
+    // A file from before shows its closest choice: "2" as 1.5x, "auto" (or anything unknown) as Auto.
+    for (stored, shown) in [("auto", "auto"), ("2", "1.5"), ("bogus", "auto")] {
         state.store.set("ui_scale", stored.into());
         let rows = advanced::rows(&state, "en");
         let row = rows.iter().find(|row| row.key == "ui_scale").unwrap();

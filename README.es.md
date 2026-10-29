@@ -453,6 +453,9 @@ Abierto desde un checkout, encuentra solo las herramientas de `out/`; `SPARTAN_P
 a un port empaquetado (con `bin/`). PLAY inicia el propio exe del launcher con `--run`, así que
 nada necesita Python.
 
+En macOS, `main` compila solo el launcher (PLAY todavía no tiene juego para iniciar); mirá los pasos en
+[launcher-rust/README.md](launcher-rust/README.md#macos) (en inglés).
+
 ## Tests
 
 Ejecutá desde la raíz del repositorio después de compilar. Los primeros tests C++ siguientes no necesitan un dump del juego.
