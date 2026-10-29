@@ -110,6 +110,7 @@ void TextureCache::RetireReadbacks() {
         [this](auto& entry) {
             if (entry.valid) {
                 entry.payload.Invalidate();
+                if (tex_trace) TraceRange(TexEventKind::Writeback, "deferred", entry.address, entry.size);
                 Core::Memory::Instance()->TryWriteBacking(std::bit_cast<u8*>(entry.address),
                     entry.payload.mapped, entry.size);
                 if (entry.watched) WatchReadback<false>(entry.address, entry.size);
@@ -179,9 +180,12 @@ bool TextureCache::ResolveReadbacks(VAddr address, u64 size, bool assume_locks,
 void TextureCache::CancelReadbacks(VAddr address, u64 size, bool exact) {
     if (!deferred_readbacks) return;
     std::scoped_lock lock{readback_mutex};
-    pending_readbacks.Cancel(address, size, [this](auto& entry) {
+    pending_readbacks.Cancel(address, size, [this, exact](auto& entry) {
         if (entry.watched) WatchReadback<false>(entry.address, entry.size);
         ++readbacks_canceled;
+        if (tex_trace) {
+            TraceRange(TexEventKind::Cancel, exact ? "delete" : "unmap", entry.address, entry.size);
+        }
     }, exact);
 }
 
@@ -273,6 +277,10 @@ void TextureCache::ProcessDownloadImages() {
                 if (!pending_readbacks.CanFit(copy->size)) {
                     scheduler.Finish();
                     copy->staging.Invalidate();
+                    if (tex_trace) {
+                        TraceRange(TexEventKind::Writeback, "queue-full", copy->guest_address,
+                                   copy->size);
+                    }
                     Core::Memory::Instance()->TryWriteBacking(
                         std::bit_cast<u8*>(copy->guest_address), copy->staging.mapped, copy->size);
                     runtime.GetStagingPool().FreeDeferred(copy->staging);
@@ -349,6 +357,9 @@ void TextureCache::ProcessDownloadImages() {
     scheduler.Finish();
     for (const PendingDownload& download : pending) {
         download.staging.Invalidate();
+        if (tex_trace) {
+            TraceRange(TexEventKind::Writeback, "frame", download.guest_address, download.size);
+        }
         Core::Memory::Instance()->TryWriteBacking(std::bit_cast<u8*>(download.guest_address),
                                                   download.staging.mapped, download.size);
         runtime.GetStagingPool().FreeDeferred(download.staging);
@@ -683,6 +694,10 @@ void TextureCache::InvalidateMemoryFromGPU(VAddr address, size_t max_size) {
 }
 
 void TextureCache::UnmapMemory(VAddr cpu_addr, size_t size) {
+    if (tex_trace) {
+        tex_map_gen.fetch_add(1, std::memory_order_relaxed);
+        TraceRange(TexEventKind::Unmap, "guest", cpu_addr, size);
+    }
     CancelReadbacks(cpu_addr, size);
     std::scoped_lock lk{mutex};
 
@@ -1489,6 +1504,7 @@ void TextureCache::RegisterImage(ImageId image_id) {
     image.flags |= ImageFlagBits::Registered;
     ++registry_generation;
     total_used_memory += Common::AlignUp(image.info.guest_size, 1024);
+    if (tex_trace) tex_trace->Created(image.info.guest_size);
     image.lru_id = lru_cache.Insert(image_id, gc_tick);
     image.lru_touched_tick = gc_tick;
 
@@ -1675,6 +1691,15 @@ void TextureCache::GarbageCollectImages() {
     if (total_used_memory < trigger_gc_memory) {
         return;
     }
+    const auto tex_gc_start = tex_trace ? std::chrono::steady_clock::now()
+                                        : std::chrono::steady_clock::time_point{};
+    SCOPE_EXIT {
+        if (tex_trace) {
+            tex_trace->Gc(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                              std::chrono::steady_clock::now() - tex_gc_start)
+                              .count());
+        }
+    };
     std::scoped_lock lock{mutex};
     bool pressured = false;
     bool aggresive = false;
@@ -1705,14 +1730,17 @@ void TextureCache::GarbageCollectImages() {
         if (download && !pressured) {
             return false;
         }
+        const char* tex_reason = aggresive ? "gc-critical" : pressured ? "gc-pressure" : "gc-trigger";
         if (download) {
             // spartanport: synchronously, while the image still protects its pages. A deferred
             // write-back landed after FreeImage had unprotected them, over whatever the game
             // had meanwhile stored there (e.g. its heap after unloading an area).
+            if (tex_trace) TraceImage(TexEventKind::Download, tex_reason, image_id);
             DownloadImageMemory(image_id, true);
             ++gc_downloads;
         }
         ++gc_evictions;
+        if (tex_trace) TraceImage(TexEventKind::Evict, tex_reason, image_id);
         FreeImage(image_id);
         if (total_used_memory < critical_gc_memory) {
             if (aggresive) {
@@ -1804,6 +1832,9 @@ void TextureCache::RunGarbageCollector() {
 
     GarbageCollectImages();
     GarbageCollectSamplers();
+    if (tex_trace) {
+        ReportTexTrace();
+    }
 }
 
 void TextureCache::TouchImage(const Image& image) {
@@ -1821,12 +1852,17 @@ void TextureCache::DeleteImage(ImageId image_id) {
     CancelReadbacks(image.info.guest_address, image.info.guest_size, true);
     ASSERT_MSG(!image.IsTracked(), "Image was not untracked");
     ASSERT_MSG(False(image.flags & ImageFlagBits::Registered), "Image was not unregistered");
+    if (tex_trace) tex_trace->Destroyed(image.info.guest_size);
 
     const auto alias_it = True(image.flags & ImageFlagBits::Aliased)
                               ? alias_states.find(image.info.guest_address)
                               : alias_states.end();
     if (alias_it != alias_states.end()) {
         AliasState& state = alias_it.value();
+        if (tex_trace && ((state.writer == image_id && state.writer_uid == image.image_uid) ||
+                          (state.backing == image_id && state.backing_uid == image.image_uid))) {
+            TraceImage(TexEventKind::AliasForget, "delete", image_id);
+        }
         // ponytail: no copy here (DeleteImage also runs on guest threads through UnmapMemory,
         // which must not record commands); the aliases then re-read guest memory.
         ForgetAliasMember(state, image_id, image.image_uid,
@@ -1870,6 +1906,74 @@ void TextureCache::DeleteImage(ImageId image_id) {
         }
         slot_images.erase(image_id);
     });
+}
+
+// spartanport (SPARTAN_TEX_TRACE=1): see tex_trace.h.
+void TextureCache::TraceImage(TexEventKind kind, const char* reason, ImageId image_id) {
+    const Image& image = slot_images[image_id];
+    TexEvent event{.kind = kind,
+                   .reason = reason,
+                   .address = image.info.guest_address,
+                   .size = image.info.guest_size,
+                   .image = image_id.index,
+                   .uid = image.image_uid,
+                   .format = static_cast<u32>(image.info.pixel_format),
+                   .pitch = image.info.pitch,
+                   .width = image.info.size.width,
+                   .height = image.info.size.height,
+                   .depth = image.info.size.depth,
+                   .flags = static_cast<u32>(image.flags),
+                   .tick = scheduler.CurrentTick(),
+                   .map_gen = tex_map_gen.load(std::memory_order_relaxed),
+                   .gc_tick = gc_tick};
+    if (True(image.flags & ImageFlagBits::Aliased)) {
+        // Callers hold `mutex` or run on the GPU thread, as DeleteImage does with alias_states.
+        if (const auto it = alias_states.find(image.info.guest_address); it != alias_states.end()) {
+            const AliasState& state = it->second;
+            event.writer = state.writer ? state.writer.index : ~0u;
+            event.writer_uid = state.writer_uid;
+            event.backing = state.backing ? state.backing.index : ~0u;
+            event.backing_uid = state.backing_uid;
+        }
+    }
+    tex_trace->Record(event);
+}
+
+void TextureCache::TraceRange(TexEventKind kind, const char* reason, VAddr address, u64 size) {
+    tex_trace->Record({.kind = kind,
+                       .reason = reason,
+                       .address = address,
+                       .size = size,
+                       .tick = scheduler.CurrentTick(),
+                       .map_gen = tex_map_gen.load(std::memory_order_relaxed),
+                       .gc_tick = gc_tick});
+}
+
+void TextureCache::ReportTexTrace() {
+    const auto now = std::chrono::steady_clock::now();
+    if (now - tex_report < std::chrono::seconds(5)) {
+        return;
+    }
+    const double seconds = std::chrono::duration<double>(now - tex_report).count();
+    tex_report = now;
+    tex_trace->Report(stdout, seconds, total_used_memory, trigger_gc_memory, pressure_gc_memory,
+                      critical_gc_memory);
+    if (instance.CanReportMemoryUsage()) {
+        vk::PhysicalDeviceMemoryBudgetPropertiesEXT budget{};
+        vk::PhysicalDeviceMemoryProperties2 props{.pNext = &budget};
+        instance.GetPhysicalDevice().getMemoryProperties2(&props);
+        const auto& memory = props.memoryProperties;
+        for (u32 heap = 0; heap < memory.memoryHeapCount; ++heap) {
+            const bool local = static_cast<bool>(memory.memoryHeaps[heap].flags &
+                                                 vk::MemoryHeapFlagBits::eDeviceLocal);
+            std::printf("Tex: heap %u%s size %llu MiB, usage %llu MiB, budget %llu MiB\n", heap,
+                        local ? " device-local" : "",
+                        static_cast<unsigned long long>(memory.memoryHeaps[heap].size >> 20),
+                        static_cast<unsigned long long>(budget.heapUsage[heap] >> 20),
+                        static_cast<unsigned long long>(budget.heapBudget[heap] >> 20));
+        }
+    }
+    std::fflush(stdout);
 }
 
 } // namespace VideoCore

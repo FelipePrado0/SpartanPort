@@ -8,6 +8,7 @@
 #include <atomic>
 #include "video_core/texture_cache/alias_state.h"
 #include "video_core/texture_cache/readback_queue.h"
+#include "video_core/texture_cache/tex_trace.h"
 #include "video_core/texture_cache/readback_sources.h"
 #include <chrono>
 #include "spartanport_toggles.h"
@@ -539,6 +540,14 @@ private:
     std::vector<std::pair<VAddr, u64>> backing_writes;
     std::atomic<bool> has_backing_writes{false};
     tsl::robin_map<VAddr, AliasState> alias_states;
+    /// spartanport (SPARTAN_TEX_TRACE=1): evictions, downloads, writebacks and unmaps, reported
+    /// with the GC every 5 s. Null when off.
+    std::unique_ptr<TexTrace> tex_trace = TexTrace::Enabled() ? std::make_unique<TexTrace>() : nullptr;
+    std::atomic<u64> tex_map_gen{0}; ///< unmaps seen (the cache's own mapping generation)
+    std::chrono::steady_clock::time_point tex_report = std::chrono::steady_clock::now();
+    void TraceImage(TexEventKind kind, const char* reason, ImageId image_id);
+    void TraceRange(TexEventKind kind, const char* reason, VAddr address, u64 size);
+    void ReportTexTrace();
     std::atomic<u64> alias_generation{};
     [[nodiscard]] bool IsLiveImage(ImageId image_id, u64 image_uid) const {
         return image_id && slot_images.is_allocated(image_id) &&
