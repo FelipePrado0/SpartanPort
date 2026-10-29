@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Run: out/gpu/cache-storage-test <dir> (a new directory that the test creates and removes).
 // Exercise the production IO worker without a window, guest process or Vulkan device.
 #include <barrier>
 #include <cassert>
@@ -8,10 +9,31 @@
 #include <fstream>
 #include <thread>
 #include <vector>
+#include "../gpu/spartanportgpu.h"
 // Include the implementation so optimized builds need not export its internal template writer.
 #include "../gpu/shadps4/video_core/cache_storage.cpp"
 
+// Mirror the production metadata shim without starting spartanportgpu_init's window/device.
+namespace Core {
+class Emulator {
+public:
+    static void FillElfInfo(const SpartanGpuConfig& config) {
+        auto& info = Common::ElfInfo::Instance();
+        info.initialized = true;
+        info.game_serial = config.serial ? config.serial : "UNKNOWN";
+        info.title = config.title ? config.title : "";
+        info.sdk_ver = config.sdk_version;
+        info.psf_attributes.raw = config.psf_attributes;
+    }
+};
+} // namespace Core
+
 int main(int argc, char** argv) {
+    assert(argc == 2); // Supply a new, test-owned directory inside the workspace.
+    const auto root = std::filesystem::absolute(argv[1]);
+    assert(!std::filesystem::exists(root));
+    std::filesystem::create_directories(root);
+
     // Window close and renderer startup can make the first database access concurrently.
     std::vector<Storage::DataBase*> databases(8);
     std::barrier start{8};
@@ -29,10 +51,6 @@ int main(int argc, char** argv) {
         assert(database == databases.front());
     }
 
-    assert(argc == 2); // Supply a new, test-owned directory inside the workspace.
-    const auto root = std::filesystem::absolute(argv[1]);
-    assert(!std::filesystem::exists(root));
-    std::filesystem::create_directories(root);
     const auto save = [&](unsigned i) {
         assert(Storage::WriteVector(Storage::BlobType::ShaderBinary, root / std::to_string(i),
                                     std::vector<u32>{i, i + 1}));
@@ -75,6 +93,58 @@ int main(int argc, char** argv) {
     worker.join();
     verify(500);
 
+    // Existing cache words still load; a miss must discard the caller's previous contents.
+    std::vector<u32> words{99};
+    auto path = root / "1";
+    Storage::LoadVector(Storage::BlobType::ShaderBinary, path, words);
+    assert((words == std::vector<u32>{1, 2}));
+    path = root / "absent";
+    Storage::LoadVector(Storage::BlobType::ShaderBinary, path, words);
+    assert(words.empty());
+
+    // Reject both an incomplete first word and a complete word followed by stray bytes.
+    for (const size_t bytes : {3, 5}) {
+        path = root / "bad.spv";
+        {
+            std::ofstream file(path, std::ios::binary);
+            file << std::string(bytes, 'x');
+            assert(file);
+        }
+        words = {99};
+        Storage::LoadVector(Storage::BlobType::ShaderBinary, path, words);
+        assert(words.empty());
+        std::vector<u8> raw{99};
+        Storage::LoadVector(Storage::BlobType::ShaderBinary, path, raw);
+        assert(raw == std::vector<u8>(bytes, 'x'));
+    }
+    path = root / "empty.spv";
+    std::ofstream{path, std::ios::binary}.close();
+    words = {99};
+    Storage::LoadVector(Storage::BlobType::ShaderBinary, path, words);
+    assert(words.empty());
+
+    // A cache root replaced by a file disables caching without throwing, then permits a retry.
+    Core::Emulator::FillElfInfo(SpartanGpuConfig{.serial = "TEST00000"});
+    using namespace Common::FS;
+    const auto original_cache = GetUserPath(PathType::CacheDir);
+    const auto cache_root = root / "cache";
+    std::filesystem::create_directory(cache_root);
+    SetUserPath(PathType::CacheDir, cache_root);
+    assert(std::filesystem::remove(cache_root));
+    std::ofstream{cache_root} << "blocked";
+    auto& cache = Storage::DataBase::Instance();
+    cache.Open();
+    assert(!cache.IsOpened());
+    assert(!cache.Save(Storage::BlobType::ShaderBinary, "blocked", std::vector<u32>{1}));
+    assert(std::filesystem::is_regular_file(cache_root));
+    assert(std::filesystem::remove(cache_root));
+    std::filesystem::create_directory(cache_root);
+    cache.Open();
+    assert(cache.IsOpened());
+    assert(std::filesystem::is_directory(cache_root / "TEST00000"));
+    cache.Close();
+    SetUserPath(PathType::CacheDir, original_cache);
+
     std::filesystem::remove_all(root); // Only the directory this test creates above.
-    std::puts("Cache storage: concurrent writes and stop drain PASS");
+    std::puts("Cache storage: concurrent writes, stop drain and load hardening PASS");
 }

@@ -105,8 +105,13 @@ void DataBase::Open() {
         }
     } else {
         cache_path = GetUserPath(PathType::CacheDir) / game_info.GameSerial();
-        if (!std::filesystem::exists(cache_path)) {
-            std::filesystem::create_directories(cache_path);
+        // spartanport: disable caching on directory errors so startup does not throw.
+        std::error_code error;
+        std::filesystem::create_directories(cache_path, error);
+        if (error) {
+            LOG_WARNING(Render, "Shader cache unavailable at {}: {}", cache_path.string(),
+                        error.message());
+            return;
         }
     }
 
@@ -196,9 +201,21 @@ void LoadVector(BlobType type, std::filesystem::path& path, std::vector<T>& v) {
         v.resize(stat.m_uncomp_size / sizeof(T));
         mz_zip_reader_extract_to_mem(&zip_ar, index, v.data(), stat.m_uncomp_size, 0);
     } else {
+        // spartanport: clear failed loads so partial words and short reads remain cache misses.
+        v.clear();
         const auto file = IOFile{path, FileAccessMode::Read};
-        v.resize(file.GetSize() / sizeof(T));
-        file.Read(v);
+        if (!file.IsOpen()) {
+            return;
+        }
+        const auto bytes = file.GetSize();
+        if (bytes % sizeof(T) != 0) {
+            return;
+        }
+        v.resize(bytes / sizeof(T));
+        if (file.Read(v) != v.size()) {
+            v.clear();
+            return;
+        }
     }
 }
 
