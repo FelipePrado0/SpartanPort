@@ -14,17 +14,19 @@
 #include <miniz.h>
 
 #include <condition_variable>
+// spartanport: callbacks report write exceptions instead of hiding them in unused futures.
+#include <exception>
 #include <functional>
-#include <future>
 #include <mutex>
 #include <queue>
 
 namespace {
 
-std::mutex submit_mutex{};
-u32 num_requests{};
+// spartanport: one mutex guards queued and active writes, avoiding a racing request count.
 std::condition_variable_any request_cv{};
-std::queue<std::packaged_task<void()>> req_queue{};
+std::condition_variable idle_cv{};
+std::queue<std::function<void()>> req_queue{};
+bool io_busy{};
 std::mutex m_request{};
 
 mz_zip_archive zip_ar{};
@@ -37,33 +39,25 @@ namespace Storage {
 void ProcessIO(const std::stop_token& stoken) {
     Common::SetCurrentThreadName("shadPS4:PipelineCacheIO");
 
-    while (!stoken.stop_requested()) {
+    // spartanport: a stop drains accepted writes; idle includes the callback currently running.
+    for (;;) {
+        std::function<void()> request;
         {
-            std::unique_lock lk{submit_mutex};
-            Common::CondvarWait(request_cv, lk, stoken, [&] { return num_requests; });
-        }
-
-        if (stoken.stop_requested()) {
-            break;
-        }
-
-        while (num_requests) {
-            std::packaged_task<void()> request{};
-            {
-                std::scoped_lock lock{m_request};
-                if (req_queue.empty()) {
-                    continue;
-                }
-                request = std::move(req_queue.front());
-                req_queue.pop();
+            std::unique_lock lk{m_request};
+            io_busy = false;
+            idle_cv.notify_all();
+            Common::CondvarWait(request_cv, lk, stoken, [&] { return !req_queue.empty(); });
+            if (req_queue.empty()) {
+                return;
             }
-
-            if (request.valid()) {
-                request();
-                request.get_future().wait();
-            }
-
-            --num_requests;
+            request = std::move(req_queue.front());
+            req_queue.pop();
+            io_busy = true;
+        }
+        try {
+            request();
+        } catch (const std::exception& e) {
+            LOG_ERROR(Render, "Cache write failed: {}", e.what());
         }
     }
 }
@@ -137,10 +131,20 @@ void DataBase::Close() {
     LOG_INFO(Render, "Cache dumped");
 }
 
+// spartanport: bound exit waits without joining a worker that may be blocked on disk IO.
+bool DataBase::Flush(std::chrono::milliseconds timeout) {
+    if (!IsOpened()) {
+        return true;
+    }
+    std::unique_lock lk{m_request};
+    return idle_cv.wait_for(lk, timeout, [] { return req_queue.empty() && !io_busy; });
+}
+
 template <typename T>
 bool WriteVector(const BlobType type, std::filesystem::path&& path_, std::vector<T>&& v) {
     {
-        auto request = std::packaged_task<void()>{[=]() {
+        // spartanport: move the payload into the queue to avoid copying it on the GPU thread.
+        std::function<void()> request = [type, path_ = std::move(path_), v = std::move(v)]() {
             auto path{path_};
             path.replace_extension(GetBlobFileExtension(type));
             if (EmulatorSettings.IsPipelineCacheArchived()) {
@@ -152,7 +156,7 @@ bool WriteVector(const BlobType type, std::filesystem::path&& path_, std::vector
                 }
             } else {
                 // spartanport: write beside and rename into place, so a game that ends during the
-                // write (the queue is not drained at exit) never leaves a truncated blob that
+                // write (an exit flush may time out) never leaves a truncated blob that
                 // the next start would load.
                 using namespace Common::FS;
                 auto temp{path};
@@ -166,13 +170,12 @@ bool WriteVector(const BlobType type, std::filesystem::path&& path_, std::vector
                 std::error_code error;
                 std::filesystem::rename(temp, path, error);
             }
-        }};
+        };
         std::scoped_lock lock{m_request};
         req_queue.emplace(std::move(request));
     }
 
-    std::scoped_lock lk{submit_mutex};
-    ++num_requests;
+    // spartanport: queue insertion and the worker predicate now share m_request.
     request_cv.notify_one();
     return true;
 }

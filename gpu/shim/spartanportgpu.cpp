@@ -14,6 +14,7 @@
 #include <boost/asio/io_context.hpp>
 #include "common/polyfill_thread.h"
 #include "video_core/renderdoc.h"
+#include "video_core/cache_storage.h"
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -211,6 +212,23 @@ static void StartProfileWriter() {
 }
 #endif
 
+extern "C" void spartanportgpu_flush_cache(void) {
+    const char* env = std::getenv("SPARTAN_CACHE_FLUSH_ON_EXIT");
+    static const bool enabled = !(env && env[0] == '0');
+    auto& cache = Storage::DataBase::Instance();
+    if (!enabled || !cache.IsOpened()) {
+        return;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const bool done = cache.Flush(std::chrono::seconds(2));
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - start)
+                        .count();
+    std::printf("Shader cache: %s at exit in %lld ms\n",
+                done ? "queue drained" : "queued writes NOT finished",
+                static_cast<long long>(ms));
+}
+
 extern "C" int spartanportgpu_init(const SpartanGpuConfig* config) {
     SpartanSettings::Load();
 #ifdef SPARTAN_PGO_GENERATE
@@ -240,6 +258,7 @@ extern "C" int spartanportgpu_init(const SpartanGpuConfig* config) {
         }
         LOG_INFO(Frontend, "Window closed by user");
         runtime_report();
+        spartanportgpu_flush_cache();
         std::fflush(stdout);
         std::_Exit(0);
     });
