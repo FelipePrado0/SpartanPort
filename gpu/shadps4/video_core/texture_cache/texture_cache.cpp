@@ -1764,9 +1764,17 @@ void TextureCache::GarbageCollectImages() {
                          ReadbackSource::CacheCleanup);
         const bool download = image.SafeToDownload();
         const bool tiled = image.info.IsTiled();
-        if (tiled && download) {
+        // spartanport: a neighboring CPU write can leave the only valid contents on the GPU.
+        // GPU-dirty images are not kept; their data is in the buffer cache.
+        // Keep unresolved images below critical; test usage so the first pass can free them too.
+        const bool gpu_contents_unresolved =
+            True(image.flags & ImageFlagBits::GpuModified) && !download &&
+            False(image.flags & ImageFlagBits::GpuDirty) &&
+            False(image.flags & ImageFlagBits::CpuDirty) && total_used_memory < critical_gc_memory;
+        if ((tiled && download) || gpu_contents_unresolved) {
             // This is a workaround for now. We can't handle non-linear image downloads.
-            // spartanport: report kept tiled images and move them behind evictable entries.
+            // spartanport: report kept tiled or unresolved images and move them behind evictable
+            // entries.
             ++gc_kept;
             gc_kept_bytes += image.info.guest_size;
             lru_cache.Touch(image.lru_id, gc_tick);
@@ -1815,10 +1823,10 @@ void TextureCache::GarbageCollectImages() {
     if (pressured || gc_downloads != 0) {
         const auto now = std::chrono::steady_clock::now();
         if (now - gc_report_time >= std::chrono::seconds(5)) {
-            // spartanport: expose tiled images that the latest pass cannot evict.
+            // spartanport: expose tiled or unresolved images that the latest pass cannot evict.
             std::printf("Texture cache: memory pressure, %llu of %llu MiB (critical %llu): "
                         "%llu images evicted, %llu written back since the last report; "
-                        "%llu old GPU-written tiled images kept (%llu MiB)\n",
+                        "%llu old GPU-written images kept (%llu MiB)\n",
                         (unsigned long long)(total_used_memory >> 20),
                         (unsigned long long)(pressure_gc_memory >> 20),
                         (unsigned long long)(critical_gc_memory >> 20),
