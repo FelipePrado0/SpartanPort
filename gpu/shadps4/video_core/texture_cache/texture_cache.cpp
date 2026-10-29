@@ -712,7 +712,8 @@ ImageId TextureCache::ResolveDepthOverlap(const ImageInfo& requested_info, Bindi
     const bool bpp_match = requested_info.num_bits == cache_image.info.num_bits;
 
     // If an image in the cache has less slices we need to expand it
-    bool recreate = cache_image.info.resources < requested_info.resources;
+    // spartanport: recreate if either dimension is too small for the requested subresources.
+    bool recreate = !cache_image.info.resources.Contains(requested_info.resources);
 
     switch (binding) {
     case BindingType::Texture:
@@ -746,7 +747,12 @@ ImageId TextureCache::ResolveDepthOverlap(const ImageInfo& requested_info, Bindi
 
     if (recreate) {
         auto new_info = requested_info;
-        new_info.resources = std::max(requested_info.resources, cache_image.info.resources);
+        // spartanport: take the larger count per dimension; the ordered max could keep the cached
+        // image's extra mips and still drop a requested layer.
+        new_info.resources = {
+            .levels = std::max(requested_info.resources.levels, cache_image.info.resources.levels),
+            .layers = std::max(requested_info.resources.layers, cache_image.info.resources.layers),
+        };
         new_info.UpdateSize();
         const auto new_image_id = slot_images.insert(instance, runtime, slot_image_views, new_info);
         RegisterImage(new_image_id);
@@ -867,8 +873,9 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
         }
 
         // Size and resources are greater, expand the image.
+        // spartanport: expand if either dimension is missing, regardless of mip ordering.
         if (image_info.type == cache_image.info.type &&
-            image_info.resources > cache_image.info.resources) {
+            !cache_image.info.resources.Contains(image_info.resources)) {
             return {ExpandImage(image_info, cache_image_id), -1, -1};
         }
 
@@ -1179,8 +1186,8 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
             // Cannot reuse this image as we need the exact requested format.
             image_id = {};
             created.reason = "exact format";
-        } else if (image_resolved.info.resources < info.resources) {
-            // The image was clearly picked up wrong.
+        } else if (!image_resolved.info.resources.Contains(info.resources)) {
+            // spartanport: reject images missing mips or layers before creating an invalid view.
             FreeImage(image_id);
             image_id = {};
             LOG_WARNING(Render_Vulkan, "Image overlap resolve failed");

@@ -64,6 +64,11 @@ struct SubresourceExtent {
     u32 layers = 1;
 
     auto operator<=>(const SubresourceExtent&) const = default;
+
+    // spartanport: check both dimensions so extra mips cannot hide missing layers.
+    bool Contains(const SubresourceExtent& other) const noexcept {
+        return levels >= other.levels && layers >= other.layers;
+    }
 };
 
 struct SubresourceRange {
