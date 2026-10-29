@@ -11,3 +11,4 @@ Backported from upstream after b4e7ae7 (2026-10-02), correctness fixes:
   0f6d1b870 stable SlotVector address-space reservation (#5212), adapted to the existing API.
   359234bbb SlotVector allocation bitset bounds check (#5158).
   ca36c7e31 subresource extents compared per dimension (#5524).
+  7ea677e56 packet sizes read before the packet runs (#5541).
