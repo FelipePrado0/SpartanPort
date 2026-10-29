@@ -286,6 +286,12 @@ add_executable(subresource-extent-test EXCLUDE_FROM_ALL ../tests/test_subresourc
 target_compile_options(subresource-extent-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(subresource-extent-test PRIVATE shim shadps4)
 target_link_libraries(subresource-extent-test PRIVATE fmt::fmt)
+find_package(Threads REQUIRED)
+add_executable(irq-controller-test EXCLUDE_FROM_ALL ../tests/test_irq_controller.cpp
+    shim/common/assert.cpp shim/common/logging/log.cpp)
+target_include_directories(irq-controller-test PRIVATE shim shadps4)
+target_compile_options(irq-controller-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+target_link_libraries(irq-controller-test PRIVATE fmt::fmt magic_enum::magic_enum Threads::Threads)
 add_executable(pipeline-binary-cache-test EXCLUDE_FROM_ALL ../tests/test_pipeline_binary_cache.cpp
     ../tests/test_gpu_runtime_stubs.cpp)
 target_compile_definitions(pipeline-binary-cache-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
