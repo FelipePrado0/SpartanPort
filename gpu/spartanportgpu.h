@@ -65,6 +65,12 @@ int spartanportgpu_audio_volume_percent(void);
 int spartanportgpu_audio_channels(void);
 /* R3 + L1 + R1 (pad) or F9: the next engine frame rate (60, 100, 120, 144, 180, 240), applied live. */
 void spartanportgpu_engine_fps_cycle(void);
+/* The pad thread during a QTE (src/runtime_pad.c): caps the engine frame rate at fps, 0 for no cap.
+ * Only stores it (no lock): the present thread applies it within a vblank, unless the menu's
+ * auto_safe_fps is off, and engine_fps (saved) never changes. */
+void spartanportgpu_engine_fps_cap(int fps);
+/* The prompt type (+0x10 of the QTE block, src/qte_hook.h) for the log line of the next cap; -1 none. */
+void spartanportgpu_engine_fps_cap_qte_type(int type);
 /* The video decoder handed the game a picture: a cutscene is on screen (the presenter draws
  * black bars outside its 16:9 picture when the render resolution is not 16:9). */
 void spartanportgpu_movie_picture(void);
