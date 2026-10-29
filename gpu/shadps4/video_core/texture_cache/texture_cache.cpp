@@ -1820,7 +1820,10 @@ void TextureCache::GarbageCollectSamplers() {
             return true;
         }
         --num_deletions;
-        const size_t lru_id = samplers.at(hash).lru_id;
+        // spartanport: keep evicted samplers alive until the GPU completes their recorded work.
+        auto& sampler = samplers.at(hash);
+        const size_t lru_id = sampler.lru_id;
+        scheduler.DeferOperation([retired = std::move(sampler)] { (void)retired; });
         samplers.erase(hash);
         sampler_lru_cache.Free(lru_id);
         return false;
