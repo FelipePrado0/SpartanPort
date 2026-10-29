@@ -582,6 +582,32 @@ using SubmitFunc = Common::UniqueFunction<void, SubmitInfo&>;
 class RecordChunk {
 public:
     static constexpr size_t Capacity = 128 * 1024;
+    // spartanport: keep the consuming command in the chunk that owns its spilled data.
+    static constexpr size_t CommandReserve = 1024;
+
+    // spartanport: oversized groups use chunk-owned storage instead of stopping with exit 23.
+    bool ReserveData(size_t bytes) {
+        const size_t remaining = Capacity - used;
+        if (remaining < CommandReserve) {
+            return false;
+        }
+        if (spill_remaining >= bytes) {
+            return true;
+        }
+        if (bytes <= remaining - CommandReserve) {
+            spill_cursor = nullptr;
+            spill_remaining = 0;
+            return true;
+        }
+        if (bytes <= Capacity - CommandReserve) {
+            return false;
+        }
+        std::unique_ptr<std::byte[]> block{new std::byte[bytes]};
+        spill_cursor = block.get();
+        spill_remaining = bytes;
+        spill_blocks.push_back(std::move(block));
+        return true;
+    }
 
     /// Returns false (and leaves `func` untouched) when the chunk has no room.
     template <typename Func>
@@ -606,8 +632,21 @@ public:
 
     /// Raw storage in the chunk for a command's variable-length data; null when full.
     void* Allocate(size_t bytes, size_t align) {
+        // spartanport: preserve alignment within the oversized group's spill block.
+        if (spill_cursor) {
+            void* result = spill_cursor;
+            size_t remaining = spill_remaining;
+            if (!std::align(align, bytes, result, remaining)) {
+                return nullptr;
+            }
+            spill_used += spill_remaining - remaining + bytes;
+            spill_cursor = static_cast<std::byte*>(result) + bytes;
+            spill_remaining = remaining - bytes;
+            return result;
+        }
         const size_t offset = (used + align - 1) & ~(align - 1);
-        if (offset + bytes > Capacity) {
+        // spartanport: reject oversized inline allocations without overflowing the size check.
+        if (offset > Capacity || bytes > Capacity - offset) {
             return nullptr;
         }
         used = offset + bytes;
@@ -624,6 +663,10 @@ public:
         }
         first = last = nullptr;
         used = 0;
+        // spartanport: release spilled data only after every consuming command has executed.
+        spill_cursor = nullptr;
+        spill_remaining = spill_used = 0;
+        spill_blocks.clear();
     }
 
     [[nodiscard]] bool Empty() const noexcept {
@@ -631,7 +674,8 @@ public:
     }
 
     [[nodiscard]] size_t Size() const noexcept {
-        return used;
+        // spartanport: count spilled payloads toward recording batch thresholds.
+        return used + spill_used;
     }
 
 private:
@@ -662,6 +706,10 @@ private:
 
     alignas(64) std::byte storage[Capacity];
     size_t used = 0;
+    // spartanport: retain oversized groups until this chunk is recycled.
+    std::vector<std::unique_ptr<std::byte[]>> spill_blocks;
+    std::byte* spill_cursor = nullptr;
+    size_t spill_remaining = 0, spill_used = 0;
     CommandBase* first{};
     CommandBase* last{};
 };
@@ -779,10 +827,12 @@ public:
         if (!IsRecordingDeferred()) {
             return;
         }
-        ASSERT(bytes + 1024 <= RecordChunk::Capacity);
-        if (RecordChunk::Capacity - record_chunk->Size() < bytes + 1024) {
+        // spartanport: spill oversized groups while keeping their consumer in the same chunk.
+        if (!record_chunk->ReserveData(bytes)) {
             // spartanport: replace before retiring so recording storage stays valid.
             RetireChunk();
+            const bool reserved = record_chunk->ReserveData(bytes);
+            ASSERT_MSG(reserved, "Cannot reserve {} bytes in an empty recording chunk", bytes);
         }
     }
 
