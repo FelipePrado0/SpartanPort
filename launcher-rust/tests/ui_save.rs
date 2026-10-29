@@ -861,3 +861,66 @@ fn a_save_keeps_the_lines_of_an_ini_that_is_not_utf8() {
     );
     assert!(text.lines().any(|line| line == "fps_limit=0"), "{text}");
 }
+
+/// The audio and effects options of the game's `spartanport.ini` (#968): the keys, values and
+/// defaults the runtime (`gpu/shim/spartanport_settings.cpp`) reads.
+const AUDIO_AND_EFFECTS: [(&str, &str); 4] = [
+    ("master_volume", "100"),
+    ("audio_channels", "auto"),
+    ("motion_blur", "1"),
+    ("depth_of_field", "1"),
+];
+
+#[test]
+fn audio_and_effects_options_default_like_the_game() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = state_in(dir.path());
+    let ini = load_ini(&state.paths.ini_path());
+    for (key, value) in AUDIO_AND_EFFECTS {
+        assert_eq!(state.store.text(key), value, "{key}");
+        assert_eq!(
+            ini.values.get(key).map(String::as_str),
+            Some(value),
+            "{key}"
+        );
+        assert!(SHOWN_INI_KEYS.contains(&key), "{key}");
+        assert_eq!(catalog::ini_setting(key).map(|row| row.key), Some(key));
+    }
+    assert!(INI_FLAGS.contains(&"motion_blur"));
+    assert!(INI_FLAGS.contains(&"depth_of_field"));
+    assert!(!INI_FLAGS.contains(&"master_volume"));
+    assert!(!INI_FLAGS.contains(&"audio_channels"));
+}
+
+#[test]
+fn audio_and_effects_options_are_saved_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    open(&mut state, Page::Game);
+    set(&mut state, "master_volume", json!(150));
+    set(&mut state, "audio_channels", json!("5.1"));
+    open(&mut state, Page::Graphics);
+    set(&mut state, "motion_blur", json!(false));
+    set(&mut state, "depth_of_field", json!(false));
+    assert!(save_enabled(&state));
+    click_save(&mut state);
+    let ini = fs::read_to_string(state.paths.ini_path()).unwrap();
+    for line in [
+        "master_volume=150",
+        "audio_channels=5.1",
+        "motion_blur=0",
+        "depth_of_field=0",
+    ] {
+        assert!(ini.lines().any(|l| l == line), "{line} in {ini}");
+    }
+    let settings = fs::read_to_string(state.paths.config_file()).unwrap();
+    for (key, _) in AUDIO_AND_EFFECTS {
+        assert!(!settings.contains(key), "{key} in settings.json");
+    }
+    let reopened = state_in(dir.path());
+    assert_eq!(reopened.store.text("master_volume"), "150");
+    assert_eq!(reopened.store.text("audio_channels"), "5.1");
+    assert!(!reopened.store.flag("motion_blur"));
+    assert!(!reopened.store.flag("depth_of_field"));
+    assert!(!dirty(&reopened));
+}

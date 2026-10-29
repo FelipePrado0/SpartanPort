@@ -679,7 +679,7 @@ pub fn pad_pick(button: &str, pairs: &[(String, String)], label: &str) -> Messag
 }
 
 /// An ini number, or its default when it is not one.
-fn ini_number(state: &State, key: &str) -> f32 {
+pub(crate) fn ini_number(state: &State, key: &str) -> f32 {
     let parse = |text: &str| text.trim().parse::<f32>().ok();
     parse(&state.store.text(key))
         .or_else(|| {

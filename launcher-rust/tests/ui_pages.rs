@@ -312,8 +312,15 @@ fn graphics_page_offers_the_choice() {
     assert_eq!(state.monitor_pairs.len(), 1);
     assert_eq!(state.store.text("monitor"), "");
 
-    // The screenshots button opens <saves>/screenshots, made first when missing.
-    let sent = messages(&state, "Open the screenshots folder");
+    // The screenshots button opens <saves>/screenshots, made first when missing. The page is
+    // taller than the default window since the Effects section (the drawer scrolls).
+    let mut ui = iced_test::simulator::Simulator::with_size(
+        iced::Settings::default(),
+        iced::Size::new(1280.0, 4000.0),
+        app::view(&state),
+    );
+    ui.click("Open the screenshots folder").unwrap();
+    let sent: Vec<Message> = ui.into_messages().collect();
     let expected = state.paths.user_dir("").join("screenshots");
     assert!(matches!(sent.as_slice(), [Message::OpenFolder(path)] if *path == expected));
 }
@@ -2852,4 +2859,48 @@ mod update_flow {
         assert_eq!(update_of(run_task(start_up_check(&state))), Some(list));
         assert_eq!(next_call(&calls), Call::List);
     }
+}
+
+#[test]
+fn graphics_effects_toggle_motion_blur_and_depth_of_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state(dir.path());
+    open(&mut state, Page::Graphics);
+    // Section titles are drawn in capitals.
+    page_has(&state, &["EFFECTS", "Motion blur", "Depth of field"]);
+    // On by default, as in the game.
+    assert_eq!(state.store.text("motion_blur"), "1");
+    assert_eq!(state.store.text("depth_of_field"), "1");
+    click_tall(&mut state, "Motion blur");
+    assert_eq!(state.store.text("motion_blur"), "0");
+    click_tall(&mut state, "Depth of field");
+    assert_eq!(state.store.text("depth_of_field"), "0");
+}
+
+#[test]
+fn game_audio_offers_volume_and_speakers() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state(dir.path());
+    open(&mut state, Page::Game);
+    // Section titles are drawn in capitals.
+    page_has(
+        &state,
+        &["AUDIO", "Volume", "100 %", "Speakers  ·  restart"],
+    );
+    assert_eq!(state.store.text("master_volume"), "100");
+    assert_eq!(state.store.text("audio_channels"), "auto");
+    let _ = app::update(
+        &mut state,
+        Message::Set("master_volume".into(), serde_json::json!(160)),
+    );
+    assert_eq!(state.store.text("master_volume"), "160");
+    page_has(&state, &["160 %"]);
+    let _ = app::update(
+        &mut state,
+        Message::Set("audio_channels".into(), serde_json::json!("7.1")),
+    );
+    assert_eq!(state.store.text("audio_channels"), "7.1");
+    // Portuguese reuses the legacy launcher's translations.
+    state.lang = "pt".into();
+    page_has(&state, &["ÁUDIO", "Alto-falantes  ·  reiniciar"]);
 }
