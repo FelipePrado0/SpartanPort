@@ -86,6 +86,15 @@ static std::string ReadFile(const char* path) {
     return s.str();
 }
 
+// The body of `signature` in the overlay's source, up to the closing brace at column 0.
+static std::string FunctionBody(const std::string& source, const char* signature) {
+    const size_t start = source.find(signature);
+    assert(start != std::string::npos);
+    const size_t end = source.find("\n}\n", start);
+    assert(end != std::string::npos);
+    return source.substr(start, end - start);
+}
+
 int main() {
     auto& s = SpartanSettings::Get();
     const char* config_path = "menu-confirm-test.ini";
@@ -316,6 +325,22 @@ int main() {
 
     // Clean up temp file
     std::remove(config_path);
+
+    // The overlay's own code (not the copies above) honours the swap in the save list and every
+    // other choice dialog: the key map, the choice event handler and the choice box's key hint.
+    // #973 restyled the save list in ChoiceBox; this keeps #1007's swap in the moved code.
+    {
+        std::string overlay_path = __FILE__;
+        overlay_path = overlay_path.substr(0, overlay_path.find_last_of("/\\") + 1) + "../gpu/shim/spartanport_overlay.cpp";
+        const std::string overlay = ReadFile(overlay_path.c_str());
+        assert(!overlay.empty());
+        assert(FunctionBody(overlay, "ImGuiKey KeyFromGamepad(").find("menu_confirm_swap") != std::string::npos);
+        assert(FunctionBody(overlay, "bool HandleChoiceEvent(").find("menu_confirm_swap") != std::string::npos);
+        const std::string choice_box = FunctionBody(overlay, "void ChoiceBox()");
+        assert(choice_box.find("menu_confirm_swap") != std::string::npos);
+        assert(choice_box.find("Enter or Circle (B): OK") != std::string::npos);
+        assert(FunctionBody(overlay, "void TextEntryBox()").find("menu_confirm_swap") != std::string::npos);
+    }
 
     std::puts("PASS: menu confirm swap tests");
     return 0;
