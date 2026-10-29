@@ -6,6 +6,10 @@ int32_t *runtime_errno(void) { return &guest_errno; }
 int32_t runtime_guest_errno(int e) { return e; }
 uint64_t runtime_wait_begin(void) { return 0; }
 void runtime_wait_end(const char *what,uint64_t start,const char *detail,long long arg) { (void)what; (void)start; (void)detail; (void)arg; }
+/* runtime_thread.c's Load: helpers (the trace is off here). */
+const char *runtime_thread_current_name(void) { return "host"; }
+unsigned long runtime_thread_host_id(void) { return 0; }
+void runtime_thread_load_snapshot(FILE *out,int sample) { (void)out; (void)sample; }
 uintptr_t runtime_lookup(const RuntimeExport *table,size_t n,const char *name) {
     for (size_t i=0;i<n;++i) if (!strcmp(table[i].name,name)) return (uintptr_t)table[i].function;
     return 0;
