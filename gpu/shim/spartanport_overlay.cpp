@@ -577,6 +577,9 @@ void PerformanceTab() {
         ChoiceRow("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()),
                   "The highest frame rate the game itself runs at. 60 for spots that break above it (a ledge "
                   "Kratos cannot cross, a button-mash prompt). R3 + L1 + R1 or F9 go through the list.");
+        CheckRow("60 FPS during QTEs", s.auto_safe_fps,
+                 "While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine "
+                 "frame rate. The saved rate does not change.");
         const int effective = G::EffectiveFps(s.fps_limit, SpartanSettings::EngineFpsNow());
         if (s.fps_limit == 0 || effective < s.fps_limit) {
             char text[48];

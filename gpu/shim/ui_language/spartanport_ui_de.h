@@ -65,6 +65,8 @@ inline constexpr std::pair<std::string_view, const char*> GermanText[] = {
     {"Enable before opening New Game. Does not change an existing save difficulty.", "Vor dem Öffnen von Neues Spiel aktivieren. Ändert nicht den Schwierigkeitsgrad eines vorhandenen Spielstands."},
     {"Enemy health bar", "Gegner-Lebensbalken"},
     {"Engine frame rate", "Engine-Bildrate"},
+    {"60 FPS during QTEs", "60 FPS während QTEs"},
+    {"While a quick-time prompt is on screen the engine runs at 60, then goes back to the engine frame rate. The saved rate does not change.", "Solange ein QTE auf dem Bildschirm ist, läuft die Engine mit 60 und kehrt danach zur Engine-Bildrate zurück. Die gespeicherte Bildrate ändert sich nicht."},
     {"Engine frame rate: ", "Engine-Bildrate: "},
     {"Engine frame rate: 60 FPS only (no frame rate patch for this game build)", "Engine-Bildrate: nur 60 FPS (kein Bildraten-Patch für diese Spielversion)"},
     {"Every multiplier back to 1x (the game's normal values).", "Alle Multiplikatoren zurück auf 1x (die normalen Werte des Spiels)."},
