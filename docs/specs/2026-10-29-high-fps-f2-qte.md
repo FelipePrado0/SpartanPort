@@ -77,3 +77,66 @@ Branch: `feat/high-fps-f2-qte`.
    depois de 650 ms e volta quando o prompt anda de novo (2 linhas extras nesse caso raro).
 5. **Linha no overlay e no launcher**: na seção da taxa do motor (Desempenho no overlay,
    Performance no launcher), logo abaixo da taxa do motor.
+
+## Ciclo TDD (registro)
+
+Ambiente: container Linux (modo nuvem), dependências pelo `shell.nix` (nix-shell), builds via
+`/home/user/wt/heavy.sh` (-j2). Linha de base F0 em `f593377`: `build.sh --test`,
+`graphics-settings-test`, `ui-language-test`, `menu-confirm-swap-test`, `cargo test` (1163 ok),
+`cargo fmt --check` e `cargo clippy --all-targets -D warnings`, tudo verde.
+
+### 1. Teto no lado GPU
+
+* **Comportamento:** teto 60 em vigor e escrito em 1 sync; nunca salvo; troca durante o teto
+  guardada; `auto_safe_fps=0` igual a hoje; `applied <= 60` ou sem globais: nada; logs.
+* **Teste:** `tests/test_graphics_settings.cpp`, `TestEngineFpsCap()` (casos
+  `engine_fps_cap_limits_rate`, `engine_fps_cap_not_saved`, `cycle_during_cap_keeps_choice`,
+  `qte_fps_cap_disabled`, mais `auto_safe_fps` no ini e em `SPARTAN_AUTO_SAFE_FPS`). O log é
+  capturado do stdout e comparado linha a linha.
+* **Red:** `ninja -C out/gpu graphics-settings-test` →
+  `error: 'struct SpartanSettings::Values' has no member named 'auto_safe_fps'` e
+  `'spartanportgpu_engine_fps_cap' was not declared in this scope`.
+* **Green:** `engine_fps_cap`, `engine_fps_cap_qte_type` e `auto_safe_fps` em `Values`;
+  `EngineFpsChosen()`; `EngineFpsNow()` com o teto; `SyncEngineFps()` com as duas linhas;
+  `CycleEngineFps()` a partir da escolha; `auto_safe_fps` em `Set`/`Save`/ambiente; as duas
+  funções C em `spartanport_settings.cpp`. `out/gpu/graphics-settings-test` → `PASS: graphics settings`.
+* **Refactor:** nenhum além do helper `EngineFpsChosen()`, criado já no Green.
+
+### 2. Queda na thread do controle
+
+* **Comportamento:** teto no primeiro quadro do prompt (com o tipo); mantido entre prompts a menos
+  de 500 ms; retirado depois de `QTE_ACTIVE_US + 500 ms`; sem hooks, nada; não reseta o minigame.
+* **Teste:** `tests/test_pad.c`, `test_qte_fps_cap()` (`qte_fps_cap_hysteresis`, relógio simulado).
+* **Red:** `gcc ... tests/test_pad.c` → `error: implicit declaration of function 'qte_fps_cap'` e
+  `'QTE_FPS_HOLD_US' undeclared`.
+* **Green:** `qte_active()` extraída de `qte_rotation()`, `qte_fps_cap()` chamada em `sample()`.
+  `out/pad-test` → `PASS: pad ABI, ..., QTE frame rate cap, ...`.
+
+### 3. Linha no menu do jogo
+
+* **Teste:** `tests/test_ui_language.cpp` (`ui-language-test`).
+* **Red:** textos novos só na tabela chinesa → `Assertion 'table.count == keys.size()' failed`.
+* **Green:** os textos nas outras 9 tabelas e o `CheckRow` no Desempenho →
+  `UI languages: 10 tables of 220 texts passed`.
+
+### 4. Launcher
+
+* **Teste:** `tests/ui_save.rs` (`auto_safe_fps_defaults_on_like_the_game`,
+  `auto_safe_fps_is_saved_and_read_back`) e `tests/ui_pages.rs`
+  (`performance_offers_60_fps_during_qtes_under_the_engine_rate`).
+* **Red:** `cargo test --test ui_save --test ui_pages auto_safe_fps` → 2 FAILED
+  (`tests/ui_save.rs:935` e `:957`); `performance_offers_...` FAILED (`page_has` não acha o texto).
+* **Green:** linha `auto_safe_fps` no catálogo (Flag, padrão 1, ordem 31), checkbox na página
+  Performance, textos em `assets/i18n.json` (12 línguas + ru), fixture; contagens de
+  `catalog.rs` e `store.rs` de 26 para 27.
+
+### Validação final
+
+* `bash build.sh --test` → todos os testes C e `PASS: graphics settings`, `build_rc=0` (overlay
+  compilado na biblioteca).
+* `cargo fmt --check` → ok; `cargo test -j 2` → 1166 passed, 0 failed;
+  `cargo clippy --all-targets -- -D warnings` → ok.
+* `ui-language-test` → `UI languages: 10 tables of 220 texts passed`.
+* **Não testado aqui:** testes só do Windows (`test_qte_hook`, `ui_snapshots`). As imagens
+  `launcher-rust/snapshots/performance-{1920x1080,1280x800}-{en,pt,ar}.png` precisam ser regeradas no
+  Windows (a página Performance ganhou uma linha). O teste no jogo é do mantenedor (roteiro F2.5).
