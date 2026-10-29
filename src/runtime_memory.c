@@ -58,7 +58,9 @@ static uint64_t pool_size_bytes(void) {
 #define MAP_NO_OVERWRITE 0x80
 enum { KIND_RESERVED=1, KIND_DIRECT, KIND_FLEXIBLE };
 typedef struct { uint64_t start, size; int type, used; } Block;
-typedef struct { uintptr_t start, end; int kind, prot, type; uint64_t phys; } Vma;
+/* gen: the mapping's generation, from map_generation when place() made it (0 for reservations);
+ * pieces of a split mapping keep it. */
+typedef struct { uintptr_t start, end; int kind, prot, type; uint64_t phys, gen; } Vma;
 typedef struct {
     uintptr_t start, end; uint64_t offset; int32_t protection, memory_type;
     uint32_t flags; char name[32];
@@ -114,12 +116,28 @@ static uint64_t flex_bitmap[FLEX_SPAN/PAGE/64];
 typedef void (*GpuRange)(uintptr_t address, uint64_t size);
 static GpuRange hook_map, hook_unmap, hook_invalidate;
 enum { HOOK_MAP, HOOK_UNMAP, HOOK_INVALIDATE };
-typedef struct { int kind; uintptr_t address; uint64_t size; } PendingHook;
+/* gen: the newest mapping generation when the notification was queued. */
+typedef struct { int kind; uintptr_t address; uint64_t size, gen; } PendingHook;
 /* Grows as needed: one unmap or protect over a range mapped in hundreds of pieces queues a
  * notification per piece (64 fixed slots overflowed). Owned by the region-table write lock;
  * flushing copies one value before releasing it, never retaining array pointers. */
 static PendingHook *pending; static size_t pending_count, pending_capacity;
 static size_t allocations, maps, flexible_maps, protects, queries, fixed_replaced;
+/* Generation of the newest guest mapping; written under the exclusive lock, read atomically. */
+static uint64_t map_generation;
+/* While this thread delivers an unmap notification for [start,end): guest writes it makes there
+ * through the backing view belong to mappings of generation gen or older. A newer mapping in the
+ * range was placed by another thread after the old one left (the notification runs without the
+ * lock), and the old generation's late readback must not overwrite it. */
+typedef struct { uintptr_t start, end; uint64_t gen; int active; } Retiring;
+static __thread Retiring retiring;
+static uint64_t stale_writes;
+static void deliver_unmap(GpuRange hook, uintptr_t address, uint64_t size, uint64_t gen) {
+    const Retiring saved=retiring;
+    retiring=(Retiring){address,address+size,gen,1};
+    hook(address,size);
+    retiring=saved;
+}
 static uint64_t live_bytes, flexible_bytes;
 
 static int valid_alignment(uint64_t a) { return a >= PAGE && a <= POOL_SIZE && !(a & (a-1)); }
@@ -450,7 +468,7 @@ static void queue_hook(int kind, uintptr_t address, uint64_t size) {
         if (!next) { fputs("STOP: GPU notification allocation failed\n",stderr); exit(21); }
         pending=next; pending_capacity=capacity;
     }
-    pending[pending_count++]=(PendingHook){kind,address,size};
+    pending[pending_count++]=(PendingHook){kind,address,size,__atomic_load_n(&map_generation,__ATOMIC_ACQUIRE)};
 }
 /* Runs queued GPU notifications; callers invoke it after dropping the lock. */
 static void flush_hooks(void) {
@@ -461,7 +479,8 @@ static void flush_hooks(void) {
         memmove(pending,pending+1,--pending_count*sizeof(*pending));
         GpuRange hook = h.kind==HOOK_MAP ? hook_map : h.kind==HOOK_UNMAP ? hook_unmap : hook_invalidate;
         write_unlock();
-        if (hook) hook(h.address,h.size);
+        if (hook && h.kind==HOOK_UNMAP) deliver_unmap(hook,h.address,h.size,h.gen);
+        else if (hook) hook(h.address,h.size);
     }
 }
 static int flex_test(uint64_t page) { return (int)((flex_bitmap[page/64]>>(page%64))&1); }
@@ -566,7 +585,7 @@ static int retire_fixed(const void *address, uint64_t size, int flags) {
     read_lock();
     int mapped=!foreign_overlap(start,start+length) && overlaps(start,start+length,1);
     read_unlock();
-    if (mapped) hook_unmap(start,length);
+    if (mapped) deliver_unmap(hook_unmap,start,length,__atomic_load_n(&map_generation,__ATOMIC_ACQUIRE));
     return mapped;
 }
 /* The GPU hears again about the mappings in a range retire_fixed retired for a map that failed. */
@@ -600,7 +619,8 @@ static int32_t place(void **inout, uint64_t size, int prot, int flags, uint64_t 
             if (vmas[i].kind!=KIND_RESERVED) ++fixed_replaced;
     void *mapped=(void *)address;
     drop_range(address,address+size);
-    if (vma_insert(vma_index(address),(Vma){address,address+size,kind,prot,type,phys})) return NO_MEMORY;
+    uint64_t gen=kind==KIND_RESERVED ? 0 : __atomic_add_fetch(&map_generation,1,__ATOMIC_ACQ_REL);
+    if (vma_insert(vma_index(address),(Vma){address,address+size,kind,prot,type,phys,gen})) return NO_MEMORY;
     if (kind==KIND_FLEXIBLE) flexible_bytes+=size;
     if (kind!=KIND_RESERVED) queue_hook(HOOK_MAP,address,size);
     *inout=mapped;
@@ -734,7 +754,8 @@ static int32_t unmap_locked(uintptr_t start, uint64_t size) {
 }
 static ABI int32_t direct_unmap(void *address, uint64_t size) {
     /* The GPU forgets the range before it disappears (as shadPS4's early GPU unmap). */
-    if (hook_unmap && !((uintptr_t)address%PAGE) && size) hook_unmap((uintptr_t)address,align_up(size,PAGE));
+    if (hook_unmap && !((uintptr_t)address%PAGE) && size)
+        deliver_unmap(hook_unmap,(uintptr_t)address,align_up(size,PAGE),__atomic_load_n(&map_generation,__ATOMIC_ACQUIRE));
     write_lock();
     size_t before=pending_count;
     int32_t result=unmap_locked((uintptr_t)address,size);
@@ -1154,6 +1175,16 @@ int runtime_memory_write_backing(uintptr_t address, const void *data, uint64_t s
         size_t i=vma_index(at);
         if (i==vma_count || vmas[i].start>at || vmas[i].kind==KIND_RESERVED) { ok=0; break; }
         uint64_t n=(vmas[i].end<end ? vmas[i].end : end)-at;
+        if (retiring.active && vmas[i].gen>retiring.gen && at<retiring.end && retiring.start<at+n) {
+            /* A late write of a retired generation over a newer mapping: dropped. */
+            if (at<retiring.start) n=retiring.start-at;
+            else {
+                uintptr_t stop=retiring.end<at+n ? retiring.end : at+n;
+                __atomic_add_fetch(&stale_writes,1,__ATOMIC_RELAXED);
+                at=stop;
+                continue;
+            }
+        }
         store_once(backing_base+vmas[i].phys+(at-vmas[i].start),
                    (const unsigned char *)data+(at-address),n);
         at+=n;
@@ -1264,5 +1295,7 @@ void runtime_memory_report(void) {
     printf("Runtime: flexible maps=%zu, in use=%" PRIu64 ", protects=%zu, queries=%zu, regions=%zu\n",
            flexible_maps, flexible_bytes, protects, queries, vma_count);
     printf("Runtime: fixed maps over mapped memory=%zu\n", fixed_replaced);
+    uint64_t stale=__atomic_load_n(&stale_writes,__ATOMIC_RELAXED);
+    if (stale) printf("Runtime: late GPU writes of unmapped memory dropped=%" PRIu64 "\n", stale);
 }
 

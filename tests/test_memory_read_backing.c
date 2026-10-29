@@ -18,9 +18,9 @@ static void fixture(void) {
     memset(backing_base+PAGE,0x31,PAGE);
     memset(backing_base+3*PAGE,0x72,PAGE);
     write_lock();
-    assert(vma_insert(0,(Vma){base,base+PAGE,KIND_DIRECT,3,0,PAGE})==0);
-    assert(vma_insert(1,(Vma){base+2*PAGE,base+3*PAGE,KIND_RESERVED,0,0,0})==0);
-    assert(vma_insert(2,(Vma){base+3*PAGE,base+4*PAGE,KIND_FLEXIBLE,0,0,3*PAGE})==0);
+    assert(vma_insert(0,(Vma){base,base+PAGE,KIND_DIRECT,3,0,PAGE,1})==0);
+    assert(vma_insert(1,(Vma){base+2*PAGE,base+3*PAGE,KIND_RESERVED,0,0,0,0})==0);
+    assert(vma_insert(2,(Vma){base+3*PAGE,base+4*PAGE,KIND_FLEXIBLE,0,0,3*PAGE,2})==0);
     write_unlock();
 }
 
@@ -75,7 +75,7 @@ static void split_backing_offsets(void) {
     for (int kind=KIND_RESERVED;kind<=KIND_FLEXIBLE;++kind) {
         write_lock();
         vma_count=0;
-        assert(!vma_insert(0,(Vma){base,base+2*PAGE,kind,3,0,5*PAGE}));
+        assert(!vma_insert(0,(Vma){base,base+2*PAGE,kind,3,0,5*PAGE,1}));
         /* mprotect and partial unmap use carve/split_at. The remaining right
          * fragment must still address its own physical page. */
         assert(!split_at(base+PAGE));

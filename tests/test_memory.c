@@ -1,7 +1,9 @@
 /* PS4 memory manager contracts (src/runtime_memory.c): a flexible mapping split by a partial
  * protection change keeps each half's own physical pages (releasing one half leaves the other's
  * contents and pages alone), and a fixed map over mapped memory retires the GPU's view of the
- * old mapping while it is still in place, before the new one arrives.
+ * old mapping while it is still in place, before the new one arrives. A late unmap notification
+ * of a replaced generation never writes over the newer mapping, and a refused replacement keeps
+ * the old mapping and its GPU visibility.
  * Linux: build.sh --test (out/memory-test). */
 #include "../src/runtime_memory.c"
 
@@ -27,8 +29,17 @@ static int gpu_readback;
 /* With release_size set, an unmap releases that direct memory, as another thread could while the
  * GPU's unmap runs without the lock. */
 static uint64_t release_start, release_size;
+/* With replace_first set, the first unmap notification for that address is delivered late: another
+ * thread maps replace_with there (a fixed direct map) after the old mapping left the table and
+ * before this notification's readback runs. */
+static uintptr_t replace_first; static int64_t replace_with = -1;
 static void on_unmap(uintptr_t address, uint64_t size) {
     note(EVENT_UNMAP, address, size);
+    if (replace_first && address == replace_first) {
+        void *at = (void *)replace_first;
+        replace_first = 0;
+        CHECK(direct_map(&at, 2 * PAGE, 3, MAP_FIXED_FLAG, replace_with, 0) == 0 && at == (void *)address);
+    }
     if (gpu_readback) runtime_memory_write_backing(address, gpu_data, size < sizeof(gpu_data) ? size : sizeof(gpu_data));
     if (release_size) { CHECK(direct_release(release_start, release_size) == 0); release_size = 0; }
 }
@@ -148,6 +159,93 @@ static void batch_retires_only_maps_that_run(void) {
     CHECK(direct_release((uint64_t)phys, 4 * PAGE) == 0);
 }
 
+/* Generation A replaced by B (a fixed flexible map over a flexible mapping): the GPU's readback of
+ * A, run while it retires A, lands in A's pages; B is the new memory, intact. */
+static void flexible_replacement_keeps_new_generation(void) {
+    void *p = NULL;
+    CHECK(map_flexible(&p, 2 * PAGE, 3, 0) == 0 && p);
+    unsigned char *m = p;
+    memset(m, 0x11, 2 * PAGE);
+    const uint64_t old_phys = vma_at((uintptr_t)m)->phys;
+    memset(gpu_data, 0xEE, sizeof(gpu_data));
+    gpu_readback = 1;
+    const size_t before = event_count;
+    void *again = p;
+    CHECK(map_flexible(&again, 2 * PAGE, 3, MAP_FIXED_FLAG) == 0 && again == p);
+    gpu_readback = 0;
+    CHECK(event_count == before + 2 && events[before].kind == EVENT_UNMAP && events[before + 1].kind == EVENT_MAP);
+    CHECK(vma_at((uintptr_t)m)->phys != old_phys);
+    CHECK(m[0] == 0 && m[2 * PAGE - 1] == 0); /* B: fresh pages, not A's contents nor A's readback */
+    CHECK(release_flexible(p, 2 * PAGE) == 0);
+}
+
+/* Generation A's unmap notification delivered late: A's physical memory is released (its GPU
+ * notification is queued), another thread maps generation B at the same address, and only then
+ * does A's notification run, with a readback of A's GPU data. B must stay intact. */
+static void late_unmap_of_old_generation_keeps_new(void) {
+    int64_t a = -1, b = -1;
+    CHECK(direct_allocate(0, (int64_t)POOL_SIZE, 2 * PAGE, PAGE, 0, &a) == 0 && a >= 0);
+    CHECK(direct_allocate(0, (int64_t)POOL_SIZE, 2 * PAGE, PAGE, 0, &b) == 0 && b >= 0);
+    void *p = NULL;
+    CHECK(direct_map(&p, 2 * PAGE, 3, 0, a, 0) == 0 && p);
+    memset(p, 0x11, 2 * PAGE);
+    memset(backing_base + b, 0x22, 2 * PAGE);
+    memset(gpu_data, 0xEE, sizeof(gpu_data));
+    replace_first = (uintptr_t)p; replace_with = b; gpu_readback = 1;
+    const uint64_t stale = stale_writes;
+    CHECK(direct_release((uint64_t)a, 2 * PAGE) == 0);
+    gpu_readback = 0;
+    CHECK(replace_first == 0);
+    CHECK(stale_writes == stale + 1); /* the late readback was dropped and counted */
+    CHECK(vma_at((uintptr_t)p) && vma_at((uintptr_t)p)->phys == (uint64_t)b);
+    CHECK(((unsigned char *)p)[0] == 0x22 && ((unsigned char *)p)[2 * PAGE - 1] == 0x22); /* B intact */
+    CHECK(direct_unmap(p, 2 * PAGE) == 0);
+    CHECK(direct_release((uint64_t)b, 2 * PAGE) == 0);
+}
+
+/* A replacement refused by its own checks leaves the old mapping as it was: same pages,
+ * protection and contents, still visible to the GPU (no notification) and to backing reads. */
+static void check_old_mapping_kept(unsigned char *m, uint64_t phys, int prot, size_t events_before) {
+    const Vma *v = vma_at((uintptr_t)m);
+    CHECK(v && v->start == (uintptr_t)m && v->end == (uintptr_t)m + 2 * PAGE && v->phys == phys && v->prot == prot);
+    CHECK(event_count == events_before);
+    CHECK(runtime_memory_is_mapped((uintptr_t)m, 2 * PAGE));
+    unsigned char copy[2 * PAGE];
+    runtime_memory_read_backing((uintptr_t)m, copy, sizeof(copy));
+    CHECK(copy[0] == 0x5A && copy[2 * PAGE - 1] == 0x5A && m[0] == 0x5A);
+}
+static void refused_replacement_keeps_old_mapping(void) {
+    /* Flexible: over the flexible budget. */
+    void *p = NULL;
+    CHECK(map_flexible(&p, 2 * PAGE, 3, 0) == 0 && p);
+    unsigned char *m = p;
+    memset(m, 0x5A, 2 * PAGE);
+    const uint64_t phys = vma_at((uintptr_t)m)->phys;
+    size_t before = event_count;
+    void *bad = p;
+    CHECK(map_flexible(&bad, FLEXIBLE_SIZE, 3, MAP_FIXED_FLAG) != 0);
+    check_old_mapping_kept(m, phys, 3, before);
+    /* Batch: a flexible entry over the budget. */
+    BatchEntry entry = {.start = p, .length = FLEXIBLE_SIZE, .prot = 3, .operation = 3};
+    int processed = -1;
+    CHECK(batch_map(&entry, 1, &processed) != 0 && processed == 0);
+    check_old_mapping_kept(m, phys, 3, before);
+    CHECK(release_flexible(p, 2 * PAGE) == 0);
+
+    /* Direct: MAP_NO_OVERWRITE over a mapping. */
+    int64_t d = -1;
+    CHECK(direct_allocate(0, (int64_t)POOL_SIZE, 4 * PAGE, PAGE, 0, &d) == 0 && d >= 0);
+    void *q = NULL;
+    CHECK(direct_map(&q, 2 * PAGE, 1, 0, d, 0) == 0 && q);
+    memset(backing_base + d, 0x5A, 2 * PAGE);
+    before = event_count;
+    bad = q;
+    CHECK(direct_map(&bad, 2 * PAGE, 3, MAP_FIXED_FLAG | MAP_NO_OVERWRITE, d + 2 * PAGE, 0) != 0);
+    check_old_mapping_kept(q, (uint64_t)d, 1, before);
+    CHECK(direct_unmap(q, 2 * PAGE) == 0);
+    CHECK(direct_release((uint64_t)d, 4 * PAGE) == 0);
+}
+
 /* More notifications than the queue's first allocation: one protect over many pieces. */
 static void hook_queue_grows(void) {
     enum { PIECES = 100 };
@@ -187,7 +285,10 @@ int main(void) {
     batch_retires_only_maps_that_run();
     hook_queue_grows();
     write_backing_stores_each_byte();
+    flexible_replacement_keeps_new_generation();
+    late_unmap_of_old_generation_keeps_new();
+    refused_replacement_keeps_old_mapping();
     if (failures) { fprintf(stderr, "%d failure(s)\n", failures); return 1; }
-    printf("PASS: flexible split keeps each half's pages, fixed maps retire the GPU's view before replacing, batches retire only maps that run, hook queue grows, backing writes (%zu GPU notifications)\n", event_count);
+    printf("PASS: flexible split keeps each half's pages, fixed maps retire the GPU's view before replacing, batches retire only maps that run, hook queue grows, backing writes, replaced generations kept, refused replacements kept (%zu GPU notifications)\n", event_count);
     return 0;
 }
