@@ -276,6 +276,12 @@ if (WIN32)
 endif()
 
 # Explicit test targets; neither launches the game nor needs a Vulkan device.
+add_executable(slot-vector-test EXCLUDE_FROM_ALL ../tests/test_slot_vector.cpp
+    shim/common/slot_vector_pages.cpp)
+target_compile_options(slot-vector-test PRIVATE -UNDEBUG -D_DEBUG -Wall -Wextra -Werror)
+target_include_directories(slot-vector-test PRIVATE shim shadps4)
+target_compile_definitions(slot-vector-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(slot-vector-test PRIVATE fmt::fmt)
 add_executable(pipeline-binary-cache-test EXCLUDE_FROM_ALL ../tests/test_pipeline_binary_cache.cpp
     ../tests/test_gpu_runtime_stubs.cpp)
 target_compile_definitions(pipeline-binary-cache-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
