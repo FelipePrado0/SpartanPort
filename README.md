@@ -487,6 +487,9 @@ Started from a checkout, it finds the tools in `out/` on its own; `SPARTAN_PORT_
 packaged port instead (its `bin/`). PLAY starts the launcher's own exe with `--run`, so nothing
 needs Python.
 
+On macOS only the launcher builds from `main` (PLAY has no game to start yet); see
+[launcher-rust/README.md](launcher-rust/README.md#macos) for the steps.
+
 ### Linux (Arch Linux)
 
 The `PKGBUILD` is provided [here](packaging/linux/PKGBUILD).
