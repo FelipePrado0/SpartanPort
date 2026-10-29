@@ -207,14 +207,38 @@ struct Info : InfoPersistent {
         return *reinterpret_cast<const T*>(&FlatUserData()[sharp_idx]);
     }
 
+    // spartanport: missing pointer pairs and low table addresses leave no vertex input to fetch.
+    bool UdPointerNull(u32 ptr_index) const noexcept {
+        if (ptr_index == IR::NumScalarRegs) {
+            return false;
+        }
+        const auto ud = UserData();
+        if (ptr_index >= ud.size() || ud.size() - ptr_index < 2) {
+            return true;
+        }
+        u64 pointer;
+        std::memcpy(&pointer, &ud[ptr_index], sizeof(pointer));
+        return (pointer & 0xFFFFFFFFFFFFULL) < 0x10000;
+    }
+
     template <typename T>
     T ReadUdReg(u32 ptr_index, u32 dword_offset) const noexcept {
-        T data;
+        // spartanport: null or short user data reads as an empty descriptor instead of faulting.
+        T data{};
         const auto ud = UserData();
         const u32* base = ud.data();
         if (ptr_index != IR::NumScalarRegs) {
+            if (ptr_index >= ud.size() || ud.size() - ptr_index < 2) {
+                return data;
+            }
             std::memcpy(&base, &ud[ptr_index], sizeof(base));
             base = reinterpret_cast<const u32*>(VAddr(base) & 0xFFFFFFFFFFFFULL);
+            if (VAddr(base) < 0x10000) {
+                return data;
+            }
+        } else if (dword_offset > ud.size() ||
+                   sizeof(T) > (ud.size() - dword_offset) * sizeof(u32)) {
+            return data;
         }
         std::memcpy(&data, base + dword_offset, sizeof(T));
         return data;

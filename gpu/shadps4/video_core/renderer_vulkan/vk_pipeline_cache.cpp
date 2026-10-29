@@ -1161,6 +1161,19 @@ bool PipelineCache::RefreshGraphicsStages(PipelineSelection& sel) {
     }
 
     const auto* vs_info = sel.infos[static_cast<u32>(SwStage::Vertex)];
+    // spartanport: a draw with no vertex table has no input to build; skip before format lookup.
+    if (vs_info && sel.fetch_shader) {
+        for (const auto& attrib : sel.fetch_shader->attributes) {
+            if (vs_info->UdPointerNull(attrib.sgpr_base)) {
+                static std::atomic<u32> reported{0};
+                if (!sel.worker && reported.fetch_add(1, std::memory_order_relaxed) < 5) {
+                    LOG_WARNING(Render_Vulkan,
+                                "Draw skipped: its vertex buffer table pointer is null or short");
+                }
+                return false;
+            }
+        }
+    }
     if (vs_info && sel.fetch_shader && !instance.IsVertexInputDynamicState()) {
         // Without vertex input dynamic state, the pipeline needs to specialize on format.
         // Stride will still be handled outside the pipeline using dynamic state.

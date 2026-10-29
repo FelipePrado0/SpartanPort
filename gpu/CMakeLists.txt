@@ -292,6 +292,13 @@ add_executable(irq-controller-test EXCLUDE_FROM_ALL ../tests/test_irq_controller
 target_include_directories(irq-controller-test PRIVATE shim shadps4)
 target_compile_options(irq-controller-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_link_libraries(irq-controller-test PRIVATE fmt::fmt magic_enum::magic_enum Threads::Threads)
+add_executable(shader-user-data-test EXCLUDE_FROM_ALL ../tests/test_shader_user_data.cpp
+    shadps4/shader_recompiler/frontend/fetch_shader.cpp
+    shadps4/shader_recompiler/frontend/decode.cpp
+    shadps4/shader_recompiler/frontend/format.cpp)
+target_compile_options(shader-user-data-test PRIVATE -UNDEBUG)
+target_include_directories(shader-user-data-test PRIVATE shim shadps4 third_party/gcn/include)
+target_link_libraries(shader-user-data-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
 add_executable(cache-storage-test EXCLUDE_FROM_ALL ../tests/test_cache_storage.cpp
     ../tests/test_gpu_runtime_stubs.cpp)
 target_include_directories(cache-storage-test PRIVATE
