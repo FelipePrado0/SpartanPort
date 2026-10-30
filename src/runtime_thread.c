@@ -486,7 +486,7 @@ static double seconds_since(const struct timespec *t) {
     struct timespec now; clock_gettime(CLOCK_MONOTONIC,&now);
     return (double)(now.tv_sec-t->tv_sec)+(double)(now.tv_nsec-t->tv_nsec)/1e9;
 }
-typedef struct { char name[32]; double ms; } ThreadCpu;
+typedef struct { char name[32]; double ms; unsigned long tid; } ThreadCpu;
 enum { CPU_REPORT_MAX = 1024, CPU_REPORT_SHOWN = 15 };
 static int by_cpu_desc(const void *a,const void *b) {
     double x=((const ThreadCpu *)a)->ms, y=((const ThreadCpu *)b)->ms;
@@ -509,6 +509,7 @@ static size_t live_thread_cpu(ThreadCpu *out,size_t max) {
             ThreadCpu *t=&out[n++];
             uint64_t ticks=(((uint64_t)k.dwHighDateTime<<32)|k.dwLowDateTime)+(((uint64_t)u.dwHighDateTime<<32)|u.dwLowDateTime);
             t->ms=(double)ticks/1e4;
+            t->tid=entry.th32ThreadID;
             PWSTR wide=NULL;
             t->name[0]=0;
             if (SUCCEEDED(GetThreadDescription(h,&wide)) && wide) {
@@ -538,6 +539,7 @@ static size_t live_thread_cpu(ThreadCpu *out,size_t max) {
         if (!open || !close || sscanf(close+2,"%*c %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %lu %lu",&utime,&stime)!=2) continue;
         ThreadCpu *t=&out[n++];
         t->ms=(double)(utime+stime)*1000.0/(double)(hz>0 ? hz : 100);
+        t->tid=strtoul(d->d_name,NULL,10);
         snprintf(t->name,sizeof(t->name),"%.*s",(int)(close-open-1),open+1);
     }
     closedir(dir);
@@ -566,6 +568,54 @@ static void cpu_report(void) {
     printf("Runtime: yields guest=%llu, zero sleeps=%llu\n",
            (unsigned long long)__atomic_load_n(&guest_yields,__ATOMIC_RELAXED),
            (unsigned long long)__atomic_load_n(&guest_zero_sleeps,__ATOMIC_RELAXED));
+}
+/* ---- Load: thread samples for the stall watchdog (docs/specs/2026-10-29-load-stall-watchdog.md) ---- */
+const char *runtime_thread_current_name(void) { return current ? current->name : "host"; }
+unsigned long runtime_thread_host_id(void) {
+#ifdef _WIN32
+    return (unsigned long)GetCurrentThreadId();
+#else
+    return (unsigned long)syscall(SYS_gettid);
+#endif
+}
+static uintptr_t load_image_base;
+static uint64_t load_image_size;
+void runtime_thread_set_image(uintptr_t base,uint64_t size) { load_image_base=base; load_image_size=size; }
+/* Reads only (no signals, no suspension): the threads keep running while they are listed.
+ * Windows lists id, name and CPU time; instruction addresses there need SuspendThread and
+ * GetThreadContext, left out until a Windows build can test them (see the spec). */
+void runtime_thread_load_snapshot(FILE *out,int sample) {
+    const int saved_errno=errno;
+    static ThreadCpu list[CPU_REPORT_MAX];
+    size_t n=live_thread_cpu(list,CPU_REPORT_MAX);
+    for (size_t i=0;i<n;++i) {
+        fprintf(out,"Load: thread sample=%d tid=%lu name='%s' cpu_ms=%.0f",sample,list[i].tid,list[i].name,list[i].ms);
+#ifndef _WIN32
+        /* "nr arg1..arg6 sp pc" while blocked in a syscall, "-1 sp pc" otherwise, or "running". */
+        char path[64], text[256];
+        snprintf(path,sizeof(path),"/proc/self/task/%lu/syscall",list[i].tid);
+        FILE *f=fopen(path,"r");
+        size_t got=f ? fread(text,1,sizeof(text)-1,f) : 0;
+        if (f) fclose(f);
+        text[got]=0;
+        long nr; unsigned long a[6], sp=0, pc=0;
+        if (!strncmp(text,"running",7)) fputs(" syscall=running",out);
+        else if (sscanf(text,"%ld",&nr)==1) {
+            int ok=nr==-1 ? sscanf(text,"%ld %lx %lx",&nr,&sp,&pc)==3
+                          : sscanf(text,"%ld %lx %lx %lx %lx %lx %lx %lx %lx",&nr,&a[0],&a[1],&a[2],&a[3],&a[4],&a[5],&sp,&pc)==9;
+            if (ok) {
+                fprintf(out," syscall=%ld pc=0x%lx sp=0x%lx",nr,pc,sp);
+                /* First argument: the futex word when the thread waits on a lock. */
+                if (nr!=-1) fprintf(out," arg0=0x%lx",a[0]);
+                if (load_image_size && pc>=load_image_base && pc-load_image_base<load_image_size)
+                    fprintf(out," image+0x%lx",(unsigned long)(pc-load_image_base));
+            }
+        }
+#endif
+        fputc('\n',out);
+    }
+    fflush(out);
+    errno=saved_errno;
 }
 void runtime_thread_report(void) {
     pthread_mutex_lock(&lock);

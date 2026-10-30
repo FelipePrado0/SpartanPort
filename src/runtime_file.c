@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <time.h>
 #ifdef _WIN32
 #include <windows.h>
 /* 64-bit sizes and times; directories are never opened as CRT descriptors. */
@@ -47,7 +48,11 @@ typedef struct {
 _Static_assert(sizeof(GuestStat)==120,"FreeBSD stat layout");
 
 typedef struct { char *names; size_t count, *offsets; unsigned char *types; } Listing;
-typedef struct { int used, host; Listing *dir; size_t position; char path[512]; } File;
+/* traced..last_us: Load: trace state of a game file (SPARTAN_FILE_TRACE / SPARTAN_LOAD_WATCHDOG). */
+typedef struct {
+    int used, host; Listing *dir; size_t position; char path[512];
+    int traced; int64_t size; uint64_t covered, bytes, reads, opened_us, last_us;
+} File;
 typedef struct { char guest[64]; char host[512]; } Mount;
 static File files[MAX_FILES];
 static Mount mounts[MAX_MOUNTS];
@@ -191,6 +196,229 @@ static File *get(int fd) {
 }
 /* SPARTAN_AUDIO_TRACE=1: sound file opens and failed reads (missing game sounds). */
 static int audio_trace(void) { static int v=-1; if (v<0) { const char *e=getenv("SPARTAN_AUDIO_TRACE"); v=e && e[0]=='1'; } return v; }
+/* ---- Load: file trace, progress state and stall watchdog ----
+ * docs/specs/2026-10-29-load-file-trace.md and docs/specs/2026-10-29-load-stall-watchdog.md.
+ * SPARTAN_FILE_TRACE=1 logs begin/end of open/read/pread/close on .wad files (=all: every file);
+ * SPARTAN_FILE_TRACE_LIMIT caps the operation lines (default 20000, 0: none);
+ * SPARTAN_LOAD_WATCHDOG=<s> reports the load state and the threads when a load makes no file
+ * progress for that long. Off: one atomic load per operation. Every path keeps errno. */
+enum { LOAD_OFF, LOAD_WAD, LOAD_ALL };
+enum { LOAD_INFLIGHT = 64, LOAD_REPORTS_MAX = 8 };
+typedef struct { uint64_t id, started; int64_t offset; int fd, slot; const char *op; } LoadOp;
+typedef struct {
+    uint64_t id, started; int64_t offset; uint64_t size; int fd; unsigned long tid;
+    const char *op; char thread[32]; char path[256];
+} LoadFlight;
+static int load_ready, load_mode, load_lines, load_reported, load_watchdog_autostart=1;
+static unsigned load_watchdog_seconds, load_reports;
+static uint64_t load_limit, load_written, load_sequence, load_last_us, load_last_id;
+static FILE *load_out; /* NULL: stdout (user/last_run.log) */
+static LoadFlight load_flights[LOAD_INFLIGHT];
+static pthread_once_t load_env_once=PTHREAD_ONCE_INIT, load_watchdog_once=PTHREAD_ONCE_INIT;
+static FILE *load_stream(void) { return load_out ? load_out : stdout; }
+static uint64_t load_now_us(void) {
+    struct timespec now;
+    return clock_gettime(CLOCK_MONOTONIC,&now) ? 0 : (uint64_t)now.tv_sec*1000000+(uint64_t)now.tv_nsec/1000;
+}
+static void load_configure(const char *trace,const char *limit,const char *watchdog) {
+    const int saved_errno=errno;
+    int mode=trace && !strcmp(trace,"1") ? LOAD_WAD : trace && !strcmp(trace,"all") ? LOAD_ALL : LOAD_OFF;
+    char *end=NULL;
+    unsigned long long cap=limit && *limit ? strtoull(limit,&end,10) : 20000;
+    if (end && *end) cap=20000;
+    long seconds=watchdog && *watchdog ? strtol(watchdog,&end,10) : 0;
+    if (watchdog && *watchdog && (*end || seconds<1 || seconds>3600)) seconds=0;
+    pthread_mutex_lock(&lock);
+    load_lines=mode!=LOAD_OFF;
+    load_mode=mode!=LOAD_OFF ? mode : seconds ? LOAD_WAD : LOAD_OFF;
+    load_limit=cap; load_written=0; load_reported=0;
+    load_watchdog_seconds=(unsigned)seconds;
+    memset(load_flights,0,sizeof(load_flights));
+    pthread_mutex_unlock(&lock);
+    __atomic_store_n(&load_ready,1,__ATOMIC_RELEASE);
+    if (load_lines) fprintf(load_stream(),"Load: trace on (mode=%s, limit=%llu)\n",mode==LOAD_ALL ? "all" : "wad",cap);
+    if (load_watchdog_seconds) fprintf(load_stream(),"Load: watchdog on (%u s without file progress, mode=%s)\n",
+                                       load_watchdog_seconds,load_mode==LOAD_ALL ? "all" : "wad");
+    if (load_mode) fflush(load_stream());
+    errno=saved_errno;
+}
+static void load_configure_env(void) {
+    load_configure(getenv("SPARTAN_FILE_TRACE"),getenv("SPARTAN_FILE_TRACE_LIMIT"),getenv("SPARTAN_LOAD_WATCHDOG"));
+}
+static int load_active(void) {
+    if (!__atomic_load_n(&load_ready,__ATOMIC_ACQUIRE)) {
+        const int saved_errno=errno;
+        pthread_once(&load_env_once,load_configure_env);
+        errno=saved_errno;
+    }
+    return load_mode;
+}
+static int load_path_traced(const char *path) {
+    if (load_mode==LOAD_ALL) return 1;
+    size_t n=strlen(path);
+    return n>=4 && path[n-4]=='.' && (path[n-3]|32)=='w' && (path[n-2]|32)=='a' && (path[n-1]|32)=='d';
+}
+/* One operation line may be written (the limit line is written once, by the first refused one). */
+static int load_line_allowed(void) {
+    if (!load_lines) return 0;
+    if (!load_limit) return 1;
+    uint64_t n=__atomic_fetch_add(&load_written,1,__ATOMIC_RELAXED);
+    if (n==load_limit) {
+        fprintf(load_stream(),"Load: trace limit %llu reached; state and watchdog keep running\n",(unsigned long long)load_limit);
+        fflush(load_stream());
+    }
+    return n<load_limit;
+}
+static void load_clean(char *path) { for (; *path; ++path) if ((unsigned char)*path<32 || *path==127) *path='?'; }
+static void load_watchdog_start(void);
+/* guest: the path being opened; otherwise the file is found by fd and must be traced already. */
+static LoadOp load_begin(const char *op,int fd,const char *guest,int64_t offset,uint64_t size) {
+    LoadOp r={0};
+    if (!load_active()) return r;
+    const int saved_errno=errno;
+    char path[256]="";
+    pthread_mutex_lock(&lock);
+    if (guest) { if (load_path_traced(guest)) snprintf(path,sizeof(path),"%s",guest); }
+    else {
+        File *f=get(fd);
+        if (f && f->traced) {
+            snprintf(path,sizeof(path),"%s",f->path);
+            if (!strcmp(op,"read") && f->host>=0) offset=host_lseek(f->host,0,SEEK_CUR);
+        }
+    }
+    if (!path[0]) { pthread_mutex_unlock(&lock); errno=saved_errno; return r; }
+    load_clean(path);
+    r.id=++load_sequence; r.started=load_now_us(); r.offset=offset; r.fd=fd; r.op=op; r.slot=-1;
+    for (int i=0;i<LOAD_INFLIGHT;++i) if (!load_flights[i].id) {
+        LoadFlight *s=&load_flights[i];
+        *s=(LoadFlight){.id=r.id,.started=r.started,.offset=offset,.size=size,.fd=fd,.op=op,.tid=runtime_thread_host_id()};
+        snprintf(s->thread,sizeof(s->thread),"%s",runtime_thread_current_name());
+        snprintf(s->path,sizeof(s->path),"%s",path);
+        r.slot=i; break;
+    }
+    load_last_us=r.started; load_last_id=r.id; load_reported=0;
+    pthread_mutex_unlock(&lock);
+    if (load_line_allowed()) {
+        fprintf(load_stream(),"Load: #%llu begin %s fd=%d tid=%lu thread='%s' t_us=%llu off=%lld req=%llu path=%s\n",
+                (unsigned long long)r.id,op,fd,runtime_thread_host_id(),runtime_thread_current_name(),
+                (unsigned long long)r.started,(long long)offset,(unsigned long long)size,path);
+        fflush(load_stream());
+    }
+    if (load_watchdog_seconds && load_watchdog_autostart) pthread_once(&load_watchdog_once,load_watchdog_start);
+    errno=saved_errno;
+    return r;
+}
+static void load_end(const LoadOp *op,int64_t result) {
+    if (!op->id) return;
+    const int saved_errno=errno;
+    const uint64_t now=load_now_us();
+    char extra[64]="";
+    pthread_mutex_lock(&lock);
+    if (op->slot>=0) load_flights[op->slot].id=0;
+    File *f=!strcmp(op->op,"open") ? (result>=0 ? get((int)result) : NULL) : get(op->fd);
+    if (f && !strcmp(op->op,"open")) {
+        HostStat s;
+        f->traced=1; f->opened_us=f->last_us=now;
+        f->size=f->host>=0 && !host_fstat(f->host,&s) ? (int64_t)s.st_size : -1;
+        snprintf(extra,sizeof(extra)," size=%lld",(long long)f->size);
+    } else if (f && f->traced && strcmp(op->op,"close")) {
+        if (result>0) {
+            f->bytes+=(uint64_t)result; ++f->reads;
+            if (op->offset>=0 && (uint64_t)op->offset<=f->covered && (uint64_t)op->offset+(uint64_t)result>f->covered)
+                f->covered=(uint64_t)op->offset+(uint64_t)result;
+        }
+        f->last_us=now;
+        snprintf(extra,sizeof(extra)," done=%llu/%lld",(unsigned long long)f->covered,(long long)f->size);
+    }
+    load_last_us=now; load_last_id=op->id; load_reported=0;
+    pthread_mutex_unlock(&lock);
+    if (load_line_allowed()) {
+        fprintf(load_stream(),"Load: #%llu end %s fd=%d tid=%lu t_us=%llu result=%lld errno=%d us=%llu%s\n",
+                (unsigned long long)op->id,op->op,!strcmp(op->op,"open") ? (int)(result>=0 ? result : -1) : op->fd,
+                runtime_thread_host_id(),(unsigned long long)now,(long long)result,result<0 ? (int)-result : 0,
+                (unsigned long long)(now>=op->started ? now-op->started : 0),extra);
+        fflush(load_stream());
+    }
+    errno=saved_errno;
+}
+static double load_age(uint64_t now,uint64_t then) { return now>then ? (double)(now-then)/1e6 : 0.0; }
+static void load_state_at(FILE *out,uint64_t now) {
+    pthread_mutex_lock(&lock);
+    unsigned flying=0;
+    for (int i=0;i<LOAD_INFLIGHT;++i) flying+=load_flights[i].id!=0;
+    fprintf(out,"Load: state t_us=%llu mode=%s last progress %.1f s ago (#%llu), %u in flight\n",(unsigned long long)now,
+            load_mode==LOAD_ALL ? "all" : load_mode ? "wad" : "off",load_age(now,load_last_us),(unsigned long long)load_last_id,flying);
+    for (int i=0;i<LOAD_INFLIGHT;++i) {
+        const LoadFlight *s=&load_flights[i];
+        if (s->id) fprintf(out,"Load:   in flight #%llu %s fd=%d tid=%lu thread='%s' for %.1f s off=%lld req=%llu path=%s\n",
+                           (unsigned long long)s->id,s->op,s->fd,s->tid,s->thread,load_age(now,s->started),
+                           (long long)s->offset,(unsigned long long)s->size,s->path);
+    }
+    for (int fd=3;fd<MAX_FILES;++fd) {
+        const File *f=&files[fd];
+        if (f->used && f->traced) fprintf(out,"Load:   open fd=%d path=%s read=%llu/%lld bytes=%llu reads=%llu opened %.1f s ago, last %.1f s ago\n",
+                                          fd,f->path,(unsigned long long)f->covered,(long long)f->size,(unsigned long long)f->bytes,
+                                          (unsigned long long)f->reads,load_age(now,f->opened_us),load_age(now,f->last_us));
+    }
+    pthread_mutex_unlock(&lock);
+    fflush(out);
+}
+void runtime_file_load_state(FILE *out) {
+    if (!load_active()) return;
+    const int saved_errno=errno;
+    load_state_at(out ? out : load_stream(),load_now_us());
+    errno=saved_errno;
+}
+/* A load is stalled: an operation is running or a traced file is open and was read, and nothing
+ * began or ended for the watchdog's time. Due once per stall (progress re-arms it), 8 per session. */
+static int load_stall_due(uint64_t now) {
+    if (!load_watchdog_seconds) return 0;
+    int due=0;
+    pthread_mutex_lock(&lock);
+    int loading=0;
+    for (int i=0;i<LOAD_INFLIGHT && !loading;++i) loading=load_flights[i].id!=0;
+    for (int fd=3;fd<MAX_FILES && !loading;++fd) loading=files[fd].used && files[fd].traced && files[fd].reads;
+    if (loading && !load_reported && load_reports<LOAD_REPORTS_MAX &&
+        now>=load_last_us && now-load_last_us>=(uint64_t)load_watchdog_seconds*1000000) {
+        load_reported=1; ++load_reports; due=1;
+    }
+    pthread_mutex_unlock(&lock);
+    return due;
+}
+static void load_stall_report(FILE *out,uint64_t now) {
+    const int saved_errno=errno;
+    if (!out) out=load_stream();
+    fprintf(out,"Load: STALL no file progress for %llu s (watchdog %u s)\n",
+            (unsigned long long)(now>load_last_us ? (now-load_last_us)/1000000 : 0),load_watchdog_seconds);
+    load_state_at(out,now);
+    /* Two samples a second apart: CPU time rising means a busy loop, flat means a wait. */
+    runtime_thread_load_snapshot(out,1);
+    fflush(out);
+    struct timespec second={1,0};
+    while (nanosleep(&second,&second) && errno==EINTR) {}
+    runtime_thread_load_snapshot(out,2);
+    fflush(out);
+    errno=saved_errno;
+}
+static void *load_watchdog(void *arg) {
+    (void)arg;
+    pthread_setname_np(pthread_self(),"load-watchdog");
+    for (;;) {
+        struct timespec quarter={0,250000000};
+        nanosleep(&quarter,NULL);
+        const uint64_t now=load_now_us();
+        if (load_stall_due(now)) load_stall_report(NULL,now);
+    }
+    return NULL;
+}
+static void load_watchdog_start(void) {
+    pthread_t thread;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
+    if (pthread_create(&thread,&attr,load_watchdog,NULL)) fputs("Load: watchdog thread not started\n",load_stream());
+    pthread_attr_destroy(&attr);
+}
 /* Game mounts (including linked mod overlays) are read-only. Saves use other mounts. */
 static int game_path(const char *p) {
     if (!p || !*p) return 0;
@@ -199,7 +427,7 @@ static int game_path(const char *p) {
            (!strncmp(p,"/hostapp",8) && (!p[8] || p[8]=='/'));
 }
 /* All operations return >=0 or -(host errno); wrappers adapt the convention. */
-static int64_t do_open(const char *guest,int flags,int mode) {
+static int64_t open_file(const char *guest,int flags,int mode) {
     if (game_path(guest) && (flags & (3|0x8|0x200|0x400|0x800))) return -EROFS;
     char path[1024];
     int e=translate(guest,path,sizeof(path));
@@ -259,7 +487,13 @@ static int64_t do_open(const char *guest,int flags,int mode) {
     }
     return fd;
 }
-static int64_t do_close(int fd) {
+static int64_t do_open(const char *guest,int flags,int mode) {
+    LoadOp op=load_begin("open",-1,guest,-1,0);
+    int64_t r=open_file(guest,flags,mode);
+    load_end(&op,r);
+    return r;
+}
+static int64_t close_file(int fd) {
     if (fd>=0 && fd<3) return 0;
     pthread_mutex_lock(&lock);
     File *f=get(fd);
@@ -269,6 +503,12 @@ static int64_t do_close(int fd) {
     *f=(File){0};
     pthread_mutex_unlock(&lock);
     return 0;
+}
+static int64_t do_close(int fd) {
+    LoadOp op=load_begin("close",fd,NULL,-1,0);
+    int64_t r=close_file(fd);
+    load_end(&op,r);
+    return r;
 }
 static int host_fd(int fd) {
     if (fd>=0 && fd<3) return fd;
@@ -294,7 +534,7 @@ static void touch_for_write(void *buffer,uint64_t size) {
         *b=*b;
     }
 }
-static int64_t do_read(int fd,void *buffer,uint64_t size) {
+static int64_t read_file(int fd,void *buffer,uint64_t size) {
     int h=host_fd(fd);
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
@@ -305,7 +545,7 @@ static int64_t do_read(int fd,void *buffer,uint64_t size) {
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;
 }
-static int64_t do_pread(int fd,void *buffer,uint64_t size,int64_t offset) {
+static int64_t pread_file(int fd,void *buffer,uint64_t size,int64_t offset) {
     int h=host_fd(fd);
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
@@ -315,6 +555,18 @@ static int64_t do_pread(int fd,void *buffer,uint64_t size,int64_t offset) {
     if (n<0) { if (audio_trace()) printf("Audio trace: pread(fd %d, %llu @%lld) failed, errno %d\n",fd,(unsigned long long)size,(long long)offset,errno); return -errno; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;
+}
+static int64_t do_read(int fd,void *buffer,uint64_t size) {
+    LoadOp op=load_begin("read",fd,NULL,-1,size);
+    int64_t r=read_file(fd,buffer,size);
+    load_end(&op,r);
+    return r;
+}
+static int64_t do_pread(int fd,void *buffer,uint64_t size,int64_t offset) {
+    LoadOp op=load_begin("pread",fd,NULL,offset,size);
+    int64_t r=pread_file(fd,buffer,size,offset);
+    load_end(&op,r);
+    return r;
 }
 static int64_t do_write(int fd,const void *buffer,uint64_t size) {
     int h=host_fd(fd);
@@ -520,5 +772,7 @@ int runtime_file_translate(const char *guest,char *out,size_t size) { return tra
 void runtime_file_report(void) {
     printf("Runtime: files opened=%zu, reads=%zu (%llu bytes), writes=%zu, not found=%zu\n",
            opens,reads,(unsigned long long)bytes_read,writes,missing);
+    /* Traced files still open at exit and the last progress (Load: trace or watchdog on). */
+    runtime_file_load_state(NULL);
 }
 

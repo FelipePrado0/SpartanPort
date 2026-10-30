@@ -2,6 +2,7 @@
 #define SPARTAN_RUNTIME_H
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 #ifdef _WIN32
 #include "compat_win.h"
 /* No signals on Windows: the exception handler resumes the thread in spartanport_longjmp
@@ -63,6 +64,17 @@ uintptr_t runtime_kernel_resolve(const char *name);
 uintptr_t runtime_file_resolve(const char *name);
 uintptr_t runtime_services_resolve(const char *name);
 void runtime_file_report(void);
+/* Load: trace state (docs/specs/2026-10-29-load-file-trace.md): last progress, operations in
+ * flight and traced files still open, to out (NULL: the trace stream). No-op while it is off. */
+void runtime_file_load_state(FILE *out);
+/* Name ("host" for threads without a record; never creates one) and host id of this thread. */
+const char *runtime_thread_current_name(void);
+unsigned long runtime_thread_host_id(void);
+/* Load: one line per live thread of the process: id, name, CPU time; on Linux also the syscall
+ * it is blocked in with pc/sp (docs/specs/2026-10-29-load-stall-watchdog.md). */
+void runtime_thread_load_snapshot(FILE *out, int sample);
+/* The game image's range, so thread samples print image-relative addresses. */
+void runtime_thread_set_image(uintptr_t base, uint64_t size);
 void runtime_file_configure(const char *app0, const char *user);
 int runtime_file_mount(const char *guest, const char *host);
 void runtime_file_unmount(const char *guest);
