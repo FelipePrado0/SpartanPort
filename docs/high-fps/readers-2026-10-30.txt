@@ -1,0 +1,319 @@
+find_rate_readers: eboot.bin (flat file: not an ELF)
+  engine rate setter: 0x1f22c0; globals: float 0x3d0250, rounded 0x1a7a500
+  global 0x1a7a500 outside the image: skipped
+  constant 59.94: 0x3601b4
+  constant 60.0: 0x2ed904, 0x2f55b8, 0x2f5640, 0x2f5650, 0x2f5670, 0x2f56c4, 0x2f5e54, 0x2f5e7c, 0x2f5ee0, 0x2f5f84, 0x2f5f8c, 0x2f5fc0, 0x2fe6a0, 0x2fe6a8, 0x2fe6dc, 0x2fe6f0, 0x2fe710, 0x2fe768, 0x351afc, 0x3521c0, 0x352534, 0x3526d4, 0x3526e8, 0x352cd4, 0x352d00, 0x352d0c, 0x352d2c, 0x3545f0, 0x3545fc, 0x355948, 0x355b0c, 0x356058, 0x359978, 0x3609f4
+  constant 1/60: not found
+readers: 112 in 43 functions
+
+function 0x4afd0..0x4b122: 4 readers
+  0x4b2e4 (file offset 0x4b2e4) ? constant 60.0 -> 0x2f55b8  [a confirmar]
+    bytes at 0x4b2cc: 0e c5 f0 57 c9 c5 f8 2e d9 0f 97 c0 0f b6 c0 f7 d8 c5 fa 2a c8 c5 f2 59 1d cb a2 2a 00 c5 fa 11 85 80 f9 ff ff c4 c1 7a 10 57 0c 48 8d bd 90 f9
+  0x4bf86 (file offset 0x4bf86) ? constant 60.0 -> 0x2f55b8  [a confirmar]
+    bytes at 0x4bf6e: f8 28 c5 73 08 c5 d0 57 05 95 99 2a 00 41 8b 47 08 a8 01 74 22 c5 da 59 0d 29 96 2a 00 c5 f8 2e c1 76 14 c5 f0 57 c9 c5 f8 2e e9 76 06 c5 fa 5c
+  0x4bffe (file offset 0x4bffe) vmulss constant 60.0 -> 0x2f55b8
+    bytes at 0x4bfe6: fa 11 ad 68 f9 ff ff e8 fe 03 2a 00 c5 fa 10 8d 64 f9 ff ff c5 f2 59 c0 c5 fa 59 05 b2 95 2a 00 e8 f5 03 2a 00 c5 fa 10 ad 68 f9 ff ff c5 fa 10
+  0x4c1d1 (file offset 0x4c1d1) ? constant 60.0 -> 0x2f55b8  [a confirmar]
+    bytes at 0x4c1b9: e8 57 d2 c5 f8 2e e2 c5 f8 28 d4 73 08 c5 d8 57 15 42 97 2a 00 c5 f2 59 1d de 93 2a 00 c5 f8 2e d3 76 24 c5 f9 6f e8 c5 e1 ef db c5 f8 2e e3 76
+
+function 0x4c300..0x4c3d8: 2 readers
+  0x4c331 (file offset 0x4c331) ? constant 60.0 -> 0x2f5640  [a confirmar]
+    bytes at 0x4c319: fe 85 d2 74 08 c5 c0 57 3d 5a 96 2a 00 c5 d2 5c c4 c5 7a 59 c6 c5 3a 59 15 06 93 2a 00 c5 c0 54 05 52 96 2a 00 c5 fa 51 c0 c5 c8 57 f6 c5 f8 2e
+  0x4c380 (file offset 0x4c380) vmulss constant 60.0 -> 0x2f5640
+    bytes at 0x4c368: fa 11 4d d4 c5 fa 11 7d d0 c5 fa 11 55 cc e8 75 00 2a 00 c5 fa 59 45 e8 c5 fa 59 05 b8 92 2a 00 e8 73 00 2a 00 c5 fa 10 55 cc c5 fa 10 7d d0 c5
+
+function 0x4c4d0..0x4c699: 3 readers
+  0x4c58f (file offset 0x4c58f) ? constant 60.0 -> 0x2f5650  [a confirmar]
+    bytes at 0x4c577: f8 12 c8 c5 f2 58 c8 c5 f9 70 c0 01 c5 fa 58 c9 c5 fa 10 43 04 c5 fa 10 15 b8 90 2a 00 c5 ea 5c d0 c5 ea 59 d1 45 84 ed 75 0a c5 ea 5d 53 08 c5
+  0x4c650 (file offset 0x4c650) vmulss constant 60.0 -> 0x2f5650
+    bytes at 0x4c638: 31 ff c5 fa 11 5d 80 e8 ac fd 29 00 c5 fa 10 8d 70 ff ff ff c5 f2 59 c0 c5 fa 59 05 f8 8f 2a 00 e8 a3 fd 29 00 c5 fa 10 5d 80 c5 f8 28 c8 c5 fa
+  0x4c669 (file offset 0x4c669) ? constant 60.0 -> 0x2f5650  [a confirmar]
+    bytes at 0x4c651: fa 59 05 f8 8f 2a 00 e8 a3 fd 29 00 c5 fa 10 5d 80 c5 f8 28 c8 c5 fa 10 05 de 8f 2a 00 c5 fa 5c c1 c5 fa 10 95 6c ff ff ff c5 e2 5c ca c5 f2 59
+
+function 0x4c6b0..0x4c7b9: 2 readers
+  0x4c9d7 (file offset 0x4c9d7) ? constant 60.0 -> 0x2f5670  [a confirmar]
+    bytes at 0x4c9bf: c5 f0 59 c1 c5 f8 12 c8 c5 f2 58 c8 c5 f9 70 c0 01 c5 fa 58 c1 c5 f8 2e 05 90 8c 2a 00 76 23 c5 f0 57 c9 c5 f8 2e e9 c5 f8 28 c5 73 08 c5 d0 57
+  0x4ca8b (file offset 0x4ca8b) vmulss constant 60.0 -> 0x2f5670
+    bytes at 0x4ca73: fa 11 9d 40 f9 ff ff e8 71 f9 29 00 c5 fa 10 8d 30 f9 ff ff c5 f2 59 c0 c5 fa 59 05 dd 8b 2a 00 e8 68 f9 29 00 c5 fa 10 9d 40 f9 ff ff c5 f8 28
+
+function 0x4d600..0x4d7c9: 3 readers
+  0x4d699 (file offset 0x4d699) ? constant 60.0 -> 0x2f56c4  [a confirmar]
+    bytes at 0x4d681: 5c 80 e4 02 00 00 c5 fa 5c e2 4c 8d 25 ce 0e 40 00 49 8b 04 24 c5 fa 10 35 22 80 2a 00 c5 ca 5c 48 48 c5 f8 57 c0 c5 f8 2e c8 74 65 48 8d 05 bc
+  0x4d6e5 (file offset 0x4d6e5) vmulss constant 60.0 -> 0x2f56c4
+    bytes at 0x4d6cd: c5 fa 11 65 c8 c5 fa 11 6d c4 e8 14 ed 29 00 c5 fa 10 4d c0 c5 f2 59 c0 c5 fa 59 05 d7 7f 2a 00 e8 0e ed 29 00 c5 fa 10 35 c6 7f 2a 00 c5 fa 10
+  0x4d6f5 (file offset 0x4d6f5) ? constant 60.0 -> 0x2f56c4  [a confirmar]
+    bytes at 0x4d6dd: fa 10 4d c0 c5 f2 59 c0 c5 fa 59 05 d7 7f 2a 00 e8 0e ed 29 00 c5 fa 10 35 c6 7f 2a 00 c5 fa 10 6d c4 c5 fa 10 65 c8 c5 fa 10 5d cc c5 fa 10 55
+
+function 0x52040..0x521c1: 11 readers
+  0x520dd (file offset 0x520dd) ? constant 60.0 -> 0x2f5e54  [a confirmar]
+    bytes at 0x520c5: 83 a0 00 00 00 c5 f8 58 c2 c5 f0 5c e0 c5 fa 10 83 a0 01 00 00 c5 fa 10 1d 6e 3d 2a 00 c5 f8 2e d8 0f 84 a0 02 00 00 c5 f8 29 65 90 c5 e2 5c c0
+  0x5210f (file offset 0x5210f) vmulss constant 60.0 -> 0x2f5e54
+    bytes at 0x520f7: 57 c9 c5 f8 2e c1 c5 f0 57 c9 74 25 31 ff e8 e6 a2 29 00 c5 fa 59 45 ac c5 fa 59 05 3d 3d 2a 00 e8 e4 a2 29 00 c5 fa 10 1d 2c 3d 2a 00 c5 f8 28
+  0x5211f (file offset 0x5211f) ? constant 60.0 -> 0x2f5e54  [a confirmar]
+    bytes at 0x52107: a2 29 00 c5 fa 59 45 ac c5 fa 59 05 3d 3d 2a 00 e8 e4 a2 29 00 c5 fa 10 1d 2c 3d 2a 00 c5 f8 28 c8 c5 e2 5c c1 c5 f8 29 45 80 48 8d 7d c0 4c 89
+  0x522a9 (file offset 0x522a9) vmulss constant 60.0 -> 0x2f5e54
+    bytes at 0x52291: 2e 05 cd 3b 2a 00 c5 f0 57 c9 74 25 31 ff e8 4c a1 29 00 c5 fa 59 45 ac c5 fa 59 05 a3 3b 2a 00 e8 4a a1 29 00 c5 fa 10 15 9a 3b 2a 00 c5 f8 28
+  0x522d1 (file offset 0x522d1) ? constant 60.0 -> 0x2f5e54  [a confirmar]
+    bytes at 0x522b9: 15 9a 3b 2a 00 c5 f8 28 c8 c5 ea 5c c1 c5 fa 59 83 a0 01 00 00 c5 f8 2e 05 7a 3b 2a 00 c5 fa 11 83 a0 01 00 00 c5 fa 10 1d 6a 3b 2a 00 c5 f8 28
+  0x522e1 (file offset 0x522e1) ? constant 60.0 -> 0x2f5e54  [a confirmar]
+    bytes at 0x522c9: 83 a0 01 00 00 c5 f8 2e 05 7a 3b 2a 00 c5 fa 11 83 a0 01 00 00 c5 fa 10 1d 6a 3b 2a 00 c5 f8 28 65 90 0f 83 88 00 00 00 f6 83 c7 01 00 00 04 0f
+  0x523ea (file offset 0x523ea) vmulss constant 60.0 -> 0x2f5e54
+    bytes at 0x523d2: c8 74 2f 31 ff c5 f8 28 c1 c5 f8 29 65 90 e8 0b a0 29 00 c5 fa 59 45 ac c5 fa 59 05 62 3a 2a 00 e8 09 a0 29 00 c5 f8 28 65 90 c5 fa 10 1d 4c 3a
+  0x523ff (file offset 0x523ff) ? constant 60.0 -> 0x2f5e54  [a confirmar]
+    bytes at 0x523e7: 59 45 ac c5 fa 59 05 62 3a 2a 00 e8 09 a0 29 00 c5 f8 28 65 90 c5 fa 10 1d 4c 3a 2a 00 c5 f8 28 8b f0 00 00 00 c5 f8 29 8b e0 00 00 00 f6 83 c7
+  0x52497 (file offset 0x52497) vmulss constant 60.0 -> 0x2f5e54
+    bytes at 0x5247f: 57 c0 c5 f8 2e c8 74 25 31 ff c5 f8 28 c1 e8 5e 9f 29 00 c5 fa 59 45 ac c5 fa 59 05 b5 39 2a 00 e8 5c 9f 29 00 c5 fa 10 15 ac 39 2a 00 48 8d 83
+  0x524c9 (file offset 0x524c9) ? constant 60.0 -> 0x2f5e54  [a confirmar]
+    bytes at 0x524b1: 00 00 48 8d 8b c4 01 00 00 c5 ea 5c c0 c5 fa 59 83 a8 01 00 00 c5 f8 2e 05 82 39 2a 00 c5 fa 11 83 a8 01 00 00 73 77 f6 41 03 08 0f 85 9e 00 00
+  0x5261f (file offset 0x5261f) ? constant 60.0 -> 0x2f5e54  [a confirmar]
+    bytes at 0x52607: 00 00 00 eb 10 c5 f8 28 83 c0 00 00 00 c5 f8 28 8b e0 00 00 00 c5 fa 10 25 2c 38 2a 00 c4 e2 79 18 93 b8 01 00 00 c5 e8 59 9b b0 00 00 00 c5 f8
+
+function 0x53b60..0x53d7a: 3 readers
+  0x53c83 (file offset 0x53c83) ? constant 60.0 -> 0x2f5e7c  [a confirmar]
+    bytes at 0x53c6b: ff c5 f8 29 45 90 48 8b 7b 08 31 f6 e8 34 a0 12 00 c5 f8 28 d8 c5 fa 10 15 f0 21 2a 00 c5 ea 5c 85 30 ff ff ff c5 f0 57 c9 c5 f8 2e c1 74 34 31
+  0x53cb5 (file offset 0x53cb5) vmulss constant 60.0 -> 0x2f5e7c
+    bytes at 0x53c9d: fa 11 9d 30 ff ff ff e8 47 87 29 00 c5 fa 10 8d 30 ff ff ff c5 f2 59 c0 c5 fa 59 05 bf 21 2a 00 e8 3e 87 29 00 c5 fa 10 15 ae 21 2a 00 c5 f8 28
+  0x53cc5 (file offset 0x53cc5) ? constant 60.0 -> 0x2f5e7c  [a confirmar]
+    bytes at 0x53cad: 30 ff ff ff c5 f2 59 c0 c5 fa 59 05 bf 21 2a 00 e8 3e 87 29 00 c5 fa 10 15 ae 21 2a 00 c5 f8 28 c8 c5 ea 5c c1 c5 f8 29 85 30 ff ff ff 48 8d bd
+
+function 0x59e80..0x59efb: 2 readers
+  0x59ff6 (file offset 0x59ff6) ? constant 60.0 -> 0x2f5ee0  [a confirmar]
+    bytes at 0x59fde: ff ff 48 8d 05 89 62 37 00 c5 fa 10 00 c5 fa 11 85 f0 fd ff ff c5 fa 10 05 e1 be 29 00 31 ff e8 ee 23 29 00 c5 fa 10 8d f0 fd ff ff c5 f2 59 c0
+  0x5a00e (file offset 0x5a00e) vmulss constant 60.0 -> 0x2f5ee0
+    bytes at 0x59ff6: 05 e1 be 29 00 31 ff e8 ee 23 29 00 c5 fa 10 8d f0 fd ff ff c5 f2 59 c0 c5 fa 59 05 ca be 29 00 e8 e5 23 29 00 c5 f8 28 bd 40 fe ff ff c5 78 28
+
+function 0x5f770..0x5f81e: 3 readers
+  0x5f92f (file offset 0x5f92f) ? constant 60.0 -> 0x2f5f84  [a confirmar]
+    bytes at 0x5f917: 14 48 85 db 0f 84 d9 00 00 00 c7 03 00 00 00 00 e9 ce 00 00 00 c5 fa 10 1d 4c 66 29 00 c5 e2 5c 45 dc c5 f0 57 c9 c5 f8 2e c1 74 2f 31 ff c5 fa
+  0x5f954 (file offset 0x5f954) vmulss constant 60.0 -> 0x2f5f84
+    bytes at 0x5f93c: c9 c5 f8 2e c1 74 2f 31 ff c5 fa 11 55 e0 e8 a1 ca 28 00 c5 fa 59 45 d4 c5 fa 59 05 28 66 29 00 e8 9f ca 28 00 c5 fa 10 1d 17 66 29 00 c5 fa 10
+  0x5f964 (file offset 0x5f964) ? constant 60.0 -> 0x2f5f84  [a confirmar]
+    bytes at 0x5f94c: ca 28 00 c5 fa 59 45 d4 c5 fa 59 05 28 66 29 00 e8 9f ca 28 00 c5 fa 10 1d 17 66 29 00 c5 fa 10 55 e0 c5 f8 28 c8 c5 e2 5c c1 c5 ea 59 c0 c5 fa
+
+function 0x60b10..0x61250: 3 readers
+  0x60b71 (file offset 0x60b71) ? constant 60.0 -> 0x2f5fc0  [a confirmar]
+    bytes at 0x60b59: c4 c1 7a 10 85 80 03 00 00 c5 fa 5c c1 c5 fa 11 85 c0 fe ff ff c5 fa 10 05 46 54 29 00 31 ff e8 73 b8 28 00 c5 fa 10 8d e0 fe ff ff c5 f2 59 c0
+  0x60b89 (file offset 0x60b89) vmulss constant 60.0 -> 0x2f5fc0
+    bytes at 0x60b71: 05 46 54 29 00 31 ff e8 73 b8 28 00 c5 fa 10 8d e0 fe ff ff c5 f2 59 c0 c5 fa 59 05 2f 54 29 00 e8 6a b8 28 00 c5 fa 10 0d 26 54 29 00 c5 f2 5c
+  0x60be9 (file offset 0x60be9) vmulss constant 60.0 -> 0x2f5fc0
+    bytes at 0x60bd1: 05 f2 53 29 00 31 ff e8 13 b8 28 00 c5 fa 10 8d e0 fe ff ff c5 f2 59 c0 c5 fa 59 05 cf 53 29 00 e8 0a b8 28 00 c5 fa 10 0d c6 53 29 00 c5 f2 5c
+
+function 0x7ecf0..0x7f645: 2 readers
+  0x7f379 (file offset 0x7f379) ? constant 60.0 -> 0x2fe6a8  [a confirmar]
+    bytes at 0x7f361: fa 10 80 48 01 00 00 c5 fa 58 c0 c5 fa 11 85 9c fd ff ff 31 ff c5 fa 10 05 26 f3 27 00 e8 6d d0 26 00 c5 fa 59 85 9c fd ff ff c5 fa 59 05 15 f3
+  0x7f38b (file offset 0x7f38b) vmulss constant 60.0 -> 0x2fe6a8
+    bytes at 0x7f373: ff 31 ff c5 fa 10 05 26 f3 27 00 e8 6d d0 26 00 c5 fa 59 85 9c fd ff ff c5 fa 59 05 15 f3 27 00 e8 68 d0 26 00 c5 f9 70 c0 00 c5 f8 28 8d a0 fd
+
+function 0x7fdb0..0x80929: 4 readers
+  0x80891 (file offset 0x80891) ? constant 60.0 -> 0x2fe6dc  [a confirmar]
+    bytes at 0x80879: 10 84 24 48 01 00 00 c5 fa 58 c0 c5 fa 11 85 a8 fb ff ff 31 ff c5 fa 10 05 42 de 27 00 e8 55 bb 26 00 c5 fa 59 85 a8 fb ff ff c5 fa 59 05 31 de
+  0x808a3 (file offset 0x808a3) vmulss constant 60.0 -> 0x2fe6dc
+    bytes at 0x8088b: ff 31 ff c5 fa 10 05 42 de 27 00 e8 55 bb 26 00 c5 fa 59 85 a8 fb ff ff c5 fa 59 05 31 de 27 00 e8 50 bb 26 00 c5 f9 70 c0 00 c5 f8 28 8d b0 fb
+  0x80a14 (file offset 0x80a14) ? constant 60.0 -> 0x2fe6dc  [a confirmar]
+    bytes at 0x809fc: 10 84 24 48 01 00 00 c5 fa 58 c0 c5 fa 11 85 a8 fb ff ff 31 ff c5 fa 10 05 bf dc 27 00 e8 d2 b9 26 00 c5 fa 59 85 a8 fb ff ff c5 fa 59 05 ae dc
+  0x80a26 (file offset 0x80a26) vmulss constant 60.0 -> 0x2fe6dc
+    bytes at 0x80a0e: ff 31 ff c5 fa 10 05 bf dc 27 00 e8 d2 b9 26 00 c5 fa 59 85 a8 fb ff ff c5 fa 59 05 ae dc 27 00 e8 cd b9 26 00 c5 f9 70 c0 00 c5 f8 28 8d b0 fb
+
+function 0x80e60..0x8122c: 2 readers
+  0x810d3 (file offset 0x810d3) ? constant 60.0 -> 0x2fe6f0  [a confirmar]
+    bytes at 0x810bb: 58 c0 c5 f8 29 45 a0 eb 05 c5 f8 29 75 a0 c4 c1 7a 10 44 24 18 c5 fa 59 05 14 d6 27 00 c5 f8 28 8b 90 00 00 00 c4 c1 70 59 8e 90 00 00 00 c5 f0
+  0x81188 (file offset 0x81188) vmulss constant 60.0 -> 0x2fe6f0
+    bytes at 0x81170: f8 28 6d a0 c5 f8 29 ab 00 04 00 00 c5 fa 10 45 cc c4 c1 7a 59 44 24 10 c5 fa 59 05 60 d5 27 00 c5 fa 5f 05 5c d5 27 00 c5 fa 5d 05 58 d5 27 00
+
+function 0x814a0..0x8162a: 2 readers
+  0x81cf6 (file offset 0x81cf6) ? constant 60.0 -> 0x2fe710  [a confirmar]
+    bytes at 0x81cde: 49 89 dd 0f 84 bb 00 00 00 c5 fa 10 85 0c fe ff ff c5 fa 58 c0 c5 fa 5f 05 11 ca 27 00 c5 fa 10 1d 05 ca 27 00 c5 fa 5d c3 c4 c1 7a 10 94 24 88
+  0x81d5b (file offset 0x81d5b) vmulss constant 60.0 -> 0x2fe710
+    bytes at 0x81d43: fa 11 a5 f0 fd ff ff e8 a1 a6 26 00 c5 fa 10 8d e0 fd ff ff c5 f2 59 c0 c5 fa 59 05 ad c9 27 00 e8 98 a6 26 00 c5 fa 10 a5 f0 fd ff ff c5 fa 10
+
+function 0x83900..0x83b50: 5 readers
+  0x83b32 (file offset 0x83b32) ? constant 60.0 -> 0x2fe768  [a confirmar]
+    bytes at 0x83b1a: c4 c1 7a 11 09 c5 fa 5e c9 c5 fa 10 15 35 ac 27 00 c5 f2 5f ca c5 fa 10 1d 2d ac 27 00 c5 f2 5d cb c4 c1 7a 11 0f c5 f8 12 c0 c4 c1 7a 5e 01 c5
+  0x83be4 (file offset 0x83be4) ? constant 60.0 -> 0x2fe768  [a confirmar]
+    bytes at 0x83bcc: c4 c1 7a 10 07 c5 fa 58 83 90 04 00 00 c5 fa 5f 05 7f ab 27 00 c5 fa 5d 05 7b ab 27 00 c4 c1 7a 11 07 eb 28 a8 80 74 09 41 c7 01 00 00 00 00 eb
+  0x83c7d (file offset 0x83c7d) ? constant 60.0 -> 0x2fe768  [a confirmar]
+    bytes at 0x83c65: c5 fa 10 46 5c 48 8b 89 e0 00 00 00 48 85 c9 74 47 48 8b 51 40 c5 fa 10 1d e2 aa 27 00 48 85 d2 74 40 c5 fa 10 4a 14 c5 e8 57 d2 c5 f8 2e d1 c5
+  0x83d10 (file offset 0x83d10) vmulss constant 60.0 -> 0x2fe768
+    bytes at 0x83cf8: 01 00 00 c5 fa 11 4d dc 31 ff e8 e9 86 26 00 c5 fa 10 4d dc c5 f2 59 c0 c5 fa 59 05 50 aa 27 00 e8 e3 86 26 00 c5 fa 10 0d 3f aa 27 00 c5 f2 5c
+  0x83d20 (file offset 0x83d20) ? constant 60.0 -> 0x2fe768  [a confirmar]
+    bytes at 0x83d08: fa 10 4d dc c5 f2 59 c0 c5 fa 59 05 50 aa 27 00 e8 e3 86 26 00 c5 fa 10 0d 3f aa 27 00 c5 f2 5c c0 c5 fa 10 4d e4 c5 f2 59 c0 c5 fa 58 83 8c 04
+
+function 0x8c3b0..0x8c7e3: 1 readers
+  0x8c6e1 (file offset 0x8c6e1) lea rate (float global) -> 0x3d0250
+    bytes at 0x8c6c9: d7 37 27 00 eb 12 c5 f8 2e 15 c5 37 27 00 73 08 c5 e2 58 1d bf 37 27 00 48 8d 05 68 3b 34 00 c5 fa 59 10 c5 ea 59 15 b4 37 27 00 c5 e2 5c c1 c5
+
+function 0x91fe0..0x9232f: 1 readers
+  0x924ea (file offset 0x924ea) lea rate (float global) -> 0x3d0250  [swing energy, known case]
+    bytes at 0x924d2: c5 fa 11 85 7c fb ff ff c5 fa 10 80 44 02 00 00 c5 fa 11 85 98 fb ff ff 48 8d 05 5f dd 33 00 c5 fa 10 00 c4 c1 7a 59 86 48 01 00 00 c5 f8 29 85
+
+function 0x9d510..0x9d702: 1 readers
+  0x9d67e (file offset 0x9d67e) lea rate (float global) -> 0x3d0250
+    bytes at 0x9d666: fa 11 83 54 01 00 00 c5 f2 5d 4b 5c c5 fa 59 c1 c5 fa 11 83 50 01 00 00 48 8d 0d cb 2b 33 00 c5 ea 59 01 c5 fa 11 83 58 01 00 00 c5 fa 10 40 28
+
+function 0xb30b0..0xb336f: 1 readers
+  0xb31e6 (file offset 0xb31e6) lea rate (float global) -> 0x3d0250
+    bytes at 0xb31ce: fa 10 88 c8 01 00 00 c5 fa 11 8d 08 fe ff ff c4 c1 7a 10 8e 48 01 00 00 48 8d 05 63 d0 31 00 c5 f2 59 08 c5 fa 11 8d 0c fe ff ff c4 c1 78 28 9f
+
+function 0xd8c20..0xd9205: 5 readers
+  0xd9b7c (file offset 0xd9b7c) ? constant 60.0 -> 0x351afc  [a confirmar]
+    bytes at 0xd9b64: c1 78 29 06 83 f8 02 0f 8c ef 01 00 00 c5 f8 28 95 f0 fa ff ff c5 ea 59 0d 77 7f 27 00 c5 f2 5c 0d 67 7f 27 00 c5 ea 59 c9 c5 ea 58 c9 c5 fa 11
+  0xd9ce6 (file offset 0xd9ce6) vmulss constant 60.0 -> 0x351afc
+    bytes at 0xd9cce: f8 29 95 d0 fb ff ff e8 16 27 21 00 c5 fa 10 8d cc fb ff ff c5 f2 59 c0 c5 fa 59 05 0e 7e 27 00 e8 0d 27 21 00 c5 f8 28 95 d0 fb ff ff c5 f8 28
+  0xd9d92 (file offset 0xd9d92) lea rate (float global) -> 0x3d0250
+    bytes at 0xd9d7a: fa 11 8d a0 fb ff ff c4 c1 7a 10 ad 58 02 00 00 c5 fa 10 85 cc fb ff ff 48 8d 15 b7 64 2f 00 c5 fa 59 02 c5 f2 59 d0 c4 c1 78 2e d1 c5 78 29 c9
+  0xda2a4 (file offset 0xda2a4) vmulss constant 60.0 -> 0x351afc
+    bytes at 0xda28c: 2c 31 ff c5 f8 28 c1 e8 58 21 21 00 c5 fa 10 8d cc fb ff ff c5 f2 59 c0 c5 fa 59 05 50 78 27 00 e8 4f 21 21 00 c5 fa 10 15 33 78 27 00 c5 ea 5c
+  0xdad53 (file offset 0xdad53) vmulss constant 60.0 -> 0x351afc
+    bytes at 0xdad3b: 8b 45 10 48 8b 80 d0 00 00 00 48 8b 78 08 45 31 f6 31 f6 e8 5d 2f 0a 00 c5 fa 59 05 a1 6d 27 00 c5 fa 58 05 9d 6d 27 00 c5 fa 2c c0 ff c8 41 0f
+
+function 0xdff90..0xe0273: 2 readers
+  0xe012c (file offset 0xe012c) ? constant 60.0 -> 0x3521c0  [a confirmar]
+    bytes at 0xe0114: c5 e2 59 d2 c5 e2 5c d2 c5 ea 59 c9 c5 f8 28 55 c0 c5 ea 5f c9 c5 fa 10 15 8b 20 27 00 c5 f2 59 ca c5 f2 58 ca c5 f2 5f c0 c5 fa 59 0d 7b 20 27
+  0xe013d (file offset 0xe013d) vmulss constant 60.0 -> 0x3521c0
+    bytes at 0xe0125: c5 ea 5f c9 c5 fa 10 15 8b 20 27 00 c5 f2 59 ca c5 f2 58 ca c5 f2 5f c0 c5 fa 59 0d 7b 20 27 00 c5 fa c2 05 76 20 27 00 01 c5 f8 54 c9 c5 fa 10
+
+function 0xe1f70..0xe20c5: 3 readers
+  0xe1fcd (file offset 0xe1fcd) lea rate (float global) -> 0x3d0250
+    bytes at 0xe1fb5: 85 60 ff ff ff 48 8b 7b 08 31 f6 e8 eb bc 09 00 c5 fa 11 85 7c ff ff ff 48 8d 05 7c e2 2e 00 c5 fa 59 08 c5 fa 11 8d 50 ff ff ff c5 f8 28 d8 c5
+  0xe2268 (file offset 0xe2268) ? constant 60.0 -> 0x352534  [a confirmar]
+    bytes at 0xe2250: 28 4d 80 c5 f2 10 c6 c5 f0 c6 c0 24 c5 f8 5c c2 c5 f8 29 45 80 c5 fa 10 05 c3 02 27 00 31 ff e8 7c a1 20 00 c5 fa 10 8d 7c ff ff ff c5 f2 59 c0
+  0xe2280 (file offset 0xe2280) vmulss constant 60.0 -> 0x352534
+    bytes at 0xe2268: 05 c3 02 27 00 31 ff e8 7c a1 20 00 c5 fa 10 8d 7c ff ff ff c5 f2 59 c0 c5 fa 59 05 ac 02 27 00 e8 73 a1 20 00 c5 fa 10 0d 97 02 27 00 c5 f2 5c
+
+function 0xea280..0xea36e: 2 readers
+  0xea2a1 (file offset 0xea2a1) ? constant 60.0 -> 0x3526d4  [a confirmar]
+    bytes at 0xea289: 48 81 ec f8 00 00 00 4c 8b 35 61 10 32 00 49 8b 06 48 89 45 e0 c5 fa 10 05 2a 84 26 00 31 ff e8 43 21 20 00 c5 fa 59 05 1f 84 26 00 48 8d 05 04
+  0xea2ad (file offset 0xea2ad) vmulss constant 60.0 -> 0x3526d4
+    bytes at 0xea295: 32 00 49 8b 06 48 89 45 e0 c5 fa 10 05 2a 84 26 00 31 ff e8 43 21 20 00 c5 fa 59 05 1f 84 26 00 48 8d 05 04 6d 36 00 c5 fa 11 00 48 8d 05 fd 6c
+
+function 0xea720..0xea8a5: 3 readers
+  0xead40 (file offset 0xead40) ? constant 60.0 -> 0x3526e8  [a confirmar]
+    bytes at 0xead28: da 58 e5 c5 f9 70 e4 00 b8 ff ff ff 7f c5 f9 6e e8 c5 d9 db ed c5 f8 2e 2d 9f 79 26 00 c5 f8 28 2d f3 7b 26 00 72 18 c5 f8 53 ec c5 d8 59 e5 c5
+  0xeaf6b (file offset 0xeaf6b) vmulss constant 60.0 -> 0x3526e8
+    bytes at 0xeaf53: fa 11 95 50 fe ff ff e8 91 14 20 00 c5 fa 10 8d 50 fe ff ff c5 f2 59 c0 c5 fa 59 05 75 77 26 00 e8 88 14 20 00 c5 fa 10 0d 60 77 26 00 c5 f2 5c
+  0xeb324 (file offset 0xeb324) vmulss constant 60.0 -> 0x3526e8
+    bytes at 0xeb30c: fa 10 05 d9 73 26 00 e8 d8 10 20 00 c5 fa 10 8d 50 fe ff ff c5 f2 59 c0 c5 fa 59 05 bc 73 26 00 e8 cf 10 20 00 c5 fa 10 8d 70 fe ff ff c5 f2 59
+
+function 0xefff0..0xf00ad: 2 readers
+  0xf01c7 (file offset 0xf01c7) ? constant 60.0 -> 0x352cd4  [a confirmar]
+    bytes at 0xf01af: c5 fa 11 45 cc 48 8b 7b 08 31 f6 e8 f1 da 08 00 c5 fa 11 45 c8 c5 fa 10 05 04 2b 26 00 31 ff e8 1d c2 1f 00 c5 fa 10 4d c8 c5 f2 59 c0 c5 fa 59
+  0xf01dc (file offset 0xf01dc) vmulss constant 60.0 -> 0x352cd4
+    bytes at 0xf01c4: c5 fa 10 05 04 2b 26 00 31 ff e8 1d c2 1f 00 c5 fa 10 4d c8 c5 f2 59 c0 c5 fa 59 05 f0 2a 26 00 e8 17 c2 1f 00 c5 fa 10 4d bc c5 f2 5e 4d b8 c5
+
+function 0xf0610..0xf07d2: 2 readers
+  0xf07bf (file offset 0xf07bf) ? constant 60.0 -> 0x352d00  [a confirmar]
+    bytes at 0xf07a7: c5 f9 70 c2 01 c5 ea 59 ca c5 fa 59 c0 c5 f2 58 c0 c5 fa 51 c0 c5 f8 2e 05 38 25 26 00 73 0d 48 83 c4 50 5b 41 5c 41 5e 41 5f 5d c3 c5 f8 29 55
+  0xf0866 (file offset 0xf0866) vmulss constant 60.0 -> 0x352d00
+    bytes at 0xf084e: ff c5 f8 28 c1 c5 fa 11 55 b0 e8 93 bb 1f 00 c5 fa 10 4d b0 c5 f2 59 c0 c5 fa 59 05 92 24 26 00 e8 8d bb 1f 00 c5 fa 10 0d 7d 24 26 00 c5 f2 5c
+
+function 0xf0900..0xf0bb7: 6 readers
+  0xf0984 (file offset 0xf0984) ? constant 60.0 -> 0x352d0c  [a confirmar]
+    bytes at 0xf096c: 48 8b 12 0f be 52 1c 39 d1 74 0a c5 fa 10 05 85 23 26 00 eb 08 c5 fa 10 05 7f 23 26 00 41 8a 4f 0c 80 f9 02 75 0a c5 fa 10 05 6e 23 26 00 eb 1c
+  0xf0995 (file offset 0xf0995) ? constant 60.0 -> 0x352d0c  [a confirmar]
+    bytes at 0xf097d: 26 00 eb 08 c5 fa 10 05 7f 23 26 00 41 8a 4f 0c 80 f9 02 75 0a c5 fa 10 05 6e 23 26 00 eb 1c 80 f9 01 75 0a c5 f8 57 05 47 22 26 00 eb 0d 80 f9
+  0xf0a1d (file offset 0xf0a1d) ? constant 60.0 -> 0x352d0c  [a confirmar]
+    bytes at 0xf0a05: 86 cc 01 00 00 49 8b 86 e0 00 00 00 48 85 c0 74 37 48 8b 48 40 c5 7a 10 0d e6 22 26 00 48 85 c9 74 2e c5 fa 10 41 14 c5 f0 57 c9 c5 f8 2e c8 74
+  0xf0b3b (file offset 0xf0b3b) ? constant 60.0 -> 0x352d0c  [a confirmar]
+    bytes at 0xf0b23: 4d 8c c5 f8 29 55 90 c5 7a 11 4d ac c5 78 29 45 b0 48 8b 7b 08 c5 fa 10 05 c8 21 26 00 c5 fa 5c 40 44 c5 fa 11 45 c0 31 f6 e8 5f d1 08 00 c5 fa
+  0xf0b7d (file offset 0xf0b7d) vmulss constant 60.0 -> 0x352d0c
+    bytes at 0xf0b65: ff c5 f8 28 c1 c5 fa 11 55 c0 e8 7c b8 1f 00 c5 fa 10 4d c0 c5 f2 59 c0 c5 fa 59 05 87 21 26 00 e8 76 b8 1f 00 c5 fa 10 0d 76 21 26 00 c5 f2 5c
+  0xf0b8d (file offset 0xf0b8d) ? constant 60.0 -> 0x352d0c  [a confirmar]
+    bytes at 0xf0b75: fa 10 4d c0 c5 f2 59 c0 c5 fa 59 05 87 21 26 00 e8 76 b8 1f 00 c5 fa 10 0d 76 21 26 00 c5 f2 5c c0 c5 fa 10 5d 8c c5 e2 59 c0 c5 fa 10 65 88 c5
+
+function 0xf0c90..0xf0d99: 2 readers
+  0xf0efb (file offset 0xf0efb) ? constant 60.0 -> 0x352d2c  [a confirmar]
+    bytes at 0xf0ee3: 58 c0 c5 fa 10 55 c0 c5 ea 5c c8 c5 f8 2e 0d 22 1e 26 00 76 0a c5 ea 58 15 28 1e 26 00 eb 12 c5 f8 2e 0d 16 1e 26 00 73 08 c5 ea 58 15 10 1e 26
+  0xf0f7d (file offset 0xf0f7d) vmulss constant 60.0 -> 0x352d2c
+    bytes at 0xf0f65: ff c5 f8 28 c1 c5 fa 11 55 c0 e8 7c b4 1f 00 c5 fa 10 4d c0 c5 f2 59 c0 c5 fa 59 05 a7 1d 26 00 e8 76 b4 1f 00 c5 fa 10 0d 82 1d 26 00 c5 f2 5c
+
+function 0x108240..0x1083d9: 1 readers
+  0x1084e6 (file offset 0x1084e6) lea rate (float global) -> 0x3d0250
+    bytes at 0x1084ce: 00 00 48 89 c1 48 d1 e9 48 83 e0 01 48 09 c8 c4 e1 fa 2a c0 c5 fa 58 c0 48 8d 05 63 7d 2c 00 c5 fa 5e 00 c5 fa 10 0d 33 b0 24 00 c5 f8 28 d1 c5
+
+function 0x115e60..0x116023: 3 readers
+  0x1162f0 (file offset 0x1162f0) vmulss constant 60.0 -> 0x3545fc
+    bytes at 0x1162d8: c5 fa 11 55 d0 c5 fa 11 5d c0 e8 09 61 1d 00 c5 fa 10 4d b0 c5 f2 59 c0 c5 fa 59 05 04 e3 23 00 e8 03 61 1d 00 c5 fa 10 5d c0 c5 fa 10 55 d0 c5
+  0x116544 (file offset 0x116544) vmulss constant 60.0 -> 0x3545fc
+    bytes at 0x11652c: c5 fa 11 65 c0 c5 fa 11 6d b0 e8 b5 5e 1d 00 c5 fa 10 4d a0 c5 f2 59 c0 c5 fa 59 05 b0 e0 23 00 e8 af 5e 1d 00 c5 fa 10 6d b0 c5 fa 10 65 c0 c5
+  0x1165c9 (file offset 0x1165c9) vmulss constant 60.0 -> 0x3545fc
+    bytes at 0x1165b1: c5 fa 11 6d d0 c5 fa 11 65 c0 e8 30 5e 1d 00 c5 fa 10 4d b0 c5 f2 59 c0 c5 fa 59 05 2b e0 23 00 e8 2a 5e 1d 00 c5 fa 10 65 c0 c5 fa 10 6d d0 c5
+
+function 0x125c60..0x125df1: 5 readers
+  0x125ca7 (file offset 0x125ca7) ? constant 60.0 -> 0x355948  [a confirmar]
+    bytes at 0x125c8f: 11 45 ec c5 f9 70 45 d0 01 c5 fa 10 0d a0 fc 22 00 c5 fa 5f c1 c5 fa 10 0d 98 fc 22 00 c5 fa 5d c1 e8 2b 67 1c 00 c5 fa 11 45 d0 c5 f8 28 45 f0
+  0x125cea (file offset 0x125cea) ? constant 60.0 -> 0x355948  [a confirmar]
+    bytes at 0x125cd2: 11 45 c8 c5 f9 70 45 f0 01 c5 fa 10 0d 5d fc 22 00 c5 fa 5f c1 c5 fa 10 0d 55 fc 22 00 c5 fa 5d c1 e8 e8 66 1c 00 c5 fa 10 15 44 fc 22 00 c5 f8
+  0x125cfb (file offset 0x125cfb) ? constant 60.0 -> 0x355948  [a confirmar]
+    bytes at 0x125ce3: c5 fa 5f c1 c5 fa 10 0d 55 fc 22 00 c5 fa 5d c1 e8 e8 66 1c 00 c5 fa 10 15 44 fc 22 00 c5 f8 28 e0 c5 ea 5c 45 cc c5 f0 57 c9 c5 f8 2e c1 74 2f
+  0x125d24 (file offset 0x125d24) vmulss constant 60.0 -> 0x355948
+    bytes at 0x125d0c: c9 c5 f8 2e c1 74 2f 31 ff c5 fa 11 65 f0 e8 d1 66 1c 00 c5 fa 59 45 c4 c5 fa 59 05 1c fc 22 00 e8 cf 66 1c 00 c5 fa 10 65 f0 c5 fa 10 15 06 fc
+  0x125d39 (file offset 0x125d39) ? constant 60.0 -> 0x355948  [a confirmar]
+    bytes at 0x125d21: 59 45 c4 c5 fa 59 05 1c fc 22 00 e8 cf 66 1c 00 c5 fa 10 65 f0 c5 fa 10 15 06 fc 22 00 c5 f8 28 c8 c5 ea 5c d9 c5 fa 10 55 ec c5 ea 5c 4d c8 c5
+
+function 0x129d70..0x12a0b9: 4 readers
+  0x129eca (file offset 0x129eca) ? constant 60.0 -> 0x355b0c  [a confirmar]
+    bytes at 0x129eb2: c4 c1 78 5c 06 c5 f8 29 85 60 ff ff ff 49 6b dd 7c 49 8b 7f 08 c5 fa 10 05 39 bc 22 00 c4 c1 7a 5c 44 1c 6c c5 fa 11 85 5c ff ff ff 31 f6 e8 cb
+  0x129f1a (file offset 0x129f1a) vmulss constant 60.0 -> 0x355b0c
+    bytes at 0x129f02: fa 11 95 5c ff ff ff e8 e2 24 1c 00 c5 fa 10 8d 5c ff ff ff c5 f2 59 c0 c5 fa 59 05 ea bb 22 00 e8 d9 24 1c 00 c5 fa 10 0d d9 bb 22 00 c5 f2 5c
+  0x129f2a (file offset 0x129f2a) ? constant 60.0 -> 0x355b0c  [a confirmar]
+    bytes at 0x129f12: 5c ff ff ff c5 f2 59 c0 c5 fa 59 05 ea bb 22 00 e8 d9 24 1c 00 c5 fa 10 0d d9 bb 22 00 c5 f2 5c c0 c5 f9 70 c0 00 c5 f8 28 8d 60 ff ff ff c5 f0
+  0x12a076 (file offset 0x12a076) ? constant 60.0 -> 0x355b0c  [a confirmar]
+    bytes at 0x12a05e: d2 c5 e8 54 d1 c5 f0 55 c0 c5 e8 56 c0 c5 f8 54 05 9d bb 22 00 c5 fa 10 0d 8d ba 22 00 c5 fa 10 c9 c5 f8 c6 c9 24 48 8b 7d 88 4c 89 fe c5 f8 28
+
+function 0x12dbd0..0x12e138: 3 readers
+  0x12dfb2 (file offset 0x12dfb2) vmulss constant 60.0 -> 0x356058
+    bytes at 0x12df9a: c5 fa 10 05 ba 80 22 00 31 ff e8 47 e4 1b 00 c5 fa 10 4d c4 c5 f2 59 c0 c5 fa 59 05 9e 80 22 00 e8 41 e4 1b 00 c5 fa 10 0d 81 80 22 00 c5 f2 5c
+  0x12dffe (file offset 0x12dffe) ? constant 60.0 -> 0x356058  [a confirmar]
+    bytes at 0x12dfe6: c5 fa 10 55 a8 c5 ea 58 c0 c5 fa 11 45 c8 eb 52 c5 fa 11 45 c8 c5 fa 10 05 51 80 22 00 31 ff e8 e6 e3 1b 00 c5 fa 10 4d c4 c5 f2 59 c0 c5 fa 59
+  0x12e013 (file offset 0x12e013) vmulss constant 60.0 -> 0x356058
+    bytes at 0x12dffb: c5 fa 10 05 51 80 22 00 31 ff e8 e6 e3 1b 00 c5 fa 10 4d c4 c5 f2 59 c0 c5 fa 59 05 3d 80 22 00 e8 e0 e3 1b 00 c5 fa 10 0d 20 80 22 00 c5 f2 5c
+
+function 0x136480..0x13686c: 1 readers
+  0x136719 (file offset 0x136719) lea rate (float global) -> 0x3d0250
+    bytes at 0x136701: 30 30 48 83 c2 30 48 81 fa a0 03 00 00 0f 85 3c ff ff ff c4 c1 7a 10 07 48 8d 05 30 9b 29 00 c5 fa 59 08 49 8b 84 24 a8 03 00 00 0f be 48 24 c5
+
+function 0x140d90..0x14142c: 1 readers
+  0x140f15 (file offset 0x140f15) lea rate (float global) -> 0x3d0250
+    bytes at 0x140efd: c5 f0 54 cf c4 c2 79 18 55 18 c5 e8 59 c9 c4 c2 79 18 5d 1c c5 e0 59 c9 48 8d 05 34 f3 28 00 c4 e2 79 18 18 c5 e0 59 c9 c5 f9 70 c0 00 c5 f8 59
+
+function 0x174410..0x1744c9: 1 readers
+  0x174489 (file offset 0x174489) ? constant 60.0 -> 0x359978  [a confirmar]
+    bytes at 0x174471: 00 00 00 48 89 c7 44 89 fe e8 e1 ba 01 00 49 89 c7 4d 89 7d 30 c5 fa 10 05 e6 54 1e 00 c4 c1 78 29 45 40 c5 f8 28 05 04 55 1e 00 c4 c1 78 29 45
+
+function 0x174690..0x174755: 1 readers
+  0x174700 (file offset 0x174700) vmulss constant 60.0 -> 0x359978
+    bytes at 0x1746e8: 77 28 e8 d1 2a 00 00 41 8b 47 2c 41 89 86 84 01 00 00 c4 c1 7a 10 47 24 c5 fa 59 05 70 52 1e 00 c5 fa 2c c0 44 6b e0 0a 49 8d b7 90 00 00 00 48
+
+function 0x1f1e90..0x1f1f1a: 3 readers
+  0x1f1ed8 (file offset 0x1f1ed8) lea rate (float global) -> 0x3d0250
+    bytes at 0x1f1ec0: 01 41 83 3e 00 74 11 e8 94 a5 0f 00 48 85 c0 78 14 c4 e1 fa 2a c8 eb 23 48 8d 05 71 e3 1d 00 c5 fa 10 00 eb 53 48 89 c1 48 d1 e9 48 83 e0 01 48
+  0x1f1efb (file offset 0x1f1efb) lea rate (float global) -> 0x3d0250
+    bytes at 0x1f1ee3: eb 53 48 89 c1 48 d1 e9 48 83 e0 01 48 09 c8 c4 e1 fa 2a c0 c5 fa 58 c8 48 8d 05 4e e3 1d 00 c5 fa 10 00 c5 f2 5e c8 c5 fa 10 15 3a e2 16 00 c5
+  0x1f1fd0 (file offset 0x1f1fd0) lea rate (float global) -> 0x3d0250
+    bytes at 0x1f1fb8: c1 48 d1 e9 48 83 e0 01 48 09 c8 c5 f8 57 c0 c4 e1 fa 2a c0 c5 fa 58 c8 48 8d 05 79 e2 1d 00 c5 fa 10 00 c5 f2 5e c8 c5 fa 10 15 65 e1 16 00 c5
+
+function 0x1f3030..0x1f3230: 2 readers
+  0x1f3189 (file offset 0x1f3189) ? constant 59.94 -> 0x3601b4  [a confirmar]
+    bytes at 0x1f3171: e8 1a cd f9 ff 48 89 05 4b 85 88 01 66 41 81 7d 16 40 02 75 0a c5 fa 10 05 22 d0 16 00 eb 08 c5 fa 10 05 1c d0 16 00 e8 23 f1 ff ff 41 8b 45 20
+  0x1f3190 (file offset 0x1f3190) vmovss constant 59.94 -> 0x3601b4
+    bytes at 0x1f3178: 05 4b 85 88 01 66 41 81 7d 16 40 02 75 0a c5 fa 10 05 22 d0 16 00 eb 08 c5 fa 10 05 1c d0 16 00 e8 23 f1 ff ff 41 8b 45 20 48 8d 0d 48 7f 88 01
+
+function 0x1f3560..0x1f365b: 1 readers
+  0x1f35ed (file offset 0x1f35ed) lea rate (float global) -> 0x3d0250
+    bytes at 0x1f35d5: c1 48 d1 e9 48 83 e0 01 48 09 c8 c5 f8 57 c0 c4 e1 fa 2a c0 c5 fa 58 c0 48 8d 05 5c cc 1d 00 c5 fa 5e 00 c5 fa 10 0d bc cb 16 00 c5 fa 5c d1 c4
+
+function 0x1f41d0..0x1f462a: 1 readers
+  0x1f481c (file offset 0x1f481c) lea rate (float global) -> 0x3d0250
+    bytes at 0x1f4804: 01 85 ff 74 05 e8 d2 37 05 00 c6 05 f7 6e 88 01 01 c6 05 18 70 88 01 00 48 8d 05 2d ba 1d 00 c5 fa 10 05 bd b9 16 00 c5 fa 5e 00 c5 fa 5a c8 8b
+
+function 0x1f6060..0x1f636e: 1 readers
+  0x1f615f (file offset 0x1f615f) lea rate (float global) -> 0x3d0250
+    bytes at 0x1f6147: eb 16 48 89 c1 48 d1 e9 48 83 e0 01 48 09 c8 c4 e1 fa 2a c0 c5 fa 58 c0 48 8d 05 ea a0 1d 00 c5 fa 5e 00 c5 fa 10 0d 8e a1 16 00 c5 fa 5c d1 c4
+
+function 0x204850..0x2048a6: 2 readers
+  0x2048f6 (file offset 0x2048f6) ? constant 60.0 -> 0x3609f4  [a confirmar]
+    bytes at 0x2048de: 77 4a e8 cb 93 f7 ff c5 fa 10 4d b4 c5 f2 59 c0 c5 fa 11 45 b4 c5 fa 10 05 f5 c0 15 00 31 ff e8 ee 7a 0e 00 c5 fa 59 45 b4 c5 fa 59 05 e5 c0 15
+  0x204907 (file offset 0x204907) vmulss constant 60.0 -> 0x3609f4
+    bytes at 0x2048ef: fa 11 45 b4 c5 fa 10 05 f5 c0 15 00 31 ff e8 ee 7a 0e 00 c5 fa 59 45 b4 c5 fa 59 05 e5 c0 15 00 e8 ec 7a 0e 00 c5 fa 10 0d dc c0 15 00 c5 f2 5c
+
+known case: the swing energy reader at 0x924ea is listed (0x48ff1a in v01.02)
