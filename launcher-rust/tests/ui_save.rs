@@ -85,6 +85,54 @@ fn save(state: &mut State) {
     send(state, Message::Save);
 }
 
+#[test]
+fn saving_persists_the_fixed_frame_generation_multiplier() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    set(&mut state, "frame_generation", json!("fsr"));
+    save(&mut state);
+    let ini = load_ini(&state.paths.ini_path());
+    assert!(ini.holds("frame_generation_frames"));
+    assert_eq!(ini.values["frame_generation_frames"], "1");
+    assert_eq!(ini.values["frame_generation"], "fsr");
+}
+
+#[test]
+fn saving_normalizes_legacy_frame_generation_multipliers() {
+    for frames in ["1", "2", "3", "9"] {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("spartanport.ini"),
+            format!("frame_generation=fsr\nframe_generation_frames={frames}\nexternal_runtime_key=keep\n"),
+        )
+        .unwrap();
+        let mut state = state_in(dir.path());
+        save(&mut state);
+        let ini = load_ini(&state.paths.ini_path());
+        assert_eq!(ini.values["frame_generation_frames"], "1", "{frames}");
+        assert_eq!(ini.values["frame_generation"], "fsr");
+        assert_eq!(ini.values["external_runtime_key"], "keep");
+    }
+}
+
+#[test]
+fn saving_normalizes_an_externally_changed_frame_generation_multiplier() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    save(&mut state);
+    fs::write(
+        state.paths.ini_path(),
+        "frame_generation=fsr\nframe_generation_frames=3\nexternal_runtime_key=keep\n",
+    )
+    .unwrap();
+    set(&mut state, "vsync", json!(false));
+    save(&mut state);
+    let ini = load_ini(&state.paths.ini_path());
+    assert_eq!(ini.values["frame_generation_frames"], "1");
+    assert_eq!(ini.values["frame_generation"], "fsr");
+    assert_eq!(ini.values["external_runtime_key"], "keep");
+}
+
 fn shows(state: &State, label: &str) -> bool {
     simulator(app::view(state)).find(label).is_ok()
 }
