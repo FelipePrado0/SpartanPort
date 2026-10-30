@@ -10,6 +10,15 @@
 
 using namespace Vulkan;
 
+struct TestPipeline {
+    int id;
+    bool valid = true;
+
+    bool IsValid() const {
+        return valid;
+    }
+};
+
 int main() {
 #ifdef _WIN32
     _set_error_mode(_OUT_TO_STDERR);
@@ -54,13 +63,30 @@ int main() {
     assert(inbox.Take(8).empty());
 
     // Conflict: the first pipeline for a key wins, the later one is left to the caller.
-    std::map<int, std::unique_ptr<int>> pipelines;
-    auto runtime = std::make_unique<int>(1);
-    auto warm = std::make_unique<int>(2);
+    std::map<int, std::unique_ptr<TestPipeline>> pipelines;
+    auto runtime = std::make_unique<TestPipeline>(1);
+    auto warm = std::make_unique<TestPipeline>(2);
     assert(PublishFirst(pipelines, 7, std::move(runtime)));
     assert(!PublishFirst(pipelines, 7, std::move(warm)));
-    assert(*pipelines[7] == 1 && warm && *warm == 2);
-    assert(PublishFirst(pipelines, 8, std::make_unique<int>(3)) && *pipelines[8] == 3);
+    assert(pipelines[7]->id == 1 && warm && warm->id == 2);
+    assert(PublishFirst(pipelines, 8, std::make_unique<TestPipeline>(3)) && pipelines[8]->id == 3);
+
+    // A refused build cannot occupy a slot or prevent a later valid pipeline from winning.
+    auto refused = std::make_unique<TestPipeline>(4, false);
+    assert(!PublishFirst(pipelines, 9, std::move(refused)));
+    assert(!pipelines.contains(9) && refused && !refused->IsValid());
+    assert(!PublishFirst(pipelines, 9, std::unique_ptr<TestPipeline>{}));
+    assert(!pipelines.contains(9));
+    assert(PublishFirst(pipelines, 9, std::make_unique<TestPipeline>(5)));
+    assert(pipelines[9]->id == 5);
+    assert(!PublishFirst(pipelines, 9, std::move(refused)));
+    assert(pipelines[9]->id == 5 && refused);
+
+    // A runtime refusal marker suppresses future warm-up publication and per-draw retries.
+    pipelines.try_emplace(10);
+    auto retry = std::make_unique<TestPipeline>(6);
+    assert(!PublishFirst(pipelines, 10, std::move(retry)));
+    assert(!pipelines[10] && retry && retry->id == 6);
 
     std::puts("PASS: warm-up inbox");
 }

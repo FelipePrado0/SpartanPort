@@ -7,6 +7,9 @@
 #include "common/singleton.h"
 #include "common/types.h"
 
+// spartanport: exit hooks observe startup safely and bound cache-drain waits.
+#include <atomic>
+#include <chrono>
 #include <functional>
 #include <thread>
 #include <vector>
@@ -23,11 +26,15 @@ enum class BlobType : u32 {
 class DataBase {
 public:
     static DataBase& Instance() {
-        return *Common::Singleton<DataBase>::Instance();
+        // spartanport: window close may race the first cache access during renderer startup.
+        static auto* const database = Common::Singleton<DataBase>::Instance();
+        return *database;
     }
 
     void Open();
     void Close();
+    // spartanport: wait for queued and active writes; false if the timeout expires first.
+    bool Flush(std::chrono::milliseconds timeout);
     [[nodiscard]] bool IsOpened() const {
         return opened;
     }
@@ -55,7 +62,8 @@ public:
 private:
     std::jthread io_worker{};
     std::filesystem::path cache_path{};
-    bool opened{};
+    // spartanport: publish initialization safely to an exit hook on another thread.
+    std::atomic<bool> opened{};
 };
 
 } // namespace Storage
