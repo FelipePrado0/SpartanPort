@@ -578,9 +578,14 @@ unsigned long runtime_thread_host_id(void) {
     return (unsigned long)syscall(SYS_gettid);
 #endif
 }
+/* Only the Linux snapshot reads pc, so Windows keeps no image range. */
+#ifndef _WIN32
 static uintptr_t load_image_base;
 static uint64_t load_image_size;
 void runtime_thread_set_image(uintptr_t base,uint64_t size) { load_image_base=base; load_image_size=size; }
+#else
+void runtime_thread_set_image(uintptr_t base,uint64_t size) { (void)base; (void)size; }
+#endif
 /* Reads only (no signals, no suspension): the threads keep running while they are listed.
  * Windows lists id, name and CPU time; instruction addresses there need SuspendThread and
  * GetThreadContext, left out until a Windows build can test them (see the spec). */
