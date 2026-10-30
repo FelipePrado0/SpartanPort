@@ -373,9 +373,8 @@ const char* UpscalerLabel(int upscaler) {
     switch (upscaler) {
     case SpartanSettings::UpscalerFsr3: return "FSR 3.1";
     case SpartanSettings::UpscalerFsr4: return "FSR 4";
-    case SpartanSettings::UpscalerFsr411: return "FSR 4.1.1";
+    case SpartanSettings::UpscalerFsr411: return "FSR 4.1";
     case SpartanSettings::UpscalerTaa: return "TAA";
-    case SpartanSettings::UpscalerDlss: return "DLSS";
     default: return "";
     }
 }
@@ -394,6 +393,7 @@ std::string OverlayText() {
     sample.fps = frame_ms_avg > 0.0f ? 1000.0f / frame_ms_avg : 0.0f;
     sample.frame_ms = frame_ms_avg;
     sample.upscaler = UpscalerLabel(s.upscaler);
+    sample.game_fps = s.frame_generation != 0 ? s.fg_game_fps.load() : 0.0f;
     return P::Format(sample, items, s.overlay_layout == 0);
 }
 
@@ -537,6 +537,50 @@ void ImageTab() {
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
+    Separator("Upscaling (applied on restart)");
+    if (BeginRows("##upscaling")) {
+        // The launcher's choices and order (options.rs UPSCALERS, PRESETS); the same values as the
+        // Display menu's rows.
+#ifdef _WIN32
+        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 4", "FSR 4.1", "TAA"};
+        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3, SpartanSettings::UpscalerFsr4,
+                                              SpartanSettings::UpscalerFsr411,
+                                              SpartanSettings::UpscalerTaa};
+#else
+        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 4", "TAA"};
+        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3, SpartanSettings::UpscalerFsr4,
+                                              SpartanSettings::UpscalerTaa};
+#endif
+        ChoiceRow("Upscaler", s.upscaler, upscaler_labels, upscaler_values, int(std::size(upscaler_values)),
+                  "FSR 4.1 needs an AMD Radeon with Adrenalin 26.10.1 or newer.");
+        // Each preset's render size at the chosen Render resolution, before the restart too.
+        static const int preset_values[] = {SpartanSettings::NativeAA, SpartanSettings::UltraQuality,
+                                            SpartanSettings::Quality, SpartanSettings::Balanced,
+                                            SpartanSettings::Performance, SpartanSettings::UltraPerformance};
+        const auto names = G::ResolutionNames();
+        const auto& name = names[std::clamp(s.render_resolution.load(), 0, int(names.size()) - 1)];
+        const auto [ow, oh] = name == "native" ? std::pair{1920, 1080} : G::ResolutionSize(name);
+        static std::string preset_text[std::size(preset_values)];
+        static const char* preset_labels[std::size(preset_values)];
+        for (size_t i = 0; i < std::size(preset_values); ++i) {
+            const auto [w, h] = SpartanSettings::UpscaleRenderSize(preset_values[i], ow, oh);
+            preset_text[i] = std::string(SpartanSettings::PresetName(preset_values[i])) + " (" +
+                             std::to_string(w) + "x" + std::to_string(h) + ")";
+            preset_labels[i] = preset_text[i].c_str();
+        }
+        ImGui::BeginDisabled(s.upscaler == SpartanSettings::UpscalerOff);
+        ChoiceRow("Quality preset", s.preset, preset_labels, preset_values, int(std::size(preset_values)),
+                  "Share of the Render resolution the game renders at; the upscaler rebuilds the full "
+                  "Render resolution. Lower renders faster.");
+        // AMD FSR frame generation switches live.
+        static const int fg_values[] = {0, 1};
+        static const char* const fg_labels[] = {"Off", "AMD FSR"};
+        ChoiceRow("Frame generation", s.frame_generation, fg_labels, fg_values, 2,
+                  "A generated frame between game frames: up to twice the frames on screen. Needs "
+                  "an upscaler. AMD FSR: any graphics card, applied at once.");
+        ImGui::EndDisabled();
+        ImGui::EndTable();
+    }
     Separator("Effects");
     if (BeginRows("##effects")) {
         CheckRow("Depth of field", s.depth_of_field,
@@ -555,6 +599,20 @@ void ImageTab() {
     Separator("Information");
     if (BeginRows("##image_info")) {
         char text[96];
+        // The game's own render size: smaller than the game image when an upscaler preset scales it.
+        static const char* render = std::getenv("SPARTAN_RENDER_RES");
+        int rw = 0, rh = 0;
+        if (!render || std::sscanf(render, "%dx%d", &rw, &rh) != 2) {
+            rw = 1920;
+            rh = 1080;
+        }
+        std::snprintf(text, sizeof(text), "%d x %d", rw, rh);
+        InfoRow("Render resolution", text);
+        InfoRow("Upscaler", UpscalerLabel(s.upscaler));
+        if (const char* problem = s.fsr4_problem.load()) InfoRow("Upscaler status", problem);
+        if (s.frame_generation == 0) InfoRow("Frame generation", "Off");
+        else if (const char* problem = s.fg_problem.load()) InfoRow("Frame generation", problem);
+        else if (const char* status = s.fg_status.load()) InfoRow("Frame generation", status);
         std::snprintf(text, sizeof(text), "%d x %d", iw, ih);
         InfoRow("Game image", text);
         std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
@@ -712,7 +770,9 @@ int RestartChanges() {
     return (s.render_resolution != s.startup_render_resolution) +
            (s.monitor != s.startup_monitor) + (s.hdr != s.startup_hdr) +
            (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
-           (s.anisotropy != s.startup_anisotropy);
+           (s.anisotropy != s.startup_anisotropy) + (s.preset != s.startup_preset) +
+           ((s.upscaler == SpartanSettings::UpscalerOff) != (s.startup_upscaler == SpartanSettings::UpscalerOff) ||
+            (s.upscaler == SpartanSettings::UpscalerTaa) != (s.startup_upscaler == SpartanSettings::UpscalerTaa));
 }
 
 // The menu's tabs: words in the title face, the open one in full colour with a red line under it,
@@ -2745,6 +2805,22 @@ void BeginChoice(const std::string& title, const std::vector<std::string>& items
 }
 
 int PollChoice() {
+    // SPARTAN_CHOICE_AUTO=1 (automated test runs): the first list (the title screen's Load)
+    // accepts its focused item, as Enter would. Only once: the game's own save prompts later
+    // would otherwise write new saves.
+    static bool auto_accept = [] {
+        const char* env = std::getenv("SPARTAN_CHOICE_AUTO");
+        return env && env[0] == '1';
+    }();
+    if (auto_accept) {
+        std::scoped_lock lock{imgui_mutex};
+        if (choice_active && !choice_items.empty()) {
+            auto_accept = false;
+            choice_result = choice_index;
+            choice_active = false;
+            RetireChoiceTextures();
+        }
+    }
     return choice_result;
 }
 

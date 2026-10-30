@@ -4,9 +4,16 @@
 #include <cstdint>
 #include <cstddef>
 #include <setjmp.h>
+#ifdef _WIN32
+#include "spartanport_toggles.h"
+#endif
 // Renderer tests have no guest process. Clock/host-thread services work; guest accesses abort.
 extern "C" {
+#ifdef _WIN32
+__thread sigjmp_buf* runtime_fault_recover = nullptr;
+#else
 thread_local sigjmp_buf* runtime_fault_recover = nullptr;
+#endif
 uint64_t runtime_disabled_optimizations = 0; // spartanport_toggles.h: 64 bits
 uint64_t runtime_tsc_frequency() { return 1000000000; }
 int runtime_file_translate(const char*, char*, size_t) { std::abort(); }

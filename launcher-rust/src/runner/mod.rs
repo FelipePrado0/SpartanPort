@@ -363,7 +363,7 @@ impl<'a> Runner<'a> {
         // resolutions too (SPARTAN_EXTRA_RESOLUTIONS tells the game). A selection that cannot be
         // read stops the start, as run.py's.
         let mut game = plan.game.clone();
-        let mod_patch_files: Vec<PathBuf> = match mods::enabled_patch_files(
+        let mut mod_patch_files: Vec<PathBuf> = match mods::enabled_patch_files(
             &plan.mods_dir,
             &plan.mods_config,
             plan.mods_switch != "0",
@@ -378,7 +378,7 @@ impl<'a> Runner<'a> {
             .collect();
         self.derive("SPARTAN_EXTRA_RESOLUTIONS", extra.join(";"));
         // 5. The start-up graphics options of spartanport.ini.
-        let graphics = graphics_options::prepare(
+        let mut graphics = graphics_options::prepare(
             &plan.config,
             &out.join("graphics_state.json"),
             &extra,
@@ -389,6 +389,34 @@ impl<'a> Runner<'a> {
         }
         for (key, value) in graphics_options::environment(&graphics.options) {
             self.set(&key, value);
+        }
+        // A temporal upscaler preset: the game renders at the preset's size (a resolution patch of
+        // that size, never the display's) and the upscaler outputs the chosen resolution. Its
+        // full-size passes are the HUD's.
+        if let Some((width, height, output)) =
+            graphics_options::upscaler_render_size(&plan.config, &self.env)
+        {
+            let base = port.join("patches").join("CUSA01623.xml");
+            let patch = fs::read_to_string(&base)
+                .ok()
+                .and_then(|xml| graphics_options::resolution_patch_xml(&xml, width, height));
+            match patch {
+                Some(text) => {
+                    let file = out.join("upscale-resolution.xml");
+                    if let Err(error) = fs::write(&file, text) {
+                        return self.fail(&format!("Upscaler: {error}"));
+                    }
+                    mod_patch_files.push(file);
+                    graphics.options.render_resolution = format!("{width}x{height}");
+                    self.derive("SPARTAN_RENDER_RES", format!("{width}x{height}"));
+                }
+                None => self.say("Upscaler: no resolution patch to scale from"),
+            }
+            self.derive("SPARTAN_OUTPUT_RES", format!("{}x{}", output.0, output.1));
+            self.say(&format!(
+                "Upscaler: render {width}x{height}, output {}x{}",
+                output.0, output.1
+            ));
         }
         if plan.fsr411_dir.is_none()
             && !port.join("fsr4_411").is_dir()
@@ -514,12 +542,7 @@ impl<'a> Runner<'a> {
         if let Some(icon) = window_icon::write(&icon, out) {
             self.set_default("SPARTAN_WINDOW_ICON", python_path(&icon));
         }
-        // The temporal upscalers and motion vectors are not calibrated for this game yet: off
-        // unless the launcher's experimental switch is on; linear image readbacks fix its
-        // corrupted textures.
-        if self.get("SPARTAN_EXPERIMENTAL_UPSCALER") != Some("1") {
-            self.set_default("SPARTAN_UPSCALER", "none");
-        }
+        // Linear image readbacks fix the game's corrupted textures.
         self.set_default("SPARTAN_READBACK_LINEAR", "1");
         // 11 and 12. The patches.
         let applied = match self.patches(&plan, &game, &mod_patch_files, &graphics) {

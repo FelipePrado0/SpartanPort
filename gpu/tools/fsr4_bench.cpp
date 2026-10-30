@@ -6,6 +6,7 @@
 //   fsr4-bench [render WxH] [output WxH] [preset 0-4] [frames] [--stats] [--fsr411]
 // --fsr411: FSR 4.1.1 replay (fsr411.cpp, assets in SPARTAN_FSR411_DIR or fsr4_411) instead of v07;
 // its frames match tools/fsr4cap (jitter phase, reset on the first frame).
+// --driver [--ldr]: installed/local AMD Vulkan runtime, including model and version verification.
 //   defaults: 2260x1272 3840x2160 2 (balanced) 900
 // BENCH_NOISE=1: pseudo-random inputs (a fixed seed); BENCH_DUMP=<file>: the output after the
 // last frame, raw RGBA16F, for comparing shader variants.
@@ -20,7 +21,9 @@
 #include <string>
 #include <vector>
 
+#define VK_ENABLE_BETA_EXTENSIONS
 #include <vulkan/vulkan.h>
+#include "video_core/renderer_vulkan/fsr_driver.h"
 
 #include "ffx_vk_fsr4_v07.h"
 #include "ffx_vk_fsr4_v07_assets.h"
@@ -69,7 +72,7 @@ uint32_t MemoryType(const Gpu& gpu, uint32_t bits, VkMemoryPropertyFlags flags) 
 Gpu CreateGpu(bool stats) {
     Gpu gpu;
     VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
-    app.pApplicationName = "fsr4-bench";
+    app.pApplicationName = "SpartanPort FSR benchmark";
     app.apiVersion = VK_API_VERSION_1_3;
     VkInstanceCreateInfo ici{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     ici.pApplicationInfo = &app;
@@ -250,9 +253,17 @@ int main(int argc, char** argv) {
     uint32_t rw = 2260, rh = 1272, ow = 3840, oh = 2160;
     int preset = 2, frames = 900;
     bool stats = false;
-    bool fsr411 = false;
+    bool fsr411 = false, driver = false, ldr = false;
     int positional = 0;
     for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--driver") == 0) {
+            driver = true;
+            continue;
+        }
+        if (std::strcmp(argv[i], "--ldr") == 0) {
+            ldr = true;
+            continue;
+        }
         if (std::strcmp(argv[i], "--fsr411") == 0) {
             fsr411 = true;
             continue;
@@ -276,16 +287,21 @@ int main(int argc, char** argv) {
             break;
         }
     }
+#ifdef _WIN32
+    _putenv_s("SPARTAN_FSR4_PROFILE", "1");
+    if (stats) _putenv_s("SPARTAN_FSR4_STATS", "1");
+#else
     setenv("SPARTAN_FSR4_PROFILE", "1", 0);
     if (stats) {
         setenv("SPARTAN_FSR4_STATS", "1", 1);
     }
+#endif
     const Gpu gpu = CreateGpu(stats);
 
     FfxInterface backend{};
     ffxContext context{};
     std::vector<unsigned char> scratch;
-    if (!fsr411) {
+    if (!fsr411 && !driver) {
     // Assets, as vk_fsr4.cpp loads them.
     FfxFsr4V07AssetSet assets{};
     if (!ffxFsr4V07BuildAssetSet(ModelPreset(preset), ow, oh, &assets)) {
@@ -358,14 +374,15 @@ int main(int argc, char** argv) {
 
     const VkImageUsageFlags rw_usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    Image color = CreateImage(gpu, VK_FORMAT_R16G16B16A16_SFLOAT, rw, rh, rw_usage,
+    Image color = CreateImage(gpu, ldr ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R16G16B16A16_SFLOAT, rw, rh, rw_usage,
                               VK_IMAGE_ASPECT_COLOR_BIT);
-    Image depth = CreateImage(gpu, VK_FORMAT_D32_SFLOAT, rw, rh,
-                              VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+    Image depth = CreateImage(gpu, driver ? VK_FORMAT_D32_SFLOAT_S8_UINT : VK_FORMAT_D32_SFLOAT, rw, rh,
+                              VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                                  VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                               VK_IMAGE_ASPECT_DEPTH_BIT);
     Image motion = CreateImage(gpu, VK_FORMAT_R16G16_SFLOAT, rw, rh, rw_usage,
                                VK_IMAGE_ASPECT_COLOR_BIT);
-    Image output = CreateImage(gpu, VK_FORMAT_R16G16B16A16_SFLOAT, ow, oh, rw_usage,
+    Image output = CreateImage(gpu, VK_FORMAT_R16G16B16A16_SFLOAT, ow, oh, rw_usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                                VK_IMAGE_ASPECT_COLOR_BIT);
 
     VkCommandPoolCreateInfo pci{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
@@ -389,7 +406,7 @@ int main(int argc, char** argv) {
         si.commandBufferCount = 1;
         si.pCommandBuffers = &cmd;
         CHECK(vkQueueSubmit(gpu.queue, 1, &si, fence));
-        CHECK(vkWaitForFences(gpu.device, 1, &fence, VK_TRUE, UINT64_MAX));
+        CHECK(vkWaitForFences(gpu.device, 1, &fence, VK_TRUE, 60'000'000'000ull));
         CHECK(vkResetFences(gpu.device, 1, &fence));
     };
     const VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -539,7 +556,41 @@ int main(int argc, char** argv) {
             gpu_ms = 0.0;
         }
     }
-    for (int frame = 1; !fsr411 && frame <= frames; ++frame) {
+    if (driver) {
+        Vulkan::DriverFsrUpscaler native(gpu.device, gpu.physical, vkGetDeviceProcAddr);
+        if (!native.Available()) {
+            std::fprintf(stderr, "FSR driver: %s\n", native.Problem().c_str());
+            return 1;
+        }
+        for (int frame = 1; frame <= frames; ++frame) {
+            CHECK(vkBeginCommandBuffer(cmd, &begin));
+            Vulkan::Fsr4Upscaler::Frame f{};
+            f.cmdbuf = cmd;
+            f.color = {color.image, color.view, rw, rh};
+            f.depth = {depth.image, depth.view, rw, rh};
+            f.motion = {motion.image, motion.view, rw, rh};
+            f.output = {output.image, output.view, ow, oh};
+            f.render_width = rw;
+            f.render_height = rh;
+            f.frame_ms = 16.6f;
+            f.near_plane = 0.05f;
+            f.far_plane = 3000.0f;
+            f.vertical_fov = 0.75f;
+            f.sharpen = true;
+            f.sharpness = 0.3f;
+            f.reset = frame == 1;
+            f.auto_exposure = true;
+            f.hdr = !ldr;
+            f.color_format = ldr ? vk::Format::eR8G8B8A8Unorm : vk::Format::eR16G16B16A16Sfloat;
+            if (!native.Record(f)) {
+                std::fprintf(stderr, "FSR driver: %s\n", native.Problem().c_str());
+                return 1;
+            }
+            submit();
+        }
+        std::printf("FSR driver: %d submitted frames, %s\n", frames, native.Description().c_str());
+    }
+    for (int frame = 1; !fsr411 && !driver && frame <= frames; ++frame) {
         CHECK(ffxFsr4VkBeginFrame(&backend, uint64_t(frame)));
         CHECK(vkBeginCommandBuffer(cmd, &begin));
         register_image(color, VK_ACCESS_SHADER_READ_BIT);
@@ -599,7 +650,7 @@ int main(int argc, char** argv) {
         }
     }
     upscaler411.reset();
-    if (!fsr411) {
+    if (!fsr411 && !driver) {
         ffxFsr4V07DestroyContext(&context, nullptr);
         ffxFsr4VkDestroyContext(reinterpret_cast<FfxFsr4VkContext*>(scratch.data()));
     }

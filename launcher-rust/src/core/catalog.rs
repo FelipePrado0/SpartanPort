@@ -3,9 +3,9 @@
 
 use crate::core::options::{
     Choice, AIM_STYLES, ANISOTROPY, AUDIO_CHANNELS, DISPLAY_MODES, DRAW_PIPE, ENGINE_FPS_CHOICES,
-    FPS_LIMITS, FRAMES_QUEUED, GLYPH_STYLES, LANGUAGES, LIVE_RESOLUTION, MENU_CONFIRM_STYLES,
-    NO_MSAA, OUTPUTS, PRESETS, READBACKS, STICK_PROMPTS, STREAM_MEMORY, UI_LANGUAGES, UI_SCALES,
-    UPSCALERS, VIDEO_BACKENDS,
+    FPS_LIMITS, FRAMES_QUEUED, FRAME_GENERATION, GLYPH_STYLES, LANGUAGES, LIVE_RESOLUTION,
+    MENU_CONFIRM_STYLES, NO_MSAA, OUTPUTS, PRESETS, READBACKS, STICK_PROMPTS, STREAM_MEMORY,
+    UI_LANGUAGES, UI_SCALES, UPSCALERS, VIDEO_BACKENDS,
 };
 
 /// The file a setting lives in.
@@ -157,12 +157,6 @@ pub static SETTINGS: &[Setting] = &[
         Kind::Text,
         Text(""),
         env("SPARTAN_PATCH_DIR", ""),
-    ),
-    app(
-        "experimental_upscaler",
-        Flag,
-        Bool(false),
-        env("SPARTAN_EXPERIMENTAL_UPSCALER", ""),
     ),
     app("video_backend", Pick(VIDEO_BACKENDS), Text("auto"), None),
     app("gamemode", Flag, Bool(false), env("SPARTAN_GAMEMODE", "")),
@@ -376,8 +370,16 @@ pub static SETTINGS: &[Setting] = &[
     ),
     ini("motion_blur", Flag, Bool(true), true, 29),
     ini("depth_of_field", Flag, Bool(true), true, 30),
-    ini("upscaler", Pick(UPSCALERS), Text("fsr3"), false, 0),
-    ini("preset", Pick(PRESETS), Text("1"), false, 1),
+    ini("upscaler", Pick(UPSCALERS), Text("off"), true, 0),
+    ini("preset", Pick(PRESETS), Text("1"), true, 1),
+    ini(
+        "frame_generation",
+        Pick(FRAME_GENERATION),
+        Text("off"),
+        true,
+        31,
+    ),
+    ini("frame_generation_frames", Kind::Int, Text("1"), false, 32),
     ini("object_motion", Flag, Bool(true), false, 2),
     ini("output_res", Pick(OUTPUTS), Text("1920x1080"), false, 4),
     ini(
@@ -520,24 +522,26 @@ mod tests {
                 "cheat_very_hard"
             ]
         );
-        assert_eq!(keys.last(), Some(&"depth_of_field"));
+        assert_eq!(keys.last(), Some(&"frame_generation_frames"));
         let shown: Vec<_> = rows.iter().filter(|s| s.written).map(|s| s.key).collect();
         assert_eq!(shown, SHOWN_INI_KEYS.iter().copied().collect::<Vec<_>>());
     }
 
     #[test]
-    fn shown_ini_keys_are_the_26_controls_of_the_window() {
-        assert_eq!(SHOWN_INI_KEYS.len(), 26);
+    fn shown_ini_keys_are_the_29_controls_of_the_window() {
+        assert_eq!(SHOWN_INI_KEYS.len(), 29);
         for seeded in ["monitor", "hdr", "glyph_style"] {
             assert!(SHOWN_INI_KEYS.contains(&seeded), "{seeded}");
         }
         assert!(INI_FLAGS.contains(&"hdr"));
+        for shown in ["upscaler", "preset", "frame_generation"] {
+            assert!(SHOWN_INI_KEYS.contains(&shown), "{shown}");
+        }
         for parked in [
-            "upscaler",
-            "preset",
             "object_motion",
             "output_res",
             "live_resolution",
+            "frame_generation_frames",
         ] {
             assert!(!SHOWN_INI_KEYS.contains(&parked), "{parked}");
         }

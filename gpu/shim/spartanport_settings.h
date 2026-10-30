@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <utility>
 #include <vector>
 #include <string_view>
 
@@ -31,12 +32,13 @@ inline int ParseAudioChannels(std::string_view value) {
 inline constexpr int MasterVolumeMin = 0, MasterVolumeMax = 200, MasterVolumeDefault = 100;
 
 enum Upscaler : int { UpscalerOff = 0, UpscalerFsr3 = 1, UpscalerFsr4 = 2, UpscalerFsr411 = 3,
-                      UpscalerTaa = 4, UpscalerDlss = 5, UpscalerCount };
+                      UpscalerTaa = 4, UpscalerCount };
 /// FSR 4 v07 or FSR 4.1.1: the same inputs, settings and placement in the frame.
 inline bool IsFsr4(int upscaler) {
     return upscaler == UpscalerFsr4 || upscaler == UpscalerFsr411;
 }
-enum Preset : int { NativeAA = 0, Quality, Balanced, Performance, UltraPerformance, PresetCount };
+// Ultra Quality (FSR 1's 1.3x) is appended: saved preset numbers keep their meaning.
+enum Preset : int { NativeAA = 0, Quality, Balanced, Performance, UltraPerformance, UltraQuality, PresetCount };
 enum DebugView : int { DebugNone = 0, DebugReactive = 1, DebugMotion = 2, DebugViewCount };
 
 /// Live output resolutions: the upscaler's output and the UI host targets.
@@ -54,8 +56,12 @@ inline float TextureLodBias(int quality) {
 }
 
 struct Values {
-    std::atomic<int> upscaler{UpscalerFsr3};
+    std::atomic<int> upscaler{UpscalerOff};
     std::atomic<int> preset{NativeAA};
+    /// Frame generation (frame_generation_policy.h Mode): off, fsr in spartanport.ini.
+    std::atomic<int> frame_generation{0};
+    /// Legacy ini key, normalized to one generated frame per real frame (2x).
+    std::atomic<int> frame_generation_frames{1};
     std::atomic<bool> sharpen{true};
     std::atomic<float> sharpness{0.3f};
     std::atomic<bool> jitter{true};
@@ -179,13 +185,17 @@ struct Values {
     /// Why FSR 4 cannot run (assets, device features), or null. Set by the renderer.
     std::atomic<const char*> fsr4_problem{nullptr};
     std::atomic<bool> fsr4_supported{false}, fsr411_supported{false};
-    /// DLSS (spartanport_dlss.dll, NVIDIA RTX) is ready, or why not (null before the device exists).
-    std::atomic<bool> dlss_supported{false};
-    std::atomic<const char*> dlss_problem{nullptr};
+    /// Why frame generation stopped or cannot run, or null; its rates for the Insert menu
+    /// ("FSR FG 2x, 60 -> 120 fps"), or null.
+    std::atomic<const char*> fg_problem{nullptr};
+    std::atomic<const char*> fg_status{nullptr};
+    /// Frame generation running: the game's frames per second (the overlay shows both), else 0.
+    std::atomic<float> fg_game_fps{0.0f};
 
     /// Startup settings for the explicit SPARTAN_RENDER_RES compatibility patch only.
     int startup_preset = NativeAA;
-    int startup_upscaler = UpscalerFsr3;
+    int startup_upscaler = UpscalerOff;
+    int startup_frame_generation = 0;
     bool startup_object_motion = true;
     int startup_output_res = OutputDefault;
     int startup_live_resolution = 0;
@@ -196,9 +206,7 @@ Values& Get();
 /// Reads the file, then the environment overrides. Called once at start.
 void Load();
 /// Checks the loaded choice before the first frame; unsupported FSR 4 uses FSR 3.1.
-void ConfigureUpscalerSupport(bool fsr4, bool fsr411);
-/// After device creation: DLSS availability; a DLSS setting falls back to FSR 3.1 without it.
-void ConfigureDlssSupport(bool available, const char* problem);
+void ConfigureUpscalerSupport(bool fsr4, bool fsr411, const char* fsr411_problem = nullptr);
 /// Startup-patched scene dimensions cannot change until run.sh prepares a new image.
 bool FixedRenderSession();
 int RenderPreset();
@@ -218,6 +226,9 @@ void Save();
 /// Render resolution divisor of a preset (1.0 native, 1.5 quality, ...).
 float PresetScale(int preset);
 const char* PresetName(int preset);
+/// The game's render size for a preset at an output size (tests/upscale_render_sizes.txt, the
+/// launcher's upscale_render_size): even, never the game's 1920x1080 nor the output size.
+std::pair<int, int> UpscaleRenderSize(int preset, int width, int height);
 const char* UpscalerName(int upscaler);
 
 } // namespace SpartanSettings

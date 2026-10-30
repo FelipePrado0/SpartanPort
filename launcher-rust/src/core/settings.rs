@@ -150,12 +150,12 @@ mod tests {
     #[test]
     fn defaults_are_in_python_order() {
         let defaults = app_defaults(&no_env);
-        assert_eq!(defaults.len(), 44);
+        assert_eq!(defaults.len(), 43);
         assert_eq!(defaults.keys().next().unwrap(), "ui_language");
         assert_eq!(defaults.keys().next_back().unwrap(), "glyph_style");
         // The switch attacks sit right before the glyphs, as in the Python's APP_DEFAULTS.
         let at = defaults.keys().position(|key| key == "switch_attacks");
-        assert_eq!(at, Some(42));
+        assert_eq!(at, Some(41));
         assert_eq!(defaults["switch_attacks"], json!(false));
         // The 2.7.0 shader cache switches sit between the screen effects and the warm-up.
         let keys: Vec<&str> = defaults.keys().map(String::as_str).collect();

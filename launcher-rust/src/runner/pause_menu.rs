@@ -270,8 +270,8 @@ struct Texts {
     controls_names: [&'static str; 8],
     /// The question Controls' Restore Defaults asks (its answers are `yes_no`).
     restore_controls: &'static str,
-    /// The rows Display adds after the game's four: eight settings and Apply.
-    display_names: [&'static str; 9],
+    /// The rows Display adds after the game's four: eleven settings and Apply.
+    display_names: [&'static str; 12],
 }
 
 /// Every language but Portuguese.
@@ -314,6 +314,9 @@ static ENGLISH: Texts = Texts {
         "Display Mode",
         "VSync",
         "HDR",
+        "Upscaler",
+        "Quality Preset",
+        "Frame Generation",
         "Apply and Restart",
     ],
 };
@@ -357,9 +360,48 @@ static PORTUGUESE: Texts = Texts {
         "Modo de exibição",
         "VSync",
         "HDR",
+        "Upscaler",
+        "Preset de qualidade",
+        "Geração de quadros",
         "Aplicar e reiniciar",
     ],
 };
+
+/// Display's settings: the eight of `0xfc0` (resolution to HDR), then Upscaler, Quality Preset
+/// and Frame Generation.
+const DISPLAY_SETTINGS: usize = 11;
+/// Display's rows: the game's four, the settings and Apply.
+const DISPLAY_ROWS: usize = 4 + DISPLAY_SETTINGS + 1;
+
+/// The builtin reading Display setting `i` (spartanport_settings.cpp): 0xfc0 + i, 0xff0 + i with
+/// arrows; Upscaler and Quality Preset read 0xf61/0xf62, 0xf67/0xf68 with arrows (0xff8 is past
+/// the hook's 0xf00..0xff7).
+fn display_read(i: usize, selected: bool) -> usize {
+    // Frame Generation: 0xf69, 0xf6c with arrows.
+    if i == 10 {
+        return if selected { 0xf6c } else { 0xf69 };
+    }
+    match (i < 8, selected) {
+        (true, false) => 0xfc0 + i,
+        (true, true) => 0xff0 + i,
+        (false, false) => 0xf61 + i - 8,
+        (false, true) => 0xf67 + i - 8,
+    }
+}
+
+/// The builtin stepping Display setting `i` left (-1) or right: 0xfd0/0xfe0 + i, 0xf63/0xf65 + i - 8.
+fn display_step(i: usize, direction: i32) -> usize {
+    // Frame Generation: 0xf6a left, 0xf6b right.
+    if i == 10 {
+        return if direction < 0 { 0xf6a } else { 0xf6b };
+    }
+    match (i < 8, direction < 0) {
+        (true, true) => 0xfd0 + i,
+        (true, false) => 0xfe0 + i,
+        (false, true) => 0xf63 + i - 8,
+        (false, false) => 0xf65 + i - 8,
+    }
+}
 
 /// The six multiplier sliders (`sliderBar4` to `sliderBar9`).
 const ALL_BARS: [usize; 6] = [0, 1, 2, 3, 4, 5];
@@ -1761,9 +1803,9 @@ impl Emitter<'_, '_> {
         }
     }
 
-    /// Display's game rows (`kept`; only Enemy Health Bar's value is the page's), then its eight
-    /// settings (builtins 0xfc0 + i read them, 0xff0 + i with arrows) and Apply. Brightness'
-    /// sliders show only while the page is at the top; scrollbar 10 follows the 8 rows of 13.
+    /// Display's game rows (`kept`; only Enemy Health Bar's value is the page's), then its eleven
+    /// settings (`display_read`) and Apply. Brightness' sliders show only while the page is at the
+    /// top; scrollbar 10 follows the 8 rows of 16.
     fn display_window(
         &mut self,
         kept: &[String],
@@ -1785,13 +1827,8 @@ impl Emitter<'_, '_> {
             self.assign(1 + slot)?;
             if index == 3 {
                 self.string(&arrows(index, selected == Some(index)))?;
-            } else if (4..12).contains(&index) {
-                let read = if selected == Some(index) {
-                    0xff0
-                } else {
-                    0xfc0
-                };
-                self.builtin(read + index - 4, false)?;
+            } else if (4..4 + DISPLAY_SETTINGS).contains(&index) {
+                self.builtin(display_read(index - 4, selected == Some(index)), false)?;
             } else {
                 self.string(b"")?;
             }
@@ -1801,7 +1838,7 @@ impl Emitter<'_, '_> {
         self.string(b"sliderBar2")?;
         self.integer(2)?;
         self.builtin(if first == 0 { 0x58 } else { 0x59 }, true)?;
-        self.scrollbar(10, first, 13, 8)
+        self.scrollbar(10, first, DISPLAY_ROWS, 8)
     }
 
     /// Controls' title and game rows (`kept`; the values of the two last are the page's), then
@@ -1965,7 +2002,7 @@ pub fn native_cheats(
     for name in ["NativeControlsReset", "NativeControlsApply"] {
         controls_specs.push(Spec::new(name, "controls", link()));
     }
-    let mut display_specs: Vec<Spec> = (0..8)
+    let mut display_specs: Vec<Spec> = (0..DISPLAY_SETTINGS)
         .map(|i| Spec::new(&format!("NativeDisplay{i}"), "display", slide()))
         .collect();
     display_specs.push(Spec::new("NativeDisplayApply", "display", link()));
@@ -2447,8 +2484,8 @@ pub fn native_cheats(
         })?;
     }
 
-    // Display: the game's four rows, then eight settings (builtins 0xfd0 + i and 0xfe0 + i change
-    // them) and Apply and Restart; eight rows show at a time.
+    // Display: the game's four rows, then eleven settings (`display_step` changes them) and Apply and
+    // Restart; eight rows show at a time.
     let display_ref = first_block(&display, 1)?;
     let display_kept = kept_labels(&s, &display, 1..=4, "Display labels not recognized")?;
     let display_window = Window::Display(&display_kept);
@@ -2463,7 +2500,7 @@ pub fn native_cheats(
         s.one("HLScreenLocY")?,
         health,
     ];
-    let display_rows: Vec<String> = (0..8)
+    let display_rows: Vec<String> = (0..DISPLAY_SETTINGS)
         .map(|i| format!("NativeDisplay{i}"))
         .chain(["NativeDisplayApply".to_string()])
         .collect();
@@ -2483,8 +2520,11 @@ pub fn native_cheats(
         e.animation(row - first, 9)?;
         e.end();
         e.navigation(name, row, &targets)?;
-        if index < 8 {
-            for (kind, function) in [("left", 0xfd0 + index), ("right", 0xfe0 + index)] {
+        if index < DISPLAY_SETTINGS {
+            for (kind, function) in [
+                ("left", display_step(index, -1)),
+                ("right", display_step(index, 1)),
+            ] {
                 e.begin(name, kind);
                 e.call(repeat);
                 e.builtin(function, true)?;
@@ -2776,7 +2816,7 @@ pub fn native_cheats(
     repad(data, base + old_size + grown, old_size, old_size + grown);
     native_multiplier_bars(data)?;
     // Display's rows, Cheats' unpinned rows, Controls' rows and Graphics Settings' rows.
-    native_scrollbar(data, 10, 13, 8)?;
+    native_scrollbar(data, 10, DISPLAY_ROWS, 8)?;
     native_scrollbar(data, 11, 8, 7)?;
     native_scrollbar(data, 12, 11, 8)?;
     native_scrollbar(data, 13, 11, 8)
@@ -4712,7 +4752,7 @@ mod tests {
         assert!(objects.contains_key("gosliderbar10"));
         let (mesh, size) = objects["MG_95eaf70c_0"];
         assert_eq!(size, 880);
-        assert!((thumb_width(&data, mesh) - 2.98 * 8.0 / 13.0).abs() < 5e-5);
+        assert!((thumb_width(&data, mesh) - 2.98 * 8.0 / 16.0).abs() < 5e-5);
         let (go, _) = objects["gosliderbar10"];
         assert_eq!(le16(&data, go + 0x76).unwrap(), 10);
         assert_eq!(le32(&data, go + 0x3c).unwrap() >> 16, 1);
@@ -4839,11 +4879,11 @@ mod tests {
     }
 
     #[test]
-    fn display_contains_eight_new_controls_and_keeps_its_original_rows() {
+    fn display_contains_eleven_new_controls_and_keeps_its_original_rows() {
         let data = native("en");
         let s = Script::parse(&data).unwrap();
         let page = s.one("PauseDisplay").unwrap();
-        for index in 0..8 {
+        for index in 0..11 {
             let row = s.one(&format!("NativeDisplay{index}")).unwrap();
             assert_eq!(row.parent, page.at - 4, "{index}");
         }
@@ -4868,14 +4908,21 @@ mod tests {
     fn display_scrolls_without_overwriting_original_setting_values() {
         let data = native("en");
         let s = Script::parse(&data).unwrap();
-        for index in 0..8 {
+        for index in 0..11 {
             let entry = block(
                 &s,
                 s.one(&format!("NativeDisplay{index}")).unwrap(),
                 1,
                 None,
             );
-            assert!(calls(&entry).contains(&(0xff0 + index)), "{index}");
+            // Upscaler and Quality Preset (8 and 9) read 0xf67/0xf68 (0xff8 is past the hook's range),
+            // Frame Generation (10) 0xf6c.
+            let selected = match index {
+                0..=7 => 0xff0 + index,
+                10 => 0xf6c,
+                _ => 0xf67 + index - 8,
+            };
+            assert!(calls(&entry).contains(&selected), "{index}");
             // The game's own values (locals 0x11-0x14) are left alone.
             assert!(
                 !entry

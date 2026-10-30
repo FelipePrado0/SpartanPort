@@ -151,10 +151,12 @@ impl Paths {
             .find(|candidate| candidate.is_file())
     }
 
-    /// Next to the port; in the data folder when the port folder is read-only (AppImage).
+    /// Next to the port, where the packages ship the open FSR 4 model; in the data folder when
+    /// the port folder has none and is read-only.
     pub fn fsr4_folder(&self) -> PathBuf {
+        let shipped = self.port_dir.join("fsr4_shaders").is_dir();
         let writable = cfg!(windows) || folder_is_writable(&self.port_dir);
-        if writable {
+        if shipped || writable {
             self.port_dir.join("fsr4_shaders")
         } else {
             self.data_dir.join("fsr4_shaders")
@@ -439,5 +441,19 @@ mod tests {
         if !root_ignores_modes {
             assert_eq!(folder, Path::new("data").join("fsr4_shaders"));
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fsr4_folder_is_the_packaged_one_even_when_the_port_is_read_only() {
+        // The AppImage ships the open FSR 4 model next to the port, which cannot be written.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("fsr4_shaders")).unwrap();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o500)).unwrap();
+        let paths = Paths::from_env(dir.path(), &env_of(&[("SPARTAN_DATA_DIR", "data")]));
+        let folder = paths.fsr4_folder();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(folder, dir.path().join("fsr4_shaders"));
     }
 }

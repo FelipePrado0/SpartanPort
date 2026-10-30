@@ -1,22 +1,39 @@
-//! The Graphics page: window, effects, textures, overlay and screenshots.
+//! The Graphics page: window, upscaling, effects, textures, overlay and screenshots.
 //!
-//! Ruling R35: like Python 2.6.0, the Experimental and Upscaling sections (`experimental_upscaler`,
-//! `upscaler`, `preset`, `output_res`, `live_resolution`, `object_motion`) stay parked until the
-//! image quality of temporal upscaling is validated, so this page does not show them.
+//! Upscaling shows the switch, the upscaler and its preset; the upscaler outputs the Render
+//! resolution of the Performance page. `output_res`, `live_resolution` and `object_motion` stay
+//! parked.
 
 use iced::widget::{button, column, text};
 use iced::Element;
 
 use crate::core::i18n::tr;
-use crate::core::options::{ANISOTROPY, DISPLAY_MODES};
+use crate::core::options::{ANISOTROPY, DISPLAY_MODES, FRAME_GENERATION, PRESETS, UPSCALERS};
 use crate::ui::app::{Message, State};
 use crate::ui::theme;
-use crate::ui::widgets::{checkbox, row, section, select, select_pairs};
+use crate::ui::widgets::{checkbox, choice_pairs, row, section, select, select_pairs};
 
 pub fn view(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
     let hint = |english: &str| tr(lang, english);
     let ini = |key: &str| state.store.text(key);
+    // Each preset with the size the game renders at for the chosen Render resolution (Performance
+    // page), as the game's menus show it: "Quality (1706x960)".
+    let output =
+        crate::core::options::resolution_size(&ini("render_resolution")).unwrap_or((1920, 1080));
+    let preset_pairs: Vec<(String, String)> = choice_pairs(PRESETS, lang)
+        .into_iter()
+        .map(|(value, label)| {
+            let name = label
+                .rsplit_once(" (")
+                .map_or(label.as_str(), |(name, _)| name)
+                .to_string();
+            match crate::core::graphics_options::upscale_render_size(&value, output) {
+                Some((w, h)) => (value, format!("{name} ({w}x{h})")),
+                None => (value, label),
+            }
+        })
+        .collect();
 
     // The list the probe made, or just the primary default while it has not answered.
     let pairs: Vec<(String, String)> = if state.monitor_pairs.is_empty() {
@@ -83,6 +100,29 @@ pub fn view(state: &State) -> Element<'_, Message> {
             &tr(lang, "Allow HDR output"),
             state.store.flag("hdr"),
             Some(&hint("When HDR is on in Windows and the display supports it.")),
+        ),
+        section(state.rtl, &tr(lang, "Upscaling")),
+        row(
+            state.rtl,
+            &tr(lang, "Upscaler"),
+            select("upscaler", UPSCALERS, &ini("upscaler"), lang),
+            Some(&hint("FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.")),
+        ),
+        row(
+            state.rtl,
+            &format!("{}  ·  {}", tr(lang, "Quality preset"), tr(lang, "restart")),
+            select_pairs("preset", &preset_pairs, &ini("preset")),
+            Some(&hint(
+                "Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution."
+            )),
+        ),
+        row(
+            state.rtl,
+            &tr(lang, "Frame generation"),
+            select("frame_generation", FRAME_GENERATION, &ini("frame_generation"), lang),
+            Some(&hint(
+                "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card."
+            )),
         ),
         section(state.rtl, &tr(lang, "Effects")),
         checkbox(

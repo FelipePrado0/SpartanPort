@@ -4,8 +4,10 @@
 #include <cassert>
 #include <cstdio>
 #include <memory>
+#include <bit>
 
 #include "video_core/renderer_vulkan/vk_depth_stencil_state.h"
+#include "video_core/renderer_vulkan/ui_composition.h"
 
 using Vulkan::GetEffectiveDepthStencilState;
 
@@ -80,6 +82,35 @@ int main() {
         assert(!GetEffectiveDepthStencilState(*regs).needs_attachment);
         regs->depth_render_override.force_z_valid = 1;
         assert(GetEffectiveDepthStencilState(*regs).needs_attachment);
+    }
+    // Captured Gorgon Eye backdrop: RT0 dims the scene; RT1 exports zero and preserves its target.
+    {
+        using Vulkan::UiComposition::ColorMask;
+        using Factor = AmdGpu::BlendControl::BlendFactor;
+        using Function = AmdGpu::BlendControl::BlendFunc;
+        constexpr uint64_t backdrop = 0xbcb456ff6dd871a8ull;
+        const auto captured = std::bit_cast<AmdGpu::BlendControl>(0x61000504u);
+        assert(ColorMask(backdrop, 3, captured) == 1);
+        assert(ColorMask(0x1234, 3, captured) == 3);
+        assert(ColorMask(backdrop, 7, captured) == 7);
+        auto blend = captured;
+        blend.enable = 0;
+        assert(ColorMask(backdrop, 3, blend) == 3);
+        blend = captured;
+        blend.color_dst_factor = Factor::Zero;
+        assert(ColorMask(backdrop, 3, blend) == 3);
+        blend = captured;
+        blend.alpha_dst_factor = Factor::Zero;
+        assert(ColorMask(backdrop, 3, blend) == 3);
+        blend = captured;
+        blend.color_func = Function::Min;
+        assert(ColorMask(backdrop, 3, blend) == 3);
+        blend = captured;
+        blend.alpha_func = Function::Max;
+        assert(ColorMask(backdrop, 3, blend) == 3);
+        blend = captured;
+        blend.separate_alpha_blend = 0;
+        assert(ColorMask(backdrop, 3, blend) == 1);
     }
     std::puts("depth-stencil-state-test: OK");
     return 0;

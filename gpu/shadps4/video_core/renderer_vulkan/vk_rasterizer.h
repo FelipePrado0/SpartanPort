@@ -338,7 +338,11 @@ private:
     std::unique_ptr<ObjectMotion> object_motion;
     bool motion_draw = false;
     u64 motion_geometry{};    ///< vertex-stream identity of the current direct draw
+    /// The draw's depth target takes the upscaler's jitter (the scene's, or SpartanPort's second one).
+    bool JitteredDepth(VideoCore::ImageId depth);
     bool gbuffer_draw = false;
+    /// SpartanPort: this draw's depth when it is a depth-only pass at the render size (the depth pre-pass).
+    VideoCore::ImageId prepass_depth{};
     /// spartanport: the draws of the game's motion blur skipped when the setting is off
     /// (spartanport_motion_blur.h). Only touched by the thread that selects pipelines.
     SpartanMotionBlur::Rule motion_blur_rule;

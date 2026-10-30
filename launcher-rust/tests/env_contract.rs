@@ -17,8 +17,9 @@ const DERIVED: &[(&str, &str)] = &[
     ("SPARTAN_PAD_MAP", "controls"),
 ];
 
-/// Switches the launcher parks: whatever the setting says, the game gets this value.
-const PARKED: &[(&str, &str)] = &[("experimental_upscaler", "0")];
+/// Switches the launcher parks: whatever the setting says, the game gets this value. None now: the
+/// upscaler switch is shown again and reaches the game like any other flag.
+const PARKED: &[(&str, &str)] = &[];
 
 fn world() -> (Paths, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
