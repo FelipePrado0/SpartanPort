@@ -11,7 +11,7 @@
 |:--|:--|:--|:--|
 | F0 | Preparação e linha de base | concluída (modo nuvem; nenhuma falha pré-existente) | — |
 | F1 | Catálogo e triagem dos bugs de FPS alto | catálogo pronto; falta a confirmação no jogo e publicar a issue | `feat/high-fps` |
-| F2 | Rede de segurança A: motor a 60 durante QTEs | 1.º teste no jogo falhou (só o `update` contava); corrigida para todos os tipos de QTE, testada no Linux; falta reteste no jogo e snapshots | `feat/high-fps` |
+| F2 | Rede de segurança A: motor a 60 durante QTEs | **validada no jogo** (30/10, cavalo do Poseidon); faltam os itens 2 a 5 da F2.5, snapshots e a decisão F2.6 | `feat/high-fps` |
 | F3 | Rede de segurança B: motor a 60 por área | não iniciada | — |
 | F4 | Correções de causa raiz (uma por mecânica) | F4.0 (ferramenta) pronta; falta o mantenedor rodá-la no eboot | `feat/high-fps` |
 | F5 | Validação final e release | não iniciada | — |
@@ -274,7 +274,9 @@ Leia isto antes de qualquer fase. Os caminhos são da `main` em `f593377`.
 - [x] Linux: `test_qte_hook` rodado com um `windows.h` de mmap (scratch, não versionado), com um
       mutante que mexe nas flags pego pelo teste; `pad-test`, `graphics-settings-test` e
       `build.sh --test` verdes.
-- [ ] Reteste no jogo (cavalo do Poseidon) com a build nova; `test_qte_hook` no Windows.
+- [x] Reteste no jogo (30/10/2026, build do Windows zip `40980000336`, head `f9903c5`): o mantenedor confirmou que os QTEs do cavalo do Poseidon ficam a 60 FPS.
+- [ ] F2.5 itens 2 a 5: troca de taxa durante o QTE, reabrir o jogo (`engine_fps` ≠ 60), opção desligada, minutos sem QTE sem ficar preso a 60.
+- [ ] `test_qte_hook` no Windows.
 - [ ] Decisão F2.6 sobre a #1092 (atenção: o stub repeat dela tem 122 bytes; com o prefixo de
       contagem passa da vaga de 128, que precisaria crescer).
 
