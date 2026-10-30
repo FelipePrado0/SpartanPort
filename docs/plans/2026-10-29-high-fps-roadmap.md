@@ -11,7 +11,7 @@
 |:--|:--|:--|:--|
 | F0 | Preparação e linha de base | concluída (modo nuvem; nenhuma falha pré-existente) | — |
 | F1 | Catálogo e triagem dos bugs de FPS alto | catálogo pronto; falta a confirmação no jogo e publicar a issue | `feat/high-fps` |
-| F2 | Rede de segurança A: motor a 60 durante QTEs | implementada e testada no Linux; falta build Windows, snapshots e teste no jogo | `feat/high-fps` |
+| F2 | Rede de segurança A: motor a 60 durante QTEs | 1.º teste no jogo falhou (só o `update` contava); corrigida para todos os tipos de QTE, testada no Linux; falta reteste no jogo e snapshots | `feat/high-fps` |
 | F3 | Rede de segurança B: motor a 60 por área | não iniciada | — |
 | F4 | Correções de causa raiz (uma por mecânica) | F4.0 (ferramenta) pronta; falta o mantenedor rodá-la no eboot | `feat/high-fps` |
 | F5 | Validação final e release | não iniciada | — |
@@ -257,12 +257,26 @@ Leia isto antes de qualquer fase. Os caminhos são da `main` em `f593377`.
 - [ ] Publicar a issue de acompanhamento (com autorização).
 
 **F2, implementada:**
-- [x] Teto do motor nunca salvo, `qte_active` com histerese de 500 ms, opção `auto_safe_fps` (overlay em todos os idiomas e launcher Rust, página Performance). TDD registrado em `docs/specs/2026-10-29-high-fps-f2-qte.md`.
+- [x] Teto do motor nunca salvo, `qte_active` com histerese de 500 ms (depois 1,5 s, abaixo), opção `auto_safe_fps` (overlay em todos os idiomas e launcher Rust, página Performance). TDD registrado em `docs/specs/2026-10-29-high-fps-f2-qte.md`.
 - [x] Linux: `build.sh --test` rc=0, `ui-language-test` (220 textos), `cargo test` 1166 passed, `fmt`, `clippy`.
 - Decisões: o log sai da thread de apresentação (a do controle só usa atômicos); a linha de entrada inclui o tipo do prompt (`prompt type T`); a apresentação também cai para 60 durante o QTE; `SPARTAN_AUTO_SAFE_FPS` também liga/desliga.
 - [ ] Testes só do Windows (`test_qte_hook`) e regerar `launcher-rust/snapshots/performance-{1920x1080,1280x800}-{en,pt,ar}.png`.
-- [ ] Build Windows zip e validação no jogo (F2.5), incluindo quais tipos de prompt movem o `heartbeat`.
-- [ ] Decisão F2.6 sobre a #1092.
+- [x] Primeiro teste no jogo (30/10, Windows, RX 6700 XT, motor a 240, teclado, QTEs do cavalo do
+      Poseidon no início do jogo): só 3 quedas, todas `prompt type 3`, de 1 a 4 s cada, e os QTEs
+      **não** ficaram a 60. Confirmou o risco: só a atualização `0x12c4a0` movia o `heartbeat`; os
+      prompts timed, repeat, charged e circle não moviam nada, e a queda saía com o prompt na tela.
+- [x] Correção (spec `docs/specs/2026-10-30-high-fps-f2-qte-all-kinds.md`): os 4 stubs do Automatic QTE
+      contam os quadros do seu tipo em `SpartanQteState.kinds[4]`, sempre (Auto QTE ligado ou não),
+      com um prefixo de 30 bytes que preserva registradores, flags e red zone; "QTE ativo" = qualquer
+      um dos 5 contadores; histerese de 500 ms para 1,5 s; log com os tipos
+      (`kinds: update,repeat`) e `QTE cap held 20 s, kinds: ...` uma vez por queda longa (denuncia um
+      site que roda fora de QTE). O giro do analógico pelo teclado/mouse continua só no `update`.
+- [x] Linux: `test_qte_hook` rodado com um `windows.h` de mmap (scratch, não versionado), com um
+      mutante que mexe nas flags pego pelo teste; `pad-test`, `graphics-settings-test` e
+      `build.sh --test` verdes.
+- [ ] Reteste no jogo (cavalo do Poseidon) com a build nova; `test_qte_hook` no Windows.
+- [ ] Decisão F2.6 sobre a #1092 (atenção: o stub repeat dela tem 122 bytes; com o prefixo de
+      contagem passa da vaga de 128, que precisaria crescer).
 
 **F4.0, pronta:**
 - [x] `tools/find_rate_readers.py` com 4 testes sintéticos (TDD registrado na spec `docs/specs/2026-10-29-high-fps-f40-rate-readers.md`). Usa o GNU objdump, se houver.
