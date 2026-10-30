@@ -358,6 +358,54 @@ def symlinks_work(directory):
         shutil.rmtree(probe, ignore_errors=True)
 
 
+def links_work(directory):
+    """Checks whether directory supports symlinks or junctions (e.g. NTFS on Windows)."""
+    probe = Path(tempfile.mkdtemp(prefix='link-test-', dir=directory))
+    try:
+        try:
+            (probe / 'link').symlink_to(probe, target_is_directory=True)
+            return True
+        except OSError:
+            if os.name != 'nt':
+                return False
+        import _winapi
+        target = probe / 'target'
+        target.mkdir()
+        _winapi.CreateJunction(str(target), str(probe / 'junc'))
+        return True
+    except OSError:
+        return False
+    finally:
+        shutil.rmtree(probe, ignore_errors=True)
+
+
+def find_linkable_dir(preferred):
+    """Finds a directory on a volume supporting symlinks or junctions."""
+    preferred = Path(preferred).resolve()
+    if links_work(preferred):
+        return preferred
+    if os.name == 'nt':
+        temp = Path(tempfile.gettempdir())
+        if links_work(temp):
+            return temp
+        try:
+            import ctypes
+            bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+            for letter in range(26):
+                if bitmask & (1 << letter):
+                    drive = f"{chr(65 + letter)}:\\"
+                    p = Path(drive) / 'Temp'
+                    try:
+                        p.mkdir(parents=True, exist_ok=True)
+                        if links_work(p):
+                            return p
+                    except OSError:
+                        pass
+        except Exception:
+            pass
+    return preferred
+
+
 def is_link(path):
     return path.is_symlink() or str(path) in LINKED or (hasattr(path, 'is_junction') and path.is_junction())
 
@@ -410,9 +458,15 @@ def build_overlay(game, out, mods):
         return game
     out = Path(out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    if os.name == 'nt' and not symlinks_work(out) and out.drive.casefold() != game.drive.casefold():
-        # Hard links only reach files on the same volume: the overlay goes beside the game.
-        out = game.parent
+    if os.name == 'nt':
+        if not links_work(out):
+            out = find_linkable_dir(out)
+        elif not symlinks_work(out) and out.drive.casefold() != game.drive.casefold():
+            # Hard links only reach files on the same volume: the overlay goes beside the game if supported.
+            if links_work(game.parent):
+                out = game.parent
+            else:
+                out = find_linkable_dir(out)
     overlay = Path(tempfile.mkdtemp(prefix='mod-game-', dir=out))
     try:
         for entry in game.iterdir():

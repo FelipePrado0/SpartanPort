@@ -9,7 +9,7 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from mods import is_link, make_link, remove_link
+from mods import find_linkable_dir, is_link, make_link, remove_link
 
 
 def overlay(source, dest):
@@ -58,8 +58,9 @@ def create_view(base, update, out):
         raise ValueError('Choose two separate folders for the game and its update')
     if not (update / 'eboot.bin').is_file():
         raise ValueError('The update folder needs eboot.bin and sce_sys/param.sfo')
-    Path(out).mkdir(parents=True, exist_ok=True)
-    target = Path(tempfile.mkdtemp(prefix='game-update-', dir=out))
+        link_dir = find_linkable_dir(out)
+    link_dir.mkdir(parents=True, exist_ok=True)
+    target = Path(tempfile.mkdtemp(prefix='game-update-', dir=link_dir))
     try:
         for entry in base.iterdir():
             make_link(target / entry.name, entry)
