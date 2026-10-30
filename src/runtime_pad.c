@@ -333,8 +333,8 @@ static const char *const qte_defaults[QTE_ROTATIONS]={"A>W>D","D>W>A","D>S>A","A
 static struct { int keys[QTE_KEYS_MAX]; unsigned length; bool directions; } qte_sequences[QTE_ROTATIONS];
 static struct {
     int loaded, mode, rotation;
-    uint32_t heartbeat;
-    uint64_t seen;       /* the last read that saw the prompt's frame count move */
+    uint32_t beat[SPARTAN_QTE_KINDS];
+    uint64_t seen[SPARTAN_QTE_KINDS];  /* the last read that saw each kind's frame count move */
     unsigned step;
     bool fresh, passed;  /* fresh: keys already held when the prompt appeared do not count */
     bool held[SDL_SCANCODE_COUNT];
@@ -404,18 +404,25 @@ static void qte_reset(void) {
     __atomic_store_n(&spartanport_qte.pass,0,__ATOMIC_RELAXED);
 }
 
-/* A prompt is up while its update keeps counting frames: one within QTE_ACTIVE_US. */
-static bool qte_active(uint64_t now) {
-    if (!spartanport_qte.block) return false;
-    const uint32_t beat=__atomic_load_n(&spartanport_qte.heartbeat,__ATOMIC_RELAXED);
-    if (beat!=qte.heartbeat) { qte.heartbeat=beat; qte.seen=now; }
-    return now-qte.seen<=QTE_ACTIVE_US;
+/* The prompt kinds (SPARTAN_QTE_KIND_* bits) up now: a kind is up while its frame count keeps moving,
+ * one frame within QTE_ACTIVE_US. The update's count (heartbeat) needs the rotation hooks; the
+ * others come from the Automatic QTE stubs, whether Automatic QTE is on or not. */
+static unsigned qte_active(uint64_t now) {
+    unsigned kinds=0;
+    for (unsigned k=0;k<SPARTAN_QTE_KINDS;++k) {
+        const uint32_t beat=__atomic_load_n(k==SPARTAN_QTE_KIND_UPDATE ? &spartanport_qte.heartbeat
+                                            : &spartanport_qte.kinds[k-1],__ATOMIC_RELAXED);
+        if (beat!=qte.beat[k]) { qte.beat[k]=beat; qte.seen[k]=now; }
+        if (now-qte.seen[k]<=QTE_ACTIVE_US) kinds|=1u<<k;
+    }
+    return kinds;
 }
 
-/* The rotation (0..5) the prompt on screen asks for, else -1. A prompt that ends resets the minigame. */
+/* The rotation (0..5) the prompt on screen asks for, else -1. A prompt that ends resets the minigame.
+ * Only the update's frames count here: the type at +0x10 is its prompt's. */
 static int qte_rotation(uint64_t now) {
     if (!spartanport_qte.block) return -1;
-    if (!qte_active(now)) { qte_reset(); return -1; }
+    if (!(qte_active(now) & 1u<<SPARTAN_QTE_KIND_UPDATE)) { qte_reset(); return -1; }
     const unsigned type=*(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET);
     return type-QTE_FIRST_ROTATION<QTE_ROTATIONS ? (int)(type-QTE_FIRST_ROTATION) : -1;
 }
@@ -487,20 +494,32 @@ static bool qte_play(const bool *keys, uint64_t now) {
 }
 
 /* The engine at 60 FPS during QTEs (gpu: spartanportgpu_engine_fps_cap, which does nothing when the
- * menu's option is off or the engine already runs at 60): down on a prompt's first frame, back after
- * QTE_FPS_HOLD_US more without one, so prompts in a row keep it. Atomics only on this thread. */
-enum { QTE_FPS_HOLD_US=500000 };
-static bool qte_fps_capped;
+ * menu's option is off or the engine already runs at 60): down on the first frame of any prompt kind,
+ * back after QTE_FPS_HOLD_US more without one, so prompts in a row keep it. A cap held
+ * QTE_FPS_REPORT_US is reported once with the kinds still counting (a site that also runs outside
+ * prompts would keep the game at 60). Atomics only on this thread. */
+/* 1.5 s: the maintainer's first test (Poseidon's horse) saw caps of 1 to 4 s end while prompts were
+ * still up, and mash or hold prompts can go a second without a frame of any counted kind; staying
+ * at 60 a moment after a QTE costs little. */
+enum { QTE_FPS_HOLD_US=1500000, QTE_FPS_REPORT_US=20000000 };
+static struct { bool capped, reported; uint64_t since; } qte_fps;
 static void qte_fps_cap(uint64_t now) {
-    if (qte_active(now)) {
-        if (!qte_fps_capped) {
-            qte_fps_capped=true;
-            spartanportgpu_engine_fps_cap_qte_type(
-                *(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET));
+    const unsigned kinds=qte_active(now);
+    uint64_t last=0;  /* the latest frame of any kind */
+    for (unsigned k=0;k<SPARTAN_QTE_KINDS;++k) if (qte.seen[k]>last) last=qte.seen[k];
+    if (kinds) {
+        if (!qte_fps.capped) {
+            qte_fps.capped=true; qte_fps.reported=false; qte_fps.since=now;
+            const int type=(kinds & 1u<<SPARTAN_QTE_KIND_UPDATE) && spartanport_qte.block
+                ? *(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET) : -1;
+            spartanportgpu_engine_fps_cap_qte(kinds,type);
             spartanportgpu_engine_fps_cap(60);
+        } else if (!qte_fps.reported && now-qte_fps.since>=QTE_FPS_REPORT_US) {
+            qte_fps.reported=true;
+            spartanportgpu_engine_fps_cap_held(kinds);
         }
-    } else if (qte_fps_capped && now-qte.seen>QTE_ACTIVE_US+QTE_FPS_HOLD_US) {
-        qte_fps_capped=false;
+    } else if (qte_fps.capped && now-last>QTE_ACTIVE_US+QTE_FPS_HOLD_US) {
+        qte_fps.capped=false;
         spartanportgpu_engine_fps_cap(0);
     }
 }

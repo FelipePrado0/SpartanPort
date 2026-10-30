@@ -71,14 +71,14 @@ static void TestEngineFpsCap(const char* path) {
 
     // engine_fps_cap_limits_rate: 60 in effect, written in one sync, with one log line.
     std::string log = CaptureLog([] {
-        spartanportgpu_engine_fps_cap_qte_type(2);
+        spartanportgpu_engine_fps_cap_qte(1u << 0 | 1u << 2, 2);  // update and repeat counting
         spartanportgpu_engine_fps_cap(60);
         assert(SpartanSettings::EngineFpsNow() == 60);
         SpartanSettings::SyncEngineFps();
         SpartanSettings::SyncEngineFps();
     });
     assert(live == 59.94f && live_int == 60);
-    assert(log == "Engine FPS: 60 during a QTE (was 144), prompt type 2\n");
+    assert(log == "Engine FPS: 60 during a QTE (was 144), kinds: update,repeat, prompt type 2\n");
 
     // engine_fps_cap_not_saved: the file keeps the player's rate and never the cap.
     SpartanSettings::Save();
@@ -94,6 +94,13 @@ static void TestEngineFpsCap(const char* path) {
     assert(Read(path).find("engine_fps=180\n") != std::string::npos);
     log = CaptureLog([] { SpartanSettings::SyncEngineFps(); });
     assert(live == 59.94f && log.empty());
+    // A cap held 20 s (runtime_pad.c): one line with the kinds still counting.
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap_held(1u << 1 | 1u << 4);
+        SpartanSettings::SyncEngineFps();
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 59.94f && log == "Engine FPS: QTE cap held 20 s, kinds: timed,circle\n");
     log = CaptureLog([] {
         spartanportgpu_engine_fps_cap(0);
         SpartanSettings::SyncEngineFps();
@@ -101,14 +108,19 @@ static void TestEngineFpsCap(const char* path) {
     });
     assert(live == 180 && live_int == 180 && SpartanSettings::EngineFpsNow() == 180);
     assert(log == "Engine FPS: back to 180 after the QTE\n");
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap_held(1u << 2);  // late, the cap is gone: nothing
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(log.empty());
 
     // A menu change during the cap is kept the same way.
     log = CaptureLog([] {
-        spartanportgpu_engine_fps_cap_qte_type(-1);
+        spartanportgpu_engine_fps_cap_qte(1u << 3, -1);
         spartanportgpu_engine_fps_cap(60);
         SpartanSettings::SyncEngineFps();
     });
-    assert(log == "Engine FPS: 60 during a QTE (was 180)\n");
+    assert(log == "Engine FPS: 60 during a QTE (was 180), kinds: charged\n");
     v.engine_fps = 240;
     log = CaptureLog([] {
         SpartanSettings::SyncEngineFps();
@@ -127,7 +139,7 @@ static void TestEngineFpsCap(const char* path) {
     // Turned on again in the menu while the prompt is up: the cap applies at once.
     v.auto_safe_fps = true;
     log = CaptureLog([] { SpartanSettings::SyncEngineFps(); });
-    assert(live == 59.94f && log == "Engine FPS: 60 during a QTE (was 240)\n");
+    assert(live == 59.94f && log == "Engine FPS: 60 during a QTE (was 240), kinds: charged\n");
     // Turned off while capped: back to the player's rate.
     v.auto_safe_fps = false;
     log = CaptureLog([] { SpartanSettings::SyncEngineFps(); });

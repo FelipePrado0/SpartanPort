@@ -170,6 +170,9 @@ struct Values {
     /// the ini: engine_fps keeps the player's rate. qte_type: the prompt's type, for the log.
     std::atomic<int> engine_fps_cap{0};
     std::atomic<int> engine_fps_cap_qte_type{-1};
+    /// For the log: the prompt kinds counting when the cap started (src/qte_hook.h SPARTAN_QTE_KIND_*
+    /// bits), and those still counting after 20 s (0 once logged).
+    std::atomic<unsigned> engine_fps_cap_kinds{0}, engine_fps_cap_held{0};
     /// The script global inPowerUpMenu (src/probe.c finds it): non-zero while the upgrade menu is
     /// open. Texture Quality adds no LOD bias then. Null when this eboot.bin's code does not match.
     std::atomic<int32_t*> power_up_menu_global{nullptr};

@@ -69,8 +69,12 @@ void spartanportgpu_engine_fps_cycle(void);
  * Only stores it (no lock): the present thread applies it within a vblank, unless the menu's
  * auto_safe_fps is off, and engine_fps (saved) never changes. */
 void spartanportgpu_engine_fps_cap(int fps);
-/* The prompt type (+0x10 of the QTE block, src/qte_hook.h) for the log line of the next cap; -1 none. */
-void spartanportgpu_engine_fps_cap_qte_type(int type);
+/* For the log line of the next cap: the prompt kinds counting (SPARTAN_QTE_KIND_* bits, src/qte_hook.h)
+ * and the prompt type (+0x10 of the QTE block) when the update counts, else -1. */
+void spartanportgpu_engine_fps_cap_qte(unsigned kinds, int type);
+/* The cap has been held 20 s: logged once, with the kinds still counting (a hook that also runs
+ * outside prompts would keep the game at 60). */
+void spartanportgpu_engine_fps_cap_held(unsigned kinds);
 /* The video decoder handed the game a picture: a cutscene is on screen (the presenter draws
  * black bars outside its 16:9 picture when the render resolution is not 16:9). */
 void spartanportgpu_movie_picture(void);

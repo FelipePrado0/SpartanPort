@@ -309,6 +309,16 @@ void Load() {
     v.startup_anisotropy = v.anisotropy;
 }
 
+// "update,repeat": the prompt kinds of a bit set, in src/qte_hook.h's SPARTAN_QTE_KIND_* order.
+static std::string QteKinds(unsigned kinds) {
+    static constexpr const char* names[] = {"update", "timed", "repeat", "charged", "circle"};
+    std::string text;
+    for (unsigned k = 0; k < std::size(names); ++k) {
+        if (kinds >> k & 1) text += (text.empty() ? "" : ",") + std::string(names[k]);
+    }
+    return text;
+}
+
 int EngineFpsChosen() {
     const auto& v = Get();
     return std::min(v.engine_fps.load(), v.applied_engine_fps.load());
@@ -321,7 +331,7 @@ int EngineFpsNow() {
 }
 
 void SyncEngineFps() {
-    const auto& v = Get();
+    auto& v = Get();
     volatile float* fps = v.engine_fps_global.load();
     volatile int32_t* rounded = v.engine_fps_int_global.load();
     // 0 until the game's setter ran; 60 when no frame rate patch applied (nothing to change).
@@ -330,9 +340,12 @@ void SyncEngineFps() {
     }
     const int chosen = EngineFpsChosen(), now = EngineFpsNow();
     const float value = now == 60 ? 59.94f : float(now); // 59.94: the game's own constant
-    // The QTE cap lowers the rate: one line when it starts and one when it ends.
+    // The QTE cap lowers the rate: one line when it starts, one if it lasts 20 s, one when it ends.
     static bool capped = false; // this thread only
     const bool capping = now < chosen;
+    if (const unsigned held = v.engine_fps_cap_held.exchange(0); held && capped && capping) {
+        std::printf("Engine FPS: QTE cap held 20 s, kinds: %s\n", QteKinds(held).c_str());
+    }
     if (*fps == value && capping == capped) {
         return;
     }
@@ -341,11 +354,10 @@ void SyncEngineFps() {
     *rounded = int32_t(value + 0.5f);
     if (capping && !capped) {
         const int type = v.engine_fps_cap_qte_type;
-        if (type >= 0) {
-            std::printf("Engine FPS: %d during a QTE (was %d), prompt type %d\n", now, chosen, type);
-        } else {
-            std::printf("Engine FPS: %d during a QTE (was %d)\n", now, chosen);
-        }
+        std::string kinds = QteKinds(v.engine_fps_cap_kinds);
+        if (!kinds.empty()) kinds = ", kinds: " + kinds;
+        if (type >= 0) kinds += ", prompt type " + std::to_string(type);
+        std::printf("Engine FPS: %d during a QTE (was %d)%s\n", now, chosen, kinds.c_str());
     } else if (capped && !capping) {
         std::printf("Engine FPS: back to %d after the QTE\n", now);
     } else if (!capping) {
@@ -549,8 +561,14 @@ extern "C" void spartanportgpu_engine_fps_cap(int fps) {
     SpartanSettings::Get().engine_fps_cap.store(fps > 0 ? fps : 0, std::memory_order_relaxed);
 }
 
-extern "C" void spartanportgpu_engine_fps_cap_qte_type(int type) {
-    SpartanSettings::Get().engine_fps_cap_qte_type.store(type, std::memory_order_relaxed);
+extern "C" void spartanportgpu_engine_fps_cap_qte(unsigned kinds, int type) {
+    auto& v = SpartanSettings::Get();
+    v.engine_fps_cap_kinds.store(kinds, std::memory_order_relaxed);
+    v.engine_fps_cap_qte_type.store(type, std::memory_order_relaxed);
+}
+
+extern "C" void spartanportgpu_engine_fps_cap_held(unsigned kinds) {
+    SpartanSettings::Get().engine_fps_cap_held.store(kinds, std::memory_order_relaxed);
 }
 
 extern "C" int spartanportgpu_menu_confirm_swap(void) {
