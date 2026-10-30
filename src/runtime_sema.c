@@ -27,10 +27,22 @@ static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
 static Sema *registry;
 static uint32_t next_id=1;
 static size_t created, deleted, acquired, signaled, timed_out;
-static Sema *find(uint32_t id) {
-    for (Sema *s=registry;s;s=s->next) if (s->id==id) return s;
+/* A found semaphore moves to the front. New ones went in front, so the ones made at boot
+ * sat behind every one made since, each wait and signal walking past them under the one lock
+ * (from Awakenchan 0.9.34 beta 9.9). Not for the diagnostic snapshot, which leaves the order
+ * alone. SPARTAN_SEMA_FRONT=0: the list keeps its order, as before. */
+static Sema *find_ordered(uint32_t id,int reorder) {
+    static int front=-1;
+    if (front<0) { const char *e=getenv("SPARTAN_SEMA_FRONT"); front=!(e && e[0]=='0'); }
+    Sema **link=&registry;
+    for (Sema *s=registry;s;link=&s->next,s=s->next) {
+        if (s->id!=id) continue;
+        if (reorder && front && link!=&registry) { *link=s->next; s->next=registry; registry=s; }
+        return s;
+    }
     return NULL;
 }
+static Sema *find(uint32_t id) { return find_ordered(id,1); }
 static void host_check(int e) {
     if (e) { fprintf(stderr,"STOP: semaphore host error %d\n",e); exit(21); }
 }
@@ -104,7 +116,12 @@ static int32_t wait_count(uint32_t id,int32_t need,uint32_t *timeout,int block) 
     pthread_mutex_unlock(&lock);
     return result;
 }
-static ABI int32_t sem_wait(uint32_t id,int32_t need,uint32_t *timeout) { return wait_count(id,need,timeout,1); }
+static ABI int32_t sem_wait(uint32_t id,int32_t need,uint32_t *timeout) {
+    const uint64_t wait_start=runtime_wait_begin();
+    const int32_t r=wait_count(id,need,timeout,1);
+    runtime_wait_end("semaphore wait",wait_start,"id",id);
+    return r;
+}
 static ABI int32_t sem_poll(uint32_t id,int32_t need) { return wait_count(id,need,NULL,0); }
 static ABI int32_t sem_signal(uint32_t id,int32_t count) {
     pthread_mutex_lock(&lock);
@@ -162,7 +179,7 @@ static ABI int32_t sem_delete(uint32_t id) {
 /* Read-only test/diagnostic snapshot, not exposed to guest code. */
 unsigned runtime_sema_waiters(uint32_t id) {
     pthread_mutex_lock(&lock);
-    Sema *s=find(id); unsigned n=0;
+    Sema *s=find_ordered(id,0); unsigned n=0;
     if (s) for (Waiter *w=s->first;w;w=w->next) ++n;
     pthread_mutex_unlock(&lock);
     return n;

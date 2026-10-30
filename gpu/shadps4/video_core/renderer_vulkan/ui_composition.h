@@ -43,14 +43,6 @@ constexpr DisplayDrawPlan PlanDisplayDraw(uint64_t shader, bool samples_ui, bool
     return {copy && !seeded, copy};
 }
 
-// DLAA writes at the scene size; only the final copy stretches the two-pixel inset.
-constexpr std::array<uint32_t, 2> TemporalOutputSize(uint32_t render_width, uint32_t render_height,
-                                                  uint32_t output_width, uint32_t output_height,
-                                                  bool native_aa) {
-    return native_aa ? std::array{render_width, render_height}
-                     : std::array{output_width, output_height};
-}
-
 // UI composition must not require scene depth/camera or an active FSR context.
 constexpr Background Choose(bool scaled, bool ui_draw, bool scene_ready, bool fsr_active) {
     if (!scaled || !ui_draw) {

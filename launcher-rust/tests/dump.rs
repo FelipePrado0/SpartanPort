@@ -17,7 +17,9 @@ use spartanport_launcher::core::patches::{apply, plan, External, PlanInput, Sele
 use spartanport_launcher::runner::link_modules::DEFAULT_MODULES;
 use spartanport_launcher::runner::pause_menu::{self, decode, MenuError, Op, Record, Script};
 use spartanport_launcher::runner::prepare::{prepare, read_self};
-use spartanport_launcher::runner::{glyphs, isa_rewrite, link_libc, link_modules, pause_menu_args};
+use spartanport_launcher::runner::{
+    glyphs, isa_rewrite, link_libc, link_modules, pause_menu_args, switch_text_mounts,
+};
 
 /// The interpreter the comparisons against the frozen Python use: `SPARTANPORT_PYTHON` as one
 /// program path, else `py -3` on Windows when `py.exe` is on `PATH`, `python` on Windows
@@ -629,6 +631,87 @@ fn real_menu_wad_matches_python() {
     }
 }
 
+// -- Switch attacks (scripts/switch_text.py): the Weapon Switching tutorials of the dump's
+// language WADs ------------------------------------------------------------------------------------
+
+/// Runs `switch_text.build(game, out)` of `scripts/switch_text.py`: what it printed (`None` when no
+/// interpreter starts).
+fn python_switch_text(game: &Path, out: &Path) -> Option<String> {
+    let env = |key: &str| std::env::var(key).ok();
+    let command = python_command(&env).ok()?;
+    let (program, args) = command.split_first()?;
+    let script = "import sys; sys.path.insert(0, sys.argv[1]); import switch_text; \
+         switch_text.build(sys.argv[2], sys.argv[3])";
+    let output = Command::new(program)
+        .args(args)
+        .args(["-B", "-c", script])
+        .arg(repo("scripts"))
+        .arg(game)
+        .arg(out)
+        .env("PYTHONIOENCODING", "utf-8")
+        .output()
+        .ok()?;
+    assert!(
+        output.status.success(),
+        "switch_text.build failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Some(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// The files of `folder`, by name.
+fn files_of(folder: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut files: Vec<_> = fs::read_dir(folder)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .map(|path| {
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            (name, fs::read(&path).unwrap())
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+#[test]
+fn real_switch_text_wads_match_python() {
+    let Some(game) = dump() else {
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let (python, rust) = (dir.path().join("python"), dir.path().join("rust"));
+    let Some(printed) = python_switch_text(&game, &python) else {
+        return;
+    };
+    let env = [("SPARTAN_SWITCH_ATTACKS".to_string(), "1".to_string())]
+        .into_iter()
+        .collect();
+    let mut log = Vec::new();
+    let args = switch_text_mounts(&env, &game, &rust, &mut |line| log.push(line));
+    // The languages the Python left as they are, said the same way.
+    let kept: Vec<&str> = log
+        .iter()
+        .map(String::as_str)
+        .filter(|line| line.ends_with(" keeps its tutorial text"))
+        .collect();
+    assert_eq!(kept, printed.lines().collect::<Vec<_>>());
+    let ours = files_of(&rust.join("switch_text"));
+    let theirs = files_of(&python.join("switch_text"));
+    let names = |files: &[(String, Vec<u8>)]| files.iter().map(|f| f.0.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&ours), names(&theirs));
+    for ((name, ours), (_, theirs)) in ours.iter().zip(&theirs) {
+        let first = ours.iter().zip(theirs).position(|(a, b)| a != b);
+        assert!(
+            ours == theirs,
+            "{name} differs (sizes {} and {}, first difference at {first:?})",
+            ours.len(),
+            theirs.len()
+        );
+    }
+    // One mount per copy (the stamp is no WAD).
+    assert_eq!(args.len(), 2 * (theirs.len() - 1));
+}
+
 /// The dump's `R_UI.WAD` and its copy patched in English (`GameScript.setUp`,
 /// `NativeCheats.setUpClass`), made once.
 struct Menu {
@@ -951,7 +1034,7 @@ fn real_menu_options_row() {
         new.one("PauseOptions").unwrap(),
         new.by_name("HLDisplay")[1],
     );
-    assert_eq!(new.records.len(), old.records.len() + 62);
+    assert_eq!(new.records.len(), old.records.len() + 66);
     assert_eq!(row.parent, options.at - 4);
     let cheats = new.one("HLNativeCheats").unwrap();
     let graphics = new.one("HLNativeGraphics").unwrap();
@@ -1176,7 +1259,7 @@ fn native_names(with_link: bool) -> Vec<String> {
         ]
         .map(String::from),
     );
-    names.extend((0..4).map(|i| format!("NativeGraphic{i}")));
+    names.extend((0..9).map(|i| format!("NativeGraphic{i}")));
     names.extend((0..8).map(|i| format!("NativeDisplay{i}")));
     names.extend(
         [

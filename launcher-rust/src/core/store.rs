@@ -71,6 +71,11 @@ impl Store {
         let (mut app, settings_file) = read_app_settings(paths);
         let (mut ini, ini_unreadable) = read_ini(&paths.ini_path());
         seed_ini(&mut ini, &app);
+        for key in ["upscaler", "frame_generation"] {
+            if ini.values.get(key).map(String::as_str) == Some("dlss") {
+                ini.values.insert(key.to_string(), "off".to_string());
+            }
+        }
         // The old "Enable the upscaler" switch kept the upscaler off whatever the ini named (the
         // game always saves one); the Upscaler choice's Off does that now, in the game's menus too.
         if let Some(on) = app.0.remove("experimental_upscaler") {
@@ -208,19 +213,36 @@ mod tests {
     }
 
     #[test]
+    fn removed_upscaler_and_frame_generation_choices_are_saved_as_off() {
+        let (dir, _) = fresh();
+        std::fs::write(
+            dir.path().join("spartanport.ini"),
+            "upscaler=dlss\nframe_generation=dlss\nframe_generation_frames=3\n",
+        )
+        .unwrap();
+        let (store, unreadable) = Store::load(&Paths::from_env(dir.path(), &|_| None));
+        assert!(unreadable.is_empty());
+        assert_eq!(store.text("upscaler"), "off");
+        assert_eq!(store.text("frame_generation"), "off");
+        assert_eq!(store.ini_to_write()["upscaler"], "off");
+        assert_eq!(store.ini_to_write()["frame_generation"], "off");
+        assert_eq!(store.ini_to_write()["frame_generation_frames"], "1");
+    }
+
+    #[test]
     fn legacy_frame_generation_multipliers_are_saved_as_2x() {
         for frames in ["1", "2", "3", "9"] {
             let (dir, _) = fresh();
             std::fs::write(
                 dir.path().join("spartanport.ini"),
-                format!("frame_generation=dlss\nframe_generation_frames={frames}\n"),
+                format!("frame_generation=fsr\nframe_generation_frames={frames}\n"),
             )
             .unwrap();
             let (store, unreadable) = Store::load(&Paths::from_env(dir.path(), &|_| None));
             assert!(unreadable.is_empty());
             assert_eq!(store.text("frame_generation_frames"), "1");
             assert_eq!(store.ini_to_write()["frame_generation_frames"], "1");
-            assert_eq!(store.ini_to_write()["frame_generation"], "dlss");
+            assert_eq!(store.ini_to_write()["frame_generation"], "fsr");
         }
     }
 
@@ -297,7 +319,7 @@ mod tests {
         // A parked key is not written; the upscaler and its preset are shown, so they are.
         assert!(!out.contains_key("object_motion"));
         assert!(out.contains_key("upscaler") && out.contains_key("preset"));
-        assert_eq!(out.len(), 25);
+        assert_eq!(out.len(), 30);
         assert_eq!(out.keys().next().unwrap(), "display_mode");
     }
 

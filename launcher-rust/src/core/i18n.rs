@@ -87,6 +87,21 @@ fn lookup(lang: &str, en: &str) -> Option<String> {
 /// Rust-only UI strings absent from the Python tables, as (English, [(language, text)]). Other
 /// languages fall back to English: a translator gap to fill.
 static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
+    // The switch attacks of the Controls page, in the Python's Portuguese and Spanish.
+    (
+        "Switch attacks on L1 + d-pad and L1 + Cross",
+        &[
+            ("pt", "Ataques de troca com L1 + direcional e L1 + X"),
+            ("es", "Ataques de cambio con L1 + cruceta y L1 + X"),
+        ],
+    ),
+    (
+        "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.",
+        &[
+            ("pt", "L1 + uma direção do direcional troca para essa arma com o ataque de troca dela (a arma que já está na mão de Kratos repete o ataque). L1 + X faz o ataque de troca da arma na mão em vez de passar para a próxima arma. O direcional sozinho troca como antes. Aplicado ao iniciar o jogo."),
+            ("es", "L1 + una dirección de la cruceta cambia a esa arma con su ataque de cambio (el arma que Kratos ya tiene en la mano repite su ataque). L1 + X hace el ataque de cambio del arma en la mano en lugar de pasar a la siguiente arma. La cruceta sola cambia como antes. Se aplica al iniciar el juego."),
+        ],
+    ),
     (
         "Graphics card not checked: the game picks one.",
         &[("pt", "Placa de vídeo não verificada: o jogo escolhe uma.")],
@@ -217,6 +232,14 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     ),
     // The word of the native render resolution's label, when the tables have no whole label.
     ("Native", &[("pt", "Nativa")]),
+    // GUI Scale's default choice (Advanced → Launcher).
+    (
+        "Auto (fits the screen)",
+        &[
+            ("pt", "Automático (cabe na tela)"),
+            ("es", "Automático (se ajusta a la pantalla)"),
+        ],
+    ),
     // The Home saves chip (the Python's "• No saves yet: the game creates them in {}" and
     // "✓ Saves found in {}" without the folder) and the splash hint.
     ("• No saves yet", &[("pt", "• Nenhum save ainda")]),

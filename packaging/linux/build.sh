@@ -18,7 +18,7 @@ install -m755 out/gpu/libspartanportgpu.so "$share/bin/gpu/"
 (cd launcher-rust && "${CARGO:-cargo}" build --release --locked)
 install -m755 launcher-rust/target/release/spartanport-launcher "$share/spartanport-launcher"
 cp -r patches "$share/"
-# The open FSR 4 model (MIT; credits in README.md). DLSS is Windows only.
+# The open FSR 4 model (MIT; credits in README.md).
 bash packaging/fetch_fsr4_model.sh
 cp -r out/fsr4_shaders "$share/fsr4_shaders"
 mkdir -p "$share/LICENSES"
@@ -47,7 +47,7 @@ install -m644 "$icon" "$appdir/spartanport.png"
 if [[ -f release.json ]]; then install -m644 release.json "$appdir/release.json"; fi
 
 # Host-provided libraries: bundling any of these breaks drivers or the display connection.
-excluded='^(ld-linux.*|libc|libm|libdl|librt|libpthread|libresolv|libutil|libnsl|libanl|libvulkan|libGL|libGLX|libGLdispatch|libEGL|libOpenGL|libgbm|libdrm.*|libX11|libX11-xcb|libxcb.*|libXau|libXdmcp|libXext|libXfixes|libXrender|libXi|libXcursor|libXrandr|libwayland-.*|libasound|libudev|libpulse.*|libfontconfig|libfreetype|libOpenCL|libva.*|libvdpau|libvpl|libnvidia-.*|libcuda|libz|libstdc\+\+|libgcc_s)\.so'
+excluded='^(ld-linux.*|libc|libm|libdl|librt|libpthread|libresolv|libutil|libnsl|libanl|libvulkan|libGL|libGLX|libGLdispatch|libEGL|libOpenGL|libgbm|libdrm.*|libX11|libX11-xcb|libxcb.*|libXau|libXdmcp|libXext|libXfixes|libXrender|libXi|libXcursor|libXrandr|libwayland-.*|libasound|libudev|libpulse.*|libfontconfig|libfreetype|libnvidia-.*|libcuda|libz|libstdc\+\+|libgcc_s)\.so'
 declare -A seen
 bundle() {
     local elf=$1 line lib name

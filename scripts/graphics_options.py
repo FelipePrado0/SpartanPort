@@ -154,7 +154,7 @@ def upscaler_render_size(ini, environment):
     if environment.get('SPARTAN_EXPERIMENTAL_UPSCALER') != '1':
         return None
     upscaler = environment.get('SPARTAN_UPSCALER') or ini.get('upscaler', 'none')
-    if upscaler in ('none', 'off', 'taa'):
+    if upscaler not in ('fsr3', 'fsr4', 'fsr411'):
         return None
     output = resolution_size(ini.get('render_resolution', 'native')) or SIZES['native']
     size = upscale_render_size(environment.get('SPARTAN_UPSCALE_PRESET') or ini.get('preset', '0'), output)

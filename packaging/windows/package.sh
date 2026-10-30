@@ -3,9 +3,7 @@
 # built outside MSYS2 with `cd launcher-rust && cargo build --release --locked`; it must run inside launcher-rust/ to read its .cargo/config.toml),
 # spartanport-probe.exe with the MSYS2 CLANG64 DLLs it needs and the controller diagrams the runner reads.
 # Run from an MSYS2 CLANG64 shell after `bash build.sh` and the cargo build. No Python is packaged.
-# The temporal upscalers ship too: the open FSR 4 model (packaging/fetch_fsr4_model.sh) and DLSS
-# (packaging/windows/build_dlss.sh), with their licenses in LICENSES/. Without the DLSS files the
-# package is made without DLSS, unless REQUIRE_DLSS=1 (the release build) stops it.
+# The open FSR 4 model ships with its license in LICENSES/.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
 source ./msys2-env.sh
@@ -14,31 +12,6 @@ source ./msys2-env.sh
 launcher=launcher-rust/target/release/spartanport-launcher.exe
 [[ -f $launcher ]] || { echo 'Build the launcher first, outside MSYS2: cd launcher-rust && cargo build --release --locked' >&2; exit 1; }
 bash packaging/fetch_fsr4_model.sh
-dlss=yes
-for file in out/spartanport_dlss.dll out/nvngx_dlss.dll out/NVIDIA-DLSS-LICENSE.txt; do
-    [[ -f $file ]] || dlss=
-done
-if [[ -z $dlss ]]; then
-    [[ ${REQUIRE_DLSS:-0} == 1 ]] && { echo 'DLSS files missing: run packaging/windows/build_dlss.sh' >&2; exit 1; }
-    echo 'Package: no DLSS (packaging/windows/build_dlss.sh makes it)' >&2
-fi
-
-# Streamline is optional; an incomplete NVIDIA FG package is never shipped.
-streamline=
-if [[ -d out/streamline ]]; then
-    for file in spartanport_streamline.dll sl.interposer.dll sl.common.dll sl.dlss_g.dll \
-                sl.reflex.dll sl.pcl.dll nvngx_dlssg.dll NvLowLatencyVk.dll; do
-        [[ -f out/streamline/$file ]] || { echo "Incomplete Streamline package: $file" >&2; exit 1; }
-    done
-    for license in NVIDIA-Streamline.txt NVIDIA-Streamline-third-party.txt reflex.license.txt \
-                   nvngx_dlss.license.txt spartanport_streamline-MIT.txt; do
-        [[ -f out/streamline/LICENSES/$license ]] || { echo "Streamline license missing: $license" >&2; exit 1; }
-    done
-    streamline=yes
-elif [[ ${REQUIRE_STREAMLINE:-0} == 1 ]]; then
-    echo 'Run python packaging/windows/build_streamline.py before packaging' >&2
-    exit 1
-fi
 
 # The package is assembled in a fresh staging folder and zipped from there; dist/spartanport-windows
 # (a playable copy that may hold saves and settings) is only refreshed afterwards.
@@ -74,18 +47,6 @@ mkdir -p "$dest/LICENSES"
 cp -r out/fsr4_shaders "$dest/fsr4_shaders"
 cp out/fsr4_shaders/LICENSE-FSR4-v07.txt "$dest/LICENSES/FSR4-v07-model-MIT.txt"
 cp gpu/third_party/fsr-vulkan/LICENSE.txt "$dest/LICENSES/FSR-Vulkan.txt"
-if [[ -n $dlss ]]; then
-    cp out/spartanport_dlss.dll out/nvngx_dlss.dll "$dest/bin/"
-    cp out/NVIDIA-DLSS-LICENSE.txt "$dest/LICENSES/NVIDIA-DLSS-SDK.txt"
-    cp gpu/dlss_bridge/LICENSE.txt "$dest/LICENSES/spartanport_dlss-MIT.txt"
-fi
-if [[ -n $streamline ]]; then
-    for file in spartanport_streamline.dll sl.interposer.dll sl.common.dll sl.dlss_g.dll \
-                sl.reflex.dll sl.pcl.dll nvngx_dlssg.dll NvLowLatencyVk.dll; do
-        cp "out/streamline/$file" "$dest/bin/"
-    done
-    cp out/streamline/LICENSES/* "$dest/LICENSES/"
-fi
 # No game files and nothing a player made (saves, shader caches built from the game's shaders,
 # settings, logs) may ship: stop when one is found.
 forbidden=$(find "$dest" -path "$dest/fsr4_shaders" -prune -o \( -iname eboot.bin -o -iname sce_module -o -iname sce_sys -o -iname savedata \

@@ -16,7 +16,6 @@
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_swapchain.h"
-#include "video_core/renderer_vulkan/vk_dlss_frame_composition.h"
 #include "video_core/texture_cache/texture_cache.h"
 
 namespace Frontend {
@@ -28,8 +27,6 @@ struct Liverpool;
 }
 
 namespace Vulkan {
-
-vk::ImageBlit MakeImageBlitFit(s32 frame_width, s32 frame_height, s32 swapchain_width, s32 swapchain_height);
 
 struct Frame {
     u32 width;
@@ -46,8 +43,6 @@ struct Frame {
     /// spartanport: frame generation's frame, shown before this one (Present), or null.
     Frame* generated = nullptr;
     bool is_generated = false; ///< spartanport: a frame generation frame (screenshots say so)
-    std::unique_ptr<NvidiaFrame> nvidia;
-    void* nvidia_token{};
 };
 
 enum SchedulerType {

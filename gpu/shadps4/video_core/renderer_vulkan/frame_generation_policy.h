@@ -7,8 +7,8 @@
 
 namespace Vulkan::FrameGenerationPolicy {
 
-/// spartanport.ini frame_generation: off, fsr, dlss.
-enum Mode : int { FgOff = 0, FgFsr = 1, FgDlss = 2 };
+/// spartanport.ini frame_generation: off, fsr.
+enum Mode : int { FgOff = 0, FgFsr = 1 };
 
 enum class Skip { None, Off, NoUpscale, Reset, FullScreenPass, Failed };
 
@@ -23,7 +23,7 @@ struct Input {
 
 Skip Decide(const Input& in);
 
-/// Exactly one generated frame per real frame (2x) for either provider.
+/// Exactly one generated frame per real frame (2x) for AMD FSR.
 int GeneratedFrames(int mode);
 
 class Pacing {

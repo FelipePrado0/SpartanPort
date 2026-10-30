@@ -13,7 +13,6 @@
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
-#include "video_core/renderer_vulkan/vk_dlss_frame_generation.h"
 #include "spartanport_overlay.h"
 #include "spartanport_settings.h"
 #include "spartanport_graphics.h"
@@ -54,6 +53,82 @@ namespace Vulkan {
 bool CanBlitToSwapchain(const vk::PhysicalDevice physical_device, vk::Format format) {
     const vk::FormatProperties props{physical_device.getFormatProperties(format)};
     return static_cast<bool>(props.optimalTilingFeatures & vk::FormatFeatureFlagBits::eBlitDst);
+}
+
+[[nodiscard]] vk::ImageSubresourceLayers MakeImageSubresourceLayers() {
+    return vk::ImageSubresourceLayers{
+        .aspectMask = vk::ImageAspectFlagBits::eColor,
+        .mipLevel = 0,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+    };
+}
+
+[[nodiscard]] vk::ImageBlit MakeImageBlit(s32 frame_width, s32 frame_height, s32 dst_width,
+                                          s32 dst_height, s32 offset_x, s32 offset_y) {
+    return vk::ImageBlit{
+        .srcSubresource = MakeImageSubresourceLayers(),
+        .srcOffsets =
+            std::array{
+                vk::Offset3D{
+                    .x = 0,
+                    .y = 0,
+                    .z = 0,
+                },
+                vk::Offset3D{
+                    .x = frame_width,
+                    .y = frame_height,
+                    .z = 1,
+                },
+            },
+        .dstSubresource = MakeImageSubresourceLayers(),
+        .dstOffsets =
+            std::array{
+                vk::Offset3D{
+                    .x = offset_x,
+                    .y = offset_y,
+                    .z = 0,
+                },
+                vk::Offset3D{
+                    .x = offset_x + dst_width,
+                    .y = offset_y + dst_height,
+                    .z = 1,
+                },
+            },
+    };
+}
+
+[[nodiscard]] vk::ImageBlit MakeImageBlitStretch(s32 frame_width, s32 frame_height,
+                                                 s32 swapchain_width, s32 swapchain_height) {
+    return MakeImageBlit(frame_width, frame_height, swapchain_width, swapchain_height, 0, 0);
+}
+
+static vk::Rect2D FitImage(s32 frame_width, s32 frame_height, s32 swapchain_width,
+                           s32 swapchain_height) {
+    float frame_aspect = static_cast<float>(frame_width) / frame_height;
+    float swapchain_aspect = static_cast<float>(swapchain_width) / swapchain_height;
+
+    u32 dst_width = swapchain_width;
+    u32 dst_height = swapchain_height;
+
+    if (frame_aspect > swapchain_aspect) {
+        dst_height = static_cast<s32>(swapchain_width / frame_aspect);
+    } else {
+        dst_width = static_cast<s32>(swapchain_height * frame_aspect);
+    }
+
+    const s32 offset_x = (swapchain_width - dst_width) / 2;
+    const s32 offset_y = (swapchain_height - dst_height) / 2;
+
+    return vk::Rect2D{{offset_x, offset_y}, {dst_width, dst_height}};
+}
+
+[[nodiscard]] vk::ImageBlit MakeImageBlitFit(s32 frame_width, s32 frame_height, s32 swapchain_width,
+                                             s32 swapchain_height) {
+    const auto& dst_rect = FitImage(frame_width, frame_height, swapchain_width, swapchain_height);
+
+    return MakeImageBlit(frame_width, frame_height, dst_rect.extent.width, dst_rect.extent.height,
+                         dst_rect.offset.x, dst_rect.offset.y);
 }
 
 // spartanport: F12 screenshots of the game's frame (without the overlay), saved as PNG to the user
@@ -293,7 +368,6 @@ Presenter::~Presenter() {
 
     const vk::Device device = instance.GetDevice();
     for (auto& frame : present_frames) {
-        frame.nvidia.reset();
         vmaDestroyImage(instance.GetAllocator(), frame.image, frame.allocation);
         device.destroyImageView(frame.image_view);
         device.destroyFence(frame.present_done);
@@ -496,7 +570,6 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
 
     Frame* frame = GetRenderFrame();
     frame->is_generated = false;
-    frame->nvidia_token = DlssFrameGeneration::Get().RenderToken();
 
     const auto frame_subresources = vk::ImageSubresourceRange{
         .aspectMask = vk::ImageAspectFlagBits::eColor,
@@ -524,7 +597,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         .pImageMemoryBarriers = &pre_barrier,
     });
     // spartanport: frame generation, the frame between the previous one and this one.
-    const vk::Image generated_image = SpartanSettings::Get().startup_frame_generation == 2 ? vk::Image{} : rasterizer->GetUpscaler().GetFrameGeneration().Generate(
+    const vk::Image generated_image = rasterizer->GetUpscaler().GetFrameGeneration().Generate(
         cmdbuf, upscaled, upscaled ? display.image : vk::Image{},
         upscaled ? display.format : vk::Format::eUndefined);
 
@@ -601,28 +674,6 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     pp_settings.picture = MovieBars::Cutscenes().Bars(image_size.width, image_size.height,
                                                       MovieBars::NowMs());
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
-    if (DlssFrameGeneration::Get().Ready()) {
-        const auto capture = rasterizer->GetUpscaler().GetFrameGeneration().TakeNvidiaCapture();
-        if (upscaled && capture.token && capture.token == frame->nvidia_token) {
-            const auto extent = swapchain.GetExtent();
-            const auto backbuffer_format = swapchain.GetHDR() ? vk::Format::eA2B10G10R10UnormPack32 : frame->format;
-            if (!frame->nvidia || !frame->nvidia->Matches(frame->width, frame->height, extent, frame->format, backbuffer_format)) {
-                if (frame->nvidia) Check(instance.GetDevice().waitIdle());
-                frame->nvidia = std::make_unique<NvidiaFrame>(instance, frame->width, frame->height, extent, frame->format, backbuffer_format);
-            }
-            frame->nvidia->token = capture.token;
-            frame->nvidia->reset = capture.reset;
-            frame->nvidia->inputs = capture.inputs;
-            frame->nvidia->Begin(cmdbuf);
-            const vk::Extent2D scene_size{capture.width, capture.height};
-            auto scene = fsr_pass.Render(cmdbuf, capture.scene, scene_size,
-                {frame->width, frame->height}, fsr_settings, frame->is_hdr);
-            auto target = frame->nvidia->Target();
-            pp_pass.Render(cmdbuf, scene, scene_size, target, pp_settings);
-        } else if (frame->nvidia) {
-            frame->nvidia->token = nullptr;
-        }
-    }
     if (generated_image) {
         // The same passes over the generated frame, into a frame of its own.
         Frame* generated = GetRenderFrame();
@@ -767,7 +818,6 @@ void Presenter::PresentLoadingFrame() {
     if (window.IsMinimized() || window.GetWidth() <= 0 || window.GetHeight() <= 0) {
         return;
     }
-    DlssFrameGeneration::Get().Pause();
     swapchain.UpdateVsync();
     if (window.GetWidth() != swapchain.GetWidth() || window.GetHeight() != swapchain.GetHeight()) {
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
@@ -824,7 +874,6 @@ void Presenter::PresentLoadingFrame() {
             swapchain.Recreate(window.GetWidth(), window.GetHeight());
         }
     }
-    DlssFrameGeneration::Get().Presented(false);
     // A few frames a second during start-up: waiting keeps semaphores and the swapchain simple.
     present_scheduler.Finish();
 }
@@ -867,7 +916,6 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     // spartanport: a minimized window has no pixels on Windows (0x0) or is hidden/occluded; keep the swapchain
     // and skip presenting until the window is restored.
     if (window.IsMinimized() || window.GetWidth() <= 0 || window.GetHeight() <= 0) {
-        DlssFrameGeneration::Get().Pause();
         free_frame();
         return;
     }
@@ -1014,20 +1062,6 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
         cmdbuf.endDebugUtilsLabelEXT();
     }
 
-    bool nvidia_enabled = false;
-    auto& nvidia = DlssFrameGeneration::Get();
-    if (nvidia.Ready() && frame->nvidia && frame->nvidia->token && is_game_frame && !is_reusing_frame &&
-        frame->nvidia->Matches(frame->width, frame->height, swapchain.GetExtent(), frame->format,
-            swapchain.GetHDR() ? vk::Format::eA2B10G10R10UnormPack32 : frame->format)) {
-        nvidia_enabled = frame->nvidia->Composite(cmdbuf, swapchain_image, swapchain.ImageView(),
-                                                 vk::ImageLayout::ePresentSrcKHR);
-        const auto resources = frame->nvidia->Resources();
-        nvidia_enabled = nvidia.Color(frame->nvidia->token, cmdbuf, resources[0], resources[1]) && nvidia_enabled;
-    }
-    nvidia.Enable(nvidia_enabled, swapchain.GetExtent());
-    void* present_token = is_game_frame && !is_reusing_frame ? frame->nvidia_token : nullptr;
-    nvidia.Marker(present_token, 4);
-
     // Flush vulkan commands.
 
     SubmitInfo info{};
@@ -1051,9 +1085,6 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
             swapchain.Recreate(window.GetWidth(), window.GetHeight());
         }
     }
-
-    nvidia.Marker(present_token, 5);
-    nvidia.Presented(is_game_frame && !is_reusing_frame);
 
     if (profile) {
         const auto now = Clock::now();
@@ -1147,12 +1178,6 @@ Frame* Presenter::GetRenderFrame() {
             queue_ms = fence_ms = 0;
             calls = 0;
         }
-    }
-    frame->nvidia_token = nullptr;
-    if (frame->nvidia) {
-        frame->nvidia->ReadCoverage();
-        frame->nvidia->token = nullptr;
-        frame->nvidia->inputs.reset();
     }
     if (frame->width != expected_frame_width || frame->height != expected_frame_height ||
         frame->is_hdr != swapchain.GetHDR()) {

@@ -1,4 +1,4 @@
-//! The Graphics page: window, upscaling, textures, overlay and screenshots.
+//! The Graphics page: window, upscaling, effects, textures, overlay and screenshots.
 //!
 //! Upscaling shows the switch, the upscaler and its preset; the upscaler outputs the Render
 //! resolution of the Performance page. `output_res`, `live_resolution` and `object_motion` stay
@@ -106,7 +106,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
             state.rtl,
             &tr(lang, "Upscaler"),
             select("upscaler", UPSCALERS, &ini("upscaler"), lang),
-            Some(&hint("FSR 4.1 requires AMD Adrenalin 26.10.1 or newer; DLSS requires an NVIDIA RTX card. The log shows the active provider; a fallback to FSR 3.1 is not FSR 4.1 or DLSS.")),
+            Some(&hint("FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.")),
         ),
         row(
             state.rtl,
@@ -121,7 +121,26 @@ pub fn view(state: &State) -> Element<'_, Message> {
             &tr(lang, "Frame generation"),
             select("frame_generation", FRAME_GENERATION, &ini("frame_generation"), lang),
             Some(&hint(
-                "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card. NVIDIA DLSS: RTX 40/50, Windows."
+                "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card."
+            )),
+        ),
+        section(state.rtl, &tr(lang, "Effects")),
+        checkbox(
+            state.rtl,
+            "motion_blur",
+            &tr(lang, "Motion blur"),
+            state.store.flag("motion_blur"),
+            Some(&hint(
+                "The game's own motion blur on fast moving objects and the camera. Off removes it."
+            )),
+        ),
+        checkbox(
+            state.rtl,
+            "depth_of_field",
+            &tr(lang, "Depth of field"),
+            state.store.flag("depth_of_field"),
+            Some(&hint(
+                "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp."
             )),
         ),
         section(state.rtl, &tr(lang, "Textures")),

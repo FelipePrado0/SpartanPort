@@ -58,20 +58,5 @@ int main() {
     assert(ui[0] == 1 && ui[1] == 1); // don't double an already native UI viewport
     const auto larger = Scale(960, 540, 3840, 2160, true);
     assert(larger[0] == 2 && larger[1] == 2);
-    // The failing RTX log: DLAA must not upscale the launcher's two-pixel inset.
-    const auto dlaa = TemporalOutputSize(1918, 1078, 1920, 1080, true);
-    assert(dlaa[0] == 1918 && dlaa[1] == 1078);
-    const auto native = TemporalOutputSize(1920, 1080, 1920, 1080, true);
-    assert(native[0] == 1920 && native[1] == 1080);
-    const auto dlaa_1440 = TemporalOutputSize(2558, 1438, 2560, 1440, true);
-    assert(dlaa_1440[0] == 2558 && dlaa_1440[1] == 1438);
-    const auto dlaa_4k = TemporalOutputSize(3838, 2158, 3840, 2160, true);
-    assert(dlaa_4k[0] == 3838 && dlaa_4k[1] == 2158);
-    for (const auto scene : std::array{std::array{1476u, 830u}, std::array{1280u, 720u},
-                                      std::array{1130u, 636u}, std::array{960u, 540u},
-                                      std::array{640u, 360u}, std::array{1918u, 1078u}}) {
-        const auto upscaled = TemporalOutputSize(scene[0], scene[1], 1920, 1080, false);
-        assert(upscaled[0] == 1920 && upscaled[1] == 1080);
-    }
     std::puts("UI composition: PASS (menu without camera, HUD, FSR off, viewport scaling)");
 }

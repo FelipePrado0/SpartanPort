@@ -2,13 +2,38 @@
 #undef NDEBUG /* the checks are asserts; release builds define NDEBUG */
 #include "../src/runtime_services.c"
 #include <assert.h>
+#ifdef _WIN32
+#include <direct.h>
+#include <process.h>
+#define test_mkdir(d) _mkdir(d)
+#define test_rmdir(d) _rmdir(d)
+#define test_getpid() _getpid()
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#define test_mkdir(d) mkdir(d, 0755)
+#define test_rmdir(d) rmdir(d)
+#define test_getpid() getpid()
+#endif
 
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *nid) { (void)table; (void)count; (void)nid; return 0; }
 int spartanportgpu_text_input_begin(const char *text, const char *prompt) { (void)text; (void)prompt; return 0; }
 int spartanportgpu_text_input_poll(char *text, uint64_t size) { (void)text; (void)size; return 0; }
+static int stub_menu_confirm_swap = 0;
+int spartanportgpu_menu_confirm_swap(void) { return stub_menu_confirm_swap; }
 void spartanportgpu_trophy_setup(const SpartanGpuTrophyLabels *labels, const SpartanGpuTrophyInfo *items,
                                 int count, const volatile uint32_t *unlocked) {
     (void)labels; (void)items; (void)count; (void)unlocked;
+}
+static char mock_user_dir[512]="user";
+const char *runtime_file_user_dir(void) { return mock_user_dir; }
+static char last_toast_title[128], last_toast_detail[256];
+void spartanportgpu_toast_trophy(int id, const char *title, const char *detail, const unsigned char *png, uint64_t png_size) {
+    (void)id; (void)png; (void)png_size;
+    if (title) snprintf(last_toast_title, sizeof(last_toast_title), "%s", title);
+    else last_toast_title[0] = 0;
+    if (detail) snprintf(last_toast_detail, sizeof(last_toast_detail), "%s", detail);
+    else last_toast_detail[0] = 0;
 }
 static int preview_file_enabled, preview_file_reads, preview_file_closes;
 static int64_t preview_file_result=8;
@@ -52,6 +77,18 @@ int runtime_savedata_param(int32_t user, const char *dir, void *param) {
     memcpy(param,save_param,sizeof(save_param)); return 0;
 }
 int runtime_savedata_icon(int32_t user, const char *dir, char *out, size_t size) { (void)user; (void)dir; (void)out; (void)size; return -1; }
+static struct {
+    char dir[32];
+    int64_t mtime;
+} test_save_mtimes[16];
+static int test_save_mtimes_count;
+int64_t runtime_savedata_mtime(int32_t user, const char *dir) {
+    (void)user;
+    for (int i=0;i<test_save_mtimes_count;++i) {
+        if (!strcmp(test_save_mtimes[i].dir,dir)) return test_save_mtimes[i].mtime;
+    }
+    return 0;
+}
 
 int main(void) {
     unsigned char param[128]={0}, result[64]={0}; /* the game zeroes the pointers it does not want */
@@ -223,6 +260,192 @@ int main(void) {
     assert(save_open(list)==0 && strstr(shown_items[1],"SAVE0001") && strstr(shown_items[1],"unavailable"));
     assert(save_term()==0);
 
+    /* ---- Issue #994: Save list ordering (newest first, overwriting, autosave, PR #938 compatibility) ---- */
+    assert(save_init()==0);
+    char sort_names[3][32]={"SAVE0001","SAVE0002","SAVE0003"};
+    const char *sort_names_ptr=sort_names[0];
+    uint32_t sort_count=3;
+    unsigned char sort_items[64]={0}, sort_list[128]={0};
+    memcpy(sort_items+16,&sort_names_ptr,8);
+    memcpy(sort_items+24,&sort_count,4);
+    unsigned char *sort_items_ptr=sort_items;
+    sort_list[52]=1; /* mode 1: list */
+    sort_list[56]=2; /* type 2: Load game */
+    memcpy(sort_list+72,&sort_items_ptr,8);
+
+    /* 1. Initial save ordering: newest first. */
+    test_save_mtimes_count=3;
+    strcpy(test_save_mtimes[0].dir,"SAVE0001"); test_save_mtimes[0].mtime=100;
+    strcpy(test_save_mtimes[1].dir,"SAVE0002"); test_save_mtimes[1].mtime=300; /* newest */
+    strcpy(test_save_mtimes[2].dir,"SAVE0003"); test_save_mtimes[2].mtime=200;
+    assert(save_open(sort_list)==0 && save_status()==DIALOG_RUNNING);
+    assert(choice_count==3);
+    assert(choice_focus==0);
+    assert(strstr(shown_items[0],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0003")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0001")!=NULL);
+
+    /* 2. Correct slot loaded after reordering. */
+    choice_next=0; /* pick top save (SAVE0002) */
+    assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0002"));
+
+    assert(save_open(sort_list)==0);
+    choice_next=1; /* pick second save (SAVE0003) */
+    assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0003"));
+
+    assert(save_open(sort_list)==0);
+    choice_next=2; /* pick third save (SAVE0001) */
+    assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0001"));
+
+    /* 3. Overwriting an older slot moves it to the top on list refresh. */
+    test_save_mtimes[0].mtime=400; /* SAVE0001 overwritten, now newest */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0003")!=NULL);
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0001"));
+
+    /* 4. Identical timestamps: deterministic alphabetical tie-breaking. */
+    test_save_mtimes[0].mtime=200;
+    test_save_mtimes[1].mtime=500;
+    test_save_mtimes[2].mtime=500; /* SAVE0002 and SAVE0003 tie at 500 */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0003")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0001")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+
+    /* 5. Missing / invalid timestamps placed at the bottom, sorted by name. */
+    test_save_mtimes[0].mtime=0;   /* missing */
+    test_save_mtimes[1].mtime=250; /* valid */
+    test_save_mtimes[2].mtime=-1;  /* invalid */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0003")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+
+    /* 5b. All missing or negative timestamps (0, -10, -100): all treated as invalid category, sorted by name. */
+    test_save_mtimes[0].mtime=-100;
+    test_save_mtimes[1].mtime=-10;
+    test_save_mtimes[2].mtime=0;
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0003")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+
+    /* 5c. Negative (-50) vs zero (0) vs valid (100): valid first, invalid tie-break by name. */
+    test_save_mtimes[0].mtime=-50;  /* SAVE0001 */
+    test_save_mtimes[1].mtime=100;  /* SAVE0002 (valid) */
+    test_save_mtimes[2].mtime=0;    /* SAVE0003 */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0002")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0003")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+
+    /* 5d. Date display in save_label matches save_mtime. */
+    save_param_available=1;
+    test_save_mtimes[0].mtime=1720000000; /* 2024-07-03 */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[1],"2024-07-03")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+    save_param_available=0;
+
+    /* 6. Autosave positioning and selection. */
+    strcpy(sort_names[0],"AUTOSAVE");
+    strcpy(sort_names[1],"SAVE0001");
+    strcpy(sort_names[2],"SAVE0002");
+    /* 6a. AUTOSAVE is newest: appears at top. */
+    strcpy(test_save_mtimes[0].dir,"AUTOSAVE"); test_save_mtimes[0].mtime=600;
+    strcpy(test_save_mtimes[1].dir,"SAVE0001"); test_save_mtimes[1].mtime=500;
+    strcpy(test_save_mtimes[2].dir,"SAVE0002"); test_save_mtimes[2].mtime=400;
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"AUTOSAVE")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0002")!=NULL);
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"AUTOSAVE"));
+
+    /* 6b. Manual save newer than AUTOSAVE: manual save at top, AUTOSAVE second. */
+    test_save_mtimes[1].mtime=700; /* SAVE0001 is newer than AUTOSAVE */
+    assert(save_open(sort_list)==0);
+    assert(strstr(shown_items[0],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[1],"AUTOSAVE")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0002")!=NULL);
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0001"));
+    assert(save_open(sort_list)==0);
+    choice_next=1; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"AUTOSAVE"));
+
+    /* 7. Save/delete navigation consistency. */
+    /* 7a. Save mode (type 1) with new_item: row 0 is 'New save', followed by sorted saves. */
+    sort_list[56]=1; /* type 1: Save game */
+    memcpy(sort_items+32,&new_title,8);
+    assert(save_open(sort_list)==0);
+    assert(choice_count==4);
+    assert(choice_focus==0);
+    assert(strstr(shown_items[0],"New")!=NULL || strstr(shown_items[0],"Novo")!=NULL);
+    assert(strstr(shown_items[1],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[2],"AUTOSAVE")!=NULL);
+    assert(strstr(shown_items[3],"SAVE0002")!=NULL);
+    /* Selecting 'New save' (row 0) produces empty name. */
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(chosen[0]=='\0');
+    /* Selecting an existing save (row 1: SAVE0001) triggers overwrite confirmation. */
+    assert(save_open(sort_list)==0);
+    choice_next=1; assert(save_status()==DIALOG_RUNNING); /* prompt displayed */
+    choice_next=1; assert(save_status()==DIALOG_RUNNING); /* cancel overwrite */
+    assert(choice_focus==1); /* cursor preserved on row 1 */
+    choice_next=1; assert(save_status()==DIALOG_RUNNING); /* prompt displayed again */
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0); /* confirm overwrite */
+    assert(!strcmp(chosen,"SAVE0001"));
+
+    /* 7b. Save mode without new_item (all slots full): existing saves start at row 0. */
+    memset(sort_items+32,0,8);
+    assert(save_open(sort_list)==0);
+    assert(choice_count==3);
+    assert(strstr(shown_items[0],"SAVE0001")!=NULL);
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+
+    /* 7c. Delete mode (type 3): existing saves start at row 0 sorted newest first. */
+    sort_list[56]=3; /* type 3: Delete save */
+    assert(save_open(sort_list)==0);
+    assert(choice_count==3);
+    assert(strstr(shown_items[0],"SAVE0001")!=NULL);
+    assert(strstr(shown_items[1],"AUTOSAVE")!=NULL);
+    assert(strstr(shown_items[2],"SAVE0002")!=NULL);
+    choice_next=0; assert(save_status()==DIALOG_FINISHED && save_result(out)==0);
+    assert(!strcmp(chosen,"SAVE0001"));
+
+    /* 8. Compatibility with PR #938: focus calculation on sorted lists. */
+    /* When PR #938 is applied, Load mode focuses AUTOSAVE if present; otherwise the newest save (index 0). */
+    sort_list[56]=2; /* type 2: Load game */
+    int focus_pr938=0;
+    int has_new=(sort_items[32]!=0);
+    for (int i=0;i<3;++i) {
+        if (!strcmp(save_dialog.dirs[i],"AUTOSAVE")) { focus_pr938=i+has_new; break; }
+    }
+    assert(focus_pr938==1); /* AUTOSAVE is at index 1 because SAVE0001 is newer */
+    /* When AUTOSAVE is absent, focus defaults to index 0 (newest save). */
+    strcpy(sort_names[0],"SAVE0003");
+    test_save_mtimes[0].dir[0]='X'; /* invalidate AUTOSAVE */
+    assert(save_open(sort_list)==0);
+    focus_pr938=0;
+    for (int i=0;i<3;++i) {
+        if (!strcmp(save_dialog.dirs[i],"AUTOSAVE")) { focus_pr938=i+has_new; break; }
+    }
+    assert(focus_pr938==0); /* newest save is at index 0 */
+    choice_next=-2; assert(save_status()==DIALOG_FINISHED);
+    assert(save_term()==0);
+    test_save_mtimes_count=0;
+
     /* PlayGo: installed, full speed, progress never divides by zero. */
     int32_t handle=0; uint64_t progress[2]; int32_t speed; uint16_t chunk=0;
     assert(playgo_init(NULL)==0 && playgo_open(&handle,NULL)==0);
@@ -236,6 +459,109 @@ int main(void) {
     uint32_t flags[4]={~0u,~0u,~0u,~0u}, count=7;
     assert(trophy_unlock_state(1,1,flags,&count)==0 && !flags[0] && !flags[3] && count==0);
     assert(trophy_unlock_state(1,1,NULL,&count)==TROPHY_INVALID && trophy_release(0)==TROPHY_INVALID);
+
+    /* Trophies: directory resolution, text loading, unlock notifications and persistence across restart. */
+    assert(!strcmp(trophy_dir(),"user"));
+    const char *tmp=getenv("TMPDIR");
+    if (!tmp || !tmp[0]) tmp=getenv("TEMP");
+    if (!tmp || !tmp[0]) tmp=getenv("TMP");
+    if (!tmp || !tmp[0]) tmp="/tmp";
+
+    char test_user[256], test_txt[512], test_dat[512];
+    snprintf(test_user,sizeof(test_user),"%s/spartanport_test_user_%d",tmp,(int)test_getpid());
+    snprintf(test_txt,sizeof(test_txt),"%s/trophy_texts.txt",test_user);
+    snprintf(test_dat,sizeof(test_dat),"%s/trophies.dat",test_user);
+
+    snprintf(mock_user_dir,sizeof(mock_user_dir),"%s",test_user);
+    assert(!strcmp(trophy_dir(),test_user));
+#ifdef _WIN32
+    _putenv("SPARTAN_USER_DIR=out/test_trophy_env");
+#else
+    setenv("SPARTAN_USER_DIR","out/test_trophy_env",1);
+#endif
+    assert(!strcmp(trophy_dir(),"out/test_trophy_env"));
+#ifdef _WIN32
+    _putenv("SPARTAN_USER_DIR=");
+#else
+    unsetenv("SPARTAN_USER_DIR");
+#endif
+    assert(!strcmp(trophy_dir(),test_user));
+
+    /* Clean up any leftovers before setup */
+    remove(test_dat);
+    remove(test_txt);
+    test_rmdir(test_user);
+
+    /* Set up isolated test user dir with custom trophy texts */
+    test_mkdir(test_user);
+    FILE *ft=fopen(test_txt,"wb");
+    assert(ft!=NULL);
+    fputs("@heading=Custom Trophies\n"
+          "0=King of the Hill | Unlock all trophies\n"
+          "1=Releasing the Floodgates | Kill Poseidon\n",ft);
+    fclose(ft);
+    remove(test_dat);
+
+    /* Reset in-memory trophy state and load from mock_user_dir */
+    trophy_ready=0;
+    memset(trophy_flags,0,sizeof(trophy_flags));
+    memset(trophy_names,0,sizeof(trophy_names));
+    memset(trophy_details,0,sizeof(trophy_details));
+    trophy_load_once();
+
+    /* Verified: names are resolved from mock_user_dir/trophy_texts.txt */
+    assert(!strcmp(trophy_names[0],"King of the Hill"));
+    assert(!strcmp(trophy_names[1],"Releasing the Floodgates"));
+    assert(!strcmp(trophy_details[1],"Kill Poseidon"));
+
+    /* Verified: unlocking trophy 1 shows decoded name in notification and persists to disk */
+    last_toast_title[0]=0;
+    assert(trophy_unlock(1,1,1,NULL)==0);
+    assert(!strcmp(last_toast_title,"Releasing the Floodgates"));
+    assert(!strcmp(last_toast_detail,"Kill Poseidon"));
+    assert((trophy_flags[0]&(1u<<1))!=0);
+
+    /* Verified: persistence across application restart */
+    trophy_ready=0;
+    memset(trophy_flags,0,sizeof(trophy_flags));
+    trophy_load_once();
+    assert((trophy_flags[0]&(1u<<1))!=0);
+
+    /* Clean up test files */
+    remove(test_dat);
+    remove(test_txt);
+    test_rmdir(test_user);
+    snprintf(mock_user_dir,sizeof(mock_user_dir),"user");
+    /* Trophy texts: every label key, the new ones of the list's order and rarity included, lands in its
+     * SpartanGpuTrophyLabels field (the struct is one pointer per key, in the keys' order). */
+    {
+        FILE *texts=fopen("trophy_texts.txt","wb");
+        assert(texts);
+        fputs("\xEF\xBB\xBF# comment\n@heading=Trof\xC3\xA9us\n@rarity={}% dos jogadores\n@ultra_rare=Ultrarraro\n"
+              "@hint_notifications=L1/R1: trof\xC3\xA9us\n@unknown=x\n3=Sr. M\xC3\xA3o | Ache a sala\n",texts);
+        fclose(texts);
+#ifdef _WIN32
+        _putenv("SPARTAN_USER_DIR=.");
+#else
+        setenv("SPARTAN_USER_DIR",".",1);
+#endif
+        memset(trophy_label,0,sizeof(trophy_label)); /* not what an earlier load left (a user/ folder here) */
+        trophy_load_names();
+        const char *label_texts[TROPHY_LABELS];
+        for (int k=0;k<TROPHY_LABELS;k++) label_texts[k]=trophy_label[k][0] ? trophy_label[k] : 0;
+        SpartanGpuTrophyLabels labels;
+        memcpy(&labels,label_texts,sizeof(labels));
+        assert(!strcmp(labels.heading,"Trof\xC3\xA9us") && !strcmp(labels.rarity,"{}% dos jogadores"));
+        assert(!strcmp(labels.ultra_rare,"Ultrarraro") && !strcmp(labels.hint_notifications,"L1/R1: trof\xC3\xA9us"));
+        assert(!labels.notice && !labels.order_list && !labels.common);
+        assert(!strcmp(trophy_names[3],"Sr. M\xC3\xA3o") && !strcmp(trophy_details[3],"Ache a sala"));
+        remove("trophy_texts.txt");
+#ifdef _WIN32
+        _putenv("SPARTAN_USER_DIR=");
+#else
+        unsetenv("SPARTAN_USER_DIR");
+#endif
+    }
 
     float ratio=0; assert(safe_area(&ratio)==0 && ratio==1.0f && safe_area(NULL)==SYSTEM_PARAMETER);
 
@@ -254,6 +580,76 @@ int main(void) {
     unsetenv("SPARTAN_LANGUAGE");
 #endif
     assert(system_param(1,&lang)==0 && lang==1);
+
+    /* System parameter 1000: enter button assignment (default 1 = Cross, 0 = Circle) */
+    int32_t enter_btn=0;
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==1);
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=1");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","1",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0);
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=0");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","0",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==1);
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=");
+    _putenv("SPARTAN_MENU_CONFIRM=circle");
+#else
+    unsetenv("SPARTAN_MENU_CONFIRM_SWAP");
+    setenv("SPARTAN_MENU_CONFIRM","circle",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0);
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM=");
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=");
+#else
+    unsetenv("SPARTAN_MENU_CONFIRM");
+    unsetenv("SPARTAN_MENU_CONFIRM_SWAP");
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==1);
+    /* Conflicting environment variables: primary SPARTAN_MENU_CONFIRM_SWAP overrides alias SPARTAN_MENU_CONFIRM */
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=0");
+    _putenv("SPARTAN_MENU_CONFIRM=circle");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","0",1);
+    setenv("SPARTAN_MENU_CONFIRM","circle",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==1); /* Primary 0 wins (Cross) */
+
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=1");
+    _putenv("SPARTAN_MENU_CONFIRM=cross");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","1",1);
+    setenv("SPARTAN_MENU_CONFIRM","cross",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0); /* Primary 1 wins (Circle) */
+
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=true");
+#else
+    setenv("SPARTAN_MENU_CONFIRM_SWAP","true",1);
+#endif
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0); /* Truthy 'true' wins (Circle) */
+
+#ifdef _WIN32
+    _putenv("SPARTAN_MENU_CONFIRM_SWAP=");
+    _putenv("SPARTAN_MENU_CONFIRM=");
+#else
+    unsetenv("SPARTAN_MENU_CONFIRM_SWAP");
+    unsetenv("SPARTAN_MENU_CONFIRM");
+#endif
+
+    stub_menu_confirm_swap = 1;
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==0);
+    stub_menu_confirm_swap = 0;
+    assert(system_param(1000,&enter_btn)==0 && enter_btn==1);
 
     puts("services test: ok");
     return 0;

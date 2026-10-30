@@ -17,7 +17,7 @@ Skip Decide(const Input& in) {
 }
 
 int GeneratedFrames(int mode) {
-    return mode == FgFsr || mode == FgDlss ? 1 : 0;
+    return mode == FgFsr ? 1 : 0;
 }
 
 Pacing::Clock::time_point Pacing::RealDeadline(Clock::time_point ready) {

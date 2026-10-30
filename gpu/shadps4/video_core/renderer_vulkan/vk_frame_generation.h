@@ -14,7 +14,6 @@
 #include "video_core/renderer_vulkan/frame_generation_policy.h"
 #include "video_core/renderer_vulkan/vk_common.h"
 #include "video_core/texture_cache/image.h"
-#include "../../../streamline_bridge/spartanport_streamline.h"
 
 struct FfxVkFsr3_3_1_6FrameGenerationContext;
 struct VmaAllocation_T;
@@ -23,11 +22,6 @@ namespace Vulkan {
 
 class Instance;
 class Scheduler;
-
-struct NvidiaInputs {
-    VideoCore::UniqueImage depth, motion;
-    vk::UniqueImageView depth_view, motion_view;
-};
 
 class FrameGeneration {
 public:
@@ -48,7 +42,6 @@ public:
         float frame_ms, near_plane, vertical_fov;
         float projection_z;
         bool reset;
-        SpartanSlCamera camera{};
     };
     /// After the upscale, before the HUD (TemporalUpscaler::RunScaled).
     void Capture(vk::CommandBuffer cmdbuf, const CaptureInfo& info);
@@ -60,14 +53,6 @@ public:
 
     /// A sampled view of the generated image in `format` (an 8-bit RGBA format).
     vk::ImageView GeneratedView(vk::Format format);
-    struct NvidiaCapture {
-        void* token{};
-        vk::ImageView scene{};
-        u32 width{}, height{};
-        bool reset{};
-        std::shared_ptr<NvidiaInputs> inputs;
-    };
-    NvidiaCapture TakeNvidiaCapture();
 
 private:
     bool EnsureContext(u32 render_width, u32 render_height, u32 output_width, u32 output_height);
@@ -83,10 +68,6 @@ private:
     u32 width = 0, height = 0, out_width = 0, out_height = 0;
     VideoCore::UniqueImage scene_image, depth_image, motion_image, generated_image;
     vk::UniqueImageView scene_view, depth_view, motion_view, generated_storage_view;
-    vk::UniqueImageView nvidia_scene_view;
-    void* nvidia_token{};
-    std::shared_ptr<NvidiaInputs> nvidia_inputs;
-    std::vector<std::shared_ptr<NvidiaInputs>> nvidia_pool;
     u64 slot_ticks[4] = {};
     bool slot_pending[4] = {};
     std::vector<std::pair<vk::Format, vk::UniqueImageView>> generated_views;

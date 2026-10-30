@@ -23,9 +23,7 @@ constexpr u32 TargetVulkanApiVersion = VK_API_VERSION_1_3;
 vk::SurfaceKHR CreateSurface(vk::Instance instance, const Frontend::WindowSDL& emu_window);
 
 vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool enable_validation,
-                                  bool enable_crash_diagnostic, s32 physical_device_index = -2);
-
-s32 SelectPhysicalDevice(const std::vector<vk::PhysicalDevice>& devices, s32 index);
+                                  bool enable_crash_diagnostic);
 
 vk::UniqueDebugUtilsMessengerEXT CreateDebugCallback(vk::Instance instance);
 

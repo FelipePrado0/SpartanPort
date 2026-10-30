@@ -80,19 +80,7 @@ jobs:
           python packaging/release_stamp.py "$TAG" --prerelease "$pre" > release.json
           mkdir -p dist && cp release.json dist/release-windows.json
           cat release.json
-      # DLSS: the bridge (gpu/dlss_bridge) is built with MSVC against NVIDIA's DLSS SDK, pinned.
-      - name: Build the DLSS bridge
-        env:
-          MSYS_NO_PATHCONV: '1'
-        run: |
-          git clone -q --depth 1 --branch v310.9.16 --filter=blob:none --no-checkout https://github.com/NVIDIA/DLSS out/dlss-sdk
-          git -C out/dlss-sdk sparse-checkout set --no-cone /include/ /LICENSE.txt \
-            /lib/Windows_x86_64/rel/nvngx_dlss.dll /lib/Windows_x86_64/x64/nvsdk_ngx_s.lib
-          git -C out/dlss-sdk checkout -q 'v310.9.16^{commit}'
-          DLSS_SDK_ROOT="$PWD/out/dlss-sdk" bash packaging/windows/build_dlss.sh
       - name: Package
-        env:
-          REQUIRE_DLSS: '1'
         run: |
           bash packaging/windows/package.sh
           cd dist && sha256sum -b spartanport-windows.zip > spartanport-windows.zip.sha256

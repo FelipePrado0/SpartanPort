@@ -27,7 +27,8 @@ if ($env:SPARTAN_RELEASE_TAG) {
 # The same names package.sh refuses to ship: game files and anything a player makes.
 $forbidden = 'eboot.bin', 'sce_module', 'sce_sys', 'savedata', 'user', 'cache', '*.log', 'spartanport.ini',
     'settings.json', 'game_icon.ico', 'mods.json', 'patches.json', '*.spv', '*.pkg',
-    '*.sprx', '*.prx'
+    '*.sprx', '*.prx', 'nvngx_dlss*.dll', 'spartanport_dlss.dll',
+    'spartanport_streamline.dll', 'sl.*.dll'
 # fsr4_shaders holds the open FSR 4 model's own shaders (MIT), not the game's.
 $models = Join-Path $tree 'fsr4_shaders'
 $found = Get-ChildItem -LiteralPath $tree -Recurse -Force |

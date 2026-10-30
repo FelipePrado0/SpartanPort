@@ -2,8 +2,9 @@
  * protection changes and queries. One sparse memfd backs the whole direct
  * pool, so any mapping of any physical range aliases the same storage.
  * Windows: a pagefile-backed section plays the memfd's part, and the PS4 user range is
- * reserved as one placeholder that views of the section replace (VirtualAlloc2/MapViewOfFile3,
- * as shadPS4 does); see the "host mappings" section below.
+ * reserved as one placeholder (one per free part when something else holds some of it) that
+ * views of the section replace (VirtualAlloc2/MapViewOfFile3, as shadPS4 does); see the
+ * "host mappings" section below.
  * Guest addresses are placed below 1 TiB (PS4 user range): GPU descriptors
  * encode 40-bit addresses, so host-default 0x7f... addresses would not fit. */
 #define _GNU_SOURCE
@@ -24,16 +25,24 @@
 #include <unistd.h>
 #endif
 /* sceKernelGetDirectMemorySize on retail PS4: 5056 MiB. SPARTAN_DMEM_MB raises it (the resolution
- * patches above 1080p need about 4 GiB more; run.sh sets it). */
+ * patches above 1080p need about 4 GiB more; the launcher sets it). pool() falls back to the retail
+ * size when the host refuses the larger pool. */
+#define RETAIL_POOL (UINT64_C(5056) * 1024 * 1024)
+static uint64_t pool_bytes;
 static uint64_t pool_size_bytes(void) {
-    static uint64_t size;
-    if (!size) {
+    uint64_t bytes = __atomic_load_n(&pool_bytes, __ATOMIC_ACQUIRE);
+    if (!bytes) {
         const char *env = getenv("SPARTAN_DMEM_MB");
         uint64_t mb = env ? strtoull(env, NULL, 10) : 0;
         if (mb < 5056 || mb > 16384) mb = 5056;
-        size = mb * 1024 * 1024;
+        /* Set once: callers read the size before taking the lock, and a thread that loses this
+         * race must not overwrite pool()'s retail fallback with the refused size. */
+        uint64_t expected = 0;
+        bytes = mb * 1024 * 1024;
+        if (!__atomic_compare_exchange_n(&pool_bytes, &expected, bytes, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+            bytes = expected;
     }
-    return size;
+    return bytes;
 }
 #define POOL_SIZE pool_size_bytes()
 #define FLEXIBLE_SIZE (UINT64_C(448) * 1024 * 1024)
@@ -63,10 +72,27 @@ _Static_assert(sizeof(BatchEntry)==32,"PS4 batch map entry layout");
  * under the lock may write guest memory, and a GPU-tracked page then faults into
  * runtime_memory_gpu_protect on the same thread. Readers nest because glibc's
  * default rwlock prefers readers; a thread holding it exclusively skips relocking. */
-static pthread_rwlock_t lock=PTHREAD_RWLOCK_INITIALIZER;
 static __thread unsigned exclusive_depth;
 /* Odd while a writer holds the lock; readers' region caches are valid for one even value. */
 static uint64_t table_generation;
+#ifdef _WIN32
+/* Windows: a slim reader/writer lock (from IgorAugustoHH/The-Order-1886-PC-Port a15cf8b).
+ * winpthread's rwlock serializes even readers on a kernel-event spin lock: the GPU thread and
+ * the copy threads spent about half their time blocked in it in a heavy scene. SRW locks do
+ * not nest shared acquisitions safely while a writer waits, so nested reads on one thread only
+ * count (read_depth): the thread holds one shared acquisition. */
+static SRWLOCK lock=SRWLOCK_INIT;
+static __thread unsigned read_depth;
+static void write_lock(void) {
+    if (!exclusive_depth++) { AcquireSRWLockExclusive(&lock); __atomic_add_fetch(&table_generation,1,__ATOMIC_ACQ_REL); }
+}
+static void write_unlock(void) {
+    if (!--exclusive_depth) { __atomic_add_fetch(&table_generation,1,__ATOMIC_RELEASE); ReleaseSRWLockExclusive(&lock); }
+}
+static void read_lock(void) { if (!exclusive_depth && !read_depth++) AcquireSRWLockShared(&lock); }
+static void read_unlock(void) { if (!exclusive_depth && !--read_depth) ReleaseSRWLockShared(&lock); }
+#else
+static pthread_rwlock_t lock=PTHREAD_RWLOCK_INITIALIZER;
 static void write_lock(void) {
     if (!exclusive_depth++) { pthread_rwlock_wrlock(&lock); __atomic_add_fetch(&table_generation,1,__ATOMIC_ACQ_REL); }
 }
@@ -75,6 +101,7 @@ static void write_unlock(void) {
 }
 static void read_lock(void) { if (!exclusive_depth) pthread_rwlock_rdlock(&lock); }
 static void read_unlock(void) { if (!exclusive_depth) pthread_rwlock_unlock(&lock); }
+#endif
 static Block blocks[LIMIT];
 static Vma *vmas; static size_t vma_count, vma_capacity;
 #ifndef _WIN32
@@ -88,19 +115,34 @@ typedef void (*GpuRange)(uintptr_t address, uint64_t size);
 static GpuRange hook_map, hook_unmap, hook_invalidate;
 enum { HOOK_MAP, HOOK_UNMAP, HOOK_INVALIDATE };
 typedef struct { int kind; uintptr_t address; uint64_t size; } PendingHook;
-static PendingHook pending[64]; static size_t pending_count;
-static size_t allocations, maps, flexible_maps, protects, queries;
+/* Grows as needed: one unmap or protect over a range mapped in hundreds of pieces queues a
+ * notification per piece (64 fixed slots overflowed). Owned by the region-table write lock;
+ * flushing copies one value before releasing it, never retaining array pointers. */
+static PendingHook *pending; static size_t pending_count, pending_capacity;
+static size_t allocations, maps, flexible_maps, protects, queries, fixed_replaced;
 static uint64_t live_bytes, flexible_bytes;
 
 static int valid_alignment(uint64_t a) { return a >= PAGE && a <= POOL_SIZE && !(a & (a-1)); }
 static uint64_t align_up(uint64_t n, uint64_t a) { return (n+a-1) & ~(a-1); }
+/* Parts of the guest range something else in the process held before the game started (#1075:
+ * usually a DLL another program loads into every process; Windows only). Guest memory is placed
+ * around them, and a fixed guest mapping there fails as on a full PS4 range. */
+#define FOREIGN_LIMIT 64
+typedef struct { uintptr_t start, end; } Foreign;
+static Foreign foreign[FOREIGN_LIMIT];
+static size_t foreign_count;
+/* End of a foreign range overlapping [start,end), or 0. */
+static uintptr_t foreign_overlap(uintptr_t start, uintptr_t end) {
+    for (size_t i=0;i<foreign_count;++i) if (foreign[i].start<end && start<foreign[i].end) return foreign[i].end;
+    return 0;
+}
 static int host_prot(int prot) {
     /* GPU read/write bits (0x10/0x20) need host access for the future GPU backend. */
     return ((prot & 0x11) ? PROT_READ : 0) | ((prot & 0x22) ? PROT_WRITE|PROT_READ : 0) | ((prot & 4) ? PROT_EXEC|PROT_READ : 0);
 }
 #ifdef _WIN32
 /* ---- host mappings (Windows) ----
- * [USER_MIN,USER_MAX) is covered by regions, each one placeholder or one view of the
+ * [USER_MIN,USER_MAX), less its foreign parts, is covered by regions, each one placeholder or one view of the
  * section. Mapping a range carves it out as a single placeholder first: views overlapping
  * it are unmapped, placeholders coalesced and split, and the parts of views outside the
  * range mapped again with the page protections they had (GPU page tracking included). */
@@ -135,15 +177,70 @@ static void region_insert(size_t at, HostRegion r) {
 static void region_erase(size_t at, size_t n) {
     memmove(regions+at,regions+at+n,(region_count-at-n)*sizeof(*regions)); region_count-=n;
 }
+static void describe_foreign(const MEMORY_BASIC_INFORMATION *m, char *out, size_t size) {
+    char path[MAX_PATH]="";
+    if (m->Type==MEM_IMAGE && GetModuleFileNameA((HMODULE)m->AllocationBase,path,sizeof(path))) {
+        const char *name=strrchr(path,'\\');
+        snprintf(out,size,"module %s",name ? name+1 : path);
+    } else {
+        snprintf(out,size,"%s memory",m->Type==MEM_IMAGE ? "module" : m->Type==MEM_MAPPED ? "mapped" : "private");
+    }
+}
+/* Reserves each free part of the range as its own placeholder. Guest mappings never span a
+ * foreign range (place), so carve_host never coalesces placeholders across one. */
+static void reserve_around_foreign(void) {
+    const uintptr_t grain=UINT64_C(0x10000); /* Windows' allocation granularity */
+    for (uintptr_t at=USER_MIN; at<USER_MAX;) {
+        MEMORY_BASIC_INFORMATION m;
+        if (!VirtualQuery((void *)at,&m,sizeof(m))) win_fail("VirtualQuery",at,0);
+        uintptr_t end=(uintptr_t)m.BaseAddress+m.RegionSize;
+        if (end>USER_MAX) end=USER_MAX;
+        if (m.State==MEM_FREE) {
+            uintptr_t a=align_up(at,grain), b=end & ~(grain-1);
+            if (a<b) {
+                if (!VirtualAlloc2(NULL,(void *)a,b-a,MEM_RESERVE|MEM_RESERVE_PLACEHOLDER,PAGE_NOACCESS,NULL,0))
+                    win_fail("reserving the PS4 address range around memory already in use",a,b-a);
+                region_insert(region_count,(HostRegion){a,b,0,0});
+            }
+        } else {
+            /* Rounded out to the granularity: the free sliver after an allocation's last page
+             * (allocations start on the granularity, not always end on it) is left alone too. */
+            char what[MAX_PATH+16];
+            describe_foreign(&m,what,sizeof(what));
+            uintptr_t a=at & ~(grain-1), b=align_up(end,grain);
+            if (foreign_count && foreign[foreign_count-1].end>=a) foreign[foreign_count-1].end=b;
+            else if (foreign_count==FOREIGN_LIMIT) win_fail("reserving the PS4 address range (too many parts in use)",at,end-at);
+            else foreign[foreign_count++]=(Foreign){a,b};
+            printf("Runtime: %p-%p of the PS4 address range was already in use (%s); the game's "
+                   "memory is placed around it\n",(void *)at,(void *)end,what);
+        }
+        at=end;
+    }
+    if (!region_count) win_fail("reserving the PS4 address range (none of it is free)",USER_MIN,USER_MAX-USER_MIN);
+}
 /* The guest range is reserved before anything else can be placed there (runtime_start). */
 void runtime_memory_reserve(void) {
     if (region_count) return;
-    if (!VirtualAlloc2(NULL,(void *)USER_MIN,USER_MAX-USER_MIN,MEM_RESERVE|MEM_RESERVE_PLACEHOLDER,PAGE_NOACCESS,NULL,0))
+    if (VirtualAlloc2(NULL,(void *)USER_MIN,USER_MAX-USER_MIN,MEM_RESERVE|MEM_RESERVE_PLACEHOLDER,PAGE_NOACCESS,NULL,0)) {
+        region_insert(0,(HostRegion){USER_MIN,USER_MAX,0,0});
+        return;
+    }
+    if (GetLastError()!=ERROR_INVALID_ADDRESS)
         win_fail("reserving the PS4 address range (link with --disable-high-entropy-va)",USER_MIN,USER_MAX-USER_MIN);
-    region_insert(0,(HostRegion){USER_MIN,USER_MAX,0,0});
+    reserve_around_foreign();
+}
+/* Guest memory committed only as the game maps it: the whole pool did not fit Windows' commit
+ * limit (RAM + page file) at once (pool_create()). */
+static int commit_on_map;
+static void commit_backing(uint64_t phys, uint64_t size) {
+    if (!commit_on_map || VirtualAlloc(backing_base+phys,size,MEM_COMMIT,PAGE_READWRITE)) return;
+    fprintf(stderr,"Runtime: cannot commit %" PRIu64 " MiB of guest memory (error %lu); is the page file large "
+            "enough? Let Windows manage its size, or use a lower output resolution\n",size>>20,GetLastError());
+    win_fail("committing guest memory",(uintptr_t)(backing_base+phys),size);
 }
 static void view_map(const HostRegion *r, DWORD protect) {
     DWORD initial=protect==PAGE_NOACCESS ? PAGE_READWRITE : protect, old;
+    commit_backing(r->phys,r->end-r->start);
     if (!MapViewOfFile3(section,GetCurrentProcess(),(void *)r->start,r->phys,r->end-r->start,MEM_REPLACE_PLACEHOLDER,initial,NULL,0))
         win_fail("MapViewOfFile3",r->start,r->end-r->start);
     if (initial!=protect && !VirtualProtect((void *)r->start,r->end-r->start,protect,&old))
@@ -229,10 +326,26 @@ static int host_protect(uintptr_t address, uint64_t size, int prot) {
     }
     return 0;
 }
-/* Released pages read as zero when reused, like the memfd's punched holes. */
-static void host_discard(uint64_t phys, uint64_t size) { memset(backing_base+phys,0,size); }
+/* Released pages read as zero when reused, like the memfd's punched holes. With commit-on-map,
+ * pages never committed are zero-filled when first committed: only committed ones are cleared,
+ * so a release does not spend commit charge on memory the game never used. */
+static void host_discard(uint64_t phys, uint64_t size) {
+    if (!commit_on_map) { memset(backing_base+phys,0,size); return; }
+    for (unsigned char *at=backing_base+phys, *end=at+size; at<end;) {
+        MEMORY_BASIC_INFORMATION m;
+        if (!VirtualQuery(at,&m,sizeof(m))) win_fail("VirtualQuery",(uintptr_t)at,0);
+        unsigned char *next=(unsigned char *)m.BaseAddress+m.RegionSize;
+        if (next>end) next=end;
+        if (m.State==MEM_COMMIT) memset(at,0,(size_t)(next-at));
+        at=next;
+    }
+}
+/* Why the last pool_create() failed, for pool()'s final message. */
+static const char *pool_step="create";
+static unsigned long pool_error;
+#define POOL_HINT "is the page file large enough?"
 /* Direct memory occupies [0,POOL_SIZE) of the section, flexible memory [POOL_SIZE,+FLEX_SPAN). */
-static int pool(void) {
+static int pool_create(void) {
     if (backing_base) return 0;
     runtime_memory_reserve();
     uint64_t bytes=POOL_SIZE+FLEX_SPAN;
@@ -244,20 +357,37 @@ static int pool(void) {
         fflush(stderr);
         exit(21);
     }
-    section=CreateFileMapping2(INVALID_HANDLE_VALUE,NULL,FILE_MAP_ALL_ACCESS,PAGE_EXECUTE_READWRITE,SEC_COMMIT,bytes,NULL,NULL,0);
-    if (!section) {
-        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %lu); is the page file large enough?\n",bytes>>20,GetLastError());
-        fflush(stderr);
-        exit(21);
+    /* SPARTAN_GUEST_COMMIT_ON_MAP=1: the fallback below from the start, to try it on a machine
+     * where the whole pool fits. */
+    const char *on_map=getenv("SPARTAN_GUEST_COMMIT_ON_MAP");
+    if (on_map && on_map[0]=='1') SetLastError(ERROR_COMMITMENT_LIMIT);
+    else section=CreateFileMapping2(INVALID_HANDLE_VALUE,NULL,FILE_MAP_ALL_ACCESS,PAGE_EXECUTE_READWRITE,SEC_COMMIT,bytes,NULL,NULL,0);
+    if (!section && (GetLastError()==ERROR_NO_SYSTEM_RESOURCES || GetLastError()==ERROR_COMMITMENT_LIMIT)) {
+        /* The pool is sized for the largest resolutions (SPARTAN_DMEM_MB, up to 16 GiB) and committed
+         * at once it exceeded RAM + page file (error 1450) although the game maps much less: then
+         * it is reserved and committed as the game maps it (commit_backing). */
+        DWORD error=GetLastError();
+        section=CreateFileMapping2(INVALID_HANDLE_VALUE,NULL,FILE_MAP_ALL_ACCESS,PAGE_EXECUTE_READWRITE,SEC_RESERVE,bytes,NULL,NULL,0);
+        if (section) {
+            commit_on_map=1;
+            printf("Runtime: the %" PRIu64 " MiB guest memory pool does not fit Windows' commit limit at once "
+                   "(error %lu): committed as the game maps it\n",bytes>>20,error);
+        }
     }
+    if (!section) { pool_step="create"; pool_error=GetLastError(); return -1; }
     backing_base=MapViewOfFile3(section,GetCurrentProcess(),NULL,0,bytes,0,PAGE_READWRITE,NULL,0);
-    if (!backing_base) win_fail("MapViewOfFile3 (guest memory pool)",0,bytes);
-    return 0;
+    if (backing_base) return 0;
+    pool_step="map"; pool_error=GetLastError();
+    CloseHandle(section); section=NULL; commit_on_map=0;
+    return -1;
 }
 #else
+static const char *pool_step="create";
+static unsigned long pool_error;
+#define POOL_HINT "is /dev/shm or RAM large enough?"
 /* Direct memory occupies [0,POOL_SIZE) of the memfd, flexible memory [POOL_SIZE,+FLEX_SPAN). */
-static int pool(void) {
-    if (pool_fd>=0) return 0;
+static int pool_create(void) {
+    if (backing_base) return 0;
     const char *fail_env=getenv("SPARTAN_FAIL_GUEST_MEMORY");
     if (fail_env) {
         int err=fail_env[0] && strcmp(fail_env,"1")!=0 ? (int)strtol(fail_env,NULL,10) : 12;
@@ -266,20 +396,10 @@ static int pool(void) {
         fflush(stderr);
         exit(21);
     }
-    pool_fd=memfd_create("spartanport-guest-memory", MFD_CLOEXEC);
-    if (pool_fd<0 || ftruncate(pool_fd,(off_t)(POOL_SIZE+FLEX_SPAN))) {
-        fprintf(stderr,"Runtime: cannot create %" PRIu64 " MiB of guest memory (error %d); is /dev/shm or RAM large enough?\n",
-                (POOL_SIZE+FLEX_SPAN)>>20,errno);
-        fflush(stderr);
-        exit(21);
-    }
+    if (pool_fd<0) pool_fd=memfd_create("spartanport-guest-memory", MFD_CLOEXEC);
+    if (pool_fd<0 || ftruncate(pool_fd,(off_t)(POOL_SIZE+FLEX_SPAN))) { pool_step="create"; pool_error=(unsigned long)errno; return -1; }
     void *view=mmap(NULL,POOL_SIZE+FLEX_SPAN,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_NORESERVE,pool_fd,0);
-    if (view==MAP_FAILED) {
-        fprintf(stderr,"Runtime: cannot map %" PRIu64 " MiB of guest memory (error %d)\n",
-                (POOL_SIZE+FLEX_SPAN)>>20,errno);
-        fflush(stderr);
-        exit(21);
-    }
+    if (view==MAP_FAILED) { pool_step="map"; pool_error=(unsigned long)errno; return -1; }
     backing_base=view;
     return 0;
 }
@@ -296,10 +416,40 @@ static void host_discard(uint64_t phys, uint64_t size) {
     fallocate(pool_fd,FALLOC_FL_PUNCH_HOLE|FALLOC_FL_KEEP_SIZE,(off_t)phys,(off_t)size);
 }
 #endif
+/* A pool larger than the PS4's (SPARTAN_DMEM_MB) that the host refuses (Windows error 1450 on
+ * some laptops) falls back to the retail 5056 MiB instead of stopping the game; resolutions that
+ * need the larger pool may then run out of direct memory. When the retail pool fails too, the
+ * game stops with exit code 21 and the message the launcher recognises. Called with the write
+ * lock held. SPARTAN_TEST_REFUSE_DMEM=1 refuses the larger pool (tests). */
+static int pool(void) {
+    if (backing_base) return 0;
+    const char *refuse=getenv("SPARTAN_TEST_REFUSE_DMEM");
+    int refused=refuse && refuse[0]=='1' && POOL_SIZE>RETAIL_POOL;
+    if (!refused && !pool_create()) return 0;
+    if (POOL_SIZE>RETAIL_POOL) {
+        printf("Runtime: the host refused %" PRIu64 " MiB of direct memory (SPARTAN_DMEM_MB); falling back to "
+               "the PS4's 5056 MiB. High output resolutions may run out of memory: lower the output "
+               "resolution if the game stops\n",POOL_SIZE>>20);
+        __atomic_store_n(&pool_bytes,RETAIL_POOL,__ATOMIC_RELEASE);
+        if (!pool_create()) return 0;
+    }
+    fprintf(stderr,"Runtime: cannot %s %" PRIu64 " MiB of guest memory (error %lu); " POOL_HINT "\n",
+            pool_step,(POOL_SIZE+FLEX_SPAN)>>20,pool_error);
+    fflush(stderr);
+    exit(21);
+}
 static void queue_hook(int kind, uintptr_t address, uint64_t size) {
     GpuRange hook = kind==HOOK_MAP ? hook_map : kind==HOOK_UNMAP ? hook_unmap : hook_invalidate;
     if (!hook) return;
-    if (pending_count==sizeof(pending)/sizeof(*pending)) { fputs("STOP: GPU hook queue overflow\n",stderr); exit(21); }
+    if (pending_count==pending_capacity) {
+        if (pending_capacity > SIZE_MAX / sizeof(*pending) / 2) {
+            fputs("STOP: GPU notification capacity overflow\n",stderr); exit(21);
+        }
+        size_t capacity=pending_capacity ? pending_capacity*2 : 64;
+        PendingHook *next=realloc(pending,capacity*sizeof(*pending));
+        if (!next) { fputs("STOP: GPU notification allocation failed\n",stderr); exit(21); }
+        pending=next; pending_capacity=capacity;
+    }
     pending[pending_count++]=(PendingHook){kind,address,size};
 }
 /* Runs queued GPU notifications; callers invoke it after dropping the lock. */
@@ -355,7 +505,7 @@ static int split_at(uintptr_t a) {
     if (i==vma_count || vmas[i].start>=a) return 0;
     Vma right=vmas[i];
     right.start=a;
-    if (right.kind==KIND_DIRECT) right.phys+=a-vmas[i].start;
+    if (right.kind!=KIND_RESERVED) right.phys+=a-vmas[i].start;
     vmas[i].end=a;
     return vma_insert(i+1,right);
 }
@@ -380,9 +530,11 @@ static int overlaps(uintptr_t start, uintptr_t end, int ignore_reserved) {
 /* First-fit search in the PS4 user range, starting from the hint. */
 static uintptr_t find_free(uintptr_t hint, uint64_t size, uint64_t alignment) {
     uintptr_t at=align_up(hint<USER_MIN ? USER_MIN : hint, alignment);
-    for (size_t i=vma_index(at); at+size<=USER_MAX; ++i) {
+    for (size_t i=vma_index(at); at+size<=USER_MAX;) {
+        uintptr_t taken=foreign_overlap(at,at+size);
+        if (taken) { at=align_up(taken,alignment); i=vma_index(at); continue; }
         if (i==vma_count || vmas[i].start>=at+size) return at;
-        at=align_up(vmas[i].end,alignment);
+        at=align_up(vmas[i++].end,alignment);
     }
     return 0;
 }
@@ -397,18 +549,55 @@ static void drop_range(uintptr_t start, uintptr_t end) {
     }
     vma_erase(i,n);
 }
-/* Places a host mapping; with MAP_FIXED it replaces what the guest had there. */
+/* A MAP_FIXED over guest mappings replaces them, so the GPU retires its view of the range first,
+ * while the old pages are still mapped, as direct_unmap does: the GPU's unmap can write
+ * GPU-modified data back to the guest (readbacks), and that has to land in the old pages, not in
+ * the mapping that replaces them. Runs without the lock, since the GPU's unmap waits for threads
+ * that take it. The GPU's unmap cannot be undone (its texture cache frees the images and cancels
+ * pending readbacks), so callers run the map's own checks first and retire only a map that passes
+ * them, and place's checks are repeated here. Returns whether the GPU was told; the caller then
+ * calls announce_mapped_locked when the map still fails (out of memory, or a host mapping error),
+ * so the GPU gets back the mappings that stay. */
+static int retire_fixed(const void *address, uint64_t size, int flags) {
+    if (!hook_unmap || !(flags & MAP_FIXED_FLAG) || (flags & MAP_NO_OVERWRITE)) return 0;
+    uintptr_t start=(uintptr_t)address;
+    if (!start || start%PAGE || !size) return 0;
+    uint64_t length=align_up(size,PAGE);
+    read_lock();
+    int mapped=!foreign_overlap(start,start+length) && overlaps(start,start+length,1);
+    read_unlock();
+    if (mapped) hook_unmap(start,length);
+    return mapped;
+}
+/* The GPU hears again about the mappings in a range retire_fixed retired for a map that failed. */
+static void announce_mapped_locked(const void *address, uint64_t size) {
+    uintptr_t start=(uintptr_t)address, end=start+align_up(size,PAGE);
+    for (size_t i=vma_index(start); i<vma_count && vmas[i].start<end; ++i)
+        if (vmas[i].kind!=KIND_RESERVED) {
+            uintptr_t a=vmas[i].start>start ? vmas[i].start : start;
+            uintptr_t b=vmas[i].end<end ? vmas[i].end : end;
+            queue_hook(HOOK_MAP,a,b-a);
+        }
+}
+/* Places a host mapping; with MAP_FIXED it replaces what the guest had there. Callers that map
+ * memory the GPU can see with MAP_FIXED call retire_fixed first. */
 static int32_t place(void **inout, uint64_t size, int prot, int flags, uint64_t alignment,
                      int kind, int type, uint64_t phys) {
     uintptr_t address=(uintptr_t)*inout;
     if (flags & MAP_FIXED_FLAG) {
         if (!address || address%PAGE) return INVALID;
         if ((flags & MAP_NO_OVERWRITE) && overlaps(address,address+size,1)) return NO_MEMORY;
+        if (foreign_overlap(address,address+size)) return NO_MEMORY;
     } else {
         address=find_free(address,size,alignment);
         if (!address) return NO_MEMORY;
     }
     if (host_map(address,size,host_prot(prot),kind==KIND_RESERVED,phys)) return NO_MEMORY;
+    /* Mappings replaced here (their GPU buffers and images were retired by retire_fixed, found
+     * when a game maps pool chunks over themselves on a level reload) count for the report. */
+    if ((flags & MAP_FIXED_FLAG) && kind!=KIND_RESERVED)
+        for (size_t i=vma_index(address); i<vma_count && vmas[i].start<address+size; ++i)
+            if (vmas[i].kind!=KIND_RESERVED) ++fixed_replaced;
     void *mapped=(void *)address;
     drop_range(address,address+size);
     if (vma_insert(vma_index(address),(Vma){address,address+size,kind,prot,type,phys})) return NO_MEMORY;
@@ -433,21 +622,47 @@ static int direct_range_allocated(uint64_t phys, uint64_t size) {
     return 1;
 }
 
-static ABI uint64_t direct_size(void) { return POOL_SIZE; }
+/* The pool is created first so that the size reported is the one the host granted. */
+static ABI uint64_t direct_size(void) {
+    write_lock();
+    pool();
+    uint64_t size=POOL_SIZE;
+    write_unlock();
+    return size;
+}
+/* A reservation the game asked for and did not get (the mapping failures print their own line):
+ * a guest NULL read soon after one is the allocation's, not a bug of its own. The first 16 only,
+ * so a game that tries again and again does not fill the log. */
+static void allocation_failed(const char *what, uint64_t size, int32_t result) {
+    static unsigned printed;
+    if (__atomic_fetch_add(&printed,1,__ATOMIC_RELAXED)>=16) return;
+    fprintf(stderr,"Runtime: %s of %" PRIu64 " bytes failed (0x%x), direct memory in use=%" PRIu64 "\n",
+            what, size, (unsigned)result, live_bytes);
+}
 static ABI int32_t direct_allocate(int64_t low, int64_t high, uint64_t size,
                                   uint64_t alignment, int type, int64_t *out) {
     if (!alignment) alignment = PAGE;
     if (!out || low < 0 || high < 0 || !size || size % PAGE || !valid_alignment(alignment) || type < 0 || type > 10)
         return INVALID;
-    uint64_t end = (uint64_t)high < POOL_SIZE ? (uint64_t)high : POOL_SIZE;
-    if ((uint64_t)low >= end || size > end - (uint64_t)low) return NO_SPACE;
     write_lock();
-    if (pool()) { write_unlock(); return NO_MEMORY; }
+    if (pool()) { write_unlock(); allocation_failed("direct allocation (no pool)", size, NO_MEMORY); return NO_MEMORY; }
+    /* After pool(): the pool may have fallen back to the retail size. */
+    uint64_t end = (uint64_t)high < POOL_SIZE ? (uint64_t)high : POOL_SIZE;
+    if ((uint64_t)low >= end || size > end - (uint64_t)low) {
+        write_unlock();
+        allocation_failed("direct allocation (outside the pool)", size, NO_SPACE);
+        return NO_SPACE;
+    }
     uint64_t start = align_up((uint64_t)low, alignment);
     int slot = -1;
     for (int i=0; i<LIMIT; ++i) if (!blocks[i].used) { slot=i; break; }
     for (;;) {
-        if (slot<0 || start > end || size > end-start) { write_unlock(); return NO_SPACE; }
+        if (slot<0 || start > end || size > end-start) {
+            write_unlock();
+            allocation_failed(slot<0 ? "direct allocation (block table full)" : "direct allocation (no room)",
+                              size, NO_SPACE);
+            return NO_SPACE;
+        }
         int overlap = 0;
         for (int i=0; i<LIMIT; ++i) {
             Block b = blocks[i];
@@ -463,21 +678,39 @@ static ABI int32_t direct_allocate(int64_t low, int64_t high, uint64_t size,
     printf("Runtime: direct allocation offset=0x%" PRIx64 ", size=%" PRIu64 " bytes, type=%d\n", start, size, type);
     return 0;
 }
-static int32_t map_direct_locked(void **out, uint64_t size, int prot, int flags, int64_t physical, uint64_t alignment) {
+/* The checks map_direct_locked makes before it changes anything; direct_map and batch_map2 also
+ * run them before retire_fixed. */
+static int32_t direct_map_refused_locked(void *const *out, uint64_t size, int prot, int64_t physical,
+                                         uint64_t alignment) {
     if (!alignment) alignment=PAGE;
     if (!out || physical < 0 || (uint64_t)physical % PAGE || !size || size % PAGE || !valid_alignment(alignment) ||
         (prot & ~0x37)) return INVALID;
     if (!direct_range_allocated((uint64_t)physical,size)) return INVALID;
+    return 0;
+}
+static int32_t map_direct_locked(void **out, uint64_t size, int prot, int flags, int64_t physical, uint64_t alignment) {
+    int32_t refused=direct_map_refused_locked(out,size,prot,physical,alignment);
+    if (refused) return refused;
+    if (!alignment) alignment=PAGE;
     int32_t result=place(out,size,prot,flags,alignment,KIND_DIRECT,block_type((uint64_t)physical),(uint64_t)physical);
     if (!result) ++maps;
     return result;
 }
 static ABI int32_t direct_map(void **out, uint64_t size, int prot, int flags, int64_t physical, uint64_t alignment) {
+    void *fixed=out ? *out : NULL;
+    read_lock();
+    int32_t refused=direct_map_refused_locked(out,size,prot,physical,alignment);
+    read_unlock();
+    int retired=!refused && retire_fixed(fixed,size,flags);
     write_lock();
+    size_t replaced=fixed_replaced;
     int32_t result=map_direct_locked(out,size,prot,flags,physical,alignment);
+    replaced=fixed_replaced-replaced;
+    if (result && retired) announce_mapped_locked(fixed,size);
     write_unlock();
     flush_hooks();
-    if (!result) printf("Runtime: mapped direct memory %p, size=%" PRIu64 ", prot=0x%x\n", *out, size, prot);
+    if (!result) printf("Runtime: mapped direct memory %p, size=%" PRIu64 ", prot=0x%x%s\n", *out, size, prot,
+                        replaced ? " (over a mapping)" : "");
     return result;
 }
 static ABI int32_t direct_map_named(void **out, uint64_t size, int prot, int flags, int64_t physical,
@@ -542,9 +775,18 @@ static ABI int32_t direct_release(uint64_t start, uint64_t size) {
     flush_hooks();
     return 0;
 }
-static int32_t map_flexible_locked(void **inout, uint64_t size, int prot, int flags) {
+/* The checks map_flexible_locked makes before it changes anything (pool() aside: it needs the
+ * write lock, and it either has the pool or stops the game); map_flexible and batch_map2 also run
+ * them before retire_fixed. */
+static int32_t flexible_map_refused_locked(void *const *inout, uint64_t size, int prot) {
     if (!inout || !size || size%PAGE || (prot & ~0x37)) return INVALID;
-    if (flexible_bytes+size>FLEXIBLE_SIZE || pool()) return NO_MEMORY;
+    if (flexible_bytes+size>FLEXIBLE_SIZE) return NO_MEMORY;
+    return 0;
+}
+static int32_t map_flexible_locked(void **inout, uint64_t size, int prot, int flags) {
+    int32_t refused=flexible_map_refused_locked(inout,size,prot);
+    if (refused) return refused;
+    if (pool()) return NO_MEMORY;
     uint64_t phys=flex_alloc(size);
     if (phys==UINT64_MAX) return NO_MEMORY;
     int32_t result=place(inout,size,prot,flags,PAGE,KIND_FLEXIBLE,0,phys);
@@ -552,8 +794,14 @@ static int32_t map_flexible_locked(void **inout, uint64_t size, int prot, int fl
     return result;
 }
 static ABI int32_t map_flexible(void **inout, uint64_t size, int prot, int flags) {
+    void *fixed=inout ? *inout : NULL;
+    read_lock();
+    int32_t refused=flexible_map_refused_locked(inout,size,prot);
+    read_unlock();
+    int retired=!refused && retire_fixed(fixed,size,flags);
     write_lock();
     int32_t result=map_flexible_locked(inout,size,prot,flags);
+    if (result && retired) announce_mapped_locked(fixed,size);
     write_unlock();
     flush_hooks();
     if (!result) printf("Runtime: mapped flexible memory %p, size=%" PRIu64 ", prot=0x%x\n", *inout, size, prot);
@@ -580,11 +828,12 @@ static ABI int32_t reserve_range(void **inout, uint64_t size, int flags, uint64_
     if (!inout || !size || size%PAGE || !valid_alignment(alignment)) return INVALID;
     write_lock();
     if ((flags & MAP_FIXED_FLAG) && overlaps((uintptr_t)*inout,(uintptr_t)*inout+size,0)) {
-        write_unlock(); return NO_MEMORY;
+        write_unlock(); allocation_failed("virtual range reservation (fixed, in use)", size, NO_MEMORY); return NO_MEMORY;
     }
     int32_t result=place(inout,size,0,flags,alignment,KIND_RESERVED,0,0);
     write_unlock();
     if (!result) printf("Runtime: reserved virtual range %p, size=%" PRIu64 "\n", *inout, size);
+    else allocation_failed("virtual range reservation", size, result);
     return result;
 }
 static int32_t protect_locked(uintptr_t start, uint64_t size, int prot, int type) {
@@ -653,9 +902,22 @@ static ABI int32_t direct_memory_type(uint64_t phys, int *type, void **start, vo
 static ABI int32_t batch_map2(BatchEntry *entries, int count, int *processed, int flags) {
     if (!entries || count<0) return INVALID;
     int32_t result=0; int done=0;
-    write_lock();
+    /* One entry at a time, so that a fixed map retires the GPU's view of what it replaces (without
+     * the lock, retire_fixed) only when it passes its checks and is about to run; the entries
+     * after a failed one never touch the GPU. */
     for (; done<count; ++done) {
         BatchEntry *e=&entries[done];
+        void *fixed=e->start;
+        int retired=0;
+        if (e->operation==0 || e->operation==3) {
+            read_lock();
+            int32_t refused=e->operation==0
+                ? direct_map_refused_locked(&e->start,e->length,(uint8_t)e->prot,(int64_t)e->offset,0)
+                : flexible_map_refused_locked(&e->start,e->length,(uint8_t)e->prot);
+            read_unlock();
+            retired=!refused && retire_fixed(fixed,e->length,flags);
+        }
+        write_lock();
         switch (e->operation) {
         case 0: result=map_direct_locked(&e->start,e->length,(uint8_t)e->prot,flags,(int64_t)e->offset,0); break;
         case 1: result=unmap_locked((uintptr_t)e->start,e->length); break;
@@ -664,10 +926,11 @@ static ABI int32_t batch_map2(BatchEntry *entries, int count, int *processed, in
         case 4: result=protect_locked((uintptr_t)e->start,e->length,(uint8_t)e->prot,e->type); break;
         default: result=INVALID;
         }
+        if (result && retired) announce_mapped_locked(fixed,e->length);
+        write_unlock();
+        flush_hooks();
         if (result) break;
     }
-    write_unlock();
-    flush_hooks();
     if (processed) *processed=done;
     return result;
 }
@@ -695,30 +958,131 @@ uintptr_t runtime_memory_resolve(const char *name) {
     return RUNTIME_LOOKUP(exports,name);
 }
 /* Host-owned memory the guest can see (image, stacks, trampolines) lives in
- * [LOW_MIN, USER_MIN): PS4 code packs pointers into 40-bit fields. */
+ * [LOW_MIN, HANDLES_MIN): PS4 code packs pointers into 40-bit fields. The image is mapped first,
+ * at LOW_MIN. Handle slabs (runtime_low_alloc) take [HANDLES_MIN, USER_MIN), so the image's
+ * address does not depend on what allocated a handle before it. */
 #define LOW_MIN UINT64_C(0x0800000000)
-static uintptr_t low_next=LOW_MIN;
-void *runtime_low_map(size_t size, int prot) {
+#define HANDLES_MIN UINT64_C(0x0f00000000)
+static uintptr_t low_next=LOW_MIN, handles_next=HANDLES_MIN;
+static void *low_map_from(uintptr_t *next, uintptr_t limit, size_t size, int prot) {
     size=align_up(size,PAGE);
     write_lock();
 #ifdef _WIN32
     void *p=NULL;
-    while (!p && low_next+size<=USER_MIN) {
-        p=VirtualAlloc((void *)low_next,size,MEM_RESERVE|MEM_COMMIT,win_prot(prot));
-        low_next+=size+UINT64_C(65536); /* unmapped gap catches overruns; allocation granularity */
+    while (!p && *next+size<=limit) {
+        p=VirtualAlloc((void *)*next,size,MEM_RESERVE|MEM_COMMIT,win_prot(prot));
+        *next+=size+UINT64_C(65536); /* unmapped gap catches overruns; allocation granularity */
     }
     write_unlock();
     return p;
 #else
     void *p=MAP_FAILED;
-    while (low_next+size<=USER_MIN) {
-        p=mmap((void *)low_next,size,prot,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
-        low_next+=size+PAGE; /* unmapped gap catches overruns */
+    while (*next+size<=limit) {
+        p=mmap((void *)*next,size,prot,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
+        *next+=size+PAGE; /* unmapped gap catches overruns */
         if (p!=MAP_FAILED) break;
     }
     write_unlock();
     return p==MAP_FAILED ? NULL : p;
 #endif
+}
+void *runtime_low_map(size_t size, int prot) {
+    void *p=low_map_from(&low_next,HANDLES_MIN,size,prot);
+    if (!p) allocation_failed("low memory map (guest image or stack)", size, NO_MEMORY);
+    return p;
+}
+/* Host records the guest holds pointers to (ScePthread handles, the TLS block with the TCB,
+ * mutex, cond, rwlock and attribute handles) come from 1 MiB slabs below the PS4 range. PS4
+ * games keep lock owners in 40 bits: a spin lock that stores scePthreadSelf() & 0xffffffffff
+ * and compares that with the whole handle never sees itself as the owner when the handle is
+ * above 1 TiB, and its thread waits on the lock's semaphore for good (found as a loading-screen
+ * freeze in another PS4 port). Windows' heap grows above 1 TiB once the space below the PS4
+ * reservation is used up; Linux keeps malloc low with mallopt (probe.c).
+ * Blocks are zeroed and 64-byte aligned behind a 64-byte header; SPARTAN_LOW_HANDLES=0 takes
+ * them from the host heap as before. */
+#define LOW_SLAB (UINT64_C(1)<<20)
+#define LOW_HEADER 64
+#define LOW_CLASSES 7 /* 128 B .. 8 KiB including the header */
+#define LOW_MAGIC UINT32_C(0x4c4f5748)
+enum { LOW_LARGE=LOW_CLASSES, LOW_HOST };
+typedef struct { uint32_t magic, kind; } LowHeader;
+typedef struct LowFree { struct LowFree *next; } LowFree;
+static pthread_mutex_t low_lock=PTHREAD_MUTEX_INITIALIZER;
+static LowFree *low_free[LOW_CLASSES];
+static unsigned char *low_slab, *low_slab_end;
+static int low_handles=-1, low_full, low_high_logged;
+static unsigned char *low_host(size_t total) {
+#ifdef _WIN32
+    return _aligned_malloc(total,LOW_HEADER);
+#else
+    return aligned_alloc(LOW_HEADER,total);
+#endif
+}
+/* Called with low_lock held. */
+static unsigned char *low_carve(size_t total, uint32_t *kind) {
+    if (low_handles<0) {
+        const char *e=getenv("SPARTAN_LOW_HANDLES");
+        low_handles=!(e && e[0]=='0');
+        if (!low_handles) puts("Runtime: guest thread and lock handles from the host heap (SPARTAN_LOW_HANDLES=0)");
+    }
+    if (!low_handles || low_full) return NULL;
+    unsigned c=0;
+    while (c<LOW_CLASSES && (size_t)128<<c<total) ++c;
+    if (c==LOW_CLASSES) {
+        *kind=LOW_LARGE; /* kept when freed: only TLS blocks of huge TLS segments get here */
+        unsigned char *p=low_map_from(&handles_next,USER_MIN,total,PROT_READ|PROT_WRITE);
+        if (!p) low_full=1;
+        return p;
+    }
+    *kind=c;
+    size_t bytes=(size_t)128<<c;
+    if (low_free[c]) { LowFree *f=low_free[c]; low_free[c]=f->next; return (unsigned char *)f; }
+    if ((size_t)(low_slab_end-low_slab)<bytes) {
+        unsigned char *slab=low_map_from(&handles_next,USER_MIN,LOW_SLAB,PROT_READ|PROT_WRITE);
+        if (!slab) {
+            low_full=1;
+            fputs("Runtime: no room left below 1 TiB for guest handles; using the host heap\n",stderr);
+            return NULL;
+        }
+        if (!low_slab) printf("Runtime: guest thread and lock handles below 1 TiB at %p (SPARTAN_LOW_HANDLES=0 turns this off)\n",(void *)slab);
+        low_slab=slab; low_slab_end=slab+LOW_SLAB;
+    }
+    unsigned char *p=low_slab; low_slab+=bytes;
+    return p;
+}
+void *runtime_low_alloc(size_t size) {
+    if (size>SIZE_MAX-2*LOW_HEADER) return NULL;
+    size_t total=(size+2*LOW_HEADER-1)&~(size_t)(LOW_HEADER-1);
+    uint32_t kind=LOW_HOST;
+    pthread_mutex_lock(&low_lock);
+    unsigned char *block=low_carve(total,&kind);
+    pthread_mutex_unlock(&low_lock);
+    if (!block && !(block=low_host(total))) return NULL;
+    memset(block,0,total);
+    *(LowHeader *)block=(LowHeader){LOW_MAGIC,kind};
+    unsigned char *p=block+LOW_HEADER;
+    if ((uintptr_t)p+size>UINT64_C(1)<<40 && !__atomic_exchange_n(&low_high_logged,1,__ATOMIC_RELAXED))
+        fprintf(stderr,"Runtime: guest handle %p is above 1 TiB; the game's 40-bit lock owners cannot hold it\n",(void *)p);
+    return p;
+}
+void runtime_low_free(void *pointer) {
+    if (!pointer) return;
+    unsigned char *block=(unsigned char *)pointer-LOW_HEADER;
+    LowHeader h=*(LowHeader *)block;
+    if (h.magic!=LOW_MAGIC || h.kind>LOW_HOST) { fprintf(stderr,"STOP: runtime_low_free(%p): not a low block\n",pointer); exit(21); }
+    ((LowHeader *)block)->magic=0;
+    if (h.kind==LOW_HOST) {
+#ifdef _WIN32
+        _aligned_free(block);
+#else
+        free(block);
+#endif
+        return;
+    }
+    if (h.kind==LOW_LARGE) return;
+    pthread_mutex_lock(&low_lock);
+    LowFree *f=(LowFree *)block; f->next=low_free[h.kind]; low_free[h.kind]=f;
+    pthread_mutex_unlock(&low_lock);
 }
 /* ---- GPU library interface (gpu/shim/spartanportgpu.cpp) ---- */
 /* Optimizations switched off at run time (diagnostics): the number in the file named by
@@ -769,7 +1133,20 @@ void runtime_memory_set_gpu_hooks(GpuRange map, GpuRange unmap, GpuRange invalid
     write_unlock();
     flush_hooks();
 }
-/* Writes through the backing view; 0 when part of the range has no backing. */
+/* Writes through the backing view; 0 when part of the range has no backing.
+ * Every guest-visible byte is stored once. Small glibc memcpy implementations can
+ * use overlapping stores; if a fence-writing thread is preempted between them the guest may free
+ * the label object before the second store lands. */
+static void store_once(unsigned char *dst, const unsigned char *src, uint64_t n) {
+    if (n > 64) { memcpy(dst,src,n); return; }
+    while (n) {
+        const uintptr_t at=(uintptr_t)dst;
+        if (n>=8 && !(at&7)) { uint64_t v; memcpy(&v,src,8); __atomic_store_n((uint64_t *)dst,v,__ATOMIC_RELEASE); dst+=8; src+=8; n-=8; }
+        else if (n>=4 && !(at&3)) { uint32_t v; memcpy(&v,src,4); __atomic_store_n((uint32_t *)dst,v,__ATOMIC_RELEASE); dst+=4; src+=4; n-=4; }
+        else if (n>=2 && !(at&1)) { uint16_t v; memcpy(&v,src,2); __atomic_store_n((uint16_t *)dst,v,__ATOMIC_RELEASE); dst+=2; src+=2; n-=2; }
+        else { __atomic_store_n(dst,*src,__ATOMIC_RELEASE); ++dst; ++src; --n; }
+    }
+}
 int runtime_memory_write_backing(uintptr_t address, const void *data, uint64_t size) {
     read_lock();
     int ok=1;
@@ -777,11 +1154,37 @@ int runtime_memory_write_backing(uintptr_t address, const void *data, uint64_t s
         size_t i=vma_index(at);
         if (i==vma_count || vmas[i].start>at || vmas[i].kind==KIND_RESERVED) { ok=0; break; }
         uint64_t n=(vmas[i].end<end ? vmas[i].end : end)-at;
-        memcpy(backing_base+vmas[i].phys+(at-vmas[i].start),(const unsigned char *)data+(at-address),n);
+        store_once(backing_base+vmas[i].phys+(at-vmas[i].start),
+                   (const unsigned char *)data+(at-address),n);
         at+=n;
     }
     read_unlock();
     return ok;
+}
+/* Reads through the backing view, past guest and GPU page protection: with precise readbacks the
+ * GPU's upload copy threads would otherwise fault on read-protected pages and wait for the GPU
+ * thread, which waits for them. Gaps and reserved ranges read as zeros; the read lock holds
+ * the mappings stable while copying. */
+void runtime_memory_read_backing(uintptr_t address, void *data, uint64_t size) {
+    if (!size) return;
+    unsigned char *out=data;
+    if (size>UINTPTR_MAX-address) { memset(out,0,size); return; }
+    read_lock();
+    for (uintptr_t at=address, end=address+size; at<end;) {
+        size_t i=vma_index(at);
+        if (i==vma_count) { memset(out+(at-address),0,end-at); break; }
+        if (vmas[i].start>at) {
+            uintptr_t gap=vmas[i].start<end ? vmas[i].start : end;
+            memset(out+(at-address),0,gap-at);
+            at=gap;
+            continue;
+        }
+        uint64_t n=(vmas[i].end<end ? vmas[i].end : end)-at;
+        if (vmas[i].kind==KIND_RESERVED) memset(out+(at-address),0,n);
+        else memcpy(out+(at-address),backing_base+vmas[i].phys+(at-vmas[i].start),n);
+        at+=n;
+    }
+    read_unlock();
 }
 /* Per-thread cache of recently found regions for the GPU's per-draw queries:
  * entries hold for as long as the table generation they were read at. */
@@ -860,5 +1263,6 @@ void runtime_memory_report(void) {
            allocations, maps, live_bytes, POOL_SIZE);
     printf("Runtime: flexible maps=%zu, in use=%" PRIu64 ", protects=%zu, queries=%zu, regions=%zu\n",
            flexible_maps, flexible_bytes, protects, queries, vma_count);
+    printf("Runtime: fixed maps over mapped memory=%zu\n", fixed_replaced);
 }
 

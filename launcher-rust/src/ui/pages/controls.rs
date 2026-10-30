@@ -23,7 +23,7 @@ use crate::core::controls::{
 use crate::core::gpu::connected_gamepad;
 use crate::core::i18n::{tr, tr_fmt};
 use crate::core::ini::INI_DEFAULTS;
-use crate::core::options::{AIM_STYLES, GLYPH_STYLES, STICK_PROMPTS};
+use crate::core::options::{AIM_STYLES, GLYPH_STYLES, MENU_CONFIRM_STYLES, STICK_PROMPTS};
 use crate::core::platform::tool::SystemTools;
 use crate::core::settings::Settings;
 use crate::ui::app::{apply_set, Message, State};
@@ -84,6 +84,8 @@ pub const PAD_STYLE_NAMES: &[(&str, &str)] = &[
 ];
 
 const GLYPH_HINT: &str = "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of up to three game files in the port's data folder (about 410 MB); your game folder is never changed. Applied when the game starts.";
+const SWITCH_CHECK: &str = "Switch attacks on L1 + d-pad and L1 + Cross";
+const SWITCH_HINT: &str = "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.";
 const RAGE_CHECK: &str = "Rage of Sparta on one input (L3 + R3 together)";
 const KEY_NOTE: &str = "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving, or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.";
 const STICK_HINT: &str = "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.";
@@ -93,6 +95,7 @@ const AIM_STYLE_HINT: &str = "Aiming with the mouse while L2 is held (Head of He
 const SENSITIVITY_HINT: &str = "Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.";
 const MOUSE_LOCK_HINT: &str = "While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.";
 const VIBRATION_HINT: &str = "Strength of the gamepad's vibration; 0% turns it off.";
+const CONFIRM_HINT: &str = "Which button confirms choices in save/load dialogs and menu lists. Default: Cross confirms, Circle cancels. Swapped: Circle confirms, Cross cancels. Does not change gameplay or combat controls.";
 const PAD_NOTE: &str = "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.";
 
 /// Side of a button icon.
@@ -676,7 +679,7 @@ pub fn pad_pick(button: &str, pairs: &[(String, String)], label: &str) -> Messag
 }
 
 /// An ini number, or its default when it is not one.
-fn ini_number(state: &State, key: &str) -> f32 {
+pub(crate) fn ini_number(state: &State, key: &str) -> f32 {
     let parse = |text: &str| text.trim().parse::<f32>().ok();
     parse(&state.store.text(key))
         .or_else(|| {
@@ -892,6 +895,17 @@ fn gamepad_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
             slider("vibration", 0.0, 100.0, "%", ini_number(state, "vibration")),
             Some(&tr(lang, VIBRATION_HINT)),
         ),
+        row(
+            state.rtl,
+            &tr(lang, "Menu confirmation"),
+            select(
+                "menu_confirm_swap",
+                MENU_CONFIRM_STYLES,
+                &state.store.text("menu_confirm_swap"),
+                lang,
+            ),
+            Some(&tr(lang, CONFIRM_HINT)),
+        ),
         container(lines).padding(Padding::ZERO.top(12)),
         note(tr(lang, PAD_NOTE)),
         reset_button(state, tr(lang, "Reset gamepad to defaults"), Kind::Pad),
@@ -937,6 +951,14 @@ pub fn view(state: &State) -> Element<'_, Message> {
                 lang
             ),
             Some(&tr(lang, GLYPH_HINT)),
+        ),
+        // For both devices, under the icons as in the Python's page.
+        checkbox(
+            state.rtl,
+            "switch_attacks",
+            &tr(lang, SWITCH_CHECK),
+            state.store.flag("switch_attacks"),
+            Some(&tr(lang, SWITCH_HINT)),
         ),
         row(state.rtl, &tr(lang, "Device"), devices.into(), None),
         device_section,

@@ -47,7 +47,112 @@ static int touch_at(const PadData *d, int x) {
 }
 static void pump(void) { SDL_UpdateJoysticks(); SDL_UpdateGamepads(); }
 
+/* Switch attacks: move data in a buffer the scan may read, his stats, and the pad's requests. */
+static uint8_t *switch_data;
+int runtime_memory_is_mapped(uintptr_t address, uint64_t size) {
+    const uintptr_t lo=(uintptr_t)switch_data;
+    return switch_data && address>=lo && address+size<=lo+0x20000;
+}
+static uint8_t *switch_put(unsigned at, uint8_t weapon, unsigned target, uint16_t window_end) {
+    uint8_t *b=switch_data+at;
+    const int32_t rel=(int32_t)target-(int32_t)at;
+    memcpy(b,&rel,4);
+    b[0x10]=b[0x11]=0xaa; b[0x2c]=b[0x2d]=0xff; b[0x2e]=0x0f; b[0x2f]=weapon; b[0x30]=b[0x31]=1;
+    memcpy(b+0x16,&window_end,2);
+    return b;
+}
+static void test_switch_attack(void) {
+    setenv("SPARTAN_SWITCH_ATTACKS","1",1);
+    spartanport_switch_status(1);
+    switch_data=aligned_alloc(0x10000,0x20000);
+    memset(switch_data,0,0x20000);
+    /* Switch attack moves: Cestus 0x100 (common) and 0x200, Blades 0x300 and 0x400, Claws 0x500. */
+    const uint8_t *claws_to_cestus=switch_put(0x1000,0x10,0x100,0x3c00);
+    const uint8_t *claws_to_blades=switch_put(0x1038,0x12,0x300,0x3c00);  /* the Claws block */
+    switch_put(0x2000,0x12,0x300,0x3c00);
+    const uint8_t *blades_to_claws=switch_put(0x3000,0x13,0x500,0x3c00);
+    const uint8_t *blades_to_claws_short=switch_put(0x3100,0x13,0x500,0x3266);
+    switch_put(0x4000,0x10,0x100,0x3266);
+    const uint8_t *cestus_to_blades_short=switch_put(0x4038,0x12,0x300,0x3266);
+    const uint8_t *rare_to_cestus=switch_put(0x5000,0x10,0x200,0x3c00);
+    const uint8_t *rare_to_blades=switch_put(0x5038,0x12,0x400,0x3c00);
+    switch_put(0x6000,0x12,0x300,0x3c00);
+    switch_data[0x6000+0x31]=4;                                /* Cross held: found too */
+    uint8_t other[0x38]={0};
+    other[0x30]=other[0x31]=1; other[0x2f]=0x06;
+    static uint8_t stats[0x300];
+    stats[0x20b]=0x12;                                         /* the Blades in his hands */
+    const uint32_t owned=1u<<15 | 1u<<17 | 1u<<18;             /* Cestus, Blades, Claws */
+    memcpy(stats+0x1c4,&owned,4);
+    spartanport_switch.stats=(uintptr_t)stats;
+    spartanport_switch.caller=0x1234;
+
+    /* No request: switch branches fail (Cross alone no longer cycles), others are the game's. */
+    PadData d={0};
+    d.timestamp=now_us();
+    apply_switch_attack(&d);
+    assert(spartanport_switch_input(blades_to_claws,0x1234)==0 && sw.scanned && sw.found==10);
+    assert(spartanport_switch_input(other,0x1234)==2 && spartanport_switch_queue(other)==other);
+    assert(spartanport_switch_input(blades_to_claws,0x5678)==0);     /* another caller: never (no cycling) */
+    assert(spartanport_switch_input(other,0x5678)==2);
+    assert(sw.attack[0][0]==switch_data+0x100 && sw.attack[0][1]==switch_data+0x200);
+    assert(sw.attack[2][0]==switch_data+0x300 && sw.attack[2][1]==switch_data+0x400 && sw.attack[3][0]==switch_data+0x500);
+
+    /* L1 + d-pad down: the Cestus. The Blades block's branch to the Claws takes it, swapped for one
+     * to the Cestus's common switch attack, with the same timing. */
+    d.buttons=BTN_L1; d.timestamp=now_us(); apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_DOWN; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(sw.request==0x10);
+    assert(spartanport_switch_input(blades_to_claws,0x1234)==1);
+    assert(spartanport_switch_queue(blades_to_claws)==claws_to_cestus && !sw.request);
+    assert(spartanport_switch_input(blades_to_claws,0x1234)==0);              /* taken once */
+
+    /* L1 + Cross: the weapon in his hands, the Blades, from the Claws block's branch to the Cestus. */
+    sw.last_at=0;
+    d.buttons=BTN_L1; d.timestamp=now_us(); apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_CROSS; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(sw.request==SWITCH_CURRENT && spartanport_switch_input(claws_to_cestus,0x1234)==1);
+    assert(spartanport_switch_queue(claws_to_cestus)==claws_to_blades && !sw.request);
+    /* The same weapon again within SWITCH_REPEAT_US: held back; another weapon is not. */
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_CROSS; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(spartanport_switch_input(claws_to_cestus,0x1234)==0 && spartanport_switch_queue(claws_to_cestus)==claws_to_cestus);
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_RIGHT; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(spartanport_switch_input(blades_to_claws,0x1234)==1 && spartanport_switch_queue(blades_to_claws)==blades_to_claws);
+    sw.last_at=0;
+    /* A branch with the short timing gets one with the short timing. */
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_CROSS; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(spartanport_switch_queue(blades_to_claws_short)==cestus_to_blades_short);
+    /* The rare kind leads to the rare kind; a branch to the requested weapon stays. */
+    sw.last_at=0;
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_DOWN; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(spartanport_switch_queue(rare_to_blades)==rare_to_cestus);
+    sw.last_at=0;
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_RIGHT; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(spartanport_switch_queue(blades_to_claws)==blades_to_claws && !sw.request);
+
+    /* Not owned (the Whip, d-pad left), or without L1: nothing. A request no move takes lapses. */
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_LEFT; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(sw.request==0x11 && spartanport_switch_input(blades_to_claws,0x1234)==0 && spartanport_switch_queue(blades_to_claws)==blades_to_claws);
+    d.buttons=0; d.timestamp+=SWITCH_REQUEST_US+1000; apply_switch_attack(&d);
+    assert(!sw.request);
+    d.buttons=BTN_DOWN; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(!sw.request);
+
+    spartanport_switch.stats=0;
+    free(switch_data);
+    switch_data=NULL;
+    setenv("SPARTAN_SWITCH_ATTACKS","0",1);
+    sw.loaded=0;
+}
+
 int main(void) {
+    test_switch_attack();
     const char *tmp=getenv("TMPDIR") ? getenv("TMPDIR") : getenv("TEMP") ? getenv("TEMP") : "/tmp";
     char path[1024];
     snprintf(path,sizeof(path),"%s/spartanport-pad-test-XXXXXX",tmp);
@@ -153,6 +258,31 @@ int main(void) {
     data=read_pad();
     assert(data.buttons==0);
 
+    /* R3 + R2 opens the trophy list and R3 + L2 the menu: with R3 held the trigger never reaches
+     * the game (a stray R2 uses the item), until each one is released. */
+    inject(path,"r2");
+    data=read_pad();
+    assert(data.buttons==BTN_R2 && data.r2==255);
+    inject(path,"");
+    data=read_pad();
+    inject(path,"r3 r2");
+    data=read_pad();
+    assert(data.buttons==0 && data.r2==0);
+    inject(path,"r2");
+    data=read_pad();
+    assert(data.buttons==0 && data.r2==0);
+    inject(path,"r3 l2 cross");
+    data=read_pad();
+    assert(data.buttons==BTN_CROSS && data.l2==0);
+    inject(path,"");
+    data=read_pad();
+    inject(path,"r3");
+    data=read_pad();
+    assert(data.buttons==BTN_R3);
+    inject(path,"");
+    data=read_pad();
+    assert(data.buttons==0);
+
     SDL_VirtualJoystickTouchpadDesc touch={.nfingers=2};
     SDL_VirtualJoystickDesc desc;
     SDL_INIT_INTERFACE(&desc);
@@ -242,5 +372,5 @@ int main(void) {
     assert(SDL_DetachVirtualJoystick(id));
     SDL_Quit();
     unlink(path);
-    puts("PASS: pad ABI, staged left/right clicks, L1 chord, engine frame rate combo, SDL touch coordinates, overlay capture");
+    puts("PASS: pad ABI, staged left/right clicks, L1 chord, engine frame rate combo, SDL touch coordinates, overlay capture, switch attacks");
 }

@@ -172,13 +172,6 @@ TemporalUpscaler::TemporalUpscaler(const Instance& instance_, Scheduler& schedul
     SpartanSettings::ConfigureUpscalerSupport(instance.IsFsr4Int8Supported(),
                                             instance.IsFsr411Supported());
 #endif
-    {
-        const Dlss* dlss = Dlss::Get();
-        static std::string problem;
-        problem = !dlss ? "spartanport_dlss.dll and nvngx_dlss.dll are not installed"
-                        : dlss->Problem();
-        SpartanSettings::ConfigureDlssSupport(dlss && dlss->Available(), problem.c_str());
-    }
     // Available unless SPARTAN_UPSCALER=none; on/off and the parameters are the menu's settings.
     const char* env = std::getenv("SPARTAN_UPSCALER");
     enabled = !(env && std::strcmp(env, "none") == 0);
@@ -241,8 +234,7 @@ bool TemporalUpscaler::Active() const {
     return enabled && !failed &&
            (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerFsr3 ||
             SpartanSettings::IsFsr4(SpartanSettings::Get().upscaler) ||
-            SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa ||
-            SpartanSettings::Get().upscaler == SpartanSettings::UpscalerDlss) &&
+            SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) &&
            !SpartanToggle::Disabled(1u << 24);
 }
 
@@ -406,7 +398,7 @@ void TemporalUpscaler::OnGraphicsDraw(u64 ps_hash, VideoCore::ImageId color) {
 bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore::Image& depth,
                                              vk::Format depth_format, u32 w, u32 h) {
     // Characters and interactive objects (any stencil but the world's) animate without object
-    // motion vectors: a reactive mask keeps FSR/DLSS from ghosting them. SPARTAN_STENCIL_REACTIVE
+    // motion vectors: a reactive mask keeps FSR from ghosting them. SPARTAN_STENCIL_REACTIVE
     // sets the reactivity (0 turns the mask off), toggle 1 << 28 switches it off at run time.
     // The depth is in General layout (both callers transit it for the motion pass).
     static const float stencil_value = [] {
@@ -462,7 +454,7 @@ bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore
 void TemporalUpscaler::RunLdr() {
     if ((UseFsr4() && (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerFsr411 ||
                        !fsr4->DriverAvailable())) ||
-        UseDlss() || SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+        SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
         return;
     }
     auto& color = texture_cache.GetImage(scene_color);
@@ -652,8 +644,8 @@ void TemporalUpscaler::OnDispatch(u64 cs_hash) {
 }
 
 bool TemporalUpscaler::EnsureResources(u32 w, u32 h, u32 ow, u32 oh, bool hdr) {
-    // DLSS, like FSR 4, has its own context: no portable FSR 3 context is made.
-    const bool use_fsr4 = UseFsr4() || UseDlss();
+    // FSR 4 has its own context: no portable FSR 3 context is made.
+    const bool use_fsr4 = UseFsr4();
     const bool use_taa = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa;
     if (use_taa && (w != ow || h != oh)) {
         std::printf("TAA: remove SPARTAN_RENDER_RES to use native-resolution TAA\n");
@@ -1400,12 +1392,6 @@ void TemporalUpscaler::Run() {
     } else if (UseFsr4()) {
         dispatched = RecordFsr4(cmdbuf, {input_color, input_color_view, w, h},
                                 {input_depth, input_depth_view, w, h}, w, h, ow, oh, frame_ms);
-    } else if (UseDlss()) {
-        dispatched = RecordDlss(
-            cmdbuf,
-            {input_color, input_color_view, color.info.pixel_format, vk::ImageAspectFlagBits::eColor, w, h},
-            {input_depth, input_depth_view, depth_format, vk::ImageAspectFlagBits::eDepth, w, h}, w, h,
-            ow, oh, frame_ms, true);
     } else {
         FfxVkPortableUpscaleDispatchInfo info{};
         info.structSize = sizeof(info);
@@ -1928,8 +1914,7 @@ void TemporalUpscaler::RunScaled() {
                                            .near_plane = camera_motion.Near(),
                                            .vertical_fov = camera_motion.VerticalFov(),
                                            .projection_z = camera_motion.TaaDepthParameters()[0][2],
-                                           .reset = frame_reset,
-                                           .camera = camera_motion.FrameGenerationCamera()});
+                                           .reset = frame_reset});
         if (profiler) profiler->Resume(resume);
     };
     const auto barrier = [&](vk::Image image, vk::ImageAspectFlags aspect,
@@ -1971,22 +1956,14 @@ void TemporalUpscaler::RunScaled() {
     last_frame = now;
 
     // spartanport: FSR 4 writes its HDR-format output, copied into the output-size UI image.
-    if (UseFsr4() || UseDlss() || SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
-        const auto [fw, fh] = UiComposition::TemporalOutputSize(
-            w, h, ow, oh, UseDlss() && Dlss::QualityForScale(float(ow) / float(w)) == 0);
+    if (UseFsr4() || SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+        const auto [fw, fh] = std::array{ow, oh};
         barrier(vk::Image(output_image), vk::ImageAspectFlagBits::eColor,
                 vk::ImageLayout::eUndefined, all, vk::AccessFlagBits2::eNone,
                 vk::ImageLayout::eGeneral, all, rw);
         bool ok4 = true;
         if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
             RecordTaa(cmdbuf, color_view, depth_view);
-        } else if (UseDlss()) {
-            ok4 = RecordDlss(cmdbuf,
-                             {color_image, color_view, color.info.pixel_format,
-                              vk::ImageAspectFlagBits::eColor, source_width, source_height},
-                             {depth_image, depth_view, depth_format, vk::ImageAspectFlagBits::eDepth,
-                              source_width, source_height},
-                             w, h, ow, oh, frame_ms, false);
         } else {
             ok4 = RecordFsr4(cmdbuf, {color_image, color_view, source_width, source_height},
                             {depth_image, depth_view, source_width, source_height}, w, h, ow,
@@ -2432,76 +2409,5 @@ bool TemporalUpscaler::RecordFsr4(vk::CommandBuffer cmdbuf, Fsr4Upscaler::Image 
     return ok;
 }
 
-bool TemporalUpscaler::UseDlss() const {
-    const Dlss* dlss = Dlss::Get();
-    return SpartanSettings::Get().upscaler == SpartanSettings::UpscalerDlss && dlss && dlss->Available() &&
-           !dlss_failed;
-}
-
-bool TemporalUpscaler::RecordDlss(vk::CommandBuffer cmdbuf, const Dlss::Resource& color,
-                                  const Dlss::Resource& depth, u32 w, u32 h, u32 ow, u32 oh,
-                                  float frame_ms, bool hdr) {
-    Dlss* dlss = Dlss::Get();
-    const int quality = Dlss::QualityForScale(float(ow) / float(w));
-    const auto [fw, fh] = UiComposition::TemporalOutputSize(w, h, ow, oh, quality == 0);
-    const Dlss::FeatureDesc desc{w, h, fw, fh, quality, hdr};
-    bool ok = true;
-    if (!dlss->HasFeature(desc)) {
-        // The previous feature may still be in use by submitted work; `cmdbuf` stays open.
-        scheduler.WaitSubmitted();
-        dlss->ReleaseFeature();
-        ok = dlss->CreateFeature(cmdbuf, desc);
-        reset = true;
-        if (ok) {
-            // The Insert menu's status line and the log: the mode DLSS really runs.
-            static constexpr const char* modes[] = {"DLAA", "Quality", "Balanced", "Performance",
-                                                    "Ultra Performance"};
-            static std::string status;
-            status = std::string("DLSS ") + modes[std::clamp(desc.quality, 0, 4)] + ", " +
-                     std::to_string(w) + "x" + std::to_string(h) + " -> " + std::to_string(fw) +
-                     "x" + std::to_string(fh);
-            if (fw != ow || fh != oh) {
-                status += " (display " + std::to_string(ow) + "x" + std::to_string(oh) + ")";
-            }
-            std::printf("Upscaler: %s\n", status.c_str());
-            SpartanSettings::Get().upscaler_status = status.c_str();
-        }
-    }
-    if (ok) {
-        Dlss::Resource bias_mask{};
-        auto& stencil_depth = texture_cache.GetImage(camera_motion.Depth());
-        // Reduced depth copies do not carry stencil: only read the depth used by this frame.
-        const bool stencil_mask = depth.image == stencil_depth.GetImage() &&
-            RecordStencilReactive(cmdbuf, stencil_depth, depth.format, w, h);
-        if (stencil_mask || (mask_ready && ReactiveOn())) {
-            bias_mask = {vk::Image(reactive_image), *reactive_view, vk::Format::eR8Unorm,
-                         vk::ImageAspectFlagBits::eColor, w, h};
-        }
-        // The jitter and motion vectors FSR 3 gets: render pixels, current to previous.
-        const float sign = SpartanToggle::Disabled(1u << 26) ? -1.0f : 1.0f;
-        const auto& settings = SpartanSettings::Get();
-        ok = dlss->Evaluate(cmdbuf, {
-            .color = color,
-            .depth = depth,
-            .motion = {vk::Image(motion_image), *motion_view, vk::Format::eR16G16Sfloat,
-                       vk::ImageAspectFlagBits::eColor, w, h},
-            .output = {vk::Image(output_image), *output_view, vk::Format::eR16G16B16A16Sfloat,
-                       vk::ImageAspectFlagBits::eColor, ow, oh},
-            .bias_mask = bias_mask,
-            .jitter_x = sign * jitter[0],
-            .jitter_y = sign * jitter[1],
-            .reset = reset,
-            .frame_ms = frame_ms,
-            .sharpness = settings.sharpen ? std::min(settings.sharpness.load(), 1.0f) : 0.0f,
-        });
-    }
-    if (!ok) {
-        std::printf("Upscaler: DLSS failed; falling back to FSR 3.1\n");
-        SpartanSettings::Get().upscaler = SpartanSettings::UpscalerFsr3;
-        dlss_failed = true; // EnsureResources creates the FSR 3 context next frame
-        reset = true;
-    }
-    return ok;
-}
 
 } // namespace Vulkan

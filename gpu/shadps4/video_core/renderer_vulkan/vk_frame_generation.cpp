@@ -16,7 +16,6 @@
 #include "video_core/host_shaders/fg_hud_comp.h"
 #include "video_core/renderer_vulkan/frame_generation_policy.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
-#include "video_core/renderer_vulkan/vk_dlss_frame_generation.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
@@ -67,9 +66,6 @@ FrameGeneration::~FrameGeneration() {
 }
 
 void FrameGeneration::Destroy() {
-    if (!nvidia_pool.empty()) Check(instance.GetDevice().waitIdle());
-    nvidia_inputs.reset();
-    nvidia_pool.clear();
     if (context) {
         ffxVkFsr3_3_1_6FrameGenerationContextDestroy(context);
         context = nullptr;
@@ -77,7 +73,6 @@ void FrameGeneration::Destroy() {
     in_flight.clear();
     generated_views.clear();
     generated_storage_view.reset();
-    nvidia_scene_view.reset();
     scene_view.reset();
     depth_view.reset();
     motion_view.reset();
@@ -157,8 +152,7 @@ void FrameGeneration::CreatePipelines() {
 }
 
 bool FrameGeneration::EnsureContext(u32 w, u32 h, u32 ow, u32 oh) {
-    const bool nvidia = DlssFrameGeneration::Get().Ready() && SpartanSettings::Get().startup_frame_generation == 2;
-    if ((context || nvidia) && w == width && h == height && ow == out_width && oh == out_height) {
+    if (context && w == width && h == height && ow == out_width && oh == out_height) {
         return true;
     }
     // Its shaders read and write storage images without a declared format.
@@ -196,26 +190,23 @@ bool FrameGeneration::EnsureContext(u32 w, u32 h, u32 ow, u32 oh) {
     };
     using Usage = vk::ImageUsageFlagBits;
     make_image(scene_image, vk::Format::eR8G8B8A8Unorm, ow, oh,
-               Usage::eSampled | Usage::eStorage | Usage::eTransferDst | Usage::eTransferSrc, true);
-    make_image(depth_image, vk::Format::eR32Sfloat, w, h, Usage::eSampled | Usage::eStorage | Usage::eTransferSrc, false);
-    make_image(motion_image, vk::Format::eR16G16Sfloat, w, h, Usage::eSampled | Usage::eStorage | Usage::eTransferSrc,
+               Usage::eSampled | Usage::eStorage | Usage::eTransferDst | Usage::eTransferSrc, false);
+    make_image(depth_image, vk::Format::eR32Sfloat, w, h, Usage::eSampled | Usage::eStorage, false);
+    make_image(motion_image, vk::Format::eR16G16Sfloat, w, h, Usage::eSampled | Usage::eStorage,
                false);
-    if (!nvidia) {
-        make_image(generated_image, vk::Format::eR8G8B8A8Unorm, ow, oh,
-                   Usage::eSampled | Usage::eStorage | Usage::eTransferSrc, true);
-    }
+    make_image(generated_image, vk::Format::eR8G8B8A8Unorm, ow, oh,
+               Usage::eSampled | Usage::eStorage | Usage::eTransferSrc, true);
     scene_view = view(vk::Image(scene_image), vk::Format::eR8G8B8A8Unorm, Usage::eSampled);
-    depth_view = view(vk::Image(depth_image), vk::Format::eR32Sfloat, Usage::eStorage | Usage::eSampled);
-    motion_view = view(vk::Image(motion_image), vk::Format::eR16G16Sfloat, Usage::eStorage | Usage::eSampled);
-    if (!nvidia) {
-        generated_storage_view = view(vk::Image(generated_image), vk::Format::eR8G8B8A8Unorm, Usage::eStorage);
-    }
+    depth_view = view(vk::Image(depth_image), vk::Format::eR32Sfloat, Usage::eStorage);
+    motion_view = view(vk::Image(motion_image), vk::Format::eR16G16Sfloat, Usage::eStorage);
+    generated_storage_view =
+        view(vk::Image(generated_image), vk::Format::eR8G8B8A8Unorm, Usage::eStorage);
 
     const FfxVkFsr3_3_1_6FrameGenerationCreateInfo create{
         .physicalDevice = VkPhysicalDevice(instance.GetPhysicalDevice()),
         .device = VkDevice(device), .maxRenderWidth = w, .maxRenderHeight = h,
         .displayWidth = ow, .displayHeight = oh, .colorFormat = VK_FORMAT_R8G8B8A8_UNORM};
-    if (!nvidia && ffxVkFsr3_3_1_6FrameGenerationContextCreate(&create, &context) !=
+    if (ffxVkFsr3_3_1_6FrameGenerationContextCreate(&create, &context) !=
         FFX_VK_FSR3_3_1_6_FRAMEGEN_OK) {
         context = nullptr;
         Fail("FSR 3.1 frame generation context creation failed");
@@ -225,17 +216,13 @@ bool FrameGeneration::EnsureContext(u32 w, u32 h, u32 ow, u32 oh) {
     height = h;
     out_width = ow;
     out_height = oh;
-    std::printf("FG: %s frame generation %ux%u -> %ux%u\n",
-                nvidia ? "NVIDIA DLSS" : "FSR 3.1", w, h, ow, oh);
+    std::printf("FG: FSR 3.1 frame generation %ux%u -> %ux%u\n", w, h, ow, oh);
     return true;
 }
 
 void FrameGeneration::Capture(vk::CommandBuffer cmdbuf, const CaptureInfo& info) {
     captured = false;
-    nvidia_inputs.reset();
-    const bool nvidia = SpartanSettings::Get().startup_frame_generation == 2 && DlssFrameGeneration::Get().Ready();
-    if (SpartanSettings::Get().startup_frame_generation == 2 && !nvidia) return;
-    if ((SpartanSettings::Get().frame_generation != FrameGenerationPolicy::FgFsr && !nvidia) || failed) {
+    if (SpartanSettings::Get().frame_generation != FrameGenerationPolicy::FgFsr || failed) {
         return;
     }
     if (!Rgba8(info.scene_format)) {
@@ -338,56 +325,6 @@ void FrameGeneration::Capture(vk::CommandBuffer cmdbuf, const CaptureInfo& info)
     capture_frame_ms = std::isfinite(info.frame_ms) && info.frame_ms > 0.0f ? info.frame_ms : 16.6f;
     capture_reset = info.reset || !prepared_last_frame;
     ++frame_id;
-    if (nvidia) {
-        auto& fg = DlssFrameGeneration::Get();
-        nvidia_token = fg.RenderToken();
-        if (!nvidia_token) return;
-        const auto free = std::ranges::find_if(nvidia_pool, [](const auto& slot) { return slot.use_count() == 1; });
-        if (free != nvidia_pool.end()) {
-            nvidia_inputs = *free;
-        } else {
-            nvidia_inputs = std::make_shared<NvidiaInputs>();
-            const auto device = instance.GetDevice();
-            const auto create = [&](VideoCore::UniqueImage& image, vk::UniqueImageView& view, vk::Format format) {
-                image = VideoCore::UniqueImage(device, instance.GetAllocator());
-                image.Create({.imageType = vk::ImageType::e2D, .format = format,
-                    .extent = {width, height, 1}, .mipLevels = 1, .arrayLayers = 1,
-                    .samples = vk::SampleCountFlagBits::e1, .tiling = vk::ImageTiling::eOptimal,
-                    .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst});
-                view = Check(device.createImageViewUnique({.image = vk::Image(image),
-                    .viewType = vk::ImageViewType::e2D, .format = format,
-                    .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}}));
-            };
-            create(nvidia_inputs->depth, nvidia_inputs->depth_view, vk::Format::eR32Sfloat);
-            create(nvidia_inputs->motion, nvidia_inputs->motion_view, vk::Format::eR16G16Sfloat);
-            nvidia_pool.push_back(nvidia_inputs);
-        }
-        const std::array copies{
-            std::pair{vk::Image(depth_image), vk::Image(nvidia_inputs->depth)},
-            std::pair{vk::Image(motion_image), vk::Image(nvidia_inputs->motion)}};
-        for (const auto& [source, target] : copies) {
-            Barrier(cmdbuf, source, Read, vk::ImageLayout::eTransferSrcOptimal, all,
-                vk::AccessFlagBits2::eMemoryWrite, vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferRead);
-            Barrier(cmdbuf, target, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, all,
-                vk::AccessFlagBits2::eNone, vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferWrite);
-            const vk::ImageCopy copy{.srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
-                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1}, .extent = {width, height, 1}};
-            cmdbuf.copyImage(source, vk::ImageLayout::eTransferSrcOptimal, target, vk::ImageLayout::eTransferDstOptimal, copy);
-            Barrier(cmdbuf, target, vk::ImageLayout::eTransferDstOptimal, Read, vk::PipelineStageFlagBits2::eCopy,
-                vk::AccessFlagBits2::eTransferWrite, all, vk::AccessFlagBits2::eShaderRead);
-        }
-        auto camera = info.camera;
-        camera.jitter[0] = info.jitter_x; camera.jitter[1] = info.jitter_y;
-        camera.reset = capture_reset;
-        const auto sampled = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        const SpartanSlImage depth{VkImage(vk::Image(nvidia_inputs->depth)), VkImageView(*nvidia_inputs->depth_view),
-            VK_FORMAT_R32_SFLOAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, sampled, width, height};
-        const SpartanSlImage motion{VkImage(vk::Image(nvidia_inputs->motion)), VkImageView(*nvidia_inputs->motion_view),
-            VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, sampled, width, height};
-        captured = nvidia_token && fg.Inputs(nvidia_token, cmdbuf, camera, depth, motion);
-        scene_srgb = info.scene_format == vk::Format::eR8G8B8A8Srgb;
-        return;
-    }
 
     if (profiler) {
         profiler->Mark(0xF6A00003, [] { return std::string{"FG prepare"}; });
@@ -492,20 +429,6 @@ void FrameGeneration::Capture(vk::CommandBuffer cmdbuf, const CaptureInfo& info)
     captured = true;
 }
 
-FrameGeneration::NvidiaCapture FrameGeneration::TakeNvidiaCapture() {
-    if (!std::exchange(captured, false) || !nvidia_token || !DlssFrameGeneration::Get().Ready()) return {};
-    if (!nvidia_scene_view) {
-        const auto format = scene_srgb ? vk::Format::eR8G8B8A8Srgb : vk::Format::eR8G8B8A8Unorm;
-        nvidia_scene_view = Check(instance.GetDevice().createImageViewUnique({
-            .image = vk::Image(scene_image), .viewType = vk::ImageViewType::e2D, .format = format,
-            .components = {vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity,
-                           vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eOne},
-            .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}}));
-    }
-    prepared_last_frame = true;
-    return {nvidia_token, *nvidia_scene_view, out_width, out_height, capture_reset, nvidia_inputs};
-}
-
 vk::Image FrameGeneration::Generate(vk::CommandBuffer cmdbuf, bool upscaled, vk::Image final_image,
                                     vk::Format final_format) {
     auto& settings = SpartanSettings::Get();
@@ -516,7 +439,6 @@ vk::Image FrameGeneration::Generate(vk::CommandBuffer cmdbuf, bool upscaled, vk:
     prepared_last_frame = did_capture;
     if (!enabled) {
         settings.fg_status = nullptr;
-        settings.fg_game_fps = 0.0f;
         return {};
     }
     if (did_capture && !Rgba8(final_format)) {

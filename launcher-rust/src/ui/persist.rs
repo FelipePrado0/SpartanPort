@@ -23,7 +23,6 @@ use crate::core::platform::tool::SystemTools;
 use crate::core::settings::{save_settings, Settings};
 use crate::ui::app::{self, Message, State};
 use crate::ui::follow::{follow, Cause};
-use crate::ui::theme;
 use crate::ui::widgets::Modal;
 
 /// The `spartanport.ini` keys the window has a control for, in the order the Python launcher
@@ -180,7 +179,9 @@ fn refresh_monitors(state: &mut State) -> bool {
     if cfg!(windows) || backend == state.displays_backend {
         return false;
     }
-    let displays = list_displays(&SystemTools, &state.paths, &backend);
+    let displays = list_displays(&SystemTools, &state.paths, &backend, &|key| {
+        std::env::var(key).ok()
+    });
     state.monitor_pairs = monitor_options(&displays);
     let visible = state.store.text("monitor");
     let selected = if state
@@ -334,7 +335,7 @@ pub fn save(state: &mut State) -> Task<Message> {
         return Task::none();
     }
     let language = launcher_language(&state.store.text("ui_language"), system_language);
-    let scale = theme::ui_scale(&state.store.text("ui_scale"));
+    let scale = app::current_zoom(state);
     let rezoomed = scale != state.scale;
     if language != state.lang || rezoomed {
         let rebuilt = rebuild(state, language, scale);

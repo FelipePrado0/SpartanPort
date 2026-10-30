@@ -13,6 +13,7 @@
 #include "runtime.h"
 #include "gpu/spartanportgpu.h"
 #include "qte_hook.h"
+#include "switch_hook.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -789,6 +790,151 @@ static void apply_weapon_cycle(PadData *d) {
     if (weapon_cycle.pressing) d->buttons|=weapon_cycle.button;
 }
 
+/* Switch attacks (SPARTAN_SWITCH_ATTACKS=1, src/switch_hook.h). L1 + Cross asks for the switch attack
+ * of the weapon in his hands, L1 + a d-pad direction for that weapon's (the game selects the
+ * weapon as always). The pad only leaves the request; the hooks let the move he is in take its
+ * branch to a switch attack for it (a block move has them) and swap that branch for one of the
+ * game's branches to the requested weapon's switch attack, of the same kind. A request no move
+ * takes lapses after SWITCH_REQUEST_US. Cross alone no longer cycles through the weapons.
+ * The same weapon's switch attack again waits SWITCH_REPEAT_US after the last one: in the game
+ * each L1 + Cross also changed the weapon, so the attacks' short recovery was not spammable. A
+ * switch attack of another weapon is not held back.
+ *
+ * The branches are found once, in the hero's move data around the first one the game asks about
+ * (all of them within SWITCH_SCAN_BYTES): per weapon, the switch attack most of them go to is
+ * the common kind, the other one the rare kind. */
+enum { SWITCH_REQUEST_US=200000, SWITCH_REPEAT_US=800000, SWITCH_CURRENT=0xff, SWITCH_FOUND=128, SWITCH_STEP=0x10000,
+       SWITCH_SCAN_BYTES=8<<20 };
+int runtime_memory_is_mapped(uintptr_t address, uint64_t size);
+static SpartanSwitchState spartanport_switch;
+typedef struct { const uint8_t *branch, *target; } SwitchFound;
+static struct {
+    int loaded, enabled, hooks;
+    uint32_t previous, request;    /* request: 0, a weapon, or SWITCH_CURRENT */
+    uint64_t until;
+    int scanned;                   /* the rest: game thread */
+    unsigned last;                 /* the weapon of the last switch attack, and when */
+    uint64_t last_at;
+    unsigned found;
+    SwitchFound branches[SWITCH_FOUND];
+    const uint8_t *attack[4][2];   /* per weapon: its switch attack moves, common kind first */
+} sw;
+uintptr_t spartanport_switch_state_address(void) { return (uintptr_t)&spartanport_switch; }
+void spartanport_switch_status(int supported) { sw.hooks=supported; }
+static const char *switch_name(unsigned w) {
+    static const char *names[4]={"Nemean Cestus","Nemesis Whip","Blades of Exile","Claws of Hades"};
+    return w>=0x10 && w<=0x13 ? names[w-0x10] : "?";
+}
+static const uint8_t *switch_target(const uint8_t *b) {
+    int32_t rel; memcpy(&rel,b,4);
+    return rel ? b+rel : NULL;
+}
+static void switch_scan(const uint8_t *seen) {
+    sw.scanned=1;
+    const uintptr_t at=(uintptr_t)seen & ~(uintptr_t)(SWITCH_STEP-1);
+    uintptr_t lo=at, hi=at+SWITCH_STEP;
+    while (at-lo<SWITCH_SCAN_BYTES && lo>=SWITCH_STEP && runtime_memory_is_mapped(lo-SWITCH_STEP,SWITCH_STEP)) lo-=SWITCH_STEP;
+    while (hi-at<SWITCH_SCAN_BYTES && runtime_memory_is_mapped(hi,SWITCH_STEP)) hi+=SWITCH_STEP;
+    unsigned counts[4][4]={{0}};
+    const uint8_t *targets[4][4]={{0}};
+    for (uintptr_t p=lo;p+0x38<=hi && sw.found<SWITCH_FOUND;p+=4) {
+        const uint8_t *b=(const uint8_t *)p;
+        if (!spartanport_switch_branch(b)) continue;
+        const uint8_t *target=switch_target(b);
+        if (!target || (uintptr_t)target<lo || (uintptr_t)target>=hi) continue;
+        sw.branches[sw.found++]=(SwitchFound){b,target};
+        const unsigned w=b[0x2f]-0x10;
+        for (unsigned i=0;i<4;++i) {
+            if (targets[w][i]==target || !targets[w][i]) { targets[w][i]=target; ++counts[w][i]; break; }
+        }
+    }
+    for (unsigned w=0;w<4;++w) {
+        for (unsigned k=0;k<2;++k) {
+            unsigned best=4;
+            for (unsigned i=0;i<4;++i)
+                if (targets[w][i] && targets[w][i]!=sw.attack[w][0] && (best==4 || counts[w][i]>counts[w][best])) best=i;
+            if (best<4) sw.attack[w][k]=targets[w][best];
+        }
+    }
+    printf("Switch attacks: %u branches to switch attacks in %llu KB of move data (Cestus %d, Whip %d, Blades %d, Claws %d kinds)\n",
+           sw.found,(unsigned long long)((hi-lo)>>10),!!sw.attack[0][0]+!!sw.attack[0][1],!!sw.attack[1][0]+!!sw.attack[1][1],
+           !!sw.attack[2][0]+!!sw.attack[2][1],!!sw.attack[3][0]+!!sw.attack[3][1]);
+}
+/* The weapon a live request is for, if he owns it and it is not a repeat too soon. */
+static unsigned switch_requested(void) {
+    const uint32_t request=__atomic_load_n(&sw.request,__ATOMIC_ACQUIRE);
+    const uint64_t now=now_us();
+    if (!request || now>__atomic_load_n(&sw.until,__ATOMIC_RELAXED)) return 0;
+    const uint8_t *stats=(const uint8_t *)(uintptr_t)__atomic_load_n(&spartanport_switch.stats,__ATOMIC_RELAXED);
+    if (!stats) return 0;
+    const unsigned w=request==SWITCH_CURRENT ? stats[0x20b] : request;
+    uint32_t owned; memcpy(&owned,stats+0x1c4,4);
+    if (w==sw.last && now-sw.last_at<SWITCH_REPEAT_US) return 0;
+    return w>=0x10 && w<=0x13 && (owned>>(w-1) & 1) ? w : 0;
+}
+/* One of the game's branches to weapon w's switch attack, of the kind branch b goes to. */
+static const uint8_t *switch_pick(const uint8_t *b, unsigned w) {
+    if (b[0x2f]==w) return b;
+    const uint8_t *target=switch_target(b);
+    const unsigned kind=target && target==sw.attack[b[0x2f]-0x10][1];
+    const uint8_t *want=sw.attack[w-0x10][kind] ? sw.attack[w-0x10][kind] : sw.attack[w-0x10][0];
+    const uint8_t *pick=NULL;
+    for (unsigned i=0;i<sw.found;++i) {
+        const SwitchFound *f=&sw.branches[i];
+        if (f->branch[0x2f]!=w || f->target!=want) continue;
+        if (!memcmp(f->branch+0x14,b+0x14,4)) return f->branch;  /* the same timing */
+        if (!pick) pick=f->branch;
+    }
+    return pick;
+}
+ABI int spartanport_switch_input(const unsigned char *b, uintptr_t caller) {
+    if (!spartanport_switch_branch(b)) return 2;
+    if (caller!=spartanport_switch.caller) return 0;  /* 0xe9a70 would take them on Cross: no cycling there either */
+    if (!sw.scanned) switch_scan(b);
+    const unsigned w=switch_requested();
+    return w && switch_pick(b,w);
+}
+ABI const unsigned char *spartanport_switch_queue(const unsigned char *b) {
+    if (!spartanport_switch_branch(b)) return b;
+    const unsigned w=switch_requested();
+    const uint8_t *pick=w ? switch_pick(b,w) : NULL;
+    if (!pick) return b;
+    const uint8_t *stats=(const uint8_t *)(uintptr_t)spartanport_switch.stats;
+    __atomic_store_n(&sw.request,0,__ATOMIC_RELEASE);
+    sw.last=w;
+    sw.last_at=now_us();
+    printf("Runtime: switch attack of the %s (in his hands: %s)\n",switch_name(w),switch_name(stats[0x20b]));
+    return pick;
+}
+
+static void reset_switch_attack(void) { __atomic_store_n(&sw.request,0,__ATOMIC_RELEASE); }
+static void apply_switch_attack(const PadData *d) {
+    if (!sw.loaded) {
+        sw.loaded=1;
+        const char *value=getenv("SPARTAN_SWITCH_ATTACKS");
+        sw.enabled=value && !strcmp(value,"1");
+        if (sw.enabled) printf("Runtime: switch attacks on L1 + d-pad and L1 + Cross%s\n",
+                               sw.hooks ? "" : " unavailable (hooks not installed)");
+    }
+    if (!sw.enabled || !sw.hooks) return;
+    const uint32_t pressed=d->buttons & ~sw.previous;
+    sw.previous=d->buttons;
+    const uint32_t request=__atomic_load_n(&sw.request,__ATOMIC_ACQUIRE);
+    if (request && d->timestamp>sw.until) {
+        printf("Runtime: switch attack request lapsed (no move could switch)\n");
+        reset_switch_attack();
+    }
+    if (!(d->buttons & BTN_L1)) return;
+    static const struct { uint32_t button, weapon; } asks[]={
+        {BTN_CROSS,SWITCH_CURRENT},{BTN_DOWN,0x10},{BTN_LEFT,0x11},{BTN_UP,0x12},{BTN_RIGHT,0x13}};
+    for (unsigned i=0;i<sizeof(asks)/sizeof(asks[0]);++i) {
+        if (!(pressed & asks[i].button)) continue;
+        __atomic_store_n(&sw.until,d->timestamp+SWITCH_REQUEST_US,__ATOMIC_RELAXED);
+        __atomic_store_n(&sw.request,asks[i].weapon,__ATOMIC_RELEASE);
+        break;
+    }
+}
+
 /* R3 + L1 + R1 goes through the engine frame rates live (60 for spots that break at a higher
  * rate). The three stay hidden from the game until each one is released: a stray R1 grabs. */
 enum { ENGINE_FPS_COMBO=BTN_R3|BTN_L1|BTN_R1 };
@@ -804,12 +950,25 @@ static void engine_fps_combo(PadData *d) {
     engine_fps_hidden&=d->buttons;
     d->buttons&=~engine_fps_hidden;
 }
+/* R3 + L2 opens the port's menu and R3 + R2 the trophy list (gpu/shim/spartanport_overlay.cpp),
+ * at half a pull, while the game takes a trigger from a slight one. With R3 held, the trigger and
+ * R3 stay hidden from the game until each one is released: a stray R2 uses the item. */
+enum { OVERLAY_TRIGGERS=BTN_L2|BTN_R2 };
+static uint32_t overlay_chord_hidden;
+static void overlay_chords(PadData *d) {
+    if ((d->buttons & BTN_R3) && (d->buttons & OVERLAY_TRIGGERS))
+        overlay_chord_hidden|=BTN_R3|(d->buttons & OVERLAY_TRIGGERS);
+    overlay_chord_hidden&=d->buttons;
+    d->buttons&=~overlay_chord_hidden;
+    if (overlay_chord_hidden & BTN_L2) d->l2=0;
+    if (overlay_chord_hidden & BTN_R2) d->r2=0;
+}
 /* After the menu or the text dialog closes, buttons still held (the Cross that accepted a
  * name) stay hidden until released: the game would take them as a new press. */
 static int hold_after_capture;
 static void sample(PadData *d) {
     sample_host(d);
-    if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); return; }
+    if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); reset_switch_attack(); return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */
     read_inject();
     replay_sample(d);
@@ -818,8 +977,10 @@ static void sample(PadData *d) {
     if (injected.buttons & BTN_R2) d->r2=255;
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
+    overlay_chords(d);
     note_game_menu(d); /* before the actions turn into the buttons they press */
     apply_combos(d);
+    apply_switch_attack(d);
     apply_dodge(d);
     apply_weapon_cycle(d);
     apply_mouse_aim(d);

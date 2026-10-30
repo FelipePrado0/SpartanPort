@@ -9,6 +9,10 @@
   <a href="https://trendshift.io/repositories/299469?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-299469" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/299469/daily?language=C%2B%2B" alt="FelipePrado0%2FSpartanPort | Trendshift" width="250" height="55"/></a>
 </div>
 
+<p align="center">
+  <a href="https://discord.gg/WYvr634563"><img src="https://img.shields.io/badge/DISCORD_OFICIAL-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Unite al Discord oficial de SpartanPort" height="40"></a>
+</p>
+
 [English](https://github.com/FelipePrado0/SpartanPort/blob/main/README.md) | [Português (Brasil)](https://github.com/FelipePrado0/SpartanPort/blob/main/README.pt-BR.md) | **Español**
 
 **SpartanPort** es un port no oficial para PC de **God of War III Remastered** (PlayStation 4) para Windows 10/11
@@ -187,6 +191,14 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
     CPU, RAM y VRAM, cada uno opcional, con tamaño de fuente, esquina, opacidad del fondo y diseño.
     Los números son el uso del propio juego, no el de todo el sistema.
 
+  El menú sigue el idioma del launcher (inglés, portugués, español, francés, alemán, italiano,
+  polaco, turco, indonesio, ruso o chino), o el elegido arriba de la pestaña **Juego**, al
+  instante. La elección queda en `spartanport.ini` (`ui_language`).
+- **Trofeos** (F8, o R3+R2 en el control): todos los trofeos con su nombre oficial y lo que piden,
+  su grado, cuántos jugadores lo consiguieron y filtros por estado y por grado; notificaciones de
+  trofeo en cuatro temas, con tus propios sonidos e imágenes si quieres. Consulta
+  [docs/TROPHIES.es.md](docs/TROPHIES.es.md).
+
 ## Disponibilidad de funciones
 
 Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/SpartanPort/releases/tag/windows-v2.2.0) y en el código el 14 de octubre de 2026.
@@ -197,7 +209,7 @@ Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/
 | Corrección de pantalla negra / íconos de botones del control | Incluidos | Incluidos |
 | Discord Rich Presence | No incluido | Opcional en Advanced, desactivado por defecto; nombre del juego y tiempo transcurrido |
 | Corrección de la cola sparse en RADV | No incluida | Integrada en `main` |
-| FSR 3.1, FSR 4, FSR 4.1, DLSS, TAA | Desactivados | Gráficos → Upscaling y los menús del juego ([detalles](#upscaling)) |
+| FSR 3.1, FSR 4, FSR 4.1, TAA | Desactivados | Gráficos → Upscaling y los menús del juego ([detalles](#upscaling)) |
 | FSR 1 | Desactivados | Desactivados en el flujo de ajustes del launcher/juego |
 | Nitidez RCAS | Disponible | Disponible |
 
@@ -241,9 +253,11 @@ Los cambios se aplican al reiniciar (**Aplicar y reiniciar** en el juego).
 - **FSR 3.1:** cualquier tarjeta gráfica.
 - **FSR 4:** el modelo abierto de FSR 4, incluido. Para AMD Radeon RX 6000 o posterior e Intel
   Arc; Windows y Linux.
-- **DLSS:** tarjetas NVIDIA RTX, en Windows. Los archivos de NVIDIA vienen incluidos, con su
-  licencia en `LICENSES/`.
 - **TAA:** antialiasing a la resolución completa, sin upscaling.
+
+La generaci?n de fotogramas AMD FSR (2x) a?ade un fotograma generado entre los del juego.
+Act?vala en **Gr?ficos > Generaci?n de fotogramas** o en los men?s del juego, con un escalador
+seleccionado. Se aplica al instante; al desactivarla se mantiene el escalador.
 
 #### FSR 4.1 (AMD, Windows)
 
@@ -294,6 +308,13 @@ L para la cruceta, Enter para Options, Tab y Retroceso para el touchpad.
 En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic del touchpad derecho)
 y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad funciona como en la
 PS4, y Share/Create funciona como View.
+
+**Ataques de cambio con L1 + cruceta y L1 + Cruz** (desactivado por defecto, página Controls): L1 +
+una dirección de la cruceta cambia a esa arma con su ataque de cambio, y el arma que Kratos ya tiene en
+la mano repite su ataque; L1 + Cruz hace el ataque de cambio del arma en la mano en lugar de pasar a la
+siguiente arma. El ataque de cambio de la misma arma otra vez espera 0,8 segundos después del último
+(el de otra arma no espera). La cruceta sola cambia como antes. Los tutoriales de cambio de arma lo dicen así en todos los idiomas
+(en copias de los archivos de idioma en la carpeta de datos del port). Sin el launcher, definí `SPARTAN_SWITCH_ATTACKS=1`.
 
 Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls del launcher, en
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* o *Keyboard*. Reemplazan los íconos de
@@ -468,6 +489,9 @@ Abierto desde un checkout, encuentra solo las herramientas de `out/`; `SPARTAN_P
 a un port empaquetado (con `bin/`). PLAY inicia el propio exe del launcher con `--run`, así que
 nada necesita Python.
 
+En macOS, `main` compila solo el launcher (PLAY todavía no tiene juego para iniciar); mirá los pasos en
+[launcher-rust/README.md](launcher-rust/README.md#macos) (en inglés).
+
 ## Tests
 
 Ejecutá desde la raíz del repositorio después de compilar. Los primeros tests C++ siguientes no necesitan un dump del juego.
@@ -601,7 +625,7 @@ También se usan: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmp
 [miniz](https://github.com/richgel999/miniz), [xbyak](https://github.com/herumi/xbyak),
 [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
 [FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) y el AMD FidelityFX SDK, [Q2RTX](https://github.com/FireBurn/Q2RTX) (los archivos
-del modelo abierto de FSR 4), el [NVIDIA DLSS SDK](https://github.com/NVIDIA/DLSS),
+del modelo abierto de FSR 4),
 [MSYS2](https://www.msys2.org), [LLVM](https://llvm.org) y [Pillow](https://python-pillow.org).
 
 ## Licencia

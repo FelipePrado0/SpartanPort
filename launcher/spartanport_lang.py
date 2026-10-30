@@ -1040,6 +1040,9 @@ EXTRA = {
         'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
             'Como os eventos de girar o analógico são respondidos. Teclado: digite o giro, meias-voltas a partir de cima D S A (horário) ou A S D, a partir de baixo A W D ou D W A, voltas completas D S A W ou A S D W; uma tecla fora de ordem recomeça. Mouse adaptativo: desenhe o giro com o mouse.',
         'Joystick prompts': 'Prompts do analógico',
+        'Switch attacks on L1 + d-pad and L1 + Cross': 'Ataques de troca com L1 + direcional e L1 + X',
+        "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.":
+            "L1 + uma direção do direcional troca para essa arma com o ataque de troca dela (a arma que já está na mão de Kratos repete o ataque). L1 + X faz o ataque de troca da arma na mão em vez de passar para a próxima arma. O direcional sozinho troca como antes. Aplicado ao iniciar o jogo.",
         'Keep the mouse in the game window': 'Manter o mouse na janela do jogo',
         'Key not supported': 'Tecla não suportada',
         'Keyboard & Mouse Mapping': 'Mapeamento de teclado e mouse',
@@ -1333,6 +1336,9 @@ EXTRA = {
         'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
             'Cómo se responden los eventos de girar el stick. Teclado: escribe el giro, medias vueltas desde arriba D S A (horario) o A S D, desde abajo A W D o D W A, vueltas completas D S A W o A S D W; una tecla fuera de orden vuelve a empezar. Ratón adaptativo: dibuja el giro con el ratón.',
         'Joystick prompts': 'Eventos del stick',
+        'Switch attacks on L1 + d-pad and L1 + Cross': 'Ataques de cambio con L1 + cruceta y L1 + X',
+        "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.":
+            "L1 + una dirección de la cruceta cambia a esa arma con su ataque de cambio (el arma que Kratos ya tiene en la mano repite su ataque). L1 + X hace el ataque de cambio del arma en la mano en lugar de pasar a la siguiente arma. La cruceta sola cambia como antes. Se aplica al iniciar el juego.",
         'Keep the mouse in the game window': 'Mantener el ratón en la ventana del juego',
         'Key not supported': 'Tecla no compatible',
         'Keyboard & Mouse Mapping': 'Asignación de teclado y ratón',
@@ -1544,6 +1550,50 @@ EXTRA['pt'].update({
 EXTRA['es'].update({
     'Aspect ratio': 'Relación de aspecto',
     'Shows the render resolutions of this shape only.': 'Muestra solo las resoluciones de render de esta proporción.',
+})
+
+EXTRA['pt'].update({
+    'Audio': 'Áudio',
+    'Volume': 'Volume',
+    'Speakers': 'Alto-falantes',
+    'Stereo': 'Estéreo',
+    '5.1 surround': 'Surround 5.1',
+    '7.1 surround': 'Surround 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volume geral do áudio do jogo. 100% é a mixagem original do jogo; mais é mais alto, com um limitador suave para que cenas altas não distorçam. Também no menu do jogo.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Formato em que a mixagem 7.1 do jogo é enviada. Automático segue o seu dispositivo de som: estéreo, 5.1 ou 7.1. Aplicado quando o jogo inicia.',
+})
+EXTRA['es'].update({
+    'Audio': 'Audio',
+    'Volume': 'Volumen',
+    'Speakers': 'Altavoces',
+    'Stereo': 'Estéreo',
+    '5.1 surround': 'Envolvente 5.1',
+    '7.1 surround': 'Envolvente 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volumen general del audio del juego. 100% es la mezcla original del juego; más es más alto, con un limitador suave para que las escenas fuertes no distorsionen. También en el menú del juego.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Formato en que se envía la mezcla 7.1 del juego. Automático sigue tu dispositivo de sonido: estéreo, 5.1 o 7.1. Se aplica al iniciar el juego.',
+})
+
+EXTRA['pt'].update({
+    'Effects': 'Efeitos',
+    'Motion blur': 'Desfoque de movimento',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        'O desfoque de movimento do próprio jogo em objetos rápidos e na câmera. Desligado, ele é removido.',
+    'Depth of field': 'Profundidade de campo',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'O desfoque do próprio jogo em objetos distantes, mais forte nas cenas. Desligado, a imagem inteira fica nítida.',
+})
+EXTRA['es'].update({
+    'Effects': 'Efectos',
+    'Motion blur': 'Desenfoque de movimiento',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        'El desenfoque de movimiento del propio juego en objetos rápidos y en la cámara. Desactivado, se elimina.',
+    'Depth of field': 'Profundidad de campo',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'El desenfoque del propio juego en objetos lejanos, más fuerte en las escenas. Desactivado, toda la imagen se ve nítida.',
 })
 
 EXTRA['pt'].update({'Polish': 'Polonês'})
@@ -2600,26 +2650,68 @@ EXTRA.setdefault('es', {}).update({
 EXTRA.setdefault('pt', {}).update({
     'FSR 4.1 (AMD driver)': 'FSR 4.1 (driver AMD)',
     'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 exige AMD Adrenalin 26.10.1 ou mais recente. O registro mostra o provedor ativo; usar FSR 3.1 como alternativa não significa FSR 4.1 ativo.',
-    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer; DLSS requires an NVIDIA RTX card. The log shows the active provider; a fallback to FSR 3.1 is not FSR 4.1 or DLSS.': 'FSR 4.1 exige AMD Adrenalin 26.10.1 ou mais recente; DLSS exige uma placa NVIDIA RTX. O registro mostra o provedor ativo; usar FSR 3.1 como alternativa não significa FSR 4.1 nem DLSS ativos.',
     'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Desligado (padrão): sem upscaling temporal. Ligado: usa o upscaler e a predefinição selecionados. Personagens animados ainda podem mostrar algum rastro.',
 })
 EXTRA.setdefault('es', {}).update({
     'FSR 4.1 (AMD driver)': 'FSR 4.1 (controlador AMD)',
     'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 requiere AMD Adrenalin 26.10.1 o posterior. El registro muestra el proveedor activo; usar FSR 3.1 como alternativa no significa que FSR 4.1 esté activo.',
-    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer; DLSS requires an NVIDIA RTX card. The log shows the active provider; a fallback to FSR 3.1 is not FSR 4.1 or DLSS.': 'FSR 4.1 requiere AMD Adrenalin 26.10.1 o posterior; DLSS requiere una tarjeta NVIDIA RTX. El registro muestra el proveedor activo; usar FSR 3.1 como alternativa no significa que FSR 4.1 o DLSS estén activos.',
     'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Desactivado (predeterminado): sin escalado temporal. Activado: usa el escalador y el ajuste seleccionados. Los personajes animados aún pueden mostrar estelas.',
 })
 EXTRA.setdefault('zh', {}).update({
     'FSR 4.1 (AMD driver)': 'FSR 4.1（AMD 驱动）',
     'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 需要 AMD Adrenalin 26.10.1 或更新版本。日志会显示实际使用的提供程序；回退至 FSR 3.1 并不表示 FSR 4.1 已启用。',
-    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer; DLSS requires an NVIDIA RTX card. The log shows the active provider; a fallback to FSR 3.1 is not FSR 4.1 or DLSS.': 'FSR 4.1 需要 AMD Adrenalin 26.10.1 或更新版本；DLSS 需要 NVIDIA RTX 显卡。日志会显示实际使用的提供程序；回退至 FSR 3.1 并不表示 FSR 4.1 或 DLSS 已启用。',
     'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': '默认关闭：不使用时域超分辨率。开启：使用所选超分辨率和预设。动画角色仍可能出现拖影。',
 })
 EXTRA.setdefault('id', {}).update({
     'FSR 4.1 (AMD driver)': 'FSR 4.1 (driver AMD)',
     'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 memerlukan AMD Adrenalin 26.10.1 atau lebih baru. Log menampilkan penyedia aktif; fallback ke FSR 3.1 bukan berarti FSR 4.1 aktif.',
-    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer; DLSS requires an NVIDIA RTX card. The log shows the active provider; a fallback to FSR 3.1 is not FSR 4.1 or DLSS.': 'FSR 4.1 memerlukan AMD Adrenalin 26.10.1 atau lebih baru; DLSS memerlukan kartu NVIDIA RTX. Log menampilkan penyedia aktif; fallback ke FSR 3.1 bukan berarti FSR 4.1 atau DLSS aktif.',
     'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Mati (bawaan): tanpa upscaling temporal. Nyala: memakai upscaler dan preset pilihan. Karakter yang bergerak masih dapat berbayang.',
+})
+
+EXTRA['zh'].update({
+    'Audio': '音频',
+    'Volume': '音量',
+    'Speakers': '扬声器',
+    'Stereo': '立体声',
+    '5.1 surround': '5.1 环绕声',
+    '7.1 surround': '7.1 环绕声',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        '游戏音频的主音量。100% 为游戏自带的混音；调高会更响亮，并带有软限幅，避免嘈杂场景出现削波失真。游戏内菜单中也有此选项。',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        '游戏的 7.1 混音输出所用的声道布局。“自动”会跟随你的声音设备：立体声、5.1 或 7.1。游戏启动时生效。',
+})
+
+EXTRA['id'].update({
+    'Audio': 'Audio',
+    'Volume': 'Volume',
+    'Speakers': 'Speaker',
+    'Stereo': 'Stereo',
+    '5.1 surround': 'Surround 5.1',
+    '7.1 surround': 'Surround 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volume utama audio game. 100% adalah campuran asli game; lebih tinggi berarti lebih keras, dengan pembatas lembut agar adegan yang keras tidak terpotong (clipping). Tersedia juga di menu dalam game.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Tata letak saluran untuk campuran 7.1 game. Otomatis mengikuti perangkat suara Anda: stereo, 5.1, atau 7.1. Diterapkan saat game dimulai.',
+})
+
+EXTRA['zh'].update({
+    'Effects': '画面效果',
+    'Motion blur': '动态模糊',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        '游戏自带的动态模糊（快速移动的物体和镜头）。关闭后将其移除。',
+    'Depth of field': '景深',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        '游戏自带的远景模糊，过场动画中最明显。关闭后整个画面保持清晰。',
+})
+
+EXTRA['id'].update({
+    'Effects': 'Efek',
+    'Motion blur': 'Motion blur',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        'Motion blur bawaan game pada objek yang bergerak cepat dan kamera. Jika dimatikan, efek ini dihilangkan.',
+    'Depth of field': 'Depth of field',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'Blur bawaan game pada objek yang jauh, paling kuat di cutscene. Jika dimatikan, seluruh gambar tetap tajam.',
 })
 
 _tables = {}

@@ -1,7 +1,7 @@
 //! The probes the launcher runs for lists: Vulkan GPUs, SDL displays and the gamepad.
 
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use indexmap::IndexMap;
@@ -211,24 +211,48 @@ pub fn monitor_selection(displays: &[Display], saved: &str) -> String {
     }
 }
 
+/// The environment to run `spartanport-probe` with, or `None` when it cannot start safely. As
+/// `run.py`: a development build loads the MSYS2 CLANG64 DLLs (SDL3, FFmpeg); without them Windows
+/// would show a missing-DLL dialog, so the probe is not run at all.
+pub fn probe_env(probe: &Path, env: Lookup) -> Option<Option<IndexMap<String, String>>> {
+    if !cfg!(windows) || probe.parent()?.join("SDL3.dll").is_file() {
+        return Some(None);
+    }
+    let root = env("MSYS2_ROOT").unwrap_or_else(|| r"C:\msys64".to_string());
+    let clang64 = std::path::Path::new(&root).join("clang64").join("bin");
+    if !clang64.join("SDL3.dll").is_file() {
+        return None;
+    }
+    let mut dirs = vec![clang64];
+    if let Some(path) = env("PATH") {
+        dirs.extend(std::env::split_paths(&path));
+    }
+    let path = std::env::join_paths(dirs).ok()?.into_string().ok()?;
+    Some(Some(inherited_env_with(&[("PATH", path)])))
+}
+
 /// The monitors the game can open on, in the order `spartanport-probe --displays` numbers them, or
 /// empty when the tool cannot tell. On Linux the probe runs under the SDL video driver the game will
 /// use (`auto` lets SDL choose).
-pub fn list_displays(tools: &dyn Tools, paths: &Paths, backend: &str) -> Vec<Display> {
+pub fn list_displays(tools: &dyn Tools, paths: &Paths, backend: &str, env: Lookup) -> Vec<Display> {
     let Some(tool) = paths.find_tool("spartanport-probe") else {
         return Vec::new();
     };
-    let env = (cfg!(not(windows)) && matches!(backend, "wayland" | "x11")).then(|| {
-        inherited_env_with(&[
-            ("SDL_VIDEO_DRIVER", backend.to_string()),
-            ("SDL_VIDEODRIVER", backend.to_string()),
-        ])
-    });
+    let Some(probe_env) = probe_env(&tool, env) else {
+        return Vec::new();
+    };
+    let mut run_env = probe_env;
+    if cfg!(not(windows)) && matches!(backend, "wayland" | "x11") {
+        let mut vars = run_env.unwrap_or_default();
+        vars.insert("SDL_VIDEO_DRIVER".to_string(), backend.to_string());
+        vars.insert("SDL_VIDEODRIVER".to_string(), backend.to_string());
+        run_env = Some(vars);
+    }
     run(
         tools,
         tool,
         &["--displays"],
-        env.as_ref(),
+        run_env.as_ref(),
         Duration::from_secs(5),
         true,
     )
@@ -239,22 +263,7 @@ pub fn list_displays(tools: &dyn Tools, paths: &Paths, backend: &str) -> Vec<Dis
 /// Whether `spartanport-probe` sees a gamepad now; `None` when the probe is missing or fails.
 pub fn connected_gamepad(tools: &dyn Tools, paths: &Paths, env: Lookup) -> Option<bool> {
     let probe = paths.find_tool("spartanport-probe")?;
-    let mut probe_env = None;
-    // A development build loads the MSYS2 CLANG64 DLLs (SDL3, FFmpeg); without them Windows would
-    // show a missing-DLL dialog, so the probe is not run at all.
-    if cfg!(windows) && !probe.parent()?.join("SDL3.dll").is_file() {
-        let root = env("MSYS2_ROOT").unwrap_or_else(|| r"C:\msys64".to_string());
-        let clang64 = std::path::Path::new(&root).join("clang64").join("bin");
-        if !clang64.join("SDL3.dll").is_file() {
-            return None;
-        }
-        let mut dirs = vec![clang64];
-        if let Some(path) = env("PATH") {
-            dirs.extend(std::env::split_paths(&path));
-        }
-        let path = std::env::join_paths(dirs).ok()?.into_string().ok()?;
-        probe_env = Some(inherited_env_with(&[("PATH", path)]));
-    }
+    let probe_env = probe_env(&probe, env)?;
     let out = run(
         tools,
         probe,
@@ -556,7 +565,7 @@ mod tests {
         let paths = Paths::from_env(dir.path(), &|_| None);
         let tools = FakeTools::printing(0, "0\tx\ty\n");
         assert_eq!(list_gpus(&tools, &paths), vec![]);
-        assert_eq!(list_displays(&tools, &paths, "auto"), vec![]);
+        assert_eq!(list_displays(&tools, &paths, "auto", &|_| None), vec![]);
         assert_eq!(connected_gamepad(&tools, &paths, &|_| None), None);
         assert!(tools.calls().is_empty());
     }
@@ -609,11 +618,13 @@ mod tests {
 
     #[test]
     fn displays_run_under_the_chosen_backend() {
-        let (_dir, paths) = port_with(&["spartanport-probe"]);
+        let (dir, paths) = port_with(&["spartanport-probe"]);
+        // The probe finds its libraries next to it, so a development build's MSYS2 is not needed.
+        std::fs::write(dir.path().join("bin").join("SDL3.dll"), b"").unwrap();
         let tools = FakeTools::printing(0, TWO_DISPLAYS);
-        let shown = list_displays(&tools, &paths, "wayland");
+        let shown = list_displays(&tools, &paths, "wayland", &|_| None);
         assert_eq!(shown.len(), 2);
-        list_displays(&tools, &paths, "auto");
+        list_displays(&tools, &paths, "auto", &|_| None);
         let calls = tools.calls();
         assert_eq!(calls[0].args, ["--displays"]);
         assert_eq!(calls[0].limit, Some(Duration::from_secs(5)));
@@ -669,5 +680,17 @@ mod tests {
             connected_gamepad(&FakeTools::timing_out(), &paths, &|_| None),
             None
         );
+    }
+
+    #[test]
+    fn displays_without_sdl3_runs_nothing_on_windows_dev_build() {
+        let (_dir, paths) = port_with(&["spartanport-probe"]);
+        let tools = FakeTools::printing(0, TWO_DISPLAYS);
+        let env = |key: &str| (key == "MSYS2_ROOT").then(|| r"C:\nonexistent_msys64".to_string());
+        if cfg!(windows) {
+            let shown = list_displays(&tools, &paths, "auto", &env);
+            assert_eq!(shown, vec![]);
+            assert!(tools.calls().is_empty());
+        }
     }
 }

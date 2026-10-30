@@ -74,15 +74,21 @@ pub static FPS_LIMITS: &[Choice] = &[
     c("0", "Unlimited"),
 ];
 
-/// GUI Scale (R90): absolute zooms, 1x by default.
-pub static UI_SCALES: &[Choice] = &[c("1", "1x"), c("1.5", "1.5x")];
+/// GUI Scale: Auto by default (the desktop's scale, fitted to the screen), or the absolute zooms
+/// of R90.
+pub static UI_SCALES: &[Choice] = &[
+    c("auto", "Auto (fits the screen)"),
+    c("1", "1x"),
+    c("1.5", "1.5x"),
+];
 
-/// The GUI Scale choice a stored value stands for: an older file's "2" is 1.5x, and its "auto"
-/// (which followed the desktop) or anything unknown is 1x.
+/// The GUI Scale choice a stored value stands for: an older file's "2" is 1.5x, and anything
+/// unknown is Auto.
 pub fn ui_scale_choice(stored: &str) -> &'static str {
     match stored {
+        "1" => "1",
         "1.5" | "2" => "1.5",
-        _ => "1",
+        _ => "auto",
     }
 }
 
@@ -92,6 +98,20 @@ pub static STICK_PROMPTS: &[Choice] = &[
 ];
 
 pub static AIM_STYLES: &[Choice] = &[c("0", "Relative"), c("1", "Absolute")];
+
+pub static MENU_CONFIRM_STYLES: &[Choice] = &[
+    c("0", "Cross confirms, Circle cancels (default)"),
+    c("1", "Circle confirms, Cross cancels"),
+];
+
+/// Speaker layout of the game's 7.1 mix (`audio_channels`): the values the runtime reads
+/// (`SpartanSettings::AudioChannelKeys`).
+pub static AUDIO_CHANNELS: &[Choice] = &[
+    c("auto", "Automatic"),
+    c("stereo", "Stereo"),
+    c("5.1", "5.1 surround"),
+    c("7.1", "7.1 surround"),
+];
 
 pub static GLYPH_STYLES: &[Choice] = &[
     c("off", "Original (default)"),
@@ -107,8 +127,6 @@ pub static UPSCALERS: &[Choice] = &[
     c("fsr4", "FSR 4 (AMD Radeon, Intel Arc)"),
     #[cfg(windows)]
     c("fsr411", "FSR 4.1 (AMD driver)"),
-    #[cfg(windows)]
-    c("dlss", "DLSS (NVIDIA RTX)"),
     cr(
         "taa",
         "TAA (native resolution anti-aliasing)",
@@ -120,8 +138,6 @@ pub static UPSCALERS: &[Choice] = &[
 pub static FRAME_GENERATION: &[Choice] = &[
     cr("off", "Off", "Выключен"),
     c("fsr", "AMD FSR (every GPU)"),
-    #[cfg(windows)]
-    c("dlss", "NVIDIA DLSS (RTX 40/50)"),
 ];
 
 /// Ordered by render scale; the values are the ini's preset numbers (Ultra Quality was added as 5).
@@ -487,7 +503,7 @@ mod tests {
 
     #[test]
     fn every_table_has_unique_values() {
-        let tables: [&[Choice]; 21] = [
+        let tables: [&[Choice]; 23] = [
             FRAME_GENERATION,
             DISPLAY_MODES,
             ANISOTROPY,
@@ -495,6 +511,8 @@ mod tests {
             UI_SCALES,
             STICK_PROMPTS,
             AIM_STYLES,
+            MENU_CONFIRM_STYLES,
+            AUDIO_CHANNELS,
             GLYPH_STYLES,
             UPSCALERS,
             PRESETS,
@@ -520,17 +538,18 @@ mod tests {
     }
 
     #[test]
-    fn gui_scale_is_1x_or_1_5x() {
-        // R90: two choices, 1x first; what an older file stored is shown as the closest one.
+    fn gui_scale_is_auto_1x_or_1_5x() {
+        // Auto first (the default), then the absolute zooms of R90; what an older file stored is
+        // shown as the closest one, and anything unknown as Auto.
         let values: Vec<&str> = UI_SCALES.iter().map(|choice| choice.value).collect();
-        assert_eq!(values, ["1", "1.5"]);
+        assert_eq!(values, ["auto", "1", "1.5"]);
         for (stored, shown) in [
             ("1", "1"),
             ("1.5", "1.5"),
-            ("auto", "1"),
+            ("auto", "auto"),
             ("2", "1.5"),
-            ("", "1"),
-            ("bogus", "1"),
+            ("", "auto"),
+            ("bogus", "auto"),
         ] {
             assert_eq!(ui_scale_choice(stored), shown, "{stored:?}");
         }

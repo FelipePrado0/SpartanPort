@@ -42,7 +42,7 @@ int main() {
 
     // Both providers generate exactly one frame per real frame (2x).
     assert(GeneratedFrames(FgFsr) == 1);
-    assert(GeneratedFrames(FgDlss) == 1);
+    assert(GeneratedFrames(2) == 0);
     assert(GeneratedFrames(FgOff) == 0);
     assert(GeneratedFrames(-1) == 0);
     using namespace std::chrono;

@@ -61,10 +61,9 @@ fix is always requested, including with patch lists saved by older launchers. Th
 patch and texture fix are mutually exclusive. See the root README for tested builds.
 From a source tree, the launcher adds `C:\msys64\clang64\bin` (or `$MSYS2_ROOT`) to `PATH` for DLLs.
 
-FSR 1 and temporal upscaling (FSR 3.1, FSR 4, TAA and DLSS) are disabled in the current launcher
-and game settings path. RCAS sharpening remains available. The DLSS bridge and FSR asset tools
-remaining in the tree are experimental development code, not supported player setup steps.
-See [the historical research notes](../../docs/upscaler.md) for context.
+FSR 3.1, FSR 4, FSR 4.1 and TAA are selected under Graphics > Upscaling.
+AMD FSR frame generation adds one generated frame per game frame (2x). The open FSR 4
+model and its license are included in the package. See the root README for hardware requirements.
 
 See the [feature availability table](https://github.com/FelipePrado0/SpartanPort#feature-availability)
 for differences between published packages and current source builds, including Discord Rich Presence.
@@ -79,7 +78,7 @@ window) and `spartanport-gpu-capabilities.exe`.
 | Linux | Windows |
 |---|---|
 | `mov rax, fs:[0]` rewritten to `gs:[0]`, GS base set with `arch_prctl` | GS is the TEB and cannot move. The loader rewrites the displacement to `gs:[0x1480 + 8*slot]` (the TEB's `TlsSlots[slot]`, same 9-byte instruction) and each guest thread keeps its TCB in that TLS slot. The slot is claimed first thing in `main` (Vulkan drivers take many). |
-| One memfd for direct + flexible memory, `mmap(MAP_FIXED)` views | A pagefile-backed section; the PS4 range 64 GiB–1 TiB is reserved as one placeholder and views replace placeholders (`VirtualAlloc2`/`MapViewOfFile3`, as in shadPS4). Partial unmaps split views and restore page protections (GPU tracking). |
+| One memfd for direct + flexible memory, `mmap(MAP_FIXED)` views | A pagefile-backed section; the PS4 range 64 GiB–1 TiB is reserved as one placeholder (or one per free part, around memory another program's DLL already holds there, logged at start-up) and views replace placeholders (`VirtualAlloc2`/`MapViewOfFile3`, as in shadPS4). Partial unmaps split views and restore page protections (GPU tracking). |
 | `-no-pie`, heap below 1 TiB | `--disable-high-entropy-va`: heaps and thread stacks stay low and out of the PS4 range. |
 | SIGSEGV handler, `sigsetjmp` recovery | Vectored exception handler; `spartanport_setjmp`/`spartanport_longjmp` (`src/compat_win.c`) restore all Win64 callee-saved registers without SEH unwinding (guest frames have no unwind data; clang's `__builtin_longjmp` restores a wrong frame pointer on Win64). |
 | Guest thread stacks from `runtime_low_map` | Windows allocates them, fully committed (`pthread_attr_setstacksize`): guest code has no stack probes and would skip the guard page. The main thread stack is 16 MiB committed. |

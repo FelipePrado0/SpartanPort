@@ -1,11 +1,26 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// The in-game menu's languages: every table is keyed by the English text, and Tr() looks a text up in
+// the language in use. English needs no table. Chinese is used once its system font has been loaded
+// (spartanport_ui_font.h); the other languages are drawn with the embedded DejaVu Sans.
 #pragma once
 #include <atomic>
+#include <cstddef>
 #include <string_view>
 #include <utility>
 
+#include "ui_language/spartanport_ui_de.h"
+#include "ui_language/spartanport_ui_es.h"
+#include "ui_language/spartanport_ui_fr.h"
+#include "ui_language/spartanport_ui_id.h"
+#include "ui_language/spartanport_ui_it.h"
+#include "ui_language/spartanport_ui_pl.h"
+#include "ui_language/spartanport_ui_pt.h"
+#include "ui_language/spartanport_ui_ru.h"
+#include "ui_language/spartanport_ui_tr.h"
+
 namespace SpartanUi {
-inline std::atomic<bool> chinese{false}; // Published after a CJK font has been loaded.
+inline std::atomic<bool> chinese{false};      // Chinese is the language in use (its font is loaded).
+inline std::atomic<bool> chinese_font{false}; // The CJK font is loaded: Chinese can be chosen.
 inline bool WantsChinese(std::string_view language) {
     return language == "zh" || language.starts_with("zh-") || language.starts_with("zh_");
 }
@@ -32,7 +47,7 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"5120 × 2160 · 21:9 (beta)", "5120 × 2160 · 21:9（测试）"},
     {"60 (original)", "60（原始）"},
     {"60 FPS: the frame rate patch is not available for this game build", "60 帧：此游戏版本无法使用帧率补丁"},
-    {"A thin bar at the top for the last enemy hit.", "在顶部显示最近击中敌人的细血条。"},
+    {"A bar at the top for the last enemy hit.", "在顶部显示最近击中敌人的血条。"},
     {"About", "关于"},
     {"Absolute", "绝对位置"},
     {"Anisotropic filtering", "各向异性过滤"},
@@ -60,9 +75,11 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"Damage dealt", "造成伤害"},
     {"Damage taken", "受到伤害"},
     {"Deferred GPU readbacks", "延迟 GPU 回读"},
+    {"Depth of field", "景深"},
     {"Display", "显示"},
     {"Display mode", "显示模式"},
     {"Effective limit", "实际帧率上限"},
+    {"Effects", "画面效果"},
     {"Enable before opening New Game. Does not change an existing save difficulty.", "请在打开“新游戏”前启用，不改变已有存档难度。"},
     {"Enemy health bar", "敌人血条"},
     {"Engine frame rate", "引擎帧率"},
@@ -147,6 +164,7 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"Strength of the controller's vibration. 0% turns it off.", "手柄震动强度，0% 为关闭。"},
     {"Textures (applied on restart)", "纹理（重启后生效）"},
     {"The first start after an update takes longer.", "更新后的首次启动需要更长时间。"},
+    {"The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.", "游戏自带的远景模糊，过场动画中最明显。关闭后整个画面保持清晰。"},
     {"The highest frame rate the game itself runs at. 60 for spots that break above it (a ledge Kratos cannot cross, a button-mash prompt). R3 + L1 + R1 or F9 go through the list.", "游戏引擎自身运行的最高帧率。如果出现无法跨越边缘或连按提示异常，请改回 60。按 R3 + L1 + R1 或 F9 循环切换。"},
     {"The item meter (bow, Helios' head, boots) stays full.", "道具能量（弓、赫利俄斯之首、靴子）保持满值。"},
     {"The performance overlay in a corner of the screen.", "在屏幕角落显示性能信息。"},
@@ -179,13 +197,114 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"orb pickups", "魂拾取"},
     {"ready", "就绪"},
     {"red orbs", "红魂"},
+    // the trophy window and the language option
+    {"Theme", "主题"},
+    {"Original", "原版"},
+    {"Card", "卡片"},
+    {"Card, cinematic platinum", "卡片（电影式白金）"},
+    {"Corner popup", "角落弹窗"},
+    {"How an unlocked trophy is shown. Original is the port's own notice.", "解锁奖杯时的显示方式。原版是移植版自带的通知。"},
+    {"Mute the sound", "静音"},
+    {"No sound plays without a sound file in user/custom_trophy.", "user/custom_trophy 中没有声音文件时不会播放声音。"},
+    {"Volume", "音量"},
+    {"Time on screen", "显示时间"},
+    {"Theme default", "主题默认"},
+    {"Platinum light", "白金光效"},
+    {"Animate the platinum", "白金动画"},
+    {"Off: the platinum shows its own picture, like the other trophies.", "关闭：白金奖杯和其他奖杯一样显示自己的图片。"},
+    {"Write the grade", "显示等级"},
+    {"The grade's name before the second line.", "在第二行前显示等级名称。"},
+    {"Bronze", "铜"},
+    {"Silver", "银"},
+    {"Gold", "金"},
+    {"Platinum", "白金"},
+    {"A preview: it looks and sounds like an unlock; nothing is unlocked or saved.", "预览：外观和声音与解锁相同；不会解锁或保存任何内容。"},
+    {"All four in a row", "四个连续"},
+    {"Three at once", "三个同时"},
+    {"Your files", "你的文件"},
+    {"Sounds:", "声音："},
+    {"Pictures:", "图片："},
+    {"Your own sounds, pictures, animations and texts go in user/custom_trophy (docs/TROPHIES.md). Sounds reload here; pictures when the game starts.", "你自己的声音、图片、动画和文字放在 user/custom_trophy（docs/TROPHIES.md）。声音在此重新加载；图片在游戏启动时加载。"},
+    {"Reload sounds", "重新加载声音"},
+    {"Trophy unlocked!", "奖杯已解锁！"},
+    {"Language", "语言"},
+    {"Pause the game", "暂停游戏"},
+    {"The game stops while this menu or the trophy list is open.", "打开此菜单或奖杯列表时游戏暂停。"},
+    {"Same as the launcher", "与启动器相同"},
+    {"The language of this menu and of the trophies. Until you choose one, the launcher's is used.", "此菜单和奖杯使用的语言。在你选择之前，使用启动器的语言。"},
+    {"none", "无"},
+    {"drawn", "绘制"},
+    {"artwork", "奖杯图片"},
+    {"Badge", "徽章"},
+    {"Supported features", "支持的功能"},
+    {"What this game version can use. Each one is turned on or off in its own tab.", "此游戏版本可以使用的功能。每项功能在各自的选项卡中开启或关闭。"},
+    {"supported", "支持"},
+    {"not supported", "不支持"},
+    {"Orb pickups", "魂拾取"},
+    {"Damage", "伤害"},
+    {"All grades", "全部等级"},
+    {"Square/G: grade", "方块/G：等级"},
 };
-inline const char* Tr(const char* text) {
-    if (chinese && text) {
-        for (const auto& [english, translated] : ChineseText) {
-            if (english == text) return translated;
-        }
+using TextTable = std::pair<std::string_view, const char*>;
+
+struct Language {
+    std::string_view code; // as the launcher names it (SPARTAN_UI_LANGUAGE)
+    const char* name;      // in the language itself
+    const TextTable* texts;
+    std::size_t count;
+};
+template <std::size_t N>
+constexpr Language Table(std::string_view code, const char* name, const TextTable (&texts)[N]) {
+    return {code, name, texts, N};
+}
+/// The menu's languages, in the order of the language list; 0 is English.
+inline constexpr Language Languages[] = {
+    {"en", "English", nullptr, 0},
+    Table("pt", "Português (Brasil)", PortugueseText),
+    Table("es", "Español", SpanishText),
+    Table("fr", "Français", FrenchText),
+    Table("de", "Deutsch", GermanText),
+    Table("it", "Italiano", ItalianText),
+    Table("pl", "Polski", PolishText),
+    Table("tr", "Türkçe", TurkishText),
+    Table("id", "Bahasa Indonesia", IndonesianText),
+    Table("ru", "Русский", RussianText),
+    Table("zh", "中文", ChineseText),
+};
+inline constexpr int LanguageCount = int(sizeof(Languages) / sizeof(Languages[0]));
+inline std::atomic<int> language{0}; // index into Languages
+
+/// The index of a launcher language ("pt", "pt-BR", "zh_CN"...); 0 (English) for any other.
+inline int FindLanguage(std::string_view code) {
+    if (WantsChinese(code)) return LanguageCount - 1;
+    const std::string_view two = code.substr(0, 2);
+    for (int i = 1; i < LanguageCount; ++i) {
+        if (Languages[i].code == two && Languages[i].code != "zh") return i;
+    }
+    return 0;
+}
+
+/// Uses the language at once; Chinese only once its font is loaded (else English). Returns the
+/// index in use.
+inline int SetLanguage(int index) {
+    if (index < 0 || index >= LanguageCount) index = 0;
+    if (Languages[index].code == "zh" && !chinese_font) index = 0;
+    language = index;
+    chinese = Languages[index].code == "zh";
+    return index;
+}
+
+inline const char* Lookup(const Language& table, const char* text) {
+    for (std::size_t i = 0; i < table.count; ++i) {
+        if (table.texts[i].first == text) return table.texts[i].second;
     }
     return text;
+}
+
+inline const char* Tr(const char* text) {
+    if (!text) return text;
+    if (chinese) return Lookup(Languages[LanguageCount - 1], text);
+    const int index = language;
+    return index > 0 && index < LanguageCount ? Lookup(Languages[index], text) : text;
 }
 } // namespace SpartanUi

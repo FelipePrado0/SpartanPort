@@ -15,6 +15,12 @@ typedef spartanport_jmp_buf sigjmp_buf;
 extern __thread sigjmp_buf *runtime_fault_recover;
 /* Restarts the game (in-game settings menu, render resolution change). */
 void runtime_restart(void);
+/* SPARTAN_SLOW_WAITS=<ms>: log guest blocking calls (locks, waits, reads) longer than that.
+ * runtime_wait_begin() returns 0 when it is off; runtime_wait_end() then does nothing. */
+uint64_t runtime_wait_begin(void);
+void runtime_wait_end(const char *what,uint64_t start,const char *detail,long long arg);
+/* The floating-point state a PS4 gives its threads (runtime_thread.c). */
+void runtime_orbis_fpu(void);
 #define ABI __attribute__((sysv_abi))
 typedef void (ABI *GuestCallback)(void);
 void runtime_start(uint64_t capabilities);
@@ -74,6 +80,9 @@ void runtime_thread_keys_cleanup(void);
 /* Guest-visible errno values are FreeBSD's. */
 int32_t runtime_guest_errno(int host_errno);
 void *runtime_low_map(size_t size, int prot);
+/* Zeroed, 64-byte aligned host records the guest sees by address, below 1 TiB (SPARTAN_LOW_HANDLES). */
+void *runtime_low_alloc(size_t size);
+void runtime_low_free(void *pointer);
 /* Windows: reserves the PS4 user address range as a placeholder (no-op elsewhere). */
 void runtime_memory_reserve(void);
 uintptr_t runtime_ajm_resolve(const char *name);
@@ -105,6 +114,7 @@ void runtime_savedata_report(void);
 #define RUNTIME_SAVE_PARAM_SIZE 1328
 int runtime_savedata_param(int32_t user, const char *dir, void *param);
 int runtime_savedata_icon(int32_t user, const char *dir, char *out, size_t size);
+int64_t runtime_savedata_mtime(int32_t user, const char *dir);
 void runtime_savedata_preview_path(const char *path);
 void runtime_thread_attach_host(const char *name);
 #endif

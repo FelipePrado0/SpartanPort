@@ -38,19 +38,31 @@ int spartanportgpu_choice_confirm(const char *title, const char *const *items, i
                                  const unsigned char *png, uint64_t size, const char *caption, const char *unavailable);
 /* 1 while the in-game settings menu is open: the game's pad input is held neutral. */
 int spartanportgpu_overlay_captures_input(void);
+/* Game threads: returns once the game is no longer paused by the menu or the trophy list. */
+void spartanportgpu_wait_while_paused(void);
 /* Controller vibration strength set in the menu, 0 (off) to 100 (the game's own). */
 int spartanportgpu_vibration_percent(void);
+/* Menu confirm button: 0 Cross confirms, Circle cancels; 1 Circle confirms, Cross cancels. */
+int spartanportgpu_menu_confirm_swap(void);
 /* Native Display menu: query (0) or toggle (1); returns 0 off, 1 on, 2 unsupported. */
 int spartanportgpu_enemy_health_bar(int toggle);
 /* Native Cheats: f00+i query/f10+i toggle (8 cheats); f20+i text/f30+i decrease/f40+i increase/
- * f50+i slider position (6 multipliers); f60 resets multipliers. Graphics: f70+i query,
- * f80+i decrease/f90+i increase (5 controls), fa3 strength position, fb0 defaults.
+ * f50+i slider position (6 multipliers); f60 resets multipliers. Graphics Settings: f70+i query,
+ * f80+i decrease/f90+i increase (5 controls), fa3 strength position, fb0 defaults. Live Graphics:
+ * f75+i query, f85+i toggle or next step, f95 previous step (0 texture quality, 1 shadows,
+ * 2 motion blur, 3 bloom; ids in src/graphics_hook.h).
  * Controls: fa4+i query/faa+i decrease/fb1+i increase/fb8+i selected query (6 controls),
  * fb7 restores only the port's controls defaults.
  * Display: fc0+i query/fd0+i decrease/fe0+i increase/ff0+i selected query (8 controls;
  * formatted text), fc9 restart available, fcb confirmed restart request (1 when saved).
  * Text results are stable pointers. */
 uint64_t spartanportgpu_native_setting(unsigned function);
+/* Master volume of the game's audio set in the menu, 0 to 200 percent (100: the game's own mix;
+ * more is boosted behind a soft limiter). Read for every audio buffer. */
+int spartanportgpu_audio_volume_percent(void);
+/* Speaker layout for the game's 7.1 audio, set in the menu or spartanport.ini (audio_channels):
+ * 0 automatic (the device's), 1 stereo, 2 5.1, 3 7.1. Read when an audio port is opened. */
+int spartanportgpu_audio_channels(void);
 /* R3 + L1 + R1 (pad) or F9: the next engine frame rate (60, 100, 120, 144, 180, 240), applied live. */
 void spartanportgpu_engine_fps_cycle(void);
 /* The video decoder handed the game a picture: a cutscene is on screen (the presenter draws
@@ -68,9 +80,11 @@ int spartanportgpu_mouse_aim_sensitivity(void);
 unsigned spartanportgpu_symbol_count(void);
 /* Yields of threads waiting for guest memory copies (CPU report, #209). */
 unsigned long long spartanportgpu_copy_yields(void);
-/* Trophy notice at the top-right of the game window (any thread). title: the trophy's name,
- * detail: its description (null or empty: none), png: its icon (PNG bytes; null: a drawn medal). */
-void spartanportgpu_toast_trophy(const char *title, const char *detail, const unsigned char *png, uint64_t png_size);
+/* Trophy notice (any thread), in the theme chosen in the menu. id: the trophy's (-1: a plain notice),
+ * title: its name, detail: its description (null or empty: none), png: its icon (PNG bytes; null: a
+ * drawn medal). */
+void spartanportgpu_toast_trophy(int id, const char *title, const char *detail, const unsigned char *png,
+                                 uint64_t png_size);
 void spartanportgpu_toast_icon(const char *text, const unsigned char *png, uint64_t png_size);
 void spartanportgpu_toast(const char *text);
 /* The in-game trophy list (F8 / R3+R2) and the notice labels, handed over once by the runtime.
@@ -82,6 +96,11 @@ typedef struct {
     const char *filter_all, *filter_unlocked, *filter_locked;
     const char *counter; /* "{} of {} unlocked" */
     const char *hint;    /* the keys */
+    const char *notifications;                        /* the second page: the notification options */
+    const char *order_list, *order_common, *order_rare; /* the orders of the list */
+    const char *rarity;                               /* "{}% of players" */
+    const char *common, *rare, *very_rare, *ultra_rare; /* the rarity tiers */
+    const char *hint_order, *hint_notifications;      /* the keys of the order and of the second page */
 } SpartanGpuTrophyLabels;
 typedef struct {
     int id;

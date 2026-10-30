@@ -27,7 +27,6 @@
 #include "video_core/amdgpu/pm4_cmds.h"
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
-#include "video_core/renderer_vulkan/vk_dlss_frame_generation.h"
 
 namespace AmdGpu {
 
@@ -708,16 +707,8 @@ void ScanDcb(std::span<const u32> dcb, int depth) {
 } // namespace
 
 Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<const u32> ccb,
-                                           u64 seq, void* frame_token) {
+                                           u64 seq) {
     FIBER_ENTER(dcb_task_name);
-    if (frame_token && rasterizer) {
-        const auto set_token = [](Vulkan::Rasterizer&, const u8* bytes) {
-            void* token{};
-            std::memcpy(&token, bytes, sizeof(token));
-            Vulkan::DlssFrameGeneration::Get().SetRenderToken(token);
-        };
-        rasterizer->RunInOrder(set_token, &frame_token, sizeof(frame_token));
-    }
     // Top-level buffers enqueued for the draw preparation workers (nested IBs are not).
     Vulkan::DrawPreparation* draw_prep =
         seq != NoSeq && rasterizer ? &rasterizer->GetDrawPreparation() : nullptr;
@@ -1682,7 +1673,7 @@ Liverpool::CmdBuffer Liverpool::CopyCmdBuffers(std::span<const u32> dcb, std::sp
     return std::make_pair(dcb, ccb);
 }
 
-void Liverpool::SubmitGfx(std::span<const u32> dcb, std::span<const u32> ccb, void* frame_token) {
+void Liverpool::SubmitGfx(std::span<const u32> dcb, std::span<const u32> ccb) {
     auto& queue = mapped_queues[GfxQueueId];
 
     if (EmulatorSettings.IsCopyGpuBuffers()) {
@@ -1701,7 +1692,7 @@ void Liverpool::SubmitGfx(std::span<const u32> dcb, std::span<const u32> ccb, vo
             seq = gfx_submit_seq++;
             draw_prep->Enqueue(seq, std::move(prep_submission));
         }
-        auto task = ProcessGraphics(dcb, ccb, seq, frame_token);
+        auto task = ProcessGraphics(dcb, ccb, seq);
         queue.submits.emplace(task.handle);
     }
 

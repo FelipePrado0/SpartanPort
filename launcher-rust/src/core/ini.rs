@@ -77,6 +77,33 @@ pub fn read_ini(path: &Path) -> (Ini, bool) {
             values.insert(key.trim().to_string(), value.trim().to_string());
         }
     }
+    let has_primary = lines
+        .iter()
+        .filter(|line| is_assignment(line))
+        .filter_map(|line| line.split_once('='))
+        .any(|(name, _)| name.trim() == "menu_confirm_swap");
+    if !has_primary {
+        if let Some(alias) = values.get("menu_confirm") {
+            let swapped = matches!(
+                alias.trim().to_ascii_lowercase().as_str(),
+                "circle" | "swapped" | "1" | "true" | "yes" | "on"
+            );
+            values.insert(
+                "menu_confirm_swap".to_string(),
+                if swapped { "1" } else { "0" }.to_string(),
+            );
+        }
+    } else if let Some(val) = values.get("menu_confirm_swap") {
+        match val.trim().to_ascii_lowercase().as_str() {
+            "circle" | "swapped" | "true" | "yes" | "on" => {
+                values.insert("menu_confirm_swap".to_string(), "1".to_string());
+            }
+            "cross" | "false" | "no" | "off" => {
+                values.insert("menu_confirm_swap".to_string(), "0".to_string());
+            }
+            _ => {}
+        }
+    }
     (Ini { values, lines }, unreadable)
 }
 
@@ -219,5 +246,57 @@ mod tests {
             fs::read_to_string(&path).unwrap(),
             "# spartanport settings (in-game menu: Insert / R3+L2)\nvsync=0\n"
         );
+    }
+
+    #[test]
+    fn menu_confirm_swap_default_is_zero() {
+        let dir = tempfile::tempdir().unwrap();
+        let ini = load_ini(&dir.path().join("spartanport.ini"));
+        assert_eq!(ini.values["menu_confirm_swap"], "0");
+    }
+
+    #[test]
+    fn menu_confirm_swap_reads_explicit_value() {
+        let (_dir, path) = ini_file("menu_confirm_swap=1\n");
+        assert_eq!(load_ini(&path).values["menu_confirm_swap"], "1");
+        let (_dir, path) = ini_file("menu_confirm_swap=0\n");
+        assert_eq!(load_ini(&path).values["menu_confirm_swap"], "0");
+        let (_dir, path) = ini_file("menu_confirm_swap=circle\n");
+        assert_eq!(load_ini(&path).values["menu_confirm_swap"], "1");
+    }
+
+    #[test]
+    fn menu_confirm_alias_maps_when_primary_is_absent() {
+        let (_dir, path) = ini_file("menu_confirm=circle\n");
+        assert_eq!(load_ini(&path).values["menu_confirm_swap"], "1");
+        let (_dir, path) = ini_file("menu_confirm=swapped\n");
+        assert_eq!(load_ini(&path).values["menu_confirm_swap"], "1");
+        let (_dir, path) = ini_file("menu_confirm=cross\n");
+        assert_eq!(load_ini(&path).values["menu_confirm_swap"], "0");
+    }
+
+    #[test]
+    fn menu_confirm_swap_primary_overrides_alias() {
+        let (_dir, path) = ini_file("menu_confirm_swap=0\nmenu_confirm=circle\n");
+        assert_eq!(load_ini(&path).values["menu_confirm_swap"], "0");
+        let (_dir, path) = ini_file("menu_confirm=circle\nmenu_confirm_swap=0\n");
+        assert_eq!(load_ini(&path).values["menu_confirm_swap"], "0");
+        let (_dir, path) = ini_file("menu_confirm_swap=1\nmenu_confirm=cross\n");
+        assert_eq!(load_ini(&path).values["menu_confirm_swap"], "1");
+        let (_dir, path) = ini_file("menu_confirm=cross\nmenu_confirm_swap=1\n");
+        assert_eq!(load_ini(&path).values["menu_confirm_swap"], "1");
+    }
+
+    #[test]
+    fn menu_confirm_swap_persists_in_ini() {
+        let (_dir, path) = ini_file("# settings\nmenu_confirm_swap=0\n");
+        let lines = load_ini(&path).lines;
+        let mut edited = IndexMap::new();
+        edited.insert("menu_confirm_swap".to_string(), "1".to_string());
+        save_ini(&path, &edited, &lines).unwrap();
+        assert_eq!(load_ini(&path).values["menu_confirm_swap"], "1");
+        assert!(fs::read_to_string(&path)
+            .unwrap()
+            .contains("menu_confirm_swap=1\n"));
     }
 }

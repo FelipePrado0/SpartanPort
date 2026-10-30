@@ -39,6 +39,14 @@ int main() {
     Environment("SPARTAN_UPSCALE_PRESET", nullptr);
     Environment("SPARTAN_RENDER_RES", nullptr);
     auto& s = Get();
+    {
+        FILE* config = std::fopen(path, "w");
+        assert(config);
+        std::fputs("upscaler=dlss\nframe_generation=dlss\n", config);
+        std::fclose(config);
+        Load();
+        assert(s.upscaler == UpscalerOff && s.frame_generation == 0);
+    }
     s.upscaler = UpscalerTaa;
     s.preset = Performance;
     assert(RenderPreset() == NativeAA && s.preset == Performance);
@@ -147,13 +155,14 @@ int main() {
     spartanportgpu_native_setting(0xf65);
     assert(s.upscaler == UpscalerFsr4);
 #ifdef _WIN32
-    // DLSS follows FSR 4.1 (the launcher's order); without an RTX card the row says so.
+    // TAA follows FSR 4.1; unsupported FSR 4.1 is labelled in both languages.
     s.upscaler = UpscalerFsr411;
     spartanportgpu_native_setting(0xf65);
-    assert(s.upscaler == UpscalerDlss);
-    s.dlss_supported = false;
+    assert(s.upscaler == UpscalerTaa);
+    s.upscaler = UpscalerFsr411;
+    s.fsr411_supported = false;
     label = reinterpret_cast<const char*>(spartanportgpu_native_setting(0xf61));
-    assert(std::strstr(label, "DLSS") && std::strstr(label, "unavailable"));
+    assert(std::strstr(label, "FSR 4.1") && std::strstr(label, "unavailable"));
     // Portuguese: the launcher's preset names and the accent.
     Environment("SPARTAN_LANGUAGE", "pt");
     label = reinterpret_cast<const char*>(spartanportgpu_native_setting(0xf61));
@@ -170,7 +179,7 @@ int main() {
 #endif
     s.upscaler = s.startup_upscaler;
 
-    // Frame generation: saved, read back, invalid values off; only DLSS waits for a restart.
+    // Frame generation: saved, read back, invalid values off; AMD FSR switches live.
     s.frame_generation = 1;
     s.frame_generation_frames = 1;
     Save();
@@ -199,11 +208,7 @@ int main() {
     assert(s.frame_generation == 0);
     s.frame_generation = 1; // FSR switches live
     assert(!GraphicsNeedRestart());
-#ifdef _WIN32
-    s.frame_generation = 2;
-    assert(GraphicsNeedRestart());
-#endif
-    // Display menu's Frame Generation row: Off, AMD FSR 2x, then DLSS 2x on Windows.
+    // Display menu's Frame Generation row cycles between Off and AMD FSR 2x.
     s.frame_generation = 0;
     s.frame_generation_frames = 1;
     const auto fg_label = [](unsigned function) {
@@ -212,19 +217,9 @@ int main() {
     assert(fg_label(0xf69).find("Off") != std::string::npos);
     assert(fg_label(0xf6b).find("AMD FSR 2x") != std::string::npos && s.frame_generation == 1);
     assert(fg_label(0xf6c).find("[ArrowSelectionL]") == 0);
-#ifdef _WIN32
-    s.fg_dlss_supported = true;
-    assert(fg_label(0xf6b).find("NVIDIA DLSS 2x") != std::string::npos && s.frame_generation == 2);
     assert(fg_label(0xf6b).find("Off") != std::string::npos && s.frame_generation == 0);
-    Environment("SPARTAN_LANGUAGE", "pt");
-    s.fg_dlss_supported = false;
-    assert(fg_label(0xf6a).find("DLSS 2x (indisponível)") != std::string::npos);
-    Environment("SPARTAN_LANGUAGE", nullptr);
-    s.fg_dlss_supported = false;
-#else
-    assert(fg_label(0xf6b).find("Off") != std::string::npos && s.frame_generation == 0);
-#endif
-    s.frame_generation = s.startup_frame_generation;
+    assert(fg_label(0xf6a).find("AMD FSR 2x") != std::string::npos && s.frame_generation == 1);
+    s.frame_generation = 0;
     std::remove(path);
     std::puts("Upscaler support: saved choices and FSR 3.1 fallback PASS");
 }

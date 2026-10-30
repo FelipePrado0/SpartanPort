@@ -13,7 +13,7 @@ FILES = [
     'test_run_isa.py', 'test_patches.py', 'test_mods.py', 'test_mod_conflicts.py',
     'test_glyphs.py', 'test_content.py', 'test_guest_memory.py', 'test_graphics_options.py',
     'test_save_backup.py', 'test_pause_menu.py', 'test_native_cheats.py', 'test_legacy.py',
-    'test_discord_presence.py', 'test_game_update.py',
+    'test_discord_presence.py', 'test_game_update.py', 'test_switch_text.py',
 ]
 
 # Mechanics with no Rust equivalent, each named by its test (or class) and explained in its row:
