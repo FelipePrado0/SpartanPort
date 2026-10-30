@@ -268,13 +268,14 @@ Leia isto antes de qualquer fase. Os caminhos são da `main` em `f593377`.
 - [x] Correção (spec `docs/specs/2026-10-30-high-fps-f2-qte-all-kinds.md`): os 4 stubs do Automatic QTE
       contam os quadros do seu tipo em `SpartanQteState.kinds[4]`, sempre (Auto QTE ligado ou não),
       com um prefixo de 30 bytes que preserva registradores, flags e red zone; "QTE ativo" = qualquer
-      um dos 5 contadores; histerese de 500 ms para 1,5 s; log com os tipos
+      um dos 5 contadores; histerese de 500 ms para 1,5 s e depois 5 s (sequências de apertos únicos); log com os tipos
       (`kinds: update,repeat`) e `QTE cap held 20 s, kinds: ...` uma vez por queda longa (denuncia um
       site que roda fora de QTE). O giro do analógico pelo teclado/mouse continua só no `update`.
 - [x] Linux: `test_qte_hook` rodado com um `windows.h` de mmap (scratch, não versionado), com um
       mutante que mexe nas flags pego pelo teste; `pad-test`, `graphics-settings-test` e
       `build.sh --test` verdes.
 - [x] Reteste no jogo (30/10/2026, build do Windows zip `40980000336`, head `f9903c5`): o mantenedor confirmou que os QTEs do cavalo do Poseidon ficam a 60 FPS.
+- [x] Espera depois do QTE aumentada para 5 s (30/10): a 1,5 s o motor voltava a 240 entre os botões de uma sequência.
 - [ ] F2.5 itens 2 a 5: troca de taxa durante o QTE, reabrir o jogo (`engine_fps` ≠ 60), opção desligada, minutos sem QTE sem ficar preso a 60.
 - [ ] `test_qte_hook` no Windows.
 - [ ] Decisão F2.6 sobre a #1092 (atenção: o stub repeat dela tem 122 bytes; com o prefixo de

@@ -498,10 +498,10 @@ static bool qte_play(const bool *keys, uint64_t now) {
  * back after QTE_FPS_HOLD_US more without one, so prompts in a row keep it. A cap held
  * QTE_FPS_REPORT_US is reported once with the kinds still counting (a site that also runs outside
  * prompts would keep the game at 60). Atomics only on this thread. */
-/* 1.5 s: the maintainer's first test (Poseidon's horse) saw caps of 1 to 4 s end while prompts were
- * still up, and mash or hold prompts can go a second without a frame of any counted kind; staying
- * at 60 a moment after a QTE costs little. */
-enum { QTE_FPS_HOLD_US=1500000, QTE_FPS_REPORT_US=20000000 };
+/* 5 s: on Poseidon's horse the single presses of one sequence come seconds apart, and 1.5 s let the
+ * engine go back to the player's rate between them (maintainer's test, 2026-10-30); staying at 60 a
+ * few seconds after a QTE costs little. */
+enum { QTE_FPS_HOLD_US=5000000, QTE_FPS_REPORT_US=20000000 };
 static struct { bool capped, reported; uint64_t since; } qte_fps;
 static void qte_fps_cap(uint64_t now) {
     const unsigned kinds=qte_active(now);

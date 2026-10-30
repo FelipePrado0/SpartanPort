@@ -194,7 +194,7 @@ static void test_qte_fps_cap(void) {
     qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+100000);
     assert(engine_fps_cap_calls==2);
     /* A new prompt later: down and up again, with its own type. */
-    t+=5000000;
+    t+=10000000;
     __atomic_add_fetch(&spartanport_qte.heartbeat,1,__ATOMIC_RELAXED);
     qte_fps_cap(t);
     assert(engine_fps_cap_calls==3 && engine_fps_cap==60 && engine_fps_cap_type==8);
@@ -204,6 +204,24 @@ static void test_qte_fps_cap(void) {
     assert(engine_fps_cap_calls==4 && engine_fps_cap==0 && qte.passed);
     qte.passed=false;
     spartanport_qte.block=0;
+}
+
+/* qte_fps_cap_sequence: a sequence of single presses with 4 s between the prompts (Poseidon's horse)
+ * stays at 60 from the first prompt to the last, then goes back once. */
+static void test_qte_fps_cap_sequence(void) {
+    const int calls=engine_fps_cap_calls;
+    spartanport_qte.block=0;
+    uint64_t t=400000000;
+    for (int press=0;press<5;++press) {
+        for (int i=0;i<30;++i) {       /* half a second of prompt frames */
+            __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_TIMED],1,__ATOMIC_RELAXED);
+            qte_fps_cap(t+=16000);
+        }
+        if (press<4) for (int i=0;i<250;++i) qte_fps_cap(t+=16000);  /* 4 s to the next prompt */
+        assert(engine_fps_cap_calls==calls+1 && engine_fps_cap==60);
+    }
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==calls+2 && engine_fps_cap==0);
 }
 
 /* The Automatic QTE stubs' counters (src/qte_hook.h) start a QTE too, without the rotation hooks;
@@ -265,6 +283,7 @@ static void test_qte_fps_cap_kinds(void) {
 int main(void) {
     test_qte_fps_cap();
     test_qte_fps_cap_kinds();
+    test_qte_fps_cap_sequence();
     test_switch_attack();
     const char *tmp=getenv("TMPDIR") ? getenv("TMPDIR") : getenv("TEMP") ? getenv("TEMP") : "/tmp";
     char path[1024];

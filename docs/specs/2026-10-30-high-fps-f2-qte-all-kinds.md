@@ -108,3 +108,11 @@ Automatic QTE (timed, repeat, charged, circle) não movem nada, e a queda sai ce
   `_Static_assert` novo do `probe.c`; corrigido com os casts.)
 * **Não testado:** `test_qte_hook` no Windows de verdade (rodado no Linux com o shim), o launcher
   (sem mudança), e o jogo: reteste nos QTEs do cavalo do Poseidon.
+
+## Ajuste de 30/10/2026: espera de 5 s
+
+* **Comportamento:** QUANDO uma sequência de apertos únicos tiver segundos entre os prompts (cavalo do Poseidon), O SISTEMA DEVE manter o motor a 60 do primeiro ao último prompt e voltar uma vez só no fim.
+* **Teste:** `tests/test_pad.c`, `test_qte_fps_cap_sequence` (5 prompts `timed` de 0,5 s com 4 s entre eles).
+* **Red:** `bash build.sh --test` → `pad-test: tests/test_pad.c:221: test_qte_fps_cap_sequence: Assertion 'engine_fps_cap_calls==calls+1 && engine_fps_cap==60' failed.` (com 1,5 s o motor voltava a 240 entre os prompts, como o mantenedor viu no jogo).
+* **Green:** `QTE_FPS_HOLD_US` de 1,5 s para 5 s; o teste antigo que abria um prompt novo 5 s depois passou a usar 10 s. `bash build.sh --test` rc=0, todos os PASS.
+* **Aprovação:** aprovada pelo mantenedor (30/10/2026).
