@@ -605,6 +605,8 @@ static void install_auto_qte_hooks(Segment *segments, uint64_t count, uint64_t s
                                               SPARTAN_QTE_CIRCLE_LENGTH};
     const char *names[AUTO_QTE_SITES] = {"button", "repeated press", "held press", "Circle struggle"};
     const uintptr_t automatic = spartanport_auto_qte_flag();
+    SpartanQteState *state = (SpartanQteState *)spartanport_qte_state_address();
+    _Static_assert((int)AUTO_QTE_SITES == (int)SPARTAN_QTE_COUNTS, "one frame count per site");
     unsigned char *stubs = allocate(page_size);
     uint64_t sites[AUTO_QTE_SITES];
     int32_t relative[AUTO_QTE_SITES] = {0};
@@ -625,11 +627,14 @@ static void install_auto_qte_hooks(Segment *segments, uint64_t count, uint64_t s
         }
         relative[i] = (int32_t)delta;
         const uintptr_t resume = (uintptr_t)(image + sites[i] + lengths[i]);
-        if (i == 0) spartanport_qte_build_timed_stub(stub, automatic, resume);
-        else if (i == 1) spartanport_qte_build_repeat_stub(stub, automatic,
+        /* The sites are in SPARTAN_QTE_COUNT_* order: each stub counts its kind's frames. */
+        const uintptr_t frames = (uintptr_t)&state->kinds[i];
+        if (i == 0) spartanport_qte_build_timed_stub(stub, frames, automatic, resume);
+        else if (i == 1) spartanport_qte_build_repeat_stub(stub, frames, automatic,
                                                     (uintptr_t)(image + spartanport_qte_call_target(image + sites[i], sites[i])));
-        else if (i == 2) spartanport_qte_build_charged_stub(stub, automatic, resume);
-        else spartanport_qte_build_circle_stub(stub, automatic, resume, (uintptr_t)(image + sites[i] + SPARTAN_QTE_CIRCLE_SKIP));
+        else if (i == 2) spartanport_qte_build_charged_stub(stub, frames, automatic, resume);
+        else spartanport_qte_build_circle_stub(stub, frames, automatic, resume,
+                                        (uintptr_t)(image + sites[i] + SPARTAN_QTE_CIRCLE_SKIP));
     }
     protect(stubs, page_size, 5);
     for (unsigned i = 0; i < AUTO_QTE_SITES; ++i) {
