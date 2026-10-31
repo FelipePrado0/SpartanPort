@@ -622,11 +622,16 @@ static int direct_range_allocated(uint64_t phys, uint64_t size) {
     return 1;
 }
 
-/* The pool is created first so that the size reported is the one the host granted. */
+/* The pool is created first so that the size reported is the one the host granted. Once it
+ * exists the size is fixed, so later calls skip the exclusive lock: taking it advances
+ * table_generation, which drops every thread's region cache. */
 static ABI uint64_t direct_size(void) {
+    static int pool_known;
+    if (__atomic_load_n(&pool_known,__ATOMIC_ACQUIRE)) return POOL_SIZE;
     write_lock();
     pool();
     uint64_t size=POOL_SIZE;
+    __atomic_store_n(&pool_known,1,__ATOMIC_RELEASE);
     write_unlock();
     return size;
 }
