@@ -41,28 +41,30 @@ static uintptr_t Address(const void* p) {
     return reinterpret_cast<uintptr_t>(p);
 }
 
-// Runs the damage stub as the game would: r13 the actor, rbp the routine's frame. Returns the
-// health the game would compute (xmm0 at the resume point) and the damage left in the frame.
-static float Damage(bool player, float health, float damage, float taken, float dealt, float* frame_damage) {
+// Runs the damage stub as the game's routine entry would: rdi the actor, xmm0 the damage, rbp the
+// routine's frame. Returns the damage the routine goes on with (xmm0) and checks the replayed
+// instructions stored it in the frame and set r13.
+static float Damage(bool player, float damage, float taken, float dealt) {
     unsigned char* code = Executable();
-    const unsigned char entry[] = {0x55, 0x41,0x55, 0x49,0x89,0xfd, 0x48,0x89,0xf5, 0xff,0x25,0,0,0,0};
+    const unsigned char entry[] = {0x55, 0x41,0x55, 0x48,0x89,0xf5, 0xff,0x25,0,0,0,0};
     std::memcpy(code, entry, sizeof(entry));
     const uintptr_t stub = Address(code + 64), exit = Address(code + 512);
     std::memcpy(code + sizeof(entry), &stub, 8);
     assert(spartanport_damage_build_stub(code + 64, Address(&taken), Address(&dealt), exit) < 448);
-    const unsigned char leave[] = {0xc5,0xfa,0x11,0x45,0x98, 0x41,0x5d, 0x5d, 0xc3};
+    const unsigned char leave[] = {0x4c,0x89,0x2a, 0x41,0x5d, 0x5d, 0xc3};  // mov [rdx], r13
     std::memcpy(code + 512, leave, sizeof(leave));
     Seal(code);
     std::vector<unsigned char> actor(0x400);
     actor[0x298] = player ? 0 : 1;
     float frame[32]{};
     float* top = frame + 32;
-    std::memcpy(reinterpret_cast<unsigned char*>(top) - 0x5c, &health, 4);
-    std::memcpy(reinterpret_cast<unsigned char*>(top) - 0x60, &damage, 4);
-    reinterpret_cast<void(__attribute__((sysv_abi))*)(void*, void*)>(code)(actor.data(), top);
-    float result;
-    std::memcpy(&result, reinterpret_cast<unsigned char*>(top) - 0x68, 4);
-    std::memcpy(frame_damage, reinterpret_cast<unsigned char*>(top) - 0x60, 4);
+    void* r13 = nullptr;
+    const float result = reinterpret_cast<float(__attribute__((sysv_abi))*)(void*, void*, void**, float)>(code)(
+        actor.data(), top, &r13, damage);
+    float stored;
+    std::memcpy(&stored, reinterpret_cast<unsigned char*>(top) - 0x60, 4);
+    assert(r13 == actor.data());
+    assert(std::memcmp(&stored, &result, 4) == 0);
     return result;
 }
 
@@ -105,14 +107,13 @@ int main(int argc, char** argv) {
         assert(spartanport_orb_pickup_signature_match(image.data() + 0x4000 + SPARTAN_ORB_PICKUP_OFFSET, SPARTAN_ORB_PICKUP_LENGTH));
     }
 
-    float left;
-    assert(Damage(true, 100, 10, 2, 5, &left) == 80 && left == 20);    // player: taken
-    assert(Damage(false, 100, 10, 2, 5, &left) == 50 && left == 50);   // enemy: dealt
-    assert(Damage(false, 100, 10, 0.5f, 0.1f, &left) == 99 && left == 1);
-    assert(Damage(true, 100, -10, 2, 5, &left) == 110 && left == -10); // healing stays
-    assert(Damage(true, 100, 0, 2, 5, &left) == 100 && left == 0);
+    assert(Damage(true, 10, 2, 5) == 20);       // player: taken
+    assert(Damage(false, 10, 2, 5) == 50);      // enemy: dealt, before the health thresholds
+    assert(Damage(false, 10, 0.5f, 0.1f) == 1);
+    assert(Damage(true, -10, 2, 5) == -10);     // healing stays
+    assert(Damage(false, 0, 2, 5) == 0);
     const float nan = std::numeric_limits<float>::quiet_NaN();
-    Damage(false, 100, nan, 2, 5, &left);
+    const float left = Damage(false, nan, 2, 5);
     assert(left != left);
 
     Amounts a = Pickup({10, 20, 30}, 2, 3, 0.5f);
