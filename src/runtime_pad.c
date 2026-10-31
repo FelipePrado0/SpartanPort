@@ -580,15 +580,17 @@ static void restore_triggers(void) {
     const DsTrigger off=ds_trigger_off();
     if (gamepad && SDL_WasInit(SDL_INIT_GAMEPAD) && SDL_GamepadConnected(gamepad)) ds_set_triggers(gamepad,&off,&off);
 }
-/* Gives R2 its click and the left trigger none. The first effect that reaches the pad also
- * registers restore_triggers to run at exit. */
-static void update_triggers(SDL_Gamepad *g) {
+/* Gives R2 its click and the left trigger none; true while the effect is on the pad. The first
+ * effect that reaches the pad also registers restore_triggers to run at exit. */
+static bool update_triggers(SDL_Gamepad *g) {
     static bool exit_hook;
     const DsTrigger off=ds_trigger_off();
     const DsTrigger right=ds_trigger_weapon(R2_CLICK_START,R2_CLICK_END,R2_CLICK_STRENGTH);
-    if (!ds_set_triggers(g,&right,&off) || exit_hook) return;
+    if (!ds_set_triggers(g,&right,&off)) return false;
+    if (exit_hook) return true;
     exit_hook=true;
     atexit(restore_triggers); /* the pad keeps an effect until the next one: leave it free */
+    return true;
 }
 
 /* motion: the pad's gyro (rad/s) and accelerometer (g) in the PS4 pad data, which the game may
@@ -631,8 +633,8 @@ static void update_dualsense(SDL_Gamepad *g, PadData *d) {
     if (features & DS_QTE) update_qte_flash(g,d->timestamp);
     else if (qte_led.shown>=0) { qte_led.shown=-1; restore_light(g); }
     if (features & DS_TRIGGERS) {
-        update_triggers(g);
-        if (d->r2<R2_PRESS_AT) { d->r2=0; d->buttons&=~(uint32_t)BTN_R2; }
+        /* Without the wall on the trigger, R2 keeps its usual threshold. */
+        if (update_triggers(g) && d->r2<R2_PRESS_AT) { d->r2=0; d->buttons&=~(uint32_t)BTN_R2; }
     } else if (ds_sent.sent_to==g) { const DsTrigger off=ds_trigger_off(); ds_set_triggers(g,&off,&off); }
     if (features & DS_MOTION) update_motion(g,d);
     if (features & DS_SPEAKER) ds_set_speaker(g,ds_speaker_gain(),ds_jack_plugged());
