@@ -421,7 +421,58 @@ static void contact_internal_collection() {
     assert(missed.calls == 1 && missed.mask == 0 && missed.normals[0][0] == 0 && missed.hits[1][0] == 0);
     VirtualFree(pages, 0, MEM_RELEASE);
 }
+static void path_capture() {
+    static SpartanPath path{};
+    float position[3]{};
+    uint64_t time = 1000000;
+    for (unsigned i = 0; i < 100; ++i) {
+        position[2] += 50.0f / 240; time += 4166; /* 50 units/s */
+        spartanport_path_add(&path, 0x1000, time, position, 0x10, SPARTAN_PATH_LIMIT);
+    }
+    assert(path.samples == 100 && !path.events && !path.captured);
+    assert(path.peak.speed > 49 && path.peak.speed < 51);
+    for (unsigned i = 0; i < 40; ++i) {
+        position[1] += 200.0f / 240; time += 4166; /* 200 units/s */
+        spartanport_path_add(&path, 0x1000, time, position, 0x20, SPARTAN_PATH_LIMIT);
+    }
+    assert(path.events == 1 && !path.captured); /* speed alone never captures, only F11 does */
+    assert(path.peak.state == 0x20);
+    for (unsigned i = 0; i < SPARTAN_PATH_FRAMES; ++i) {
+        position[1] += 50.0f / 240; time += 4166;
+        spartanport_path_add(&path, 0x1000, time, position, 0x10, SPARTAN_PATH_LIMIT);
+    }
+    const uint64_t mark_time = time;
+    spartanport_path_mark(&path);
+    for (unsigned i = 0; i < SPARTAN_PATH_FRAMES - SPARTAN_PATH_BEFORE; ++i) {
+        assert(!path.captured);
+        position[1] += 200.0f / 240; time += 4166;
+        spartanport_path_add(&path, 0x1000, time, position, 0x30, SPARTAN_PATH_LIMIT);
+    }
+    assert(path.captured == SPARTAN_PATH_FRAMES && !path.remaining && path.capture_speed > 190);
+    assert(path.capture[SPARTAN_PATH_BEFORE - 1].time == mark_time && path.capture[SPARTAN_PATH_BEFORE].state == 0x30);
+    position[1] += 50; time += 200000; /* a gap, a load or a pause, is not a speed */
+    spartanport_path_add(&path, 0x1000, time, position, 0x20, SPARTAN_PATH_LIMIT);
+    assert(path.ring[(path.count - 1) % SPARTAN_PATH_FRAMES].speed == 0);
+    const uint32_t count = path.count;
+    spartanport_path_add(&path, 0x2000, time + 4166, position, 0, SPARTAN_PATH_LIMIT);
+    assert(path.object == 0x1000 && path.count == count); /* other movers never mix in */
+    SpartanPath taken;
+    spartanport_path_take(&path, &taken);
+    assert(taken.events == 2 && taken.captured == SPARTAN_PATH_FRAMES);
+    assert(!path.samples && !path.events && !path.captured && !path.peak.time && path.count == count);
+
+    static SpartanPaths paths{};
+    for (uintptr_t i = 0; i < SPARTAN_PATH_TRACKS; ++i)
+        spartanport_paths_add(&paths, 0x1000 + i * 0x10, time, position, 0, SPARTAN_PATH_LIMIT);
+    spartanport_paths_add(&paths, 0x1000, time + 4166, position, 0, SPARTAN_PATH_LIMIT);
+    assert(paths.tracks[0].object == 0x1000 && paths.tracks[0].count == 2); /* each mover keeps its own track */
+    spartanport_paths_add(&paths, 0x9000, time + 8332, position, 0, SPARTAN_PATH_LIMIT);
+    assert(paths.full == 1); /* no stale track yet, the newcomer is counted, not mixed in */
+    spartanport_paths_add(&paths, 0x9000, time + SPARTAN_PATH_STALE_US + 4166, position, 0, SPARTAN_PATH_LIMIT);
+    assert(paths.tracks[1].object == 0x9000 && paths.tracks[1].count == 1); /* a gone mover frees its track */
+}
 int main(int argc, char **argv) {
+    path_capture();
     contact_branch_collection();
     contact_internal_collection();
     collision_collection();

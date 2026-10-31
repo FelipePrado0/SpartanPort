@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #ifndef SPARTAN_HIGH_FPS_TRACE_H
 #define SPARTAN_HIGH_FPS_TRACE_H
+#include <math.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
@@ -589,6 +590,85 @@ static inline int spartanport_trace_take(SpartanTraceSlot *slot, SpartanTraceSna
     __atomic_store_n(&slot->lock, 0, __ATOMIC_RELEASE);
     return 1;
 }
+enum { SPARTAN_TRACE_MOVE_INIT = 2 };
+
+/* Temporary F4.2 instrumentation: every recent move-init object sampled on each pad read, on the
+ * host, one track per object; the log tells which track is Kratos. The player presses F11 just
+ * before the physics breaks: each track then captures the SPARTAN_PATH_BEFORE samples before the
+ * mark and the ones after it. Samples at SPARTAN_PATH_LIMIT units/s or more only count as events. */
+#define SPARTAN_PATH_LIMIT 100.0f
+enum { SPARTAN_PATH_BEFORE = 64, SPARTAN_PATH_FRAMES = 256, SPARTAN_PATH_GAP_US = 100000,
+       SPARTAN_PATH_TRACKS = 24, SPARTAN_PATH_STALE_US = 1000000 };
+typedef struct {
+    uint64_t time;
+    float position[3], speed;
+    uint32_t state;
+} SpartanPathFrame;
+typedef struct {
+    uintptr_t object;
+    SpartanPathFrame ring[SPARTAN_PATH_FRAMES], capture[SPARTAN_PATH_FRAMES], peak;
+    uint32_t count, samples, events, remaining, captured;
+    float capture_speed;
+} SpartanPath;
+static inline void spartanport_path_add(SpartanPath *path, uintptr_t object, uint64_t time,
+                                        const float position[3], uint32_t state, float limit) {
+    if (!path->object) path->object = object;
+    if (object != path->object) return;
+    SpartanPathFrame frame = {time, {position[0], position[1], position[2]}, 0, state};
+    float previous = 0;
+    if (path->count) {
+        const SpartanPathFrame *last = &path->ring[(path->count - 1) % SPARTAN_PATH_FRAMES];
+        previous = last->speed;
+        if (time > last->time && time - last->time < SPARTAN_PATH_GAP_US) {
+            float squared = 0;
+            for (unsigned i = 0; i < 3; ++i)
+                squared += (position[i] - last->position[i]) * (position[i] - last->position[i]);
+            frame.speed = sqrtf(squared) * 1e6f / (float)(time - last->time);
+        }
+    }
+    path->ring[path->count++ % SPARTAN_PATH_FRAMES] = frame;
+    ++path->samples;
+    if (!path->peak.time || frame.speed > path->peak.speed) path->peak = frame;
+    path->events += frame.speed >= limit && previous < limit;
+    if (path->remaining) {
+        if (frame.speed > path->capture_speed) path->capture_speed = frame.speed;
+        if (!--path->remaining) {
+            path->captured = path->count < SPARTAN_PATH_FRAMES ? path->count : SPARTAN_PATH_FRAMES;
+            for (uint32_t i = 0; i < path->captured; ++i)
+                path->capture[i] = path->ring[(path->count - path->captured + i) % SPARTAN_PATH_FRAMES];
+        }
+    }
+}
+/* The next SPARTAN_PATH_FRAMES - SPARTAN_PATH_BEFORE samples complete the capture. */
+static inline void spartanport_path_mark(SpartanPath *path) {
+    path->captured = 0;
+    path->capture_speed = 0;
+    path->remaining = SPARTAN_PATH_FRAMES - SPARTAN_PATH_BEFORE;
+}
+static inline void spartanport_path_take(SpartanPath *path, SpartanPath *out) {
+    *out = *path;
+    path->samples = path->events = path->captured = 0;
+    path->capture_speed = 0;
+    path->peak.time = 0;
+}
+typedef struct {
+    SpartanPath tracks[SPARTAN_PATH_TRACKS];
+    uint32_t full;
+} SpartanPaths;
+static inline void spartanport_paths_add(SpartanPaths *paths, uintptr_t object, uint64_t time,
+                                         const float position[3], uint32_t state, float limit) {
+    SpartanPath *open = 0;
+    for (unsigned i = 0; i < SPARTAN_PATH_TRACKS; ++i) {
+        SpartanPath *path = &paths->tracks[i];
+        if (path->object == object) { spartanport_path_add(path, object, time, position, state, limit); return; }
+        const uint64_t last = path->count ? path->ring[(path->count - 1) % SPARTAN_PATH_FRAMES].time : 0;
+        if (!open && (!path->object || time - last > SPARTAN_PATH_STALE_US)) open = path;
+    }
+    if (!open) { ++paths->full; return; }
+    memset(open, 0, sizeof(*open));
+    spartanport_path_add(open, object, time, position, state, limit);
+}
+
 static inline int spartanport_trace_match(const SpartanTracePoint *point, const unsigned char *code, uint64_t size) {
     return size >= 7 && code[0] == 0x48 && code[1] == 0x8d && code[2] == 5 + point->destination * 8;
 }
