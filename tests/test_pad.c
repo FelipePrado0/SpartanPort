@@ -225,6 +225,19 @@ static void test_qte_fps_cap_sequence(void) {
     assert(engine_fps_cap_calls==calls+2 && engine_fps_cap==0);
 }
 
+/* A charged prompt (hold a button: chests, doors) is an animation, not physics: it never caps. */
+static void test_qte_fps_cap_charged(void) {
+    const int calls=engine_fps_cap_calls;
+    spartanport_qte.block=0;
+    uint64_t t=900000000;
+    for (int i=0;i<120;++i) {
+        __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_CHARGED],1,__ATOMIC_RELAXED);
+        qte_fps_cap(t+=16000);
+    }
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==calls);
+}
+
 /* The Automatic QTE stubs' counters (src/qte_hook.h) start a QTE too, without the rotation hooks;
  * a pause of 1 s between mash bursts keeps the cap; a cap held 20 s is reported once, with the
  * kinds still counting. */
@@ -284,6 +297,7 @@ static void test_qte_fps_cap_kinds(void) {
 int main(void) {
     test_qte_fps_cap();
     test_qte_fps_cap_kinds();
+    test_qte_fps_cap_charged();
     test_qte_fps_cap_sequence();
     test_switch_attack();
     const char *tmp=getenv("TMPDIR") ? getenv("TMPDIR") : getenv("TEMP") ? getenv("TEMP") : "/tmp";

@@ -510,10 +510,13 @@ static struct { bool capped, reported; uint64_t since; } qte_fps;
  * one only lift the cap when both are done. */
 enum { R1_FPS_HOLD_US=4000000 };
 static uint64_t r1_fps_until;
+/* Charged prompts (hold a button: chests, doors) only play an animation: they keep the player's rate
+ * (maintainer, 2026-10-31). */
+enum { QTE_FPS_KINDS=((1u<<SPARTAN_QTE_KINDS)-1) & ~(1u<<SPARTAN_QTE_KIND_CHARGED) };
 static void qte_fps_cap(uint64_t now) {
-    const unsigned kinds=qte_active(now);
-    uint64_t last=0;  /* the latest frame of any kind */
-    for (unsigned k=0;k<SPARTAN_QTE_KINDS;++k) if (qte.seen[k]>last) last=qte.seen[k];
+    const unsigned kinds=qte_active(now) & QTE_FPS_KINDS;
+    uint64_t last=0;  /* the latest frame of any kind that caps */
+    for (unsigned k=0;k<SPARTAN_QTE_KINDS;++k) if (QTE_FPS_KINDS>>k & 1 && qte.seen[k]>last) last=qte.seen[k];
     if (kinds) {
         if (!qte_fps.capped) {
             qte_fps.capped=true; qte_fps.reported=false; qte_fps.since=now;
