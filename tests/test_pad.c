@@ -31,6 +31,16 @@ void spartanport_camera_steer(float x, float y, float seconds, int recenter) {
     if (recenter) { ++camera_recenters; return; }
     camera_x=x; camera_y=y; ++camera_steers;
 }
+static unsigned camera_writes;
+unsigned spartanport_camera_writes(void) { return camera_writes; }
+static int camera_live=1;
+int spartanport_camera_live(void) { return camera_live; }
+static int mouse_locked, camera_looks;
+static float camera_look_x, camera_look_y;
+int spartanportgpu_mouse_locked(void) { return mouse_locked; }
+void spartanport_camera_look(float right_degrees, float down_degrees) {
+    camera_look_x=right_degrees; camera_look_y=down_degrees; ++camera_looks;
+}
 
 static bool SDLCALL record_rumble(void *userdata, uint16_t low, uint16_t high) {
     (void)userdata;
@@ -184,6 +194,29 @@ int main(void) {
     inject(path,"camera rx=128");  /* a size of its own: on Windows the file is told apart by mtime and size */
     data=read_pad();
     assert(camera_toggles==2 && camera_on);
+    /* The mouse turns the camera by an angle (0.12° a px at 100 %) while the game has the mouse,
+     * not with L2 held (the items' aim keeps it) nor once the window lets go of it. */
+    inject(path,"ry=128");
+    mouse_locked=1;
+    SDL_SetAtomicInt(&mouse_motion[0],100*16);
+    SDL_SetAtomicInt(&mouse_motion[1],-50*16);
+    data=read_pad();
+    assert(camera_looks==1 && fabsf(camera_look_x-12.0f)<1e-4f && fabsf(camera_look_y+6.0f)<1e-4f);
+    assert(SDL_GetAtomicInt(&mouse_motion[0])==0 && data.right_x==128);
+    SDL_SetAtomicInt(&mouse_motion[0],100*16);
+    data=read_pad();
+    assert(camera_looks==2);
+    data=read_pad();  /* no movement since: no turn either */
+    assert(camera_looks==2);
+    inject(path,"l2");
+    SDL_SetAtomicInt(&mouse_motion[0],100*16);
+    data=read_pad();
+    assert(camera_looks==2);
+    inject(path,"ry=128");
+    mouse_locked=0;
+    SDL_SetAtomicInt(&mouse_motion[0],100*16);
+    data=read_pad();
+    assert(camera_looks==2);
     /* Turned camera: the left stick (and the evade with L1) turns with it, so that up goes ahead of
      * the camera. Behind Kratos (half a turn) up is the game's down; a quarter turn left, its left. */
     camera_yaw=3.14159265f;
@@ -197,6 +230,27 @@ int main(void) {
     inject(path,"l1 rx=255 ry=128");
     data=read_pad();
     assert(data.right_y<=1 && data.right_x>=127 && data.right_x<=129);  /* right turns into the game's up */
+    /* The pause menu (the touchpad) takes WASD and the right stick as they are, until the game's
+     * controller writes the camera again once the settle time is over. */
+    const int menu_steers=camera_steers;
+    inject(path,"touchpad ly=0 lx=128 rx=255");
+    data=read_pad();
+    assert(data.left_y==0 && data.left_x==128 && data.right_x==255 && camera_steers==menu_steers);
+    ++camera_writes;  /* the frame in flight when it opened */
+    inject(path,"ly=0 lx=128 rx=255");
+    data=read_pad();
+    assert(data.left_y==0 && data.left_x==128 && data.right_x==255);
+    usleep(320000);
+    data=read_pad();
+    assert(data.left_y==0 && data.left_x==128 && data.right_x==255);
+    ++camera_writes;  /* play again */
+    data=read_pad();
+    assert(data.left_x==0 && data.right_x==128 && camera_steers==menu_steers+1);
+    /* The title screen (no Kratos): the same, the sticks as they are. */
+    camera_live=0;
+    data=read_pad();
+    assert(data.left_y==0 && data.left_x==128 && data.right_x==255 && camera_steers==menu_steers+1);
+    camera_live=1;
     camera_yaw=0;
     camera_stick=0;
     inject(path,"");

@@ -746,7 +746,8 @@ static void apply_dodge(PadData *d) {
  * the game does not see it, except with L1 held (the game's evade is L1 + right stick), L2 held (the
  * items' aim) or a QTE prompt up (any of them: the camera goes back to the game's, which frames the
  * scripted moves better, and the stick reaches the game for a turn). The keyboard's dodge action
- * runs after this and still tilts the stick. Reads before the mouse aim, which only works with L2.
+ * runs after this and still tilts the stick. The mouse turns it too (apply_camera_mouse); reads
+ * before the mouse aim, which only works with L2.
  * The left stick (and the evade with L1) is turned with the camera: camera_turn_stick. */
 enum { CAMERA_DEADZONE=24, CAMERA_TAP_US=400000 };
 static uint64_t camera_last;
@@ -769,6 +770,38 @@ static void camera_turn_stick(uint8_t *x, uint8_t *y) {
     *x=(uint8_t)(nx<0 ? 0 : nx>255 ? 255 : lroundf(nx));
     *y=(uint8_t)(ny<0 ? 0 : ny>255 ? 255 : lroundf(ny));
 }
+/* The mouse turns the free camera like a mouse look, CAMERA_MOUSE_DEGREES per px at the menu's
+ * right stick sensitivity of 100 %, while the game has the mouse (the window's lock: not in the
+ * pause menu or another window) and L2 is not held (the items' aim keeps it, apply_mouse_aim). */
+static const float CAMERA_MOUSE_DEGREES=0.12f;
+static void apply_camera_mouse(const PadData *d) {
+    if ((d->buttons & BTN_L2) || !spartanportgpu_mouse_locked()) return;
+    const float dx=SDL_SetAtomicInt(&mouse_motion[0],0)/16.0f, dy=SDL_SetAtomicInt(&mouse_motion[1],0)/16.0f;
+    const float scale=CAMERA_MOUSE_DEGREES*(float)spartanportgpu_mouse_aim_sensitivity()/100.0f;
+    if (dx!=0 || dy!=0) spartanport_camera_look(dx*scale,dy*scale);
+}
+/* A game menu (the pause menu, photo mode, the Power Up menu) takes WASD and the sticks as they
+ * are: it is up from the button that opens it until the game's controller writes the camera again
+ * (the game is paused under it). Writes in the first CAMERA_MENU_SETTLE_US still belong to play. */
+enum { CAMERA_MENU_SETTLE_US=300000 };
+static struct { bool up, held; uint64_t since; unsigned writes; } camera_menu;
+static bool camera_menu_up(const PadData *d) {
+    const bool held=(d->buttons & (BTN_OPTIONS|BTN_TOUCHPAD|CLICK_LEFT|CLICK_RIGHT))!=0;
+    if (held && !camera_menu.held) {
+        if (!camera_menu.up) { printf("Free camera: game menu up\n"); fflush(stdout); }
+        camera_menu.up=true; camera_menu.since=d->timestamp;
+    }
+    camera_menu.held=held;
+    if (!camera_menu.up) return false;
+    const unsigned writes=spartanport_camera_writes();
+    if (d->timestamp-camera_menu.since<CAMERA_MENU_SETTLE_US) camera_menu.writes=writes;
+    else if (writes!=camera_menu.writes) {
+        camera_menu.up=false;
+        printf("Free camera: game menu closed (the game's camera moves again)\n");
+        fflush(stdout);
+    }
+    return camera_menu.up;
+}
 static void apply_free_camera(PadData *d) {
     const bool key=(d->buttons & CAMERA_TOGGLE)!=0;
     d->buttons&=~CAMERA_TOGGLE;
@@ -786,12 +819,16 @@ static void apply_free_camera(PadData *d) {
     const uint64_t step=camera_last && d->timestamp>camera_last ? d->timestamp-camera_last : 0;
     camera_last=d->timestamp;
     const float seconds=step>100000 ? 0.1f : (float)step/1e6f;
+    if (camera_menu_up(d) || !spartanport_camera_live()) return;  /* a game menu, the title screen */
     if (!spartanport_camera_on() || qte_prompt_up(d->timestamp)) spartanport_camera_steer(0,0,seconds,1);
-    else if (d->buttons & (BTN_L1|BTN_L2)) {
-        if (d->buttons & BTN_L1) camera_turn_stick(&d->right_x,&d->right_y);  /* the evade's direction */
-    } else {
-        spartanport_camera_steer(camera_axis(d->right_x),camera_axis(d->right_y),seconds,0);
-        d->right_x=d->right_y=128;
+    else {
+        apply_camera_mouse(d);
+        if (d->buttons & (BTN_L1|BTN_L2)) {
+            if (d->buttons & BTN_L1) camera_turn_stick(&d->right_x,&d->right_y);  /* the evade's direction */
+        } else {
+            spartanport_camera_steer(camera_axis(d->right_x),camera_axis(d->right_y),seconds,0);
+            d->right_x=d->right_y=128;
+        }
     }
     camera_turn_stick(&d->left_x,&d->left_y);
 }

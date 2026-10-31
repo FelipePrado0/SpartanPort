@@ -2594,10 +2594,10 @@ class Launcher:
                         'is never changed. Applied when the game starts.'))
         # Both devices turn the free camera, so it stays above the device's section.
         self.check(page, 'free_camera', 'ini', _('Free camera (experimental)'),
-                   _('Experimental. The right stick turns the camera all the way around Kratos and Kratos moves the '
-                     'way the camera looks; L1 + right stick dodges. In play, the Free camera key (G) or a tap of R3 '
-                     'on the gamepad switches it off and on, for boss fights; quick-time events and the game\'s '
-                     'camera cuts go back to the game\'s camera. Also in the in-game menu.'))
+                   _('Experimental. The right stick or the mouse turns the camera all the way around Kratos and '
+                     'Kratos moves the way the camera looks; L1 + right stick dodges. In play, the Free camera key '
+                     '(G) or a tap of R3 on the gamepad switches it off and on, for boss fights; quick-time events '
+                     'and the game\'s camera cuts go back to the game\'s camera. Also in the in-game menu.'))
         saved_device = self.app.get('controls_device')
         self.device = tk.StringVar(value=saved_device if saved_device in dict(CONTROL_DEVICES) else 'keyboard')
         self.device_chosen = saved_device in dict(CONTROL_DEVICES)

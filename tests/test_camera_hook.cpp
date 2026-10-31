@@ -240,6 +240,35 @@ int main(int argc, char** argv) {
     spartanport_camera_node_written(node, manager);
     std::memcpy(turned, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(turned));
     for (int i = 0; i < 16; ++i) assert(std::fabs(turned[i] - cut[i]) < 1e-3f);
+
+    // The title screen (the Shell level, its own WADs too) keeps the game's camera until a level of
+    // play opens; the game's other files change nothing.
+    assert(spartanport_camera_live());
+    spartanport_camera_file_opened("/app0/EXEC/WAD/PS4_LE/SHELL.WAD");
+    assert(!spartanport_camera_live());
+    for (const char* other : {"/app0/EXEC/WAD/PS4_LE/HDS675SHELL.WAD", "/app0/EXEC/WAD/PS4_LE/R_UI.WAD",
+                              "/app0/EXEC/WAD/PS4_LE/POSSKYBOX_050.WAD", "/app0/sound/OLY150.BNK"})
+        spartanport_camera_file_opened(other);
+    assert(!spartanport_camera_live());
+    spartanport_camera_steer(1, 0, 0.25f, 0);
+    std::memcpy(node + SPARTAN_CAMERA_NODE_MATRIX, cut, sizeof(cut));
+    spartanport_camera_node_written(node, manager);
+    assert(!std::memcmp(cut, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(cut)));
+    spartanport_camera_file_opened("/app0/EXEC/WAD/PS4_LE/Oly150.WAD");
+    assert(spartanport_camera_live());
+    spartanport_camera_file_opened("/app0/EXEC/WAD/PS4_LE/SHELL.WAD");
+    spartanport_camera_file_opened("/app0/EXEC/WAD/PS4_LE/CHALLENGE01.WAD");
+    assert(spartanport_camera_live());
+
+    // The mouse turns it by an angle: 30 degrees to the right, as the stick's quarter second; down
+    // looks down, up to the pitch limit.
+    spartanport_camera_steer(0, 0, 1, 1);
+    spartanport_camera_look(30, 0);
+    assert(close_to(spartanport_camera_yaw(), -30 * 0.017453292f));
+    spartanport_camera_look(-30, 0);
+    spartanport_camera_steer(1, 0, 0.25f, 0);
+    assert(close_to(spartanport_camera_yaw(), -30 * 0.017453292f));
+    spartanport_camera_steer(0, 0, 1, 1);
     (void)argc;
     (void)argv;
     std::puts("camera-hook-test: OK");

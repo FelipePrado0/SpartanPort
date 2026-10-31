@@ -60,6 +60,8 @@ void spartanportgpu_movie_picture(void);
 int spartanportgpu_mouse_prompt_distance(void);
 /* The pause key (touchpad right) was pressed: it lets go of the mouse lock, or takes it back. */
 void spartanportgpu_mouse_pause_key(void);
+/* The game has the mouse (the window's lock, relative mode): its movement turns the free camera. */
+int spartanportgpu_mouse_locked(void);
 /* L2 aim with the mouse, set in the menu: 0 relative (follows movement), 1 absolute. */
 int spartanportgpu_mouse_aim_style(void);
 /* L2 aim sensitivity in percent (10 to 200), set in the menu. */

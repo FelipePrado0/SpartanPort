@@ -398,6 +398,10 @@ extern "C" void spartanportgpu_mouse_pause_key(void) {
     Frontend::ToggleMousePause();
 }
 
+extern "C" int spartanportgpu_mouse_locked(void) {
+    return Frontend::MouseLocked() ? 1 : 0;
+}
+
 extern "C" int spartanportgpu_overlay_captures_input(void) {
     return SpartanOverlay::CapturesInput() ? 1 : 0;
 }

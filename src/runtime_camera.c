@@ -53,6 +53,43 @@ static int camera_player(const float *eye, float *position) {
     return distance > 0.5f && distance < CAMERA_PLAYER_REACH;  /* also false for NaN */
 }
 
+/* The title screen is the Shell level (Kratos is there too, on his rock): from the game opening
+ * SHELL.WAD until it opens a level of play, named by three letters and three digits (OLY150.WAD,
+ * BAS400AI1CENT.WAD; HDS675SHELL.WAD belongs to the title) or CHALLENGE01.WAD and the like. Its
+ * menu takes the sticks as they are and its camera stays the game's. runtime_file.c tells. */
+static volatile int camera_title;
+static int camera_upper(char c) { return c >= 'a' && c <= 'z' ? c - 'a' + 'A' : c; }
+static int camera_name_has(const char *name, const char *word) {
+    for (; *name; ++name) {
+        size_t i = 0;
+        while (word[i] && camera_upper(name[i]) == word[i]) ++i;
+        if (!word[i]) return 1;
+    }
+    return 0;
+}
+void spartanport_camera_file_opened(const char *guest) {
+    const char *slash = strrchr(guest, '/');
+    const char *name = slash ? slash + 1 : guest;
+    const size_t n = strlen(name);
+    if (n < 5 || !camera_name_has(name + n - 4, ".WAD")) return;
+    int title = -1;
+    if (camera_name_has(name, "SHELL")) title = camera_name_has(name, "SHELL.WAD") && n == 9 ? 1 : -1;
+    else if (camera_name_has(name, "CHALLENGE")) title = 0;
+    else if (n >= 10) {
+        int level = 1;
+        for (int i = 0; i < 6; ++i) {
+            const char c = (char)camera_upper(name[i]);
+            if (i < 3 ? c < 'A' || c > 'Z' : c < '0' || c > '9') level = 0;
+        }
+        if (level) title = 0;
+    }
+    if (title < 0 || title == camera_title) return;
+    camera_title = title;
+    printf("Free camera: %s (%s)\n", title ? "title screen, the game's camera" : "in play", name);
+    fflush(stdout);
+}
+int spartanport_camera_live(void) { return !camera_title; }
+
 uintptr_t spartanport_camera_state_address(void) { return (uintptr_t)&camera_state; }
 
 static void camera_configure_stick(void);
@@ -147,6 +184,12 @@ void spartanport_camera_steer(float x, float y, float seconds, int recenter) {
     camera_state.yaw = clamp_angle(camera_state.yaw - x * CAMERA_YAW_SPEED * 0.017453292f * seconds, camera_limits[0]);
     camera_state.pitch = clamp_angle(camera_state.pitch - y * CAMERA_PITCH_SPEED * 0.017453292f * seconds,
                                      camera_limits[1]);
+}
+
+/* The mouse turns the camera by an angle, not a speed: right turns it right, down looks down. */
+void spartanport_camera_look(float right_degrees, float down_degrees) {
+    camera_state.yaw = clamp_angle(camera_state.yaw - right_degrees * 0.017453292f, camera_limits[0]);
+    camera_state.pitch = clamp_angle(camera_state.pitch - down_degrees * 0.017453292f, camera_limits[1]);
 }
 
 /* The game's global that holds the view the camera stack attaches to (probe.c). */
@@ -585,7 +628,7 @@ static int camera_node_free(const unsigned char *node) {
  * view recomputed) when that differs from what it holds. */
 static void camera_turn_node(unsigned char *node, float *world) {
     memcpy(world, camera_clean, sizeof(camera_clean));
-    if (camera_state.yaw != 0 || camera_state.pitch != 0) {
+    if ((camera_state.yaw != 0 || camera_state.pitch != 0) && spartanport_camera_live()) {
         const SpartanCameraState state = camera_orbit_state();
         float kratos[3];
         if (camera_player(world + 12, kratos)) spartanport_camera_orbit_about(world, kratos, &state, camera_up);
@@ -624,7 +667,12 @@ static void camera_take_clean(const unsigned char *matrix) {
 
 /* Called by the controller's stub after it wrote a camera node: the gameplay camera's new matrix
  * is the clean one, and the node is turned at once, before anything reads it. */
+static volatile unsigned camera_writes;
+/* How many times the game's controller wrote the gameplay camera: it stops while the game is paused. */
+unsigned spartanport_camera_writes(void) { return camera_writes; }
+
 ABI void spartanport_camera_node_written(unsigned char *node, const unsigned char *manager) {
+    if ((uint64_t)(uintptr_t)node == camera_node) ++camera_writes;
     float distance;
     memcpy(&distance, manager + SPARTAN_CAMERA_MANAGER_DISTANCE, sizeof(distance));
     if ((uint64_t)(uintptr_t)node == camera_node) {
@@ -665,7 +713,8 @@ ABI void spartanport_camera_apply(unsigned char *render_view, uint64_t caller) {
     unsigned char *camera = (unsigned char *)(uintptr_t)node;
     if (!camera_node_free(camera)) {  /* a parented camera: the view alone, as before */
         const SpartanCameraState state = camera_orbit_state();
-        if (state.yaw != 0 || state.pitch != 0) spartanport_camera_orbit(render_view, &state, camera_up);
+        if ((state.yaw != 0 || state.pitch != 0) && spartanport_camera_live())
+            spartanport_camera_orbit(render_view, &state, camera_up);
         return;
     }
     const unsigned char *matrix = camera + SPARTAN_CAMERA_NODE_MATRIX;

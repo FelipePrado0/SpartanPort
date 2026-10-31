@@ -156,6 +156,10 @@ int spartanport_camera_on(void);
 float spartanport_camera_yaw(void);
 void spartanport_camera_toggle(void);
 void spartanport_camera_steer(float x, float y, float seconds, int recenter);
+void spartanport_camera_look(float right_degrees, float down_degrees);
+unsigned spartanport_camera_writes(void);
+int spartanport_camera_live(void);
+void spartanport_camera_file_opened(const char *guest);
 #ifdef __cplusplus
 }
 #endif
