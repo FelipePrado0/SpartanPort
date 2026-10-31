@@ -36,7 +36,8 @@
   "check_updates": false,
   "game_patches": {
     "CUSA01623": [
-      "Skip Intro"
+      "Skip Intro",
+      "High FPS Wall Seam Fix"
     ]
   },
   "controls": {
@@ -53,5 +54,8 @@
   "stick_prompts": "keyboard",
   "controls_layout": 4,
   "switch_attacks": false,
-  "glyph_style": "off"
+  "glyph_style": "off",
+  "patches_offered": [
+    "High FPS Wall Seam Fix"
+  ]
 }

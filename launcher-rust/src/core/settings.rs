@@ -81,21 +81,78 @@ pub fn app_defaults(env: &dyn Fn(&str) -> Option<String>) -> Map<String, Value> 
 
 /// Copies the previous launcher's `settings.json` into the data folder, once. Never overwrites;
 /// every error is ignored. (`game_icon.ico` is not copied: the runner writes the window icon.)
+/// The shader notes start off in the copy, whatever the old file said (maintainer, 2026-10-31).
 pub fn migrate_portable_settings(target: &Path, legacy: &Path) {
-    if target == legacy {
+    if target == legacy || !copy_if_missing(legacy, target) {
         return;
     }
-    copy_if_missing(legacy, target);
+    if let Ok(Some(Value::Object(mut saved))) = read_json::<Value>(target) {
+        if saved.remove("shader_notes").is_some() {
+            let _ = save_settings(target, &Settings(saved));
+        }
+    }
 }
 
-fn copy_if_missing(from: &Path, to: &Path) {
+fn copy_if_missing(from: &Path, to: &Path) -> bool {
     if to.is_file() || !from.is_file() {
-        return;
+        return false;
     }
     if let Some(parent) = to.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let _ = fs::copy(from, to);
+    fs::copy(from, to).is_ok()
+}
+
+/// Built-in patches that became on by default after players had saved their list. A saved list
+/// is exact, so each is ticked in it once; `patches_offered` remembers that, and unticking it
+/// later sticks. ponytail: a fixed list, read the XML defaults if more such patches come.
+const NEW_DEFAULT_PATCHES: &[(&str, &str)] = &[("CUSA01623", "High FPS Wall Seam Fix")];
+
+fn offered(saved: &Map<String, Value>) -> Vec<Value> {
+    match saved.get("patches_offered") {
+        Some(Value::Array(names)) => names.clone(),
+        _ => Vec::new(),
+    }
+}
+
+/// Ticks each new default patch once in a saved list; with no saved list the XML defaults apply
+/// and nothing changes.
+fn offer_new_default_patches(saved: &mut Map<String, Value>) {
+    let mut done = offered(saved);
+    let before = done.len();
+    for (title_id, name) in NEW_DEFAULT_PATCHES {
+        if done.iter().any(|offered| offered == name) {
+            continue;
+        }
+        let list = saved
+            .get_mut("game_patches")
+            .and_then(|all| all.get_mut(*title_id))
+            .and_then(Value::as_array_mut);
+        if let Some(list) = list {
+            if !list.iter().any(|chosen| chosen == name) {
+                list.push(json!(name));
+            }
+            done.push(json!(name));
+        }
+    }
+    if done.len() > before {
+        saved.insert("patches_offered".to_string(), Value::Array(done));
+    }
+}
+
+/// The patches page wrote a list from what it showed, new defaults included: they count as
+/// offered, so a later untick sticks.
+pub fn mark_default_patches_offered(saved: &mut Map<String, Value>, title_id: &str) {
+    let mut done = offered(saved);
+    let before = done.len();
+    for (_, name) in NEW_DEFAULT_PATCHES.iter().filter(|(id, _)| *id == title_id) {
+        if !done.iter().any(|offered| offered == name) {
+            done.push(json!(name));
+        }
+    }
+    if done.len() > before {
+        saved.insert("patches_offered".to_string(), Value::Array(done));
+    }
 }
 
 /// Defaults overlaid with the saved file; see `read_app_settings`.
@@ -127,6 +184,7 @@ pub fn read_app_settings(paths: &Paths) -> (Settings, SettingsFile) {
     for (key, value) in migrate_controls(saved) {
         merged.insert(key, value);
     }
+    offer_new_default_patches(&mut merged);
     (Settings(merged), file)
 }
 
@@ -322,5 +380,61 @@ mod tests {
 
         migrate_portable_settings(&legacy, &legacy);
         assert_eq!(fs::read_to_string(&legacy).unwrap(), "newer");
+    }
+
+    #[test]
+    fn the_portable_migration_leaves_the_shader_notes_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy = dir.path().join("legacy").join("settings.json");
+        let target = dir.path().join("data").join("settings.json");
+        fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        fs::write(
+            &legacy,
+            r#"{"ui_language": "pt", "shader_notes": true, "hdr": true}"#,
+        )
+        .unwrap();
+        migrate_portable_settings(&target, &legacy);
+        let copied: Value = serde_json::from_slice(&fs::read(&target).unwrap()).unwrap();
+        assert_eq!(copied, json!({"ui_language": "pt", "hdr": true}));
+        // The old file keeps its value; the copy is only made once.
+        assert!(fs::read_to_string(&legacy)
+            .unwrap()
+            .contains("shader_notes"));
+    }
+
+    fn patches(settings: &Map<String, Value>) -> Vec<&str> {
+        settings["game_patches"]["CUSA01623"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .collect()
+    }
+
+    #[test]
+    fn a_new_default_patch_is_ticked_once_in_a_saved_list() {
+        let mut saved = json!({"game_patches": {"CUSA01623": ["Skip Intro"]}})
+            .as_object()
+            .unwrap()
+            .clone();
+        offer_new_default_patches(&mut saved);
+        assert_eq!(patches(&saved), ["Skip Intro", "High FPS Wall Seam Fix"]);
+        assert_eq!(saved["patches_offered"], json!(["High FPS Wall Seam Fix"]));
+        // Unticked by the player afterwards: it stays off.
+        saved["game_patches"]["CUSA01623"] = json!(["Skip Intro"]);
+        offer_new_default_patches(&mut saved);
+        assert_eq!(patches(&saved), ["Skip Intro"]);
+    }
+
+    #[test]
+    fn without_a_saved_list_the_defaults_apply_and_nothing_changes() {
+        let mut saved = Map::new();
+        offer_new_default_patches(&mut saved);
+        assert!(saved.is_empty());
+        // The page then writes the list it showed, with the default unticked: it stays off.
+        saved.insert("game_patches".into(), json!({"CUSA01623": ["Skip Intro"]}));
+        mark_default_patches_offered(&mut saved, "CUSA01623");
+        offer_new_default_patches(&mut saved);
+        assert_eq!(patches(&saved), ["Skip Intro"]);
     }
 }

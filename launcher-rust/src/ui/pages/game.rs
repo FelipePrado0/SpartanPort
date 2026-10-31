@@ -14,6 +14,7 @@ use crate::core::i18n::{tr, tr_fmt};
 use crate::core::options::{AUDIO_CHANNELS, LANGUAGES};
 use crate::core::patches::{builtin_xml, game_patch_metas, selectable, PatchMeta};
 use crate::core::save_backup::{list_backups, restore, KEEP};
+use crate::core::settings::mark_default_patches_offered;
 use crate::ui::app::{Message, State};
 use crate::ui::follow::{follow, Cause};
 use crate::ui::pages::controls::ini_number;
@@ -176,8 +177,16 @@ pub fn store_game_patches(state: &mut State) {
         Some(Value::Object(map)) => map.clone(),
         _ => Map::new(),
     };
-    all.insert(title_id, Value::Array(names));
+    all.insert(title_id.clone(), Value::Array(names));
     state.store.set("game_patches", Value::Object(all));
+    let mut offered = Map::new();
+    if let Some(saved) = state.store.json("patches_offered") {
+        offered.insert("patches_offered".into(), saved.clone());
+    }
+    mark_default_patches_offered(&mut offered, &title_id);
+    if let Some(list) = offered.remove("patches_offered") {
+        state.store.set("patches_offered", list);
+    }
 }
 
 /// Reads the built-in patches of the game in `state.installation` into `state.patches`, keeping

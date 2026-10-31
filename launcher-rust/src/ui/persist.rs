@@ -20,7 +20,7 @@ use crate::core::gpu::{list_displays, monitor_options, monitor_selection, Displa
 use crate::core::i18n::{is_rtl, launcher_language, system_language, tr, tr_fmt};
 use crate::core::ini::{load_ini, save_ini};
 use crate::core::platform::tool::SystemTools;
-use crate::core::settings::{save_settings, Settings};
+use crate::core::settings::{mark_default_patches_offered, save_settings, Settings};
 use crate::ui::app::{self, Message, State};
 use crate::ui::follow::{follow, Cause};
 use crate::ui::widgets::Modal;
@@ -110,6 +110,7 @@ pub fn gather(state: &State) -> Persisted {
         };
         all.insert(title_id.clone(), strings(chosen));
         app.insert("game_patches".to_string(), Value::Object(all));
+        mark_default_patches_offered(&mut app, title_id);
     }
     let ini = state.store.ini_to_write();
     let mut controls = Map::new();
