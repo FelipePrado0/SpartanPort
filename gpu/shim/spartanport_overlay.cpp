@@ -452,6 +452,14 @@ void GameTab() {
                   "L2 aim with the mouse: lower needs more mouse movement for the same stick, higher less.");
         CheckRow("Keep mouse in window", s.mouse_lock,
                  "While you play, the mouse stays in the game window; this menu and other windows get it back.");
+        ImGui::BeginDisabled(!s.free_camera_supported.load());
+        CheckRow("Free camera (experimental)", s.free_camera,
+                 s.free_camera_supported.load()
+                     ? "The right stick or the mouse turns the camera around Kratos (L1 + right stick evades). In "
+                       "play, G on the keyboard or a tap of R3 switches it off and on (the game's camera, for "
+                       "boss fights); QTEs and cuts go back to the game's camera."
+                     : Unsupported);
+        ImGui::EndDisabled();
         ImGui::EndTable();
     }
 

@@ -227,7 +227,7 @@ class ControlMapTest(unittest.TestCase):
             if default.casefold() != key.casefold():
                 self.assertEqual(pairs.pop(button), default)
         self.assertEqual(pairs, {'grab': 'C', 'dodge': 'Mouse Back',
-                                 'weapon_next': 'Wheel Up', 'weapon_prev': 'Wheel Down'})
+                                 'weapon_next': 'Wheel Up', 'weapon_prev': 'Wheel Down', 'camera': 'G'})
         self.assertIn('l3=None,r3=None,rage=F', launcher.keyboard_map({}))
         controls = {'key': {'square': 'Wheel Up', 'cross': 'Q', 'triangle': 'E'}}
         self.assertIn('cross=Q,square=Wheel Up,triangle=E,', launcher.keyboard_map(controls))
@@ -239,7 +239,7 @@ class ControlMapTest(unittest.TestCase):
     def test_actions_belong_to_the_keyboard_table(self):
         names = [row[0] for row in launcher.table_rows('key')]
         self.assertEqual(names[names.index('r3') + 1], 'rage')
-        self.assertEqual(names[-4:], ['grab', 'dodge', 'weapon_next', 'weapon_prev'])
+        self.assertEqual(names[-5:], ['grab', 'dodge', 'weapon_next', 'weapon_prev', 'camera'])
         self.assertNotIn('dodge', [row[0] for row in launcher.table_rows('pad')])
         self.assertEqual(launcher.control_values({'key': {'dodge': 'V'}}, 'key'), {'dodge': 'V'})
         self.assertIn('dodge=V', launcher.keyboard_map({'key': {'dodge': 'V'}}))
@@ -254,7 +254,7 @@ class ControlMapTest(unittest.TestCase):
                          ('Next weapon', 'Previous weapon'))
         self.assertIn('weapon_next=Wheel Up,weapon_prev=Wheel Down', launcher.keyboard_map({}))
         env = launcher.game_environment(dict(launcher.APP_DEFAULTS))
-        self.assertTrue(env['SPARTAN_KEY_MAP'].endswith('weapon_next=Wheel Up,weapon_prev=Wheel Down'))
+        self.assertTrue(env['SPARTAN_KEY_MAP'].endswith('weapon_next=Wheel Up,weapon_prev=Wheel Down,camera=G'))
         moved = launcher.keyboard_map({'key': {'weapon_next': 'Mouse Back', 'weapon_prev': 'None'}})
         self.assertIn('weapon_next=Mouse Back,weapon_prev=None', moved)
         self.assertEqual(launcher.APP_DEFAULTS['controls_layout'], launcher.CONTROLS_LAYOUT)

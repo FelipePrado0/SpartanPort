@@ -153,6 +153,8 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
 - Áudio: música, vozes e efeitos (ATRAC9 e MP3).
 - Controle (DualSense, Xbox e outros, via SDL3) e teclado ao mesmo tempo, os dois com botões
   configuráveis.
+- **Câmera livre (experimental):** o analógico direito ou o mouse gira a câmera em volta do Kratos, por
+  completo, e ele anda para onde ela olha; ela para antes das paredes (veja [Teclado](#teclado)).
 - Salvar e carregar: a lista de saves aparece na tela, como no PS4. O autosave também funciona.
   O launcher faz backup dos saves antes de cada partida.
 - Patches: resolução de renderização de 480p, 720p, 900p, 1440p, 1800p ou 4K, correção de texturas
@@ -289,6 +291,7 @@ Padrão; mude na tela **Controls** do launcher, seção **Keyboard & Mouse Mappi
 | P | clique esquerdo do touchpad (modo foto) |
 | Esc | clique direito do touchpad (menu de pausa) |
 | Insert | menu do port (R3+L2 no controle) |
+| G | liga e desliga a câmera livre (um toque no R3 no controle), quando a câmera livre está ligada |
 
 **Rage of Sparta em uma tecla** (ligado por padrão) deixa Z e X sem uso. Os **Joystick prompts**
 respondem aos eventos rápidos de girar o analógico sem analógico: digite o giro (meias-voltas D S A,
@@ -311,6 +314,20 @@ Kratos repete o ataque; L1 + Xis faz o ataque de troca da arma na mão em vez de
 arma. O ataque de troca da mesma arma de novo espera 0,8 segundo depois do último (o de outra arma
 não espera). O direcional sozinho troca como antes. Os tutoriais de troca de arma passam a dizer isso em todos os idiomas
 (em cópias dos arquivos de idioma na pasta de dados do port). Sem o launcher, defina `SPARTAN_SWITCH_ATTACKS=1`.
+
+**Câmera livre** (experimental, desligada por padrão): ligue em *Câmera livre (experimental)* na tela
+Controls do launcher, na seção *Controller* do menu do port (Insert) ou em Opções → Controles do jogo.
+Aí o analógico direito, ou o mouse enquanto o jogo o prende, gira a câmera em volta do Kratos por
+completo e por cima dele, e a câmera mantém esse ângulo enquanto ele anda; o mouse segue a
+*Sensibilidade da mira*, e com L2 pressionado ele mira como antes. O Kratos anda para onde a câmera
+olha, e L1 + analógico direito faz a esquiva. No jogo, G (configurável) ou um toque só no R3 desliga e
+liga a câmera livre: desligada, é a câmera do próprio jogo, para as lutas de chefe e as cenas
+roteirizadas. O jogo retoma a câmera sozinho nos cortes de câmera, nos eventos rápidos, na tela inicial
+e no menu de pausa. A câmera para antes de paredes e rochas (a colisão da própria fase, não as paredes
+invisíveis na beira dos penhascos), sobe por cima do Kratos quando ele está encostado numa parede e não
+desce abaixo dos pés dele. Muitos lugares foram feitos só para a câmera do jogo, então outros ângulos
+podem mostrar o fundo inacabado do cenário. Sem o launcher, defina `SPARTAN_FREE_CAMERA=1`;
+`SPARTAN_FREE_CAMERA_LIMITS=yaw,pitch` (graus) limita quanto ela gira.
 
 Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Controls do launcher, em
 *Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox*, *Nintendo* ou *Teclado*. Eles trocam os ícones

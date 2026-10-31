@@ -377,6 +377,14 @@ extern "C" int spartanportgpu_mouse_aim_sensitivity(void) {
     return SpartanSettings::Get().mouse_aim_sensitivity.load(std::memory_order_relaxed);
 }
 
+extern "C" int spartanportgpu_free_camera(void) {
+    return SpartanSettings::Get().free_camera.load(std::memory_order_relaxed);
+}
+
+extern "C" void spartanport_camera_status(int supported) {
+    SpartanSettings::Get().free_camera_supported = supported != 0;
+}
+
 // The menu's Automatic QTE switch, read by the game's code through the QTE stubs (src/qte_hook.h).
 extern "C" uintptr_t spartanport_auto_qte_flag(void) {
     static_assert(sizeof(std::atomic<bool>) == 1, "the stubs compare one byte");
@@ -389,6 +397,10 @@ extern "C" void spartanport_qte_status(int supported) {
 
 extern "C" void spartanportgpu_mouse_pause_key(void) {
     Frontend::ToggleMousePause();
+}
+
+extern "C" int spartanportgpu_mouse_locked(void) {
+    return Frontend::MouseLocked() ? 1 : 0;
 }
 
 extern "C" int spartanportgpu_overlay_captures_input(void) {

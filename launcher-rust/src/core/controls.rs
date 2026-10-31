@@ -140,6 +140,9 @@ pub static KEY_DEFAULTS: &[(&str, &str)] = &[
 pub static RAGE_ROW: ControlRow = row("rage", "F", None);
 pub static GRAB_ROW: ControlRow = row("grab", "C", None);
 pub static DODGE_ROW: ControlRow = row("dodge", "Mouse Back", None);
+/// Switches the free camera off and on in play (the port's `camera` action); on the gamepad a tap
+/// of R3 does it, which is not remapped.
+pub static CAMERA_ROW: ControlRow = row("camera", "G", None);
 /// Rage of Sparta was on the wheel click until the wheel cycled the weapons, where a scroll could
 /// set it off. A saved table keeps it there (`keep_saved_rage`).
 pub const RAGE_LEGACY_INPUT: &str = "Mouse Middle";
@@ -160,7 +163,7 @@ pub static STICK_ROWS: [ControlRow; 8] = [
     row("look_left", "Left", None),
     row("look_right", "Right", None),
 ];
-pub static KEY_ACTIONS: [&ControlRow; 13] = [
+pub static KEY_ACTIONS: [&ControlRow; 14] = [
     &STICK_ROWS[0],
     &STICK_ROWS[1],
     &STICK_ROWS[2],
@@ -174,10 +177,12 @@ pub static KEY_ACTIONS: [&ControlRow; 13] = [
     &DODGE_ROW,
     &WEAPON_ROWS[0],
     &WEAPON_ROWS[1],
+    &CAMERA_ROW,
 ];
 pub const RAGE_BUTTONS: [&str; 2] = ["l3", "r3"];
-/// Settings layout: 4 = remappable keyboard stick directions (`migrate_controls`).
-pub const CONTROLS_LAYOUT: u64 = 4;
+/// Settings layout: 4 = remappable keyboard stick directions, 5 = the free camera's key
+/// (`migrate_controls`).
+pub const CONTROLS_LAYOUT: u64 = 5;
 
 pub static MOUSE_NAMES: &[&str] = &[
     "Mouse Left",
@@ -218,6 +223,7 @@ pub fn table_rows(kind: Kind) -> Vec<&'static ControlRow> {
     }
     rows.extend([&GRAB_ROW, &DODGE_ROW]);
     rows.extend(&WEAPON_ROWS);
+    rows.push(&CAMERA_ROW);
     rows
 }
 
@@ -561,6 +567,14 @@ pub fn migrate_controls(saved: Map<String, Value>) -> Map<String, Value> {
         Some(Value::Object(map)) => map.clone(),
         _ => Map::new(),
     };
+    if previous == Some(4.0) {
+        // Layout 4 only lacks the free camera's key.
+        let rage = on_unless_off(&saved, "rage_one_input");
+        claim_new_actions(&mut controls, rage, std::slice::from_ref(&CAMERA_ROW));
+        saved.insert("controls".to_string(), Value::Object(controls));
+        saved.insert("controls_layout".to_string(), Value::from(CONTROLS_LAYOUT));
+        return saved;
+    }
     let native = controls.shift_remove("native");
     if previous.is_some_and(|n| n == 2.0 || n == 3.0) {
         if previous == Some(2.0) {
@@ -592,6 +606,7 @@ pub fn migrate_controls(saved: Map<String, Value>) -> Map<String, Value> {
     }
     let rage = on_unless_off(&saved, "rage_one_input");
     claim_new_actions(&mut controls, rage, &STICK_ROWS);
+    claim_new_actions(&mut controls, rage, std::slice::from_ref(&CAMERA_ROW));
     saved.insert("controls".to_string(), Value::Object(controls));
     saved.insert("controls_layout".to_string(), Value::from(CONTROLS_LAYOUT));
     saved
@@ -783,7 +798,8 @@ mod tests {
                 ("grab", "C"),
                 ("dodge", "Mouse Back"),
                 ("weapon_next", "Wheel Up"),
-                ("weapon_prev", "Wheel Down")
+                ("weapon_prev", "Wheel Down"),
+                ("camera", "G")
             ])
         );
         assert!(keyboard_map(&json!({}), true).contains("l3=None,r3=None,rage=F"));
@@ -856,8 +872,8 @@ mod tests {
         let r3 = names.iter().position(|name| *name == "r3").unwrap();
         assert_eq!(names[r3 + 1], "rage");
         assert_eq!(
-            names[names.len() - 4..],
-            ["grab", "dodge", "weapon_next", "weapon_prev"]
+            names[names.len() - 5..],
+            ["grab", "dodge", "weapon_next", "weapon_prev", "camera"]
         );
         // the stick directions come first
         assert_eq!(names[..STICK_ROWS.len()], STICK_ROWS.map(|row| row.button));
@@ -888,7 +904,7 @@ mod tests {
         let app = app_defaults(&|_| None);
         assert!(
             keyboard_map(&app["controls"], truthy(&app["rage_one_input"]))
-                .ends_with("weapon_next=Wheel Up,weapon_prev=Wheel Down")
+                .ends_with("weapon_next=Wheel Up,weapon_prev=Wheel Down,camera=G")
         );
         let moved = keyboard_map(
             &json!({"key": {"weapon_next": "Mouse Back", "weapon_prev": "None"}}),
@@ -1064,7 +1080,7 @@ mod tests {
     // Rust only (not in the Python): the migration itself leaves a newer layout as it is.
     #[test]
     fn a_newer_layout_is_left_alone() {
-        let saved = json!({"controls_layout": 5, "controls": {"keyboard": {"rage": "Q"}}});
+        let saved = json!({"controls_layout": 6, "controls": {"keyboard": {"rage": "Q"}}});
         let map = saved.as_object().unwrap().clone();
         assert_eq!(migrate_controls(map.clone()), map);
     }

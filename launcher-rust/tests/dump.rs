@@ -1034,7 +1034,7 @@ fn real_menu_options_row() {
         new.one("PauseOptions").unwrap(),
         new.by_name("HLDisplay")[1],
     );
-    assert_eq!(new.records.len(), old.records.len() + 66);
+    assert_eq!(new.records.len(), old.records.len() + 67);
     assert_eq!(row.parent, options.at - 4);
     let cheats = new.one("HLNativeCheats").unwrap();
     let graphics = new.one("HLNativeGraphics").unwrap();

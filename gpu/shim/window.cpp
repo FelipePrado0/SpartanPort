@@ -20,6 +20,13 @@ void ToggleMousePause() {
     mouse_paused.store(!mouse_paused.load(std::memory_order_relaxed), std::memory_order_relaxed);
 }
 
+// spartanport: the window's mouse_locked, for the pad thread (the free camera's mouse look).
+static std::atomic<bool> mouse_lock_shared{false};
+
+bool MouseLocked() {
+    return mouse_lock_shared.load(std::memory_order_relaxed);
+}
+
 // spartanport: the display the window opens on. SPARTAN_MONITOR is an index into SDL_GetDisplays() (the same
 // order a launcher's list would use); absent or empty means the primary display. An invalid,
 // negative or out-of-range value falls back to the primary with a diagnostic. SDL_WINDOWPOS_CENTERED
@@ -294,6 +301,7 @@ bool WindowSDL::PollEvents() {
     if (lock != mouse_locked) {
         if (lock) SDL_WarpMouseInWindow(window, width / 2.0f, height / 2.0f);
         if (SDL_SetWindowRelativeMouseMode(window, lock)) mouse_locked = lock;
+        mouse_lock_shared.store(mouse_locked, std::memory_order_relaxed);
     }
     if (const bool show = paused && !mouse_locked; show != cursor_shown) {
         show ? SDL_ShowCursor() : SDL_HideCursor();

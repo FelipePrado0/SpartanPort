@@ -156,6 +156,8 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
 - Control (DualSense, Xbox y otros, mediante SDL3) y teclado al mismo tiempo, ambos remapeables.
 - **Íconos de botones en el juego** (opcional, desactivado por defecto): los íconos de botones de
   PlayStation dentro del juego pueden mostrar los de tu control, Xbox o Nintendo, o las teclas con las que jugás (página Game, sección Controls).
+- **Cámara libre (experimental):** el stick derecho o el mouse gira la cámara alrededor de Kratos, por
+  completo, y él se mueve hacia donde ella mira; se detiene antes de las paredes (ver [Controles de teclado](#controles-de-teclado)).
 - Guardado y carga: la lista de partidas guardadas se muestra en pantalla, como en la PS4. El
   autoguardado también funciona. El launcher hace una copia de seguridad de las partidas antes de
   cada inicio.
@@ -293,6 +295,7 @@ Valores por defecto; cambialos en la página **Controls** del launcher, sección
 | P | clic del touchpad izquierdo (modo foto) |
 | Esc | clic del touchpad derecho (menú de pausa) |
 | Insert | el menú del port (R3+L2 en el control) |
+| G | activa y desactiva la cámara libre (un toque de R3 en el control), cuando la cámara libre está activada |
 
 **Rage of Sparta en una tecla** (activado por defecto) deja Z y X sin uso. Los **Joystick prompts**
 responden a los quick-time events de girar el stick sin stick: escribí el giro (medias vueltas D S
@@ -315,6 +318,20 @@ la mano repite su ataque; L1 + Cruz hace el ataque de cambio del arma en la mano
 siguiente arma. El ataque de cambio de la misma arma otra vez espera 0,8 segundos después del último
 (el de otra arma no espera). La cruceta sola cambia como antes. Los tutoriales de cambio de arma lo dicen así en todos los idiomas
 (en copias de los archivos de idioma en la carpeta de datos del port). Sin el launcher, definí `SPARTAN_SWITCH_ATTACKS=1`.
+
+**Cámara libre** (experimental, desactivada por defecto): activala con *Free camera (experimental)* en la
+página Controls del launcher, en la sección *Controller* del menú del port (Insert) o en Opciones →
+Controles del juego. Así el stick derecho, o el mouse mientras el juego lo retiene, gira la cámara
+alrededor de Kratos por completo y por encima de él, y la cámara mantiene ese ángulo mientras él se
+mueve; el mouse sigue la *Right stick sensitivity*, y con L2 presionado apunta como antes. Kratos se
+mueve hacia donde mira la cámara, y L1 + stick derecho esquiva. En el juego, G (remapeable) o un toque
+solo de R3 la desactiva y la activa: desactivada, es la cámara del propio juego, para las peleas contra
+jefes y las escenas guionadas. El juego retoma la cámara solo en sus cortes de cámara, los quick-time
+events, la pantalla de título y el menú de pausa. La cámara se detiene antes de paredes y rocas (la
+colisión del propio nivel, no las paredes invisibles al borde de los precipicios), sube por encima de
+Kratos cuando está contra una pared y no baja por debajo de sus pies. Muchos lugares se hicieron solo
+para la cámara del juego, así que otros ángulos pueden mostrar partes sin terminar del escenario. Sin el
+launcher, definí `SPARTAN_FREE_CAMERA=1`; `SPARTAN_FREE_CAMERA_LIMITS=yaw,pitch` (grados) limita cuánto gira.
 
 Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls del launcher, en
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* o *Keyboard*. Reemplazan los íconos de

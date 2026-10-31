@@ -319,7 +319,7 @@ mod tests {
         // A parked key is not written; the upscaler and its preset are shown, so they are.
         assert!(!out.contains_key("object_motion"));
         assert!(out.contains_key("upscaler") && out.contains_key("preset"));
-        assert_eq!(out.len(), 30);
+        assert_eq!(out.len(), 31);
         assert_eq!(out.keys().next().unwrap(), "display_mode");
     }
 

@@ -350,10 +350,19 @@ int main() {
     v.mouse_prompt_distance = 16;
     spartanportgpu_native_setting(0xfae);
     assert(v.mouse_prompt_distance == 16);
+    // Controls' free camera row: unavailable without the hook, else On/Off, toggled by 0xf6f.
+    v.free_camera_supported = false;
+    v.free_camera = false;
+    assert(std::string(text(0xf6f)).find("Unavailable") != std::string::npos && !v.free_camera);
+    v.free_camera_supported = true;
+    assert(std::string(text(0xf6d)) == "[ArrowSpacer]Off[ArrowSpacer]");
+    assert(std::string(text(0xf6f)) == "[ArrowSelectionL]On[ArrowSelectionR]" && v.free_camera);
+    assert(Read(path).find("free_camera=1\n") != std::string::npos);
+    assert(std::string(text(0xf6e)).find("On") != std::string::npos);
     v.anisotropy = 16;
     spartanportgpu_native_setting(0xfb7);
     assert(v.vibration == 100 && v.mouse_aim_sensitivity == 100 && v.mouse_prompt_distance == 48);
-    assert(v.mouse_lock && v.mouse_aim_style == 0 && v.anisotropy == 16);
+    assert(v.mouse_lock && v.mouse_aim_style == 0 && v.anisotropy == 16 && !v.free_camera);
     v.cheats_supported = 0;
     v.cheats[0] = false;
     assert(std::string(text(0xf10)) == "Unavailable" && !v.cheats[0]);
@@ -375,6 +384,15 @@ int main() {
     SpartanSettings::Load();
     assert(std::string(text(0xf07)) == "On");
     assert(std::string(text(0xf17)) == "Off" && !v.auto_qte);
+    // Free camera: off by default, kept in the ini (the launcher writes the same key).
+    v.free_camera = true;
+    SpartanSettings::Save();
+    assert(Read(path).find("free_camera=1\n") != std::string::npos);
+    v.free_camera = false;
+    SpartanSettings::Load();
+    assert(v.free_camera);
+    v.free_camera = false;
+    SpartanSettings::Save();
     v.red_orbs_supported = true;
     v.orb_pickup_supported = true;
     v.damage_supported = true;

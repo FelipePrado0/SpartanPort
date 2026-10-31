@@ -8,11 +8,13 @@
  *   IJKL d-pad (I up, K down, J left, L right).
  * SPARTAN_KEY_MAP also takes the mouse: Mouse Left, Mouse Right, Mouse Middle, Mouse Back,
  * Mouse Forward, Wheel Up and Wheel Down (see mouse_names). The wheel cycles the weapons
- * (weapon_next, weapon_prev: apply_weapon_cycle). */
+ * (weapon_next, weapon_prev: apply_weapon_cycle). G turns the free camera off and on (camera:
+ * apply_free_camera). */
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "gpu/spartanportgpu.h"
 #include "qte_hook.h"
+#include "camera_hook.h"
 #include "switch_hook.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,8 +40,9 @@ enum {
     CLICK_LEFT=0x40000000, CLICK_RIGHT=0x80000000,
     /* Host-only actions of the keyboard map: dodge tilts the right stick (apply_dodge); rage and
      * grab press two buttons together (apply_combos); weapon_next and weapon_prev press the
-     * d-pad button of the next or previous weapon (apply_weapon_cycle). */
-    DODGE=0x20000000, RAGE=0x10000000, GRAB=0x08000000,
+     * d-pad button of the next or previous weapon (apply_weapon_cycle); camera turns the free
+     * camera off and on (apply_free_camera; bit 0 is not a button of the pad). */
+    DODGE=0x20000000, RAGE=0x10000000, GRAB=0x08000000, CAMERA_TOGGLE=0x1,
     WEAPON_NEXT=0x04000000, WEAPON_PREV=0x02000000,
     MOVE_UP=0x00010000, MOVE_DOWN=0x00020000, MOVE_LEFT=0x00040000, MOVE_RIGHT=0x00080000,
     LOOK_UP=0x00200000, LOOK_DOWN=0x00400000, LOOK_LEFT=0x00800000, LOOK_RIGHT=0x01000000,
@@ -93,6 +96,7 @@ static uint16_t touch_axis(float v, int max) {
  * right source with L1 held is a left click (photo mode on pads without a touchpad). */
 enum { CLICK_LEAD_US=50000, CLICK_HOLD_US=50000, CLICK_TAIL_US=100000 };
 static struct { int side; uint64_t pressed, released; } click={-1,0,0};
+static uint32_t pad_held; /* the buttons of the last read that came from the gamepad */
 static void play_click(PadData *d) {
     const uint64_t now=d->timestamp;
     uint32_t sources=d->buttons & (CLICK_LEFT|CLICK_RIGHT);
@@ -148,6 +152,7 @@ static const struct { const char *name; uint32_t ps; } ps_names[]={
     {"options",BTN_OPTIONS}, {"touchpad",CLICK_LEFT}, {"touchpad_left",CLICK_LEFT}, {"touchpad_right",CLICK_RIGHT},
     {"up",BTN_UP}, {"down",BTN_DOWN}, {"left",BTN_LEFT}, {"right",BTN_RIGHT},
     {"dodge",DODGE}, {"rage",RAGE}, {"grab",GRAB}, {"weapon_next",WEAPON_NEXT}, {"weapon_prev",WEAPON_PREV},
+    {"camera",CAMERA_TOGGLE},
     {"move_up",MOVE_UP}, {"move_down",MOVE_DOWN}, {"move_left",MOVE_LEFT}, {"move_right",MOVE_RIGHT},
     {"look_up",LOOK_UP}, {"look_down",LOOK_DOWN}, {"look_left",LOOK_LEFT}, {"look_right",LOOK_RIGHT},
 };
@@ -172,7 +177,8 @@ static ButtonMap key_map={{
     {SDL_SCANCODE_W,MOVE_UP}, {SDL_SCANCODE_S,MOVE_DOWN}, {SDL_SCANCODE_A,MOVE_LEFT}, {SDL_SCANCODE_D,MOVE_RIGHT},
     {SDL_SCANCODE_UP,LOOK_UP}, {SDL_SCANCODE_DOWN,LOOK_DOWN},
     {SDL_SCANCODE_LEFT,LOOK_LEFT}, {SDL_SCANCODE_RIGHT,LOOK_RIGHT},
-},25};
+    {SDL_SCANCODE_G,CAMERA_TOGGLE},
+},26};
 
 static char *trim(char *text) {
     while (*text==' ' || *text=='\t') ++text;
@@ -415,6 +421,12 @@ static int qte_rotation(uint64_t now) {
     return type-QTE_FIRST_ROTATION<QTE_ROTATIONS ? (int)(type-QTE_FIRST_ROTATION) : -1;
 }
 
+/* Any prompt on screen: a button, mashing, holding or a turn of the stick. */
+static bool qte_prompt_up(uint64_t now) {
+    if (qte_rotation(now)>=0) return true;
+    return spartanport_qte.block && qte.seen && now-qte.seen<=QTE_ACTIVE_US;
+}
+
 /* A direction key (pressed or drawn) in the minigame: the next step, or back to the start. */
 static void qte_advance(int key, const int *sequence, unsigned length) {
     if (qte.passed) return;
@@ -503,6 +515,7 @@ static void sample_host(PadData *d) {
     d->connected=1; d->connected_count=connected_count ? connected_count : 1;
     d->timestamp=now_us();
     SDL_Gamepad *g=current_gamepad();
+    pad_held=0;
     watch_wheel();
     if (spartanportgpu_overlay_captures_input()) { drop_wheel(); return; } /* settings menu open: neutral input */
     const bool *k=SDL_WasInit(SDL_INIT_VIDEO) ? SDL_GetKeyboardState(NULL) : NULL;
@@ -511,6 +524,7 @@ static void sample_host(PadData *d) {
         for (size_t i=0;i<pad_map.count;++i)
             if (SDL_GetGamepadButton(g,(SDL_GamepadButton)pad_map.entries[i].source)) d->buttons|=pad_map.entries[i].ps;
         const uint32_t mapped=d->buttons;
+        pad_held=mapped;
         d->left_x=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFTX)); d->left_y=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFTY));
         d->right_x=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHTX)); d->right_y=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHTY));
         d->l2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFT_TRIGGER)); d->r2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
@@ -727,6 +741,97 @@ static void apply_dodge(PadData *d) {
     }
     dodge.held=held;
     if (held || d->timestamp<dodge.until) { d->right_x=dodge.x; d->right_y=dodge.y; }
+}
+
+/* Free camera (src/runtime_camera.c, on in the menu or the launcher): the right stick turns the camera and
+ * the game does not see it, except with L1 held (the game's evade is L1 + right stick), L2 held (the
+ * items' aim) or a QTE prompt up (any of them: the camera goes back to the game's, which frames the
+ * scripted moves better, and the stick reaches the game for a turn). The keyboard's dodge action
+ * runs after this and still tilts the stick. The mouse turns it too (apply_camera_mouse); reads
+ * before the mouse aim, which only works with L2.
+ * The left stick (and the evade with L1) is turned with the camera: camera_turn_stick. */
+enum { CAMERA_DEADZONE=24, CAMERA_TAP_US=400000 };
+static uint64_t camera_last;
+static struct { bool key_held, r3_held, r3_alone; uint64_t r3_since; } camera_toggle;
+static float camera_axis(uint8_t value) {
+    const int v=value-128;
+    if (abs(v)<CAMERA_DEADZONE) return 0;
+    const float t=(float)(abs(v)-CAMERA_DEADZONE)/(127-CAMERA_DEADZONE);
+    return (v<0 ? -1.0f : 1.0f)*(t>1 ? 1 : t*t);  /* squared: fine control near the centre */
+}
+/* The game moves Kratos (and aims the evade) relative to its own camera, not the turned one: a
+ * stick direction is turned by the camera's yaw so that up is ahead of the camera on screen. */
+static void camera_turn_stick(uint8_t *x, uint8_t *y) {
+    const float yaw=spartanport_camera_yaw();
+    if (yaw==0 || (*x==128 && *y==128)) return;
+    const float c=cosf(yaw), s=sinf(yaw);
+    const float sx=(float)(*x-128), sy=(float)(128-*y);  /* right, up */
+    const float tx=sx*c-sy*s, ty=sx*s+sy*c;              /* a positive yaw turns the camera left */
+    const float nx=128+tx, ny=128-ty;
+    *x=(uint8_t)(nx<0 ? 0 : nx>255 ? 255 : lroundf(nx));
+    *y=(uint8_t)(ny<0 ? 0 : ny>255 ? 255 : lroundf(ny));
+}
+/* The mouse turns the free camera like a mouse look, CAMERA_MOUSE_DEGREES per px at the menu's
+ * right stick sensitivity of 100 %, while the game has the mouse (the window's lock: not in the
+ * pause menu or another window) and L2 is not held (the items' aim keeps it, apply_mouse_aim). */
+static const float CAMERA_MOUSE_DEGREES=0.12f;
+static void apply_camera_mouse(const PadData *d) {
+    if ((d->buttons & BTN_L2) || !spartanportgpu_mouse_locked()) return;
+    const float dx=SDL_SetAtomicInt(&mouse_motion[0],0)/16.0f, dy=SDL_SetAtomicInt(&mouse_motion[1],0)/16.0f;
+    const float scale=CAMERA_MOUSE_DEGREES*(float)spartanportgpu_mouse_aim_sensitivity()/100.0f;
+    if (dx!=0 || dy!=0) spartanport_camera_look(dx*scale,dy*scale);
+}
+/* A game menu (the pause menu, photo mode, the Power Up menu) takes WASD and the sticks as they
+ * are: it is up from the button that opens it until the game's controller writes the camera again
+ * (the game is paused under it). Writes in the first CAMERA_MENU_SETTLE_US still belong to play. */
+enum { CAMERA_MENU_SETTLE_US=300000 };
+static struct { bool up, held; uint64_t since; unsigned writes; } camera_menu;
+static bool camera_menu_up(const PadData *d) {
+    const bool held=(d->buttons & (BTN_OPTIONS|BTN_TOUCHPAD|CLICK_LEFT|CLICK_RIGHT))!=0;
+    if (held && !camera_menu.held) {
+        if (!camera_menu.up) { printf("Free camera: game menu up\n"); fflush(stdout); }
+        camera_menu.up=true; camera_menu.since=d->timestamp;
+    }
+    camera_menu.held=held;
+    if (!camera_menu.up) return false;
+    const unsigned writes=spartanport_camera_writes();
+    if (d->timestamp-camera_menu.since<CAMERA_MENU_SETTLE_US) camera_menu.writes=writes;
+    else if (writes!=camera_menu.writes) {
+        camera_menu.up=false;
+        printf("Free camera: game menu closed (the game's camera moves again)\n");
+        fflush(stdout);
+    }
+    return camera_menu.up;
+}
+static void apply_free_camera(PadData *d) {
+    const bool key=(d->buttons & CAMERA_TOGGLE)!=0;
+    d->buttons&=~CAMERA_TOGGLE;
+    if (!spartanport_camera_stick_enabled()) return;
+    /* The toggle: the keyboard's camera key, or a tap of the pad's R3 alone (R3 with L3 is Rage of
+     * Sparta, with L2 the settings menu, with L1 and R1 the frame rate; R3 still reaches the game). */
+    if (key && !camera_toggle.key_held) spartanport_camera_toggle();
+    camera_toggle.key_held=key;
+    const bool r3=(pad_held & BTN_R3)!=0;
+    if (r3 && !camera_toggle.r3_held) { camera_toggle.r3_since=d->timestamp; camera_toggle.r3_alone=true; }
+    if (r3 && (d->buttons & (BTN_L1|BTN_R1|BTN_L2|BTN_L3))) camera_toggle.r3_alone=false;
+    if (!r3 && camera_toggle.r3_held && camera_toggle.r3_alone && d->timestamp-camera_toggle.r3_since<CAMERA_TAP_US)
+        spartanport_camera_toggle();
+    camera_toggle.r3_held=r3;
+    const uint64_t step=camera_last && d->timestamp>camera_last ? d->timestamp-camera_last : 0;
+    camera_last=d->timestamp;
+    const float seconds=step>100000 ? 0.1f : (float)step/1e6f;
+    if (camera_menu_up(d) || !spartanport_camera_live()) return;  /* a game menu, the title screen */
+    if (!spartanport_camera_on() || qte_prompt_up(d->timestamp)) spartanport_camera_steer(0,0,seconds,1);
+    else {
+        apply_camera_mouse(d);
+        if (d->buttons & (BTN_L1|BTN_L2)) {
+            if (d->buttons & BTN_L1) camera_turn_stick(&d->right_x,&d->right_y);  /* the evade's direction */
+        } else {
+            spartanport_camera_steer(camera_axis(d->right_x),camera_axis(d->right_y),seconds,0);
+            d->right_x=d->right_y=128;
+        }
+    }
+    camera_turn_stick(&d->left_x,&d->left_y);
 }
 
 /* The game's menus (the title menu, the pause menu, the Power Up menu) move a list with the
@@ -980,6 +1085,7 @@ static void sample(PadData *d) {
     overlay_chords(d);
     note_game_menu(d); /* before the actions turn into the buttons they press */
     apply_combos(d);
+    apply_free_camera(d);
     apply_switch_attack(d);
     apply_dodge(d);
     apply_weapon_cycle(d);

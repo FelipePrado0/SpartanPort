@@ -45,7 +45,7 @@ use crate::core::python::python_json;
 use crate::runner::glyphs::{entries, Entry};
 
 /// Of the patch: a change rebuilds the cached copy.
-pub const VERSION: u32 = 23;
+pub const VERSION: u32 = 25;
 pub const WAD: &str = "EXEC/WAD/PS4_LE/R_UI.WAD";
 
 /// The Exit to Desktop row's text in one language.
@@ -255,6 +255,27 @@ const MULTIPLIER_NAMES: [&str; 7] = [
     "Reset All to 1x",
 ];
 
+/// The builtin that reads Controls' control `index` (`selected`: with arrows): 0xfa4 + i (0xfb8 + i)
+/// for the first six, 0xf6d (0xf6e) for the free camera, the seventh.
+fn control_read(index: usize, selected: bool) -> usize {
+    match (index, selected) {
+        (6, false) => 0xf6d,
+        (6, true) => 0xf6e,
+        (_, false) => 0xfa4 + index,
+        (_, true) => 0xfb8 + index,
+    }
+}
+
+/// The builtin that moves Controls' control `index` left (-1) or right: 0xfaa + i and 0xfb1 + i
+/// for the first six; 0xf6f toggles the free camera either way.
+fn control_change(index: usize, direction: i32) -> usize {
+    match index {
+        6 => 0xf6f,
+        _ if direction < 0 => 0xfaa + index,
+        _ => 0xfb1 + index,
+    }
+}
+
 /// The texts of the native pages that follow the game's language.
 struct Texts {
     /// The Graphics Settings page: its title, its nine controls, Restore Defaults and Apply.
@@ -266,8 +287,8 @@ struct Texts {
     /// The question Apply and Restart asks, and its answers.
     restart: &'static str,
     restart_answers: [&'static str; 2],
-    /// The rows Controls adds after the game's three: six controls, Restore Defaults and Apply.
-    controls_names: [&'static str; 8],
+    /// The rows Controls adds after the game's three: seven controls, Restore Defaults and Apply.
+    controls_names: [&'static str; 9],
     /// The question Controls' Restore Defaults asks (its answers are `yes_no`).
     restore_controls: &'static str,
     /// The rows Display adds after the game's four: eleven settings and Apply.
@@ -301,6 +322,7 @@ static ENGLISH: Texts = Texts {
         "Mouse Aim Style",
         "Mouse QTE Distance",
         "Keep Mouse in Window",
+        "Free Camera (Experimental)",
         "Restore Controls Defaults",
         "Apply and Restart",
     ],
@@ -347,6 +369,7 @@ static PORTUGUESE: Texts = Texts {
         "Estilo da mira",
         "Distância do mouse nos QTEs",
         "Prender cursor à janela",
+        "Câmera livre (experimental)",
         "Restaurar padrões dos controles",
         "Aplicar e reiniciar",
     ],
@@ -1842,8 +1865,8 @@ impl Emitter<'_, '_> {
     }
 
     /// Controls' title and game rows (`kept`; the values of the two last are the page's), then
-    /// its six controls (builtins 0xfa4 + i read them, 0xfb8 + i with arrows), Restore Defaults
-    /// and Apply; scrollbar 12 follows the 8 rows of 11.
+    /// its seven controls (builtins [`control_read`] read them), Restore Defaults and Apply;
+    /// scrollbar 12 follows the 8 rows of 12.
     fn controls_window(
         &mut self,
         kept: &[String],
@@ -1868,9 +1891,8 @@ impl Emitter<'_, '_> {
                     .as_bytes(),
             )?;
             self.assign(1 + slot)?;
-            if (3..9).contains(&row) {
-                let read = if selected == Some(row) { 0xfb8 } else { 0xfa4 };
-                self.builtin(read + row - 3, false)?;
+            if (3..10).contains(&row) {
+                self.builtin(control_read(row - 3, selected == Some(row)), false)?;
             } else if matches!(row, 1 | 2) {
                 self.string(&arrows(row, selected == Some(row)))?;
             } else {
@@ -1881,7 +1903,7 @@ impl Emitter<'_, '_> {
         self.string(b"PauseText")?;
         self.integer(1)?;
         self.builtin(0x58, true)?;
-        self.scrollbar(12, first, 11, 8)
+        self.scrollbar(12, first, 12, 8)
     }
 
     /// The code block at `code`, with the texts of the locals in `replacements` replaced: states
@@ -1996,7 +2018,7 @@ pub fn native_cheats(
         Spec::new("HLNativeGraphics", "options", link()),
         Spec::new("HLNativeCheats", "options", link()),
     ];
-    let mut controls_specs: Vec<Spec> = (0..6)
+    let mut controls_specs: Vec<Spec> = (0..7)
         .map(|i| Spec::new(&format!("NativeControl{i}"), "controls", slide()))
         .collect();
     for name in ["NativeControlsReset", "NativeControlsApply"] {
@@ -2410,15 +2432,15 @@ pub fn native_cheats(
         }
     }
 
-    // Controls: the game's three rows, then six controls (builtins 0xfaa + i and 0xfb1 + i change
-    // them), Restore Defaults and Apply and Restart; eight rows show at a time.
+    // Controls: the game's three rows, then seven controls ([`control_change`] changes them),
+    // Restore Defaults and Apply and Restart; eight rows show at a time.
     let controls_originals = ["HLContDis", "HLFreeCamera", "HLFlightControl"]
         .map(|name| s.one(name))
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
     let controls_kept = kept_labels(&s, &controls, 0..=3, "Controls labels not recognized")?;
     let controls_window = Window::Controls(&controls_kept);
-    let control_rows: Vec<String> = (0..6)
+    let control_rows: Vec<String> = (0..7)
         .map(|i| format!("NativeControl{i}"))
         .chain(["NativeControlsReset", "NativeControlsApply"].map(String::from))
         .collect();
@@ -2438,8 +2460,8 @@ pub fn native_cheats(
         e.animation(row - first, 9)?;
         e.end();
         e.navigation(name, row, &targets)?;
-        if index < 6 {
-            for (kind, function) in [("left", 0xfaa + index), ("right", 0xfb1 + index)] {
+        if index < 7 {
+            for (kind, function) in [("left", control_change(index, -1)), ("right", control_change(index, 1))] {
                 e.begin(name, kind);
                 e.call(repeat);
                 e.builtin(function, true)?;
@@ -2818,7 +2840,7 @@ pub fn native_cheats(
     // Display's rows, Cheats' unpinned rows, Controls' rows and Graphics Settings' rows.
     native_scrollbar(data, 10, DISPLAY_ROWS, 8)?;
     native_scrollbar(data, 11, 8, 7)?;
-    native_scrollbar(data, 12, 11, 8)?;
+    native_scrollbar(data, 12, 12, 8)?;
     native_scrollbar(data, 13, 11, 8)
 }
 
@@ -4686,7 +4708,7 @@ mod tests {
                 }
             }
         }
-        // Controls: Apply and Restart and Restore Defaults, each with its question, and six
+        // Controls: Apply and Restart and Restore Defaults, each with its question, and seven
         // controls after the game's three rows.
         s.one("NativeControlsApply").unwrap();
         s.one("NativeControlsReset").unwrap();
@@ -4697,14 +4719,17 @@ mod tests {
             state_ref(&s, "NativeControlsRestartNo")
         );
         let controls = s.one("PauseControls").unwrap();
-        for index in 0..6 {
+        for index in 0..7 {
             let row = s.one(&format!("NativeControl{index}")).unwrap();
             assert_eq!(row.parent, controls.at - 4, "{index}");
             for (trigger, function) in [(&[0xe6, 0xf2], 0xfaa), (&[0xe2, 0xee], 0xfb1)] {
                 let code = block(&s, row, 3, Some(trigger));
-                assert!(calls(&code).contains(&(function + index)), "{index}");
+                let function = if index == 6 { 0xf6f } else { function + index };
+                assert!(calls(&code).contains(&function), "{index}");
             }
         }
+        let free_camera = block(&s, s.one("NativeControl6").unwrap(), 1, None);
+        assert!(calls(&free_camera).contains(&0xf6e));
         for name in ["HLContDis", "HLFreeCamera", "HLFlightControl"] {
             s.one(name).unwrap();
         }
@@ -4830,8 +4855,8 @@ mod tests {
                 name.starts_with("NativeControl") || name.starts_with("NativeGraphicsRestart")
             })
             .collect();
-        // Six controls, Reset and Apply, two questions with their answers, and Graphics' restart.
-        assert_eq!(names.len(), 17, "{names:?}");
+        // Seven controls, Reset and Apply, two questions with their answers, and Graphics' restart.
+        assert_eq!(names.len(), 18, "{names:?}");
         for name in names {
             let record = s.one(name).unwrap();
             for b in Script::blocks(record) {

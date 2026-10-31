@@ -151,6 +151,10 @@ struct Values {
     std::atomic<int> mouse_aim_style{0};
     /// L2 aim sensitivity in percent, 10 to 200: lower needs more mouse for the same stick. Live.
     std::atomic<int> mouse_aim_sensitivity{100};
+    /// Free camera (src/runtime_camera.c): the right stick turns the camera around Kratos. Off by
+    /// default, experimental. Live.
+    std::atomic<bool> free_camera{false};
+    std::atomic<bool> free_camera_supported{false};
     // Startup: run.py turns them into patches and environment variables; "Apply and restart".
     std::atomic<int> render_resolution{0};
     std::atomic<int> engine_fps{120};

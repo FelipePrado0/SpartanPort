@@ -192,6 +192,8 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.mouse_aim_style = std::clamp(i, 0, 1);
     } else if (key == "mouse_aim_sensitivity") {
         v.mouse_aim_sensitivity = value.empty() ? 100 : std::clamp(i, 10, 200);
+    } else if (key == "free_camera") {
+        v.free_camera = i != 0;
     } else if (key == "restart_unconfirmed") {
         v.restart_unconfirmed = i != 0;
     } else if (key == "enemy_health_bar") {
@@ -279,7 +281,8 @@ void Load() {
         {"SPARTAN_AUDIO_VOLUME", "master_volume"},       {"SPARTAN_AUDIO_CHANNELS", "audio_channels"},
         {"SPARTAN_MOUSE_PROMPT_DISTANCE", "mouse_prompt_distance"}, {"SPARTAN_MOUSE_LOCK", "mouse_lock"},
         {"SPARTAN_MOUSE_AIM_STYLE", "mouse_aim_style"}, {"SPARTAN_MOUSE_AIM_SENSITIVITY", "mouse_aim_sensitivity"},
-        {"SPARTAN_AUTO_QTE", "auto_qte"},                {"SPARTAN_MOTION_BLUR", "motion_blur"},
+        {"SPARTAN_AUTO_QTE", "auto_qte"}, {"SPARTAN_FREE_CAMERA", "free_camera"},
+        {"SPARTAN_MOTION_BLUR", "motion_blur"},
         {"SPARTAN_DEPTH_OF_FIELD", "depth_of_field"},
         {"SPARTAN_MONITOR", "monitor"}, {"SPARTAN_HDR", "hdr"},
         {"SPARTAN_GLYPH_STYLE", "glyph_style"},
@@ -472,6 +475,7 @@ void Save() {
     std::fprintf(file, "depth_of_field=%d\n", int(v.depth_of_field.load()));
     std::fprintf(file, "master_volume=%d\naudio_channels=%s\n", v.master_volume.load(),
                  AudioChannelKeys[std::clamp(v.audio_channels.load(), 0, AudioChannelsCount - 1)].data());
+    std::fprintf(file, "free_camera=%d\n", int(v.free_camera.load()));
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");
@@ -551,6 +555,7 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
             v.mouse_aim_style = 0;
             v.mouse_prompt_distance = 48;
             v.mouse_lock = true;
+            v.free_camera = false;
             SpartanSettings::Save();
             return 0;
         }
@@ -583,6 +588,24 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         labels[row] = std::string(selected ? "[ArrowSelectionL]" : "[ArrowSpacer]") + value
                     + (selected ? "[ArrowSelectionR]" : "[ArrowSpacer]");
         return text(labels[row].c_str());
+    }
+    // Controls' seventh row, the free camera: 0xf6d reads it, 0xf6e with arrows, 0xf6f toggles it.
+    if (function >= 0xf6d && function <= 0xf6f) {
+        const bool supported = v.free_camera_supported.load();
+        if (function == 0xf6f && supported) {
+            v.free_camera = !v.free_camera;
+            SpartanSettings::Save();
+        }
+        const char* language = std::getenv("SPARTAN_LANGUAGE");
+        const bool pt = language && (std::strcmp(language, "7") == 0 || std::strcmp(language, "17") == 0
+                                    || std::strncmp(language, "pt", 2) == 0 || std::strcmp(language, "br") == 0);
+        const char* value = !supported ? (pt ? "Indisponível" : "Unavailable")
+                          : v.free_camera ? (pt ? "Ligado" : "On") : (pt ? "Desligado" : "Off");
+        static thread_local std::string label;
+        const bool selected = function != 0xf6d;
+        label = std::string(selected ? "[ArrowSelectionL]" : "[ArrowSpacer]") + value
+              + (selected ? "[ArrowSelectionR]" : "[ArrowSpacer]");
+        return text(label.c_str());
     }
     // Display menu, Upscaler (row 0) and Quality preset (row 1): value 0xf61/0xf62, left 0xf63/0xf64,
     // right 0xf65/0xf66, selected 0xf67/0xf68. Applied by Apply and Restart (GraphicsNeedRestart).
