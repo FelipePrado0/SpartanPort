@@ -161,6 +161,8 @@ static void test_switch_attack(void) {
     sw.loaded=0;
 }
 
+/* Runs the switch attack test, then the pad ABI against a virtual SDL gamepad: rumble, the light
+ * bar, touchpad clicks, the L1 chord, the engine frame rate and menu combos, and overlay capture. */
 int main(void) {
     test_switch_attack();
     const char *tmp=getenv("TMPDIR") ? getenv("TMPDIR") : getenv("TEMP") ? getenv("TEMP") : "/tmp";

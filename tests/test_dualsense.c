@@ -9,6 +9,8 @@
 #define setenv(name, value, overwrite) _putenv_s(name, value)
 #endif
 
+/* Checks the trigger effect encodings and the output report block, the extras and speaker gain
+ * parsing, the QTE colours and the headset jack bit of an input report. */
 int main(void) {
     const DsTrigger off=ds_trigger_off();
     for (int i=0;i<DS_TRIGGER_SIZE;++i) assert(off.bytes[i]==0);

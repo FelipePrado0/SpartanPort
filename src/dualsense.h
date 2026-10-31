@@ -79,6 +79,8 @@ static inline void ds_build_effects(uint8_t out[DS_EFFECTS_SIZE], const DsTrigge
 
 /* What was last sent, so an effect is written once and again after a reconnect. */
 static struct { DsTrigger right, left; SDL_Gamepad *sent_to; } ds_sent __attribute__((unused));
+/* Puts an effect on each trigger of a DualSense. Nothing is sent when the pad already has these
+ * effects. False when the pad is not a DualSense or SDL refuses the report. */
 static inline bool ds_set_triggers(SDL_Gamepad *g, const DsTrigger *right, const DsTrigger *left) {
     if (!ds_is_dualsense(g)) return false;
     if (ds_sent.sent_to==g && !memcmp(&ds_sent.right,right,sizeof(*right)) && !memcmp(&ds_sent.left,left,sizeof(*left)))
@@ -122,6 +124,9 @@ static inline SDL_AudioDeviceID ds_speaker_device(void) {
 enum { DS_SPEAKER_VOLUME=0x64, DS_SPEAKER_GAIN_DEFAULT=4, DS_PATH_HEADSET=0x00, DS_PATH_SPEAKER=0x30 };
 /* With a headset in the pad's jack, its audio stays on the headset (path 0, the pad's own choice). */
 static struct { int gain, jack; SDL_Gamepad *sent_to; } ds_speaker_sent __attribute__((unused));
+/* Switches a DualSense's audio to its speaker (or leaves it on the headset when `jack`) at the
+ * preamp `gain` (0..7). Sent once per pad and setting. False when the pad is not a DualSense or SDL
+ * refuses the report. */
 static inline bool ds_set_speaker(SDL_Gamepad *g, int gain, bool jack) {
     if (!ds_is_dualsense(g)) return false;
     if (ds_speaker_sent.sent_to==g && ds_speaker_sent.gain==gain && ds_speaker_sent.jack==jack) return true;
@@ -145,6 +150,8 @@ static inline int ds_report_jack(const uint8_t *report, int size) {
 /* SDL keeps the pad's input reports to itself, so a second HID handle (Windows gives each handle
  * its own copy) reads the jack. Without one the jack reads as empty: the speaker plays. */
 static struct { SDL_hid_device *device; bool tried, jack; } ds_hid __attribute__((unused));
+/* True while a headset is plugged into the pad's jack. Opens the HID handle once, then reads the
+ * pending input reports without blocking and keeps the last jack state they carried. */
 static inline bool ds_jack_plugged(void) {
     if (!ds_hid.device && !ds_hid.tried) {
         ds_hid.tried=true;
@@ -160,6 +167,8 @@ static inline bool ds_jack_plugged(void) {
     }
     return ds_hid.jack;
 }
+/* The pad went away: what was sent to it no longer counts, so the next pad gets everything again,
+ * and the HID handle is closed (it is opened again on the next jack read). */
 static inline void ds_forget(void) {
     ds_sent.sent_to=NULL; ds_speaker_sent.sent_to=NULL;
     if (ds_hid.device) SDL_hid_close(ds_hid.device);
@@ -201,6 +210,8 @@ static inline unsigned ds_parse_features(const char *text) {
  * while it exists, and is read again every second: the extras can be switched while the game runs.
  * speaker is the exception, taken when the game opens its audio ports at start. */
 static int ds_gain_read __attribute__((unused))=DS_SPEAKER_GAIN_DEFAULT;
+/* The DS_* bits that are on now, from dualsense.txt or SPARTAN_DUALSENSE; also reads the speaker
+ * gain. Checked at most once a second, and logged when it changes. */
 static inline unsigned ds_features(void) {
     static unsigned features, logged;
     static uint64_t checked;
