@@ -61,10 +61,9 @@ fix is always requested, including with patch lists saved by older launchers. Th
 patch and texture fix are mutually exclusive. See the root README for tested builds.
 From a source tree, the launcher adds `C:\msys64\clang64\bin` (or `$MSYS2_ROOT`) to `PATH` for DLLs.
 
-FSR 1 and temporal upscaling (FSR 3.1, FSR 4, TAA and DLSS) are disabled in the current launcher
-and game settings path. RCAS sharpening remains available. The DLSS bridge and FSR asset tools
-remaining in the tree are experimental development code, not supported player setup steps.
-See [the historical research notes](../../docs/upscaler.md) for context.
+FSR 3.1, FSR 4, FSR 4.1 and TAA are selected under Graphics > Upscaling.
+AMD FSR frame generation adds one generated frame per game frame (2x). The open FSR 4
+model and its license are included in the package. See the root README for hardware requirements.
 
 See the [feature availability table](https://github.com/FelipePrado0/SpartanPort#feature-availability)
 for differences between published packages and current source builds, including Discord Rich Presence.

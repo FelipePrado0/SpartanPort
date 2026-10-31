@@ -170,7 +170,7 @@ mod tests {
         let ini = load_ini(&path);
         assert_eq!(ini.values["extra"], "a=b");
         assert_eq!(ini.values["fps_limit"], "60");
-        assert_eq!(ini.values["upscaler"], "fsr3");
+        assert_eq!(ini.values["upscaler"], "off");
     }
 
     #[test]

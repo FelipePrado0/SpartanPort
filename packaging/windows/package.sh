@@ -2,8 +2,8 @@
 # Builds dist/spartanport-windows/ (and dist/spartanport-windows.zip): SpartanPort.exe (the Rust launcher,
 # built outside MSYS2 with `cd launcher-rust && cargo build --release --locked`; it must run inside launcher-rust/ to read its .cargo/config.toml),
 # spartanport-probe.exe with the MSYS2 CLANG64 DLLs it needs and the controller diagrams the runner reads.
-# Run from an MSYS2 CLANG64 shell after `bash build.sh` and the cargo build. No Python is packaged. The
-# temporal upscalers are off, so neither the FSR 4 assets nor the DLSS runtime are packaged.
+# Run from an MSYS2 CLANG64 shell after `bash build.sh` and the cargo build. No Python is packaged.
+# The open FSR 4 model ships with its license in LICENSES/.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
 source ./msys2-env.sh
@@ -11,6 +11,7 @@ source ./msys2-env.sh
 
 launcher=launcher-rust/target/release/spartanport-launcher.exe
 [[ -f $launcher ]] || { echo 'Build the launcher first, outside MSYS2: cd launcher-rust && cargo build --release --locked' >&2; exit 1; }
+bash packaging/fetch_fsr4_model.sh
 
 # The package is assembled in a fresh staging folder and zipped from there; dist/spartanport-windows
 # (a playable copy that may hold saves and settings) is only refreshed afterwards.
@@ -41,12 +42,17 @@ cp -r patches "$dest/"
 cp docs/VOICE_REPLACEMENT.md "$dest/docs/"
 cp LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
 if [[ -f release.json ]]; then cp release.json "$dest/"; fi
+# The upscalers' third-party files and their licenses (credits in README.md).
+mkdir -p "$dest/LICENSES"
+cp -r out/fsr4_shaders "$dest/fsr4_shaders"
+cp out/fsr4_shaders/LICENSE-FSR4-v07.txt "$dest/LICENSES/FSR4-v07-model-MIT.txt"
+cp gpu/third_party/fsr-vulkan/LICENSE.txt "$dest/LICENSES/FSR-Vulkan.txt"
 # No game files and nothing a player made (saves, shader caches built from the game's shaders,
 # settings, logs) may ship: stop when one is found.
-forbidden=$(find "$dest" \( -iname eboot.bin -o -iname sce_module -o -iname sce_sys -o -iname savedata \
+forbidden=$(find "$dest" -path "$dest/fsr4_shaders" -prune -o \( -iname eboot.bin -o -iname sce_module -o -iname sce_sys -o -iname savedata \
     -o -iname user -o -iname cache -o -iname '*.log' -o -iname spartanport.ini -o -iname settings.json \
     -o -iname game_icon.ico \
-    -o -iname mods.json -o -iname patches.json -o -iname fsr4_shaders -o -iname 'nvngx_dlss*.dll' \
+    -o -iname mods.json -o -iname patches.json \
     -o -iname '*.py' -o -iname _internal \
     -o -iname '*.spv' -o -iname '*.pkg' -o -iname '*.sprx' -o -iname '*.prx' \) -print)
 if [[ -n $forbidden ]]; then

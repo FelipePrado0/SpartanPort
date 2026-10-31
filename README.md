@@ -205,7 +205,8 @@ Availability checked against [release 2.2.0](https://github.com/FelipePrado0/Spa
 | Startup black-screen patch / controller button icons | Included | Included |
 | Discord Rich Presence | Not included | Optional under Advanced, off by default; game name and elapsed time |
 | RADV sparse-queue fix | Not included | Merged into `main` |
-| FSR 1, FSR 3.1, FSR 4, TAA, DLSS | Disabled | Disabled in the launcher/game settings path |
+| FSR 3.1, FSR 4, FSR 4.1, TAA | Disabled | Graphics → Upscaling and the in-game menus ([details](#upscaling)) |
+| FSR 1 | Disabled | Disabled in the launcher/game settings path |
 | RCAS sharpening | Available | Available |
 
 The Linux AppImage was rebuilt on October 14 for glibc 2.39 or newer. The Windows and Linux
@@ -242,6 +243,33 @@ GPU on those two drivers, integrated ones included; the game's log line `GPU: gu
 multisampling off` or `on` is what was applied. Choose **Off** if the lines appear on another
 card and **On** to keep multisampling anyway. Off and On set `SPARTAN_NO_MSAA=1` or `0`; Automatic
 passes an inherited `SPARTAN_NO_MSAA` through. Applies on the next game launch.
+
+### Upscaling
+
+Choose the upscaler and the quality preset under **Graphics → Upscaling**, in the in-game
+**Display** menu or in the **Insert** menu (**Image**). The three show the same values. Off is
+the default. A preset renders a share of the Render resolution and the upscaler rebuilds the
+full resolution; each preset shows the size it renders at. Changes apply on restart (**Apply
+and Restart** in the game).
+
+- **FSR 3.1:** every graphics card.
+- **FSR 4:** the open FSR 4 model, included. For AMD Radeon RX 6000 or newer and Intel Arc;
+  Windows and Linux.
+- **TAA:** anti-aliasing at the full resolution, no upscaling.
+
+AMD FSR frame generation (2x) adds one generated frame between game frames. Enable it
+under **Graphics > Frame generation** or in the in-game menus, with an upscaler selected.
+It applies live; disabling it returns to the game frames without changing the upscaler.
+
+#### FSR 4.1 (AMD, Windows)
+
+FSR 4.1 runs through AMD's Vulkan runtime (`amdvkffx64.dll`), which comes with the AMD driver
+(Adrenalin 26.10.1 or newer).
+
+- RX 7000 and RX 9000: the driver should include it. Not yet confirmed; reports are welcome.
+- RX 6000: the current driver ships FSR 4.1 for DirectX 12 only, without the Vulkan runtime.
+  SpartanPort uses FSR 3.1 instead and says why in the in-game menu (**Insert → Image**).
+- NVIDIA and Intel: FSR 3.1.
 
 ### Menu language
 
@@ -646,6 +674,7 @@ This project is a fork of Supermedo's Windows port, which builds on deadinside28
   all the GPU and shader translation to Vulkan in this port.
 - **[WilkPrintes](https://github.com/WilkPrintes)**: designed and built the
   [SpartanPort website](https://spartanport.com/en). Special thanks for giving the project its home.
+- **IFreemz** (eFMann on GitHub): [shadPS4 Bloodborne DLSS & FSR](https://github.com/eFMann/shadPS4-Bloodborne-DLSS-FSR). The temporal upscaler integration this port's FSR 3.1 and FSR 4 are based on.
 
 Patches: kvicken and cuesta4 (resolution, texture fix, 120 FPS and skip videos, building on the
 PS3 patches by illusion0001), published for shadPS4 in
@@ -659,7 +688,8 @@ Also used: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmpeg](htt
 [sirit](https://github.com/shadps4-emu/sirit), [magic_enum](https://github.com/Neargye/magic_enum),
 [miniz](https://github.com/richgel999/miniz), [xbyak](https://github.com/herumi/xbyak),
 [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
-[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) and the AMD FidelityFX SDK,
+[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) and the AMD FidelityFX SDK, [Q2RTX](https://github.com/FireBurn/Q2RTX) (the open FSR 4
+model files),
 [MSYS2](https://www.msys2.org), [LLVM](https://llvm.org) and [Pillow](https://python-pillow.org).
 
 ## License

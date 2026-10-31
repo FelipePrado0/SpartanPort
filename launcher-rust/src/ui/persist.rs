@@ -25,11 +25,9 @@ use crate::ui::app::{self, Message, State};
 use crate::ui::follow::{follow, Cause};
 use crate::ui::widgets::Modal;
 
-/// The `spartanport.ini` keys the window has a control for, in the order the Python launcher
-/// creates their variables (Home, Graphics, Performance, Game, Controls): `collect` writes only
-/// these, in this order, so a first save appends the same lines. The parked Upscaling keys
-/// (`upscaler`, `preset`, `object_motion`, `output_res`, `live_resolution`) have no control and are
-/// never written: a file keeps whatever it holds for them. Taken from the catalog's written Ini rows.
+/// The `spartanport.ini` keys with visible controls, in catalog order. Saving also writes the
+/// fixed legacy frame generation multiplier returned by `Store::ini_to_write`. Hidden settings
+/// outside that map keep their existing values.
 pub static SHOWN_INI_KEYS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
     SETTINGS
         .iter()
@@ -239,12 +237,12 @@ pub fn collect(state: &mut State) -> Result<(), PersistError> {
         .as_ref()
         .map_or(&disk.values, |saved| &saved.ini);
     let mut edited = IndexMap::new();
-    for key in SHOWN_INI_KEYS.iter() {
-        let Some(value) = pending.ini.get(*key) else {
-            continue;
-        };
-        if !persisted.contains(key) || baseline.get(*key) != Some(value) {
-            edited.insert((*key).to_string(), value.clone());
+    for (key, value) in &pending.ini {
+        if key == "frame_generation_frames"
+            || !persisted.contains(key.as_str())
+            || baseline.get(key) != Some(value)
+        {
+            edited.insert(key.clone(), value.clone());
         }
     }
     write_files(state, &pending, &edited, &disk.lines)?;

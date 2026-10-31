@@ -209,7 +209,8 @@ Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/
 | Corrección de pantalla negra / íconos de botones del control | Incluidos | Incluidos |
 | Discord Rich Presence | No incluido | Opcional en Advanced, desactivado por defecto; nombre del juego y tiempo transcurrido |
 | Corrección de la cola sparse en RADV | No incluida | Integrada en `main` |
-| FSR 1, FSR 3.1, FSR 4, TAA, DLSS | Desactivados | Desactivados en el flujo de ajustes del launcher/juego |
+| FSR 3.1, FSR 4, FSR 4.1, TAA | Desactivados | Gráficos → Upscaling y los menús del juego ([detalles](#upscaling)) |
+| FSR 1 | Desactivados | Desactivados en el flujo de ajustes del launcher/juego |
 | Nitidez RCAS | Disponible | Disponible |
 
 El AppImage Linux se recompiló el 14 de octubre para glibc 2.39 o posterior. Los paquetes
@@ -240,6 +241,33 @@ cubre toda GPU con esos dos drivers, incluidas las integradas; la línea del log
 multisampling off` u `on` indica lo que se aplicó. Elegí **Off** si las líneas aparecen en otra placa
 y **On** para mantener el multimuestreo de todas formas. Off y On establecen `SPARTAN_NO_MSAA=1` o `0`;
 Automatic deja pasar un `SPARTAN_NO_MSAA` heredado. Se aplica en el próximo inicio del juego.
+
+### Upscaling
+
+Elegí el upscaler y el preset de calidad en **Gráficos → Upscaling**, en el menú **Pantalla** del
+juego o en el menú **Insert** (**Image**). Los tres muestran los mismos valores. El valor por
+defecto es Desactivado. El preset renderiza una fracción de la resolución de renderizado y el
+upscaler reconstruye la resolución completa; cada preset muestra la resolución en que renderiza.
+Los cambios se aplican al reiniciar (**Aplicar y reiniciar** en el juego).
+
+- **FSR 3.1:** cualquier tarjeta gráfica.
+- **FSR 4:** el modelo abierto de FSR 4, incluido. Para AMD Radeon RX 6000 o posterior e Intel
+  Arc; Windows y Linux.
+- **TAA:** antialiasing a la resolución completa, sin upscaling.
+
+La generaci?n de fotogramas AMD FSR (2x) a?ade un fotograma generado entre los del juego.
+Act?vala en **Gr?ficos > Generaci?n de fotogramas** o en los men?s del juego, con un escalador
+seleccionado. Se aplica al instante; al desactivarla se mantiene el escalador.
+
+#### FSR 4.1 (AMD, Windows)
+
+FSR 4.1 funciona con el runtime Vulkan de AMD (`amdvkffx64.dll`), que viene con el driver de AMD
+(Adrenalin 26.10.1 o posterior).
+
+- RX 7000 y RX 9000: el driver debería incluirlo. Todavía no confirmado; los reportes son bienvenidos.
+- RX 6000: el driver actual trae FSR 4.1 solo para DirectX 12, sin el runtime Vulkan. SpartanPort
+  usa FSR 3.1 en su lugar e indica el motivo en el menú del juego (**Insert → Image**).
+- NVIDIA e Intel: FSR 3.1.
 
 ## Controles de teclado
 
@@ -580,6 +608,8 @@ deadinside28:
   hace toda la traducción de GPU y shaders a Vulkan en este port.
 - **[WilkPrintes](https://github.com/WilkPrintes)**: diseñó y construyó el
   [sitio de SpartanPort](https://spartanport.com/es). Un agradecimiento especial por darle un hogar al proyecto.
+- **IFreemz** (eFMann en GitHub): [shadPS4 Bloodborne DLSS & FSR](https://github.com/eFMann/shadPS4-Bloodborne-DLSS-FSR). El puente de DLSS y la integración
+  de los upscalers temporales en que se basan DLSS, FSR 3.1 y FSR 4 de este port.
 
 Parches: kvicken y cuesta4 (resolución, corrección de texturas, 120 FPS y saltar videos, sobre los
 parches de PS3 de illusion0001), publicados para shadPS4 en
@@ -594,7 +624,8 @@ También se usan: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmp
 [sirit](https://github.com/shadps4-emu/sirit), [magic_enum](https://github.com/Neargye/magic_enum),
 [miniz](https://github.com/richgel999/miniz), [xbyak](https://github.com/herumi/xbyak),
 [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
-[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) y el AMD FidelityFX SDK,
+[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) y el AMD FidelityFX SDK, [Q2RTX](https://github.com/FireBurn/Q2RTX) (los archivos
+del modelo abierto de FSR 4),
 [MSYS2](https://www.msys2.org), [LLVM](https://llvm.org) y [Pillow](https://python-pillow.org).
 
 ## Licencia

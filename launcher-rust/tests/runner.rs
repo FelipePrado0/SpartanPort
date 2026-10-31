@@ -433,7 +433,8 @@ fn run_writes_every_derived_file_and_starts_the_probe_with_the_python_command_li
         var("SPARTAN_CONFIG"),
         Some(text(&port.root.join("spartanport.ini")))
     );
-    assert_eq!(var("SPARTAN_UPSCALER").as_deref(), Some("none"));
+    // The game reads spartanport.ini's upscaler (Off by default); the runner no longer forces it.
+    assert_eq!(var("SPARTAN_UPSCALER"), None);
     assert_eq!(var("SPARTAN_READBACK_LINEAR").as_deref(), Some("1"));
     assert_eq!(
         var("SPARTAN_WINDOW_ICON"),

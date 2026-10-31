@@ -808,8 +808,9 @@ def migrate_controls(saved):
 UPSCALERS = [('fsr3', ('FSR 3.1 (every GPU)', 'FSR 3.1 (любая видеокарта)')),
              ('taa', ('TAA (native resolution anti-aliasing)', 'TAA (нативное сглаживание)')),
              ('off', ('Off', 'Выключен'))]
-PRESETS = [('0', ('Native AA (×1.0)',)), ('1', ('Quality (×1.5)',)), ('2', ('Balanced (×1.7)',)),
-           ('3', ('Performance (×2)',)), ('4', ('Ultra Performance (×3)',))]
+# Ordered by render scale; the values are spartanport.ini preset numbers (Ultra Quality was added as 5).
+PRESETS = [('0', ('Native AA (100%)',)), ('5', ('Ultra Quality (77%)',)), ('1', ('Quality (67%)',)),
+           ('2', ('Balanced (59%)',)), ('3', ('Performance (50%)',)), ('4', ('Ultra Performance (33%)',))]
 OUTPUTS = [('1280x720', ('1280 × 720',)), ('1920x1080', ('1920 × 1080',)),
            ('2560x1440', ('2560 × 1440',)), ('3840x2160', ('3840 × 2160 (4K)',))]
 LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарте)')), ('0', ('Off (faster)', 'Выключена (быстрее)')),
@@ -1334,9 +1335,7 @@ def game_environment(s):
     write_trophy_texts(Path(user_dir))
     env['SPARTAN_GAME_DIR'] = s['game_dir']
     env.pop('SPARTAN_PATCH_DIR', None)
-    # Temporal upscaling is parked (build_graphics): a switch saved on by 2.1.8 has no control left to
-    # turn it off, so it is ignored until the upscaler section comes back.
-    env['SPARTAN_EXPERIMENTAL_UPSCALER'] = '0'
+    env['SPARTAN_EXPERIMENTAL_UPSCALER'] = '1' if s.get('experimental_upscaler') else '0'
     if s.get('update_dir'):
         env['SPARTAN_PATCH_DIR'] = s['update_dir']
     if not WINDOWS:
@@ -2136,25 +2135,18 @@ class Launcher:
             return self.banner_image.subsample(factor) if factor > 1 else self.banner_image
 
     def build_graphics(self):
-        """Window and overlay controls; temporal upscaling stays commented out."""
+        """Window and overlay controls, then the temporal upscaler."""
         f = self.scrolled_page('graphics', _('Graphics', 'Графика'), _('How the game appears on your screen.'))
         self.build_display(f)
-        # Temporal upscaling is parked until its image quality is validated.
-        # self.section(f, _('Experimental'))
-        # self.check(f, 'experimental_upscaler', 'app', _('Enable the upscaler (experimental)'),
-        #            _('Off (default): the game runs without temporal upscaling; FSR 3.1 and TAA need this switch on. '
-        #              'FSR 3.1 is not calibrated for this game yet: expect ghosting or flicker. The remaining options require this switch; '
-        #              'leave it off for normal gameplay.',
-        #              'Выкл. (по умолчанию): игра без временного апскейлинга; FSR 3.1 и TAA нужен этот переключатель. '
-        #              'FSR 3.1 ещё не откалиброван для этой игры: возможны гостинг и мерцание.'), restart=True)
-        # self.section(f, _('Upscaling', 'Апскейлинг'))
-        # self.row(f, _('Upscaler', 'Апскейлер'), self.choice(f, 'upscaler', 'ini', UPSCALERS))
-        # self.row(f, _('Quality preset', 'Пресет'), self.choice(f, 'preset', 'ini', PRESETS),
-        #          _('Render scale per axis: Quality renders at 1/1.5 of the output size.',
-        #            'Масштаб рендера по каждой оси: Quality рисует в 1/1.5 размера вывода.'))
-        # self.row(f, _('Output resolution', 'Разрешение вывода'), self.choice(f, 'output_res', 'ini', OUTPUTS),
-        #          _('What the upscaler produces; the HUD is drawn at this size too.',
-        #            'Что выдаёт апскейлер; интерфейс рисуется в этом же размере.'))
+        self.section(f, _('Upscaling'))
+        self.check(f, 'experimental_upscaler', 'app', _('Enable the upscaler'),
+                   _('Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. '
+                     'Animated characters can still show some ghosting.'), restart=True)
+        self.row(f, _('Upscaler', 'Апскейлер'), self.choice(f, 'upscaler', 'ini', UPSCALERS))
+        # The upscaler outputs the Render resolution chosen above; the preset renders below it.
+        self.row(f, _('Quality preset', 'Пресет'), self.choice(f, 'preset', 'ini', PRESETS),
+                 _('Share of the Render resolution above the game renders at; the upscaler rebuilds the full '
+                   'Render resolution. Lower renders faster. Native AA keeps the full resolution.'), restart=True)
         # self.row(f, _('Live resolution changes', 'Смена разрешения на лету'), self.choice(f, 'live_resolution', 'ini', LIVE),
         #          _('Off: outputs other than 1080p are set by a patch at start (fastest; changing them in the '
         #            'game restarts it). On: change output and preset in the game without a restart, at a cost.',

@@ -68,9 +68,26 @@ impl Store {
     /// Reads both files, plus the ones that are there but could not be read (the files stay as
     /// they are until a save).
     pub fn load(paths: &Paths) -> (Store, Vec<PathBuf>) {
-        let (app, settings_file) = read_app_settings(paths);
+        let (mut app, settings_file) = read_app_settings(paths);
         let (mut ini, ini_unreadable) = read_ini(&paths.ini_path());
         seed_ini(&mut ini, &app);
+        for key in ["upscaler", "frame_generation"] {
+            if ini.values.get(key).map(String::as_str) == Some("dlss") {
+                ini.values.insert(key.to_string(), "off".to_string());
+            }
+        }
+        // The old "Enable the upscaler" switch kept the upscaler off whatever the ini named (the
+        // game always saves one); the Upscaler choice's Off does that now, in the game's menus too.
+        if let Some(on) = app.0.remove("experimental_upscaler") {
+            if on != Value::Bool(true)
+                && ini.values.get("upscaler").map(String::as_str) != Some("off")
+            {
+                ini.values.insert("upscaler".into(), "off".into());
+                let off = IndexMap::from([("upscaler".to_string(), "off".to_string())]);
+                let _ = crate::core::graphics_options::write_keys(&paths.ini_path(), &off);
+            }
+            let _ = crate::core::settings::save_settings(&paths.config_file(), &app);
+        }
         let unreadable = [
             (
                 settings_file == SettingsFile::Unreadable,
@@ -94,6 +111,9 @@ impl Store {
     }
 
     pub fn text(&self, key: &str) -> String {
+        if key == "frame_generation_frames" {
+            return "1".to_string();
+        }
         match ini_setting(key) {
             Some(row) => self
                 .ini
@@ -161,11 +181,13 @@ impl Store {
     }
 
     /// What a save writes to the ini: the keys the window has a control for, a switch as
-    /// `"1"`/`"0"` (anything but "1" reads as off).
+    /// `"1"`/`"0"` (anything but "1" reads as off). The retired FG multiplier is saved as 2x.
     pub fn ini_to_write(&self) -> IndexMap<String, String> {
         SETTINGS
             .iter()
-            .filter(|row| row.file == File::Ini && row.written)
+            .filter(|row| {
+                row.file == File::Ini && (row.written || row.key == "frame_generation_frames")
+            })
             .map(|row| {
                 let value = if matches!(row.kind, Kind::Flag) {
                     if self.flag(row.key) { "1" } else { "0" }.to_string()
@@ -188,6 +210,40 @@ mod tests {
         let (store, unreadable) = Store::load(&Paths::from_env(dir.path(), &|_| None));
         assert!(unreadable.is_empty());
         (dir, store)
+    }
+
+    #[test]
+    fn removed_upscaler_and_frame_generation_choices_are_saved_as_off() {
+        let (dir, _) = fresh();
+        std::fs::write(
+            dir.path().join("spartanport.ini"),
+            "upscaler=dlss\nframe_generation=dlss\nframe_generation_frames=3\n",
+        )
+        .unwrap();
+        let (store, unreadable) = Store::load(&Paths::from_env(dir.path(), &|_| None));
+        assert!(unreadable.is_empty());
+        assert_eq!(store.text("upscaler"), "off");
+        assert_eq!(store.text("frame_generation"), "off");
+        assert_eq!(store.ini_to_write()["upscaler"], "off");
+        assert_eq!(store.ini_to_write()["frame_generation"], "off");
+        assert_eq!(store.ini_to_write()["frame_generation_frames"], "1");
+    }
+
+    #[test]
+    fn legacy_frame_generation_multipliers_are_saved_as_2x() {
+        for frames in ["1", "2", "3", "9"] {
+            let (dir, _) = fresh();
+            std::fs::write(
+                dir.path().join("spartanport.ini"),
+                format!("frame_generation=fsr\nframe_generation_frames={frames}\n"),
+            )
+            .unwrap();
+            let (store, unreadable) = Store::load(&Paths::from_env(dir.path(), &|_| None));
+            assert!(unreadable.is_empty());
+            assert_eq!(store.text("frame_generation_frames"), "1");
+            assert_eq!(store.ini_to_write()["frame_generation_frames"], "1");
+            assert_eq!(store.ini_to_write()["frame_generation"], "fsr");
+        }
     }
 
     #[test]
@@ -254,14 +310,16 @@ mod tests {
         // Only "1" is on in an ini: "true" is written as off, a bare "1" stays on.
         store.set("vsync", json!("true"));
         store.set("show_fps", json!("1"));
-        store.set("upscaler", json!("xx"));
+        store.set("object_motion", json!("0"));
         store.set("fps_limit", json!("60"));
         let out = store.ini_to_write();
         assert_eq!(out["vsync"], "0");
         assert_eq!(out["show_fps"], "1");
         assert_eq!(out["fps_limit"], "60");
-        assert!(!out.contains_key("upscaler"));
-        assert_eq!(out.len(), 27);
+        // A parked key is not written; the upscaler and its preset are shown, so they are.
+        assert!(!out.contains_key("object_motion"));
+        assert!(out.contains_key("upscaler") && out.contains_key("preset"));
+        assert_eq!(out.len(), 31);
         assert_eq!(out.keys().next().unwrap(), "display_mode");
     }
 
@@ -303,6 +361,31 @@ mod tests {
         assert_eq!(store.text("monitor"), "");
         assert_eq!(store.text("hdr"), "1");
         assert_eq!(store.text("glyph_style"), "off");
+    }
+
+    #[test]
+    fn the_old_upscaler_switch_becomes_the_upscaler_choice() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::from_env(dir.path(), &|_| None);
+        // Off (or never set): the game saved upscaler=fsr3, but the switch kept it off.
+        std::fs::write(paths.config_file(), r#"{"experimental_upscaler": false}"#).unwrap();
+        std::fs::write(paths.ini_path(), "upscaler=fsr3\npreset=1\n").unwrap();
+        let (store, _) = Store::load(&paths);
+        assert_eq!(store.text("upscaler"), "off");
+        assert!(std::fs::read_to_string(paths.ini_path())
+            .unwrap()
+            .contains("upscaler=off"));
+        assert!(store.json("experimental_upscaler").is_none());
+        // Once: a later choice in the game or the launcher stays.
+        std::fs::write(paths.ini_path(), "upscaler=fsr411\npreset=1\n").unwrap();
+        let (store, _) = Store::load(&paths);
+        assert_eq!(store.text("upscaler"), "fsr411");
+        // On: the chosen upscaler stays.
+        std::fs::write(paths.config_file(), r#"{"experimental_upscaler": true}"#).unwrap();
+        std::fs::write(paths.ini_path(), "upscaler=fsr3\n").unwrap();
+        let (store, _) = Store::load(&paths);
+        assert_eq!(store.text("upscaler"), "fsr3");
+        assert!(store.json("experimental_upscaler").is_none());
     }
 
     #[test]

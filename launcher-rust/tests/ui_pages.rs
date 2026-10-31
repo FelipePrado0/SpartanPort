@@ -34,6 +34,18 @@ fn graphics_rows_change_the_right_keys() {
     let _ = app::update(&mut state, pick);
     assert_eq!(state.store.text("display_mode"), "borderless");
     assert!(state.store.json("display_mode").is_none());
+    #[cfg(windows)]
+    {
+        let pick = select_message(
+            "upscaler",
+            spartanport_launcher::core::options::UPSCALERS,
+            "en",
+            "FSR 4.1 (AMD driver)",
+        )
+        .unwrap();
+        let _ = app::update(&mut state, pick);
+        assert_eq!(state.store.text("upscaler"), "fsr411");
+    }
 }
 
 #[test]

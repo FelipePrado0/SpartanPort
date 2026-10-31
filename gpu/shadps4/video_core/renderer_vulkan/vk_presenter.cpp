@@ -12,6 +12,7 @@
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
+#include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "spartanport_overlay.h"
 #include "spartanport_settings.h"
 #include "spartanport_graphics.h"
@@ -22,6 +23,7 @@
 #include "video_core/texture_cache/image.h"
 
 #include <miniz.h>
+#include <thread>
 
 #include <algorithm>
 #include <array>
@@ -203,7 +205,7 @@ bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, 
     }
 }
 
-std::filesystem::path ScreenshotPath() {
+std::filesystem::path ScreenshotPath(bool generated) {
     const auto& dir = Common::FS::GetUserPath(Common::FS::PathType::ScreenshotsDir);
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
@@ -222,9 +224,9 @@ std::filesystem::path ScreenshotPath() {
     const auto ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
     char name[96];
-    std::snprintf(name, sizeof(name), "%s_%04d%02d%02d_%02d%02d%02d_%03d.png", serial.c_str(),
+    std::snprintf(name, sizeof(name), "%s_%04d%02d%02d_%02d%02d%02d_%03d%s.png", serial.c_str(),
                   local.tm_year + 1900, local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min,
-                  local.tm_sec, int(ms));
+                  local.tm_sec, int(ms), generated ? "-fg" : "");
     return dir / name;
 }
 
@@ -256,7 +258,7 @@ void CaptureScreenshot(const Instance& instance, Scheduler& scheduler, vk::Comma
                            vk::DependencyFlags{}, to_host, {}, {});
     scheduler.DeferPriorityOperation([allocator = instance.GetAllocator(), buffer, allocation, info,
                                       width = frame.width, height = frame.height, format = frame.format,
-                                      hdr = frame.is_hdr, path = ScreenshotPath()] {
+                                      hdr = frame.is_hdr, path = ScreenshotPath(frame.is_generated)] {
         vmaInvalidateAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
         std::vector<u8> rgba;
         const bool converted =
@@ -567,6 +569,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     }
 
     Frame* frame = GetRenderFrame();
+    frame->is_generated = false;
 
     const auto frame_subresources = vk::ImageSubresourceRange{
         .aspectMask = vk::ImageAspectFlagBits::eColor,
@@ -593,6 +596,10 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         .imageMemoryBarrierCount = 1,
         .pImageMemoryBarriers = &pre_barrier,
     });
+    // spartanport: frame generation, the frame between the previous one and this one.
+    const vk::Image generated_image = rasterizer->GetUpscaler().GetFrameGeneration().Generate(
+        cmdbuf, upscaled, upscaled ? display.image : vk::Image{},
+        upscaled ? display.format : vk::Format::eUndefined);
 
     VideoCore::ImageViewInfo view_info{};
     view_info.format = GetFrameViewFormat(attribute.attrib.pixel_format);
@@ -667,6 +674,29 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     pp_settings.picture = MovieBars::Cutscenes().Bars(image_size.width, image_size.height,
                                                       MovieBars::NowMs());
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
+    if (generated_image) {
+        // The same passes over the generated frame, into a frame of its own.
+        Frame* generated = GetRenderFrame();
+        const auto generated_barrier = vk::ImageMemoryBarrier2{
+            .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+            .srcAccessMask = vk::AccessFlagBits2::eColorAttachmentRead,
+            .dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+            .dstAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
+            .oldLayout = vk::ImageLayout::eUndefined,
+            .newLayout = vk::ImageLayout::eColorAttachmentOptimal,
+            .image = generated->image,
+            .subresourceRange{frame_subresources},
+        };
+        cmdbuf.pipelineBarrier2({.imageMemoryBarrierCount = 1,
+                                 .pImageMemoryBarriers = &generated_barrier});
+        const vk::ImageView generated_view = fsr_pass.Render(
+            cmdbuf,
+            rasterizer->GetUpscaler().GetFrameGeneration().GeneratedView(view_info.format),
+            image_size, {generated->width, generated->height}, fsr_settings, generated->is_hdr);
+        pp_pass.Render(cmdbuf, generated_view, image_size, *generated, pp_settings);
+        generated->is_generated = true;
+        frame->generated = generated;
+    }
     if (frame_dump) {
         // The presented image as the swapchain blit reads it (General after the pass).
         const vk::MemoryBarrier2 done{.srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
@@ -682,6 +712,10 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     // Flush frame creation commands.
     frame->ready_semaphore = draw_scheduler.GetWorkSemaphore()->Handle();
     frame->ready_tick = draw_scheduler.CurrentTick();
+    if (frame->generated) {
+        frame->generated->ready_semaphore = frame->ready_semaphore;
+        frame->generated->ready_tick = frame->ready_tick;
+    }
     SubmitInfo info{};
     draw_scheduler.Flush(info);
 
@@ -845,6 +879,30 @@ void Presenter::PresentLoadingFrame() {
 }
 
 void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame) {
+    using Clock = std::chrono::steady_clock;
+    const auto real_deadline = !is_reusing_frame && is_game_frame
+        ? frame_pacing.RealDeadline(Clock::now()) : Clock::time_point{};
+    struct Profile {
+        Clock::time_point window = Clock::now(), last_present{};
+        double pacing_ms = 0, acquire_ms = 0, submit_ms = 0, present_ms = 0;
+        double real_gap_ms = 0, generated_gap_ms = 0;
+        u64 real = 0, generated = 0, real_gaps = 0, generated_gaps = 0;
+    };
+    Profile* profile = nullptr;
+    if (GpuProfiler::Get() && !is_reusing_frame) {
+        static thread_local Profile totals;
+        profile = &totals;
+    }
+    // spartanport: frame generation: the generated frame first, the real one halfway to the next.
+    if (Frame* generated = std::exchange(frame->generated, nullptr)) {
+        Present(generated, false, false);
+        const auto sleep_start = profile ? Clock::now() : Clock::time_point{};
+        std::this_thread::sleep_until(real_deadline);
+        if (profile) {
+            profile->pacing_ms += std::chrono::duration<double, std::milli>(
+                Clock::now() - sleep_start).count();
+        }
+    }
     // Free the frame for reuse
     const auto free_frame = [&] {
         if (!is_reusing_frame) {
@@ -868,6 +926,7 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
     }
 
+    const auto acquire_start = profile ? Clock::now() : Clock::time_point{};
     if (!swapchain.AcquireNextImage()) {
         if (!window.IsMinimized() && window.GetWidth() > 0 && window.GetHeight() > 0) {
             swapchain.Recreate(window.GetWidth(), window.GetHeight());
@@ -880,6 +939,10 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
         }
     }
 
+    if (profile) {
+        profile->acquire_ms += std::chrono::duration<double, std::milli>(
+            Clock::now() - acquire_start).count();
+    }
     // Reset fence for queue submission. Do it here instead of GetRenderFrame() because we may
     // skip frame because of slow swapchain recreation. If a frame skip occurs, we skip signal
     // the frame's present fence and future GetRenderFrame() call will hang waiting for this frame.
@@ -1006,7 +1069,13 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     info.AddWait(frame->ready_semaphore, frame->ready_tick);
     info.AddSignal(swapchain.GetPresentReadySemaphore());
     info.AddSignal(frame->present_done);
+    const auto submit_start = profile ? Clock::now() : Clock::time_point{};
     scheduler.Flush(info);
+    const auto present_start = profile ? Clock::now() : Clock::time_point{};
+    if (profile) {
+        profile->submit_ms += std::chrono::duration<double, std::milli>(
+            present_start - submit_start).count();
+    }
 
     // Present to swapchain.
     {
@@ -1017,6 +1086,40 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
         }
     }
 
+    if (profile) {
+        const auto now = Clock::now();
+        profile->present_ms += std::chrono::duration<double, std::milli>(now - present_start).count();
+        const bool has_gap = profile->last_present != Clock::time_point{};
+        const double gap = has_gap ? std::chrono::duration<double, std::milli>(
+            now - profile->last_present).count() : 0.0;
+        profile->last_present = now;
+        if (is_game_frame) {
+            ++profile->real;
+            profile->real_gap_ms += gap;
+            profile->real_gaps += has_gap;
+        } else {
+            ++profile->generated;
+            profile->generated_gap_ms += gap;
+            profile->generated_gaps += has_gap;
+        }
+        const double seconds = std::chrono::duration<double>(now - profile->window).count();
+        if (seconds >= 5.0) {
+            const double calls = double(profile->real + profile->generated);
+            std::printf("FG CPU profile: mode=%d real_calls/s=%.1f generated_calls/s=%.1f "
+                        "real=%llu generated=%llu pacing=%.3f ms/real "
+                        "acquire=%.3f submit=%.3f present=%.3f ms/call "
+                        "gap_to_real=%.3f gap_to_generated=%.3f ms\n",
+                        SpartanSettings::Get().frame_generation.load(), profile->real / seconds,
+                        profile->generated / seconds, static_cast<unsigned long long>(profile->real),
+                        static_cast<unsigned long long>(profile->generated),
+                        profile->pacing_ms / double(std::max<u64>(1, profile->real)),
+                        profile->acquire_ms / calls, profile->submit_ms / calls,
+                        profile->present_ms / calls,
+                        profile->real_gap_ms / double(std::max<u64>(1, profile->real_gaps)),
+                        profile->generated_gap_ms / double(std::max<u64>(1, profile->generated_gaps)));
+            *profile = {};
+        }
+    }
     free_frame();
     if (!is_reusing_frame && is_game_frame) {
         DebugState.IncFlipFrameNum();
@@ -1024,6 +1127,9 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
 }
 
 Frame* Presenter::GetRenderFrame() {
+    using Clock = std::chrono::steady_clock;
+    const bool profile = GpuProfiler::Get() != nullptr;
+    const auto wait_start = profile ? Clock::now() : Clock::time_point{};
     // Wait for free presentation frames
     Frame* frame;
     {
@@ -1036,6 +1142,7 @@ Frame* Presenter::GetRenderFrame() {
         free_queue.pop();
     }
 
+    const auto queue_ready = profile ? Clock::now() : Clock::time_point{};
     const vk::Device device = instance.GetDevice();
     vk::Result result{};
 
@@ -1054,6 +1161,24 @@ Frame* Presenter::GetRenderFrame() {
         }
     }
 
+    if (profile) {
+        const auto now = Clock::now();
+        static thread_local auto window = wait_start;
+        static thread_local double queue_ms = 0, fence_ms = 0;
+        static thread_local u64 calls = 0;
+        queue_ms += std::chrono::duration<double, std::milli>(queue_ready - wait_start).count();
+        fence_ms += std::chrono::duration<double, std::milli>(now - queue_ready).count();
+        ++calls;
+        const double seconds = std::chrono::duration<double>(now - window).count();
+        if (seconds >= 5.0) {
+            std::printf("FG frame wait profile: mode=%d calls/s=%.1f queue=%.3f fence=%.3f ms/call\n",
+                        SpartanSettings::Get().frame_generation.load(), calls / seconds,
+                        queue_ms / double(calls), fence_ms / double(calls));
+            window = now;
+            queue_ms = fence_ms = 0;
+            calls = 0;
+        }
+    }
     if (frame->width != expected_frame_width || frame->height != expected_frame_height ||
         frame->is_hdr != swapchain.GetHDR()) {
         RecreateFrame(frame, expected_frame_width, expected_frame_height);
