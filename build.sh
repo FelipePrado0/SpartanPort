@@ -34,8 +34,9 @@ MINGW*|MSYS*)
         out/services-test.exe
         clang -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_savedata.c src/compat_win.c -lbcrypt -o out/savedata-test.exe
         out/savedata-test.exe
-        ninja -C out/gpu graphics-settings-test
+        ninja -C out/gpu graphics-settings-test high-fps-trace-test
         out/gpu/graphics-settings-test.exe
+        out/gpu/high-fps-trace-test.exe
     fi
     exit 0
     ;;

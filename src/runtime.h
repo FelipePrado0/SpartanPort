@@ -103,6 +103,9 @@ uintptr_t runtime_audio_resolve(const char *name);
 void runtime_audio_report(void);
 uintptr_t runtime_pad_resolve(const char *name);
 void runtime_pad_report(void);
+/* Temporary F4.1 trace: bounded samples of the game's frame-rate readers. */
+uintptr_t runtime_high_fps_trace_slot(unsigned index);
+void runtime_high_fps_trace_enable(unsigned mask, uintptr_t engine_rate);
 /* probe --gamepad: prints one "Gamepad:" line for the first pad found (returns 1) or none (0). */
 int runtime_pad_describe(void);
 uintptr_t runtime_rtc_resolve(const char *name);
