@@ -19,6 +19,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+from prepare import parse_self  # noqa: E402
+
 # src/probe.c engine_fps_setter: lea rax,[rip+fps]; vmovss [rax],xmm0; vaddss xmm1,xmm0,[rip+half];
 # vcvttss2si eax,xmm1; lea rcx,[rip+rounded]; mov [rcx],eax.
 SETTER = "48 8d 05 ?? ?? ?? ?? c5 fa 11 00 c5 fa 58 0d ?? ?? ?? ?? c5 fa 2c c1 48 8d 0d ?? ?? ?? ?? 89 01"
@@ -32,7 +35,7 @@ CONSTANT_MAX = 64  # copies of one constant listed; more means it is not a const
 FUNCTION_SEARCH = 0x10000
 FUNCTION_START = b"\x55\x48\x89\xe5"  # push rbp; mov rbp, rsp
 
-PT_LOAD, PT_SCE_RELRO, PF_X = 1, 0x61000010, 1
+PT_LOAD, PT_SCE_RELRO, PF_X, PF_R = 1, 0x61000010, 1, 4
 RIP_MODRM = re.compile(rb"[\x05\x0d\x15\x1d\x25\x2d\x35\x3d]")
 
 
@@ -40,7 +43,17 @@ class Image:
     """The file laid out at its virtual addresses (the image offsets the port's hooks use)."""
 
     def __init__(self, data):
-        self.segments = []  # (vaddr, size, file offset, executable)
+        self.segments = []  # (vaddr, memory size, ELF file offset, file size, executable)
+        self.source_offsets = {}
+        self.constant_ranges = []
+        self.is_self = data[:4] == b"O\x15=\x1d"
+        if self.is_self:
+            data, _, headers, segments, _ = parse_self(data)
+            for segment in segments:
+                flags = int(segment["flags"], 16)
+                if flags & 0x800:
+                    header = headers[(flags >> 20) & 4095]
+                    self.source_offsets[header["offset"]] = segment["offset"]
         self.flat = False
         if data[:4] == b"\x7fELF" and data[4] == 2 and data[5] == 1:
             phoff, = struct.unpack_from("<Q", data, 0x20)
@@ -50,6 +63,8 @@ class Image:
                     "<IIQQQQQQ", data, phoff + i * phentsize)
                 if p_type in (PT_LOAD, PT_SCE_RELRO) and p_memsz:
                     self.segments.append((p_vaddr, p_memsz, p_offset, p_filesz, bool(p_flags & PF_X)))
+                    if p_flags & PF_R:
+                        self.constant_ranges.append((p_vaddr, p_vaddr + p_filesz))
         if not self.segments:
             # Not an ELF (or no loadable segment): the file itself, every byte both code and data.
             self.flat = True
@@ -65,7 +80,7 @@ class Image:
     def data(self):
         if self.flat:
             return [(0, len(self.bytes))]
-        return [(v, v + m) for v, m, _, _, x in self.segments if not x]
+        return self.constant_ranges
 
     def mapped(self, address, size=4):
         return any(v <= address and address + size <= v + m for v, m, _, _, _ in self.segments)
@@ -73,7 +88,7 @@ class Image:
     def file_offset(self, address):
         for vaddr, _, offset, filesz, _ in self.segments:
             if vaddr <= address < vaddr + filesz:
-                return offset + address - vaddr
+                return self.source_offsets.get(offset, offset) + address - vaddr
         return None
 
     def disp(self, at):
@@ -253,6 +268,7 @@ def report(path, tool=None, out=sys.stdout):
         image = Image(f.read())
     write = lambda text="": print(text, file=out)
     write("find_rate_readers: %s (%s)" % (os.path.basename(path),
+                                          "SELF" if image.is_self else
                                           "flat file: not an ELF" if image.flat else "ELF"))
     targets, setter, notes = find_targets(image)
     for note in notes:

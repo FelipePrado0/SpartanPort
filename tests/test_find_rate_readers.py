@@ -75,6 +75,20 @@ def synthetic(swing=True):
     return bytes(elf), swing_at
 
 
+def wrap_self(elf):
+    """Place the ELF's two segments at different SELF file offsets."""
+    data = bytearray(0x700)
+    data[:4] = b"O\x15=\x1d"
+    struct.pack_into("<H", data, 24, 2)
+    data[96:96 + 176] = elf[:176]
+    for index, source in enumerate((0x200, 0x600)):
+        offset, = struct.unpack_from("<Q", elf, 64 + index * 56 + 8)
+        size, = struct.unpack_from("<Q", elf, 64 + index * 56 + 32)
+        struct.pack_into("<QQQQ", data, 32 + index * 32, 0x800 | (index << 20), source, size, size)
+        data[source:source + size] = elf[offset:offset + size]
+    return bytes(data)
+
+
 class FindRateReadersTest(unittest.TestCase):
     def setUp(self):
         self.tool = load_tool()
@@ -120,12 +134,44 @@ class FindRateReadersTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("WARNING: the swing energy reader", out.getvalue())
 
+    def test_self_maps_readers_and_zero_filled_global(self):
+        elf, swing = synthetic()
+        elf = bytearray(elf)
+        rounded = DATA + 0x200
+        struct.pack_into("<Q", elf, 64 + 56 + 40, 0x300)
+        elf[0x1000 + 4 + 26:0x1000 + 4 + 30] = rip(CODE + 4 + 26, rounded)
+        elf[0x1206:0x120A] = rip(CODE + 0x206, rounded)
+        image = self.tool.Image(wrap_self(elf))
+        targets, setter, _ = self.tool.find_targets(image)
+        readers = self.tool.find_readers(image, targets, setter)
+        self.assertEqual([r[0] for r in readers], [swing, CODE + 0x204, CODE + 0x20A])
+        self.assertEqual(targets[rounded], "rate (rounded global)")
+        self.assertEqual(image.file_offset(swing), 0x200 + swing - CODE)
+        self.assertIsNone(image.file_offset(rounded))
+
+    def test_constants_in_executable_segment_are_found(self):
+        elf, _ = synthetic()
+        elf = bytearray(elf)
+        constant = CODE + 0x300
+        struct.pack_into("<I", elf, 0x1300, 0x42700000)
+        elf[0x120E:0x1212] = rip(CODE + 0x20E, constant)
+        image = self.tool.Image(elf)
+        targets, setter, _ = self.tool.find_targets(image)
+        readers = self.tool.find_readers(image, targets, setter)
+        self.assertEqual(targets.get(constant), "constant 60.0")
+        self.assertIn((CODE + 0x20A, CODE + 0x20E, constant, "vmulss"), readers)
+
     def test_runs_isolated_without_objdump(self):
         data, _ = synthetic()
-        run = subprocess.run([sys.executable, "-I", TOOL, "--no-objdump", self.write(data)],
-                             capture_output=True, text=True)
-        self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertIn("readers: 3 in 2 functions", run.stdout)
+        flat = bytes(self.tool.Image(data).bytes)
+        for source, kind in ((data, "ELF"), (wrap_self(data), "SELF"),
+                             (flat, "flat file: not an ELF")):
+            with self.subTest(kind=kind):
+                run = subprocess.run([sys.executable, "-I", TOOL, "--no-objdump", self.write(source)],
+                                     capture_output=True, text=True, cwd=self.folder.name, timeout=30)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertIn("(%s)" % kind, run.stdout)
+                self.assertIn("readers: 3 in 2 functions", run.stdout)
         warned = subprocess.run([sys.executable, "-I", TOOL, "--no-objdump", self.write(synthetic(False)[0])],
                                 capture_output=True, text=True)
         self.assertEqual(warned.returncode, 0, warned.stderr)  # a warning, not a failure
