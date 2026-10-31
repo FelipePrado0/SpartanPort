@@ -15,6 +15,7 @@
 #include "switch_hook.h"
 #include "actor_hook.h"
 #include "player_hook.h"
+#include "ledge_hook.h"
 #include "damage_hook.h"
 #include "menu_hook.h"
 #include "graphics_hook.h"
@@ -575,6 +576,34 @@ static void install_player_hook(Segment *segments, uint64_t count, uint64_t size
     memcpy(image + at + 1, &relative, 4);
     memset(image + at + 5, 0x90, SPARTAN_PLAYER_HOOK_LENGTH - 5);
     printf("Player hook: ready at image+0x%" PRIx64 "\n", at);
+}
+
+/* Wall seam fix (src/ledge_hook.h): present only when the launcher's "Wall Seam Fix" patch swapped
+ * 31 c9 for 33 c9 after the ledge ray call. */
+static _Alignas(64) SpartanLedgeCache ledge_cache;
+static void install_wall_seam_fix(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t seam = spartanport_signature_find(image, size, &spartanport_ledge_site);
+    if (seam == UINT64_MAX) return;
+    int32_t call, lea;
+    memcpy(&call, image + seam + 1, 4);
+    memcpy(&lea, image + seam + 18, 4);
+    const int64_t callee = (int64_t)seam + 5 + call, result = (int64_t)seam + 22 + lea;
+    unsigned char *stub = allocate(page_size);
+    const int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + seam + 5);
+    if (callee < 0 || result < 0 || !mapped(segments, count, (uint64_t)callee, 1) ||
+        !mapped(segments, count, (uint64_t)result, SPARTAN_LEDGE_RESULT_WORDS * 4) ||
+        delta < INT32_MIN || delta > INT32_MAX) {
+        puts("Wall seam fix: skipped (call, result or hook outside range)");
+        return;
+    }
+    ledge_cache.result = (uintptr_t)(image + result);
+    spartanport_ledge_stub(stub, (uintptr_t)&ledge_cache, (uintptr_t)spartanport_ledge_ray,
+                           (uintptr_t)(image + callee), (uintptr_t)(image + seam + 5));
+    protect(stub, page_size, 5);
+    const int32_t relative = (int32_t)delta;
+    image[seam] = 0xe9;
+    memcpy(image + seam + 1, &relative, 4);
+    printf("Wall seam fix: ready at image+0x%" PRIx64 "\n", seam);
 }
 
 /* QTE prompts (src/qte_hook.h): a frame count in the prompt's update and an answer in its
@@ -1338,6 +1367,7 @@ int main(int argc, char **argv) {
     if (gpu_enabled) find_power_up_menu(segments, ns, size);
     if (gpu_enabled) install_actor_watch(segments, ns, size);
     if (gpu_enabled) install_player_hook(segments, ns, size);
+    if (gpu_enabled) install_wall_seam_fix(segments, ns, size);
     if (gpu_enabled) install_stat_multipliers(segments, ns, size);
     if (gpu_enabled) install_graphics(segments, ns, size);
     if (gpu_enabled) install_auto_qte_hooks(segments, ns, size, install_qte_hooks(segments, ns, size));
