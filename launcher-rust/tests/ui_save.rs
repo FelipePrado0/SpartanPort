@@ -973,3 +973,40 @@ fn audio_and_effects_options_are_saved_and_read_back() {
     assert!(!reopened.store.flag("depth_of_field"));
     assert!(!dirty(&reopened));
 }
+
+/// F2 (`docs/specs/2026-10-29-high-fps-f2-qte.md`): the engine at 60 FPS during QTEs, the
+/// `auto_safe_fps` key the game reads (`gpu/shim/spartanport_settings.cpp`), on by default.
+#[test]
+fn auto_safe_fps_defaults_on_like_the_game() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = state_in(dir.path());
+    let ini = load_ini(&state.paths.ini_path());
+    assert_eq!(state.store.text("auto_safe_fps"), "1");
+    assert_eq!(
+        ini.values.get("auto_safe_fps").map(String::as_str),
+        Some("1")
+    );
+    assert!(SHOWN_INI_KEYS.contains(&"auto_safe_fps"));
+    assert!(INI_FLAGS.contains(&"auto_safe_fps"));
+    assert_eq!(
+        catalog::ini_setting("auto_safe_fps").map(|row| row.key),
+        Some("auto_safe_fps")
+    );
+}
+
+#[test]
+fn auto_safe_fps_is_saved_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    open(&mut state, Page::Performance);
+    set(&mut state, "auto_safe_fps", json!(false));
+    assert!(save_enabled(&state));
+    click_save(&mut state);
+    let ini = fs::read_to_string(state.paths.ini_path()).unwrap();
+    assert!(ini.lines().any(|l| l == "auto_safe_fps=0"), "{ini}");
+    let settings = fs::read_to_string(state.paths.config_file()).unwrap();
+    assert!(!settings.contains("auto_safe_fps"), "{settings}");
+    let reopened = state_in(dir.path());
+    assert!(!reopened.store.flag("auto_safe_fps"));
+    assert!(!dirty(&reopened));
+}

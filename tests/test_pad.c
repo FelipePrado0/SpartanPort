@@ -13,6 +13,12 @@ int spartanportgpu_overlay_captures_input(void) { return capture; }
 int spartanportgpu_vibration_percent(void) { return vibration_percent; }
 static int engine_fps_cycles;
 void spartanportgpu_engine_fps_cycle(void) { ++engine_fps_cycles; }
+static int engine_fps_cap=-1, engine_fps_cap_calls, engine_fps_cap_type=-2, engine_fps_held_calls;
+static unsigned engine_fps_cap_kinds, engine_fps_held_kinds;
+void spartanportgpu_engine_fps_cap(int fps) { engine_fps_cap=fps; ++engine_fps_cap_calls; }
+void spartanportgpu_engine_fps_cap_qte(unsigned kinds, int type) { engine_fps_cap_kinds=kinds; engine_fps_cap_type=type; }
+void spartanportgpu_engine_fps_cap_held(unsigned kinds) { engine_fps_held_kinds=kinds; ++engine_fps_held_calls; }
+int runtime_file_cronos(void) { return 0; }
 int spartanportgpu_mouse_prompt_distance(void) { return 48; }
 void spartanportgpu_mouse_pause_key(void) {}
 int spartanportgpu_mouse_aim_style(void) { return 0; }
@@ -151,7 +157,148 @@ static void test_switch_attack(void) {
     sw.loaded=0;
 }
 
+/* qte_fps_cap_hysteresis: the engine goes to 60 on a prompt's first frame and back only after
+ * QTE_ACTIVE_US + QTE_FPS_HOLD_US without one; a prompt in between keeps it (simulated clock). */
+static void test_qte_fps_cap(void) {
+    uint8_t block[0x20]={0};
+    block[SPARTAN_QTE_TYPE_OFFSET]=2;  /* cross */
+    uint64_t t=50000000;
+    qte_fps_cap(t);                    /* hooks not installed: nothing */
+    assert(engine_fps_cap_calls==0);
+    spartanport_qte.block=(uintptr_t)block;
+    qte_fps_cap(t+=16000);             /* no prompt frame yet */
+    assert(engine_fps_cap_calls==0);
+    __atomic_add_fetch(&spartanport_qte.heartbeat,1,__ATOMIC_RELAXED);
+    qte_fps_cap(t+=16000);
+    assert(engine_fps_cap_calls==1 && engine_fps_cap==60 && engine_fps_cap_type==2);
+    assert(engine_fps_cap_kinds==1u<<SPARTAN_QTE_KIND_UPDATE);
+    for (int i=0;i<30;++i) {
+        __atomic_add_fetch(&spartanport_qte.heartbeat,1,__ATOMIC_RELAXED);
+        qte_fps_cap(t+=16000);
+    }
+    assert(engine_fps_cap_calls==1);
+    const uint64_t last=t;             /* the prompt's last frame */
+    qte_fps_cap(last+QTE_ACTIVE_US+1); /* the prompt is gone, the cap holds */
+    qte_fps_cap(last+QTE_ACTIVE_US+QTE_FPS_HOLD_US);
+    assert(engine_fps_cap_calls==1 && engine_fps_cap==60);
+    /* The next prompt 400 ms after the last one ended: the cap stays, no call. */
+    block[SPARTAN_QTE_TYPE_OFFSET]=8;  /* 360CW */
+    t=last+QTE_ACTIVE_US+400000;
+    __atomic_add_fetch(&spartanport_qte.heartbeat,1,__ATOMIC_RELAXED);
+    qte_fps_cap(t);
+    assert(engine_fps_cap_calls==1 && engine_fps_cap==60);
+    /* Then nothing for the full window: back to the player's rate, once. */
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US);
+    assert(engine_fps_cap_calls==1);
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==2 && engine_fps_cap==0);
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+100000);
+    assert(engine_fps_cap_calls==2);
+    /* A new prompt later: down and up again, with its own type. */
+    t+=10000000;
+    __atomic_add_fetch(&spartanport_qte.heartbeat,1,__ATOMIC_RELAXED);
+    qte_fps_cap(t);
+    assert(engine_fps_cap_calls==3 && engine_fps_cap==60 && engine_fps_cap_type==8);
+    /* qte_active does not touch the stick-prompt minigame (qte_rotation resets it). */
+    qte.passed=true;
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==4 && engine_fps_cap==0 && qte.passed);
+    qte.passed=false;
+    spartanport_qte.block=0;
+}
+
+/* qte_fps_cap_sequence: a sequence of single presses with 4 s between the prompts (Poseidon's horse)
+ * stays at 60 from the first prompt to the last, then goes back once. */
+static void test_qte_fps_cap_sequence(void) {
+    const int calls=engine_fps_cap_calls;
+    spartanport_qte.block=0;
+    uint64_t t=400000000;
+    for (int press=0;press<5;++press) {
+        for (int i=0;i<30;++i) {       /* half a second of prompt frames */
+            __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_TIMED],1,__ATOMIC_RELAXED);
+            qte_fps_cap(t+=16000);
+        }
+        if (press<4) for (int i=0;i<250;++i) qte_fps_cap(t+=16000);  /* 4 s to the next prompt */
+        assert(engine_fps_cap_calls==calls+1 && engine_fps_cap==60);
+    }
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==calls+2 && engine_fps_cap==0);
+}
+
+/* A charged prompt (hold a button: chests, doors) is an animation, not physics: it never caps. */
+static void test_qte_fps_cap_charged(void) {
+    const int calls=engine_fps_cap_calls;
+    spartanport_qte.block=0;
+    uint64_t t=900000000;
+    for (int i=0;i<120;++i) {
+        __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_CHARGED],1,__ATOMIC_RELAXED);
+        qte_fps_cap(t+=16000);
+    }
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==calls);
+}
+
+/* The Automatic QTE stubs' counters (src/qte_hook.h) start a QTE too, without the rotation hooks;
+ * a pause of 1 s between mash bursts keeps the cap; a cap held 20 s is reported once, with the
+ * kinds still counting. */
+static void test_qte_fps_cap_kinds(void) {
+    const int calls=engine_fps_cap_calls;
+    spartanport_qte.block=0;           /* only the Automatic QTE hooks */
+    uint64_t t=200000000;
+    qte_fps_cap(t);
+    assert(engine_fps_cap_calls==calls);
+    __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_REPEAT],1,__ATOMIC_RELAXED);
+    qte_fps_cap(t+=16000);
+    assert(engine_fps_cap_calls==calls+1 && engine_fps_cap==60);
+    assert(engine_fps_cap_kinds==1u<<SPARTAN_QTE_KIND_REPEAT && engine_fps_cap_type==-1);
+    const uint64_t start=t;
+    /* Mash bursts of 3 s with 1 s pauses, for 24 s: the cap holds, one 20 s report. */
+    while (t-start<24000000) {
+        for (int i=0;i<187;++i) {
+            __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_REPEAT],1,__ATOMIC_RELAXED);
+            if (t-start>10000000) __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_TIMED],1,__ATOMIC_RELAXED);
+            qte_fps_cap(t+=16000);
+        }
+        for (int i=0;i<62;++i) qte_fps_cap(t+=16000);  /* about 1 s without a frame */
+        assert(engine_fps_cap_calls==calls+1 && engine_fps_cap==60);
+        if (t-start<20000000) assert(engine_fps_held_calls==0);
+    }
+    assert(engine_fps_held_calls==1);
+    assert(engine_fps_held_kinds==((1u<<SPARTAN_QTE_KIND_REPEAT)|(1u<<SPARTAN_QTE_KIND_TIMED)));
+    /* Over: back after the window, once. */
+    const uint64_t last=t-62*16000;
+    qte_fps_cap(last+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==calls+2 && engine_fps_cap==0 && engine_fps_held_calls==1);
+    /* The next long cap reports again. */
+    t=last+60000000;
+    for (int i=0;i<1300;++i) {
+        __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_CIRCLE],1,__ATOMIC_RELAXED);
+        qte_fps_cap(t+=16000);
+    }
+    assert(engine_fps_cap_calls==calls+3 && engine_fps_held_calls==2);
+    assert(engine_fps_held_kinds==1u<<SPARTAN_QTE_KIND_CIRCLE);
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap==0);
+    /* The stick-prompt minigame follows only the rotation prompt's own frames. */
+    uint8_t block[0x20]={0};
+    block[SPARTAN_QTE_TYPE_OFFSET]=4;  /* Up180CW, stale from an earlier prompt */
+    spartanport_qte.block=(uintptr_t)block;
+    __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_REPEAT],1,__ATOMIC_RELAXED);
+    t+=5000000;
+    assert(qte_rotation(t)==-1);
+    __atomic_add_fetch(&spartanport_qte.heartbeat,1,__ATOMIC_RELAXED);
+    assert(qte_rotation(t+16000)==0);
+    qte_fps_cap(t+16000);
+    qte_fps_cap(t+16000+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap==0);
+    spartanport_qte.block=0;
+}
+
 int main(void) {
+    test_qte_fps_cap();
+    test_qte_fps_cap_kinds();
+    test_qte_fps_cap_charged();
+    test_qte_fps_cap_sequence();
     test_switch_attack();
     const char *tmp=getenv("TMPDIR") ? getenv("TMPDIR") : getenv("TEMP") ? getenv("TEMP") : "/tmp";
     char path[1024];
@@ -372,5 +519,5 @@ int main(void) {
     assert(SDL_DetachVirtualJoystick(id));
     SDL_Quit();
     unlink(path);
-    puts("PASS: pad ABI, staged left/right clicks, L1 chord, engine frame rate combo, SDL touch coordinates, overlay capture, switch attacks");
+    puts("PASS: pad ABI, staged left/right clicks, L1 chord, engine frame rate combo, QTE frame rate cap (all prompt kinds), SDL touch coordinates, overlay capture, switch attacks");
 }

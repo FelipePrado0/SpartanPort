@@ -170,6 +170,15 @@ struct Values {
     /// rounded. Null when this eboot.bin's code does not match. engine_fps is written there live.
     std::atomic<float*> engine_fps_global{nullptr};
     std::atomic<int32_t*> engine_fps_int_global{nullptr};
+    /// The engine rate goes to 60 while a QTE prompt is up (spartanport.ini auto_safe_fps). Live.
+    std::atomic<bool> auto_safe_fps{true};
+    /// Temporary cap of the engine rate, 0 for none (runtime_pad.c sets 60 during a QTE). Never in
+    /// the ini: engine_fps keeps the player's rate. qte_type: the prompt's type, for the log.
+    std::atomic<int> engine_fps_cap{0};
+    std::atomic<int> engine_fps_cap_qte_type{-1};
+    /// For the log: the prompt kinds counting when the cap started (src/qte_hook.h SPARTAN_QTE_KIND_*
+    /// bits), and those still counting after 20 s (0 once logged).
+    std::atomic<unsigned> engine_fps_cap_kinds{0}, engine_fps_cap_held{0};
     /// The script global inPowerUpMenu (src/probe.c finds it): non-zero while the upgrade menu is
     /// open. Texture Quality adds no LOD bias then. Null when this eboot.bin's code does not match.
     std::atomic<int32_t*> power_up_menu_global{nullptr};
@@ -213,12 +222,14 @@ int RenderPreset();
 bool ResolutionNeedsRestart();
 /// A startup graphics option differs from the one this launch started with.
 bool GraphicsNeedRestart();
-/// The engine rate in effect: engine_fps, up to what this launch's patch allows.
+/// The player's engine rate: engine_fps, up to what this launch's patch allows.
+int EngineFpsChosen();
+/// The engine rate in effect: EngineFpsChosen(), up to the QTE cap while auto_safe_fps is on.
 int EngineFpsNow();
 /// Present thread, every vblank: writes EngineFpsNow() into the game once the game has set its
 /// own rate (a frame rate patch applied), when they differ.
 void SyncEngineFps();
-/// R3 + L1 + R1 / F9: the next engine rate (saved); 0 when this launch cannot change it.
+/// R3 + L1 + R1 / F9: the rate after EngineFpsChosen() (saved); 0 when this launch cannot change it.
 int CycleEngineFps();
 /// Writes the file (menu changes).
 void Save();

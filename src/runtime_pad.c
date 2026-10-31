@@ -333,8 +333,8 @@ static const char *const qte_defaults[QTE_ROTATIONS]={"A>W>D","D>W>A","D>S>A","A
 static struct { int keys[QTE_KEYS_MAX]; unsigned length; bool directions; } qte_sequences[QTE_ROTATIONS];
 static struct {
     int loaded, mode, rotation;
-    uint32_t heartbeat;
-    uint64_t seen;       /* the last read that saw the prompt's frame count move */
+    uint32_t beat[SPARTAN_QTE_KINDS];
+    uint64_t seen[SPARTAN_QTE_KINDS];  /* the last read that saw each kind's frame count move */
     unsigned step;
     bool fresh, passed;  /* fresh: keys already held when the prompt appeared do not count */
     bool held[SDL_SCANCODE_COUNT];
@@ -404,13 +404,25 @@ static void qte_reset(void) {
     __atomic_store_n(&spartanport_qte.pass,0,__ATOMIC_RELAXED);
 }
 
-/* The rotation (0..5) the prompt on screen asks for, else -1. A prompt is up while its update
- * keeps counting frames; QTE_ACTIVE_US without a frame ends it (and resets the minigame). */
+/* The prompt kinds (SPARTAN_QTE_KIND_* bits) up now: a kind is up while its frame count keeps moving,
+ * one frame within QTE_ACTIVE_US. The update's count (heartbeat) needs the rotation hooks; the
+ * others come from the Automatic QTE stubs, whether Automatic QTE is on or not. */
+static unsigned qte_active(uint64_t now) {
+    unsigned kinds=0;
+    for (unsigned k=0;k<SPARTAN_QTE_KINDS;++k) {
+        const uint32_t beat=__atomic_load_n(k==SPARTAN_QTE_KIND_UPDATE ? &spartanport_qte.heartbeat
+                                            : &spartanport_qte.kinds[k-1],__ATOMIC_RELAXED);
+        if (beat!=qte.beat[k]) { qte.beat[k]=beat; qte.seen[k]=now; }
+        if (now-qte.seen[k]<=QTE_ACTIVE_US) kinds|=1u<<k;
+    }
+    return kinds;
+}
+
+/* The rotation (0..5) the prompt on screen asks for, else -1. A prompt that ends resets the minigame.
+ * Only the update's frames count here: the type at +0x10 is its prompt's. */
 static int qte_rotation(uint64_t now) {
     if (!spartanport_qte.block) return -1;
-    const uint32_t beat=__atomic_load_n(&spartanport_qte.heartbeat,__ATOMIC_RELAXED);
-    if (beat!=qte.heartbeat) { qte.heartbeat=beat; qte.seen=now; }
-    if (now-qte.seen>QTE_ACTIVE_US) { qte_reset(); return -1; }
+    if (!(qte_active(now) & 1u<<SPARTAN_QTE_KIND_UPDATE)) { qte_reset(); return -1; }
     const unsigned type=*(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET);
     return type-QTE_FIRST_ROTATION<QTE_ROTATIONS ? (int)(type-QTE_FIRST_ROTATION) : -1;
 }
@@ -479,6 +491,69 @@ static bool qte_play(const bool *keys, uint64_t now) {
     }
     qte.fresh=false;
     return true;
+}
+
+/* The engine at 60 FPS during QTEs (gpu: spartanportgpu_engine_fps_cap, which does nothing when the
+ * menu's option is off or the engine already runs at 60): down on the first frame of any prompt kind,
+ * back after QTE_FPS_HOLD_US more without one, so prompts in a row keep it. A cap held
+ * QTE_FPS_REPORT_US is reported once with the kinds still counting (a site that also runs outside
+ * prompts would keep the game at 60). Atomics only on this thread. */
+/* 5 s: on Poseidon's horse the single presses of one sequence come seconds apart, and 1.5 s let the
+ * engine go back to the player's rate between them (maintainer's test, 2026-10-30); staying at 60 a
+ * few seconds after a QTE costs little. */
+enum { QTE_FPS_HOLD_US=5000000, QTE_FPS_REPORT_US=20000000 };
+static struct { bool capped, reported; uint64_t since; } qte_fps;
+/* In Cronos, one blade pull (R1) at 240 FPS throws Kratos out of the map, at 60 it works. R1 there
+ * caps the engine at 60 until R1_FPS_HOLD_US after the last R1; the QTE cap and this one only lift
+ * the cap when both are done. */
+uintptr_t runtime_player_object;
+enum { R1_FPS_HOLD_US=4000000 };
+static uint64_t r1_fps_until;
+/* Charged prompts (hold a button: chests, doors) only play an animation: they keep the player's rate
+ * (maintainer, 2026-10-31). */
+enum { QTE_FPS_KINDS=((1u<<SPARTAN_QTE_KINDS)-1) & ~(1u<<SPARTAN_QTE_KIND_CHARGED) };
+static void qte_fps_cap(uint64_t now) {
+    const unsigned kinds=qte_active(now) & QTE_FPS_KINDS;
+    uint64_t last=0;  /* the latest frame of any kind that caps */
+    for (unsigned k=0;k<SPARTAN_QTE_KINDS;++k) if (QTE_FPS_KINDS>>k & 1 && qte.seen[k]>last) last=qte.seen[k];
+    if (kinds) {
+        if (!qte_fps.capped) {
+            qte_fps.capped=true; qte_fps.reported=false; qte_fps.since=now;
+            const int type=(kinds & 1u<<SPARTAN_QTE_KIND_UPDATE) && spartanport_qte.block
+                ? *(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET) : -1;
+            spartanportgpu_engine_fps_cap_qte(kinds,type);
+            if (!r1_fps_until) spartanportgpu_engine_fps_cap(60);
+        } else if (!qte_fps.reported && now-qte_fps.since>=QTE_FPS_REPORT_US) {
+            qte_fps.reported=true;
+            spartanportgpu_engine_fps_cap_held(kinds);
+        }
+    } else if (qte_fps.capped && now-last>QTE_ACTIVE_US+QTE_FPS_HOLD_US) {
+        qte_fps.capped=false;
+        if (!r1_fps_until) spartanportgpu_engine_fps_cap(0);
+    }
+}
+/* The pull that fails, Kratos at obj+0xa0 when R1 starts it: between the maintainer's marks of
+ * 2026-10-31 (z 81 to 101) and the 9 pulls that validated the cap (z 64 to 90), each within 24. */
+static const float r1_pull_spot[3]={-90,372,80};
+enum { R1_PULL_RADIUS=25 };
+static void r1_fps_cap(const PadData *d, uintptr_t kratos) {
+    static bool was_down;
+    const bool down=(d->buttons & (BTN_R3|BTN_L1|BTN_R1))==BTN_R1;  /* not the frame rate combo */
+    if (down && !was_down && kratos && runtime_file_cronos()) {
+        float position[3], squared=0;
+        memcpy(position,(const void *)(kratos+0xa0),sizeof(position));
+        for (int i=0;i<3;++i) squared+=(position[i]-r1_pull_spot[i])*(position[i]-r1_pull_spot[i]);
+        if (squared>R1_PULL_RADIUS*R1_PULL_RADIUS) { was_down=down; return; }
+        /* +0x298: 0 for the player in the damage code (src/actor_hook.h), a check on the object. */
+        printf("Engine FPS: 60 for %d s, the Cronos blade pull at [%.1f,%.1f,%.1f] (player byte %u)\n",
+               R1_FPS_HOLD_US/1000000,position[0],position[1],position[2],*(const volatile uint8_t *)(kratos+0x298));
+        if (!r1_fps_until && !qte_fps.capped) spartanportgpu_engine_fps_cap(60);
+        r1_fps_until=d->timestamp+R1_FPS_HOLD_US;
+    } else if (r1_fps_until && d->timestamp>r1_fps_until) {
+        r1_fps_until=0;
+        if (!qte_fps.capped) spartanportgpu_engine_fps_cap(0);
+    }
+    was_down=down;
 }
 
 static void sample_keyboard(PadData *d, const bool *keys, SDL_MouseButtonFlags mouse, const bool wheel[2]) {
@@ -968,6 +1043,8 @@ static void overlay_chords(PadData *d) {
 static int hold_after_capture;
 static void sample(PadData *d) {
     sample_host(d);
+    qte_fps_cap(d->timestamp);
+    r1_fps_cap(d, __atomic_load_n(&runtime_player_object, __ATOMIC_RELAXED));
     if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); reset_switch_attack(); return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */
     read_inject();

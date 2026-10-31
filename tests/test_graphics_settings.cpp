@@ -6,6 +6,11 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 #include "spartanport_graphics.h"
 #include "spartanport_settings.h"
 #include "../gpu/spartanportgpu.h"
@@ -30,6 +35,170 @@ static std::string Read(const char* path) {
     std::stringstream s;
     s << in.rdbuf();
     return s.str();
+}
+
+// SyncEngineFps's log lines (stdout) while fn runs.
+template <typename Fn>
+static std::string CaptureLog(Fn fn) {
+    std::fflush(stdout);
+    const char* file = "graphics-settings-test.log";
+    const int saved = dup(1);
+    FILE* log = std::fopen(file, "w");
+    assert(saved >= 0 && log);
+    dup2(fileno(log), 1);
+    fn();
+    std::fflush(stdout);
+    dup2(saved, 1);
+    close(saved);
+    std::fclose(log);
+    const std::string text = Read(file);
+    std::remove(file);
+    return text;
+}
+
+// F2 (docs/specs/2026-10-29-high-fps-f2-qte.md): the QTE cap of the engine rate.
+static void TestEngineFpsCap(const char* path) {
+    auto& v = SpartanSettings::Get();
+    float live = 240;
+    int32_t live_int = 240;
+    v.engine_fps_global = &live;
+    v.engine_fps_int_global = &live_int;
+    v.applied_engine_fps = 240;
+    v.engine_fps = 144;
+    v.auto_safe_fps = true;
+    SpartanSettings::SyncEngineFps();
+    assert(live == 144 && live_int == 144);
+
+    // engine_fps_cap_limits_rate: 60 in effect, written in one sync, with one log line.
+    std::string log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap_qte(1u << 0 | 1u << 2, 2);  // update and repeat counting
+        spartanportgpu_engine_fps_cap(60);
+        assert(SpartanSettings::EngineFpsNow() == 60);
+        SpartanSettings::SyncEngineFps();
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 59.94f && live_int == 60);
+    assert(log == "Engine FPS: 60 during a QTE (was 144), kinds: update,repeat, prompt type 2\n");
+
+    // engine_fps_cap_not_saved: the file keeps the player's rate and never the cap.
+    SpartanSettings::Save();
+    std::string saved = Read(path);
+    assert(saved.find("engine_fps=144\n") != std::string::npos);
+    assert(saved.find("auto_safe_fps=1\n") != std::string::npos);
+    assert(saved.find("engine_fps_cap") == std::string::npos);
+    assert(v.engine_fps == 144);
+
+    // cycle_during_cap_keeps_choice: R3 + L1 + R1 goes on from 144, the cap stays until the QTE ends.
+    assert(SpartanSettings::CycleEngineFps() == 180);
+    assert(v.engine_fps == 180 && SpartanSettings::EngineFpsNow() == 60);
+    assert(Read(path).find("engine_fps=180\n") != std::string::npos);
+    log = CaptureLog([] { SpartanSettings::SyncEngineFps(); });
+    assert(live == 59.94f && log.empty());
+    // A cap held 20 s (runtime_pad.c): one line with the kinds still counting.
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap_held(1u << 1 | 1u << 4);
+        SpartanSettings::SyncEngineFps();
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 59.94f && log == "Engine FPS: QTE cap held 20 s, kinds: timed,circle\n");
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap(0);
+        SpartanSettings::SyncEngineFps();
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 180 && live_int == 180 && SpartanSettings::EngineFpsNow() == 180);
+    assert(log == "Engine FPS: back to 180 after the QTE\n");
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap_held(1u << 2);  // late, the cap is gone: nothing
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(log.empty());
+
+    // A menu change during the cap is kept the same way.
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap_qte(1u << 3, -1);
+        spartanportgpu_engine_fps_cap(60);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(log == "Engine FPS: 60 during a QTE (was 180), kinds: charged\n");
+    v.engine_fps = 240;
+    log = CaptureLog([] {
+        SpartanSettings::SyncEngineFps();
+        spartanportgpu_engine_fps_cap(0);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 240 && log == "Engine FPS: back to 240 after the QTE\n");
+
+    // qte_fps_cap_disabled: auto_safe_fps=0 behaves as before (no cap, no line).
+    v.auto_safe_fps = false;
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap(60);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(SpartanSettings::EngineFpsNow() == 240 && live == 240 && log.empty());
+    // Turned on again in the menu while the prompt is up: the cap applies at once.
+    v.auto_safe_fps = true;
+    log = CaptureLog([] { SpartanSettings::SyncEngineFps(); });
+    assert(live == 59.94f && log == "Engine FPS: 60 during a QTE (was 240), kinds: charged\n");
+    // Turned off while capped: back to the player's rate.
+    v.auto_safe_fps = false;
+    log = CaptureLog([] { SpartanSettings::SyncEngineFps(); });
+    assert(live == 240 && log == "Engine FPS: back to 240 after the QTE\n");
+    spartanportgpu_engine_fps_cap(0);
+    v.auto_safe_fps = true;
+
+    // A player rate of 60: the cap changes nothing and logs nothing.
+    v.engine_fps = 60;
+    log = CaptureLog([] {
+        SpartanSettings::SyncEngineFps();
+        spartanportgpu_engine_fps_cap(60);
+        SpartanSettings::SyncEngineFps();
+        spartanportgpu_engine_fps_cap(0);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 59.94f && log == "Engine FPS: 60\n");
+
+    // No frame rate patch (applied 60) or no globals: nothing.
+    v.engine_fps = 240;
+    v.applied_engine_fps = 60;
+    live = 59.94f;
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap(60);
+        SpartanSettings::SyncEngineFps();
+        spartanportgpu_engine_fps_cap(0);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 59.94f && log.empty());
+    v.applied_engine_fps = 240;
+    v.engine_fps_global = nullptr;
+    v.engine_fps_int_global = nullptr;
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap(60);
+        SpartanSettings::SyncEngineFps();
+        spartanportgpu_engine_fps_cap(0);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(log.empty());
+
+    // auto_safe_fps in the ini: on by default, 0 read and written back; SPARTAN_AUTO_SAFE_FPS overrides.
+    {
+        std::ofstream out(path);
+        out << "engine_fps=240\n";
+    }
+    SpartanSettings::Load();
+    assert(v.auto_safe_fps);
+    {
+        std::ofstream out(path);
+        out << "engine_fps=240\nauto_safe_fps=0\nengine_fps_cap=60\n";
+    }
+    SpartanSettings::Load();
+    assert(!v.auto_safe_fps && v.engine_fps_cap == 0);
+    SpartanSettings::Save();
+    assert(Read(path).find("auto_safe_fps=0\n") != std::string::npos);
+    SetEnvironment("SPARTAN_AUTO_SAFE_FPS", "1");
+    SpartanSettings::Load();
+    assert(v.auto_safe_fps);
+    SetEnvironment("SPARTAN_AUTO_SAFE_FPS", "");
 }
 
 int main() {
@@ -573,6 +742,7 @@ int main() {
     const bool blur_before = v.motion_blur;
     assert(std::string(text(0xf97)) == "On" && v.motion_blur != blur_before);  // toggles toggle with f90 too
     assert(SpartanSettings::TextureLodBias(-1) == 0.0f && SpartanSettings::TextureLodBias(9) == 0.0f);
+    TestEngineFpsCap(path);
     std::remove(path);
     std::puts("PASS: graphics settings");
 }

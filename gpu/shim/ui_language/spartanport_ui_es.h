@@ -65,6 +65,8 @@ inline constexpr std::pair<std::string_view, const char*> SpanishText[] = {
     {"Enable before opening New Game. Does not change an existing save difficulty.", "Actívalo antes de abrir Nueva partida. No cambia la dificultad de una partida guardada."},
     {"Enemy health bar", "Barra de vida del enemigo"},
     {"Engine frame rate", "Velocidad del motor"},
+    {"High Frame Rate Physics Fix", "Corrección de física a FPS altos"},
+    {"At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate. The saved rate does not change.", "Con FPS altos, el motor funciona a 60 mientras hay un QTE en pantalla o durante el tirón de las cuchillas en Cronos, y luego vuelve a la velocidad del motor. La velocidad guardada no cambia."},
     {"Engine frame rate: ", "Velocidad del motor: "},
     {"Engine frame rate: 60 FPS only (no frame rate patch for this game build)", "Velocidad del motor: solo 60 FPS (sin parche de velocidad para esta versión del juego)"},
     {"Every multiplier back to 1x (the game's normal values).", "Todos los multiplicadores a 1x (los valores normales del juego)."},

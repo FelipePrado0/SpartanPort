@@ -2396,6 +2396,7 @@ mod compile_tests {
             chosen(&[], false),
             [
                 "Bug Fix - Texture Corruption Fix",
+                "High FPS Wall Seam Fix",
                 "Skip Any Video With X Button",
                 "Bug Fix - Startup Black Screen"
             ]
@@ -2406,6 +2407,7 @@ mod compile_tests {
                 false
             ),
             [
+                "High FPS Wall Seam Fix",
                 "Skip Any Video With X Button",
                 "Bug Fix - Startup Black Screen",
                 "Resolution Patch - 720p"
@@ -2434,6 +2436,7 @@ mod compile_tests {
         assert_eq!(
             chosen(&["Resolution Patch - 4K"], false),
             [
+                "High FPS Wall Seam Fix",
                 "Skip Any Video With X Button",
                 "Bug Fix - Startup Black Screen",
                 "Resolution Patch - 4K"

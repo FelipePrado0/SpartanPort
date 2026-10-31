@@ -5,6 +5,7 @@
  * Paths containing ".." components are rejected rather than normalized. */
 #define _GNU_SOURCE
 #include "runtime.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -198,6 +199,23 @@ static int game_path(const char *p) {
     return (!strncmp(p,"/app0",5) && (!p[5] || p[5]=='/')) ||
            (!strncmp(p,"/hostapp",8) && (!p[8] || p[8]=='/'));
 }
+/* Temporary F4.2: whether the last area WAD the game opened is a Cronos one (Crn*.WAD). Resource
+ * WADs (R_*) load in any area and leave it as it is. */
+static int area_cronos;
+int runtime_file_cronos(void) { return __atomic_load_n(&area_cronos,__ATOMIC_RELAXED); }
+static int prefix_nocase(const char *s,const char *prefix) {
+    for (; *prefix; ++s,++prefix) if (tolower((unsigned char)*s)!=tolower((unsigned char)*prefix)) return 0;
+    return 1;
+}
+static void note_area(const char *guest) {
+    const char *base=strrchr(guest,'/');
+    base=base ? base+1 : guest;
+    const size_t n=strlen(base);
+    if (n<5 || !prefix_nocase(base+n-4,".wad") || prefix_nocase(base,"R_")) return;
+    const int cronos=prefix_nocase(base,"Crn");
+    if (cronos!=runtime_file_cronos()) printf("Runtime: area %s, %s Cronos\n",base,cronos ? "in" : "out of");
+    __atomic_store_n(&area_cronos,cronos,__ATOMIC_RELAXED);
+}
 /* All operations return >=0 or -(host errno); wrappers adapt the convention. */
 static int64_t do_open(const char *guest,int flags,int mode) {
     if (game_path(guest) && (flags & (3|0x8|0x200|0x400|0x800))) return -EROFS;
@@ -245,6 +263,7 @@ static int64_t do_open(const char *guest,int flags,int mode) {
     snprintf(files[fd].path,sizeof(files[fd].path),"%s",guest);
     ++opens;
     pthread_mutex_unlock(&lock);
+    note_area(guest);
     if (audio_trace() && strstr(guest,"sound/")) printf("Audio trace: open(%s) -> fd %d, %lld bytes\n",guest,fd,(long long)s.st_size);
     const char *mod_trace=getenv("SPARTAN_MOD_TRACE"), *mod_root=getenv("SPARTAN_MODS_DIR");
     if (mod_trace && mod_trace[0]=='1' && mod_root) {

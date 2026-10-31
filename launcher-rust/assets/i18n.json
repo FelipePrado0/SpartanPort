@@ -2433,6 +2433,8 @@
    "The game's own motion blur on fast moving objects and the camera. Off removes it.": "O desfoque de movimento do próprio jogo em objetos rápidos e na câmera. Desligado, ele é removido.",
    "Depth of field": "Profundidade de campo",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "O desfoque do próprio jogo em objetos distantes, mais forte nas cenas. Desligado, a imagem inteira fica nítida.",
+   "High Frame Rate Physics Fix": "Correção de física em FPS alto",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Em FPS alto, o motor roda a 60 enquanto um comando de QTE está na tela ou durante a puxada de lâminas do Cronos, e depois volta à taxa do motor.",
    "Enable the upscaler": "Ativar o upscaler",
    "Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "Fração da resolução de renderização (página Desempenho) em que o jogo renderiza; o upscaler reconstrói essa resolução completa. Menor roda mais rápido. AA nativo mantém a resolução completa.",
    "Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.": "Desligado (padrão): o jogo roda sem upscaling temporal. Ligado: FSR 3.1 com o preset abaixo. Personagens animados ainda podem mostrar algum rastro.",
@@ -2794,6 +2796,8 @@
    "The game's own motion blur on fast moving objects and the camera. Off removes it.": "El desenfoque de movimiento del propio juego en objetos rápidos y en la cámara. Desactivado, se elimina.",
    "Depth of field": "Profundidad de campo",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "El desenfoque del propio juego en objetos lejanos, más fuerte en las escenas. Desactivado, toda la imagen se ve nítida.",
+   "High Frame Rate Physics Fix": "Corrección de física a FPS altos",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Con FPS altos, el motor funciona a 60 mientras hay un QTE en pantalla o durante el tirón de las cuchillas en Cronos, y luego vuelve a la velocidad del motor.",
    "Enable the upscaler": "Activar el escalador",
    "Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "Fracción de la resolución de renderizado (página Rendimiento) a la que el juego renderiza; el escalador reconstruye esa resolución completa. Menor es más rápido. AA nativo mantiene la resolución completa.",
    "Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.": "Desactivado (predet.): el juego funciona sin escalado temporal. Activado: FSR 3.1 con el preset de abajo. Los personajes animados aún pueden mostrar algo de estela.",
@@ -2862,7 +2866,9 @@
    "Depth of field": "Głębia ostrości",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Własne rozmycie gry na odległych obiektach, najsilniejsze w przerywnikach. Wyłączone zachowuje ostrość całego obrazu.",
    "Automatic": "Automatycznie",
-   "restart": "restart"
+   "restart": "restart",
+   "High Frame Rate Physics Fix": "Poprawka fizyki przy wysokim FPS",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Przy wysokim FPS silnik działa w 60 FPS, gdy na ekranie jest QTE lub podczas przyciągania ostrzami na Kronosie, a potem wraca do liczby klatek silnika."
   },
   "fr": {
    "Polish": "Polonais",
@@ -2914,7 +2920,9 @@
    "Depth of field": "Profondeur de champ",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Le flou propre au jeu sur les objets lointains, plus fort dans les cinématiques. Désactivé, toute l'image reste nette.",
    "Automatic": "Automatique",
-   "restart": "redémarrage"
+   "restart": "redémarrage",
+   "High Frame Rate Physics Fix": "Correctif physique à FPS élevé",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "À FPS élevé, le moteur tourne à 60 tant qu'un QTE est à l'écran ou pendant la traction aux lames sur Cronos, puis revient à la fréquence du moteur."
   },
   "de": {
    "Polish": "Polnisch",
@@ -2966,7 +2974,9 @@
    "Depth of field": "Tiefenschärfe",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Die eigene Unschärfe des Spiels bei entfernten Objekten, am stärksten in Zwischensequenzen. Aus hält das ganze Bild scharf.",
    "Automatic": "Automatisch",
-   "restart": "Neustart"
+   "restart": "Neustart",
+   "High Frame Rate Physics Fix": "Physik-Fix bei hoher Bildrate",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Bei hoher Bildrate läuft die Engine mit 60, solange ein QTE auf dem Bildschirm ist oder während des Klingenzugs auf Kronos, und kehrt danach zur Engine-Bildrate zurück."
   },
   "it": {
    "Polish": "Polacco",
@@ -3018,7 +3028,9 @@
    "Depth of field": "Profondità di campo",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "La sfocatura del gioco sugli oggetti lontani, più forte nelle scene d'intermezzo. Disattivata, tutta l'immagine resta nitida.",
    "Automatic": "Automatico",
-   "restart": "riavvio"
+   "restart": "riavvio",
+   "High Frame Rate Physics Fix": "Correzione fisica ad alto framerate",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Ad alto framerate il motore gira a 60 finché un QTE è sullo schermo o durante la trazione con le lame su Crono, poi torna alla frequenza del motore."
   },
   "tr": {
    "Polish": "Lehçe",
@@ -3070,7 +3082,9 @@
    "Depth of field": "Alan derinliği",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Oyunun uzaktaki nesnelerdeki kendi bulanıklığı, en güçlüsü ara sahnelerde. Kapalı olduğunda tüm görüntü net kalır.",
    "Automatic": "Otomatik",
-   "restart": "yeniden başlatma"
+   "restart": "yeniden başlatma",
+   "High Frame Rate Physics Fix": "Yüksek FPS fizik düzeltmesi",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Yüksek FPS'de motor, ekranda bir QTE varken veya Kronos'taki bıçak çekişi sırasında 60'ta çalışır, sonra motor kare hızına geri döner."
   },
   "ar": {
    "Polish": "البولندية",
@@ -3121,7 +3135,9 @@
    "Depth of field": "عمق المجال",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "ضبابية اللعبة الخاصة على الأجسام البعيدة، وهي الأقوى في المشاهد السينمائية. الإيقاف يُبقي الصورة كلها واضحة.",
    "Automatic": "تلقائي",
-   "restart": "إعادة التشغيل"
+   "restart": "إعادة التشغيل",
+   "High Frame Rate Physics Fix": "إصلاح الفيزياء عند معدل إطارات مرتفع",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "عند معدل إطارات مرتفع يعمل المحرك بـ 60 أثناء ظهور حدث QTE على الشاشة أو أثناء السحب بالنصلين في كرونوس، ثم يعود إلى معدل إطارات المحرك."
   },
   "zh": {
    "Polish": "波兰语",
@@ -3483,6 +3499,8 @@
    "The game's own motion blur on fast moving objects and the camera. Off removes it.": "游戏自带的动态模糊（快速移动的物体和镜头）。关闭后将其移除。",
    "Depth of field": "景深",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "游戏自带的远景模糊，过场动画中最明显。关闭后整个画面保持清晰。",
+   "High Frame Rate Physics Fix": "高帧率物理修复",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "高帧率下，快速反应提示在屏幕上或在克洛诺斯身上用刀刃拉拽时，引擎以 60 运行，结束后回到引擎帧率。",
    "Enable the upscaler": "启用超分辨率",
    "Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "游戏以渲染分辨率（性能页面）的这一比例渲染，超分辨率重建完整渲染分辨率。越低越快。原生抗锯齿保持完整分辨率。",
    "Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.": "默认关闭，游戏不使用时域超分辨率。开启：使用下方预设的 FSR 3.1。动画角色仍可能有少量拖影。",
@@ -3551,7 +3569,9 @@
    "Depth of field": "被写界深度",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "遠くの物体にかかるゲーム本来のぼかし。カットシーンで最も強くなります。オフにすると画面全体がくっきりします。",
    "Automatic": "自動",
-   "restart": "再起動"
+   "restart": "再起動",
+   "High Frame Rate Physics Fix": "高フレームレート物理修正",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "高フレームレート時、QTE の表示中やクロノスでのブレードの引き寄せ中はエンジンを 60 で動かし、その後エンジンのフレームレートに戻します。"
   },
   "ko": {
    "Polish": "폴란드어",
@@ -3603,7 +3623,9 @@
    "Depth of field": "피사계 심도",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "먼 물체에 적용되는 게임 자체의 흐림 효과로, 컷신에서 가장 강합니다. 끄면 화면 전체가 선명하게 유지됩니다.",
    "Automatic": "자동",
-   "restart": "재시작"
+   "restart": "재시작",
+   "High Frame Rate Physics Fix": "고프레임 물리 수정",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "고프레임에서 QTE가 화면에 있는 동안이나 크로노스에서 블레이드로 당겨질 때 엔진은 60으로 동작하고, 이후 엔진 프레임레이트로 돌아갑니다."
   },
   "id": {
    "Polish": "Polandia",
@@ -3950,6 +3972,8 @@
    "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Motion blur bawaan game pada objek yang bergerak cepat dan kamera. Jika dimatikan, efek ini dihilangkan.",
    "Depth of field": "Depth of field",
    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Blur bawaan game pada objek yang jauh, paling kuat di cutscene. Jika dimatikan, seluruh gambar tetap tajam.",
+   "High Frame Rate Physics Fix": "Perbaikan fisika FPS tinggi",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Pada FPS tinggi, mesin berjalan di 60 selama QTE tampil di layar atau saat tarikan bilah di Cronos, lalu kembali ke frame rate mesin.",
    "Enable the upscaler": "Aktifkan upscaler",
    "Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "Bagian dari resolusi render (halaman Performa) yang dipakai game untuk merender; upscaler membangun ulang resolusi render penuh. Lebih rendah lebih cepat. Native AA memakai resolusi penuh.",
    "Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.": "Mati (bawaan): game berjalan tanpa upscaling temporal. Nyala: FSR 3.1 dengan preset di bawah. Karakter yang bergerak masih bisa sedikit berbayang.",
@@ -4136,6 +4160,8 @@
   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Собственное размытие игры на дальних объектах, сильнее всего в роликах. Выключено — вся картинка остаётся чёткой.",
   "Automatic": "Автоматически",
   "restart": "перезапуск",
+  "High Frame Rate Physics Fix": "Исправление физики при высоком FPS",
+  "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "При высоком FPS движок работает на 60, пока на экране QTE или во время рывка на клинках на Кроносе, затем возвращается к частоте движка.",
   "Upscaler": "Апскейлер",
   "Quality preset": "Пресет"
  },

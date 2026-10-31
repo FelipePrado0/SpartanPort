@@ -2916,3 +2916,18 @@ fn game_audio_offers_volume_and_speakers() {
     state.lang = "pt".into();
     page_has(&state, &["ÁUDIO", "Alto-falantes  ·  reiniciar"]);
 }
+
+#[test]
+fn performance_offers_60_fps_during_qtes_under_the_engine_rate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state(dir.path());
+    open(&mut state, Page::Performance);
+    page_has(
+        &state,
+        &["Engine frame rate", "High Frame Rate Physics Fix"],
+    );
+    // On by default, as in the game.
+    assert_eq!(state.store.text("auto_safe_fps"), "1");
+    click_tall(&mut state, "High Frame Rate Physics Fix");
+    assert_eq!(state.store.text("auto_safe_fps"), "0");
+}

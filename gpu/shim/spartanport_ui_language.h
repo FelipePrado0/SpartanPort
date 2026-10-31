@@ -83,6 +83,8 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"Enable before opening New Game. Does not change an existing save difficulty.", "请在打开“新游戏”前启用，不改变已有存档难度。"},
     {"Enemy health bar", "敌人血条"},
     {"Engine frame rate", "引擎帧率"},
+    {"High Frame Rate Physics Fix", "高帧率物理修复"},
+    {"At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate. The saved rate does not change.", "高帧率下，快速反应提示在屏幕上或在克洛诺斯身上用刀刃拉拽时，引擎以 60 运行，结束后回到引擎帧率。保存的帧率不会改变。"},
     {"Engine frame rate: ", "引擎帧率："},
     {"Engine frame rate: 60 FPS only (no frame rate patch for this game build)", "引擎帧率：仅支持 60 帧（此版本无可用帧率补丁）"},
     {"Every multiplier back to 1x (the game's normal values).", "将所有倍率恢复为 1 倍（游戏正常数值）。"},
