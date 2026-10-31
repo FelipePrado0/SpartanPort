@@ -30,6 +30,8 @@ MINGW*|MSYS*)
     cp out/gpu/spartanport-probe.exe out/gpu/spartanport-gpu-capabilities.exe out/gpu/spartanport-play.exe out/
     echo "Built $PWD/out/spartanport-probe.exe"
     if [[ ${1:-} == --test ]]; then
+        clang -std=c11 -O2 -g -Wall -Wextra -Werror -Isrc tests/test_load_snapshot.c -lpsapi -o out/load-snapshot-test.exe
+        out/load-snapshot-test.exe
         clang -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_services.c src/compat_win.c -lbcrypt -o out/services-test.exe
         out/services-test.exe
         clang -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_savedata.c src/compat_win.c -lbcrypt -o out/savedata-test.exe

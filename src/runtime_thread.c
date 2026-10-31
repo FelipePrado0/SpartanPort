@@ -19,6 +19,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <tlhelp32.h>
+#include "thread_capture.h"
 #else
 #include <dirent.h>
 #include <sys/resource.h>
@@ -578,17 +579,11 @@ unsigned long runtime_thread_host_id(void) {
     return (unsigned long)syscall(SYS_gettid);
 #endif
 }
-/* Only the Linux snapshot reads pc, so Windows keeps no image range. */
-#ifndef _WIN32
 static uintptr_t load_image_base;
 static uint64_t load_image_size;
 void runtime_thread_set_image(uintptr_t base,uint64_t size) { load_image_base=base; load_image_size=size; }
-#else
-void runtime_thread_set_image(uintptr_t base,uint64_t size) { (void)base; (void)size; }
-#endif
-/* Reads only (no signals, no suspension): the threads keep running while they are listed.
- * Windows lists id, name and CPU time; instruction addresses there need SuspendThread and
- * GetThreadContext, left out until a Windows build can test them (see the spec). */
+/* Linux only reads /proc, so the threads keep running while they are listed. Windows suspends
+ * each one just long enough to copy its registers and stack (thread_capture.h). */
 void runtime_thread_load_snapshot(FILE *out,int sample) {
     const int saved_errno=errno;
     static ThreadCpu list[CPU_REPORT_MAX];
@@ -615,6 +610,16 @@ void runtime_thread_load_snapshot(FILE *out,int sample) {
                 if (load_image_size && pc>=load_image_base && pc-load_image_base<load_image_size)
                     fprintf(out," image+0x%lx",(unsigned long)(pc-load_image_base));
             }
+        }
+#else
+        ThreadCapture cap;
+        if (!thread_capture(list[i].tid,load_image_base,load_image_size,&cap)) fputs(" pc=?",out);
+        else {
+            fprintf(out," pc=0x%llx sp=0x%llx",(unsigned long long)cap.pc,(unsigned long long)cap.sp);
+            if (load_image_size && cap.pc>=load_image_base && cap.pc-load_image_base<load_image_size)
+                fprintf(out," image+0x%llx",(unsigned long long)(cap.pc-load_image_base));
+            for (int f=0;f<cap.frame_count;++f)
+                fprintf(out,"%simage+0x%llx",f ? "," : " stack=",(unsigned long long)(cap.frames[f]-load_image_base));
         }
 #endif
         fputc('\n',out);
