@@ -395,6 +395,7 @@ extern ABI void spartanport_camera_apply(unsigned char *render_view, uint64_t ca
 extern void spartanport_camera_set_view_global(uintptr_t address);
 extern void spartanport_camera_set_image(uintptr_t image, uint64_t size);
 extern void spartanport_camera_set_player_global(uintptr_t address);
+extern void spartanport_camera_set_ray(uintptr_t function, uintptr_t filter, uintptr_t hit);
 extern void spartanport_camera_status(int supported);
 extern ABI void spartanport_camera_node_written(unsigned char *node, const unsigned char *manager);
 
@@ -704,6 +705,18 @@ static void install_camera_hook(Segment *segments, uint64_t count, uint64_t size
     if (player != UINT64_MAX && mapped(segments, count, player, SPARTAN_CAMERA_GLOBAL_NEXT)) {
         const uint64_t player_global = spartanport_camera_view_global(image + player, player);
         if (mapped(segments, count, player_global, 8)) spartanport_camera_set_player_global((uintptr_t)(image + player_global));
+    }
+    /* The level's raycast: the free camera stops short of walls with it (none: it goes through them). */
+    const uint64_t ray = spartanport_signature_find(image, size, &spartanport_camera_ray_site);
+    if (ray != UINT64_MAX && mapped(segments, count, ray, SPARTAN_CAMERA_RAY_FILTER_LEA + SPARTAN_CAMERA_RAY_LEA_LENGTH) &&
+        spartanport_camera_ray_match(image + ray, size - ray)) {
+        const uint64_t filter = spartanport_camera_ray_global(image + ray, ray, SPARTAN_CAMERA_RAY_FILTER_LEA);
+        const uint64_t hit = spartanport_camera_ray_global(image + ray, ray, SPARTAN_CAMERA_RAY_RESULT_LEA);
+        if (mapped(segments, count, filter, SPARTAN_CAMERA_RAY_FILTER_SIZE) &&
+            mapped(segments, count, hit, SPARTAN_CAMERA_RAY_RESULT_SIZE)) {
+            spartanport_camera_set_ray((uintptr_t)(image + ray), (uintptr_t)(image + filter), (uintptr_t)(image + hit));
+            printf("Free camera: walls stop it (the level's raycast)\n");
+        }
     }
     protect(stub, page_size, 5);
     const int64_t reach[2] = {(int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + at + 5),

@@ -9,6 +9,7 @@
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "camera_hook.h"
+#include "actor_hook.h"
 #include "gpu/spartanportgpu.h"
 #include <math.h>
 #include <stdio.h>
@@ -127,6 +128,7 @@ int spartanport_camera_configure(void) {
  * SPARTAN_FREE_CAMERA_LIMITS=yaw,pitch: the most it turns from the game's camera, in degrees; a
  * yaw of 180 or more (the default) turns all the way around Kratos; the pitch goes up to 70 by
  * default, short of looking straight down (the floor stops it first going down).
+ * SPARTAN_FREE_CAMERA_RAY=kinds,excluded (hex): the walls' raycast filter (src/camera_hook.h).
  * SPARTAN_FREE_CAMERA_FLOOR: how far above Kratos's feet the camera stays when it orbits him, in
  * game units (default 0.5; negative: no floor). Until the port knows the level's collision, his feet
  * stand for the ground under the camera. */
@@ -135,6 +137,7 @@ static const float CAMERA_RECENTER_SECONDS = 0.3f;
 static int camera_stick;
 static float camera_limits[2] = {180, 70};
 static float camera_floor = 0.5f;
+static uint32_t camera_ray_kinds = SPARTAN_CAMERA_RAY_KINDS, camera_ray_excluded = SPARTAN_CAMERA_RAY_EXCLUDED;
 
 int spartanport_camera_stick_enabled(void) { return camera_stick; }
 
@@ -163,6 +166,12 @@ static void camera_configure_stick(void) {
     if (limits && sscanf(limits, "%f,%f", &yaw, &pitch) == 2 && yaw >= 0 && pitch >= 0) {
         camera_limits[0] = yaw;
         camera_limits[1] = pitch;
+    }
+    const char *ray = getenv("SPARTAN_FREE_CAMERA_RAY");
+    unsigned kinds, excluded;
+    if (ray && sscanf(ray, "%x,%x", &kinds, &excluded) == 2) {
+        camera_ray_kinds = kinds;
+        camera_ray_excluded = excluded;
     }
     const char *floor = getenv("SPARTAN_FREE_CAMERA_FLOOR");
     if (floor) camera_floor = strtof(floor, NULL);
@@ -274,10 +283,17 @@ static void camera_note(const unsigned char *render_view, uint64_t caller, int p
  * The address printed is the instruction after the access (a data breakpoint traps after it).
  * SPARTAN_FREE_CAMERA_WATCH=player: writes to Kratos's position (the player's object +0x70 and
  * +0x78) instead, each site with the return addresses of its first hit (the rbp chain): the code
- * that moves him, which asks the level's collision where he may go. */
+ * that moves him, which asks the level's collision where he may go.
+ * SPARTAN_FREE_CAMERA_WATCH=actor: the player's object turned out to be the camera's target, not
+ * Kratos. Once Kratos has been hit (the damage hook records his actor, src/actor_hook.h) the actor,
+ * and the objects its first ACTOR_BYTES point at, are searched for three floats that follow the
+ * target as he moves; the place that matched every look is watched for writes as above.
+ * SPARTAN_FREE_CAMERA_WATCH=actor:a0 watches that place of the actor (hex) at once: +0xa0 is his
+ * position row, the one the scene node is built from (0x44fa60). */
 enum { WATCH_SITES = 64, WATCH_FRAMES = 8 };
 static const unsigned watch_camera_offsets[4] = {0x40, 0x70, 0x90, 0xc0};
 static const unsigned watch_player_offsets[4] = {0x70, 0x78, 0x70, 0x78};
+static const unsigned watch_actor_offsets[4] = {0, 8, 0, 8};
 static const unsigned *watch_offsets = watch_camera_offsets;
 static struct {
     uint64_t rip;
@@ -360,16 +376,103 @@ static DWORD WINAPI watch_arm(void *unused) {
     return 0;
 }
 
+extern uintptr_t spartanport_actor_slots_address(void);
+static int scan_read(uint64_t address, void *out, size_t size);
+
+/* Places (actor +a, or actor +a -> +b) holding the target's position: x and z within ACTOR_REACH,
+ * y within ACTOR_HEIGHT (the target may sit above his feet). */
+enum { ACTOR_BYTES = 0x800, ACTOR_POINTED = 0x200, ACTOR_PLACES = 256, ACTOR_LOOKS = 6, ACTOR_FRAMES = 90 };
+static const float ACTOR_REACH = 1.5f, ACTOR_HEIGHT = 4.0f;
+static struct { uint16_t outer, inner; unsigned char pointed; unsigned hits; } actor_places[ACTOR_PLACES];
+static unsigned actor_place_count, actor_looks;
+static float actor_first[3];
+
+static int actor_near(const float *v, const float *target) {
+    return fabsf(v[0] - target[0]) < ACTOR_REACH && fabsf(v[2] - target[2]) < ACTOR_REACH &&
+           fabsf(v[1] - target[1]) < ACTOR_HEIGHT;
+}
+
+static void actor_note(unsigned outer, unsigned inner, int pointed) {
+    for (unsigned i = 0; i < actor_place_count; ++i)
+        if (actor_places[i].outer == outer && actor_places[i].inner == inner && actor_places[i].pointed == pointed) {
+            ++actor_places[i].hits;
+            return;
+        }
+    if (actor_looks || actor_place_count == ACTOR_PLACES) return;  /* only places seen on the first look */
+    actor_places[actor_place_count].outer = (uint16_t)outer;
+    actor_places[actor_place_count].inner = (uint16_t)inner;
+    actor_places[actor_place_count].pointed = (unsigned char)pointed;
+    actor_places[actor_place_count++].hits = 1;
+}
+
+/* One look at the actor; after ACTOR_LOOKS with the target moved, the address to watch (0: not yet). */
+static uint64_t actor_find(uint64_t actor, const float *target) {
+    static unsigned char bytes[ACTOR_BYTES], pointed[ACTOR_POINTED];
+    if (!scan_read(actor, bytes, sizeof(bytes))) return 0;
+    if (!actor_looks) memcpy(actor_first, target, sizeof(actor_first));
+    for (unsigned a = 0; a + 12 <= ACTOR_BYTES; a += 4) {
+        float v[3];
+        memcpy(v, bytes + a, sizeof(v));
+        if (actor_near(v, target)) actor_note(a, 0, 0);
+        uint64_t pointer;
+        if (a & 7 || (memcpy(&pointer, bytes + a, 8), pointer < 0x100000000ull || pointer & 0xf)) continue;
+        if (!scan_read(pointer, pointed, sizeof(pointed))) continue;
+        for (unsigned b = 0; b + 12 <= ACTOR_POINTED; b += 4) {
+            memcpy(v, pointed + b, sizeof(v));
+            if (actor_near(v, target)) actor_note(a, b, 1);
+        }
+    }
+    ++actor_looks;
+    const float moved[3] = {target[0] - actor_first[0], target[1] - actor_first[1], target[2] - actor_first[2]};
+    if (actor_looks < ACTOR_LOOKS || sqrtf(moved[0] * moved[0] + moved[2] * moved[2]) < 3 * ACTOR_REACH) return 0;
+    printf("Free camera: Kratos's actor %#llx, places following the target (%u looks):\n", (unsigned long long)actor,
+           actor_looks);
+    uint64_t chosen = 0;
+    for (unsigned i = 0; i < actor_place_count; ++i) {
+        if (actor_places[i].hits != actor_looks) continue;
+        uint64_t at = actor + actor_places[i].outer;
+        if (actor_places[i].pointed) {
+            uint64_t pointer = 0;
+            scan_read(at, &pointer, 8);
+            at = pointer + actor_places[i].inner;
+            printf("  +%#x -> +%#x\n", actor_places[i].outer, actor_places[i].inner);
+        } else {
+            printf("  +%#x\n", actor_places[i].outer);
+        }
+        if (!chosen && !(at & 7)) chosen = at;
+    }
+    if (!chosen) {  /* nothing kept up: start again */
+        actor_place_count = actor_looks = 0;
+        printf("  none; looking again\n");
+    }
+    fflush(stdout);
+    return chosen;
+}
+
 static void camera_watch(uint64_t node) {
-    static int checked, wanted;
+    static int checked, wanted, actor_mode;
+    static unsigned actor_offset;
     if (!checked) {
         const char *watch = getenv("SPARTAN_FREE_CAMERA_WATCH");
         wanted = watch && *watch && strcmp(watch, "0");
         watch_player = wanted && !strcmp(watch, "player");
+        actor_mode = wanted && !strncmp(watch, "actor", 5);
+        if (actor_mode && watch[5] == ':') actor_offset = (unsigned)strtoul(watch + 6, NULL, 16) & ~7u;
         checked = 1;
     }
     if (!wanted || watch_node || !node || node & 7) return;
-    if (watch_player) {
+    if (actor_mode) {
+        static unsigned frames;
+        const SpartanActorSlot *slots = (const SpartanActorSlot *)spartanport_actor_slots_address();
+        const uint64_t player = camera_player_global ? *camera_player_global : 0;
+        if (++frames % ACTOR_FRAMES || !slots || !slots[0].actor || player < 0x10000 || player & 0xf) return;
+        float target[3];
+        memcpy(target, (const unsigned char *)(uintptr_t)player + SPARTAN_CAMERA_PLAYER_POSITION, sizeof(target));
+        node = actor_offset ? slots[0].actor + actor_offset : actor_find(slots[0].actor, target);
+        if (!node) return;
+        watch_player = 1;  /* the same write watch, at the found place */
+        watch_offsets = watch_actor_offsets;
+    } else if (watch_player) {
         const uint64_t player = camera_player_global ? *camera_player_global : 0;
         if (player < 0x10000 || player & 0xf) return;
         node = player;
@@ -672,7 +775,121 @@ static int camera_node_free(const unsigned char *node) {
 
 /* The clean matrix turned by the state into `world` and into the node, marked changed (its cached
  * view recomputed) when that differs from what it holds. */
-static void camera_turn_node(unsigned char *node, float *world) {
+/* Walls: the level's raycast (src/camera_hook.h) from Kratos's chest (CAMERA_RAY_RISE above the
+ * pivot, his feet) to the orbited camera; a hit brings the camera in to CAMERA_RAY_MARGIN short of
+ * it on that line. The game's own raycasts share the filter and hit globals, so they are kept as
+ * they were around the port's, which runs only where the camera controller runs (node_written,
+ * inside the game's update) and not from the render view's update. The other frames reuse its
+ * answer. Coming in is at once, going
+ * back out eases over CAMERA_RAY_EASE of the remaining way per cast, without popping. */
+typedef float camera_v4 __attribute__((vector_size(16)));
+typedef ABI int (*camera_ray_fn)(camera_v4 start, camera_v4 end);
+static camera_ray_fn camera_ray;
+static unsigned char *camera_ray_filter, *camera_ray_hit;
+static const float CAMERA_RAY_RISE = 1.5f, CAMERA_RAY_MARGIN = 0.4f, CAMERA_RAY_NEAREST = 1.0f, CAMERA_RAY_EASE = 0.15f;
+static float camera_pull = 1;  /* the share of the way from the chest to the camera it may go */
+static unsigned camera_ray_logged;
+
+void spartanport_camera_set_ray(uintptr_t function, uintptr_t filter, uintptr_t hit) {
+    camera_ray = (camera_ray_fn)function;
+    camera_ray_filter = (unsigned char *)filter;
+    camera_ray_hit = (unsigned char *)hit;
+}
+
+/* The share of from → to that is clear: 1, or where the first wall or floor is. */
+static float camera_cast(const float *from, const float *to) {
+    unsigned char filter[SPARTAN_CAMERA_RAY_FILTER_SIZE], hit[SPARTAN_CAMERA_RAY_RESULT_SIZE], ours[SPARTAN_CAMERA_RAY_FILTER_SIZE];
+    memcpy(filter, camera_ray_filter, sizeof(filter));
+    memcpy(hit, camera_ray_hit, sizeof(hit));
+    memset(ours, 0, sizeof(ours));
+    memcpy(ours, &camera_ray_kinds, 4);
+    memcpy(ours + 4, &camera_ray_excluded, 4);
+    memcpy(ours + 8, &SPARTAN_CAMERA_RAY_CLOSEST, 4);
+    memcpy(camera_ray_filter, ours, sizeof(ours));
+    const camera_v4 start = {from[0], from[1], from[2], 1}, end = {to[0], to[1], to[2], 1};
+    const int touched = camera_ray(start, end);
+    float point[3], distance;
+    memcpy(point, camera_ray_hit, sizeof(point));
+    memcpy(&distance, camera_ray_hit + 0x20, sizeof(distance));
+    memcpy(camera_ray_filter, filter, sizeof(filter));
+    memcpy(camera_ray_hit, hit, sizeof(hit));
+    if (!touched) return 1;
+    float share = spartanport_camera_hit_fraction(from, to, point, 0.5f);
+    if (share < 0) {  /* not a point on the way: the distance, as a share or in units */
+        const float d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+        const float length = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        share = distance >= 0 && distance <= 1 ? distance : distance > 0 && distance < length ? distance / length : 1;
+    }
+    if (camera_log && camera_ray_logged < 24) {
+        ++camera_ray_logged;
+        printf("Free camera: ray %.1f %.1f %.1f -> %.1f %.1f %.1f hit %.1f %.1f %.1f distance %.2f share %.2f\n", from[0],
+               from[1], from[2], to[0], to[1], to[2], point[0], point[1], point[2], distance, share);
+    }
+    return share;
+}
+
+/* The orbited camera brought in on the line from Kratos's chest when a wall stands between them;
+ * cast: ask the level now (the controller's thread), else keep the last answer. */
+static void camera_keep_clear(float *world, const float *kratos, int cast) {
+    float chest[3];
+    for (int i = 0; i < 3; ++i) chest[i] = kratos[i] + camera_up[i] * CAMERA_RAY_RISE;
+    float *eye = world + 12;
+    const float d[3] = {eye[0] - chest[0], eye[1] - chest[1], eye[2] - chest[2]};
+    const float length = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    if (!(length > CAMERA_RAY_NEAREST)) return;
+    if (cast && camera_ray) {
+        const float clear = camera_cast(chest, eye);
+        float wanted = clear >= 1 ? 1 : (clear * length - CAMERA_RAY_MARGIN) / length;
+        if (wanted < CAMERA_RAY_NEAREST / length) wanted = CAMERA_RAY_NEAREST / length;
+        camera_pull = wanted < camera_pull ? wanted : camera_pull + (wanted - camera_pull) * CAMERA_RAY_EASE;
+    }
+    if (camera_pull >= 1) return;
+    for (int i = 0; i < 3; ++i) eye[i] = chest[i] + d[i] * camera_pull;
+}
+
+/* Up against a wall the line from his chest is short and the camera would sit on his back: then
+ * it rises over him instead (the pitch that raises it, CAMERA_LIFT_STEP at a time, within the
+ * pitch limit) until CAMERA_LIFT_ROOM of the way is clear, and looks down at him. The rise eases
+ * there and back by CAMERA_LIFT_EASE of the way per cast; the other frames keep it. */
+static const float CAMERA_LIFT_ROOM = 4.0f, CAMERA_LIFT_STEP = 0.17453292f, CAMERA_LIFT_EASE = 0.25f;
+enum { CAMERA_LIFT_STEPS = 6 };
+static float camera_lift, camera_lift_wanted;  /* radians, upward */
+
+/* How much the pitch must rise for the way from the chest to be clear enough. */
+static float camera_find_lift(const float *clean, const float *kratos, const SpartanCameraState *state, float rising,
+                              float limit) {
+    float chest[3];
+    for (int i = 0; i < 3; ++i) chest[i] = kratos[i] + camera_up[i] * CAMERA_RAY_RISE;
+    for (int step = 0; step <= CAMERA_LIFT_STEPS; ++step) {
+        SpartanCameraState probe = *state;
+        probe.pitch += rising * step * CAMERA_LIFT_STEP;
+        if (fabsf(probe.pitch) > limit) return fabsf(limit - fabsf(state->pitch));
+        float world[16];
+        memcpy(world, clean, sizeof(world));
+        spartanport_camera_orbit_about(world, kratos, &probe, camera_up);
+        const float d[3] = {world[12] - chest[0], world[13] - chest[1], world[14] - chest[2]};
+        const float length = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        const float room = length * camera_cast(chest, world + 12);
+        if (room >= CAMERA_LIFT_ROOM || room >= length - CAMERA_RAY_MARGIN) return step * CAMERA_LIFT_STEP;
+    }
+    return CAMERA_LIFT_STEPS * CAMERA_LIFT_STEP;
+}
+
+/* The state's pitch raised by the lift (found when cast). */
+static void camera_rise(const float *clean, const float *kratos, SpartanCameraState *state, int cast) {
+    const float limit = camera_limits[1] * 0.017453292f;
+    /* Which way of the pitch raises the camera here. */
+    const float rising = spartanport_camera_orbit_height(clean, kratos, state, state->pitch + 0.01f, camera_up) >=
+                                 spartanport_camera_orbit_height(clean, kratos, state, state->pitch, camera_up)
+                             ? 1.0f : -1.0f;
+    if (cast && camera_ray) camera_lift_wanted = camera_find_lift(clean, kratos, state, rising, limit);
+    camera_lift += (camera_lift_wanted - camera_lift) * CAMERA_LIFT_EASE;
+    if (camera_lift < 0.001f) camera_lift = 0;
+    float pitch = state->pitch + rising * camera_lift;
+    state->pitch = pitch > limit ? limit : pitch < -limit ? -limit : pitch;
+}
+
+static void camera_turn_node(unsigned char *node, float *world, int cast) {
     memcpy(world, camera_clean, sizeof(camera_clean));
     if ((camera_state.yaw != 0 || camera_state.pitch != 0) && spartanport_camera_live()) {
         SpartanCameraState state = camera_orbit_state();
@@ -684,10 +901,15 @@ static void camera_turn_node(unsigned char *node, float *world) {
                                     camera_floor;
                 state.pitch = camera_state.pitch = spartanport_camera_floor_pitch(world, kratos, &state, camera_up, floor);
             }
+            camera_rise(world, kratos, &state, cast);
             spartanport_camera_orbit_about(world, kratos, &state, camera_up);
+            camera_keep_clear(world, kratos, cast);
         } else {
             spartanport_camera_orbit_world(world, camera_sign, &state, camera_up);
         }
+    } else {
+        camera_pull = 1;  /* the game's own camera: nothing to keep clear */
+        camera_lift = camera_lift_wanted = 0;
     }
     unsigned char *matrix = node + SPARTAN_CAMERA_NODE_MATRIX;
     if (memcmp(matrix, world, sizeof(camera_clean))) {
@@ -741,7 +963,7 @@ ABI void spartanport_camera_node_written(unsigned char *node, const unsigned cha
     if (distance > 0 && distance < 100000) camera_target_distance = distance;  /* also false for NaN */
     camera_take_clean(node + SPARTAN_CAMERA_NODE_MATRIX);
     float world[16];
-    camera_turn_node(node, world);
+    camera_turn_node(node, world, 1);
 }
 
 /* While the player turns the camera (its angles changed since the view's last update) the game's
@@ -786,7 +1008,7 @@ ABI void spartanport_camera_apply(unsigned char *render_view, uint64_t caller) {
     const unsigned char *matrix = camera + SPARTAN_CAMERA_NODE_MATRIX;
     if (!camera_has_written || memcmp(matrix, camera_written, sizeof(camera_written))) camera_take_clean(matrix);
     float world[16];
-    camera_turn_node(camera, world);
+    camera_turn_node(camera, world, 0);
     spartanport_camera_set_view(render_view, world);
     camera_hold_blur(render_view);
 }

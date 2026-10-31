@@ -84,6 +84,9 @@ int main(int argc, char** argv) {
     // The motion blur's switch (6e72 build): found once, its compare and jbe there.
     const uint64_t blur = Find(image, spartanport_motion_blur_site);
     assert(blur != UINT64_MAX && spartanport_motion_blur_signature_match(image.data() + blur, image.size() - blur));
+    // The level's raycast (6e72 build): found once, with the leas of its filter and hit.
+    const uint64_t ray = Find(image, spartanport_camera_ray_site);
+    assert(ray != UINT64_MAX && spartanport_camera_ray_match(image.data() + ray, image.size() - ray));
     uint64_t found[3];
     assert(spartanport_orb_find(image.data(), image.size(), found) == 0x6a9f0);
     for (unsigned i = 0; i < 3; ++i) assert(found[i] == calls[i]);

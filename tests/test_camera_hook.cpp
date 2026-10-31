@@ -59,6 +59,28 @@ static void call_controller(unsigned char* stub, void* node, const void* manager
 
 // src/runtime_camera.c, linked in; the menu's Free camera is on.
 extern "C" int spartanportgpu_free_camera(void) { return 1; }
+// The level's raycast, faked: it records the filter it was given and, when told to, hits halfway.
+alignas(16) static unsigned char fake_filter[SPARTAN_CAMERA_RAY_FILTER_SIZE], fake_hit[SPARTAN_CAMERA_RAY_RESULT_SIZE];
+static int fake_ray_calls;
+static bool fake_ray_hits;
+static float fake_wall_top = -1e9f;  // a low wall: ends below this height are hit at 10%
+static uint32_t fake_kinds, fake_excluded, fake_flags;
+typedef float FakeV4 __attribute__((vector_size(16)));
+extern "C" __attribute__((sysv_abi)) int fake_ray(FakeV4 start, FakeV4 end) {
+    ++fake_ray_calls;
+    std::memcpy(&fake_kinds, fake_filter, 4);
+    std::memcpy(&fake_excluded, fake_filter + 4, 4);
+    std::memcpy(&fake_flags, fake_filter + 8, 4);
+    const float share = end[1] < fake_wall_top ? 0.1f : 0.5f;
+    if (!fake_ray_hits && !(end[1] < fake_wall_top)) return 0;
+    const float point[3] = {start[0] + (end[0] - start[0]) * share, start[1] + (end[1] - start[1]) * share,
+                            start[2] + (end[2] - start[2]) * share};
+    std::memcpy(fake_hit, point, sizeof(point));
+    return 1;
+}
+extern "C" void spartanport_camera_set_ray(uintptr_t function, uintptr_t filter, uintptr_t hit);
+// No actor recorded (the watch tool's actor search stays idle).
+extern "C" uintptr_t spartanport_actor_slots_address(void) { return 0; }
 extern "C" {
 int spartanport_camera_configure(void);
 void spartanport_camera_set_player_global(uintptr_t address);
@@ -257,6 +279,67 @@ int main(int argc, char** argv) {
     const float after[3] = {turned[12] - kratos[0], turned[13] - kratos[1], turned[14] - kratos[2]};
     assert(close_to(dot(before, before), dot(after, after)) && close_to(after[1], before[1]));
     assert(!close_to(turned[12], clean[12]));
+
+    // Walls: the level's raycast from his chest (1.5 above him) to the camera. Clear, the camera
+    // stays; a hit halfway brings it in to 0.4 short of the hit at once, on the controller's call
+    // only (the view's update reuses it); clear again, it eases back out. The game's filter and hit
+    // are as they were after each cast.
+    {
+        float open[16];
+        std::memcpy(open, turned, sizeof(open));
+        std::memset(fake_filter, 0xab, sizeof(fake_filter));
+        std::memset(fake_hit, 0xcd, sizeof(fake_hit));
+        unsigned char kept_filter[sizeof(fake_filter)], kept_hit[sizeof(fake_hit)];
+        std::memcpy(kept_filter, fake_filter, sizeof(kept_filter));
+        std::memcpy(kept_hit, fake_hit, sizeof(kept_hit));
+        spartanport_camera_set_ray(reinterpret_cast<uintptr_t>(&fake_ray), reinterpret_cast<uintptr_t>(fake_filter),
+                                   reinterpret_cast<uintptr_t>(fake_hit));
+        std::memcpy(node + SPARTAN_CAMERA_NODE_MATRIX, clean, sizeof(clean));
+        spartanport_camera_node_written(node, manager);
+        // Two casts: the rise's search (nothing to rise for) and the pull.
+        assert(fake_ray_calls == 2 && fake_kinds == SPARTAN_CAMERA_RAY_KINDS &&
+               fake_excluded == SPARTAN_CAMERA_RAY_EXCLUDED && fake_flags == SPARTAN_CAMERA_RAY_CLOSEST);
+        assert(!std::memcmp(open, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(open)));
+        assert(!std::memcmp(kept_filter, fake_filter, sizeof(kept_filter)) && !std::memcmp(kept_hit, fake_hit, sizeof(kept_hit)));
+
+        const float chest[3] = {kratos[0], kratos[1] + 1.5f, kratos[2]};
+        const float way[3] = {open[12] - chest[0], open[13] - chest[1], open[14] - chest[2]};
+        const float length = std::sqrt(dot(way, way));
+        fake_ray_hits = true;
+        std::memcpy(node + SPARTAN_CAMERA_NODE_MATRIX, clean, sizeof(clean));
+        spartanport_camera_node_written(node, manager);
+        std::memcpy(turned, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(turned));
+        const float closer[3] = {turned[12] - chest[0], turned[13] - chest[1], turned[14] - chest[2]};
+        assert(close_to(std::sqrt(dot(closer, closer)), length * 0.5f - 0.4f));
+        assert(close_to(dot(closer, way), std::sqrt(dot(closer, closer)) * length));  // on the same line
+        assert(!std::memcmp(turned + 8, open + 8, 3 * sizeof(float)));         // still looking the same way
+        assert(!std::memcmp(kept_filter, fake_filter, sizeof(kept_filter)) && !std::memcmp(kept_hit, fake_hit, sizeof(kept_hit)));
+        spartanport_camera_apply(gameplay, 0);
+        assert(fake_ray_calls == 4 && !std::memcmp(turned, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(turned)));
+
+        fake_ray_hits = false;
+        std::memcpy(node + SPARTAN_CAMERA_NODE_MATRIX, clean, sizeof(clean));
+        spartanport_camera_node_written(node, manager);
+        std::memcpy(turned, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(turned));
+        const float eased[3] = {turned[12] - chest[0], turned[13] - chest[1], turned[14] - chest[2]};
+        const float pull = (length * 0.5f - 0.4f) / length;
+        assert(close_to(std::sqrt(dot(eased, eased)), length * (pull + (1 - pull) * 0.15f)));
+
+        // Up against a low wall (the way is clear only from higher up): the camera rises over him,
+        // a quarter of the rise per cast (pulled in while its way still passes under the wall), and
+        // ends above the wall at its full distance, looking down at him.
+        fake_wall_top = open[13] + 0.5f;
+        for (int cast = 0; cast < 40; ++cast) {
+            std::memcpy(node + SPARTAN_CAMERA_NODE_MATRIX, clean, sizeof(clean));
+            spartanport_camera_node_written(node, manager);
+        }
+        std::memcpy(turned, node + SPARTAN_CAMERA_NODE_MATRIX, sizeof(turned));
+        const float risen[3] = {turned[12] - chest[0], turned[13] - chest[1], turned[14] - chest[2]};
+        assert(turned[13] > fake_wall_top && std::sqrt(dot(risen, risen)) > length * 0.95f);
+        assert(turned[9] * open[9] >= 0 && std::fabs(turned[9]) > std::fabs(open[9]));  // tilted further down
+        fake_wall_top = -1e9f;
+        spartanport_camera_set_ray(0, 0, 0);
+    }
 
     // A cut (the game's camera jumped): back to the game's framing, the stick's turn dropped.
     float cut[16];

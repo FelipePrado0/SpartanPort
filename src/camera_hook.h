@@ -137,6 +137,50 @@ static inline unsigned spartanport_camera_build_controller_stub(unsigned char *o
     return sizeof(body) + 8;
 }
 
+/* The level's raycast (0x156d10 in the 6e72 build; Kratos's movement and some 140 other places call
+ * it): int ray(start, end), the points in xmm0 and xmm1 (x, y, z), System V. It reads a filter from
+ * a global and leaves the closest hit in another; 1 when something was hit. The filter (0x38
+ * bytes): +0 the kinds of objects that count (the spatial query tests it, 0x5e0590), +4 surfaces
+ * left out, +8 flags (2: the closest hit, else the first), +0x10 an object to skip, +0x30 a
+ * callback. Kratos's movement uses {0xfff4c00c, 0, 2}: it also stops at the invisible walls on
+ * cliff edges. The camera leaves out 0x4d3220c2 too, as the line-of-sight casts do (0x5361f9 and
+ * others). The hit (0x60 bytes): +0 the point, +0x10 the normal, +0x20 how far along (0..1),
+ * +0x28 the object hit. The function's own leas name both globals. */
+enum { SPARTAN_CAMERA_RAY_RESULT_LEA = 0x5c, SPARTAN_CAMERA_RAY_FILTER_LEA = 0xa2, SPARTAN_CAMERA_RAY_LEA_LENGTH = 7,
+       SPARTAN_CAMERA_RAY_FILTER_SIZE = 0x38, SPARTAN_CAMERA_RAY_RESULT_SIZE = 0x60 };
+static const uint32_t SPARTAN_CAMERA_RAY_KINDS = 0xfff4c00cu, SPARTAN_CAMERA_RAY_EXCLUDED = 0x4d3220c2u,
+                      SPARTAN_CAMERA_RAY_CLOSEST = 2;
+static const SpartanSignature spartanport_camera_ray_site = {
+    "55 48 89 e5 41 57 41 56 41 55 41 54 53 48 81 ec b8 00 00 00 c5 fa 10 15 ?? ?? ?? ?? "
+    "c5 fa 10 da c5 f8 c6 db 24 c5 f2 10 c2 c5 f0 c6 d0 24 c5 e0 5c c2", 0};
+
+/* lea r12, [rip+disp] (the hit) and lea r13, [rip+disp] (the filter) at their places. */
+static inline int spartanport_camera_ray_match(const unsigned char *code, uint64_t size) {
+    static const unsigned char result[3] = {0x4c,0x8d,0x25}, filter[3] = {0x4c,0x8d,0x2d};
+    return size >= SPARTAN_CAMERA_RAY_FILTER_LEA + SPARTAN_CAMERA_RAY_LEA_LENGTH &&
+           !memcmp(code + SPARTAN_CAMERA_RAY_RESULT_LEA, result, 3) && !memcmp(code + SPARTAN_CAMERA_RAY_FILTER_LEA, filter, 3);
+}
+
+/* The image offset a lea of the raycast (at `lea` from its start) points at. */
+static inline uint64_t spartanport_camera_ray_global(const unsigned char *code, uint64_t site, unsigned lea) {
+    int32_t displacement;
+    memcpy(&displacement, code + lea + 3, 4);
+    return site + lea + SPARTAN_CAMERA_RAY_LEA_LENGTH + (int64_t)displacement;
+}
+
+/* Where along from → to (0..1) a hit at `point` lies, or -1 when the point is not on the segment
+ * (farther than `slack` from it). */
+static inline float spartanport_camera_hit_fraction(const float *from, const float *to, const float *point, float slack) {
+    const float d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+    const float p[3] = {point[0] - from[0], point[1] - from[1], point[2] - from[2]};
+    const float length2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    if (!(length2 > 0)) return -1;
+    const float along = (p[0] * d[0] + p[1] * d[1] + p[2] * d[2]) / length2;
+    float off2 = 0;
+    for (int i = 0; i < 3; ++i) off2 += (p[i] - along * d[i]) * (p[i] - along * d[i]);
+    return along >= 0 && along <= 1 && off2 <= slack * slack ? along : -1;
+}
+
 /* Shared by the port's apply function (game thread) and the input (runtime_pad.c). Angles in
  * radians: yaw turns the camera around the world's vertical axis, pitch around its own right
  * axis, both about a pivot `distance` units ahead of it (0: in place). */
