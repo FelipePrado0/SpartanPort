@@ -68,3 +68,31 @@ tamanho; limite de linhas. No jogo, o roteiro do mantenedor em
 ## Aprovação
 
 Aprovada pelo líder por delegação do mantenedor (2026-10-29).
+
+## Registro TDD
+
+- **Comportamento:** os critérios de aceite acima.
+- **Teste:** `tests/test_memory_trace.c` (`off_prints_nothing`, `on_traces_each_change`,
+  `small_changes_filtered`, `stale_write_traced`, `line_cap`).
+- **Red:** antes da implementação,
+  `cc -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_memory_trace.c -o out/memory-trace-test`
+  falhou com `error: 'col_sink' undeclared`, `'col_state' undeclared`, `'col_lines' undeclared`
+  (`exit=1`): o trace não existia. Não houve um Red de asserção separado.
+- **Green:** `col_note`/`col_flush`, gerações em `place()`, notas em `direct_allocate`,
+  `map_direct_locked`, `map_flexible_locked`, `retire_fixed`, `unmap_locked` (com a origem:
+  `munmap`, `batch`, `release`), `direct_release`, falhas de mapa e escritas atrasadas.
+  `out/memory-trace-test`: `PASS: memory trace off by default, one line per change with
+  generations, size filter, late writes, line cap`, `exit=0`.
+- **Refactor:** `unmap_locked` ganhou o parâmetro de origem (o teste `hook_queue_grows` foi
+  ajustado); `out/memory-test`, `out/memory-read-backing-test` e `out/low-handles-test` continuam
+  passando.
+- **Validação final:** amostra real (`SPARTAN_MEM_TRACE=1 SPARTAN_MEM_TRACE_MIN_KB=0 out/memory-test`):
+
+```
+Col: memory trace on (min=0 KiB, max=20000 lines)
+Col: t=2601333 tid=13459 map kind=direct addr=0x1000000000 size=32768 phys=0x0 prot=0x3 gen=3
+Col: t=2601333 tid=13459 retire addr=0x1000000000 size=32768 gen=3-3
+Col: t=2601333 tid=13459 map kind=direct addr=0x1000000000 size=32768 phys=0x0 prot=0x3 gen=4 replaced=1 oldgen=3-3
+Col: t=2601333 tid=13459 unmap addr=0x1000000000 size=32768 gen=4-4 src=munmap
+Col: t=2601333 tid=13459 release phys=0x0 size=32768
+```

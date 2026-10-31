@@ -17,12 +17,16 @@
 #include <pthread.h>
 #include <time.h>
 #include <errno.h>
+#include <stdarg.h>
 #ifdef _WIN32
 #include <windows.h>
 #else
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <sys/syscall.h>
+#endif
 #endif
 /* sceKernelGetDirectMemorySize on retail PS4: 5056 MiB. SPARTAN_DMEM_MB raises it (the resolution
  * patches above 1080p need about 4 GiB more; the launcher sets it). pool() falls back to the retail
@@ -132,6 +136,87 @@ static uint64_t map_generation;
 typedef struct { uintptr_t start, end; uint64_t gen; int active; } Retiring;
 static __thread Retiring retiring;
 static uint64_t stale_writes;
+/* ---- Col: memory trace (SPARTAN_MEM_TRACE=1), for missing scenery and collision (#871, #1000) ----
+ * One line per change of guest memory, with address, size, generation and thread; changes smaller
+ * than SPARTAN_MEM_TRACE_MIN_KB (64) are left out, and the trace stops after SPARTAN_MEM_TRACE_MAX
+ * (20000) lines. Lines made under the region lock wait in a per-thread buffer until col_flush,
+ * which callers run after releasing it. */
+static int col_state=-1; /* -1 unread, 0 off, 1 on */
+static uint64_t col_min_bytes, col_max_lines, col_lines;
+static FILE *col_sink; /* NULL: stdout */
+#define COL_BUFFER 8192
+static __thread char col_buffer[COL_BUFFER];
+static __thread size_t col_used, col_lost;
+static int col_enabled(void) {
+    int state=__atomic_load_n(&col_state,__ATOMIC_ACQUIRE);
+    if (state>=0) return state;
+    const char *on=getenv("SPARTAN_MEM_TRACE"), *min=getenv("SPARTAN_MEM_TRACE_MIN_KB"), *max=getenv("SPARTAN_MEM_TRACE_MAX");
+    state=on && on[0]=='1' && !on[1];
+    col_min_bytes=(min && *min ? strtoull(min,NULL,10) : 64)*1024;
+    col_max_lines=max && *max ? strtoull(max,NULL,10) : 20000;
+    if (state) {
+        FILE *out=col_sink ? col_sink : stdout;
+        fprintf(out,"Col: memory trace on (min=%" PRIu64 " KiB, max=%" PRIu64 " lines)\n",col_min_bytes/1024,col_max_lines);
+        fflush(out);
+    }
+    __atomic_store_n(&col_state,state,__ATOMIC_RELEASE);
+    return state;
+}
+/* Whether a change of size bytes is traced; size 0 always is (failures, late writes). */
+static int col_on(uint64_t size) { return !__atomic_load_n(&col_state,__ATOMIC_RELAXED) ? 0 : col_enabled() && (!size || size>=col_min_bytes); }
+static uint64_t col_ms(void) {
+#ifdef _WIN32
+    LARGE_INTEGER now, frequency;
+    QueryPerformanceCounter(&now); QueryPerformanceFrequency(&frequency);
+    return (uint64_t)(now.QuadPart/(frequency.QuadPart/1000));
+#else
+    struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t);
+    return (uint64_t)t.tv_sec*1000+(uint64_t)t.tv_nsec/1000000;
+#endif
+}
+static uint64_t col_tid(void) {
+#if defined(_WIN32)
+    return GetCurrentThreadId();
+#elif defined(__APPLE__)
+    uint64_t id=0; pthread_threadid_np(NULL,&id); return id;
+#elif defined(__linux__)
+    return (uint64_t)syscall(SYS_gettid);
+#else
+    return (uint64_t)(uintptr_t)pthread_self();
+#endif
+}
+__attribute__((format(printf,1,2))) static void col_note(const char *format, ...) {
+    uint64_t line=__atomic_add_fetch(&col_lines,1,__ATOMIC_RELAXED);
+    if (line>col_max_lines+1) return;
+    char *at=col_buffer+col_used; size_t room=COL_BUFFER-col_used;
+    int n;
+    if (line==col_max_lines+1) n=snprintf(at,room,"Col: memory trace limit reached\n");
+    else {
+        n=snprintf(at,room,"Col: t=%" PRIu64 " tid=%" PRIu64 " ",col_ms(),col_tid());
+        if (n>=0 && (size_t)n<room) {
+            va_list args; va_start(args,format);
+            int m=vsnprintf(at+n,room-(size_t)n,format,args);
+            va_end(args);
+            n=m<0 ? m : n+m;
+            if (n>=0 && (size_t)n+1<room) { at[n++]='\n'; at[n]=0; }
+            else n=-1;
+        } else n=-1;
+    }
+    if (n<0 || (size_t)n>=room) { at[0]=0; ++col_lost; return; }
+    col_used+=(size_t)n;
+}
+static void col_flush(void) {
+    if (!col_used && !col_lost) return;
+    FILE *out=col_sink ? col_sink : stdout;
+    if (col_used) fputs(col_buffer,out);
+    if (col_lost) fprintf(out,"Col: %zu lines lost (buffer full)\n",col_lost);
+    fflush(out);
+    col_used=0; col_lost=0; col_buffer[0]=0;
+}
+/* Oldest and newest generation of the guest mappings in [start,end); 0-0 when none. Lock held. */
+static void col_generations(uintptr_t start, uintptr_t end, uint64_t *oldest, uint64_t *newest);
+/* What place() replaced, for the map line its caller writes. */
+static __thread struct { uint64_t gen, replaced, oldest, newest; } col_placed;
 static void deliver_unmap(GpuRange hook, uintptr_t address, uint64_t size, uint64_t gen) {
     const Retiring saved=retiring;
     retiring=(Retiring){address,address+size,gen,1};
@@ -546,6 +631,28 @@ static int overlaps(uintptr_t start, uintptr_t end, int ignore_reserved) {
         if (!ignore_reserved || vmas[i].kind!=KIND_RESERVED) return 1;
     return 0;
 }
+static void col_generations(uintptr_t start, uintptr_t end, uint64_t *oldest, uint64_t *newest) {
+    *oldest=0; *newest=0;
+    for (size_t i=vma_index(start); i<vma_count && vmas[i].start<end; ++i) {
+        if (vmas[i].kind==KIND_RESERVED) continue;
+        if (!*oldest || vmas[i].gen<*oldest) *oldest=vmas[i].gen;
+        if (vmas[i].gen>*newest) *newest=vmas[i].gen;
+    }
+}
+/* The map line for a map place() just made. */
+static void col_mapped(const char *kind, const void *address, uint64_t size, uint64_t phys, int prot) {
+    if (!col_on(size)) return;
+    if (col_placed.replaced)
+        col_note("map kind=%s addr=%p size=%" PRIu64 " phys=0x%" PRIx64 " prot=0x%x gen=%" PRIu64 " replaced=%" PRIu64 " oldgen=%" PRIu64 "-%" PRIu64,
+                 kind,address,size,phys,(unsigned)prot,col_placed.gen,col_placed.replaced,col_placed.oldest,col_placed.newest);
+    else
+        col_note("map kind=%s addr=%p size=%" PRIu64 " phys=0x%" PRIx64 " prot=0x%x gen=%" PRIu64,
+                 kind,address,size,phys,(unsigned)prot,col_placed.gen);
+}
+static void col_map_failed(const char *kind, const void *address, uint64_t size, int32_t result, int retired) {
+    if (col_on(0))
+        col_note("map-failed kind=%s addr=%p size=%" PRIu64 " result=0x%x retired=%d",kind,address,size,(unsigned)result,retired);
+}
 /* First-fit search in the PS4 user range, starting from the hint. */
 static uintptr_t find_free(uintptr_t hint, uint64_t size, uint64_t alignment) {
     uintptr_t at=align_up(hint<USER_MIN ? USER_MIN : hint, alignment);
@@ -584,7 +691,12 @@ static int retire_fixed(const void *address, uint64_t size, int flags) {
     uint64_t length=align_up(size,PAGE);
     read_lock();
     int mapped=!foreign_overlap(start,start+length) && overlaps(start,start+length,1);
+    uint64_t oldest=0, newest=0;
+    if (mapped && col_on(length)) col_generations(start,start+length,&oldest,&newest);
     read_unlock();
+    if (mapped && col_on(length))
+        col_note("retire addr=%p size=%" PRIu64 " gen=%" PRIu64 "-%" PRIu64,(void *)start,length,oldest,newest);
+    col_flush();
     if (mapped) deliver_unmap(hook_unmap,start,length,__atomic_load_n(&map_generation,__ATOMIC_ACQUIRE));
     return mapped;
 }
@@ -614,13 +726,19 @@ static int32_t place(void **inout, uint64_t size, int prot, int flags, uint64_t 
     if (host_map(address,size,host_prot(prot),kind==KIND_RESERVED,phys)) return NO_MEMORY;
     /* Mappings replaced here (their GPU buffers and images were retired by retire_fixed, found
      * when a game maps pool chunks over themselves on a level reload) count for the report. */
+    col_placed.replaced=0; col_placed.oldest=0; col_placed.newest=0;
     if ((flags & MAP_FIXED_FLAG) && kind!=KIND_RESERVED)
         for (size_t i=vma_index(address); i<vma_count && vmas[i].start<address+size; ++i)
-            if (vmas[i].kind!=KIND_RESERVED) ++fixed_replaced;
+            if (vmas[i].kind!=KIND_RESERVED) {
+                ++fixed_replaced; ++col_placed.replaced;
+                if (!col_placed.oldest || vmas[i].gen<col_placed.oldest) col_placed.oldest=vmas[i].gen;
+                if (vmas[i].gen>col_placed.newest) col_placed.newest=vmas[i].gen;
+            }
     void *mapped=(void *)address;
     drop_range(address,address+size);
     uint64_t gen=kind==KIND_RESERVED ? 0 : __atomic_add_fetch(&map_generation,1,__ATOMIC_ACQ_REL);
     if (vma_insert(vma_index(address),(Vma){address,address+size,kind,prot,type,phys,gen})) return NO_MEMORY;
+    col_placed.gen=gen;
     if (kind==KIND_FLEXIBLE) flexible_bytes+=size;
     if (kind!=KIND_RESERVED) queue_hook(HOOK_MAP,address,size);
     *inout=mapped;
@@ -695,6 +813,7 @@ static ABI int32_t direct_allocate(int64_t low, int64_t high, uint64_t size,
     blocks[slot] = (Block){start, size, type, 1}; *out = (int64_t)start;
     ++allocations; live_bytes += size;
     write_unlock();
+    if (col_on(size)) { col_note("alloc phys=0x%" PRIx64 " size=%" PRIu64 " type=%d",start,size,type); col_flush(); }
     printf("Runtime: direct allocation offset=0x%" PRIx64 ", size=%" PRIu64 " bytes, type=%d\n", start, size, type);
     return 0;
 }
@@ -713,7 +832,7 @@ static int32_t map_direct_locked(void **out, uint64_t size, int prot, int flags,
     if (refused) return refused;
     if (!alignment) alignment=PAGE;
     int32_t result=place(out,size,prot,flags,alignment,KIND_DIRECT,block_type((uint64_t)physical),(uint64_t)physical);
-    if (!result) ++maps;
+    if (!result) { ++maps; col_mapped("direct",*out,size,(uint64_t)physical,prot); }
     return result;
 }
 static ABI int32_t direct_map(void **out, uint64_t size, int prot, int flags, int64_t physical, uint64_t alignment) {
@@ -728,6 +847,8 @@ static ABI int32_t direct_map(void **out, uint64_t size, int prot, int flags, in
     replaced=fixed_replaced-replaced;
     if (result && retired) announce_mapped_locked(fixed,size);
     write_unlock();
+    if (result) col_map_failed("direct",fixed,size,result,retired);
+    col_flush();
     flush_hooks();
     if (!result) printf("Runtime: mapped direct memory %p, size=%" PRIu64 ", prot=0x%x%s\n", *out, size, prot,
                         replaced ? " (over a mapping)" : "");
@@ -737,9 +858,14 @@ static ABI int32_t direct_map_named(void **out, uint64_t size, int prot, int fla
                                     uint64_t alignment, const char *name) {
     (void)name; return direct_map(out,size,prot,flags,physical,alignment);
 }
-static int32_t unmap_locked(uintptr_t start, uint64_t size) {
+static int32_t unmap_locked(uintptr_t start, uint64_t size, const char *source) {
     if (start%PAGE || !size) return INVALID;
     uint64_t end=start+align_up(size,PAGE);
+    if (col_on(end-start)) {
+        uint64_t oldest, newest;
+        col_generations(start,end,&oldest,&newest);
+        if (newest) col_note("unmap addr=%p size=%" PRIu64 " gen=%" PRIu64 "-%" PRIu64 " src=%s",(void *)start,end-start,oldest,newest,source);
+    }
     for (size_t i=vma_index(start); i<vma_count && vmas[i].start<end; ++i)
         if (vmas[i].kind!=KIND_RESERVED) {
             uintptr_t a=vmas[i].start>start ? vmas[i].start : start, b=vmas[i].end<end ? vmas[i].end : end;
@@ -758,9 +884,10 @@ static ABI int32_t direct_unmap(void *address, uint64_t size) {
         deliver_unmap(hook_unmap,(uintptr_t)address,align_up(size,PAGE),__atomic_load_n(&map_generation,__ATOMIC_ACQUIRE));
     write_lock();
     size_t before=pending_count;
-    int32_t result=unmap_locked((uintptr_t)address,size);
+    int32_t result=unmap_locked((uintptr_t)address,size,"munmap");
     pending_count=before; /* already notified above */
     write_unlock();
+    col_flush();
     return result;
 }
 static ABI int32_t direct_release(uint64_t start, uint64_t size) {
@@ -774,7 +901,7 @@ static ABI int32_t direct_release(uint64_t start, uint64_t size) {
         uint64_t length=v.end-v.start;
         if (v.kind==KIND_DIRECT && v.phys<start+size && start<v.phys+length) {
             uint64_t a=v.phys>start ? v.phys : start, b=v.phys+length<start+size ? v.phys+length : start+size;
-            unmap_locked(v.start+(a-v.phys),b-a);
+            unmap_locked(v.start+(a-v.phys),b-a,"release");
             i=vma_index(v.start);
             continue;
         }
@@ -793,6 +920,8 @@ static ABI int32_t direct_release(uint64_t start, uint64_t size) {
     }
     host_discard(start,size); /* zero on reuse */
     write_unlock();
+    if (col_on(size)) col_note("release phys=0x%" PRIx64 " size=%" PRIu64,start,size);
+    col_flush();
     flush_hooks();
     return 0;
 }
@@ -811,7 +940,8 @@ static int32_t map_flexible_locked(void **inout, uint64_t size, int prot, int fl
     uint64_t phys=flex_alloc(size);
     if (phys==UINT64_MAX) return NO_MEMORY;
     int32_t result=place(inout,size,prot,flags,PAGE,KIND_FLEXIBLE,0,phys);
-    if (result) flex_free(phys,size); else ++flexible_maps;
+    if (result) flex_free(phys,size);
+    else { ++flexible_maps; col_mapped("flexible",*inout,size,phys,prot); }
     return result;
 }
 static ABI int32_t map_flexible(void **inout, uint64_t size, int prot, int flags) {
@@ -824,6 +954,8 @@ static ABI int32_t map_flexible(void **inout, uint64_t size, int prot, int flags
     int32_t result=map_flexible_locked(inout,size,prot,flags);
     if (result && retired) announce_mapped_locked(fixed,size);
     write_unlock();
+    if (result) col_map_failed("flexible",fixed,size,result,retired);
+    col_flush();
     flush_hooks();
     if (!result) printf("Runtime: mapped flexible memory %p, size=%" PRIu64 ", prot=0x%x\n", *inout, size, prot);
     else fprintf(stderr,"Runtime: flexible map of %" PRIu64 " bytes failed (0x%x), in use=%" PRIu64 "\n",
@@ -941,7 +1073,7 @@ static ABI int32_t batch_map2(BatchEntry *entries, int count, int *processed, in
         write_lock();
         switch (e->operation) {
         case 0: result=map_direct_locked(&e->start,e->length,(uint8_t)e->prot,flags,(int64_t)e->offset,0); break;
-        case 1: result=unmap_locked((uintptr_t)e->start,e->length); break;
+        case 1: result=unmap_locked((uintptr_t)e->start,e->length,"batch"); break;
         case 2: result=protect_locked((uintptr_t)e->start,e->length,(uint8_t)e->prot,-1); break;
         case 3: result=map_flexible_locked(&e->start,e->length,(uint8_t)e->prot,flags); break;
         case 4: result=protect_locked((uintptr_t)e->start,e->length,(uint8_t)e->prot,e->type); break;
@@ -949,6 +1081,9 @@ static ABI int32_t batch_map2(BatchEntry *entries, int count, int *processed, in
         }
         if (result && retired) announce_mapped_locked(fixed,e->length);
         write_unlock();
+        if (result && (e->operation==0 || e->operation==3))
+            col_map_failed(e->operation==0 ? "direct" : "flexible",fixed,e->length,result,retired);
+        col_flush();
         flush_hooks();
         if (result) break;
     }
@@ -1181,6 +1316,8 @@ int runtime_memory_write_backing(uintptr_t address, const void *data, uint64_t s
             else {
                 uintptr_t stop=retiring.end<at+n ? retiring.end : at+n;
                 __atomic_add_fetch(&stale_writes,1,__ATOMIC_RELAXED);
+                if (col_on(0)) col_note("stale-write addr=%p size=%" PRIu64 " gen=%" PRIu64 " retiring=%" PRIu64,
+                                        (void *)at,(uint64_t)(stop-at),vmas[i].gen,retiring.gen);
                 at=stop;
                 continue;
             }
@@ -1190,6 +1327,7 @@ int runtime_memory_write_backing(uintptr_t address, const void *data, uint64_t s
         at+=n;
     }
     read_unlock();
+    col_flush();
     return ok;
 }
 /* Reads through the backing view, past guest and GPU page protection: with precise readbacks the
