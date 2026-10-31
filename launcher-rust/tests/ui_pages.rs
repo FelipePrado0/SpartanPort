@@ -5,7 +5,7 @@ mod common;
 
 use common::{
     browsed, click, dump_with_patches, gpu_rows, load_mods, load_trophies, make_mod, messages,
-    messages_in, open, sfo, state, state_with_trophies, two_displays, write_mod_patch, ARC_LAPTOP,
+    open, sfo, state, state_with_trophies, two_displays, write_mod_patch, ARC_LAPTOP,
 };
 use spartanport_launcher::core::env::game_environment;
 use spartanport_launcher::core::gpu::{display_label, parse_display_list};
@@ -312,13 +312,8 @@ fn graphics_page_offers_the_choice() {
     assert_eq!(state.monitor_pairs.len(), 1);
     assert_eq!(state.store.text("monitor"), "");
 
-    // The screenshots button opens <saves>/screenshots, made first when missing. It sits at the
-    // bottom of the page, below a 768-pixel window.
-    let sent = messages_in(
-        &state,
-        "Open the screenshots folder",
-        iced::Size::new(1280.0, 1200.0),
-    );
+    // The screenshots button opens <saves>/screenshots, made first when missing.
+    let sent = messages(&state, "Open the screenshots folder");
     let expected = state.paths.user_dir("").join("screenshots");
     assert!(matches!(sent.as_slice(), [Message::OpenFolder(path)] if *path == expected));
 }

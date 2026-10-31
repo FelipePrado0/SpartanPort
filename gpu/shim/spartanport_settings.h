@@ -97,9 +97,6 @@ struct Values {
     /// default, experimental. Live.
     std::atomic<bool> free_camera{false};
     std::atomic<bool> free_camera_supported{false};
-    /// The game's motion blur (src/motion_blur_hook.h): camera and object blur. On by default. Live.
-    std::atomic<bool> motion_blur{true};
-    std::atomic<bool> motion_blur_supported{false};
     // Startup: run.py turns them into patches and environment variables; "Apply and restart".
     std::atomic<int> render_resolution{0};
     std::atomic<int> engine_fps{120};

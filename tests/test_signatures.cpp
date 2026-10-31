@@ -8,7 +8,6 @@
 #include "../src/damage_hook.h"
 #include "../src/orb_hook.h"
 #include "../src/camera_hook.h"
-#include "../src/motion_blur_hook.h"
 
 struct Site { const SpartanSignature* sig; uint64_t reference; };
 
@@ -37,26 +36,6 @@ int main(int argc, char** argv) {
     buffer[100] = 0;
     assert(Find(buffer, sig) == 251);
 
-    // The motion blur stub: the switch's address, the compare, the je to the skip's jump, both targets.
-    {
-        unsigned char stub[64];
-        const unsigned n = spartanport_motion_blur_build_stub(stub, 0x1122334455667788u, 0x1000, 0x2000);
-        uint64_t value;
-        memcpy(&value, stub + SPARTAN_MOTION_BLUR_ENABLED_IMMEDIATE, 8);
-        assert(n == 51 && value == 0x1122334455667788u);
-        assert(!memcmp(stub, spartanport_motion_blur_original, 4) && !memcmp(stub + 19, spartanport_motion_blur_original + 4, 4));
-        assert(stub[17] == 0x74 && 19 + stub[18] == 37 && stub[37] == 0xff && stub[38] == 0x25);
-        memcpy(&value, stub + 29, 8);
-        assert(value == 0x1000);
-        memcpy(&value, stub + 43, 8);
-        assert(value == 0x2000);
-        // jbe +0x12d at 0x8: the update's return at 0x8 + 6 + 0x12d.
-        const unsigned char site[] = {0xc5, 0xf8, 0x57, 0xc0, 0xc5, 0xf8, 0x2e, 0xc8, 0x0f, 0x86, 0x2d, 0x01, 0, 0};
-        assert(spartanport_motion_blur_signature_match(site, sizeof(site)));
-        assert(spartanport_motion_blur_skip(site, 0x16af91) == 0x16af91 + 14 + 0x12d);
-        assert(!spartanport_motion_blur_signature_match(site, 13));
-    }
-
     if (argc < 2) {
         std::puts("signatures-test: OK (search; pass out/eboot.elf to check the game's hooks)");
         return 0;
@@ -81,9 +60,6 @@ int main(int argc, char** argv) {
     const uint64_t camera = Find(image, spartanport_camera_site), lea = Find(image, spartanport_camera_view_site);
     assert(camera != UINT64_MAX && lea != UINT64_MAX && Find(image, spartanport_camera_player_site) != UINT64_MAX);
     assert(spartanport_camera_signature_match(image.data() + camera, image.size() - camera));
-    // The motion blur's switch (6e72 build): found once, its compare and jbe there.
-    const uint64_t blur = Find(image, spartanport_motion_blur_site);
-    assert(blur != UINT64_MAX && spartanport_motion_blur_signature_match(image.data() + blur, image.size() - blur));
     // The level's raycast (6e72 build): found once, with the leas of its filter and hit.
     const uint64_t ray = Find(image, spartanport_camera_ray_site);
     assert(ray != UINT64_MAX && spartanport_camera_ray_match(image.data() + ray, image.size() - ray));

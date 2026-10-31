@@ -93,16 +93,6 @@ pub fn view(state: &State) -> Element<'_, Message> {
                 "Sharper floors and walls seen at an angle, at little cost on most graphics cards."
             )),
         ),
-        section(state.rtl, &tr(lang, "Effects")),
-        checkbox(
-            state.rtl,
-            "motion_blur",
-            &tr(lang, "Motion blur"),
-            state.store.flag("motion_blur"),
-            Some(&hint(
-                "The game's blur on fast movement: Kratos, enemies and camera turns. Also in the in-game menu."
-            )),
-        ),
         section(state.rtl, &tr(lang, "Overlay")),
         checkbox(
             state.rtl,

@@ -68,15 +68,6 @@ pub fn messages(state: &State, label: &str) -> Vec<Message> {
     ui.into_messages().collect()
 }
 
-/// `messages` in a window of `size` (the simulator's own is 1024 × 768): for a control below the
-/// fold of a scrolling page.
-pub fn messages_in(state: &State, label: &str, size: Size) -> Vec<Message> {
-    let mut ui = iced_test::Simulator::with_size(iced::Settings::default(), size, app::view(state));
-    ui.click(label)
-        .unwrap_or_else(|error| panic!("click {label:?}: {error:?}"));
-    ui.into_messages().collect()
-}
-
 /// Clicks `label` and feeds the emitted messages to `update`.
 pub fn click(state: &mut State, label: &str) {
     for message in messages(state, label) {

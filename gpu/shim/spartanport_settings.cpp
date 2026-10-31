@@ -145,8 +145,6 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.mouse_aim_sensitivity = value.empty() ? 100 : std::clamp(i, 10, 200);
     } else if (key == "free_camera") {
         v.free_camera = i != 0;
-    } else if (key == "motion_blur") {
-        v.motion_blur = value.empty() || i != 0;
     } else if (key == "restart_unconfirmed") {
         v.restart_unconfirmed = i != 0;
     } else if (key == "enemy_health_bar") {
@@ -395,7 +393,6 @@ void Save() {
                        "mouse_aim_sensitivity=%d\nfree_camera=%d\n",
                  v.anisotropy.load(), v.vibration.load(), v.mouse_prompt_distance.load(), int(v.mouse_lock.load()),
                  v.mouse_aim_style.load(), v.mouse_aim_sensitivity.load(), int(v.free_camera.load()));
-    std::fprintf(file, "motion_blur=%d\n", int(v.motion_blur.load()));
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");
@@ -601,19 +598,8 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
             v.rcas = true;
             v.rcas_strength = 75;
             v.anisotropy = 0;
-            v.motion_blur = true;
             SpartanSettings::Save();
             return 0;
-        }
-        // The sixth row, the game's motion blur: live, a toggle either way.
-        if (index == 5 && group <= 0xf90) {
-            const bool supported = v.motion_blur_supported.load();
-            if (supported && (group == 0xf80 || group == 0xf90)) {
-                v.motion_blur = !v.motion_blur.load();
-                SpartanSettings::Save();
-            }
-            if (!supported) return label("Unavailable", "Indisponível");
-            return v.motion_blur ? label("On", "Ligado") : label("Off", "Desligado");
         }
         if (index >= 5 || group > 0xfa0) return 0;
         if (group == 0xfa0) return index == 3 ? std::clamp(v.rcas_strength.load(), 0, 100) : 0;

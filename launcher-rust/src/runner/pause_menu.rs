@@ -45,7 +45,7 @@ use crate::core::python::python_json;
 use crate::runner::glyphs::{entries, Entry};
 
 /// Of the patch: a change rebuilds the cached copy.
-pub const VERSION: u32 = 24;
+pub const VERSION: u32 = 23;
 pub const WAD: &str = "EXEC/WAD/PS4_LE/R_UI.WAD";
 
 /// The Exit to Desktop row's text in one language.
@@ -278,9 +278,9 @@ fn control_change(index: usize, direction: i32) -> usize {
 
 /// The texts of the native pages that follow the game's language.
 struct Texts {
-    /// The Graphics Settings page: its title, its six controls, Restore Defaults and Apply.
+    /// The Graphics Settings page: its title, its five controls, Restore Defaults and Apply.
     graphics_title: &'static str,
-    graphics_names: [&'static str; 8],
+    graphics_names: [&'static str; 7],
     /// The question Restore Defaults asks, and its answers.
     restore_graphics: &'static str,
     yes_no: [&'static str; 2],
@@ -304,7 +304,6 @@ static ENGLISH: Texts = Texts {
         "RCAS Sharpening",
         "Sharpening Strength",
         "Anisotropic Filtering",
-        "Motion Blur",
         "Restore Graphics Defaults",
         "Apply and Restart",
     ],
@@ -345,7 +344,6 @@ static PORTUGUESE: Texts = Texts {
         "Nitidez RCAS",
         "Intensidade da nitidez",
         "Filtragem anisotrópica",
-        "Desfoque de movimento",
         "Restaurar padrões gráficos",
         "Aplicar e reiniciar",
     ],
@@ -1657,7 +1655,7 @@ impl Emitter<'_, '_> {
             self.string(name.as_bytes())?;
             self.assign(1 + slot)?;
         }
-        for index in 0..6 {
+        for index in 0..5 {
             self.query(index, 0xf70 + index, selected == Some(index))?;
         }
         self.slider(3, Some(0xfa3))?;
@@ -1992,7 +1990,7 @@ pub fn native_cheats(
         link(),
     ));
     specs.push(Spec::new("NativeGraphics", "pause", back()));
-    for i in 0..6 {
+    for i in 0..5 {
         let events = if SLIDING_GRAPHICS.contains(&i) {
             vec![left.clone(), right.clone(), up.clone(), down.clone()]
         } else {
@@ -2266,10 +2264,10 @@ pub fn native_cheats(
         }
     }
 
-    // Graphics Settings: six controls (builtins 0xf70 + i read them, 0xf80 + i and 0xf90 + i
+    // Graphics Settings: five controls (builtins 0xf70 + i read them, 0xf80 + i and 0xf90 + i
     // change them), Restore Defaults behind a Yes/No question (0xfb0 restores) and Apply and
     // Restart, which asks only when a change waits for a restart (0xfc9).
-    let graphics_rows: Vec<String> = (0..6)
+    let graphics_rows: Vec<String> = (0..5)
         .map(|i| format!("NativeGraphic{i}"))
         .chain(["NativeGraphicsReset", "NativeGraphicsApply"].map(String::from))
         .collect();
@@ -2319,7 +2317,7 @@ pub fn native_cheats(
         };
         let targets = new_states(rows);
         for (index, name) in rows.iter().enumerate() {
-            let function = (graphics && index < 6).then_some(0xf70 + index);
+            let function = (graphics && index < 5).then_some(0xf70 + index);
             e.selection(name, index, function, true, redraw)?;
             e.selection(name, index, function, false, Redraw::Row)?;
             e.navigation(name, index, &targets)?;
@@ -2350,7 +2348,7 @@ pub fn native_cheats(
             for (kind, function) in actions {
                 e.begin(name, kind);
                 e.call(repeat);
-                for other in 0..6 {
+                for other in 0..5 {
                     let read = if other == index {
                         function
                     } else {
