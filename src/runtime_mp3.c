@@ -38,7 +38,7 @@ static void parse_extended(const unsigned char *begin, uint32_t size, uint32_t h
         part23+=read_bits(&r,12);
         r.bit+=v1 ? 47 : 51;
     }
-    r.bit+=part23;
+    if (part23) return;
     size_t offset=(r.bit+7)/8;
     p=offset>r.size ? end : p+offset;
     if (p+8<=end && (!memcmp(p,"Xing",4) || !memcmp(p,"Info",4))) {
@@ -66,8 +66,9 @@ static void parse_extended(const unsigned char *begin, uint32_t size, uint32_t h
             }
         }
     } else {
-        while (p+9<end && *p!=0xB4) ++p;                    /* FGH indicator */
-        if (p+9>=end) return;
+        const unsigned char *scan_end=p+16<end ? p+16 : end;
+        while (p+9<scan_end && *p!=0xB4) ++p;               /* FGH indicator */
+        if (p+9>=scan_end) return;
         uint8_t crc=0xFF;
         for (int i=0;i<9;++i) for (int j=7;j>=0;--j)
             crc=(uint8_t)(((crc>>7)&1)!=((p[i]>>j)&1) ? crc*2 : (crc*2)^0x45);
