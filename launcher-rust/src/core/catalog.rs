@@ -2,9 +2,10 @@
 //! Only the table; reading and writing live in `settings` and `store`.
 
 use crate::core::options::{
-    Choice, AIM_STYLES, ANISOTROPY, DISPLAY_MODES, DRAW_PIPE, ENGINE_FPS_CHOICES, FPS_LIMITS,
-    FRAMES_QUEUED, GLYPH_STYLES, LANGUAGES, LIVE_RESOLUTION, NO_MSAA, OUTPUTS, PRESETS, READBACKS,
-    STICK_PROMPTS, STREAM_MEMORY, UI_LANGUAGES, UI_SCALES, UPSCALERS, VIDEO_BACKENDS,
+    Choice, AIM_STYLES, ANISOTROPY, AUDIO_CHANNELS, DISPLAY_MODES, DRAW_PIPE, ENGINE_FPS_CHOICES,
+    FPS_LIMITS, FRAMES_QUEUED, FRAME_GENERATION, GLYPH_STYLES, LANGUAGES, LIVE_RESOLUTION,
+    MENU_CONFIRM_STYLES, NO_MSAA, OUTPUTS, PRESETS, READBACKS, STICK_PROMPTS, STREAM_MEMORY,
+    UI_LANGUAGES, UI_SCALES, UPSCALERS, VIDEO_BACKENDS,
 };
 
 /// The file a setting lives in.
@@ -144,7 +145,7 @@ pub static SETTINGS: &[Setting] = &[
         Text("en"),
         env("SPARTAN_UI_LANGUAGE", ""),
     ),
-    app("ui_scale", Pick(UI_SCALES), Text("1"), None),
+    app("ui_scale", Pick(UI_SCALES), Text("auto"), None),
     app(
         "game_dir",
         Kind::Text,
@@ -156,12 +157,6 @@ pub static SETTINGS: &[Setting] = &[
         Kind::Text,
         Text(""),
         env("SPARTAN_PATCH_DIR", ""),
-    ),
-    app(
-        "experimental_upscaler",
-        Flag,
-        Bool(false),
-        env("SPARTAN_EXPERIMENTAL_UPSCALER", ""),
     ),
     app("video_backend", Pick(VIDEO_BACKENDS), Text("auto"), None),
     app("gamemode", Flag, Bool(false), env("SPARTAN_GAMEMODE", "")),
@@ -308,6 +303,13 @@ pub static SETTINGS: &[Setting] = &[
         env("SPARTAN_STICK_PROMPTS", ""),
     ),
     app("controls_layout", Kind::Int, Int(5), None),
+    // Off unless set: the runner patches the tutorials only for "1" (`run.py` `switch_text_mounts`).
+    app(
+        "switch_attacks",
+        Flag,
+        Bool(false),
+        env("SPARTAN_SWITCH_ATTACKS", ""),
+    ),
     app(
         "glyph_style",
         Pick(GLYPH_STYLES),
@@ -348,10 +350,37 @@ pub static SETTINGS: &[Setting] = &[
     ini("mouse_aim_style", Pick(AIM_STYLES), Text("0"), true, 24),
     ini("mouse_aim_sensitivity", Kind::Int, Int(100), true, 25),
     ini("mouse_lock", Kind::Int, Int(1), true, 23),
-    ini("free_camera", Flag, Bool(false), true, 26),
     ini("vibration", Kind::Int, Int(100), true, 21),
-    ini("upscaler", Pick(UPSCALERS), Text("fsr3"), false, 0),
-    ini("preset", Pick(PRESETS), Text("1"), false, 1),
+    ini(
+        "menu_confirm_swap",
+        Pick(MENU_CONFIRM_STYLES),
+        Text("0"),
+        true,
+        26,
+    ),
+    // #968: read by the game itself (gpu/shim/spartanport_settings.cpp). motion_blur is the same
+    // key as the in-game Options > Graphics > Motion Blur.
+    ini("master_volume", Kind::Int, Int(100), true, 27),
+    ini(
+        "audio_channels",
+        Pick(AUDIO_CHANNELS),
+        Text("auto"),
+        true,
+        28,
+    ),
+    ini("motion_blur", Flag, Bool(true), true, 29),
+    ini("depth_of_field", Flag, Bool(true), true, 30),
+    ini("upscaler", Pick(UPSCALERS), Text("off"), true, 0),
+    ini("preset", Pick(PRESETS), Text("1"), true, 1),
+    ini(
+        "frame_generation",
+        Pick(FRAME_GENERATION),
+        Text("off"),
+        true,
+        31,
+    ),
+    ini("frame_generation_frames", Kind::Int, Text("1"), false, 32),
+    ini("free_camera", Flag, Bool(false), true, 33),
     ini("object_motion", Flag, Bool(true), false, 2),
     ini("output_res", Pick(OUTPUTS), Text("1920x1080"), false, 4),
     ini(
@@ -500,18 +529,20 @@ mod tests {
     }
 
     #[test]
-    fn shown_ini_keys_are_the_22_controls_of_the_window() {
-        assert_eq!(SHOWN_INI_KEYS.len(), 22);
+    fn shown_ini_keys_are_the_30_controls_of_the_window() {
+        assert_eq!(SHOWN_INI_KEYS.len(), 30);
         for seeded in ["monitor", "hdr", "glyph_style"] {
             assert!(SHOWN_INI_KEYS.contains(&seeded), "{seeded}");
         }
         assert!(INI_FLAGS.contains(&"hdr"));
+        for shown in ["upscaler", "preset", "frame_generation"] {
+            assert!(SHOWN_INI_KEYS.contains(&shown), "{shown}");
+        }
         for parked in [
-            "upscaler",
-            "preset",
             "object_motion",
             "output_res",
             "live_resolution",
+            "frame_generation_frames",
         ] {
             assert!(!SHOWN_INI_KEYS.contains(&parked), "{parked}");
         }
@@ -531,6 +562,7 @@ mod tests {
         assert_eq!(run_default("SPARTAN_MODS_ENABLED"), Some("1"));
         assert_eq!(run_default("SPARTAN_STREAM_MEMORY"), Some("cached"));
         assert_eq!(run_default("SPARTAN_GLYPH_STYLE"), Some("off"));
+        assert_eq!(run_default("SPARTAN_SWITCH_ATTACKS"), Some(""));
         assert_eq!(run_default("SPARTAN_NOT_A_SETTING"), None);
     }
 

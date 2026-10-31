@@ -408,11 +408,7 @@ def open_url(url):
 
 
 def _(en, ru=None):
-    if en.endswith(WARN):
-        return _(en[:-len(WARN)], ru and ru.removesuffix(WARN)) + WARN
-    if LANG == 'ru':
-        return ru or en
-    return spartanport_lang.table(LANG).get(en) or en
+    return translate(LANG, en, ru)
 
 
 def environment_language():
@@ -472,7 +468,7 @@ def heading_font(size, fallback=None, every_language=False):
 # launcher's own settings.json (passed to run.py as environment variables).
 
 INI_FLAGS = {'cheat_double_jumps', 'cheat_very_hard', 'object_motion', 'show_fps', 'vsync', 'async_shaders', 'deferred_readback',
-             'stale_readback', 'hdr', 'free_camera'}
+             'stale_readback', 'hdr', 'motion_blur', 'depth_of_field', 'free_camera'}
 # The graphics keys are also in the in-game menu (Insert / R3+L2); run.py reads the startup ones.
 INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
@@ -481,8 +477,12 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'render_resolution': graphics_options.DEFAULTS['render_resolution'], 'engine_fps': '120',
                 'frames_queued': '1', 'monitor': '', 'hdr': '0', 'glyph_style': 'off', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
                 'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1',
-                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100', 'free_camera': '0'}
+                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100', 'menu_confirm_swap': '0',
+                'master_volume': '100', 'audio_channels': 'auto', 'motion_blur': '1',
+                'depth_of_field': '1', 'free_camera': '0'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
+AUDIO_CHANNELS = [('auto', ('Automatic',)), ('stereo', ('Stereo',)), ('5.1', ('5.1 surround',)),
+                  ('7.1', ('7.1 surround',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('100', ('100',)), ('120', ('120',)), ('144', ('144',)), ('180', ('180',)), ('240', ('240',)), ('0', ('Unlimited',))]
 # The sidebar's pages, top to bottom, and the methods that refresh a page's lists when it is shown.
@@ -500,7 +500,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
                 'rage_one_input': True, 'stick_prompts': 'keyboard', 'controls_layout': CONTROLS_LAYOUT,
-                'glyph_style': 'off'}
+                'switch_attacks': False, 'glyph_style': 'off', 'menu_confirm_swap': '0'}
 
 # PS4 button, default key, default gamepad button (SDL names; src/runtime_pad.c). L2/R2 come
 # from the analog triggers and the left touchpad click (photo mode) from L1 + the right click's
@@ -566,6 +566,8 @@ STICK_PROMPTS = [('keyboard', ('Keyboard (native)',)), ('mouse', ('Adaptive mous
 AIM_STYLES = [('0', ('Relative',)), ('1', ('Absolute',))]
 GLYPH_STYLES = [('off', ('Original (default)',)), ('auto', ('Match my controller',)), ('xbox', ('Xbox',)),
                 ('nintendo', ('Nintendo',)), ('keyboard', ('Keyboard',))]
+MENU_CONFIRM_STYLES = [('0', ('Cross confirms, Circle cancels (default)',)),
+                       ('1', ('Circle confirms, Cross cancels',))]
 
 
 # Keyboard capture on the Controls page: the Tk keysym of a pressed key and the SDL scancode
@@ -817,8 +819,9 @@ def migrate_controls(saved):
 UPSCALERS = [('fsr3', ('FSR 3.1 (every GPU)', 'FSR 3.1 (любая видеокарта)')),
              ('taa', ('TAA (native resolution anti-aliasing)', 'TAA (нативное сглаживание)')),
              ('off', ('Off', 'Выключен'))]
-PRESETS = [('0', ('Native AA (×1.0)',)), ('1', ('Quality (×1.5)',)), ('2', ('Balanced (×1.7)',)),
-           ('3', ('Performance (×2)',)), ('4', ('Ultra Performance (×3)',))]
+# Ordered by render scale; the values are spartanport.ini preset numbers (Ultra Quality was added as 5).
+PRESETS = [('0', ('Native AA (100%)',)), ('5', ('Ultra Quality (77%)',)), ('1', ('Quality (67%)',)),
+           ('2', ('Balanced (59%)',)), ('3', ('Performance (50%)',)), ('4', ('Ultra Performance (33%)',))]
 OUTPUTS = [('1280x720', ('1280 × 720',)), ('1920x1080', ('1920 × 1080',)),
            ('2560x1440', ('2560 × 1440',)), ('3840x2160', ('3840 × 2160 (4K)',))]
 LIVE = [('auto', ('Auto (by graphics card)', 'Авто (по видеокарте)')), ('0', ('Off (faster)', 'Выключена (быстрее)')),
@@ -901,14 +904,33 @@ def load_ini():
         legacy = {}
     values.update(monitor=str(legacy.get('monitor') or ''), hdr='1' if legacy.get('hdr') else '0')
     values['glyph_style'] = legacy.get('glyph_style', 'off')
+    if 'menu_confirm_swap' in legacy:
+        leg_val = str(legacy['menu_confirm_swap']).strip().lower()
+        values['menu_confirm_swap'] = '1' if leg_val in ('1', 'true', 'circle', 'swapped', 'yes', 'on') else '0'
+    elif 'menu_confirm' in legacy:
+        leg_val = str(legacy['menu_confirm']).strip().lower()
+        values['menu_confirm_swap'] = '1' if leg_val in ('circle', 'swapped', '1', 'true', 'yes', 'on') else '0'
+    else:
+        values['menu_confirm_swap'] = '0'
     try:
         lines = ini_path().read_text(encoding='utf-8').splitlines()
     except OSError:
         pass
+    ini_swap = None
+    ini_alias = None
     for line in lines:
         if '=' in line and not line.lstrip().startswith('#'):
             key, value = line.split('=', 1)
-            values[key.strip()] = value.strip()
+            k, v = key.strip(), value.strip()
+            values[k] = v
+            if k == 'menu_confirm_swap':
+                ini_swap = v
+            elif k == 'menu_confirm':
+                ini_alias = v
+    if ini_swap is not None:
+        values['menu_confirm_swap'] = '1' if str(ini_swap).strip().lower() in ('1', 'true', 'circle', 'swapped', 'yes', 'on') else '0'
+    elif ini_alias is not None:
+        values['menu_confirm_swap'] = '1' if str(ini_alias).strip().lower() in ('circle', 'swapped', '1', 'true', 'yes', 'on') else '0'
     return values, lines
 
 
@@ -1261,25 +1283,59 @@ def game_profile_of(folder):
     return title_id, game_profile_for(folder)
 
 
-def write_trophy_texts(folder):
-    """user/trophy_texts.txt: the trophy names, descriptions and labels the game shows, in the launcher's
-    language (the game reads it at start: the notice and the list of F8 / R3+R2). A failure is harmless."""
-    labels = (('heading', _('Trophies', 'Трофеи')), ('notice', _('TROPHY UNLOCKED', 'ТРОФЕЙ ПОЛУЧЕН')),
-              ('unlocked', _('UNLOCKED', 'ПОЛУЧЕН')), ('locked', _('LOCKED', 'ЗАКРЫТ')),
-              ('all', _('All trophies', 'Все')), ('only_unlocked', _('Unlocked', 'Получены')),
-              ('only_locked', _('Locked', 'Закрыты')),
-              ('counter', _('{} of {} unlocked', '{} из {} получено')),
-              ('hint', _('Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close',
-                         'Вверх/Вниз: прокрутка   Влево/Вправо: фильтр   F8 / R3+R2 / Esc: закрыть')))
-    lines = [f'# Written by the launcher on every start (language: {LANG}); do not edit.']
+def translate(language, en, ru=None):
+    """`en` in `language` ("ru": `ru`), as _() does for the launcher's own language."""
+    if en.endswith(WARN):
+        return translate(language, en[:-len(WARN)], ru and ru.removesuffix(WARN)) + WARN
+    if language == 'ru':
+        return ru or en
+    return spartanport_lang.table(language).get(en) or en
+
+
+def trophy_labels(_):
+    """The labels of the game's trophy notice and window, translated by `_`."""
+    return (('heading', _('Trophies', 'Трофеи')), ('notice', _('TROPHY UNLOCKED', 'ТРОФЕЙ ПОЛУЧЕН')),
+            ('unlocked', _('UNLOCKED', 'ПОЛУЧЕН')), ('locked', _('LOCKED', 'ЗАКРЫТ')),
+            ('all', _('All trophies', 'Все')), ('only_unlocked', _('Unlocked', 'Получены')),
+            ('only_locked', _('Locked', 'Закрыты')),
+            ('counter', _('{} of {} unlocked', '{} из {} получено')),
+            ('hint', _('Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close',
+                       'Вверх/Вниз: прокрутка   Влево/Вправо: фильтр   F8 / R3+R2 / Esc: закрыть')),
+            ('notifications', _('Notifications', 'Уведомления')),
+            ('order_list', _('List order', 'Порядок списка')),
+            ('order_common', _('Most earned first', 'Сначала частые')),
+            ('order_rare', _('Rarest first', 'Сначала редкие')),
+            ('rarity', _('{}% of players', '{}% игроков')),
+            ('common', _('Common', 'Обычный')),
+            ('rare', _('Rare', 'Редкий')),
+            ('very_rare', _('Very rare', 'Очень редкий')),
+            ('ultra_rare', _('Ultra rare', 'Ультраредкий')),
+            ('hint_order', _('Triangle/Tab: order   L1/R1: notifications', 'Треугольник/Tab: порядок   L1/R1: уведомления')),
+            ('hint_notifications', _('L1/R1: trophies   F8 / R3+R2 / Esc: close', 'L1/R1: трофеи   F8 / R3+R2 / Esc: закрыть')))
+
+
+def trophy_texts(language):
+    """The text of a trophy_texts.txt in `language`: labels, then "ID=Name | Description" per trophy."""
+    labels = trophy_labels(lambda en, ru=None: translate(language, en, ru))
+    lines = [f'# Written by the launcher on every start (language: {language}); do not edit.']
     lines += [f'@{key}={" ".join(text.split())}' for key, text in labels]
     for trophy in range(spartanport_trophies.TROPHY_COUNT):
-        name, description = spartanport_trophies.text(LANG, trophy)
+        name, description = spartanport_trophies.text(language, trophy)
         lines.append(f'{trophy}={name} | {description}')
+    return '\n'.join(lines) + '\n'
+
+
+def write_trophy_texts(folder):
+    """user/trophy_texts.txt: the trophy names, descriptions and labels the game shows, in the launcher's
+    language (the game reads it at start: the notice and the list of F8 / R3+R2), and the same in every
+    language in user/trophy_texts/<language>.txt, for the language chosen inside the game. A failure is
+    harmless."""
     try:
         folder = Path(folder)
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / 'trophy_texts.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        (folder / 'trophy_texts').mkdir(parents=True, exist_ok=True)
+        (folder / 'trophy_texts.txt').write_text(trophy_texts(LANG), encoding='utf-8')
+        for language in spartanport_trophies.LANGUAGES:
+            (folder / 'trophy_texts' / f'{language}.txt').write_text(trophy_texts(language), encoding='utf-8')
     except OSError:
         pass
 
@@ -1290,9 +1346,7 @@ def game_environment(s):
     write_trophy_texts(Path(user_dir))
     env['SPARTAN_GAME_DIR'] = s['game_dir']
     env.pop('SPARTAN_PATCH_DIR', None)
-    # Temporal upscaling is parked (build_graphics): a switch saved on by 2.1.8 has no control left to
-    # turn it off, so it is ignored until the upscaler section comes back.
-    env['SPARTAN_EXPERIMENTAL_UPSCALER'] = '0'
+    env['SPARTAN_EXPERIMENTAL_UPSCALER'] = '1' if s.get('experimental_upscaler') else '0'
     if s.get('update_dir'):
         env['SPARTAN_PATCH_DIR'] = s['update_dir']
     if not WINDOWS:
@@ -1354,6 +1408,9 @@ def game_environment(s):
         env['SPARTAN_KEY_MAP'] = value
     if value := control_map(controls, 'pad'):
         env['SPARTAN_PAD_MAP'] = value
+    env.pop('SPARTAN_SWITCH_ATTACKS', None)
+    if s.get('switch_attacks'):
+        env['SPARTAN_SWITCH_ATTACKS'] = '1'
     env.pop('SPARTAN_STICK_PROMPTS', None)
     if s.get('stick_prompts') in dict(STICK_PROMPTS):
         env['SPARTAN_STICK_PROMPTS'] = s['stick_prompts']
@@ -1361,6 +1418,17 @@ def game_environment(s):
     env.pop('SPARTAN_GLYPH_STYLE', None)
     if glyph_style in ('auto', 'xbox', 'nintendo', 'keyboard'):
         env['SPARTAN_GLYPH_STYLE'] = glyph_style
+    menu_confirm_swap = s.get('menu_confirm_swap')
+    if menu_confirm_swap is None:
+        if 'menu_confirm' in s:
+            menu_confirm_swap = '1' if str(s['menu_confirm']).strip().lower() in ('circle', 'swapped', '1', 'true', 'yes', 'on') else '0'
+        else:
+            ini_vals, _ = load_ini()
+            menu_confirm_swap = ini_vals.get('menu_confirm_swap', '0')
+    env.pop('SPARTAN_MENU_CONFIRM_SWAP', None)
+    env.pop('SPARTAN_MENU_CONFIRM', None)
+    if str(menu_confirm_swap).strip().lower() in ('1', 'true', 'circle', 'swapped', 'yes', 'on'):
+        env['SPARTAN_MENU_CONFIRM_SWAP'] = '1'
     env['PYTHONUNBUFFERED'] = '1'
     env['PYTHONIOENCODING'] = 'utf-8'
     return env
@@ -1797,6 +1865,21 @@ class Launcher:
             self.ttk.Label(cell, text=_('restart'), style='Restart.TLabel').pack(side='left', padx=self.px((8, 0)))
         return cell
 
+    def ini_slider(self, parent, key, low, high, unit):
+        """A slider over an integer spartanport.ini setting, with its value and `unit` beside it."""
+        tk = self.tk
+        holder = self.ttk.Frame(parent)
+        amount = self.var(key, 'ini')
+        tk.Scale(holder, from_=low, to=high, orient='horizontal', variable=amount, showvalue=False,
+                 length=self.px(260), width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD,
+                 activebackground=ACCENT_HI, highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
+        value = self.ttk.Label(holder, width=7)
+        value.pack(side='left', padx=self.px(10))
+        show = lambda *_a: value.configure(text=f'{amount.get()}{unit}')
+        amount.trace_add('write', show)
+        show()
+        return holder
+
     def row(self, parent, title, widget, hint=None, restart=False):
         """Name on the left, control on the right, an optional note below."""
         r = self.next_row(parent)
@@ -2063,25 +2146,18 @@ class Launcher:
             return self.banner_image.subsample(factor) if factor > 1 else self.banner_image
 
     def build_graphics(self):
-        """Window and overlay controls; temporal upscaling stays commented out."""
+        """Window and overlay controls, then the temporal upscaler."""
         f = self.scrolled_page('graphics', _('Graphics', 'Графика'), _('How the game appears on your screen.'))
         self.build_display(f)
-        # Temporal upscaling is parked until its image quality is validated.
-        # self.section(f, _('Experimental'))
-        # self.check(f, 'experimental_upscaler', 'app', _('Enable the upscaler (experimental)'),
-        #            _('Off (default): the game runs without temporal upscaling; FSR 3.1 and TAA need this switch on. '
-        #              'FSR 3.1 is not calibrated for this game yet: expect ghosting or flicker. The remaining options require this switch; '
-        #              'leave it off for normal gameplay.',
-        #              'Выкл. (по умолчанию): игра без временного апскейлинга; FSR 3.1 и TAA нужен этот переключатель. '
-        #              'FSR 3.1 ещё не откалиброван для этой игры: возможны гостинг и мерцание.'), restart=True)
-        # self.section(f, _('Upscaling', 'Апскейлинг'))
-        # self.row(f, _('Upscaler', 'Апскейлер'), self.choice(f, 'upscaler', 'ini', UPSCALERS))
-        # self.row(f, _('Quality preset', 'Пресет'), self.choice(f, 'preset', 'ini', PRESETS),
-        #          _('Render scale per axis: Quality renders at 1/1.5 of the output size.',
-        #            'Масштаб рендера по каждой оси: Quality рисует в 1/1.5 размера вывода.'))
-        # self.row(f, _('Output resolution', 'Разрешение вывода'), self.choice(f, 'output_res', 'ini', OUTPUTS),
-        #          _('What the upscaler produces; the HUD is drawn at this size too.',
-        #            'Что выдаёт апскейлер; интерфейс рисуется в этом же размере.'))
+        self.section(f, _('Upscaling'))
+        self.check(f, 'experimental_upscaler', 'app', _('Enable the upscaler'),
+                   _('Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. '
+                     'Animated characters can still show some ghosting.'), restart=True)
+        self.row(f, _('Upscaler', 'Апскейлер'), self.choice(f, 'upscaler', 'ini', UPSCALERS))
+        # The upscaler outputs the Render resolution chosen above; the preset renders below it.
+        self.row(f, _('Quality preset', 'Пресет'), self.choice(f, 'preset', 'ini', PRESETS),
+                 _('Share of the Render resolution above the game renders at; the upscaler rebuilds the full '
+                   'Render resolution. Lower renders faster. Native AA keeps the full resolution.'), restart=True)
         # self.row(f, _('Live resolution changes', 'Смена разрешения на лету'), self.choice(f, 'live_resolution', 'ini', LIVE),
         #          _('Off: outputs other than 1080p are set by a patch at start (fastest; changing them in the '
         #            'game restarts it). On: change output and preset in the game without a restart, at a cost.',
@@ -2116,6 +2192,11 @@ class Launcher:
         self.check(f, 'hdr', 'ini', _('Allow HDR output', 'Разрешить HDR'),
                    _('When HDR is on in Windows and the display supports it.',
                      'Если HDR включён в Windows и монитор его поддерживает.'))
+        self.section(f, _('Effects'))
+        self.check(f, 'motion_blur', 'ini', _('Motion blur'),
+                   _("The game's own motion blur on fast moving objects and the camera. Off removes it."))
+        self.check(f, 'depth_of_field', 'ini', _('Depth of field'),
+                   _("The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp."))
         self.section(f, _('Textures'))
         self.row(f, _('Anisotropic filtering'), self.choice(f, 'anisotropy', 'ini', ANISOTROPY),
                  _('Sharper floors and walls seen at an angle, at little cost on most graphics cards.'),
@@ -2260,6 +2341,13 @@ class Launcher:
                    'Действует при первом запуске игры. Потом игра хранит язык текста и речи в своём '
                    'сохранении настроек: меняйте их в игре, в Настройки → Параметры игры → Текст и '
                    'Настройки → Аудио → Речь.'))
+        self.section(f, _('Audio'))
+        self.row(f, _('Volume'), self.ini_slider(f, 'master_volume', 0, 200, '%'),
+                 _("Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft "
+                   "limiter so loud scenes do not clip. Also in the in-game menu."))
+        self.row(f, _('Speakers'), self.choice(f, 'audio_channels', 'ini', AUDIO_CHANNELS),
+                 _("Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. "
+                   "Applied when the game starts."), restart=True)
         self.build_patches(f)
 
     def user_dir(self):
@@ -2574,17 +2662,7 @@ class Launcher:
             ttk.Label(table, text=title, width=-14).grid(row=r, column=1, sticky='w', padx=self.px((0, 12)))
 
         def slider(key, low, high, unit, parent=None):
-            holder = ttk.Frame(parent or f)
-            amount = self.var(key, 'ini')
-            tk.Scale(holder, from_=low, to=high, orient='horizontal', variable=amount, showvalue=False,
-                     length=self.px(260), width=self.px(12), sliderlength=self.px(18), bg=ACCENT, troughcolor=CARD,
-                     activebackground=ACCENT_HI, highlightthickness=0, bd=0, sliderrelief='flat').pack(side='left')
-            value = ttk.Label(holder, width=7)
-            value.pack(side='left', padx=self.px(10))
-            show = lambda *_a: value.configure(text=f'{amount.get()}{unit}')
-            amount.trace_add('write', show)
-            show()
-            return holder
+            return self.ini_slider(parent or f, key, low, high, unit)
 
         # The in-game icons first, then the device: its section is shown, the other hidden (show_device).
         page = f
@@ -2592,6 +2670,11 @@ class Launcher:
                  hint=_('Replaces the PlayStation button icons inside the game with the ones of your controller. '
                         'Works on a copy of up to three game files in the port\'s data folder (about 410 MB); your game folder '
                         'is never changed. Applied when the game starts.'))
+        self.check(page, 'switch_attacks', 'app', _('Switch attacks on L1 + d-pad and L1 + Cross'),
+                   _('L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos\' '
+                     'hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands '
+                     'instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the '
+                     'game starts.'))
         # Both devices turn the free camera, so it stays above the device's section.
         self.check(page, 'free_camera', 'ini', _('Free camera (experimental)'),
                    _('Experimental. The right stick or the mouse turns the camera all the way around Kratos and '
@@ -2681,6 +2764,10 @@ class Launcher:
                             command=self.relabel_pad_controls).pack(side='left', padx=self.px((0, 14)))
         self.row(f, _('Controller type'), names)
         self.row(f, _('Vibration'), slider('vibration', 0, 100, '%', f), _("Strength of the gamepad's vibration; 0% turns it off."))
+        self.row(f, 'Menu confirmation', self.choice(f, 'menu_confirm_swap', 'ini', MENU_CONFIRM_STYLES),
+                 hint='Which button confirms choices in save/load dialogs and menu lists. '
+                      'Default: Cross confirms, Circle cancels. Swapped: Circle confirms, Cross cancels. '
+                      'Does not change gameplay or combat controls.')
         table = mapping_table(f)
         for r, (button, _key, pad) in enumerate(CONTROLS, start=1):
             game_button(table, r, button)
@@ -3268,6 +3355,7 @@ class Launcher:
         app['controls'] = {kind: control_changes({b: v.get() for b, v in vars_.items()}, kind)
                            for kind, vars_ in self.control_vars.items()}
         app['pad_style'] = self.pad_style.get()
+        app['menu_confirm_swap'] = ini.get('menu_confirm_swap', '0')
         if getattr(self, 'device_chosen', False):  # an untouched first choice stays automatic
             app['controls_device'] = self.device.get()
         mods = {'order': list(self.mod_order),

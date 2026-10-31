@@ -3,7 +3,6 @@
   "ui_scale": "auto",
   "game_dir": "D:\\Games\\CUSA01623",
   "update_dir": "",
-  "experimental_upscaler": false,
   "video_backend": "auto",
   "gamemode": false,
   "mangohud": false,
@@ -41,5 +40,6 @@
   "rage_one_input": true,
   "stick_prompts": "keyboard",
   "controls_layout": 5,
+  "switch_attacks": false,
   "glyph_style": "off"
 }

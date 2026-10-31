@@ -53,6 +53,11 @@ public:
     [[nodiscard]] VideoCore::ImageId Depth() const noexcept {
         return depth_id;
     }
+    /// The camera came from a depth pre-pass (SpartanPort): characters and effects draw with another
+    /// depth target of the same size, and need the jitter too.
+    [[nodiscard]] bool PrepassCamera() const noexcept {
+        return prepass_camera;
+    }
     /// The render size in the scene constants (the game's viewport; its targets may be
     /// allocated larger, e.g. 1916x1080 for a 1916x1078 scene), or zero before the first camera.
     [[nodiscard]] std::array<u32, 2> RenderSize() const noexcept {
@@ -74,6 +79,11 @@ public:
 
     /// The G-buffer pass (5+ color targets): its depth is the scene depth.
     void OnGBufferPass(VideoCore::ImageId depth);
+
+    /// A depth-only pass at the render size binding a view-projection (SpartanPort's depth pre-pass,
+    /// vk_view_projection.h): the first valid one of a frame is the main camera, its depth
+    /// the scene depth.
+    void OnViewProjection(const float* matrix, VideoCore::ImageId depth);
 
     /// The pass copying the finished frame (`frame`, the last target drawn) to the display: the
     /// frame's depth and camera are complete. Records the debug overlay, starts a new frame.
@@ -105,6 +115,7 @@ private:
     std::array<float, 2> jitter{}, previous_jitter{};
     std::array<u32, 2> render_size{};
     VideoCore::ImageId depth_id{};
+    bool prepass_camera = false;
 
     vk::UniqueDescriptorSetLayout desc_layout;
     vk::UniquePipelineLayout pipeline_layout;

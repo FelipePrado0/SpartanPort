@@ -46,6 +46,30 @@ def solid_png(rgb):
     return out.getvalue()
 
 
+class GameTexts(unittest.TestCase):
+    """The names are the PS4 list's (the Remastered renamed some of the PS3 ones), and the launcher
+    writes them in every language for the language chosen inside the game."""
+
+    def test_english_is_the_ps4_list(self):
+        names = [name for name, _ in spartanport_trophies.TEXTS['en']]
+        self.assertEqual((names[12], names[23], names[28]), ('Torn Up', 'Depths Below', 'Horn of Plenty'))
+
+    def test_every_language_is_written(self):
+        import spartanport_launcher_win as launcher
+        with tempfile.TemporaryDirectory() as folder:
+            launcher.write_trophy_texts(folder)
+            self.assertTrue((Path(folder) / 'trophy_texts.txt').is_file())
+            for language in spartanport_trophies.LANGUAGES:
+                text = (Path(folder) / 'trophy_texts' / f'{language}.txt').read_text(encoding='utf-8')
+                lines = text.splitlines()
+                self.assertEqual(sum(1 for line in lines if line[:1].isdigit()), spartanport_trophies.TROPHY_COUNT, language)
+                labels = dict(line[1:].split('=', 1) for line in lines if line.startswith('@'))
+                self.assertEqual(len(labels), 20, language)
+            ru = (Path(folder) / 'trophy_texts' / 'ru.txt').read_text(encoding='utf-8')
+            self.assertIn('@heading=Трофеи', ru)
+            self.assertIn('@rarity={}% игроков', ru)
+
+
 class TrophyTexts(unittest.TestCase):
     def test_every_language_lists_all_trophies(self):
         for language in LANGUAGES:

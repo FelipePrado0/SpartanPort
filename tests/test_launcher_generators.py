@@ -29,7 +29,7 @@ class LauncherGeneratorOutput(unittest.TestCase):
         # collect() writes every ini key the window shows that the file lacked, not only the edits.
         lines = (folder / 'spartanport.ini').read_text(encoding='utf-8').splitlines()
         self.assertIn('vibration=100', lines)
-        self.assertNotIn('preset=1', lines)
+        self.assertIn('preset=1', lines)
 
 
 if __name__ == '__main__':

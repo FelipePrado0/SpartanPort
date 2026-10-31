@@ -36,6 +36,30 @@ int main() {
         assert(GetAliasCopyExtent(src, dst) == rows);
         assert(GetAliasCopyExtent(dst, src) == rows);
     }
+    // Captured water copy: the integer view includes row padding, but shares the tiled layout.
+    {
+        auto scene = Make({1706, 960, 1}, vk::Format::eR8G8B8A8Srgb);
+        scene.pitch = 1792;
+        scene.tile_mode = AmdGpu::TileMode::Display2DThin;
+        scene.array_mode = AmdGpu::ArrayMode::Array2DTiledThin1;
+        for (const u32 height : {466u, 576u, 764u, 959u}) {
+            auto copy = Make({1792, height, 1}, vk::Format::eR8G8B8A8Uint);
+            copy.tile_mode = scene.tile_mode;
+            copy.array_mode = scene.array_mode;
+            const Extent3D common{1706, height, 1};
+            assert(GetAliasCopyExtent(scene, copy) == common);
+            assert(GetAliasCopyExtent(copy, scene) == common);
+            auto incompatible = copy;
+            incompatible.pitch = 1920;
+            assert(!GetAliasCopyExtent(scene, incompatible));
+            incompatible = copy;
+            incompatible.tile_mode = AmdGpu::TileMode::Display1DThin;
+            assert(!GetAliasCopyExtent(scene, incompatible));
+            incompatible = copy;
+            incompatible.bank_swizzle = scene.bank_swizzle + 1;
+            assert(!GetAliasCopyExtent(scene, incompatible));
+        }
+    }
     // Other memory layouts never alias.
     {
         const ImageInfo src = Make({1920, 1088, 1});

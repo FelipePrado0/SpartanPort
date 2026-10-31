@@ -187,6 +187,14 @@ A corrupção gráfica no Steam Deck/RADV é um problema conhecido do AppImage 2
     CPU, RAM e VRAM, cada um opcional, com tamanho da fonte, canto, transparência e formato. Os
     números são o uso do próprio jogo, não do sistema inteiro.
 
+  O menu segue o idioma do launcher (inglês, português, espanhol, francês, alemão, italiano,
+  polonês, turco, indonésio, russo ou chinês), ou o escolhido no topo da aba **Jogo**, na hora.
+  A escolha fica em `spartanport.ini` (`ui_language`).
+- **Troféus** (F8, ou R3+R2 no controle): todos os troféus com o nome oficial e o que pedem, a
+  classe, quantos jogadores conseguiram, e filtros por estado e por classe; notificações de troféu
+  em quatro temas, com sons e imagens seus se você quiser. Veja
+  [docs/TROPHIES.pt-BR.md](docs/TROPHIES.pt-BR.md).
+
 ## Disponibilidade dos recursos
 
 Disponibilidade conferida na [release 2.2.0](https://github.com/FelipePrado0/SpartanPort/releases/tag/windows-v2.2.0) e no código em 14 de outubro de 2026.
@@ -197,7 +205,8 @@ Disponibilidade conferida na [release 2.2.0](https://github.com/FelipePrado0/Spa
 | Correção da tela preta / ícones dos botões do controle | Incluídos | Incluídos |
 | Discord Rich Presence | Não incluído | Opcional em Advanced, desligado por padrão; nome do jogo e tempo decorrido |
 | Correção da fila esparsa no RADV | Não incluída | Integrada à `main` |
-| FSR 1, FSR 3.1, FSR 4, TAA, DLSS | Desativados | Desativados no fluxo de configurações do launcher/jogo |
+| FSR 3.1, FSR 4, FSR 4.1, TAA | Desativados | Gráficos → Upscaling e os menus do jogo ([detalhes](#upscaling)) |
+| FSR 1 | Desativados | Desativados no fluxo de configurações do launcher/jogo |
 | Nitidez RCAS | Disponível | Disponível |
 
 O AppImage Linux foi recompilado em 14 de outubro para glibc 2.39 ou mais nova. Os pacotes
@@ -228,6 +237,33 @@ A opção automática mostra o nome da placa e a decisão, acompanhando **Graphi
 se aparecerem linhas em outra placa, ou **On** para manter a multiamostragem. A alteração vale
 na próxima abertura. Sem o launcher, `SPARTAN_NO_MSAA=1` desliga e `0` liga; **Automatic** preserva
 essa variável caso ela já exista no ambiente.
+
+### Upscaling
+
+Escolha o upscaler e o preset de qualidade em **Gráficos → Upscaling**, no menu **Exibição** do
+jogo ou no menu **Insert** (**Image**). Os três mostram os mesmos valores. O padrão é
+Desligado. O preset renderiza uma fração da resolução de renderização, e o upscaler reconstrói
+a resolução completa; cada preset mostra a resolução em que renderiza. As mudanças valem ao
+reiniciar (**Aplicar e reiniciar** no jogo).
+
+- **FSR 3.1:** qualquer placa de vídeo.
+- **FSR 4:** o modelo aberto do FSR 4, incluso. Para AMD Radeon RX 6000 ou mais nova e Intel
+  Arc; Windows e Linux.
+- **TAA:** antisserrilhamento na resolução completa, sem upscaling.
+
+A gera??o de quadros AMD FSR (2x) adiciona um quadro gerado entre os quadros do jogo.
+Ative em **Gr?ficos > Gera??o de quadros** ou nos menus do jogo, com um upscaler selecionado.
+A op??o ? aplicada na hora; deslig?-la mant?m o upscaler e volta aos quadros do jogo.
+
+#### FSR 4.1 (AMD, Windows)
+
+O FSR 4.1 roda pelo runtime Vulkan da AMD (`amdvkffx64.dll`), que vem com o driver da AMD
+(Adrenalin 26.10.1 ou mais recente).
+
+- RX 7000 e RX 9000: o driver deve incluí-lo. Ainda não confirmado; relatos são bem-vindos.
+- RX 6000: o driver atual traz o FSR 4.1 só para DirectX 12, sem o runtime Vulkan. O
+  SpartanPort usa o FSR 3.1 no lugar e mostra o motivo no menu do jogo (**Insert → Image**).
+- NVIDIA e Intel: FSR 3.1.
 
 ## Teclado
 
@@ -268,6 +304,13 @@ direcional, Enter para Options, Tab e Backspace para o touchpad.
 Em um controle sem touchpad (Xbox e outros), View abre o menu de pausa (o clique direito do
 touchpad) e L1 + View abre o modo foto (o clique esquerdo). No DualSense o touchpad funciona
 como no PS4, e Share/Create funciona como View.
+
+**Ataques de troca com L1 + direcional e L1 + Xis** (desligado por padrão, tela Controls): L1 + uma
+direção do direcional troca para essa arma com o ataque de troca dela, e a arma que já está na mão de
+Kratos repete o ataque; L1 + Xis faz o ataque de troca da arma na mão em vez de passar para a próxima
+arma. O ataque de troca da mesma arma de novo espera 0,8 segundo depois do último (o de outra arma
+não espera). O direcional sozinho troca como antes. Os tutoriais de troca de arma passam a dizer isso em todos os idiomas
+(em cópias dos arquivos de idioma na pasta de dados do port). Sem o launcher, defina `SPARTAN_SWITCH_ATTACKS=1`.
 
 Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Controls do launcher, em
 *Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox*, *Nintendo* ou *Teclado*. Eles trocam os ícones
@@ -323,7 +366,7 @@ uma correção para todas as configurações de overlay.
 - Tela preta ao abrir: use a release mais recente, que inclui o patch do deadlock na abertura.
   Se persistir, informe GPU, driver, build do jogo e a saída de **Advanced → Log**. Apagar o
   cache de shaders não é uma solução geral e exige reconstruí-lo na próxima abertura.
-- O jogo fecha com "cannot create ... guest memory (error 1450)": o Windows ficou sem memória virtual para alocar o pool de memória do jogo. Aumente o arquivo de paginação: pressione **Win + R**, digite `SystemPropertiesAdvanced`, vá em Configurações de **Desempenho** → guia **Avançado** → **Memória virtual** Alterar, desmarque o gerenciamento automático, selecione a unidade **C:**, defina um tamanho personalizado (ex.: 16384 MB inicial, 24576 MB máximo), clique em **Definir**, **OK** e reinicie o PC.
+- O jogo fecha com "cannot create ... guest memory (error 1450)", ou mais tarde com "cannot commit ... guest memory": o Windows ficou sem memória virtual para alocar o pool de memória do jogo. Aumente o arquivo de paginação: pressione **Win + R**, digite `SystemPropertiesAdvanced`, vá em Configurações de **Desempenho** → guia **Avançado** → **Memória virtual** Alterar, desmarque o gerenciamento automático, selecione a unidade **C:**, defina um tamanho personalizado (ex.: 16384 MB inicial, 24576 MB máximo), clique em **Definir**, **OK** e reinicie o PC.
 - O **Idioma do jogo** do launcher não muda nada: ele só vale no primeiro início do jogo. Depois, o
   jogo restaura os próprios idiomas de texto e de falas do save de configurações, então troque no
   jogo: **Opções → Configurações de jogo → Texto de jogo** e **Opções → Áudio → Falas** (por exemplo,
@@ -441,6 +484,9 @@ Aberto a partir de um checkout, ele acha sozinho as ferramentas de `out/`; `SPAR
 aponta para um port empacotado (com `bin/`). O PLAY inicia o próprio exe do launcher com `--run`,
 então nada precisa de Python.
 
+No macOS, a `main` compila só o launcher (o PLAY ainda não tem jogo para iniciar); veja os passos em
+[launcher-rust/README.md](launcher-rust/README.md#macos) (em inglês).
+
 ## Testes
 
 Execute na raiz do repositório depois de compilar. Os primeiros testes C++ abaixo não precisam de um dump do jogo.
@@ -556,6 +602,8 @@ Este projeto é um fork do port para Windows de Supermedo, que parte do original
   que faz toda a tradução de GPU e shaders para Vulkan neste port.
 - **[WilkPrintes](https://github.com/WilkPrintes)**: criou o design e o
   [site do SpartanPort](https://spartanport.com/pt). Agradecimento especial por dar uma casa ao projeto.
+- **IFreemz** (eFMann no GitHub): [shadPS4 Bloodborne DLSS & FSR](https://github.com/eFMann/shadPS4-Bloodborne-DLSS-FSR). A ponte do DLSS e a integração
+  dos upscalers temporais em que o DLSS, o FSR 3.1 e o FSR 4 deste port se baseiam.
 
 Patches: kvicken e cuesta4 (resolução, correção de texturas, 120 FPS e pular vídeos, a partir
 dos patches de PS3 de illusion0001), publicados para o shadPS4 em
@@ -571,7 +619,8 @@ Também usados: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9),
 [magic_enum](https://github.com/Neargye/magic_enum), [miniz](https://github.com/richgel999/miniz),
 [xbyak](https://github.com/herumi/xbyak),
 [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
-[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) e o AMD FidelityFX SDK,
+[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) e o AMD FidelityFX SDK, [Q2RTX](https://github.com/FireBurn/Q2RTX) (os arquivos do
+modelo aberto do FSR 4),
 [MSYS2](https://www.msys2.org), [LLVM](https://llvm.org) e [Pillow](https://python-pillow.org).
 
 ## Licença

@@ -947,6 +947,13 @@ EXTRA = {
         'Graphics (experimental)': 'Gráficos (experimental)',
         'Experimental': 'Experimental',
         'Enable the upscaler (experimental)': 'Ativar o upscaler (experimental)',
+        'Enable the upscaler': 'Ativar o upscaler',
+        'Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Fração da resolução de renderização (página Desempenho) em que o jogo renderiza; o upscaler reconstrói essa resolução completa. Menor roda mais rápido. AA nativo mantém a resolução completa.',
+        'Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.': 'Desligado (padrão): o jogo roda sem upscaling temporal. Ligado: FSR 3.1 com o preset abaixo. Personagens animados ainda podem mostrar algum rastro.',
+        'Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Fração da resolução de renderização acima em que o jogo renderiza; o upscaler reconstrói essa resolução completa. Menor roda mais rápido. AA nativo mantém a resolução completa.',
+        'Native AA (100%)': 'AA nativo (100%)', 'Ultra Quality (77%)': 'Qualidade ultra (77%)',
+        'Quality (67%)': 'Qualidade (67%)', 'Balanced (59%)': 'Equilibrado (59%)',
+        'Performance (50%)': 'Desempenho (50%)', 'Ultra Performance (33%)': 'Desempenho máximo (33%)',
         'Off (default): the game runs without temporal upscaling. These upscalers are not calibrated for this game yet: expect ghosting or flicker. FSR 3.1 needs nothing else; FSR 4 needs the assets below, and without them the game uses FSR 3.1. The options on this page only take effect with this switch on.': 'Desligado (padrão): o jogo roda sem upscaling temporal. Esses upscalers ainda não estão calibrados para este jogo: espere fantasmas (ghosting) ou cintilação. O FSR 3.1 não precisa de mais nada; o FSR 4 precisa dos assets abaixo e, sem eles, o jogo usa o FSR 3.1. As opções desta página só valem com este interruptor ligado.',
         'Add to Steam': 'Adicionar à Steam',
         'Steam is open. Close it completely (Steam > Exit) and click again: Steam rewrites its shortcuts when it closes.': 'A Steam está aberta. Feche-a por completo (Steam > Sair) e clique de novo: a Steam reescreve os atalhos quando fecha.',
@@ -1033,6 +1040,9 @@ EXTRA = {
         'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
             'Como os eventos de girar o analógico são respondidos. Teclado: digite o giro, meias-voltas a partir de cima D S A (horário) ou A S D, a partir de baixo A W D ou D W A, voltas completas D S A W ou A S D W; uma tecla fora de ordem recomeça. Mouse adaptativo: desenhe o giro com o mouse.',
         'Joystick prompts': 'Prompts do analógico',
+        'Switch attacks on L1 + d-pad and L1 + Cross': 'Ataques de troca com L1 + direcional e L1 + X',
+        "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.":
+            "L1 + uma direção do direcional troca para essa arma com o ataque de troca dela (a arma que já está na mão de Kratos repete o ataque). L1 + X faz o ataque de troca da arma na mão em vez de passar para a próxima arma. O direcional sozinho troca como antes. Aplicado ao iniciar o jogo.",
         'Keep the mouse in the game window': 'Manter o mouse na janela do jogo',
         'Key not supported': 'Tecla não suportada',
         'Keyboard & Mouse Mapping': 'Mapeamento de teclado e mouse',
@@ -1252,6 +1262,13 @@ EXTRA = {
         'Graphics (experimental)': 'Gráficos (experimental)',
         'Experimental': 'Experimental',
         'Enable the upscaler (experimental)': 'Activar el escalador (experimental)',
+        'Enable the upscaler': 'Activar el escalador',
+        'Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Fracción de la resolución de renderizado (página Rendimiento) a la que el juego renderiza; el escalador reconstruye esa resolución completa. Menor es más rápido. AA nativo mantiene la resolución completa.',
+        'Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.': 'Desactivado (predet.): el juego funciona sin escalado temporal. Activado: FSR 3.1 con el preset de abajo. Los personajes animados aún pueden mostrar algo de estela.',
+        'Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Fracción de la resolución de renderizado de arriba a la que el juego renderiza; el escalador reconstruye esa resolución completa. Menor es más rápido. AA nativo mantiene la resolución completa.',
+        'Native AA (100%)': 'AA nativo (100%)', 'Ultra Quality (77%)': 'Calidad ultra (77%)',
+        'Quality (67%)': 'Calidad (67%)', 'Balanced (59%)': 'Equilibrado (59%)',
+        'Performance (50%)': 'Rendimiento (50%)', 'Ultra Performance (33%)': 'Rendimiento máximo (33%)',
         'Off (default): the game runs without temporal upscaling. These upscalers are not calibrated for this game yet: expect ghosting or flicker. FSR 3.1 needs nothing else; FSR 4 needs the assets below, and without them the game uses FSR 3.1. The options on this page only take effect with this switch on.':
             'Desactivado (predeterminado): el juego corre sin escalado temporal. Estos escaladores aún no están calibrados para este juego: es posible que haya estelas (ghosting) o parpadeos. FSR 3.1 no necesita nada más; FSR 4 necesita los archivos de abajo y, sin ellos, el juego usa FSR 3.1. Las opciones de esta página solo surten efecto con este interruptor activado.',
         'Add to Steam': 'Añadir a Steam',
@@ -1319,6 +1336,9 @@ EXTRA = {
         'How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.':
             'Cómo se responden los eventos de girar el stick. Teclado: escribe el giro, medias vueltas desde arriba D S A (horario) o A S D, desde abajo A W D o D W A, vueltas completas D S A W o A S D W; una tecla fuera de orden vuelve a empezar. Ratón adaptativo: dibuja el giro con el ratón.',
         'Joystick prompts': 'Eventos del stick',
+        'Switch attacks on L1 + d-pad and L1 + Cross': 'Ataques de cambio con L1 + cruceta y L1 + X',
+        "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.":
+            "L1 + una dirección de la cruceta cambia a esa arma con su ataque de cambio (el arma que Kratos ya tiene en la mano repite su ataque). L1 + X hace el ataque de cambio del arma en la mano en lugar de pasar a la siguiente arma. La cruceta sola cambia como antes. Se aplica al iniciar el juego.",
         'Keep the mouse in the game window': 'Mantener el ratón en la ventana del juego',
         'Key not supported': 'Tecla no compatible',
         'Keyboard & Mouse Mapping': 'Asignación de teclado y ratón',
@@ -1532,6 +1552,50 @@ EXTRA['es'].update({
     'Shows the render resolutions of this shape only.': 'Muestra solo las resoluciones de render de esta proporción.',
 })
 
+EXTRA['pt'].update({
+    'Audio': 'Áudio',
+    'Volume': 'Volume',
+    'Speakers': 'Alto-falantes',
+    'Stereo': 'Estéreo',
+    '5.1 surround': 'Surround 5.1',
+    '7.1 surround': 'Surround 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volume geral do áudio do jogo. 100% é a mixagem original do jogo; mais é mais alto, com um limitador suave para que cenas altas não distorçam. Também no menu do jogo.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Formato em que a mixagem 7.1 do jogo é enviada. Automático segue o seu dispositivo de som: estéreo, 5.1 ou 7.1. Aplicado quando o jogo inicia.',
+})
+EXTRA['es'].update({
+    'Audio': 'Audio',
+    'Volume': 'Volumen',
+    'Speakers': 'Altavoces',
+    'Stereo': 'Estéreo',
+    '5.1 surround': 'Envolvente 5.1',
+    '7.1 surround': 'Envolvente 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volumen general del audio del juego. 100% es la mezcla original del juego; más es más alto, con un limitador suave para que las escenas fuertes no distorsionen. También en el menú del juego.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Formato en que se envía la mezcla 7.1 del juego. Automático sigue tu dispositivo de sonido: estéreo, 5.1 o 7.1. Se aplica al iniciar el juego.',
+})
+
+EXTRA['pt'].update({
+    'Effects': 'Efeitos',
+    'Motion blur': 'Desfoque de movimento',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        'O desfoque de movimento do próprio jogo em objetos rápidos e na câmera. Desligado, ele é removido.',
+    'Depth of field': 'Profundidade de campo',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'O desfoque do próprio jogo em objetos distantes, mais forte nas cenas. Desligado, a imagem inteira fica nítida.',
+})
+EXTRA['es'].update({
+    'Effects': 'Efectos',
+    'Motion blur': 'Desenfoque de movimiento',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        'El desenfoque de movimiento del propio juego en objetos rápidos y en la cámara. Desactivado, se elimina.',
+    'Depth of field': 'Profundidad de campo',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'El desenfoque del propio juego en objetos lejanos, más fuerte en las escenas. Desactivado, toda la imagen se ve nítida.',
+})
+
 EXTRA['pt'].update({'Polish': 'Polonês'})
 EXTRA['es'].update({'Polish': 'Polaco'})
 for _lang, _text in (('pl', 'Polski'), ('fr', 'Polonais'), ('de', 'Polnisch'),
@@ -1638,6 +1702,16 @@ EXTRA.setdefault('zh', {}).update({'   (game patches)': '   （游戏补丁）',
  'Dodge': '闪避',
  'Drop a mod folder or .zip in the mods folder.': '将模组文件夹或 .zip 放入模组目录。',
  'Enable the upscaler (experimental)': '启用超分辨率（实验性）',
+ 'Enable the upscaler': '启用超分辨率',
+ 'Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': '游戏以渲染分辨率（性能页面）的这一比例渲染，超分辨率重建完整渲染分辨率。越低越快。原生抗锯齿保持完整分辨率。',
+ 'Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.': '默认关闭，游戏不使用时域超分辨率。开启：使用下方预设的 FSR 3.1。动画角色仍可能有少量拖影。',
+ 'Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': '游戏以上方渲染分辨率的这一比例渲染，超分辨率重建完整渲染分辨率。越低越快。原生抗锯齿保持完整分辨率。',
+ 'Native AA (100%)': '原生抗锯齿 (100%)',
+ 'Ultra Quality (77%)': '超高质量 (77%)',
+ 'Quality (67%)': '质量 (67%)',
+ 'Balanced (59%)': '平衡 (59%)',
+ 'Performance (50%)': '性能 (50%)',
+ 'Ultra Performance (33%)': '超高性能 (33%)',
  'Engine frame rate': '引擎帧率',
  'Enlarges a smaller game image to the window. With Render resolution 720p (Performance) it raises the FPS; at the size of the window it does nothing.': '将较低分辨率的游戏画面放大到窗口大小。渲染分辨率设为 '
                                                                                                                                                          '720p '
@@ -2369,6 +2443,16 @@ EXTRA.setdefault('id', {}).update({
     'Delete': 'Hapus',
     'Diagnostics (for development)': 'Diagnostik (untuk pengembangan)',
     'Enable the upscaler (experimental)': 'Aktifkan upscaler (eksperimental)',
+    'Enable the upscaler': 'Aktifkan upscaler',
+    'Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Bagian dari resolusi render (halaman Performa) yang dipakai game untuk merender; upscaler membangun ulang resolusi render penuh. Lebih rendah lebih cepat. Native AA memakai resolusi penuh.',
+    'Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.': 'Mati (bawaan): game berjalan tanpa upscaling temporal. Nyala: FSR 3.1 dengan preset di bawah. Karakter yang bergerak masih bisa sedikit berbayang.',
+    'Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.': 'Bagian dari resolusi render di atas yang dipakai game untuk merender; upscaler membangun ulang resolusi render penuh. Lebih rendah lebih cepat. Native AA memakai resolusi penuh.',
+    'Native AA (100%)': 'Native AA (100%)',
+    'Ultra Quality (77%)': 'Kualitas Ultra (77%)',
+    'Quality (67%)': 'Kualitas (67%)',
+    'Balanced (59%)': 'Seimbang (59%)',
+    'Performance (50%)': 'Performa (50%)',
+    'Ultra Performance (33%)': 'Performa Ultra (33%)',
     'Experimental': 'Eksperimental',
     'F11 captures a frame for analysis': 'F11 menangkap satu frame untuk analisis',
     'Files': 'File',
@@ -2583,6 +2667,94 @@ EXTRA.setdefault('es', {}).update({
         'Toque de R3',
     "Experimental. The right stick or the mouse turns the camera all the way around Kratos and Kratos moves the way the camera looks; L1 + right stick dodges. In play, the Free camera key (G) or a tap of R3 on the gamepad switches it off and on, for boss fights; quick-time events and the game's camera cuts go back to the game's camera. Also in the in-game menu.":
         'Experimental. El stick derecho o el ratón gira la cámara alrededor de Kratos, por completo, y Kratos se mueve hacia donde mira la cámara; L1 + stick derecho esquiva. En el juego, la tecla de la cámara libre (G) o un toque de R3 en el mando la desactiva y activa, para las peleas contra jefes; los quick-time events y los cortes de cámara del juego vuelven a la cámara del juego. También en el menú del juego.',
+})
+
+EXTRA.setdefault('pt', {}).update({
+    'FSR 4.1 (AMD driver)': 'FSR 4.1 (driver AMD)',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 exige AMD Adrenalin 26.10.1 ou mais recente. O registro mostra o provedor ativo; usar FSR 3.1 como alternativa não significa FSR 4.1 ativo.',
+    'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Desligado (padrão): sem upscaling temporal. Ligado: usa o upscaler e a predefinição selecionados. Personagens animados ainda podem mostrar algum rastro.',
+})
+EXTRA.setdefault('es', {}).update({
+    'FSR 4.1 (AMD driver)': 'FSR 4.1 (controlador AMD)',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 requiere AMD Adrenalin 26.10.1 o posterior. El registro muestra el proveedor activo; usar FSR 3.1 como alternativa no significa que FSR 4.1 esté activo.',
+    'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Desactivado (predeterminado): sin escalado temporal. Activado: usa el escalador y el ajuste seleccionados. Los personajes animados aún pueden mostrar estelas.',
+})
+EXTRA.setdefault('zh', {}).update({
+    'FSR 4.1 (AMD driver)': 'FSR 4.1（AMD 驱动）',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 需要 AMD Adrenalin 26.10.1 或更新版本。日志会显示实际使用的提供程序；回退至 FSR 3.1 并不表示 FSR 4.1 已启用。',
+    'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': '默认关闭：不使用时域超分辨率。开启：使用所选超分辨率和预设。动画角色仍可能出现拖影。',
+})
+EXTRA.setdefault('id', {}).update({
+    'FSR 4.1 (AMD driver)': 'FSR 4.1 (driver AMD)',
+    'FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.': 'FSR 4.1 memerlukan AMD Adrenalin 26.10.1 atau lebih baru. Log menampilkan penyedia aktif; fallback ke FSR 3.1 bukan berarti FSR 4.1 aktif.',
+    'Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.': 'Mati (bawaan): tanpa upscaling temporal. Nyala: memakai upscaler dan preset pilihan. Karakter yang bergerak masih dapat berbayang.',
+})
+
+EXTRA['zh'].update({
+    'Audio': '音频',
+    'Volume': '音量',
+    'Speakers': '扬声器',
+    'Stereo': '立体声',
+    '5.1 surround': '5.1 环绕声',
+    '7.1 surround': '7.1 环绕声',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        '游戏音频的主音量。100% 为游戏自带的混音；调高会更响亮，并带有软限幅，避免嘈杂场景出现削波失真。游戏内菜单中也有此选项。',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        '游戏的 7.1 混音输出所用的声道布局。“自动”会跟随你的声音设备：立体声、5.1 或 7.1。游戏启动时生效。',
+})
+
+EXTRA['id'].update({
+    'Audio': 'Audio',
+    'Volume': 'Volume',
+    'Speakers': 'Speaker',
+    'Stereo': 'Stereo',
+    '5.1 surround': 'Surround 5.1',
+    '7.1 surround': 'Surround 7.1',
+    "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.":
+        'Volume utama audio game. 100% adalah campuran asli game; lebih tinggi berarti lebih keras, dengan pembatas lembut agar adegan yang keras tidak terpotong (clipping). Tersedia juga di menu dalam game.',
+    "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.":
+        'Tata letak saluran untuk campuran 7.1 game. Otomatis mengikuti perangkat suara Anda: stereo, 5.1, atau 7.1. Diterapkan saat game dimulai.',
+})
+
+EXTRA['zh'].update({
+    'Effects': '画面效果',
+    'Motion blur': '动态模糊',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        '游戏自带的动态模糊（快速移动的物体和镜头）。关闭后将其移除。',
+    'Depth of field': '景深',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        '游戏自带的远景模糊，过场动画中最明显。关闭后整个画面保持清晰。',
+})
+
+EXTRA['id'].update({
+    'Effects': 'Efek',
+    'Motion blur': 'Motion blur',
+    "The game's own motion blur on fast moving objects and the camera. Off removes it.":
+        'Motion blur bawaan game pada objek yang bergerak cepat dan kamera. Jika dimatikan, efek ini dihilangkan.',
+    'Depth of field': 'Depth of field',
+    "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.":
+        'Blur bawaan game pada objek yang jauh, paling kuat di cutscene. Jika dimatikan, seluruh gambar tetap tajam.',
+})
+
+EXTRA['zh'].update({
+    'Free camera (experimental)': '自由镜头（实验性）',
+    'Free camera on/off': '自由镜头：开/关',
+    'Tap R3': '轻按 R3',
+    "Experimental. The right stick or the mouse turns the camera all the way around Kratos and Kratos moves the way the camera looks; L1 + right stick dodges. In play, the Free camera key (G) or a tap of R3 on the gamepad switches it off and on, for boss fights; quick-time events and the game's camera cuts go back to the game's camera. Also in the in-game menu.":
+        '实验性功能。右摇杆或鼠标可让镜头围绕奎托斯完整旋转，奎托斯会朝镜头所看的方向移动；L1 + 右摇杆为闪避。'
+        '游戏中，自由镜头按键（G）或轻按手柄上的 R3 可将其关闭和开启，适用于首领战；快速反应事件和游戏自带的'
+        '镜头切换会回到游戏的镜头。游戏内菜单中也有此选项。',
+})
+
+EXTRA['id'].update({
+    'Free camera (experimental)': 'Kamera bebas (eksperimental)',
+    'Free camera on/off': 'Kamera bebas: nyala/mati',
+    'Tap R3': 'Ketuk R3',
+    "Experimental. The right stick or the mouse turns the camera all the way around Kratos and Kratos moves the way the camera looks; L1 + right stick dodges. In play, the Free camera key (G) or a tap of R3 on the gamepad switches it off and on, for boss fights; quick-time events and the game's camera cuts go back to the game's camera. Also in the in-game menu.":
+        'Eksperimental. Stik kanan atau mouse memutar kamera sepenuhnya di sekitar Kratos, dan Kratos bergerak ke '
+        'arah pandangan kamera; L1 + stik kanan untuk menghindar. Dalam permainan, tombol Kamera bebas (G) atau '
+        'ketukan R3 pada gamepad mematikan dan menyalakannya, untuk pertarungan bos; quick-time event dan potongan '
+        'kamera game kembali ke kamera game. Juga tersedia di menu dalam game.',
 })
 
 _tables = {}

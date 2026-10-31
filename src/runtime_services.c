@@ -72,6 +72,16 @@ static ABI int32_t user_event(int32_t *event) {
 
 /* ---- SystemService ---- */
 static int language(void) { const char *v=getenv("SPARTAN_LANGUAGE"); return v ? atoi(v) : 1; }
+static int menu_confirm_is_swapped(const char *s) {
+    if (!s) return 0;
+    while (*s==' ' || *s=='\t') s++;
+    if (!strcmp(s,"1")) return 1;
+#ifdef _WIN32
+    return !_stricmp(s,"circle") || !_stricmp(s,"swapped") || !_stricmp(s,"true") || !_stricmp(s,"yes") || !_stricmp(s,"on");
+#else
+    return !strcasecmp(s,"circle") || !strcasecmp(s,"swapped") || !strcasecmp(s,"true") || !strcasecmp(s,"yes") || !strcasecmp(s,"on");
+#endif
+}
 static ABI int32_t system_param(int32_t id,int32_t *value) {
     if (!value) return SYSTEM_PARAMETER;
     switch (id) {
@@ -85,7 +95,18 @@ static ABI int32_t system_param(int32_t id,int32_t *value) {
 #endif
     case 5: *value=0; break;                    /* summer time */
     case 7: *value=0; break;                    /* parental level off */
-    case 1000: *value=1; break;                 /* enter button = cross */
+    case 1000: {
+        const char *v=getenv("SPARTAN_MENU_CONFIRM_SWAP");
+        if (!v || !*v) v=getenv("SPARTAN_MENU_CONFIRM");
+        int swapped=0;
+        if (v && *v) {
+            swapped=menu_confirm_is_swapped(v);
+        } else {
+            swapped=spartanportgpu_menu_confirm_swap();
+        }
+        *value=swapped ? 0 : 1;                 /* enter button: 1 = cross, 0 = circle */
+        break;
+    }
     default: fprintf(stderr,"STOP: unsupported system parameter %d\n",id); exit(21);
     }
     return 0;
@@ -619,8 +640,10 @@ static int trophy_icon(int32_t id,const unsigned char **png,uint64_t *size) {
 /* Texts: <user dir>/trophy_texts.txt (the launcher writes it in its language on every start) or, when
  * there is none, <user dir>/trophy_names.txt. One "ID=Name | Description" per line (the description is
  * optional), "@label=text" for the labels of the notice and of the trophy list, # starts a comment. */
-static const char *const trophy_label_keys[9]={"heading","notice","unlocked","locked","all","only_unlocked","only_locked","counter","hint"};
-static char trophy_label[9][200];
+#define TROPHY_LABELS 20
+static const char *const trophy_label_keys[TROPHY_LABELS]={"heading","notice","unlocked","locked","all","only_unlocked","only_locked","counter","hint",
+    "notifications","order_list","order_common","order_rare","rarity","common","rare","very_rare","ultra_rare","hint_order","hint_notifications"};
+static char trophy_label[TROPHY_LABELS][200];
 static char trophy_names[TROPHY_MAX][64];
 static char trophy_details[TROPHY_MAX][160];
 static FILE *trophy_open_text(char *path,size_t size) {
@@ -651,7 +674,7 @@ static void trophy_load_names(void) {
         while (*value==' ') value++;
         if (*p=='@') {
             *eq=0;
-            for (int k=0;k<9;k++) if (!strcmp(p+1,trophy_label_keys[k])) snprintf(trophy_label[k],sizeof(trophy_label[k]),"%s",value);
+            for (int k=0;k<TROPHY_LABELS;k++) if (!strcmp(p+1,trophy_label_keys[k])) snprintf(trophy_label[k],sizeof(trophy_label[k]),"%s",value);
             continue;
         }
         char *end; long id=strtol(p,&end,10);
@@ -727,12 +750,12 @@ static void trophy_load_once(void) {
         infos[i].id=id; infos[i].name=trophy_names[id]; infos[i].detail=trophy_details[id];
         infos[i].png=png; infos[i].png_size=png_size;
     }
-    SpartanGpuTrophyLabels labels={
-        trophy_label[0][0] ? trophy_label[0] : 0, trophy_label[1][0] ? trophy_label[1] : 0,
-        trophy_label[2][0] ? trophy_label[2] : 0, trophy_label[3][0] ? trophy_label[3] : 0,
-        trophy_label[4][0] ? trophy_label[4] : 0, trophy_label[5][0] ? trophy_label[5] : 0,
-        trophy_label[6][0] ? trophy_label[6] : 0, trophy_label[7][0] ? trophy_label[7] : 0,
-        trophy_label[8][0] ? trophy_label[8] : 0};
+    /* SpartanGpuTrophyLabels: one pointer per key, in the order of trophy_label_keys (0: English). */
+    const char *label_texts[TROPHY_LABELS];
+    for (int k=0;k<TROPHY_LABELS;k++) label_texts[k]=trophy_label[k][0] ? trophy_label[k] : 0;
+    SpartanGpuTrophyLabels labels;
+    _Static_assert(sizeof(labels)==sizeof(label_texts),"one label pointer per key");
+    memcpy(&labels,label_texts,sizeof(labels));
     spartanportgpu_trophy_setup(&labels,infos,(int)total,(const volatile uint32_t *)trophy_flags);
 }
 static ABI int32_t trophy_context(int32_t *ctx,int32_t user,uint32_t label,uint64_t options) {
@@ -756,7 +779,7 @@ static void trophy_notify(int32_t id) {
     snprintf(detail,sizeof(detail),"%s",trophy_details[id]);
     int has_icon=trophy_icon(id,&png,&png_size);
     pthread_mutex_unlock(&lock);
-    spartanportgpu_toast_trophy(notice,detail,has_icon ? png : 0,has_icon ? png_size : 0);
+    spartanportgpu_toast_trophy(id,notice,detail,has_icon ? png : 0,has_icon ? png_size : 0);
 }
 /* On a PlayStation the system grants the platinum (id 0) with the last trophy: 1 when every other
  * trophy of the package is unlocked and this call just unlocked the platinum. Lock held. */

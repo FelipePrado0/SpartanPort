@@ -191,6 +191,14 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
     CPU, RAM y VRAM, cada uno opcional, con tamaño de fuente, esquina, opacidad del fondo y diseño.
     Los números son el uso del propio juego, no el de todo el sistema.
 
+  El menú sigue el idioma del launcher (inglés, portugués, español, francés, alemán, italiano,
+  polaco, turco, indonesio, ruso o chino), o el elegido arriba de la pestaña **Juego**, al
+  instante. La elección queda en `spartanport.ini` (`ui_language`).
+- **Trofeos** (F8, o R3+R2 en el control): todos los trofeos con su nombre oficial y lo que piden,
+  su grado, cuántos jugadores lo consiguieron y filtros por estado y por grado; notificaciones de
+  trofeo en cuatro temas, con tus propios sonidos e imágenes si quieres. Consulta
+  [docs/TROPHIES.es.md](docs/TROPHIES.es.md).
+
 ## Disponibilidad de funciones
 
 Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/SpartanPort/releases/tag/windows-v2.2.0) y en el código el 14 de octubre de 2026.
@@ -201,7 +209,8 @@ Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/
 | Corrección de pantalla negra / íconos de botones del control | Incluidos | Incluidos |
 | Discord Rich Presence | No incluido | Opcional en Advanced, desactivado por defecto; nombre del juego y tiempo transcurrido |
 | Corrección de la cola sparse en RADV | No incluida | Integrada en `main` |
-| FSR 1, FSR 3.1, FSR 4, TAA, DLSS | Desactivados | Desactivados en el flujo de ajustes del launcher/juego |
+| FSR 3.1, FSR 4, FSR 4.1, TAA | Desactivados | Gráficos → Upscaling y los menús del juego ([detalles](#upscaling)) |
+| FSR 1 | Desactivados | Desactivados en el flujo de ajustes del launcher/juego |
 | Nitidez RCAS | Disponible | Disponible |
 
 El AppImage Linux se recompiló el 14 de octubre para glibc 2.39 o posterior. Los paquetes
@@ -232,6 +241,33 @@ cubre toda GPU con esos dos drivers, incluidas las integradas; la línea del log
 multisampling off` u `on` indica lo que se aplicó. Elegí **Off** si las líneas aparecen en otra placa
 y **On** para mantener el multimuestreo de todas formas. Off y On establecen `SPARTAN_NO_MSAA=1` o `0`;
 Automatic deja pasar un `SPARTAN_NO_MSAA` heredado. Se aplica en el próximo inicio del juego.
+
+### Upscaling
+
+Elegí el upscaler y el preset de calidad en **Gráficos → Upscaling**, en el menú **Pantalla** del
+juego o en el menú **Insert** (**Image**). Los tres muestran los mismos valores. El valor por
+defecto es Desactivado. El preset renderiza una fracción de la resolución de renderizado y el
+upscaler reconstruye la resolución completa; cada preset muestra la resolución en que renderiza.
+Los cambios se aplican al reiniciar (**Aplicar y reiniciar** en el juego).
+
+- **FSR 3.1:** cualquier tarjeta gráfica.
+- **FSR 4:** el modelo abierto de FSR 4, incluido. Para AMD Radeon RX 6000 o posterior e Intel
+  Arc; Windows y Linux.
+- **TAA:** antialiasing a la resolución completa, sin upscaling.
+
+La generaci?n de fotogramas AMD FSR (2x) a?ade un fotograma generado entre los del juego.
+Act?vala en **Gr?ficos > Generaci?n de fotogramas** o en los men?s del juego, con un escalador
+seleccionado. Se aplica al instante; al desactivarla se mantiene el escalador.
+
+#### FSR 4.1 (AMD, Windows)
+
+FSR 4.1 funciona con el runtime Vulkan de AMD (`amdvkffx64.dll`), que viene con el driver de AMD
+(Adrenalin 26.10.1 o posterior).
+
+- RX 7000 y RX 9000: el driver debería incluirlo. Todavía no confirmado; los reportes son bienvenidos.
+- RX 6000: el driver actual trae FSR 4.1 solo para DirectX 12, sin el runtime Vulkan. SpartanPort
+  usa FSR 3.1 en su lugar e indica el motivo en el menú del juego (**Insert → Image**).
+- NVIDIA e Intel: FSR 3.1.
 
 ## Controles de teclado
 
@@ -272,6 +308,13 @@ L para la cruceta, Enter para Options, Tab y Retroceso para el touchpad.
 En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic del touchpad derecho)
 y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad funciona como en la
 PS4, y Share/Create funciona como View.
+
+**Ataques de cambio con L1 + cruceta y L1 + Cruz** (desactivado por defecto, página Controls): L1 +
+una dirección de la cruceta cambia a esa arma con su ataque de cambio, y el arma que Kratos ya tiene en
+la mano repite su ataque; L1 + Cruz hace el ataque de cambio del arma en la mano en lugar de pasar a la
+siguiente arma. El ataque de cambio de la misma arma otra vez espera 0,8 segundos después del último
+(el de otra arma no espera). La cruceta sola cambia como antes. Los tutoriales de cambio de arma lo dicen así en todos los idiomas
+(en copias de los archivos de idioma en la carpeta de datos del port). Sin el launcher, definí `SPARTAN_SWITCH_ATTACKS=1`.
 
 Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls del launcher, en
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* o *Keyboard*. Reemplazan los íconos de
@@ -446,6 +489,9 @@ Abierto desde un checkout, encuentra solo las herramientas de `out/`; `SPARTAN_P
 a un port empaquetado (con `bin/`). PLAY inicia el propio exe del launcher con `--run`, así que
 nada necesita Python.
 
+En macOS, `main` compila solo el launcher (PLAY todavía no tiene juego para iniciar); mirá los pasos en
+[launcher-rust/README.md](launcher-rust/README.md#macos) (en inglés).
+
 ## Tests
 
 Ejecutá desde la raíz del repositorio después de compilar. Los primeros tests C++ siguientes no necesitan un dump del juego.
@@ -562,6 +608,8 @@ deadinside28:
   hace toda la traducción de GPU y shaders a Vulkan en este port.
 - **[WilkPrintes](https://github.com/WilkPrintes)**: diseñó y construyó el
   [sitio de SpartanPort](https://spartanport.com/es). Un agradecimiento especial por darle un hogar al proyecto.
+- **IFreemz** (eFMann en GitHub): [shadPS4 Bloodborne DLSS & FSR](https://github.com/eFMann/shadPS4-Bloodborne-DLSS-FSR). El puente de DLSS y la integración
+  de los upscalers temporales en que se basan DLSS, FSR 3.1 y FSR 4 de este port.
 
 Parches: kvicken y cuesta4 (resolución, corrección de texturas, 120 FPS y saltar videos, sobre los
 parches de PS3 de illusion0001), publicados para shadPS4 en
@@ -576,7 +624,8 @@ También se usan: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmp
 [sirit](https://github.com/shadps4-emu/sirit), [magic_enum](https://github.com/Neargye/magic_enum),
 [miniz](https://github.com/richgel999/miniz), [xbyak](https://github.com/herumi/xbyak),
 [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
-[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) y el AMD FidelityFX SDK,
+[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) y el AMD FidelityFX SDK, [Q2RTX](https://github.com/FireBurn/Q2RTX) (los archivos
+del modelo abierto de FSR 4),
 [MSYS2](https://www.msys2.org), [LLVM](https://llvm.org) y [Pillow](https://python-pillow.org).
 
 ## Licencia

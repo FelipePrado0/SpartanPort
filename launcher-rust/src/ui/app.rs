@@ -78,10 +78,12 @@ pub struct State {
     pub lang: String,
     /// Whether the interface language reads right to left (Arabic).
     pub rtl: bool,
-    /// The interface zoom (`theme::ui_scale`): screen pixels per logical pixel.
+    /// The interface zoom (`theme::zoom`): screen pixels per logical pixel.
     pub scale: f32,
     /// The desktop's own scale where the window opened; 1.0 until the window reports it.
     pub desktop_scale: f32,
+    /// The window's monitor in screen pixels, once known; GUI Scale Auto fits the window to it.
+    pub monitor_px: Option<Size>,
     pub splash: SplashState,
     pub game: GameState,
     /// The Home status line while the game starts, runs or its system files are copied; empty
@@ -180,7 +182,7 @@ impl State {
         };
         let lang = launcher_language(&store.text("ui_language"), system_language);
         // The desktop's scale, which `window_zoom` takes out, is known once the window opens.
-        let scale = theme::ui_scale(&store.text("ui_scale"));
+        let scale = theme::zoom(&store.text("ui_scale"), 1.0, None);
         let now = Instant::now();
         let rtl = is_rtl(&lang);
         let controls = ControlsView::new(store.app());
@@ -203,6 +205,7 @@ impl State {
             rtl,
             scale,
             desktop_scale: 1.0,
+            monitor_px: None,
             splash: SplashState::new(now),
             game: Default::default(),
             status: String::new(),
@@ -404,22 +407,42 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
                 .discard(),
             ]);
         }
-        // The monitor the window opened on: the zoom takes its scale out of GUI Scale.
+        // The monitor the window opened on: the zoom takes its scale out of GUI Scale, and Auto
+        // follows it until `MonitorSize` caps it to the screen.
         Message::DesktopScale(factor) => {
             state.desktop_scale = factor;
-            state.scale = theme::ui_scale(&state.store.text("ui_scale"));
+            state.scale = current_zoom(state);
             return fit_window(state);
         }
-        // GUI Scale (1x or 1.5x) keeps its size on the new desktop; the window is neither refitted
-        // nor moved. Its logical size changes with the zoom, so it is read again.
+        // GUI Scale 1x or 1.5x keeps its size on the new desktop; the window is neither refitted
+        // nor moved. Its logical size changes with the zoom, so it is read again. Auto takes the
+        // new desktop's scale and fits the window to the new monitor.
         Message::DesktopRescaled(factor) => {
             state.desktop_scale = factor;
-            state.scale = theme::ui_scale(&state.store.text("ui_scale"));
+            state.scale = current_zoom(state);
+            if theme::ui_scale(&state.store.text("ui_scale")).is_none() {
+                return fit_window(state);
+            }
             if let Some(id) = state.window {
                 return window::size(id).map(Message::Resized);
             }
         }
-        Message::MonitorSize(monitor) => return size_window(state, monitor),
+        Message::MonitorSize(monitor) => {
+            // iced reports the monitor in logical pixels of the current zoom.
+            let monitor = known_monitor(monitor);
+            if let Some(monitor) = monitor {
+                state.monitor_px = Some(monitor * state.scale);
+            }
+            let zoom = current_zoom(state);
+            let monitor = match (monitor, state.monitor_px) {
+                (Some(_), Some(px)) if zoom != state.scale => {
+                    state.scale = zoom;
+                    Some(px * (1.0 / zoom))
+                }
+                _ => monitor,
+            };
+            return size_window(state, monitor);
+        }
         Message::Tick(at) => {
             tick(state, at);
             lang_menu::update(state, LangMessage::Tick(at));
@@ -580,7 +603,12 @@ fn browse(state: &State, key: String) -> Task<Message> {
 pub fn start_monitor_listing(state: &State) -> Task<Message> {
     let paths = state.paths.clone();
     let backend = state.store.text("video_backend");
-    blocking(move || list_displays(&SystemTools, &paths, &backend)).map(Message::MonitorsListed)
+    blocking(move || {
+        list_displays(&SystemTools, &paths, &backend, &|key| {
+            std::env::var(key).ok()
+        })
+    })
+    .map(Message::MonitorsListed)
 }
 
 /// Advances the clock, the fire and the splash.
@@ -885,6 +913,15 @@ pub fn window_message((id, event): (window::Id, window::Event)) -> Option<Messag
         window::Event::Unfocused => Some(Message::WindowFocused(false)),
         _ => None,
     }
+}
+
+/// The zoom of the stored GUI Scale on the window's desktop and monitor (`theme::zoom`).
+pub fn current_zoom(state: &State) -> f32 {
+    theme::zoom(
+        &state.store.text("ui_scale"),
+        state.desktop_scale,
+        state.monitor_px,
+    )
 }
 
 /// The monitor's size when it is a real one: Wayland reports 0 × 0 for an output without a current

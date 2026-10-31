@@ -187,6 +187,14 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
     RAM and VRAM, each optional, with font size, corner, background opacity and layout. The
     numbers are the game's own use, not the whole system's.
 
+  The menu follows the launcher's language (English, Portuguese, Spanish, French, German,
+  Italian, Polish, Turkish, Indonesian, Russian or Chinese), or the one chosen at the top of its
+  **Game** tab, at once (see [Menu language](#menu-language)).
+- **Trophies** (F8, or R3+R2 on the controller): every trophy with its official name and what it
+  asks, its grade, how many players earned it, and filters by state and grade; unlock
+  notifications in four themes, with your own sounds and pictures if you want. See
+  [docs/TROPHIES.md](docs/TROPHIES.md).
+
 ## Feature availability
 
 Availability checked against [release 2.2.0](https://github.com/FelipePrado0/SpartanPort/releases/tag/windows-v2.2.0) and the source on October 14, 2026.
@@ -197,7 +205,8 @@ Availability checked against [release 2.2.0](https://github.com/FelipePrado0/Spa
 | Startup black-screen patch / controller button icons | Included | Included |
 | Discord Rich Presence | Not included | Optional under Advanced, off by default; game name and elapsed time |
 | RADV sparse-queue fix | Not included | Merged into `main` |
-| FSR 1, FSR 3.1, FSR 4, TAA, DLSS | Disabled | Disabled in the launcher/game settings path |
+| FSR 3.1, FSR 4, FSR 4.1, TAA | Disabled | Graphics → Upscaling and the in-game menus ([details](#upscaling)) |
+| FSR 1 | Disabled | Disabled in the launcher/game settings path |
 | RCAS sharpening | Available | Available |
 
 The Linux AppImage was rebuilt on October 14 for glibc 2.39 or newer. The Windows and Linux
@@ -209,13 +218,13 @@ Settings are kept in `spartanport.ini` (the game and the in-game menu) and in
 `settings.json` (the launcher), in the port folder. Saves, the shader cache and
 `last_run.log` go to the project's `user` folder.
 
-**GUI Scale:** choose **Auto**, **1x** or **2x** under **Advanced → Launcher**,
-then click **Save**. Text, controls and layout resize together, without changing
-game resolution. Auto follows the desktop scale the window system reports to the Rust
-launcher (Windows display scaling; the Wayland or X11 scale on Linux). On macOS, Retina
-scaling stays with the operating system. Manual 1x/2x sets the launcher's logical size, including text,
-icons, controls, scrollbars and spacing. Screen resolution alone does not select
-a scale. The choice is saved in `settings.json`.
+**GUI Scale:** choose **Auto (fits the screen)** (the default), **1x** or **1.5x** under
+**Advanced → Launcher**, then click **Save**. Text, controls and layout resize together, without
+changing game resolution. Auto follows the desktop scale the window system reports (Windows display
+scaling, Retina on macOS, the Wayland or X11 scale on Linux), lowered when needed so the
+1280 × 800 window fits in 90 % of the monitor, and never below 1x. It is worked out again when
+the window moves to a monitor with another scale. 1x and 1.5x are fixed sizes in screen pixels,
+whatever the desktop scale. The choice is saved in `settings.json`.
 
 On **Performance → GPU data → Stream buffer memory**, choose **System RAM (cached, default)**,
 **System RAM (uncached)** or **GPU memory (previous behavior)**. System RAM can improve frame
@@ -235,11 +244,49 @@ multisampling off` or `on` is what was applied. Choose **Off** if the lines appe
 card and **On** to keep multisampling anyway. Off and On set `SPARTAN_NO_MSAA=1` or `0`; Automatic
 passes an inherited `SPARTAN_NO_MSAA` through. Applies on the next game launch.
 
-### Chinese interface
+### Upscaling
+
+Choose the upscaler and the quality preset under **Graphics → Upscaling**, in the in-game
+**Display** menu or in the **Insert** menu (**Image**). The three show the same values. Off is
+the default. A preset renders a share of the Render resolution and the upscaler rebuilds the
+full resolution; each preset shows the size it renders at. Changes apply on restart (**Apply
+and Restart** in the game).
+
+- **FSR 3.1:** every graphics card.
+- **FSR 4:** the open FSR 4 model, included. For AMD Radeon RX 6000 or newer and Intel Arc;
+  Windows and Linux.
+- **TAA:** anti-aliasing at the full resolution, no upscaling.
+
+AMD FSR frame generation (2x) adds one generated frame between game frames. Enable it
+under **Graphics > Frame generation** or in the in-game menus, with an upscaler selected.
+It applies live; disabling it returns to the game frames without changing the upscaler.
+
+#### FSR 4.1 (AMD, Windows)
+
+FSR 4.1 runs through AMD's Vulkan runtime (`amdvkffx64.dll`), which comes with the AMD driver
+(Adrenalin 26.10.1 or newer).
+
+- RX 7000 and RX 9000: the driver should include it. Not yet confirmed; reports are welcome.
+- RX 6000: the current driver ships FSR 4.1 for DirectX 12 only, without the Vulkan runtime.
+  SpartanPort uses FSR 3.1 instead and says why in the in-game menu (**Insert → Image**).
+- NVIDIA and Intel: FSR 3.1.
+
+### Menu language
+
+The Insert / R3+L2 menu and the trophy window (F8 / R3+R2) use the launcher's language
+(**Advanced → Launcher language**) in English, Portuguese, Spanish, French, German, Italian,
+Polish, Turkish, Indonesian, Russian and Chinese. **Language**, at the top of the menu's **Game**
+tab (and of the trophy window's **Notifications** page), switches them at once and is kept in
+`spartanport.ini` (`ui_language`); **Same as the launcher** follows the launcher again. The trophy
+names change with it (the launcher writes them in every language in `user/trophy_texts/`). This
+does not change the game's own text or voice language. Arabic, Japanese and Korean keep the menu
+in English: its font does not draw them. The `ui-language-test` CMake target checks that every
+language has every text and keeps each printf format's arguments.
+
+#### Chinese
 
 Select **简体中文** under **Advanced → Launcher language** for the launcher and the
-Insert / R3+L2 menu. This does not change the game's text or voice language. Direct launches
-without the launcher can set `SPARTAN_UI_LANGUAGE=zh`.
+Insert / R3+L2 menu. Direct launches without the launcher can set `SPARTAN_UI_LANGUAGE=zh`.
 
 The launcher prefers an installed CJK font (Microsoft YaHei UI on Windows, Noto Sans CJK SC
 or another available CJK family elsewhere). The in-game menu merges an installed Chinese
@@ -290,6 +337,14 @@ Tab and Backspace for the touchpad.
 On a controller without a touchpad (Xbox and others), View opens the pause menu (the right
 touchpad click) and L1 + View opens photo mode (the left click). On a DualSense the touchpad
 works as on the PS4, and Share/Create works like View.
+
+**Switch attacks on L1 + d-pad and L1 + Cross** (off by default, Controls page): L1 + a d-pad
+direction switches to that weapon with its switch attack, and the weapon in Kratos' hands does its
+attack again; L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the
+next weapon. The same weapon's switch attack again waits 0.8 seconds after the last one (another
+weapon's does not). The d-pad alone switches as before. The Weapon Switching tutorials say so in every language
+(on copies of the language files in the port's data folder). Without the launcher, set `SPARTAN_SWITCH_ATTACKS=1`.
+How the game picks Kratos' moves, for further changes: [docs/moves.md](docs/moves.md).
 
 **In-game button icons** (off by default) are chosen on the launcher's Controls page, under
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* or *Keyboard*. They replace the PlayStation icons in the
@@ -365,7 +420,7 @@ read the joystick; the mapper does not install device drivers.
 - Black screen at start: use the latest release, which includes the startup deadlock patch.
   If it persists, report your GPU, driver, game build and **Advanced → Log** output. Clearing
   the shader cache is not a general fix and requires rebuilding it on the next launch.
-- The game closes with "cannot create ... guest memory (error 1450)": Windows ran out of virtual memory to allocate the guest pool. Increase the page file: press **Win + R**, type `SystemPropertiesAdvanced`, go to **Performance** Settings → **Advanced** → **Virtual memory** Change, uncheck automatic management, select drive **C:**, set a custom size (e.g. 16384 MB initial, 24576 MB maximum), click **Set**, **OK**, and restart your PC.
+- The game closes with "cannot create ... guest memory (error 1450)", or later with "cannot commit ... guest memory": Windows ran out of virtual memory to allocate the guest pool. Increase the page file: press **Win + R**, type `SystemPropertiesAdvanced`, go to **Performance** Settings → **Advanced** → **Virtual memory** Change, uncheck automatic management, select drive **C:**, set a custom size (e.g. 16384 MB initial, 24576 MB maximum), click **Set**, **OK**, and restart your PC.
 - **Game language** in the launcher has no effect: it is only used on the game's first start. After
   that the game restores its own text and speech languages from its settings save, so change them in
   the game: **Options → Game Settings → Game Text** and **Options → Audio → Speech** (for example,
@@ -478,6 +533,9 @@ cargo run --release
 Started from a checkout, it finds the tools in `out/` on its own; `SPARTAN_PORT_DIR` points it at a
 packaged port instead (its `bin/`). PLAY starts the launcher's own exe with `--run`, so nothing
 needs Python.
+
+On macOS only the launcher builds from `main` (PLAY has no game to start yet); see
+[launcher-rust/README.md](launcher-rust/README.md#macos) for the steps.
 
 ### Linux (Arch Linux)
 
@@ -616,6 +674,7 @@ This project is a fork of Supermedo's Windows port, which builds on deadinside28
   all the GPU and shader translation to Vulkan in this port.
 - **[WilkPrintes](https://github.com/WilkPrintes)**: designed and built the
   [SpartanPort website](https://spartanport.com/en). Special thanks for giving the project its home.
+- **IFreemz** (eFMann on GitHub): [shadPS4 Bloodborne DLSS & FSR](https://github.com/eFMann/shadPS4-Bloodborne-DLSS-FSR). The temporal upscaler integration this port's FSR 3.1 and FSR 4 are based on.
 
 Patches: kvicken and cuesta4 (resolution, texture fix, 120 FPS and skip videos, building on the
 PS3 patches by illusion0001), published for shadPS4 in
@@ -629,7 +688,8 @@ Also used: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmpeg](htt
 [sirit](https://github.com/shadps4-emu/sirit), [magic_enum](https://github.com/Neargye/magic_enum),
 [miniz](https://github.com/richgel999/miniz), [xbyak](https://github.com/herumi/xbyak),
 [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
-[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) and the AMD FidelityFX SDK,
+[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) and the AMD FidelityFX SDK, [Q2RTX](https://github.com/FireBurn/Q2RTX) (the open FSR 4
+model files),
 [MSYS2](https://www.msys2.org), [LLVM](https://llvm.org) and [Pillow](https://python-pillow.org).
 
 ## License

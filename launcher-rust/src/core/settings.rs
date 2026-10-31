@@ -153,6 +153,10 @@ mod tests {
         assert_eq!(defaults.len(), 43);
         assert_eq!(defaults.keys().next().unwrap(), "ui_language");
         assert_eq!(defaults.keys().next_back().unwrap(), "glyph_style");
+        // The switch attacks sit right before the glyphs, as in the Python's APP_DEFAULTS.
+        let at = defaults.keys().position(|key| key == "switch_attacks");
+        assert_eq!(at, Some(41));
+        assert_eq!(defaults["switch_attacks"], json!(false));
         // The 2.7.0 shader cache switches sit between the screen effects and the warm-up.
         let keys: Vec<&str> = defaults.keys().map(String::as_str).collect();
         let at = keys
@@ -174,8 +178,8 @@ mod tests {
         assert_eq!(defaults["shader_notes"], json!(false));
         // Ruling R83: no folder is guessed, on any system.
         assert_eq!(defaults["game_dir"], json!(""));
-        // Ruling R90: GUI Scale starts at 1x (the Python's "auto" followed the desktop).
-        assert_eq!(defaults["ui_scale"], json!("1"));
+        // GUI Scale starts at Auto, the desktop's scale fitted to the screen (as the Python's).
+        assert_eq!(defaults["ui_scale"], json!("auto"));
         // Ruling R91: Discord Rich Presence starts on.
         assert_eq!(defaults["discord_rpc"], json!(true));
         let env = |k: &str| (k == "SPARTAN_GAME_DIR").then(|| "/games".to_string());

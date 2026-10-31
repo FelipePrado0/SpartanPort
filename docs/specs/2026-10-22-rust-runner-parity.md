@@ -1,10 +1,11 @@
 # Rust runner parity: Python tests → Rust tests
 
-Every test method of the 18 Python files that test the game runner (`tests/test_prepare.py`,
+Every test method of the 19 Python files that test the game runner (`tests/test_prepare.py`,
 `test_link_libc.py`, `test_link_modules.py`, `test_isa_rewrite.py`, `test_run_isa.py`,
 `test_patches.py`, `test_mods.py`, `test_mod_conflicts.py`, `test_glyphs.py`, `test_content.py`,
 `test_guest_memory.py`, `test_graphics_options.py`, `test_save_backup.py`, `test_pause_menu.py`,
-`test_native_cheats.py`, `test_legacy.py`, `test_discord_presence.py`, `test_game_update.py`; the
+`test_native_cheats.py`, `test_legacy.py`, `test_discord_presence.py`, `test_game_update.py`,
+`test_switch_text.py`; the
 Python runner 2.7.0, reference `003e42b`) with the Rust test of `launcher-rust/` that covers its
 behaviour (spec `2026-10-22-rust-runner-design.md` §7). `tests/test_runner_parity_doc.py` keeps this
 map honest through `tests/parity_doc.py`, the checker it shares with the launcher map
@@ -54,6 +55,9 @@ the second definition is the live one and has the only row (33 definitions, 32 r
 `test_patches.py::test_unavailable_frame_rate_patch_falls_back_to_the_highest_lower_one` tests
 `graphics_options.restrict_to_available`; its row names the Rust test of `graphics_options.rs`.
 `test_game_update.py` has its own rows against `src/runner/game_update.rs`.
+`test_switch_text.py` (the switch attacks' tutorial texts, after 2.7.0) has its own rows against
+`src/runner/switch_text.rs`; `tests/dump.rs::real_switch_text_wads_match_python` compares the copies of
+the dump's language WADs with the Python's.
 The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discovery, conflict and info tests of `src/core/mods.rs` are ports from the launcher work (sub-project 1) that the runner kept using.
 
 ## Counts
@@ -78,7 +82,8 @@ The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discove
 | `tests/test_legacy.py` | 34 | 18 | 6 | 0 | 0 | 10 | 0 |
 | `tests/test_discord_presence.py` | 26 | 22 | 3 | 0 | 0 | 1 | 0 |
 | `tests/test_game_update.py` | 6 | 6 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **326** | **289** | **21** | **4** | **0** | **12** | **0** |
+| `tests/test_switch_text.py` | 4 | 4 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **330** | **293** | **21** | **4** | **0** | **12** | **0** |
 
 ## Map
 
@@ -293,6 +298,12 @@ The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discove
 | `tests/test_graphics_options.py::SteamDeckTest::test_other_machines_stay_native` | `src/core/graphics_options.rs::tests::other_machines_stay_native` | ported |
 | `tests/test_graphics_options.py::SteamDeckTest::test_no_dmi_names_stays_native` | `src/core/graphics_options.rs::tests::no_dmi_names_stays_native` | ported |
 | `tests/test_graphics_options.py::SteamDeckTest::test_the_default_resolution_is_a_built_in_one` | `src/core/graphics_options.rs::tests::the_default_resolution_is_a_built_in_one` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_upscale_render_size_follows_the_preset_scale` | `src/core/graphics_options.rs::tests::upscale_render_size_follows_the_preset_scale` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_upscaler_output_is_the_chosen_render_resolution` | `src/core/graphics_options.rs::tests::upscaler_output_is_the_chosen_render_resolution` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_upscale_render_size_goes_above_the_games_1080p` | `src/core/graphics_options.rs::tests::upscale_render_size_follows_the_preset_scale` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_the_scene_is_never_the_display_size` | `src/core/graphics_options.rs::tests::upscale_render_size_follows_the_preset_scale` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_resolution_patch_for_any_size_matches_the_built_in_ones` | `src/core/graphics_options.rs::tests::resolution_patch_for_any_size_matches_the_built_in_ones` | ported |
+| `tests/test_graphics_options.py::SteamDeckTest::test_resolution_patch_takes_the_smallest_template_that_fits` | `src/core/graphics_options.rs::tests::resolution_patch_takes_the_smallest_template_that_fits` | ported |
 | `tests/test_save_backup.py::SaveBackupTest::test_copies_savedata` | `src/core/save_backup.rs::tests::copies_savedata` | ported |
 | `tests/test_save_backup.py::SaveBackupTest::test_no_backup_without_saves` | `src/core/save_backup.rs::tests::no_backup_without_saves` | ported |
 | `tests/test_save_backup.py::SaveBackupTest::test_same_second_gets_unique_name` | `src/core/save_backup.rs::tests::same_second_gets_unique_name` | ported |
@@ -331,8 +342,10 @@ The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discove
 | `tests/test_native_cheats.py::NativeCheats::test_graphics_labels_follow_the_game_language` | `src/runner/pause_menu.rs::tests::graphics_labels_follow_the_game_language` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_graphics_options_label_animation_and_confirmation_focus` | `src/runner/pause_menu.rs::tests::graphics_options_label_animation_and_confirmation_focus` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_graphics_rows_wrap_and_only_strength_uses_a_slider` | `src/runner/pause_menu.rs::tests::graphics_rows_wrap_and_only_strength_uses_a_slider` | ported |
+| `tests/test_native_cheats.py::NativeCheats::test_graphics_live_rows_query_and_change_their_settings` | `src/runner/pause_menu.rs::tests::graphics_live_rows_query_and_change_their_settings` | ported |
+| `tests/test_native_cheats.py::NativeCheats::test_graphics_scrolls_and_hides_the_slider_and_its_scrollbar` | `src/runner/pause_menu.rs::tests::graphics_scrolls_and_hides_the_slider_and_its_scrollbar` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_audio_clears_unused_rows_inherited_from_options` | `src/runner/pause_menu.rs::tests::audio_clears_unused_rows_inherited_from_options` | ported |
-| `tests/test_native_cheats.py::NativeCheats::test_display_contains_eight_new_controls_and_keeps_its_original_rows` | `src/runner/pause_menu.rs::tests::display_contains_eight_new_controls_and_keeps_its_original_rows` | ported |
+| `tests/test_native_cheats.py::NativeCheats::test_display_contains_eight_new_controls_and_keeps_its_original_rows` | `src/runner/pause_menu.rs::tests::display_contains_ten_new_controls_and_keeps_its_original_rows` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_display_scrolls_without_overwriting_original_setting_values` | `src/runner/pause_menu.rs::tests::display_scrolls_without_overwriting_original_setting_values` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_graphics_does_not_add_an_informational_row` | `src/runner/pause_menu.rs::tests::graphics_does_not_add_an_informational_row` | ported |
 | `tests/test_native_cheats.py::NativeCheats::test_every_cheat_has_native_selection_and_initial_value` | `tests/dump.rs::real_menu_every_cheat_has_native_selection_and_initial_value` | ported |
@@ -410,6 +423,10 @@ The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discove
 | `tests/test_game_update.py::GameUpdateTests::test_dumps_are_not_modified` | `src/runner/game_update.rs::tests::dumps_are_not_modified` | ported |
 | `tests/test_game_update.py::GameUpdateTests::test_a_network_share_without_junctions_mirrors_the_tree` | `src/runner/game_update.rs::tests::a_network_share_without_junctions_mirrors_the_tree` | ported |
 | `tests/test_game_update.py::GameUpdateTests::test_different_titles_and_nested_folders_are_refused` | `src/runner/game_update.rs::tests::different_titles_and_nested_folders_are_refused` | ported |
+| `tests/test_switch_text.py::SwitchTextTest::test_cards_end_with_the_new_lines_and_what_follows_moves` | `src/runner/switch_text.rs::cards_end_with_the_new_lines_and_what_follows_moves` | ported |
+| `tests/test_switch_text.py::SwitchTextTest::test_any_wording_of_the_old_sentence` | `src/runner/switch_text.rs::any_wording_of_the_old_sentence` | ported |
+| `tests/test_switch_text.py::SwitchTextTest::test_a_language_whose_font_lacks_a_new_character_keeps_its_text` | `src/runner/switch_text.rs::a_language_whose_font_lacks_a_new_character_keeps_its_text` | ported |
+| `tests/test_switch_text.py::SwitchTextTest::test_build_mounts_copies_and_never_writes_the_game` | `src/runner/switch_text.rs::build_mounts_copies_and_never_writes_the_game` | ported |
 
 ## Known deviations from the Python
 

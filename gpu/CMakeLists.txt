@@ -117,6 +117,9 @@ add_host_shader(post_process.frag post_process_frag)
 add_host_shader(camera_motion.comp camera_motion_comp)
 add_host_shader(upscale_merge.comp upscale_merge_comp)
 add_host_shader(upscale_reactive.comp upscale_reactive_comp)
+add_host_shader(stencil_reactive.comp stencil_reactive_comp)
+add_host_shader(fg_depth.comp fg_depth_comp)
+add_host_shader(fg_hud.comp fg_hud_comp)
 add_host_shader(taa.comp taa_comp)
 add_host_shader(taa_sharpen.comp taa_sharpen_comp)
 add_host_shader(taa_sharpen.comp taa_sharpen_ldr_comp LDR_OUTPUT=1)
@@ -163,9 +166,10 @@ target_sources(spartanportgpu PRIVATE third_party/imgui/imgui.cpp third_party/im
     third_party/imgui/backends/imgui_impl_vulkan.cpp)
 target_include_directories(spartanportgpu PRIVATE third_party/imgui third_party/imgui/backends)
 target_compile_definitions(spartanportgpu PRIVATE IMGUI_IMPL_VULKAN_NO_PROTOTYPES
-    SPARTAN_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf")
+    SPARTAN_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf"
+    SPARTAN_TITLE_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../launcher/Cinzel-Black.ttf")
 set_source_files_properties(shim/spartanport_overlay.cpp PROPERTIES
-    OBJECT_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf)
+    OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf;${CMAKE_CURRENT_SOURCE_DIR}/../launcher/Cinzel-Black.ttf")
 target_include_directories(spartanportgpu PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include third_party/half/include)
 target_compile_definitions(spartanportgpu PRIVATE BOOST_ASIO_STANDALONE NDEBUG)
 target_compile_options(spartanportgpu PRIVATE -Wno-deprecated-declarations -Wno-missing-field-initializers)
@@ -173,7 +177,8 @@ target_compile_options(spartanportgpu PRIVATE -Wno-deprecated-declarations -Wno-
 if (NOT WIN32)
     target_link_options(spartanportgpu PRIVATE -Wl,--allow-shlib-undefined)
 endif()
-target_link_libraries(spartanportgpu PRIVATE ffx-vulkan::portable ffx-vulkan::fsr4-v07-vulkan)
+target_link_libraries(spartanportgpu PRIVATE ffx-vulkan::portable ffx-vulkan::fsr4-v07-vulkan
+    ffx-vulkan::fsr3-vk-framegeneration-3.1.6)
 target_link_libraries(spartanportgpu PUBLIC Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
     tsl::robin_map GPUOpen::VulkanMemoryAllocator PkgConfig::XXHASH PkgConfig::SDL3 PkgConfig::FFMPEG miniz::miniz Zydis::Zydis sirit)
 target_include_directories(spartanportgpu PRIVATE third_party/xbyak)
@@ -308,6 +313,28 @@ target_link_libraries(motion-shader-test PRIVATE spartanportgpu)
 add_executable(png-decode-test EXCLUDE_FROM_ALL ../tests/test_png_decode.cpp shim/spartanport_png.cpp)
 target_compile_options(png-decode-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_link_libraries(png-decode-test PRIVATE PkgConfig::FFMPEG)
+add_executable(trophy-toast-test EXCLUDE_FROM_ALL ../tests/test_trophy_toast.cpp
+    shim/spartanport_trophy_toast_model.cpp shim/spartanport_trophy_media.cpp shim/spartanport_trophy_texts.cpp
+    shim/spartanport_png.cpp)
+target_include_directories(trophy-toast-test PRIVATE shim)
+target_compile_options(trophy-toast-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+target_link_libraries(trophy-toast-test PRIVATE PkgConfig::FFMPEG)
+# The overlay drawn offscreen (tools/overlay_preview.cpp): its own code through ImGui's SDL software
+# renderer, for working on its look without the game and for the documentation's pictures.
+add_executable(overlay-preview EXCLUDE_FROM_ALL tools/overlay_preview.cpp
+    third_party/imgui/backends/imgui_impl_sdlrenderer3.cpp)
+# The overlay's source is compiled here as in the library: same definitions, includes and options.
+target_include_directories(overlay-preview PRIVATE $<TARGET_PROPERTY:spartanportgpu,INCLUDE_DIRECTORIES>)
+target_compile_definitions(overlay-preview PRIVATE $<TARGET_PROPERTY:spartanportgpu,COMPILE_DEFINITIONS>)
+target_compile_options(overlay-preview PRIVATE $<TARGET_PROPERTY:spartanportgpu,COMPILE_OPTIONS>)
+target_link_libraries(overlay-preview PRIVATE spartanportgpu)
+if (WIN32)
+    target_sources(overlay-preview PRIVATE ../src/compat_win.c)
+    target_link_libraries(overlay-preview PRIVATE onecore bcrypt ws2_32 -pthread)
+endif()
+add_executable(ui-language-test EXCLUDE_FROM_ALL ../tests/test_ui_language.cpp)
+target_include_directories(ui-language-test PRIVATE shim)
+target_compile_options(ui-language-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 add_executable(aliasing-test EXCLUDE_FROM_ALL ../tests/test_aliasing.cpp
     shadps4/video_core/texture_cache/aliasing.cpp shadps4/video_core/texture_cache/host_compatibility.cpp)
 target_compile_options(aliasing-test PRIVATE -UNDEBUG)
@@ -367,6 +394,19 @@ add_executable(ui-composition-test EXCLUDE_FROM_ALL ../tests/test_ui_composition
 target_compile_options(ui-composition-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_include_directories(ui-composition-test PRIVATE ..)
 
+add_executable(frame-generation-test EXCLUDE_FROM_ALL ../tests/test_frame_generation.cpp
+    shadps4/video_core/renderer_vulkan/frame_generation_policy.cpp)
+target_compile_options(frame-generation-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+target_include_directories(frame-generation-test PRIVATE .. shadps4)
+
+add_executable(frame-generation-runtime-test EXCLUDE_FROM_ALL
+    ../tests/test_frame_generation_runtime.cpp ../tests/test_gpu_runtime_stubs.cpp)
+target_include_directories(frame-generation-runtime-test PRIVATE shim shadps4 third_party/gcn/include)
+target_compile_options(frame-generation-runtime-test PRIVATE -UNDEBUG -fPIC)
+set_source_files_properties(../tests/test_frame_generation_runtime.cpp PROPERTIES
+    COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
+target_link_libraries(frame-generation-runtime-test PRIVATE spartanportgpu)
+
 add_executable(scene-resolution-test EXCLUDE_FROM_ALL ../tests/test_scene_resolution.cpp ../tests/test_gpu_runtime_stubs.cpp)
 target_include_directories(scene-resolution-test PRIVATE shim shadps4 third_party/gcn/include)
 # The test's Vulkan-Hpp inline methods have a different set of platform extensions
@@ -383,6 +423,21 @@ set_source_files_properties(../tests/test_taa_shader.cpp PROPERTIES
 target_link_libraries(taa-shader-test PRIVATE spartanportgpu)
 add_dependencies(taa-shader-test host_shaders)
 
+add_executable(reactive-shader-test EXCLUDE_FROM_ALL ../tests/test_reactive_shader.cpp)
+target_include_directories(reactive-shader-test PRIVATE ${SHADER_INCLUDE})
+target_compile_options(reactive-shader-test PRIVATE -UNDEBUG)
+target_link_libraries(reactive-shader-test PRIVATE Vulkan::Vulkan GPUOpen::VulkanMemoryAllocator)
+add_dependencies(reactive-shader-test host_shaders)
+
+add_executable(fg-motion-shader-test EXCLUDE_FROM_ALL ../tests/test_fg_motion_shader.cpp)
+target_include_directories(fg-motion-shader-test PRIVATE ${SHADER_INCLUDE})
+target_compile_options(fg-motion-shader-test PRIVATE -UNDEBUG)
+target_link_libraries(fg-motion-shader-test PRIVATE Vulkan::Vulkan GPUOpen::VulkanMemoryAllocator)
+add_dependencies(fg-motion-shader-test host_shaders)
+
+add_executable(view-projection-test EXCLUDE_FROM_ALL ../tests/test_view_projection.cpp)
+target_include_directories(view-projection-test PRIVATE shadps4)
+target_compile_options(view-projection-test PRIVATE -UNDEBUG)
 add_executable(camera-motion-test EXCLUDE_FROM_ALL ../tests/test_camera_motion.cpp ../tests/test_gpu_runtime_stubs.cpp)
 target_include_directories(camera-motion-test PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include)
 target_compile_options(camera-motion-test PRIVATE -UNDEBUG -fPIC)
@@ -394,6 +449,15 @@ add_executable(upscaler-support-test EXCLUDE_FROM_ALL ../tests/test_upscaler_sup
     shim/spartanport_settings.cpp)
 target_include_directories(upscaler-support-test PRIVATE shim)
 target_compile_options(upscaler-support-test PRIVATE -UNDEBUG)
+target_compile_definitions(upscaler-support-test PRIVATE
+    SPARTAN_SIZES_TABLE="${CMAKE_CURRENT_SOURCE_DIR}/../tests/upscale_render_sizes.txt")
+
+add_executable(fsr-driver-test EXCLUDE_FROM_ALL ../tests/test_fsr_driver.cpp
+    shadps4/video_core/renderer_vulkan/fsr_driver.cpp)
+target_include_directories(fsr-driver-test PRIVATE shadps4)
+target_compile_definitions(fsr-driver-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_options(fsr-driver-test PRIVATE -UNDEBUG)
+target_link_libraries(fsr-driver-test PRIVATE Vulkan::Headers)
 add_executable(orb-multiplier-test EXCLUDE_FROM_ALL ../tests/test_orb_multiplier.cpp
     shim/spartanport_orbs.cpp shim/spartanport_settings.cpp)
 target_include_directories(orb-multiplier-test PRIVATE shim)
@@ -429,6 +493,17 @@ add_executable(graphics-settings-test EXCLUDE_FROM_ALL ../tests/test_graphics_se
     shim/spartanport_settings.cpp)
 target_include_directories(graphics-settings-test PRIVATE shim)
 target_compile_options(graphics-settings-test PRIVATE -UNDEBUG)
+add_executable(menu-confirm-swap-test EXCLUDE_FROM_ALL ../tests/test_menu_confirm_swap.cpp
+    shim/spartanport_settings.cpp)
+target_include_directories(menu-confirm-swap-test PRIVATE shim third_party/imgui)
+target_link_libraries(menu-confirm-swap-test PRIVATE PkgConfig::SDL3)
+target_compile_options(menu-confirm-swap-test PRIVATE -UNDEBUG)
+add_executable(depth-of-field-test EXCLUDE_FROM_ALL ../tests/test_depth_of_field.cpp)
+target_include_directories(depth-of-field-test PRIVATE shim)
+target_compile_options(depth-of-field-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+add_executable(motion-blur-test EXCLUDE_FROM_ALL ../tests/test_motion_blur.cpp)
+target_include_directories(motion-blur-test PRIVATE shim)
+target_compile_options(motion-blur-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 add_executable(actor-hook-test EXCLUDE_FROM_ALL ../tests/test_actor_hook.cpp)
 target_include_directories(actor-hook-test PRIVATE shim)
 target_compile_options(actor-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
@@ -437,8 +512,12 @@ target_compile_options(qte-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 add_executable(camera-hook-test EXCLUDE_FROM_ALL ../tests/test_camera_hook.cpp ../src/runtime_camera.c)
 target_include_directories(camera-hook-test PRIVATE ../src ..)
 target_compile_options(camera-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+add_executable(switch-hook-test EXCLUDE_FROM_ALL ../tests/test_switch_hook.cpp)
+target_compile_options(switch-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror -mno-red-zone)
 add_executable(menu-hook-test EXCLUDE_FROM_ALL ../tests/test_menu_hook.cpp)
 target_compile_options(menu-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+add_executable(graphics-hook-test EXCLUDE_FROM_ALL ../tests/test_graphics_hook.cpp)
+target_compile_options(graphics-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 add_executable(readback-sources-test EXCLUDE_FROM_ALL ../tests/test_readback_sources.cpp)
 target_include_directories(readback-sources-test PRIVATE shadps4)
 target_compile_options(readback-sources-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
@@ -448,8 +527,10 @@ target_link_libraries(page-state-test PRIVATE Boost::headers)
 target_compile_options(page-state-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 
 add_executable(fsr4-bench EXCLUDE_FROM_ALL tools/fsr4_bench.cpp
+    shadps4/video_core/renderer_vulkan/fsr_driver.cpp
     shadps4/video_core/renderer_vulkan/fsr411/fsr411.cpp)
-target_include_directories(fsr4-bench PRIVATE shadps4/video_core/renderer_vulkan/fsr411)
+target_include_directories(fsr4-bench PRIVATE shadps4 shadps4/video_core/renderer_vulkan/fsr411)
+target_compile_definitions(fsr4-bench PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(fsr4-bench PRIVATE ffx-vulkan::fsr4-v07-vulkan ffx-vulkan::fsr4-v07-assets Vulkan::Vulkan)
 
 add_executable(cheat-hook-test ../tests/test_cheat_hook.cpp)

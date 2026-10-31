@@ -144,6 +144,25 @@ def glyph_mounts(env, probe, game, out):
     return [part for guest, path in mounts.items() for part in ('--mount', f'{guest}={path}')], style
 
 
+def switch_text_mounts(env, game, out):
+    """Probe arguments for the Weapon Switching tutorials that match the switch attacks: patched
+    copies of the language WADs (scripts/switch_text.py), only with SPARTAN_SWITCH_ATTACKS=1; without
+    it old copies are removed. The game folder is never written."""
+    if env.get('SPARTAN_SWITCH_ATTACKS') != '1':
+        shutil.rmtree(Path(out) / 'switch_text', ignore_errors=True)
+        return []
+    try:
+        import switch_text
+        mounts = switch_text.build(game, out)
+    except Exception as error:  # noqa: BLE001  (text only: whatever fails, the game still starts)
+        print(f'Switch attacks: {error}; the tutorials keep their own text', flush=True)
+        return []
+    if mounts:
+        print(f'Switch attacks: tutorial text on copies in {Path(out) / "switch_text"}; game files untouched',
+              flush=True)
+    return [part for guest, path in mounts.items() for part in ('--mount', f'{guest}={path}')]
+
+
 def pause_menu_args(game, out, mounts, language=None):
     """Probe arguments for the copy of R_UI.WAD with the pause menu's Exit to Desktop row
     (scripts/pause_menu.py), made from the glyphs' copy when `mounts` has one. The probe mounts it
@@ -202,6 +221,20 @@ def main():
     if reverted:
         print('Graphics: the last restart never reached the game; previous options restored', flush=True)
     env.update(graphics_options.environment(graphics))
+    # A temporal upscaler preset: the game renders at the preset's size (a resolution patch of that
+    # size, never the display's) and the upscaler outputs the chosen resolution. Its full-size passes
+    # are the HUD's.
+    if upscale := graphics_options.upscaler_render_size(graphics_options.read_ini(env['SPARTAN_CONFIG']), env):
+        width, height, output = upscale
+        upscale_patch = out / 'upscale-resolution.xml'
+        upscale_patch.write_text(graphics_options.resolution_patch_xml(width, height), encoding='utf-8')
+        mod_patch_files = [*mod_patch_files, upscale_patch]
+        graphics['render_resolution'] = f'{width}x{height}'
+        env['SPARTAN_RENDER_RES'] = f'{width}x{height}'
+        derived.append('SPARTAN_RENDER_RES')
+        env['SPARTAN_OUTPUT_RES'] = f'{output[0]}x{output[1]}'
+        derived.append('SPARTAN_OUTPUT_RES')
+        print(f'Upscaler: render {width}x{height}, output {output[0]}x{output[1]}', flush=True)
     if not env.get('SPARTAN_FSR411_DIR') and not (PORT / 'fsr4_411').is_dir() and (data / 'fsr4_411').is_dir():
         env['SPARTAN_FSR411_DIR'] = str(data / 'fsr4_411')
 
@@ -318,10 +351,12 @@ def main():
         if glyph_style:  # the in-game menu names the buttons the same way
             env['SPARTAN_GLYPHS'] = glyph_style
             derived.append('SPARTAN_GLYPHS')
-        mount_args = glyph_args + pause_menu_args(game, out, glyph_args, env.get('SPARTAN_LANGUAGE'))
+        mount_args = (glyph_args + pause_menu_args(game, out, glyph_args, env.get('SPARTAN_LANGUAGE'))
+                      + switch_text_mounts(env, game, out))
         env['SPARTAN_DERIVED'] = ','.join(derived)
-        # The guest memory pool is committed in full at start: a resolution patch above 1080p
-        # can need more than 16 GB of RAM, and the game then closes when the page file cannot grow.
+        # The guest memory pool is committed at start, or as the game maps it when Windows refuses:
+        # a resolution patch above 1080p can need more than 16 GB of RAM, and the game then closes
+        # when the page file cannot grow.
         import guest_memory
         if warning := guest_memory.memory_warning(env.get('SPARTAN_DMEM_MB'), guest_memory.physical_memory_mb(),
                                                   env.get('SPARTAN_STREAM_MEMORY', 'cached')):

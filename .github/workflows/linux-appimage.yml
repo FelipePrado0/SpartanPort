@@ -36,7 +36,12 @@ jobs:
         run: bash packaging/linux/ci-deps.sh
       - uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: bash build.sh
+        env:
+          SDL_AUDIO_DRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: |
+          mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}"
+          timeout 45m bash build.sh --test
       - name: Stamp
         if: inputs.tag != '' && inputs.stamp
         env:

@@ -1,4 +1,4 @@
-//! The Game page: cheats, folders, save backups, the game language and the game patches.
+//! The Game page: cheats, folders, save backups, the game language, audio and the game patches.
 //!
 //! Every read of the disk happens in `refresh_backups` and `refresh_game_patches`, which
 //! `follow` calls; `view` only draws what they stored in the state.
@@ -11,17 +11,23 @@ use iced::{Center, Element, Left, Right, Task};
 use serde_json::{Map, Value};
 
 use crate::core::i18n::{tr, tr_fmt};
-use crate::core::options::LANGUAGES;
+use crate::core::options::{AUDIO_CHANNELS, LANGUAGES};
 use crate::core::patches::{builtin_xml, game_patch_metas, selectable, PatchMeta};
 use crate::core::save_backup::{list_backups, restore, KEEP};
 use crate::ui::app::{Message, State};
 use crate::ui::follow::{follow, Cause};
+use crate::ui::pages::controls::ini_number;
 use crate::ui::play::{refuse_while_live, LiveAction};
 use crate::ui::tasks::blocking;
 use crate::ui::theme;
 use crate::ui::widgets::{
-    checkbox, folder, min_width, row, section, select, toggle_row, Modal, SELECT_MIN, SELECT_TEXT,
+    checkbox, folder, min_width, row, section, select, slider, toggle_row, Modal, SELECT_MIN,
+    SELECT_TEXT,
 };
+
+/// The notes under the Audio rows (#968); the translation tables key on these texts.
+pub const VOLUME_NOTE: &str = "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.";
+pub const SPEAKERS_NOTE: &str = "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.";
 
 /// The note under the Game language row; the translation tables key on this text.
 pub const LANGUAGE_NOTE: &str = "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.";
@@ -311,6 +317,8 @@ pub fn view(state: &State) -> Element<'_, Message> {
     let hint = |english: &str| tr(lang, english);
     let language = state.store.text("language");
     let default_saves = state.paths.user_dir("").display().to_string();
+    // The Python marks a row that needs a new start of the game with a small `restart` note.
+    let speakers_label = format!("{}  ·  {}", tr(lang, "Speakers"), tr(lang, "restart"));
 
     column![
         section(state.rtl, &tr(lang, "Cheats")),
@@ -367,6 +375,30 @@ pub fn view(state: &State) -> Element<'_, Message> {
             &tr(lang, "Game language"),
             select("language", LANGUAGES, &language, lang),
             Some(&hint(LANGUAGE_NOTE)),
+        ),
+        section(state.rtl, &tr(lang, "Audio")),
+        row(
+            state.rtl,
+            &tr(lang, "Volume"),
+            slider(
+                "master_volume",
+                0.0,
+                200.0,
+                "%",
+                ini_number(state, "master_volume")
+            ),
+            Some(&hint(VOLUME_NOTE)),
+        ),
+        row(
+            state.rtl,
+            &speakers_label,
+            select(
+                "audio_channels",
+                AUDIO_CHANNELS,
+                &state.store.text("audio_channels"),
+                lang
+            ),
+            Some(&hint(SPEAKERS_NOTE)),
         ),
         patches_section(state),
     ]

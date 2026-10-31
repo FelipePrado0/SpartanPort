@@ -48,3 +48,5 @@ launcher-rust/target/
 /release.json
 # Brainstorming companion sessions
 .superpowers/
+# Local agent plans and specs (superpowers skills), not shared for now
+/docs/superpowers/

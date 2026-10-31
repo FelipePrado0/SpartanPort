@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use crate::core::catalog::{run_default, setting, Kind};
 use crate::core::controls::{control_map, keyboard_map, Kind as ControlKind};
-use crate::core::i18n::{tr, trophy_text};
+use crate::core::i18n::{tr, trophy_text, LANGS};
 use crate::core::installation::Installation;
 use crate::core::legacy::forward_environment;
 use crate::core::options::Choice;
@@ -43,27 +43,42 @@ fn one_or_zero(on: bool) -> String {
     if on { "1" } else { "0" }.to_string()
 }
 
-/// `user/trophy_texts.txt`: the trophy names, descriptions and labels the game shows, in the
-/// launcher's language. A failure is harmless.
-pub fn write_trophy_texts(folder: &Path, lang: &str) {
-    let labels = [
-        ("heading", "Trophies"),
-        ("notice", "TROPHY UNLOCKED"),
-        ("unlocked", "UNLOCKED"),
-        ("locked", "LOCKED"),
-        ("all", "All trophies"),
-        ("only_unlocked", "Unlocked"),
-        ("only_locked", "Locked"),
-        ("counter", "{} of {} unlocked"),
-        (
-            "hint",
-            "Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close",
-        ),
-    ];
+/// The labels of the game's trophy notice and window, as (key, English).
+const TROPHY_LABELS: [(&str, &str); 20] = [
+    ("heading", "Trophies"),
+    ("notice", "TROPHY UNLOCKED"),
+    ("unlocked", "UNLOCKED"),
+    ("locked", "LOCKED"),
+    ("all", "All trophies"),
+    ("only_unlocked", "Unlocked"),
+    ("only_locked", "Locked"),
+    ("counter", "{} of {} unlocked"),
+    (
+        "hint",
+        "Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close",
+    ),
+    ("notifications", "Notifications"),
+    ("order_list", "List order"),
+    ("order_common", "Most earned first"),
+    ("order_rare", "Rarest first"),
+    ("rarity", "{}% of players"),
+    ("common", "Common"),
+    ("rare", "Rare"),
+    ("very_rare", "Very rare"),
+    ("ultra_rare", "Ultra rare"),
+    ("hint_order", "Triangle/Tab: order   L1/R1: notifications"),
+    (
+        "hint_notifications",
+        "L1/R1: trophies   F8 / R3+R2 / Esc: close",
+    ),
+];
+
+/// The text of a trophy_texts.txt in `lang`: the labels, then "ID=Name | Description" per trophy.
+pub fn trophy_texts(lang: &str) -> String {
     let mut lines = vec![format!(
         "# Written by the launcher on every start (language: {lang}); do not edit."
     )];
-    for (key, en) in labels {
+    for (key, en) in TROPHY_LABELS {
         let text = tr(lang, en);
         let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
         lines.push(format!("@{key}={collapsed}"));
@@ -72,8 +87,20 @@ pub fn write_trophy_texts(folder: &Path, lang: &str) {
         let (name, description) = trophy_text(lang, trophy);
         lines.push(format!("{trophy}={name} | {description}"));
     }
-    if fs::create_dir_all(folder).is_ok() {
-        let _ = fs::write(folder.join("trophy_texts.txt"), lines.join("\n") + "\n");
+    lines.join("\n") + "\n"
+}
+
+/// `user/trophy_texts.txt`: the trophy names, descriptions and labels the game shows, in the
+/// launcher's language, and the same in every language in `user/trophy_texts/<language>.txt`, for
+/// the language chosen inside the game. A failure is harmless.
+pub fn write_trophy_texts(folder: &Path, lang: &str) {
+    let each = folder.join("trophy_texts");
+    if fs::create_dir_all(&each).is_err() {
+        return;
+    }
+    let _ = fs::write(folder.join("trophy_texts.txt"), trophy_texts(lang));
+    for code in LANGS {
+        let _ = fs::write(each.join(format!("{code}.txt")), trophy_texts(code));
     }
 }
 
@@ -143,8 +170,6 @@ pub fn environment(
     let mut env = base.clone();
     env.insert(var("game_dir").into(), settings.get_str("game_dir"));
     env.shift_remove(var("update_dir"));
-    // Temporal upscaling is parked: a switch saved on earlier has no control left to turn it off.
-    env.insert(var("experimental_upscaler").into(), "0".into());
     let update_dir = settings.get_str("update_dir");
     if !update_dir.is_empty() {
         env.insert(var("update_dir").into(), update_dir.clone());
@@ -268,6 +293,9 @@ pub fn environment(
     if !value.is_empty() {
         env.insert("SPARTAN_PAD_MAP".into(), value);
     }
+    // The saved choice wins over an inherited variable, as in the Python.
+    env.shift_remove(var("switch_attacks"));
+    put_if_on(&mut env, settings, "switch_attacks");
     // A saved value that is not a choice, or is the runner's own default, is left out.
     let put_choice = |env: &mut IndexMap<String, String>, key: &str| {
         let name = var(key);
@@ -280,6 +308,22 @@ pub fn environment(
     };
     put_choice(&mut env, "stick_prompts");
     put_choice(&mut env, "glyph_style");
+    env.shift_remove("SPARTAN_MENU_CONFIRM_SWAP");
+    env.shift_remove("SPARTAN_MENU_CONFIRM");
+    if let Some(val) = settings.get("menu_confirm_swap") {
+        let is_swapped = match val {
+            Value::String(s) => matches!(
+                s.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "circle" | "swapped" | "yes" | "on"
+            ),
+            Value::Number(n) => n.as_i64() == Some(1),
+            Value::Bool(b) => *b,
+            _ => false,
+        };
+        if is_swapped {
+            env.insert("SPARTAN_MENU_CONFIRM_SWAP".into(), "1".into());
+        }
+    }
     env.insert("PYTHONUNBUFFERED".into(), "1".into());
     env.insert("PYTHONIOENCODING".into(), "utf-8".into());
     env
@@ -480,6 +524,23 @@ mod tests {
     }
 
     #[test]
+    fn switch_attacks_follow_the_saved_choice() {
+        // Off by default: no variable, also over an inherited one.
+        let (settings, paths, _dir) = setup(json!({}));
+        let inherited = base(&[("SPARTAN_SWITCH_ATTACKS", "1")]);
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert!(!env.contains_key("SPARTAN_SWITCH_ATTACKS"));
+        let (on, paths, _dir) = setup(json!({"switch_attacks": true}));
+        let env = game_environment(&on, &paths, "en", &IndexMap::new(), true);
+        assert_eq!(env["SPARTAN_SWITCH_ATTACKS"], "1");
+        // In the Python's order: after the key and gamepad maps.
+        let keys: Vec<&str> = env.keys().map(String::as_str).collect();
+        let at = keys.iter().position(|key| *key == "SPARTAN_SWITCH_ATTACKS");
+        let key_map = keys.iter().position(|key| *key == "SPARTAN_KEY_MAP");
+        assert!(key_map.is_some() && key_map < at, "{keys:?}");
+    }
+
+    #[test]
     fn trophy_texts_file_has_35_rows_and_the_labels() {
         let dir = tempfile::tempdir().unwrap();
         let folder = dir.path().join("user");
@@ -487,12 +548,44 @@ mod tests {
         let text = fs::read_to_string(folder.join("trophy_texts.txt")).unwrap();
         assert!(text.ends_with('\n'));
         let lines: Vec<&str> = text.lines().collect();
-        assert_eq!(lines.len(), 45);
+        assert_eq!(lines.len(), 56);
         assert!(lines[0].starts_with("# Written by the launcher on every start (language: pt)"));
         assert_eq!(lines[1], format!("@heading={}", tr("pt", "Trophies")));
         let (name, _) = trophy_text("pt", 0);
-        assert!(lines[10].starts_with(&format!("0={name} | ")));
-        assert!(lines[44].starts_with("34="));
+        assert!(lines[21].starts_with(&format!("0={name} | ")));
+        assert!(lines[55].starts_with("34="));
+    }
+
+    #[test]
+    fn trophy_texts_are_written_in_every_language() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join("user");
+        write_trophy_texts(&folder, "pt");
+        for code in LANGS {
+            let text = fs::read_to_string(folder.join("trophy_texts").join(format!("{code}.txt")))
+                .unwrap();
+            let lines: Vec<&str> = text.lines().collect();
+            let rows = lines
+                .iter()
+                .filter(|line| line.starts_with(|c: char| c.is_ascii_digit()));
+            assert_eq!(rows.count(), TROPHY_COUNT, "{code}");
+            let labels = lines.iter().filter(|line| line.starts_with('@')).count();
+            assert_eq!(labels, TROPHY_LABELS.len(), "{code}");
+        }
+        let ru = fs::read_to_string(folder.join("trophy_texts").join("ru.txt")).unwrap();
+        assert!(ru.contains("@heading=Трофеи"));
+        assert!(ru.contains("@rarity={}% игроков"));
+        let pt = fs::read_to_string(folder.join("trophy_texts").join("pt.txt")).unwrap();
+        assert!(pt.contains("@order_rare=Mais raros primeiro"));
+    }
+
+    #[test]
+    fn english_names_are_the_ps4_list() {
+        let names: Vec<String> = [12, 23, 28]
+            .iter()
+            .map(|&id| trophy_text("en", id).0)
+            .collect();
+        assert_eq!(names, ["Torn Up", "Depths Below", "Horn of Plenty"]);
     }
 
     #[test]
@@ -536,5 +629,30 @@ mod tests {
         );
         assert!(custom_folder.join("trophy_texts.txt").is_file());
         assert!(!inherited_folder.join("trophy_texts.txt").exists());
+    }
+
+    #[test]
+    fn inherited_menu_confirm_env_is_not_leaked() {
+        let (settings, paths, _dir) = setup(json!({}));
+        let inherited = base(&[
+            ("SPARTAN_MENU_CONFIRM_SWAP", "1"),
+            ("SPARTAN_MENU_CONFIRM", "circle"),
+        ]);
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert!(!env.contains_key("SPARTAN_MENU_CONFIRM_SWAP"));
+        assert!(!env.contains_key("SPARTAN_MENU_CONFIRM"));
+    }
+
+    #[test]
+    fn menu_confirm_swap_in_settings_is_forwarded() {
+        let (settings, paths, _dir) = setup(json!({"menu_confirm_swap": "1"}));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert_eq!(
+            env.get("SPARTAN_MENU_CONFIRM_SWAP").map(String::as_str),
+            Some("1")
+        );
+        let (settings, paths, _dir) = setup(json!({"menu_confirm_swap": "0"}));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert!(!env.contains_key("SPARTAN_MENU_CONFIRM_SWAP"));
     }
 }
