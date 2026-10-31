@@ -689,6 +689,16 @@ ABI void spartanport_camera_node_written(unsigned char *node, const unsigned cha
     camera_turn_node(node, world);
 }
 
+/* While the player turns the camera (its angles changed since the view's last update) the game's
+ * camera motion blur is held: the view moves by the port's orbit, not by the game's camera. */
+static float camera_blur_yaw, camera_blur_pitch;
+static void camera_hold_blur(unsigned char *render_view) {
+    if (camera_state.yaw == camera_blur_yaw && camera_state.pitch == camera_blur_pitch) return;
+    camera_blur_yaw = camera_state.yaw;
+    camera_blur_pitch = camera_state.pitch;
+    spartanport_camera_hold_blur(render_view);
+}
+
 /* Called by the hook's stub on every view update (shadow maps, reflections, 2D, the game's camera).
  * The gameplay view: a perspective projection driven by a camera from the gameplay stack
  * (priority 0x200, docs/plans/2026-10-26-free-camera.md). Its node is turned here too, for the
@@ -715,6 +725,7 @@ ABI void spartanport_camera_apply(unsigned char *render_view, uint64_t caller) {
         const SpartanCameraState state = camera_orbit_state();
         if ((state.yaw != 0 || state.pitch != 0) && spartanport_camera_live())
             spartanport_camera_orbit(render_view, &state, camera_up);
+        camera_hold_blur(render_view);
         return;
     }
     const unsigned char *matrix = camera + SPARTAN_CAMERA_NODE_MATRIX;
@@ -722,4 +733,5 @@ ABI void spartanport_camera_apply(unsigned char *render_view, uint64_t caller) {
     float world[16];
     camera_turn_node(camera, world);
     spartanport_camera_set_view(render_view, world);
+    camera_hold_blur(render_view);
 }

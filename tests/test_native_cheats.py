@@ -95,6 +95,15 @@ class NativeCheats(unittest.TestCase):
                 self.assertIn(function + index, [int.from_bytes(arg, 'big') for _, op, arg in
                                                 self.block(self.script.one(name), 3, trigger) if op == 0x13])
 
+    def test_graphics_motion_blur_row_reads_and_toggles(self):
+        page = self.script.one('NativeGraphics')
+        self.assertIn(0xf75, [int.from_bytes(arg, 'big') for _, op, arg in self.block(page, 1) if op == 0x13])
+        row = self.script.one('NativeGraphic5')
+        self.assertEqual(row['parent'], page['at'] - 4)
+        toggle = [0xe6, 0xe2, 0xee, 0xf2, 0xe9]  # either arrow or confirm
+        self.assertIn(0xf95, [int.from_bytes(arg, 'big') for _, op, arg in self.block(row, 3, toggle) if op == 0x13])
+        self.assertEqual(self.target('NativeGraphic5', pause_menu.DOWN), self.script.one('NativeGraphicsReset')['at'] - 4)
+
     def test_graphics_defaults_require_confirmation_and_cancel_preserves_the_selection(self):
         self.assertEqual(self.target('NativeGraphicsReset', pause_menu.CONFIRM),
                          self.script.one('NativeGraphicsConfirm')['at'] - 4)

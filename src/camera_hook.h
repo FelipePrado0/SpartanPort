@@ -233,6 +233,25 @@ static inline void spartanport_camera_set_view(unsigned char *render_view, const
     memcpy(render_view + SPARTAN_CAMERA_VIEW, view, sizeof(view));
 }
 
+/* The view's previous view×projection, what the game's motion blur reprojects the frame from: the
+ * update's callers copy +0x40 (view×projection) there before each update. */
+enum { SPARTAN_CAMERA_PREVIOUS_VIEW_PROJECTION = 0x200 };
+
+/* No camera motion blur this frame: the previous view×projection becomes the one the update is
+ * about to derive from the view and projection (p' = p * view * projection, as 0x5cc784 does). A
+ * fast orbit around Kratos otherwise smears the background over him, a trail beside him. */
+static inline void spartanport_camera_hold_blur(unsigned char *render_view) {
+    float view[16], projection[16], product[16];
+    memcpy(view, render_view + SPARTAN_CAMERA_VIEW, sizeof(view));
+    memcpy(projection, render_view + SPARTAN_CAMERA_PROJECTION, sizeof(projection));
+    for (int row = 0; row < 4; ++row)
+        for (int column = 0; column < 4; ++column)
+            product[row * 4 + column] = view[row * 4] * projection[column] + view[row * 4 + 1] * projection[4 + column] +
+                                        view[row * 4 + 2] * projection[8 + column] +
+                                        view[row * 4 + 3] * projection[12 + column];
+    memcpy(render_view + SPARTAN_CAMERA_PREVIOUS_VIEW_PROJECTION, product, sizeof(product));
+}
+
 /* Orbits the render view's camera by the state's angles and rewrites the view as the world's
  * rigid inverse. */
 static inline void spartanport_camera_orbit(unsigned char *render_view, const SpartanCameraState *state, const float *up) {

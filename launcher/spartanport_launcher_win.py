@@ -472,7 +472,7 @@ def heading_font(size, fallback=None, every_language=False):
 # launcher's own settings.json (passed to run.py as environment variables).
 
 INI_FLAGS = {'cheat_double_jumps', 'cheat_very_hard', 'object_motion', 'show_fps', 'vsync', 'async_shaders', 'deferred_readback',
-             'stale_readback', 'hdr', 'free_camera'}
+             'stale_readback', 'hdr', 'free_camera', 'motion_blur'}
 # The graphics keys are also in the in-game menu (Insert / R3+L2); run.py reads the startup ones.
 INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080',
@@ -481,7 +481,7 @@ INI_DEFAULTS = {'upscaler': 'fsr3', 'preset': '1',
                 'render_resolution': graphics_options.DEFAULTS['render_resolution'], 'engine_fps': '120',
                 'frames_queued': '1', 'monitor': '', 'hdr': '0', 'glyph_style': 'off', 'cheat_very_hard': '0', 'cheat_double_jumps': '0',
                 'anisotropy': '0', 'vibration': '100', 'mouse_prompt_distance': '48', 'mouse_lock': '1',
-                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100', 'free_camera': '0'}
+                'mouse_aim_style': '0', 'mouse_aim_sensitivity': '100', 'free_camera': '0', 'motion_blur': '1'}
 DISPLAY_MODES = [('windowed', ('Windowed',)), ('borderless', ('Borderless',)), ('fullscreen', ('Fullscreen',))]
 ANISOTROPY = [('0', ('Game default',)), ('2', ('2x',)), ('4', ('4x',)), ('8', ('8x',)), ('16', ('16x',))]
 FPS_LIMITS = [('30', ('30',)), ('60', ('60',)), ('100', ('100',)), ('120', ('120',)), ('144', ('144',)), ('180', ('180',)), ('240', ('240',)), ('0', ('Unlimited',))]
@@ -2120,6 +2120,9 @@ class Launcher:
         self.row(f, _('Anisotropic filtering'), self.choice(f, 'anisotropy', 'ini', ANISOTROPY),
                  _('Sharper floors and walls seen at an angle, at little cost on most graphics cards.'),
                  restart=True)
+        self.section(f, _('Effects'))
+        self.check(f, 'motion_blur', 'ini', _('Motion blur'),
+                   _("The game's blur on fast movement: Kratos, enemies and camera turns. Also in the in-game menu."))
         self.section(f, _('Overlay'))
         self.check(f, 'show_fps', 'ini', _('Show performance overlay'),
                    _('Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.'))

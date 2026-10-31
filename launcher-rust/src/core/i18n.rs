@@ -468,6 +468,14 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
         ],
     ),
     (
+        "Motion blur",
+        &[("pt", "Desfoque de movimento"), ("es", "Desenfoque de movimiento")],
+    ),
+    (
+        "The game's blur on fast movement: Kratos, enemies and camera turns. Also in the in-game menu.",
+        &[("pt", "O borrão do jogo em movimentos rápidos: Kratos, inimigos e giros da câmera. Também no menu do jogo."), ("es", "El desenfoque del juego en movimientos rápidos: Kratos, enemigos y giros de cámara. También en el menú del juego.")],
+    ),
+    (
         "Free camera (experimental)",
         &[("pt", "Câmera livre (experimental)"), ("es", "Cámara libre (experimental)")],
     ),

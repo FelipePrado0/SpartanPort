@@ -2564,6 +2564,12 @@ EXTRA.setdefault('es', {}).update({
 })
 
 EXTRA.setdefault('pt', {}).update({
+    'Effects':
+        'Efeitos',
+    'Motion blur':
+        'Desfoque de movimento',
+    "The game's blur on fast movement: Kratos, enemies and camera turns. Also in the in-game menu.":
+        'O borrão do jogo em movimentos rápidos: Kratos, inimigos e giros da câmera. Também no menu do jogo.',
     'Free camera (experimental)':
         'Câmera livre (experimental)',
     'Free camera on/off':
@@ -2575,6 +2581,12 @@ EXTRA.setdefault('pt', {}).update({
 })
 
 EXTRA.setdefault('es', {}).update({
+    'Effects':
+        'Efectos',
+    'Motion blur':
+        'Desenfoque de movimiento',
+    "The game's blur on fast movement: Kratos, enemies and camera turns. Also in the in-game menu.":
+        'El desenfoque del juego en movimientos rápidos: Kratos, enemigos y giros de cámara. También en el menú del juego.',
     'Free camera (experimental)':
         'Cámara libre (experimental)',
     'Free camera on/off':

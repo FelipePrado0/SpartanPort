@@ -300,6 +300,16 @@ int main() {
     v.rcas = false;
     assert(std::string(text(0xf93)) == "-" && v.rcas_strength == 0);
     assert(spartanportgpu_native_setting(0xfc8) == 0);
+    // The sixth row, motion blur: unavailable without the hook, else a live On/Off toggle.
+    v.motion_blur_supported = false;
+    v.motion_blur = true;
+    assert(std::string(text(0xf95)) == "Unavailable" && v.motion_blur);
+    v.motion_blur_supported = true;
+    assert(std::string(text(0xf75)) == "On");
+    assert(std::string(text(0xf95)) == "Off" && !v.motion_blur);
+    assert(Read(path).find("motion_blur=0\n") != std::string::npos);
+    assert(std::string(text(0xf85)) == "On" && v.motion_blur);
+    v.motion_blur = false;
     v.fps_limit = 144;
     v.engine_fps = 180;
     v.render_resolution = 4;
@@ -310,7 +320,7 @@ int main() {
     assert(spartanportgpu_native_setting(0xfb0) == 0);
     assert(v.frames_queued == 1 && v.async_shaders && v.rcas && v.rcas_strength == 75);
     assert(v.fps_limit == 144 && v.engine_fps == 180 && v.render_resolution == 4 && !v.vsync);
-    assert(v.anisotropy == 0 && v.cheats[0] && v.damage_dealt == 2.0f);
+    assert(v.anisotropy == 0 && v.cheats[0] && v.damage_dealt == 2.0f && v.motion_blur);
     v.rcas_strength = 0;
     SpartanSettings::Load();
     assert(v.rcas_strength == 75 && v.async_shaders && v.frames_queued == 1 && v.rcas);

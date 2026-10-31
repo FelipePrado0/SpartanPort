@@ -14,6 +14,7 @@
 #include "qte_hook.h"
 #include "actor_hook.h"
 #include "damage_hook.h"
+#include "motion_blur_hook.h"
 #include "menu_hook.h"
 #include "camera_hook.h"
 #include "gpu/spartanportgpu.h"
@@ -386,6 +387,8 @@ extern void spartanport_stat_multipliers_status(int damage, int orb_pickup);
 extern uintptr_t spartanport_qte_state_address(void);
 extern void spartanport_qte_status(int supported);
 extern uintptr_t spartanport_auto_qte_flag(void);
+extern uintptr_t spartanport_motion_blur_flag(void);
+extern void spartanport_motion_blur_status(int supported);
 extern uintptr_t spartanport_camera_state_address(void);
 extern int spartanport_camera_configure(void);
 extern ABI void spartanport_camera_apply(unsigned char *render_view, uint64_t caller);
@@ -716,6 +719,28 @@ static void install_camera_hook(Segment *segments, uint64_t count, uint64_t size
     const int debug = spartanport_camera_configure();
     spartanport_camera_status(1);
     printf("Free camera: hook ready%s\n", debug ? " (debug offset from SPARTAN_FREE_CAMERA_DEBUG)" : "");
+}
+
+/* Motion blur (src/motion_blur_hook.h): the menu's switch, read by the blur's update every frame. */
+static void install_motion_blur_hook(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t at = spartanport_signature_find(image, size, &spartanport_motion_blur_site);
+    if (at == UINT64_MAX ||
+        !mapped(segments, count, at, SPARTAN_MOTION_BLUR_HOOK_LENGTH + SPARTAN_MOTION_BLUR_BRANCH_LENGTH) ||
+        !spartanport_motion_blur_signature_match(image + at, size - at)) {
+        printf("Motion blur: switch unavailable (code not found in this eboot.bin)\n");
+        return;
+    }
+    const uint64_t skip = spartanport_motion_blur_skip(image + at, at);
+    unsigned char *stub = allocate(page_size);
+    spartanport_motion_blur_build_stub(stub, spartanport_motion_blur_flag(),
+                                       (uintptr_t)(image + at + SPARTAN_MOTION_BLUR_HOOK_LENGTH), (uintptr_t)(image + skip));
+    protect(stub, page_size, 5);
+    if (!mapped(segments, count, skip, 1) || !install_jump(at, SPARTAN_MOTION_BLUR_HOOK_LENGTH, stub)) {
+        printf("Motion blur: switch unavailable (hook outside relative-jump range)\n");
+        return;
+    }
+    spartanport_motion_blur_status(1);
+    printf("Motion blur: switch ready\n");
 }
 
 /* Damage dealt/taken and green/blue/gold orb multipliers (src/damage_hook.h, src/orb_hook.h):
@@ -1236,6 +1261,7 @@ int main(int argc, char **argv) {
     if (gpu_enabled) install_actor_watch(segments, ns, size);
     if (gpu_enabled) install_stat_multipliers(segments, ns, size);
     if (gpu_enabled) install_camera_hook(segments, ns, size);
+    if (gpu_enabled) install_motion_blur_hook(segments, ns, size);
     if (gpu_enabled) install_auto_qte_hooks(segments, ns, size, install_qte_hooks(segments, ns, size));
     if (gpu_enabled && pause_menu && app0) install_menu_exit(segments, ns, size, pause_menu);
 #ifdef _WIN32

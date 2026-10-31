@@ -384,6 +384,17 @@ extern "C" void spartanport_camera_status(int supported) {
     SpartanSettings::Get().free_camera_supported = supported != 0;
 }
 
+// The menu's Motion blur switch, read by the game's motion blur update through its stub
+// (src/motion_blur_hook.h).
+extern "C" uintptr_t spartanport_motion_blur_flag(void) {
+    static_assert(sizeof(std::atomic<bool>) == 1, "the stub compares one byte");
+    return reinterpret_cast<uintptr_t>(&SpartanSettings::Get().motion_blur);
+}
+
+extern "C" void spartanport_motion_blur_status(int supported) {
+    SpartanSettings::Get().motion_blur_supported = supported != 0;
+}
+
 // The menu's Automatic QTE switch, read by the game's code through the QTE stubs (src/qte_hook.h).
 extern "C" uintptr_t spartanport_auto_qte_flag(void) {
     static_assert(sizeof(std::atomic<bool>) == 1, "the stubs compare one byte");

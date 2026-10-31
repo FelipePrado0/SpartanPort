@@ -349,6 +349,7 @@ pub static SETTINGS: &[Setting] = &[
     ini("mouse_aim_sensitivity", Kind::Int, Int(100), true, 25),
     ini("mouse_lock", Kind::Int, Int(1), true, 23),
     ini("free_camera", Flag, Bool(false), true, 26),
+    ini("motion_blur", Flag, Bool(true), true, 27),
     ini("vibration", Kind::Int, Int(100), true, 21),
     ini("upscaler", Pick(UPSCALERS), Text("fsr3"), false, 0),
     ini("preset", Pick(PRESETS), Text("1"), false, 1),
@@ -494,14 +495,14 @@ mod tests {
                 "cheat_very_hard"
             ]
         );
-        assert_eq!(keys.last(), Some(&"free_camera"));
+        assert_eq!(keys.last(), Some(&"motion_blur"));
         let shown: Vec<_> = rows.iter().filter(|s| s.written).map(|s| s.key).collect();
         assert_eq!(shown, SHOWN_INI_KEYS.iter().copied().collect::<Vec<_>>());
     }
 
     #[test]
-    fn shown_ini_keys_are_the_22_controls_of_the_window() {
-        assert_eq!(SHOWN_INI_KEYS.len(), 22);
+    fn shown_ini_keys_are_the_23_controls_of_the_window() {
+        assert_eq!(SHOWN_INI_KEYS.len(), 23);
         for seeded in ["monitor", "hdr", "glyph_style"] {
             assert!(SHOWN_INI_KEYS.contains(&seeded), "{seeded}");
         }

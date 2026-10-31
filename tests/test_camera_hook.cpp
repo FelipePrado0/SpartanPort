@@ -143,6 +143,22 @@ int main(int argc, char** argv) {
         assert(close_to(world[1], 0));  // the right axis stays level: no roll
         check_inverse(render_view);
     }
+    // Held motion blur: the previous view×projection is view * projection (row vectors).
+    {
+        alignas(64) static unsigned char blur_view[0x300];
+        float* v = reinterpret_cast<float*>(blur_view + SPARTAN_CAMERA_VIEW);
+        float* p = reinterpret_cast<float*>(blur_view + SPARTAN_CAMERA_PROJECTION);
+        for (int i = 0; i < 16; ++i) v[i] = static_cast<float>(i + 1), p[i] = static_cast<float>((i * 7) % 5 - 2);
+        spartanport_camera_hold_blur(blur_view);
+        const float* previous = reinterpret_cast<float*>(blur_view + SPARTAN_CAMERA_PREVIOUS_VIEW_PROJECTION);
+        for (int row = 0; row < 4; ++row)
+            for (int column = 0; column < 4; ++column) {
+                float expected = 0;
+                for (int k = 0; k < 4; ++k) expected += v[row * 4 + k] * p[k * 4 + column];
+                assert(close_to(previous[row * 4 + column], expected));
+            }
+        assert(reinterpret_cast<float*>(blur_view + SPARTAN_CAMERA_VIEW)[0] == 1);  // the view is left alone
+    }
     // The controller's stub: the port gets the node and the manager, rax comes back, rdx holds the
     // counter.
     static uint64_t counter;

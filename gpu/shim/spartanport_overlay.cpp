@@ -450,6 +450,15 @@ void ImageTab() {
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
+    Separator("Effects");
+    if (BeginRows("##effects")) {
+        ImGui::BeginDisabled(!s.motion_blur_supported.load());
+        CheckRow("Motion blur", s.motion_blur,
+                 s.motion_blur_supported.load() ? "The game's blur on fast movement: Kratos, enemies and camera turns."
+                                                : Unsupported);
+        ImGui::EndDisabled();
+        ImGui::EndTable();
+    }
     Separator("Textures (applied on restart)");
     if (BeginRows("##textures")) {
         static const char* const anisotropy_labels[] = {"Game default", "2x", "4x", "8x", "16x"};
