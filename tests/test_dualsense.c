@@ -7,6 +7,7 @@
 
 #ifdef _WIN32
 #define setenv(name, value, overwrite) _putenv_s(name, value)
+#define unsetenv(name) _putenv_s(name, "")
 #endif
 
 /* Checks the trigger effect encodings and the output report block, the extras and speaker gain
@@ -77,6 +78,9 @@ int main(void) {
     report[0]=0x31; /* a Bluetooth report */
     assert(ds_report_jack(report,64)==-1);
 
+    /* Nothing inherited from the caller's environment or a dualsense.txt in the working directory. */
+    setenv("SPARTAN_DUALSENSE_FILE","spartan-dualsense-test-missing.txt",1);
+    unsetenv("SPARTAN_DUALSENSE");
     assert(ds_features()==0);
     puts("dualsense: ok");
     return 0;
