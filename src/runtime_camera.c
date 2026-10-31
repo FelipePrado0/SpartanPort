@@ -125,11 +125,16 @@ int spartanport_camera_configure(void) {
  * SPARTAN_FREE_CAMERA_DISTANCE: the pivot's distance ahead of the camera, in game units (0: in
  * place); by default the camera turns around the point it looks at (Kratos in play).
  * SPARTAN_FREE_CAMERA_LIMITS=yaw,pitch: the most it turns from the game's camera, in degrees; a
- * yaw of 180 or more (the default) turns all the way around Kratos. */
+ * yaw of 180 or more (the default) turns all the way around Kratos; the pitch goes up to 70 by
+ * default, short of looking straight down (the floor stops it first going down).
+ * SPARTAN_FREE_CAMERA_FLOOR: how far above Kratos's feet the camera stays when it orbits him, in
+ * game units (default 0.5; negative: no floor). Until the port knows the level's collision, his feet
+ * stand for the ground under the camera. */
 enum { CAMERA_YAW_SPEED = 120, CAMERA_PITCH_SPEED = 80 };  /* degrees per second at full tilt */
 static const float CAMERA_RECENTER_SECONDS = 0.3f;
 static int camera_stick;
-static float camera_limits[2] = {180, 25};
+static float camera_limits[2] = {180, 70};
+static float camera_floor = 0.5f;
 
 int spartanport_camera_stick_enabled(void) { return camera_stick; }
 
@@ -159,6 +164,8 @@ static void camera_configure_stick(void) {
         camera_limits[0] = yaw;
         camera_limits[1] = pitch;
     }
+    const char *floor = getenv("SPARTAN_FREE_CAMERA_FLOOR");
+    if (floor) camera_floor = strtof(floor, NULL);
     camera_state.enabled = 1;
 }
 
@@ -264,12 +271,36 @@ static void camera_note(const unsigned char *render_view, uint64_t caller, int p
  * data breakpoints on its camera node (the local matrix at +0x40 and its position row +0x70, the
  * world matrix at +0x90 and its position row +0xc0, 8 bytes each, read or write) in every thread
  * of the process; each instruction that touched them is counted and listed with the view table.
- * The address printed is the instruction after the access (a data breakpoint traps after it). */
-enum { WATCH_SITES = 64 };
-static const unsigned watch_offsets[4] = {0x40, 0x70, 0x90, 0xc0};
-static struct { uint64_t rip; unsigned slot; volatile LONG hits; } watch_sites[WATCH_SITES];
+ * The address printed is the instruction after the access (a data breakpoint traps after it).
+ * SPARTAN_FREE_CAMERA_WATCH=player: writes to Kratos's position (the player's object +0x70 and
+ * +0x78) instead, each site with the return addresses of its first hit (the rbp chain): the code
+ * that moves him, which asks the level's collision where he may go. */
+enum { WATCH_SITES = 64, WATCH_FRAMES = 8 };
+static const unsigned watch_camera_offsets[4] = {0x40, 0x70, 0x90, 0xc0};
+static const unsigned watch_player_offsets[4] = {0x70, 0x78, 0x70, 0x78};
+static const unsigned *watch_offsets = watch_camera_offsets;
+static struct {
+    uint64_t rip;
+    unsigned slot;
+    volatile LONG hits;
+    uint64_t frames[WATCH_FRAMES];
+} watch_sites[WATCH_SITES];
 static volatile LONG watch_count;
 static uint64_t watch_node;
+static int watch_player;
+
+/* The return addresses up the rbp chain, while it stays inside this thread's stack. */
+static void watch_backtrace(const CONTEXT *c, uint64_t *frames) {
+    const uint64_t base = __readgsqword(0x08), limit = __readgsqword(0x10);
+    uint64_t rbp = c->Rbp;
+    for (int i = 0; i < WATCH_FRAMES; ++i) {
+        if (rbp < limit || rbp + 16 > base || rbp & 7) break;
+        frames[i] = ((const uint64_t *)(uintptr_t)rbp)[1];
+        const uint64_t next = ((const uint64_t *)(uintptr_t)rbp)[0];
+        if (next <= rbp) break;
+        rbp = next;
+    }
+}
 
 static LONG CALLBACK watch_handler(EXCEPTION_POINTERS *info) {
     if (info->ExceptionRecord->ExceptionCode != EXCEPTION_SINGLE_STEP) return EXCEPTION_CONTINUE_SEARCH;
@@ -283,6 +314,7 @@ static LONG CALLBACK watch_handler(EXCEPTION_POINTERS *info) {
         if (watch_sites[i].rip == rip && watch_sites[i].slot == slot) break;
     if (i == watch_count && i < WATCH_SITES) {
         watch_sites[i].slot = slot;
+        watch_backtrace(c, watch_sites[i].frames);
         watch_sites[i].rip = rip;  /* a race between threads may list a site twice: harmless */
         InterlockedIncrement(&watch_count);
     }
@@ -312,8 +344,9 @@ static DWORD WINAPI watch_arm(void *unused) {
                 c.Dr2 = watch_node + watch_offsets[2];
                 c.Dr3 = watch_node + watch_offsets[3];
                 c.Dr6 = 0;
-                /* L0-L3 on; each RW = 11 (read or write), LEN = 10 (8 bytes). */
-                c.Dr7 = 0x55 | 0xbbbbull << 16;
+                /* L0-L3 on; each RW = 11 (read or write), LEN = 10 (8 bytes). The player: L0-L1,
+                 * RW = 01 (write). */
+                c.Dr7 = watch_player ? 0x5 | 0x99ull << 16 : 0x55 | 0xbbbbull << 16;
                 armed += SetThreadContext(thread, &c) != 0;
             }
             ResumeThread(thread);
@@ -321,7 +354,8 @@ static DWORD WINAPI watch_arm(void *unused) {
         CloseHandle(thread);
     }
     CloseHandle(snapshot);
-    printf("Free camera: watching camera node %#llx in %u threads\n", (unsigned long long)watch_node, armed);
+    printf("Free camera: watching %s %#llx in %u threads\n", watch_player ? "the player's object" : "camera node",
+           (unsigned long long)watch_node, armed);
     fflush(stdout);
     return 0;
 }
@@ -331,9 +365,16 @@ static void camera_watch(uint64_t node) {
     if (!checked) {
         const char *watch = getenv("SPARTAN_FREE_CAMERA_WATCH");
         wanted = watch && *watch && strcmp(watch, "0");
+        watch_player = wanted && !strcmp(watch, "player");
         checked = 1;
     }
     if (!wanted || watch_node || !node || node & 7) return;
+    if (watch_player) {
+        const uint64_t player = camera_player_global ? *camera_player_global : 0;
+        if (player < 0x10000 || player & 0xf) return;
+        node = player;
+        watch_offsets = watch_player_offsets;
+    }
     watch_node = node;
     AddVectoredExceptionHandler(1, watch_handler);
     HANDLE thread = CreateThread(NULL, 0, watch_arm, NULL, 0, NULL);
@@ -342,10 +383,15 @@ static void camera_watch(uint64_t node) {
 
 static void camera_watch_report(void) {
     if (!watch_node) return;
-    printf("Free camera: camera node %#llx accesses (instruction after; +offset)\n", (unsigned long long)watch_node);
-    for (int i = 0; i < watch_count && i < WATCH_SITES; ++i)
-        printf("  %#llx +%#x hits %ld\n", (unsigned long long)watch_sites[i].rip, watch_offsets[watch_sites[i].slot],
+    printf("Free camera: %s %#llx accesses (instruction after; +offset; callers)\n",
+           watch_player ? "player's object" : "camera node", (unsigned long long)watch_node);
+    for (int i = 0; i < watch_count && i < WATCH_SITES; ++i) {
+        printf("  %#llx +%#x hits %ld <-", (unsigned long long)watch_sites[i].rip, watch_offsets[watch_sites[i].slot],
                (long)watch_sites[i].hits);
+        for (int f = 0; f < WATCH_FRAMES && watch_sites[i].frames[f]; ++f)
+            printf(" %#llx", (unsigned long long)watch_sites[i].frames[f]);
+        printf("\n");
+    }
 }
 
 /* SPARTAN_FREE_CAMERA_SCAN=1 (reverse engineering): looks for the camera's target (Kratos) in the
@@ -629,10 +675,19 @@ static int camera_node_free(const unsigned char *node) {
 static void camera_turn_node(unsigned char *node, float *world) {
     memcpy(world, camera_clean, sizeof(camera_clean));
     if ((camera_state.yaw != 0 || camera_state.pitch != 0) && spartanport_camera_live()) {
-        const SpartanCameraState state = camera_orbit_state();
+        SpartanCameraState state = camera_orbit_state();
         float kratos[3];
-        if (camera_player(world + 12, kratos)) spartanport_camera_orbit_about(world, kratos, &state, camera_up);
-        else spartanport_camera_orbit_world(world, camera_sign, &state, camera_up);
+        if (camera_player(world + 12, kratos)) {
+            /* Not below the floor: the stick's pitch stops there too, so turning back answers at once. */
+            if (camera_floor >= 0) {
+                const float floor = kratos[0] * camera_up[0] + kratos[1] * camera_up[1] + kratos[2] * camera_up[2] +
+                                    camera_floor;
+                state.pitch = camera_state.pitch = spartanport_camera_floor_pitch(world, kratos, &state, camera_up, floor);
+            }
+            spartanport_camera_orbit_about(world, kratos, &state, camera_up);
+        } else {
+            spartanport_camera_orbit_world(world, camera_sign, &state, camera_up);
+        }
     }
     unsigned char *matrix = node + SPARTAN_CAMERA_NODE_MATRIX;
     if (memcmp(matrix, world, sizeof(camera_clean))) {

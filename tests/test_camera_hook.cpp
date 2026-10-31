@@ -143,6 +143,29 @@ int main(int argc, char** argv) {
         assert(close_to(world[1], 0));  // the right axis stays level: no roll
         check_inverse(render_view);
     }
+    // The floor: the camera at (0, 2, 10) looks at a pivot at (0, 0, 0); a pitch that would take it
+    // below height 1 stops where it meets it, one that keeps it above stays, and when the game's own
+    // camera is lower than the floor the pitch that leaves the camera higher of the two wins.
+    {
+        make_view(render_view);
+        float pose[16];
+        std::memcpy(pose, world, sizeof(pose));
+        const float pivot[3] = {0, 0, 0};
+        SpartanCameraState floor_state = {};
+        for (const float pitch : {0.6f, -0.6f}) {
+            floor_state.pitch = pitch;
+            const float lower = spartanport_camera_orbit_height(pose, pivot, &floor_state, pitch, up);
+            if (lower >= 1) {
+                assert(spartanport_camera_floor_pitch(pose, pivot, &floor_state, up, 1) == pitch);
+                continue;
+            }
+            const float held = spartanport_camera_floor_pitch(pose, pivot, &floor_state, up, 1);
+            assert(std::fabs(held) < std::fabs(pitch) && held * pitch >= 0);
+            assert(close_to(spartanport_camera_orbit_height(pose, pivot, &floor_state, held, up), 1));
+            // The game's camera (height 2) under a floor at 3: stay with it rather than go lower.
+            assert(spartanport_camera_floor_pitch(pose, pivot, &floor_state, up, 3) == 0);
+        }
+    }
     // Held motion blur: the previous view×projection is view * projection (row vectors).
     {
         alignas(64) static unsigned char blur_view[0x300];

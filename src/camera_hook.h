@@ -193,6 +193,36 @@ static inline void spartanport_camera_orbit_about(float *world, const float *piv
     for (int i = 0; i < 3; ++i) position[i] = pivot[i] + offset[i];
 }
 
+/* The pitch that keeps the orbited camera at `floor` or higher along `up` (the world's vertical):
+ * the state's own when it does, else the one between the game's framing (0) and it where the
+ * camera meets the floor. When the game's own camera is lower than the floor, the pitch that leaves
+ * it higher of the two. */
+static inline float spartanport_camera_orbit_height(const float *world, const float *pivot,
+                                                    const SpartanCameraState *state, float pitch, const float *up) {
+    SpartanCameraState probe = *state;
+    float turned[16];
+    probe.pitch = pitch;
+    memcpy(turned, world, sizeof(turned));
+    spartanport_camera_orbit_about(turned, pivot, &probe, up);
+    return turned[12] * up[0] + turned[13] * up[1] + turned[14] * up[2];
+}
+
+static inline float spartanport_camera_floor_pitch(const float *world, const float *pivot,
+                                                   const SpartanCameraState *state, const float *up, float floor) {
+    const float wanted = state->pitch;
+    const float height = spartanport_camera_orbit_height(world, pivot, state, wanted, up);
+    if (!(height < floor)) return wanted;  /* also NaN: left as it is */
+    if (spartanport_camera_orbit_height(world, pivot, state, 0, up) < floor)
+        return height >= spartanport_camera_orbit_height(world, pivot, state, 0, up) ? wanted : 0;
+    float low = 0, high = wanted;  /* low: at or above the floor; high: below it */
+    for (int i = 0; i < 16; ++i) {
+        const float middle = (low + high) * 0.5f;
+        if (spartanport_camera_orbit_height(world, pivot, state, middle, up) < floor) high = middle;
+        else low = middle;
+    }
+    return low;
+}
+
 /* The same around the point `state->distance` ahead of the camera. sign: -1 when the camera looks
  * down its third axis (the projection's [2][3]), +1 when it looks up it. */
 static inline void spartanport_camera_orbit_world(float *world, float sign, const SpartanCameraState *state,
