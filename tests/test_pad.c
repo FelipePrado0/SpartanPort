@@ -304,6 +304,8 @@ static void test_qte_fps_cap_kinds(void) {
     spartanport_qte.block=0;
 }
 
+/* Runs the switch attack test, then the pad ABI against a virtual SDL gamepad: rumble, the light
+ * bar, touchpad clicks, the L1 chord, the engine frame rate and menu combos, and overlay capture. */
 int main(void) {
     test_qte_fps_cap();
     test_qte_fps_cap_kinds();

@@ -269,6 +269,9 @@ static void try_audio_fallback(Port *p, int id) {
 }
 #endif
 
+/* sceAudioOutOpen: opens a port of `type` and returns its handle. A pad speaker port (type 4) plays
+ * on the DualSense's own speaker when the speaker extra is on and one is found; every other port,
+ * and that one when none is found, plays on the default output. */
 static ABI int32_t audio_open(int32_t user, int32_t type, int32_t index, uint32_t length, uint32_t freq, uint32_t param) {
     (void)user; (void)index;
     if (!initialized) return ERR_NOT_INIT;
