@@ -1013,12 +1013,15 @@ static void overlay_chords(PadData *d) {
 static int hold_after_capture;
 static _Alignas(64) SpartanTraceSlot high_fps_trace[SPARTAN_TRACE_POINTS];
 static _Alignas(64) SpartanCollisionTrace high_fps_collision;
+static _Alignas(64) SpartanLedgeCache high_fps_ledge;
 static unsigned high_fps_trace_mask;
 static uintptr_t high_fps_trace_engine;
 static uint64_t high_fps_trace_last;
 uintptr_t runtime_high_fps_trace_slot(unsigned index) {
     if (index == SPARTAN_COLLISION_SLOT) return (uintptr_t)&high_fps_collision;
     if (index == SPARTAN_COLLISION_HELPER) return (uintptr_t)spartanport_collision_record;
+    if (index == SPARTAN_LEDGE_SLOT) return (uintptr_t)&high_fps_ledge;
+    if (index == SPARTAN_LEDGE_HELPER) return (uintptr_t)spartanport_ledge_ray;
     return index < SPARTAN_TRACE_POINTS ? (uintptr_t)&high_fps_trace[index] : 0;
 }
 void runtime_high_fps_trace_enable(unsigned mask, uintptr_t engine_rate) {
@@ -1147,6 +1150,9 @@ static void high_fps_trace_report(uint64_t now) {
     if (high_fps_trace_engine) memcpy(&engine, (const void *)high_fps_trace_engine, sizeof(engine));
     printf("HighFPS: time_us=%" PRIu64 " window_us=%" PRIu64 " engine=%.1f\n", now, now - previous, (double)engine);
     if (mask & (1u << SPARTAN_COLLISION_SLOT)) high_fps_collision_report();
+    if (mask & (1u << SPARTAN_LEDGE_SLOT)) /* totals since boot; the game thread writes them unlocked */
+        printf("HighFPS: wall seam fix hits=%u misses=%u reused=%u\n", __atomic_load_n(&high_fps_ledge.hits, __ATOMIC_RELAXED),
+               __atomic_load_n(&high_fps_ledge.misses, __ATOMIC_RELAXED), __atomic_load_n(&high_fps_ledge.reused, __ATOMIC_RELAXED));
     for (unsigned i = 0; i < SPARTAN_TRACE_POINTS; ++i) {
         if (!(mask & (1u << i))) continue;
         SpartanTraceSnapshot snapshot;

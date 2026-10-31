@@ -494,7 +494,7 @@ static void find_engine_fps(Segment *segments, uint64_t count, uint64_t size) {
     engine_rounded_at=rounded;
 }
 static void install_high_fps_trace(Segment *segments, uint64_t count, uint64_t size) {
-    const size_t capacity = round_page((SPARTAN_TRACE_POINTS + SPARTAN_CONTACT_PHASES + SPARTAN_CONTACT_BRANCHES) *
+    const size_t capacity = round_page((SPARTAN_TRACE_POINTS + SPARTAN_CONTACT_PHASES + SPARTAN_CONTACT_BRANCHES + 1) *
                                        SPARTAN_TRACE_STUB_SIZE);
     unsigned char *stubs = allocate(capacity);
     unsigned enabled = 0;
@@ -595,6 +595,35 @@ static void install_high_fps_trace(Segment *segments, uint64_t count, uint64_t s
             printf("HighFPS: contact branch=%s ready at image+0x%" PRIx64 "\n", site->name, at);
         }
     } else puts("HighFPS: collision pair skipped (signatures, original bytes or trampoline range unavailable)");
+    /* Present only when the launcher's "Wall Seam Fix" patch swapped 31 c9 for 33 c9. */
+    const uint64_t seam = spartanport_signature_find(image, size, &spartanport_ledge_site);
+    if (seam != UINT64_MAX) {
+        unsigned char *stub = stubs + (SPARTAN_TRACE_POINTS + SPARTAN_CONTACT_PHASES + SPARTAN_CONTACT_BRANCHES) *
+                                          SPARTAN_TRACE_STUB_SIZE;
+        int32_t call, lea;
+        memcpy(&call, image + seam + 1, 4);
+        memcpy(&lea, image + seam + 18, 4);
+        const int64_t callee = (int64_t)seam + 5 + call, result = (int64_t)seam + 22 + lea;
+        const int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + seam + 5);
+        SpartanLedgeCache *cache = (SpartanLedgeCache *)runtime_high_fps_trace_slot(SPARTAN_LEDGE_SLOT);
+        if (callee < 0 || result < 0 || !mapped(segments, count, (uint64_t)callee, 1) ||
+            !mapped(segments, count, (uint64_t)result, SPARTAN_LEDGE_RESULT_WORDS * 4) ||
+            delta < INT32_MIN || delta > INT32_MAX) {
+            puts("HighFPS: wall seam fix skipped (call, result or trampoline outside range)");
+        } else {
+            cache->result = (uintptr_t)(image + result);
+            const unsigned built = spartanport_ledge_stub(stub, (uintptr_t)cache,
+                runtime_high_fps_trace_slot(SPARTAN_LEDGE_HELPER), (uintptr_t)(image + callee), (uintptr_t)(image + seam + 5));
+            if (!built || built > SPARTAN_TRACE_STUB_SIZE) puts("HighFPS: wall seam fix skipped (stub exceeds its slot)");
+            else {
+                const int32_t relative_seam = (int32_t)delta;
+                image[seam] = 0xe9;
+                memcpy(image + seam + 1, &relative_seam, 4);
+                enabled |= 1u << SPARTAN_LEDGE_SLOT;
+                printf("HighFPS: wall seam fix ready at image+0x%" PRIx64 "\n", seam);
+            }
+        }
+    }
     protect(stubs, capacity, 5);
     runtime_high_fps_trace_enable(enabled, engine_fps_at ? (uintptr_t)(image + engine_fps_at) : 0);
 }
