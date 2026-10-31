@@ -154,6 +154,8 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   remappable.
 - **In-game button icons** (opt-in, off by default): the PlayStation button icons in the game can
   show your controller's, Xbox or Nintendo ones, or the keyboard keys you play with (Game page, Controls).
+- **Free camera (experimental):** the right stick or the mouse turns the camera all the way around
+  Kratos, and he runs the way it looks; it stops short of walls (see [Keyboard controls](#keyboard-controls)).
 - Saving and loading: the save list is shown on screen, as on the PS4. Autosave works too. The
   launcher backs the saves up before every start.
 - Patches: render resolution of 480p, 720p, 900p, 1440p, 1800p or 4K, corrupted texture fix and skip
@@ -322,6 +324,7 @@ Defaults; change them on the launcher's **Controls** page, under **Keyboard & Mo
 | P | left touchpad click (photo mode) |
 | Esc | right touchpad click (pause menu) |
 | Insert | the port's menu (R3+L2 on the controller) |
+| G | free camera off and on (a tap of R3 on the controller), when the free camera is on |
 
 **Rage of Sparta on one input** (on by default) leaves Z and X unused. **Joystick prompts** answer
 the stick-rotation quick-time events without a stick: type the turn (half turns D S A, A S D, A W D
@@ -345,6 +348,20 @@ next weapon. The same weapon's switch attack again waits 0.8 seconds after the l
 weapon's does not). The d-pad alone switches as before. The Weapon Switching tutorials say so in every language
 (on copies of the language files in the port's data folder). Without the launcher, set `SPARTAN_SWITCH_ATTACKS=1`.
 How the game picks Kratos' moves, for further changes: [docs/moves.md](docs/moves.md).
+
+**Free camera** (experimental, off by default): turn it on with *Free camera (experimental)* on the
+launcher's Controls page, under *Controller* in the port's menu (Insert) or in the game's
+Options → Controls. The right stick, or the mouse while the game holds it, then turns the camera all
+the way around Kratos and up over him, and the camera keeps that angle while he moves; the mouse
+follows *Right stick sensitivity*, and with L2 held it aims as before. Kratos runs the way the camera
+looks, and L1 + right stick dodges. In play, G (remappable) or a tap of R3 alone switches it off and
+on: off is the game's own camera, for boss fights and set pieces. The game takes the camera back by
+itself for its camera cuts, quick-time events, the title screen and the pause menu. The camera stops
+short of walls and rocks (the level's own collision, not the invisible walls at cliff edges), rises
+over Kratos when he stands against a wall and does not go below his feet. Many places were built for
+the game's camera only, so other angles can show unfinished backs of the scenery. Without the
+launcher, set `SPARTAN_FREE_CAMERA=1`; `SPARTAN_FREE_CAMERA_LIMITS=yaw,pitch` (degrees) limits how far
+it turns.
 
 **In-game button icons** (off by default) are chosen on the launcher's Controls page, under
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* or *Keyboard*. They replace the PlayStation icons in the
