@@ -14,6 +14,8 @@
 #include "gpu/spartanportgpu.h"
 #include "qte_hook.h"
 #include "switch_hook.h"
+#include "actor_hook.h"
+#include "dualsense.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -117,11 +119,22 @@ static void play_click(PadData *d) {
     if (now>=down && now<up) d->buttons|=BTN_TOUCHPAD;
 }
 
+/* Last light bar colour the game asked for, and the pad it was last written to (so a pad that
+ * reconnects gets it again). Called under lock. */
+static struct { uint8_t rgb[3]; bool set; SDL_Gamepad *applied_to; } light_bar;
+/* Writes the game's light bar colour to the pad, once per pad. Pads without an RGB LED are skipped. */
+static void apply_light_bar(SDL_Gamepad *g) {
+    if (!g || !light_bar.set || light_bar.applied_to==g) return;
+    light_bar.applied_to=g;
+    if (SDL_GetBooleanProperty(SDL_GetGamepadProperties(g),SDL_PROP_GAMEPAD_CAP_RGB_LED_BOOLEAN,false))
+        SDL_SetGamepadLED(g,light_bar.rgb[0],light_bar.rgb[1],light_bar.rgb[2]);
+}
+
 /* Opens the first gamepad SDL knows about; called under lock. */
 static SDL_Gamepad *current_gamepad(void) {
     if (!sdl_ready) sdl_ready = SDL_WasInit(SDL_INIT_GAMEPAD) ? 1 : SDL_InitSubSystem(SDL_INIT_GAMEPAD) ? 1 : -1;
     if (sdl_ready<0) return NULL;
-    if (gamepad && !SDL_GamepadConnected(gamepad)) { SDL_CloseGamepad(gamepad); gamepad=NULL; }
+    if (gamepad && !SDL_GamepadConnected(gamepad)) { SDL_CloseGamepad(gamepad); gamepad=NULL; light_bar.applied_to=NULL; ds_forget(); }
     if (!gamepad) {
         int count=0;
         SDL_JoystickID *ids=SDL_GetGamepads(&count);
@@ -131,6 +144,7 @@ static SDL_Gamepad *current_gamepad(void) {
         }
         SDL_free(ids);
     }
+    apply_light_bar(gamepad);
     return gamepad;
 }
 /* Button sources: a host button or key and the PS4 button it presses. The defaults below can be
@@ -496,6 +510,138 @@ static void sample_keyboard(PadData *d, const bool *keys, SDL_MouseButtonFlags m
     key_axis(&d->right_y,pressed & LOOK_UP,pressed & LOOK_DOWN);
 }
 
+/* DualSense extras, each one switched on by SPARTAN_DUALSENSE (dualsense.h); called under lock
+ * with the pad sampled so far.
+ *
+ * hitflash: the light bar flashes red when the player's health drops. The health hook
+ * (actor_hook.h, slot 0) bumps its sequence on every hit of the player; the colour the game set
+ * is put back after HIT_FLASH_US. */
+extern uintptr_t spartanport_actor_slots_address(void);
+enum { HIT_FLASH_US=180000 };
+static struct { bool seen, flashing; uint32_t seq; float health; uint64_t until; } hit;
+/* Puts the light bar back to the colour the game set, or to the PS4 player 1 blue if it set none. */
+static void restore_light(SDL_Gamepad *g) {
+    if (light_bar.set) { light_bar.applied_to=NULL; apply_light_bar(g); }
+    else SDL_SetGamepadLED(g,0,0,255); /* the pad's own colour: player 1 blue */
+}
+/* Ends a finished flash, then starts one (red, HIT_FLASH_US) when the player's health dropped since
+ * the last hit the hook counted. The first reading only sets the baseline. */
+static void update_hit_flash(SDL_Gamepad *g, uint64_t now) {
+    if (hit.flashing && now>=hit.until) {
+        hit.flashing=false;
+        restore_light(g);
+    }
+    const void *slots=(const void *)spartanport_actor_slots_address();
+    if (!slots || !SDL_GetBooleanProperty(SDL_GetGamepadProperties(g),SDL_PROP_GAMEPAD_CAP_RGB_LED_BOOLEAN,false)) return;
+    SpartanActorSlot player;
+    memcpy(&player,slots,sizeof(player));
+    if (player.seq==hit.seq) return;
+    if (hit.seen && player.health<hit.health) {
+        hit.until=now+HIT_FLASH_US;
+        if (!hit.flashing) { hit.flashing=true; SDL_SetGamepadLED(g,255,0,0); }
+    }
+    hit.seen=true; hit.seq=player.seq; hit.health=player.health;
+}
+
+/* qte: while a QTE prompt is up (the same hook as the stick prompts) the light bar blinks in the
+ * colour of its button, and the pad gives a short tap at each new prompt. A hit flash goes first. */
+enum { QTE_BLINK_US=120000, QTE_TAP_MS=90 };
+static struct { uint32_t beat; uint64_t seen; int type, shown; } qte_led={.type=-1,.shown=-1};
+/* Reads the QTE prompt type while the hook's heartbeat is fresh, taps the pad when a new prompt
+ * appears, and blinks the light bar in the prompt's colour every QTE_BLINK_US. Back to the game's
+ * colour when the prompt ends; a running hit flash takes the light bar first. */
+static void update_qte_flash(SDL_Gamepad *g, uint64_t now) {
+    int type=-1;
+    if (spartanport_qte.block) {
+        const uint32_t beat=__atomic_load_n(&spartanport_qte.heartbeat,__ATOMIC_RELAXED);
+        if (beat!=qte_led.beat) { qte_led.beat=beat; qte_led.seen=now; }
+        if (now-qte_led.seen<=QTE_ACTIVE_US)
+            type=(int)*(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET);
+    }
+    uint8_t rgb[3]={0,0,0};
+    if (type>=0 && !ds_qte_color((unsigned)type,rgb)) type=-1;
+    if (type>=0 && type!=qte_led.type) SDL_RumbleGamepad(g,0x4000,0xC000,QTE_TAP_MS);
+    qte_led.type=type;
+    if (hit.flashing) { qte_led.shown=-1; return; }
+    const int shown=type>=0 && (now/QTE_BLINK_US)%2==0 ? type : -1;
+    if (shown==qte_led.shown) return;
+    qte_led.shown=shown;
+    if (shown>=0) SDL_SetGamepadLED(g,rgb[0],rgb[1],rgb[2]);
+    else restore_light(g);
+}
+
+/* triggers: R2 gets a click (a wall that gives way near the end of the travel) on a DualSense,
+ * and counts as pressed only past it (R2_PRESS_AT of 255, where the wall gives way), so the game's
+ * action starts at the click instead of at the first touch.
+ * This is where a trigger effect for something in the game (a chest, a bow) would be chosen. */
+enum { R2_CLICK_START=4, R2_CLICK_END=6, R2_CLICK_STRENGTH=6, R2_PRESS_AT=150 };
+/* atexit hook: frees both triggers, since the pad keeps an effect until the next one. */
+static void restore_triggers(void) {
+    const DsTrigger off=ds_trigger_off();
+    if (gamepad && SDL_WasInit(SDL_INIT_GAMEPAD) && SDL_GamepadConnected(gamepad)) ds_set_triggers(gamepad,&off,&off);
+}
+/* Gives R2 its click and the left trigger none; true while the effect is on the pad. The first
+ * effect that reaches the pad also registers restore_triggers to run at exit. */
+static bool update_triggers(SDL_Gamepad *g) {
+    static bool exit_hook;
+    const DsTrigger off=ds_trigger_off();
+    const DsTrigger right=ds_trigger_weapon(R2_CLICK_START,R2_CLICK_END,R2_CLICK_STRENGTH);
+    if (!ds_set_triggers(g,&right,&off)) return false;
+    if (exit_hook) return true;
+    exit_hook=true;
+    atexit(restore_triggers); /* the pad keeps an effect until the next one: leave it free */
+    return true;
+}
+
+/* motion: the pad's gyro (rad/s) and accelerometer (g) in the PS4 pad data, which the game may
+ * read. gyroaim: with L2 held (aiming), the gyro also moves the right stick: turning the pad
+ * left or right turns the view, tilting it up or down raises or lowers it (SDL's gyro x is
+ * pitch, y is yaw; a stick up is a smaller value). */
+enum { GYRO_DEADZONE_MILLI=40, GYRO_STICK_PER_RAD=64 };
+static SDL_Gamepad *motion_enabled_for;
+/* A stick value moved by `delta` steps, kept within 0..255. */
+static uint8_t add_stick(uint8_t value, float delta) {
+    const float x=(float)value+delta;
+    return (uint8_t)(x<0.0f ? 0.0f : x>255.0f ? 255.0f : x+0.5f);
+}
+/* Switches the pad's sensors on once per pad and copies gyro and acceleration into the pad data;
+ * with gyroaim and L2 held, adds the gyro (past a small deadzone) to the right stick. */
+static void update_motion(SDL_Gamepad *g, PadData *d) {
+    if (motion_enabled_for!=g) {
+        motion_enabled_for=g;
+        if (SDL_GamepadHasSensor(g,SDL_SENSOR_GYRO)) SDL_SetGamepadSensorEnabled(g,SDL_SENSOR_GYRO,true);
+        if (SDL_GamepadHasSensor(g,SDL_SENSOR_ACCEL)) SDL_SetGamepadSensorEnabled(g,SDL_SENSOR_ACCEL,true);
+    }
+    float gyro[3]={0,0,0}, accel[3]={0,0,0};
+    if (SDL_GetGamepadSensorData(g,SDL_SENSOR_GYRO,gyro,3)) memcpy(d->angular_velocity,gyro,sizeof(gyro));
+    if (SDL_GetGamepadSensorData(g,SDL_SENSOR_ACCEL,accel,3))
+        for (int i=0;i<3;++i) d->acceleration[i]=accel[i]/SDL_STANDARD_GRAVITY;
+    if (!(ds_features() & DS_GYROAIM) || d->l2<=30) return;
+    const float dead=GYRO_DEADZONE_MILLI/1000.0f;
+    const float yaw=fabsf(gyro[1])>dead ? gyro[1] : 0.0f, pitch=fabsf(gyro[0])>dead ? gyro[0] : 0.0f;
+    d->right_x=add_stick(d->right_x,-yaw*GYRO_STICK_PER_RAD);
+    d->right_y=add_stick(d->right_y,pitch*GYRO_STICK_PER_RAD);
+}
+/* Runs the extras that are on for a DualSense (ds_features). An extra that was switched off while
+ * the game runs is undone here: the light bar and the triggers go back to what the game set. */
+static void update_dualsense(SDL_Gamepad *g, PadData *d) {
+    if (!ds_is_dualsense(g)) return;
+    const unsigned features=ds_features();
+    /* An extra switched off while the game runs leaves the pad as the game set it. */
+    if (features & DS_HITFLASH) update_hit_flash(g,d->timestamp);
+    else if (hit.flashing) { hit.flashing=false; restore_light(g); }
+    if (features & DS_QTE) update_qte_flash(g,d->timestamp);
+    else if (qte_led.shown>=0) { qte_led.shown=-1; restore_light(g); }
+    if (features & DS_TRIGGERS) {
+        /* Without the wall on the trigger, R2 keeps its usual threshold. */
+        if (update_triggers(g) && d->r2<R2_PRESS_AT) { d->r2=0; d->buttons&=~(uint32_t)BTN_R2; }
+    } else if (ds_sent.sent_to==g) { const DsTrigger off=ds_trigger_off(); ds_set_triggers(g,&off,&off); }
+    if (features & DS_MOTION) update_motion(g,d);
+    if (features & DS_SPEAKER) ds_set_speaker(g,ds_speaker_gain(),ds_jack_plugged());
+}
+
+/* One sample of the host's pad and keyboard as PS4 pad data. A neutral pad stays when the settings
+ * menu has the input. */
 static void sample_host(PadData *d) {
     memset(d,0,sizeof(*d));
     d->left_x=d->left_y=d->right_x=d->right_y=128;
@@ -529,6 +675,7 @@ static void sample_host(PadData *d) {
                 }
             }
         }
+        update_dualsense(g,d);
     }
     /* The keyboard works with or without a gamepad: its buttons add to the pad's, and a stick
      * follows the keys only while one of them is held. */
@@ -1053,12 +1200,30 @@ static ABI int32_t pad_vibration(int32_t handle, const uint8_t *param) {
 static ABI int32_t pad_ok_handle(int32_t handle) { return handle==PAD_HANDLE && opened ? 0 : ERR_INVALID_HANDLE; }
 static ABI int32_t pad_ok_handle_flag(int32_t handle, uint8_t flag) { (void)flag; return pad_ok_handle(handle); }
 
+/* The game's light bar colour (OrbisPadLightBarParam: r, g, b, reserved) goes to the pad's LED when
+ * it has one (a DualSense); a pad that connects later gets the last colour (apply_light_bar). */
 static ABI int32_t pad_light_bar(int32_t handle, const uint8_t *rgb) {
     if (handle!=PAD_HANDLE || !opened) return ERR_INVALID_HANDLE;
-    (void)rgb; return 0;
+    if (!rgb) return ERR_INVALID_ARG;
+    pthread_mutex_lock(&lock);
+    memcpy(light_bar.rgb,rgb,3);
+    light_bar.set=true; light_bar.applied_to=NULL;
+    apply_light_bar(current_gamepad());
+    pthread_mutex_unlock(&lock);
+    return 0;
+}
+/* scePadResetLightBar returns the colour to the pad's own: the blue of player 1 on a PS4. */
+static ABI int32_t pad_reset_light_bar(int32_t handle) {
+    if (handle!=PAD_HANDLE || !opened) return ERR_INVALID_HANDLE;
+    pthread_mutex_lock(&lock);
+    memcpy(light_bar.rgb,(const uint8_t[3]){0,0,255},3);
+    light_bar.set=true; light_bar.applied_to=NULL;
+    apply_light_bar(current_gamepad());
+    pthread_mutex_unlock(&lock);
+    return 0;
 }
 static const RuntimeExport exports[]={
-    {"scePadSetLightBar",pad_light_bar}, {"scePadResetLightBar",pad_ok_handle},
+    {"scePadSetLightBar",pad_light_bar}, {"scePadResetLightBar",pad_reset_light_bar},
     {"scePadInit",pad_init}, {"scePadOpen",pad_open}, {"scePadClose",pad_close},
     {"scePadReadState",pad_read_state}, {"scePadRead",pad_read},
     {"scePadGetControllerInformation",pad_info}, {"scePadSetVibration",pad_vibration},
