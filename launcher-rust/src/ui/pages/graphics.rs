@@ -118,7 +118,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
         ),
         row(
             state.rtl,
-            &tr(lang, "Frame generation"),
+            &format!("{}  ·  {}", tr(lang, "Frame generation"), tr(lang, "Experimental")),
             select("frame_generation", FRAME_GENERATION, &ini("frame_generation"), lang),
             Some(&hint(
                 "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card."
