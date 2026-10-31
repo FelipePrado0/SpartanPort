@@ -14,8 +14,6 @@
 #include "gpu/spartanportgpu.h"
 #include "qte_hook.h"
 #include "switch_hook.h"
-#include "high_fps_trace.h"
-#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -505,9 +503,10 @@ static bool qte_play(const bool *keys, uint64_t now) {
  * few seconds after a QTE costs little. */
 enum { QTE_FPS_HOLD_US=5000000, QTE_FPS_REPORT_US=20000000 };
 static struct { bool capped, reported; uint64_t since; } qte_fps;
-/* Temporary F4.2: in Cronos, one blade pull (R1) at 240 FPS throws Kratos out of the map, at 60 it
- * works. R1 there caps the engine at 60 until R1_FPS_HOLD_US after the last R1; the QTE cap and this
- * one only lift the cap when both are done. */
+/* In Cronos, one blade pull (R1) at 240 FPS throws Kratos out of the map, at 60 it works. R1 there
+ * caps the engine at 60 until R1_FPS_HOLD_US after the last R1; the QTE cap and this one only lift
+ * the cap when both are done. */
+uintptr_t runtime_player_object;
 enum { R1_FPS_HOLD_US=4000000 };
 static uint64_t r1_fps_until;
 /* Charged prompts (hold a button: chests, doors) only play an animation: they keep the player's rate
@@ -533,8 +532,9 @@ static void qte_fps_cap(uint64_t now) {
         if (!r1_fps_until) spartanportgpu_engine_fps_cap(0);
     }
 }
-/* The pull that fails: maintainer's F11 marks 8 to 10 (2026-10-31), Kratos at obj+0xa0 when R1 starts it. */
-static const float r1_pull_spot[3]={-92,373,88};
+/* The pull that fails, Kratos at obj+0xa0 when R1 starts it: between the maintainer's marks of
+ * 2026-10-31 (z 81 to 101) and the 9 pulls that validated the cap (z 64 to 90), each within 24. */
+static const float r1_pull_spot[3]={-90,372,80};
 enum { R1_PULL_RADIUS=25 };
 static void r1_fps_cap(const PadData *d, uintptr_t kratos) {
     static bool was_down;
@@ -543,10 +543,10 @@ static void r1_fps_cap(const PadData *d, uintptr_t kratos) {
         float position[3], squared=0;
         memcpy(position,(const void *)(kratos+0xa0),sizeof(position));
         for (int i=0;i<3;++i) squared+=(position[i]-r1_pull_spot[i])*(position[i]-r1_pull_spot[i]);
-        const bool spot=squared<=R1_PULL_RADIUS*R1_PULL_RADIUS;
-        printf("Engine FPS: R1 in Cronos at [%.1f,%.1f,%.1f] state 0x%x, %s\n",position[0],position[1],position[2],
-               *(const volatile uint16_t *)(kratos+0x1c0),spot ? "the failing pull, 60 for 4 s" : "left as is");
-        if (!spot) { was_down=down; return; }
+        if (squared>R1_PULL_RADIUS*R1_PULL_RADIUS) { was_down=down; return; }
+        /* +0x298: 0 for the player in the damage code (src/actor_hook.h), a check on the object. */
+        printf("Engine FPS: 60 for %d s, the Cronos blade pull at [%.1f,%.1f,%.1f] (player byte %u)\n",
+               R1_FPS_HOLD_US/1000000,position[0],position[1],position[2],*(const volatile uint8_t *)(kratos+0x298));
         if (!r1_fps_until && !qte_fps.capped) spartanportgpu_engine_fps_cap(60);
         r1_fps_until=d->timestamp+R1_FPS_HOLD_US;
     } else if (r1_fps_until && d->timestamp>r1_fps_until) {
@@ -1041,257 +1041,10 @@ static void overlay_chords(PadData *d) {
 /* After the menu or the text dialog closes, buttons still held (the Cross that accepted a
  * name) stay hidden until released: the game would take them as a new press. */
 static int hold_after_capture;
-static _Alignas(64) SpartanTraceSlot high_fps_trace[SPARTAN_TRACE_POINTS];
-static _Alignas(64) SpartanCollisionTrace high_fps_collision;
-static _Alignas(64) SpartanLedgeCache high_fps_ledge;
-static unsigned high_fps_trace_mask;
-static uintptr_t high_fps_trace_engine;
-static uint64_t high_fps_trace_last;
-uintptr_t runtime_high_fps_trace_slot(unsigned index) {
-    if (index == SPARTAN_COLLISION_SLOT) return (uintptr_t)&high_fps_collision;
-    if (index == SPARTAN_COLLISION_HELPER) return (uintptr_t)spartanport_collision_record;
-    if (index == SPARTAN_LEDGE_SLOT) return (uintptr_t)&high_fps_ledge;
-    if (index == SPARTAN_LEDGE_HELPER) return (uintptr_t)spartanport_ledge_ray;
-    return index < SPARTAN_TRACE_POINTS ? (uintptr_t)&high_fps_trace[index] : 0;
-}
-void runtime_high_fps_trace_enable(unsigned mask, uintptr_t engine_rate) {
-    high_fps_trace_engine = engine_rate;
-    __atomic_store_n(&high_fps_trace_mask, mask, __ATOMIC_RELEASE);
-}
-static float high_fps_trace_float(uint32_t bits) {
-    float value;
-    memcpy(&value, &bits, sizeof(value));
-    return value;
-}
-static void high_fps_contact_vector(const uint32_t *value) {
-    printf("[%.9g,%.9g,%.9g,%.9g]", (double)high_fps_trace_float(value[0]),
-           (double)high_fps_trace_float(value[1]), (double)high_fps_trace_float(value[2]),
-           (double)high_fps_trace_float(value[3]));
-}
-static void high_fps_contact_detail_report(const char *label, const SpartanContactDetail *detail) {
-    if (!detail->valid) return;
-    printf("HighFPS: contact detail=%s object=0x%" PRIxPTR " caller=0x%" PRIxPTR
-           " result=0x%x query_flags=0x%x stages=0x%x target_in=",
-           label, detail->pair[0].object, detail->pair[0].caller,
-           detail->pair[1].result, detail->pair[0].query_flags, detail->stage_mask);
-    high_fps_contact_vector(detail->pair[0].request);
-    printf(" target_out=");
-    high_fps_contact_vector(detail->pair[1].request);
-    putchar('\n');
-    static const char *const names[SPARTAN_CONTACT_STAGES] = {"primary", "retry", "fallback"};
-    for (unsigned i = 0; i < SPARTAN_CONTACT_STAGES; ++i) {
-        const SpartanContactStage *stage = &detail->stages[i];
-        if (!stage->calls) continue;
-        printf("HighFPS: contact stage=%s calls=%u mask=0x%x threshold=%.9g up=",
-               names[i], stage->calls, stage->mask, (double)high_fps_trace_float(stage->threshold));
-        high_fps_contact_vector(stage->up);
-        putchar('\n');
-        for (unsigned ray = 0; ray < 2; ++ray) {
-            const unsigned bits = (stage->mask >> (ray * 2)) & 3;
-            printf("HighFPS: contact ray=%u bits=0x%x a=", ray, bits);
-            high_fps_contact_vector(stage->points[ray]);
-            printf(" b=");
-            high_fps_contact_vector(stage->points[ray + 2]);
-            if (bits) {
-                printf(" hit=");
-                high_fps_contact_vector(stage->hits[ray]);
-                printf(" normal=");
-                high_fps_contact_vector(stage->normals[ray]);
-            }
-            putchar('\n');
-        }
-    }
-    /* "top" not taken, or no event after "side-ray", means the last check failed. */
-    printf("HighFPS: contact path=");
-    const unsigned steps = detail->path_count < SPARTAN_CONTACT_PATH ? detail->path_count : SPARTAN_CONTACT_PATH;
-    for (unsigned i = 0; i < steps; ++i)
-        printf("%s%s:%s", i ? "," : "", spartanport_contact_branches[detail->path[i] & 0x7f].name,
-               detail->path[i] & 0x80 ? "jump" : "next");
-    printf("%s events=%u\n", steps ? "" : "none", detail->path_count);
-    if (steps) {
-        const SpartanContactProbe *probe = &detail->probe;
-        const uint32_t *normal = probe->vectors[3], *direction = probe->vectors[1], *up = detail->stages[0].up;
-        double facing = 0, upright = 0;
-        for (unsigned lane = 0; lane < 3; ++lane) {
-            facing += (double)high_fps_trace_float(direction[lane]) * high_fps_trace_float(normal[lane]);
-            upright += (double)high_fps_trace_float(up[lane]) * high_fps_trace_float(normal[lane]);
-        }
-        printf("HighFPS: contact probe ecx=0x%x blocked=%u side=%u height=%.9g surface=0x%" PRIxPTR
-               " facing=%.9g (vs 0.85) upright=%.9g (vs 0.1)",
-               probe->ecx, probe->blocked, probe->side, (double)high_fps_trace_float(probe->height),
-               probe->surface, facing, upright);
-        static const char *const names[8] = {"probe", "direction", "ledge_hit", "ledge_normal", "ledge_extra",
-                                             "m2f0", "object170", "object180"};
-        for (unsigned i = 0; i < 8; ++i) {
-            printf(" %s=", names[i]);
-            high_fps_contact_vector(probe->vectors[i]);
-        }
-        putchar('\n');
-    }
-    printf("HighFPS: contact history=");
-    for (unsigned i = 0; i < detail->history_count; ++i) {
-        const float z = high_fps_trace_float(detail->history[i][2]);
-        printf("%s%.6g:%s", i ? "," : "", (double)z, detail->history[i][3] ? "ok" : "fail");
-        if (i) printf("(dz=%.6g)", (double)(z - high_fps_trace_float(detail->history[i - 1][2])));
-    }
-    printf("%s\n", detail->history_count ? "" : "none");
-}
-static void high_fps_collision_report(void) {
-    static SpartanCollisionSnapshot snapshot; /* too big for the pad thread's stack */
-    if (!spartanport_collision_take(&high_fps_collision, &snapshot)) return;
-    printf("HighFPS: collision entries=%u completed=%u groups=%u pending=%u busy=%u unpaired=%u full=%u\n",
-           snapshot.entries, snapshot.completed, snapshot.count, snapshot.pending,
-           snapshot.busy, snapshot.unpaired, snapshot.full);
-    for (unsigned i = 0; i < snapshot.count; ++i) {
-        const SpartanCollisionGroup *group = &snapshot.groups[i];
-        printf("HighFPS: collision object=0x%" PRIxPTR " caller=0x%" PRIxPTR
-               " calls=%u target_nonzero=%u position_changed=%u request_changed=%u flags_seen=0x%x results_seen=0x%x zero_results=%u wall_failures=%u\n",
-               group->first[0].object, group->first[0].caller, group->calls, group->requested,
-               group->moved, group->adjusted, group->flags_seen, group->results_seen, group->zero_results, group->wall_failures);
-        if (group->wall_failures || group->passes)
-            printf("HighFPS: collision wall passes=%u fail_z=[%.6g,%.6g] pass_z=[%.6g,%.6g]\n", group->passes,
-                   (double)high_fps_trace_float(group->fail_low), (double)high_fps_trace_float(group->fail_high),
-                   (double)high_fps_trace_float(group->pass_low), (double)high_fps_trace_float(group->pass_high));
-        for (unsigned sample = 0; sample < 2; ++sample) {
-            const SpartanCollisionSample *pair = sample ? group->last : group->first;
-            printf("HighFPS: collision sample=%s object=0x%" PRIxPTR " caller=0x%" PRIxPTR
-                   " flags_in=0x%x flags_out=0x%x query_flags=0x%x result=0x%x valid_in=%u valid_out=%u",
-                   sample ? "last" : "first", pair[0].object, pair[0].caller,
-                   pair[0].flags, pair[1].flags, pair[0].query_flags, pair[1].result, pair[0].valid, pair[1].valid);
-            for (unsigned phase = 0; phase < 2; ++phase) {
-                printf(" position_%s=[%.9g,%.9g,%.9g,%.9g] request_%s=[%.9g,%.9g,%.9g,%.9g]",
-                       phase ? "out" : "in", (double)high_fps_trace_float(pair[phase].position[0]),
-                       (double)high_fps_trace_float(pair[phase].position[1]), (double)high_fps_trace_float(pair[phase].position[2]),
-                       (double)high_fps_trace_float(pair[phase].position[3]), phase ? "out" : "in",
-                       (double)high_fps_trace_float(pair[phase].request[0]), (double)high_fps_trace_float(pair[phase].request[1]),
-                       (double)high_fps_trace_float(pair[phase].request[2]), (double)high_fps_trace_float(pair[phase].request[3]));
-            }
-            putchar('\n');
-        }
-        high_fps_contact_detail_report("first-failure", &group->first_failure);
-        high_fps_contact_detail_report("last-success", &group->last_success);
-    }
-}
-static SpartanPaths high_fps_paths;
-/* ponytail: Kratos is the first move-init object (the only mover at the title screen, same in every
- * F4.2 log); find the player by its own pointer before this leaves the trace build. */
-static uintptr_t high_fps_player;
-/* Recent move-init records name the objects the game moved in the last frames, so their memory is
- * live. Read without the slot lock: count only grows after a record is complete, and the oldest
- * record, the one a writer may be filling, is skipped. */
-static void high_fps_path_sample(uint64_t now) {
-    static int f11_was_down;
-    const bool *keys = sdl_ready ? SDL_GetKeyboardState(NULL) : NULL;
-    const int f11 = keys && keys[SDL_SCANCODE_F11];
-    if (f11 && !f11_was_down) {
-        printf("HighFPS: path mark F11 time_us=%" PRIu64 "\n", now);
-        for (unsigned i = 0; i < SPARTAN_PATH_TRACKS; ++i) spartanport_path_mark(&high_fps_paths.tracks[i]);
-    }
-    f11_was_down = f11;
-    const SpartanTraceSlot *slot = &high_fps_trace[SPARTAN_TRACE_MOVE_INIT];
-    const uint32_t count = __atomic_load_n(&slot->count, __ATOMIC_ACQUIRE);
-    const uint32_t recent = count < SPARTAN_TRACE_CAPACITY - 1 ? count : SPARTAN_TRACE_CAPACITY - 1;
-    uintptr_t seen[SPARTAN_TRACE_CAPACITY];
-    unsigned seen_count = 0;
-    for (uint32_t i = 1; i <= recent; ++i) {
-        uintptr_t object;
-        memcpy(&object, slot->records[(count - i) & (SPARTAN_TRACE_CAPACITY - 1)].input + 2, sizeof(object));
-        if (!object || (object & 0xf)) continue;
-        if (!high_fps_player) high_fps_player = object;
-        unsigned known = 0;
-        while (known < seen_count && seen[known] != object) ++known;
-        if (known < seen_count) continue;
-        seen[seen_count++] = object;
-        float position[3];
-        memcpy(position, (const void *)(object + 0xa0), sizeof(position));
-        spartanport_paths_add(&high_fps_paths, object, now, position,
-                              *(const volatile uint16_t *)(object + 0x1c0), SPARTAN_PATH_LIMIT);
-    }
-}
-static void high_fps_path_report_track(SpartanPath *track) {
-    static SpartanPath path;
-    spartanport_path_take(track, &path);
-    if (!path.samples) return;
-    const SpartanPathFrame *peak = &path.peak;
-    printf("HighFPS: path object=0x%" PRIxPTR " samples=%u events=%u limit=%g peak_speed=%.6g peak_at=[%.6g,%.6g,%.6g]"
-           " peak_state=0x%x\n", path.object, path.samples, path.events, (double)SPARTAN_PATH_LIMIT,
-           (double)peak->speed, (double)peak->position[0], (double)peak->position[1], (double)peak->position[2],
-           peak->state);
-    if (!path.captured) return;
-    printf("HighFPS: path capture object=0x%" PRIxPTR " frames=%u mark=%u peak_speed=%.6g\n", path.object,
-           path.captured, path.captured - (SPARTAN_PATH_FRAMES - SPARTAN_PATH_BEFORE), (double)path.capture_speed);
-    for (uint32_t i = 0; i < path.captured; ++i) {
-        const SpartanPathFrame *frame = &path.capture[i];
-        printf("HighFPS: path frame=%u t_ms=%.3f pos=[%.6g,%.6g,%.6g] speed=%.6g state=0x%x\n", i,
-               (double)(frame->time - path.capture[0].time) / 1000.0, (double)frame->position[0],
-               (double)frame->position[1], (double)frame->position[2], (double)frame->speed, frame->state);
-    }
-}
-static void high_fps_path_report(void) {
-    const uint32_t full = __atomic_exchange_n(&high_fps_paths.full, 0, __ATOMIC_RELAXED);
-    if (full) printf("HighFPS: path tracks_full=%u\n", full);
-    for (unsigned i = 0; i < SPARTAN_PATH_TRACKS; ++i) high_fps_path_report_track(&high_fps_paths.tracks[i]);
-}
-static void high_fps_trace_report(uint64_t now) {
-    const unsigned mask = __atomic_load_n(&high_fps_trace_mask, __ATOMIC_ACQUIRE);
-    const uint64_t previous = __atomic_load_n(&high_fps_trace_last, __ATOMIC_RELAXED);
-    if (mask & (1u << SPARTAN_TRACE_MOVE_INIT)) high_fps_path_sample(now);
-    if (!mask || !spartanport_trace_due(&high_fps_trace_last, now)) return;
-    float engine = 0;
-    if (high_fps_trace_engine) memcpy(&engine, (const void *)high_fps_trace_engine, sizeof(engine));
-    printf("HighFPS: time_us=%" PRIu64 " window_us=%" PRIu64 " engine=%.1f\n", now, now - previous, (double)engine);
-    if (mask & (1u << SPARTAN_COLLISION_SLOT)) high_fps_collision_report();
-    if (mask & (1u << SPARTAN_TRACE_MOVE_INIT)) high_fps_path_report();
-    if (mask & (1u << SPARTAN_LEDGE_SLOT)) /* totals since boot; the game thread writes them unlocked */
-        printf("HighFPS: wall seam fix hits=%u misses=%u reused=%u\n", __atomic_load_n(&high_fps_ledge.hits, __ATOMIC_RELAXED),
-               __atomic_load_n(&high_fps_ledge.misses, __ATOMIC_RELAXED), __atomic_load_n(&high_fps_ledge.reused, __ATOMIC_RELAXED));
-    for (unsigned i = 0; i < SPARTAN_TRACE_POINTS; ++i) {
-        if (!(mask & (1u << i))) continue;
-        SpartanTraceSnapshot snapshot;
-        if (!spartanport_trace_take(&high_fps_trace[i], &snapshot)) continue;
-        const uint64_t calls = (uint64_t)snapshot.calls + snapshot.dropped;
-        printf("HighFPS: site=%s calls=%" PRIu64 " kept=%u overwritten=%u busy=%u",
-               spartanport_trace_points[i].name, calls, snapshot.samples,
-               snapshot.calls - snapshot.samples, snapshot.dropped);
-        if (snapshot.samples) {
-            float low = 0, high = 0;
-            unsigned finite = 0;
-            for (unsigned j = 0; j < snapshot.samples; ++j) {
-                const float value = snapshot.records[j].input[0];
-                if (!isfinite(value)) continue;
-                if (!finite || value < low) low = value;
-                if (!finite || value > high) high = value;
-                ++finite;
-            }
-            const SpartanTraceRecord *last = &snapshot.records[snapshot.samples - 1];
-            printf(" operand_rate=%.6g input=", (double)last->rate);
-            if (spartanport_trace_points[i].input == SPARTAN_TRACE_FRAME_CONTEXT)
-                printf("%.9g", (double)last->input[0]);
-            else
-                printf("[%.9g,%.9g,%.9g,%.9g]", (double)last->input[0], (double)last->input[1],
-                       (double)last->input[2], (double)last->input[3]);
-            printf(" range=[%.9g,%.9g] finite=%u product=%.9g", (double)low, (double)high, finite,
-                   (double)last->input[0] * last->rate);
-        }
-        putchar('\n');
-        if (spartanport_trace_points[i].input == SPARTAN_TRACE_FRAME_CONTEXT) {
-            SpartanTraceGroup groups[SPARTAN_TRACE_CAPACITY];
-            const unsigned count = spartanport_trace_group_context(&snapshot, groups);
-            for (unsigned j = 0; j < count; ++j) {
-                const SpartanTraceGroup *group = &groups[j];
-                printf("HighFPS: context object=0x%" PRIxPTR " caller=0x%" PRIxPTR " state=%u samples=%u"
-                       " input=%.9g operand_rate=%.6g product=%.9g\n",
-                       group->object, group->caller, group->state, group->samples,
-                       (double)group->input, (double)group->rate, (double)group->input * group->rate);
-            }
-        }
-    }
-}
 static void sample(PadData *d) {
     sample_host(d);
     qte_fps_cap(d->timestamp);
-    r1_fps_cap(d, high_fps_player);
-    high_fps_trace_report(d->timestamp);
+    r1_fps_cap(d, __atomic_load_n(&runtime_player_object, __ATOMIC_RELAXED));
     if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); reset_switch_attack(); return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */
     read_inject();

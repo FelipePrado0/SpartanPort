@@ -14,10 +14,10 @@
 #include "qte_hook.h"
 #include "switch_hook.h"
 #include "actor_hook.h"
+#include "player_hook.h"
 #include "damage_hook.h"
 #include "menu_hook.h"
 #include "graphics_hook.h"
-#include "high_fps_trace.h"
 #include "gpu/spartanportgpu.h"
 #if !defined(__x86_64__) || !defined(__GNUC__)
 #error This prototype requires x86-64 GCC or Clang (including MinGW).
@@ -493,140 +493,6 @@ static void find_engine_fps(Segment *segments, uint64_t count, uint64_t size) {
     engine_fps_at=fps;
     engine_rounded_at=rounded;
 }
-static void install_high_fps_trace(Segment *segments, uint64_t count, uint64_t size) {
-    const size_t capacity = round_page((SPARTAN_TRACE_POINTS + SPARTAN_CONTACT_PHASES + SPARTAN_CONTACT_BRANCHES + 1) *
-                                       SPARTAN_TRACE_STUB_SIZE);
-    unsigned char *stubs = allocate(capacity);
-    unsigned enabled = 0;
-    for (unsigned i = 0; i < SPARTAN_TRACE_POINTS; ++i) {
-        const SpartanTracePoint *point = &spartanport_trace_points[i];
-        const uint64_t at = spartanport_signature_find(image, size, &point->site);
-        if (at == UINT64_MAX || !mapped(segments, count, at, 7) ||
-            !spartanport_trace_match(point, image + at, size - at)) {
-            printf("HighFPS: site=%s skipped (signature absent, ambiguous or original bytes changed)\n", point->name);
-            continue;
-        }
-        int32_t displacement;
-        memcpy(&displacement, image + at + 3, 4);
-        const int64_t rate = (int64_t)at + 7 + displacement;
-        unsigned char *stub = stubs + i * SPARTAN_TRACE_STUB_SIZE;
-        const int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + at + 5);
-        if (rate < 0 || !mapped(segments, count, (uint64_t)rate, 4) || delta < INT32_MIN || delta > INT32_MAX) {
-            printf("HighFPS: site=%s skipped (operand or trampoline outside range)\n", point->name);
-            continue;
-        }
-        const unsigned length = spartanport_trace_stub(stub, point, runtime_high_fps_trace_slot(i),
-                                                      (uintptr_t)(image + rate), (uintptr_t)(image + at + 7));
-        if (!length || length > SPARTAN_TRACE_STUB_SIZE) {
-            printf("HighFPS: site=%s skipped (stub exceeds its slot)\n", point->name);
-            continue;
-        }
-        const int32_t relative = (int32_t)delta;
-        image[at] = 0xe9;
-        memcpy(image + at + 1, &relative, 4);
-        memset(image + at + 5, 0x90, 2);
-        enabled |= 1u << i;
-        printf("HighFPS: site=%s trace ready at image+0x%" PRIx64 "\n", point->name, at);
-    }
-    uint64_t collision[SPARTAN_CONTACT_PHASES];
-    int32_t relative[SPARTAN_CONTACT_PHASES];
-    int ready = 1;
-    for (unsigned phase = 0; phase < SPARTAN_CONTACT_PHASES; ++phase) {
-        collision[phase] = spartanport_signature_find(image, size, &spartanport_collision_sites[phase]);
-        const uint64_t at = collision[phase];
-        const unsigned length = spartanport_collision_length(phase);
-        unsigned char *stub = stubs + (SPARTAN_TRACE_POINTS + phase) * SPARTAN_TRACE_STUB_SIZE;
-        const int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + (at == UINT64_MAX ? 0 : at) + 5);
-        if (at == UINT64_MAX || !mapped(segments, count, at, length) ||
-            !spartanport_collision_match(phase, image + at, size - at) || delta < INT32_MIN || delta > INT32_MAX) {
-            ready = 0;
-            continue;
-        }
-        uintptr_t operand = 0;
-        if (phase == 1) {
-            int32_t displacement;
-            memcpy(&displacement, image + at + 3, 4);
-            const int64_t target = (int64_t)at + 7 + displacement;
-            if (target < 0 || !mapped(segments, count, (uint64_t)target, 8)) { ready = 0; continue; }
-            operand = (uintptr_t)(image + target);
-        }
-        const unsigned built = spartanport_collision_stub(stub, runtime_high_fps_trace_slot(SPARTAN_COLLISION_SLOT),
-            runtime_high_fps_trace_slot(SPARTAN_COLLISION_HELPER), phase, (uintptr_t)(image + at + length), operand);
-        if (!built || built > SPARTAN_TRACE_STUB_SIZE) ready = 0;
-        relative[phase] = (int32_t)delta;
-    }
-    for (unsigned phase = 2; phase < SPARTAN_CONTACT_PHASES && ready; ++phase)
-        if (collision[phase] <= collision[0] || collision[phase] >= collision[1]) ready = 0;
-    if (ready && collision[1] > collision[0] && collision[1] - collision[0] < 0x10000) {
-        /* Install the entry, exit and internal sites together so every sample has a path. */
-        for (unsigned phase = 0; phase < SPARTAN_CONTACT_PHASES; ++phase) {
-            image[collision[phase]] = 0xe9;
-            memcpy(image + collision[phase] + 1, &relative[phase], 4);
-            memset(image + collision[phase] + 5, 0x90, spartanport_collision_length(phase) - 5);
-        }
-        enabled |= 1u << SPARTAN_COLLISION_SLOT;
-        printf("HighFPS: contact query pair ready at image+0x%" PRIx64 " and image+0x%" PRIx64 "\n", collision[0], collision[1]);
-        for (unsigned phase = 2; phase < SPARTAN_CONTACT_PHASES; ++phase)
-            printf("HighFPS: contact internal stage=%u ready at image+0x%" PRIx64 "\n", phase - 2, collision[phase]);
-        /* Each wall check is optional: a missing one leaves the others observed. */
-        for (unsigned branch = 0; branch < SPARTAN_CONTACT_BRANCHES; ++branch) {
-            const SpartanContactBranch *site = &spartanport_contact_branches[branch];
-            const uint64_t at = spartanport_signature_find(image, size, &site->site);
-            unsigned char *stub = stubs + (SPARTAN_TRACE_POINTS + SPARTAN_CONTACT_PHASES + branch) * SPARTAN_TRACE_STUB_SIZE;
-            const int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + (at == UINT64_MAX ? 0 : at) + 5);
-            if (at == UINT64_MAX || at <= collision[0] || at >= collision[1] || !mapped(segments, count, at, 6) ||
-                !spartanport_branch_match(branch, image + at, size - at) || delta < INT32_MIN || delta > INT32_MAX) {
-                printf("HighFPS: contact branch=%s skipped (signature absent, ambiguous or original bytes changed)\n", site->name);
-                continue;
-            }
-            int32_t jump;
-            memcpy(&jump, image + at + 2, 4);
-            const unsigned built = spartanport_branch_stub(stub, runtime_high_fps_trace_slot(SPARTAN_COLLISION_SLOT),
-                runtime_high_fps_trace_slot(SPARTAN_COLLISION_HELPER), branch,
-                (uintptr_t)(image + at + 6 + jump), (uintptr_t)(image + at + 6));
-            if (!built || built > SPARTAN_TRACE_STUB_SIZE) {
-                printf("HighFPS: contact branch=%s skipped (stub exceeds its slot)\n", site->name);
-                continue;
-            }
-            const int32_t relative_branch = (int32_t)delta;
-            image[at] = 0xe9;
-            memcpy(image + at + 1, &relative_branch, 4);
-            image[at + 5] = 0x90;
-            printf("HighFPS: contact branch=%s ready at image+0x%" PRIx64 "\n", site->name, at);
-        }
-    } else puts("HighFPS: collision pair skipped (signatures, original bytes or trampoline range unavailable)");
-    /* Present only when the launcher's "Wall Seam Fix" patch swapped 31 c9 for 33 c9. */
-    const uint64_t seam = spartanport_signature_find(image, size, &spartanport_ledge_site);
-    if (seam != UINT64_MAX) {
-        unsigned char *stub = stubs + (SPARTAN_TRACE_POINTS + SPARTAN_CONTACT_PHASES + SPARTAN_CONTACT_BRANCHES) *
-                                          SPARTAN_TRACE_STUB_SIZE;
-        int32_t call, lea;
-        memcpy(&call, image + seam + 1, 4);
-        memcpy(&lea, image + seam + 18, 4);
-        const int64_t callee = (int64_t)seam + 5 + call, result = (int64_t)seam + 22 + lea;
-        const int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + seam + 5);
-        SpartanLedgeCache *cache = (SpartanLedgeCache *)runtime_high_fps_trace_slot(SPARTAN_LEDGE_SLOT);
-        if (callee < 0 || result < 0 || !mapped(segments, count, (uint64_t)callee, 1) ||
-            !mapped(segments, count, (uint64_t)result, SPARTAN_LEDGE_RESULT_WORDS * 4) ||
-            delta < INT32_MIN || delta > INT32_MAX) {
-            puts("HighFPS: wall seam fix skipped (call, result or trampoline outside range)");
-        } else {
-            cache->result = (uintptr_t)(image + result);
-            const unsigned built = spartanport_ledge_stub(stub, (uintptr_t)cache,
-                runtime_high_fps_trace_slot(SPARTAN_LEDGE_HELPER), (uintptr_t)(image + callee), (uintptr_t)(image + seam + 5));
-            if (!built || built > SPARTAN_TRACE_STUB_SIZE) puts("HighFPS: wall seam fix skipped (stub exceeds its slot)");
-            else {
-                const int32_t relative_seam = (int32_t)delta;
-                image[seam] = 0xe9;
-                memcpy(image + seam + 1, &relative_seam, 4);
-                enabled |= 1u << SPARTAN_LEDGE_SLOT;
-                printf("HighFPS: wall seam fix ready at image+0x%" PRIx64 "\n", seam);
-            }
-        }
-    }
-    protect(stubs, capacity, 5);
-    runtime_high_fps_trace_enable(enabled, engine_fps_at ? (uintptr_t)(image + engine_fps_at) : 0);
-}
 /* After it: the present thread reads the globals every vblank, and the image is not
  * accessible between the two protect passes. */
 static void publish_engine_fps(void) {
@@ -682,6 +548,33 @@ static void install_actor_watch(Segment *segments, uint64_t count, uint64_t size
     memset(image + at + 5, 0x90, SPARTAN_ACTOR_HOOK_LENGTH - 5);
     spartanport_actor_status(1);
     printf("Health display: damage hook ready (enemy health bar in the menu)\n");
+}
+
+/* Kratos' object (src/player_hook.h), for the Cronos blade pull cap in runtime_pad.c. */
+static void install_player_hook(Segment *segments, uint64_t count, uint64_t size) {
+    const uint64_t at = spartanport_signature_find(image, size, &spartanport_player_site);
+    if (at == UINT64_MAX || !mapped(segments, count, at, SPARTAN_PLAYER_HOOK_LENGTH) ||
+        !spartanport_player_match(image + at, size - at)) {
+        printf("Player hook: unavailable (code not found in this eboot.bin)\n");
+        return;
+    }
+    int32_t displacement;
+    memcpy(&displacement, image + at + 3, 4);
+    const int64_t rate = (int64_t)at + SPARTAN_PLAYER_HOOK_LENGTH + displacement;
+    unsigned char *stub = allocate(page_size);
+    const int64_t delta = (int64_t)(uintptr_t)stub - (int64_t)(uintptr_t)(image + at + 5);
+    if (rate < 0 || !mapped(segments, count, (uint64_t)rate, 4) || delta < INT32_MIN || delta > INT32_MAX) {
+        printf("Player hook: unavailable (operand or hook outside range)\n");
+        return;
+    }
+    spartanport_player_stub(stub, (uintptr_t)&runtime_player_object, (uintptr_t)(image + rate),
+                            (uintptr_t)(image + at + SPARTAN_PLAYER_HOOK_LENGTH));
+    protect(stub, page_size, 5);
+    const int32_t relative = (int32_t)delta;
+    image[at] = 0xe9;
+    memcpy(image + at + 1, &relative, 4);
+    memset(image + at + 5, 0x90, SPARTAN_PLAYER_HOOK_LENGTH - 5);
+    printf("Player hook: ready at image+0x%" PRIx64 "\n", at);
 }
 
 /* QTE prompts (src/qte_hook.h): a frame count in the prompt's update and an answer in its
@@ -1442,9 +1335,9 @@ int main(int argc, char **argv) {
     if (gpu_enabled) install_orb_multiplier(segments, ns, size);
     if (gpu_enabled) install_cheats(segments, ns, size);
     if (gpu_enabled) find_engine_fps(segments, ns, size);
-    if (gpu_enabled) install_high_fps_trace(segments, ns, size);
     if (gpu_enabled) find_power_up_menu(segments, ns, size);
     if (gpu_enabled) install_actor_watch(segments, ns, size);
+    if (gpu_enabled) install_player_hook(segments, ns, size);
     if (gpu_enabled) install_stat_multipliers(segments, ns, size);
     if (gpu_enabled) install_graphics(segments, ns, size);
     if (gpu_enabled) install_auto_qte_hooks(segments, ns, size, install_qte_hooks(segments, ns, size));

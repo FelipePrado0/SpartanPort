@@ -68,6 +68,7 @@ int runtime_file_mount(const char *guest, const char *host);
 void runtime_file_unmount(const char *guest);
 int runtime_file_translate(const char *guest, char *out, size_t size);
 int64_t runtime_file_open(const char *path, int flags, int mode);
+/* 1 while the last area WAD the game opened is a Cronos one (Crn*.WAD). */
 int runtime_file_cronos(void);
 int64_t runtime_file_close(int fd);
 int64_t runtime_file_read(int fd, void *buffer, uint64_t size);
@@ -104,9 +105,8 @@ uintptr_t runtime_audio_resolve(const char *name);
 void runtime_audio_report(void);
 uintptr_t runtime_pad_resolve(const char *name);
 void runtime_pad_report(void);
-/* Temporary F4.1 trace: bounded samples of the game's frame-rate readers. */
-uintptr_t runtime_high_fps_trace_slot(unsigned index);
-void runtime_high_fps_trace_enable(unsigned mask, uintptr_t engine_rate);
+/* Kratos' object, stored by the player hook (src/player_hook.h); 0 until he first moves. */
+extern uintptr_t runtime_player_object;
 /* probe --gamepad: prints one "Gamepad:" line for the first pad found (returns 1) or none (0). */
 int runtime_pad_describe(void);
 uintptr_t runtime_rtc_resolve(const char *name);
