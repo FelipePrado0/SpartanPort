@@ -35,7 +35,7 @@ import struct
 
 from glyphs import entries
 
-VERSION = 24  # of the patch: a change rebuilds the cached copy
+VERSION = 25  # of the patch: a change rebuilds the cached copy
 WAD = 'EXEC/WAD/PS4_LE/R_UI.WAD'
 # The Graphics Settings controls that move left and right (Frames Queued, Sharpening Strength,
 # Anisotropic Filtering, Texture Quality); the others toggle.
