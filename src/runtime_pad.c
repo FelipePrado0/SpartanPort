@@ -505,6 +505,11 @@ static bool qte_play(const bool *keys, uint64_t now) {
  * few seconds after a QTE costs little. */
 enum { QTE_FPS_HOLD_US=5000000, QTE_FPS_REPORT_US=20000000 };
 static struct { bool capped, reported; uint64_t since; } qte_fps;
+/* Temporary F4.2: in Cronos, one blade pull (R1) at 240 FPS throws Kratos out of the map, at 60 it
+ * works. R1 there caps the engine at 60 until R1_FPS_HOLD_US after the last R1; the QTE cap and this
+ * one only lift the cap when both are done. */
+enum { R1_FPS_HOLD_US=4000000 };
+static uint64_t r1_fps_until;
 static void qte_fps_cap(uint64_t now) {
     const unsigned kinds=qte_active(now);
     uint64_t last=0;  /* the latest frame of any kind */
@@ -515,15 +520,37 @@ static void qte_fps_cap(uint64_t now) {
             const int type=(kinds & 1u<<SPARTAN_QTE_KIND_UPDATE) && spartanport_qte.block
                 ? *(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET) : -1;
             spartanportgpu_engine_fps_cap_qte(kinds,type);
-            spartanportgpu_engine_fps_cap(60);
+            if (!r1_fps_until) spartanportgpu_engine_fps_cap(60);
         } else if (!qte_fps.reported && now-qte_fps.since>=QTE_FPS_REPORT_US) {
             qte_fps.reported=true;
             spartanportgpu_engine_fps_cap_held(kinds);
         }
     } else if (qte_fps.capped && now-last>QTE_ACTIVE_US+QTE_FPS_HOLD_US) {
         qte_fps.capped=false;
-        spartanportgpu_engine_fps_cap(0);
+        if (!r1_fps_until) spartanportgpu_engine_fps_cap(0);
     }
+}
+/* The pull that fails: maintainer's F11 marks 8 to 10 (2026-10-31), Kratos at obj+0xa0 when R1 starts it. */
+static const float r1_pull_spot[3]={-92,373,88};
+enum { R1_PULL_RADIUS=25 };
+static void r1_fps_cap(const PadData *d, uintptr_t kratos) {
+    static bool was_down;
+    const bool down=(d->buttons & (BTN_R3|BTN_L1|BTN_R1))==BTN_R1;  /* not the frame rate combo */
+    if (down && !was_down && kratos && runtime_file_cronos()) {
+        float position[3], squared=0;
+        memcpy(position,(const void *)(kratos+0xa0),sizeof(position));
+        for (int i=0;i<3;++i) squared+=(position[i]-r1_pull_spot[i])*(position[i]-r1_pull_spot[i]);
+        const bool spot=squared<=R1_PULL_RADIUS*R1_PULL_RADIUS;
+        printf("Engine FPS: R1 in Cronos at [%.1f,%.1f,%.1f] state 0x%x, %s\n",position[0],position[1],position[2],
+               *(const volatile uint16_t *)(kratos+0x1c0),spot ? "the failing pull, 60 for 4 s" : "left as is");
+        if (!spot) { was_down=down; return; }
+        if (!r1_fps_until && !qte_fps.capped) spartanportgpu_engine_fps_cap(60);
+        r1_fps_until=d->timestamp+R1_FPS_HOLD_US;
+    } else if (r1_fps_until && d->timestamp>r1_fps_until) {
+        r1_fps_until=0;
+        if (!qte_fps.capped) spartanportgpu_engine_fps_cap(0);
+    }
+    was_down=down;
 }
 
 static void sample_keyboard(PadData *d, const bool *keys, SDL_MouseButtonFlags mouse, const bool wheel[2]) {
@@ -1143,6 +1170,9 @@ static void high_fps_collision_report(void) {
     }
 }
 static SpartanPaths high_fps_paths;
+/* ponytail: Kratos is the first move-init object (the only mover at the title screen, same in every
+ * F4.2 log); find the player by its own pointer before this leaves the trace build. */
+static uintptr_t high_fps_player;
 /* Recent move-init records name the objects the game moved in the last frames, so their memory is
  * live. Read without the slot lock: count only grows after a record is complete, and the oldest
  * record, the one a writer may be filling, is skipped. */
@@ -1164,6 +1194,7 @@ static void high_fps_path_sample(uint64_t now) {
         uintptr_t object;
         memcpy(&object, slot->records[(count - i) & (SPARTAN_TRACE_CAPACITY - 1)].input + 2, sizeof(object));
         if (!object || (object & 0xf)) continue;
+        if (!high_fps_player) high_fps_player = object;
         unsigned known = 0;
         while (known < seen_count && seen[known] != object) ++known;
         if (known < seen_count) continue;
@@ -1256,6 +1287,7 @@ static void high_fps_trace_report(uint64_t now) {
 static void sample(PadData *d) {
     sample_host(d);
     qte_fps_cap(d->timestamp);
+    r1_fps_cap(d, high_fps_player);
     high_fps_trace_report(d->timestamp);
     if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); reset_switch_attack(); return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */

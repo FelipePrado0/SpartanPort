@@ -18,6 +18,7 @@ static unsigned engine_fps_cap_kinds, engine_fps_held_kinds;
 void spartanportgpu_engine_fps_cap(int fps) { engine_fps_cap=fps; ++engine_fps_cap_calls; }
 void spartanportgpu_engine_fps_cap_qte(unsigned kinds, int type) { engine_fps_cap_kinds=kinds; engine_fps_cap_type=type; }
 void spartanportgpu_engine_fps_cap_held(unsigned kinds) { engine_fps_held_kinds=kinds; ++engine_fps_held_calls; }
+int runtime_file_cronos(void) { return 0; }
 int spartanportgpu_mouse_prompt_distance(void) { return 48; }
 void spartanportgpu_mouse_pause_key(void) {}
 int spartanportgpu_mouse_aim_style(void) { return 0; }
