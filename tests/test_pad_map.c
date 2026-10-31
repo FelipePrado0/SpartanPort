@@ -15,6 +15,7 @@ int spartanportgpu_mouse_aim_sensitivity(void) { return aim_sensitivity; }
 void spartanportgpu_engine_fps_cycle(void) {}
 static SpartanActorSlot test_actor_slots[2];
 uintptr_t spartanport_actor_slots_address(void) { return (uintptr_t)test_actor_slots; }
+int runtime_memory_is_mapped(uintptr_t address, uint64_t size) { (void)address; (void)size; return 0; }
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *name) {
     (void)table; (void)count; (void)name;
     return 0;
