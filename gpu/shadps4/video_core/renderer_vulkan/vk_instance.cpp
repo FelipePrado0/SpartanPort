@@ -226,6 +226,28 @@ bool PipelineBinaryCacheRequested() {
     const char* setting = std::getenv("SPARTAN_PIPELINE_BINARIES");
     return !setting || *setting != '0';
 }
+
+// NVIDIA 595.x (595.104.02, 595.112.07) returns from vkGetPipelineKeyKHR(device, nullptr, key) with
+// rbx, a callee-saved register, set to 1; 615.78.08 keeps it. A caller holding the key pointer in rbx
+// then crashed reading 0x11. Pipeline keys (non-null info) and the other binary calls keep rbx.
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+// The clobber makes this function save rbx on entry and restore it on return, whatever the driver
+// left in it, and keep no value in rbx across the call; noinline keeps that to this one call.
+[[gnu::noinline]] VkResult GetGlobalPipelineKeyKeepingRbx(VkDevice device, VkPipelineBinaryKeyKHR* key) {
+    const VkResult result = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetPipelineKeyKHR(device, nullptr, key);
+    asm volatile("" ::: "rbx");
+    return result;
+}
+#endif
+
+vk::Result GetGlobalPipelineKey(vk::Device device, vk::PipelineBinaryKeyKHR& key) {
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+    return vk::Result{GetGlobalPipelineKeyKeepingRbx(static_cast<VkDevice>(device),
+                                                     reinterpret_cast<VkPipelineBinaryKeyKHR*>(&key))};
+#else
+    return device.getPipelineKeyKHR(nullptr, &key);
+#endif
+}
 }
 
 bool InitializePipelineBinaryCache(vk::Device device, bool supported,
@@ -246,7 +268,7 @@ bool InitializePipelineBinaryCache(vk::Device device, bool supported,
         LOG_WARNING(Render_Vulkan, "Pipeline binary cache functions unavailable; using normal compilation");
         return false;
     }
-    const auto result = device.getPipelineKeyKHR(nullptr, &global_key);
+    const auto result = GetGlobalPipelineKey(device, global_key);
     if (result != vk::Result::eSuccess || !global_key.keySize ||
         global_key.keySize > VK_MAX_PIPELINE_BINARY_KEY_SIZE_KHR) {
         const auto key_size = global_key.keySize;
