@@ -91,6 +91,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     (
         "Switch attacks on L1 + d-pad and L1 + Cross",
         &[
+            ("zh", "使用 L1 + 方向键及 L1 + 叉键发动切换攻击"),
             ("pt", "Ataques de troca com L1 + direcional e L1 + X"),
             ("es", "Ataques de cambio con L1 + cruceta y L1 + X"),
         ],
@@ -98,67 +99,82 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     (
         "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.",
         &[
+            ("zh", "L1 + 方向键会切换至对应武器并使出切换攻击（若已持有该武器，则再次使出攻击）。L1 + 叉键会使出当前武器的切换攻击，不再轮换到下一把武器。单独按方向键仍按原方式切换。启动游戏时生效。"),
             ("pt", "L1 + uma direção do direcional troca para essa arma com o ataque de troca dela (a arma que já está na mão de Kratos repete o ataque). L1 + X faz o ataque de troca da arma na mão em vez de passar para a próxima arma. O direcional sozinho troca como antes. Aplicado ao iniciar o jogo."),
             ("es", "L1 + una dirección de la cruceta cambia a esa arma con su ataque de cambio (el arma que Kratos ya tiene en la mano repite su ataque). L1 + X hace el ataque de cambio del arma en la mano en lugar de pasar a la siguiente arma. La cruceta sola cambia como antes. Se aplica al iniciar el juego."),
         ],
     ),
     (
         "Graphics card not checked: the game picks one.",
-        &[("pt", "Placa de vídeo não verificada: o jogo escolhe uma.")],
+        &[
+            ("zh", "尚未检测显卡：由游戏自动选择。"),("pt", "Placa de vídeo não verificada: o jogo escolhe uma.")],
     ),
     (
         "The port folder is incomplete. Missing from {}:\n\n{}\n\nDownload the package again from the releases page and extract all of it; the launcher must stay inside that folder.",
-        &[("pt", "A pasta do port está incompleta. Faltando em {}:\n\n{}\n\nBaixe o pacote de novo na página de releases e extraia tudo; o launcher precisa ficar dentro dessa pasta.")],
+        &[
+            ("zh", "移植版文件夹不完整。{} 中缺少：\n\n{}\n\n请从发布页面重新下载安装包并完整解压；启动器必须保留在该文件夹内。"),("pt", "A pasta do port está incompleta. Faltando em {}:\n\n{}\n\nBaixe o pacote de novo na página de releases e extraia tudo; o launcher precisa ficar dentro dessa pasta.")],
     ),
     (
         "From a source checkout, build.sh builds them.",
-        &[("pt", "Num checkout do código-fonte, o build.sh gera esses arquivos.")],
+        &[
+            ("zh", "使用源码时，可运行 build.sh 构建这些文件。"),("pt", "Num checkout do código-fonte, o build.sh gera esses arquivos.")],
     ),
     (
         "Missing or empty files:",
-        &[("pt", "Arquivos ausentes ou vazios:")],
+        &[
+            ("zh", "缺失或为空的文件："),("pt", "Arquivos ausentes ou vazios:")],
     ),
     (
         "Initial setup",
-        &[("pt", "Configuração inicial")],
+        &[
+            ("zh", "初始设置"),("pt", "Configuração inicial")],
     ),
     // The setup's step line, whole: the table's "Step {} of {}" ("Etapa") is the old controller
     // wizard's. "Skip" and "Back" come from the table.
     (
         "Step {} of {} · {}",
-        &[("pt", "Passo {} de {} · {}")],
+        &[
+            ("zh", "第 {} 步，共 {} 步 · {}"),("pt", "Passo {} de {} · {}")],
     ),
     (
         "Video",
-        &[("pt", "Vídeo")],
+        &[
+            ("zh", "视频"),("pt", "Vídeo")],
     ),
     (
         "Next",
-        &[("pt", "Avançar")],
+        &[
+            ("zh", "下一步"),("pt", "Avançar")],
     ),
     (
         "Finish",
-        &[("pt", "Concluir")],
+        &[
+            ("zh", "完成"),("pt", "Concluir")],
     ),
     (
         "Choose the folder of your game dump. The update folder is optional.",
-        &[("pt", "Escolha a pasta do dump do jogo. A pasta da atualização é opcional.")],
+        &[
+            ("zh", "选择游戏转储文件夹。更新文件夹可不选。"),("pt", "Escolha a pasta do dump do jogo. A pasta da atualização é opcional.")],
     ),
     (
         "The game runs on this graphics card.",
-        &[("pt", "O jogo roda nesta placa de vídeo.")],
+        &[
+            ("zh", "游戏使用此显卡运行。"),("pt", "O jogo roda nesta placa de vídeo.")],
     ),
     (
         "Resolution and frame rate. The in-game menu (Insert or R3+L2) changes the same values.",
-        &[("pt", "Resolução e taxa de quadros. O menu do jogo (Insert ou R3+L2) muda os mesmos valores.")],
+        &[
+            ("zh", "分辨率与帧率。游戏内菜单（Insert 或 R3+L2）也可修改这些设置。"),("pt", "Resolução e taxa de quadros. O menu do jogo (Insert ou R3+L2) muda os mesmos valores.")],
     ),
     (
         "You can change all of this later in the Graphics, Performance and Game tabs.",
-        &[("pt", "Tudo isso pode ser mudado depois nas abas Graphics, Performance e Game.")],
+        &[
+            ("zh", "之后可在“画面”“性能”和“游戏”页面修改这些设置。"),("pt", "Tudo isso pode ser mudado depois nas abas Graphics, Performance e Game.")],
     ),
     (
         "{} lines kept",
         &[
+            ("zh", "保留 {} 行"),
             ("pt", "{} linhas mantidas"),
             ("es", "{} líneas guardadas"),
             ("ru", "{} строк хранится"),
@@ -167,6 +183,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     (
         "Open last_run.log",
         &[
+            ("zh", "打开 last_run.log"),
             ("pt", "Abrir last_run.log"),
             ("es", "Abrir last_run.log"),
             ("ru", "Открыть last_run.log"),
@@ -174,15 +191,18 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     ),
     (
         "Americas",
-        &[("pt", "Américas"), ("es", "América"), ("ru", "Америка")],
+        &[
+            ("zh", "美洲"),("pt", "Américas"), ("es", "América"), ("ru", "Америка")],
     ),
     (
         "Europe",
-        &[("pt", "Europa"), ("es", "Europa"), ("ru", "Европа")],
+        &[
+            ("zh", "欧洲"),("pt", "Europa"), ("es", "Europa"), ("ru", "Европа")],
     ),
     (
         "Asia & Middle East",
         &[
+            ("zh", "亚洲及中东"),
             ("pt", "Ásia e Oriente Médio"),
             ("es", "Asia y Oriente Medio"),
             ("ru", "Азия и Ближний Восток"),
@@ -190,14 +210,16 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     ),
     (
         "These files could not be read:\n\n{}\n\nThe launcher shows default values for what it could not read. The files stay as they are until you save (Save or PLAY), which writes what it shows.",
-        &[(
+        &[
+            ("zh", "无法读取以下文件：\n\n{}\n\n启动器会为无法读取的设置显示默认值。在点击“保存”或“开始游戏”前，文件保持原样；保存时会写入当前显示的设置。"),(
             "pt",
             "Não foi possível ler estes arquivos:\n\n{}\n\nO launcher mostra valores padrão no lugar do que não conseguiu ler. Os arquivos ficam como estão até você salvar (Salvar ou JOGAR), o que grava o que ele mostra.",
         )],
     ),
     (
         "mods_presets.json could not be read, so no preset is listed and the file is left as it is. Fix or delete it to save presets again.",
-        &[(
+        &[
+            ("zh", "无法读取 mods_presets.json，因此不显示预设，文件保持原样。修复或删除该文件后，才可再次保存预设。"),(
             "pt",
             "Não foi possível ler mods_presets.json; nenhum preset é listado e o arquivo fica como está. Corrija ou apague o arquivo para voltar a salvar presets.",
         )],
@@ -207,51 +229,60 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     // texts in Portuguese, which `tr` reads first (the Trophies one in the 2.6.0 wording).
     (
         "Frame rate, shaders and GPU data paths. Applied when the game starts.",
-        &[(
+        &[
+            ("zh", "帧率、着色器与 GPU 数据传输方式。启动游戏时生效。"),(
             "pt",
             "Taxa de quadros, shaders e caminhos de dados da GPU. Aplicado ao iniciar o jogo.",
         )],
     ),
     (
         "Keyboard, mouse and gamepad mapping.",
-        &[("pt", "Mapeamento de teclado, mouse e controle.")],
+        &[
+            ("zh", "键盘、鼠标与手柄映射。"),("pt", "Mapeamento de teclado, mouse e controle.")],
     ),
     (
         "Launcher options, diagnostics and system tools.",
-        &[(
+        &[
+            ("zh", "启动器选项、诊断与系统工具。"),(
             "pt",
             "Opções do launcher, diagnóstico e ferramentas do sistema.",
         )],
     ),
     (
         "Output of the last start. last_run.log holds the same text.",
-        &[(
+        &[
+            ("zh", "上次启动的输出。相同内容也保存在 last_run.log。"),(
             "pt",
             "Saída da última execução. last_run.log tem o mesmo texto.",
         )],
     ),
     // The word of the native render resolution's label, when the tables have no whole label.
-    ("Native", &[("pt", "Nativa")]),
+    ("Native", &[
+            ("zh", "原生"),("pt", "Nativa")]),
     // GUI Scale's default choice (Advanced → Launcher).
     (
         "Auto (fits the screen)",
         &[
+            ("zh", "自动（适应屏幕）"),
             ("pt", "Automático (cabe na tela)"),
             ("es", "Automático (se ajusta a la pantalla)"),
         ],
     ),
     // The Home saves chip (the Python's "• No saves yet: the game creates them in {}" and
     // "✓ Saves found in {}" without the folder) and the splash hint.
-    ("• No saves yet", &[("pt", "• Nenhum save ainda")]),
+    ("• No saves yet", &[
+            ("zh", "• 暂无存档"),("pt", "• Nenhum save ainda")]),
     (
         "✓ Saves found",
-        &[("pt", "✓ Saves encontrados"), ("es", "✓ Partidas guardadas")],
+        &[
+            ("zh", "✓ 已找到存档"),("pt", "✓ Saves encontrados"), ("es", "✓ Partidas guardadas")],
     ),
     // The Home hint line after a start that left patches out (ruling R85): the Python's
     // "{} not found in this eboot.bin at the last start (see Log)" with the word it followed.
     (
         "{} patches not found in this eboot.bin at the last start (see Log)",
-        &[(
+        &[
+            ("zh", "上次启动时，有 {} 项补丁未在此 eboot.bin 中找到匹配位置（见“日志”）"),(
             "pt",
             "{} patches não encontrados neste eboot.bin na última inicialização (veja o Registro)",
         )],
@@ -259,17 +290,21 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     // The Home graphics card chip when the probe did not answer.
     (
         "• GPU: not checked",
-        &[("pt", "• GPU: não verificada"), ("es", "• GPU: sin comprobar")],
+        &[
+            ("zh", "• GPU：尚未检测"),("pt", "• GPU: não verificada"), ("es", "• GPU: sin comprobar")],
     ),
-    ("any key skips", &[("pt", "qualquer tecla pula")]),
+    ("any key skips", &[
+            ("zh", "按任意键跳过"),("pt", "qualquer tecla pula")]),
     // The splash's two checks (ruling R97).
     (
         "Checking the settings…",
-        &[("pt", "Verificando as configurações…")],
+        &[
+            ("zh", "正在检查设置…"),("pt", "Verificando as configurações…")],
     ),
     (
         "Checking for updates…",
-        &[("pt", "Verificando atualizações…")],
+        &[
+            ("zh", "正在检查更新…"),("pt", "Verificando atualizações…")],
     ),
     (
         "Effects",
@@ -278,6 +313,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     (
         "Embers and flames on the Home screen. Off saves GPU time.",
         &[
+            ("zh", "在主页显示余烬和火焰效果。关闭可减少 GPU 开销。"),
             (
                 "pt",
                 "Brasas e chamas na tela inicial. Desligado economiza GPU.",
@@ -633,6 +669,24 @@ pub fn native_name(lang: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn simplified_chinese_covers_rust_only_text_and_preserves_arguments() {
+        for (en, _) in UI_EXTRA {
+            let zh = tr("zh", en);
+            assert!(!zh.is_empty() && zh != *en, "no zh for {en:?}");
+            assert_eq!(en.matches("{}").count(), zh.matches("{}").count(), "{en}");
+        }
+        for key in [
+            "Configure any control, in any order.",
+            "Assigned input",
+            "Cancel capture",
+            "Menu confirmation",
+            "{} lines kept",
+        ] {
+            assert_ne!(tr("zh", key), key);
+        }
+    }
 
     #[test]
     fn rust_only_strings_have_the_spec_translations() {

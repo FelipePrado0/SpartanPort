@@ -726,6 +726,22 @@ fn unchecking_a_patch_lands_in_game_patches() {
 }
 
 #[test]
+fn chinese_patch_labels_keep_the_original_saved_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state(dir.path());
+    browsed(&mut state, "game_dir", &dump_with_patches(dir.path()));
+    open(&mut state, Page::Game);
+    state.lang = "zh".into();
+    state.patches.selectable[0].name = "Skip Intro".into();
+    state.patches.chosen.clear();
+    state.patches.chosen.insert("Skip Intro".into());
+    click_tall(&mut state, "跳过开场标志  (Ann)");
+    assert!(!state.patches.chosen.contains("Skip Intro"));
+    click_tall(&mut state, "跳过开场标志  (Ann)");
+    assert_eq!(state.store.json("game_patches").unwrap()["CUSA01623"], serde_json::json!(["Skip Intro"]));
+}
+
+#[test]
 fn restore_asks_first_and_is_blocked_while_running() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state(dir.path());

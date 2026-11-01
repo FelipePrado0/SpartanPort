@@ -305,8 +305,8 @@ fn patches_section(state: &State) -> Element<'_, Message> {
     );
     for meta in &patches.selectable {
         let label = match &meta.author {
-            Some(author) => format!("{}  ({author})", meta.name),
-            None => meta.name.clone(),
+            Some(author) => format!("{}  ({author})", tr(lang, &meta.name)),
+            None => tr(lang, &meta.name),
         };
         let name = meta.name.clone();
         let note = meta.note.as_deref().map(|note| tr(lang, note));
