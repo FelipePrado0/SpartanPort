@@ -671,7 +671,7 @@ static bool update_triggers(SDL_Gamepad *g) {
 /* motion: the pad's gyro (rad/s) and accelerometer (g) in the PS4 pad data, which the game may
  * read. gyroaim: with L2 held (aiming), the gyro also moves the right stick: turning the pad
  * left or right turns the view, tilting it up or down raises or lowers it (SDL's gyro x is
- * pitch, y is yaw; a stick up is a smaller value). */
+ * pitch, y is yaw; a stick up is a smaller value). The pitch sign was checked on a DualSense. */
 enum { GYRO_DEADZONE_MILLI=40, GYRO_STICK_PER_RAD=64 };
 static SDL_Gamepad *motion_enabled_for;
 /* A stick value moved by `delta` steps, kept within 0..255. */
@@ -695,8 +695,36 @@ static void update_motion(SDL_Gamepad *g, PadData *d) {
     const float dead=GYRO_DEADZONE_MILLI/1000.0f;
     const float yaw=fabsf(gyro[1])>dead ? gyro[1] : 0.0f, pitch=fabsf(gyro[0])>dead ? gyro[0] : 0.0f;
     d->right_x=add_stick(d->right_x,-yaw*GYRO_STICK_PER_RAD);
-    d->right_y=add_stick(d->right_y,pitch*GYRO_STICK_PER_RAD);
+    d->right_y=add_stick(d->right_y,-pitch*GYRO_STICK_PER_RAD);
 }
+/* speaker: a short beep on the pad's speaker when the gain changes while the game runs (the menu's
+ * slider), so its level can be heard. A stream of its own on the pad's output, beside the game's. */
+enum { BEEP_HZ=880, BEEP_MS=150 };
+static struct { SDL_AudioStream *stream; SDL_AudioDeviceID device; int gain; } beep={NULL,0,-1};
+static void speaker_beep(int gain) {
+    const int last=beep.gain;
+    beep.gain=gain;
+    if (last<0 || last==gain) return; /* not at start */
+    const SDL_AudioDeviceID device=ds_speaker_device();
+    if (!device) return;
+    if (beep.stream && beep.device!=device) { SDL_DestroyAudioStream(beep.stream); beep.stream=NULL; }
+    if (!beep.stream) {
+        const SDL_AudioSpec spec={SDL_AUDIO_F32,1,48000};
+        beep.stream=SDL_OpenAudioDeviceStream(device,&spec,NULL,NULL);
+        if (!beep.stream) return;
+        beep.device=device;
+        SDL_ResumeAudioStreamDevice(beep.stream);
+    }
+    float tone[48*BEEP_MS];
+    const int frames=(int)(sizeof(tone)/sizeof(tone[0]));
+    for (int i=0;i<frames;++i) {
+        const float fade=i<480 ? i/480.0f : i>frames-480 ? (frames-i)/480.0f : 1.0f; /* 10 ms, no clicks */
+        tone[i]=0.5f*fade*sinf(2.0f*3.14159265f*BEEP_HZ*i/48000.0f);
+    }
+    SDL_ClearAudioStream(beep.stream);
+    SDL_PutAudioStreamData(beep.stream,tone,(int)sizeof(tone));
+}
+
 /* Runs the extras that are on for a DualSense (ds_features). An extra that was switched off while
  * the game runs is undone here: the light bar and the triggers go back to what the game set. */
 static void update_dualsense(SDL_Gamepad *g, PadData *d) {
@@ -712,7 +740,12 @@ static void update_dualsense(SDL_Gamepad *g, PadData *d) {
         if (update_triggers(g) && d->r2<R2_PRESS_AT) { d->r2=0; d->buttons&=~(uint32_t)BTN_R2; }
     } else if (ds_sent.sent_to==g) { const DsTrigger off=ds_trigger_off(); ds_set_triggers(g,&off,&off); }
     if (features & DS_MOTION) update_motion(g,d);
-    if (features & DS_SPEAKER) ds_set_speaker(g,ds_speaker_gain(),ds_jack_plugged());
+}
+/* Also while the settings menu is open, where its gain slider is. */
+static void update_speaker(SDL_Gamepad *g) {
+    if (!ds_is_dualsense(g) || !(ds_features() & DS_SPEAKER)) return;
+    const int gain=ds_speaker_gain();
+    if (ds_set_speaker(g,gain,ds_jack_plugged())) speaker_beep(gain);
 }
 
 /* One sample of the host's pad and keyboard as PS4 pad data. A neutral pad stays when the settings
@@ -725,6 +758,7 @@ static void sample_host(PadData *d) {
     d->timestamp=now_us();
     SDL_Gamepad *g=current_gamepad();
     watch_wheel();
+    if (g) update_speaker(g);
     if (spartanportgpu_overlay_captures_input()) { drop_wheel(); return; } /* settings menu open: neutral input */
     const bool *k=SDL_WasInit(SDL_INIT_VIDEO) ? SDL_GetKeyboardState(NULL) : NULL;
     load_button_maps();

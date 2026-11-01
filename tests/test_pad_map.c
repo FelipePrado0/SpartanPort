@@ -5,6 +5,7 @@
 
 int spartanportgpu_overlay_captures_input(void) { return 0; }
 int spartanportgpu_vibration_percent(void) { return 100; }
+unsigned spartanportgpu_dualsense_features(int *speaker_gain) { *speaker_gain=4; return 0; }
 int spartanportgpu_mouse_prompt_distance(void) { return 48; }
 static int pause_keys;
 void spartanportgpu_mouse_pause_key(void) { ++pause_keys; }

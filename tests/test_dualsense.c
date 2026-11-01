@@ -10,8 +10,13 @@
 #define unsetenv(name) _putenv_s(name, "")
 #endif
 
+/* The in-game menu's DualSense rows (gpu/shim/spartanportgpu.cpp). */
+static unsigned menu_features;
+static int menu_gain=DS_SPEAKER_GAIN_DEFAULT;
+unsigned spartanportgpu_dualsense_features(int *speaker_gain) { *speaker_gain=menu_gain; return menu_features; }
+
 /* Checks the trigger effect encodings and the output report block, the extras and speaker gain
- * parsing, the QTE colours and the headset jack bit of an input report. */
+ * parsing, the menu's choice, the QTE colours and the headset jack bit of an input report. */
 int main(void) {
     const DsTrigger off=ds_trigger_off();
     for (int i=0;i<DS_TRIGGER_SIZE;++i) assert(off.bytes[i]==0);
@@ -82,6 +87,10 @@ int main(void) {
     setenv("SPARTAN_DUALSENSE_FILE","spartan-dualsense-test-missing.txt",1);
     unsetenv("SPARTAN_DUALSENSE");
     assert(ds_features()==0);
+    /* With neither of those, the menu's choice, followed at once. */
+    menu_features=DS_SPEAKER; menu_gain=6;
+    assert(ds_features()==DS_SPEAKER);
+    assert(ds_speaker_gain()==6);
     puts("dualsense: ok");
     return 0;
 }

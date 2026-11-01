@@ -10,17 +10,23 @@ added by the port (`src/dualsense.h`, `src/runtime_pad.c`).
   without an RGB LED ignore it.
 - **Touchpad click**, as before (photo mode, pause menu).
 
-## Opt-in: `SPARTAN_DUALSENSE`
+## Extras: the in-game menu or `SPARTAN_DUALSENSE`
 
-A comma-separated list in the environment (`SPARTAN_DUALSENSE=triggers,hitflash`), or `all`.
-Everything here needs a DualSense (SDL's PS5 gamepad type) and is off by default.
+Everything here needs a DualSense (SDL's PS5 gamepad type) and is on by default. While a
+DualSense is connected, the in-game menu (Insert / R3+L2) shows a **DualSense** group under
+**Controller** with a switch for each one and the speaker gain; they are saved in `spartanport.ini`
+(`dualsense_speaker=1`, `dualsense_speaker_gain=4`, ...); a `0` turns one off.
+
+For scripts, a comma-separated list in the environment (`SPARTAN_DUALSENSE=triggers,hitflash`), or
+`all`, replaces the menu's choice, and a `dualsense.txt` with the same list in the data folder
+replaces both while it exists.
 
 | Name | What it does |
 |---|---|
 | `triggers` | R2 gets a click: a wall that gives way near the end of the travel (a DualSense "weapon" trigger effect). The triggers are set free again when the game exits normally. |
 | `hitflash` | The light bar flashes red for 180 ms when the player loses health, then returns to the colour the game set. Needs the health hook (`Health display: damage hook ready` in the log). |
 | `qte` | While a QTE prompt is up, the light bar blinks in the colour of its button (triangle green, circle red, cross blue, square pink; stick rotations white) and the pad gives a short rumble tap at each new prompt. Mash and hold prompts are not told apart yet. |
-| `speaker` | The game's pad speaker port (the sounds it made for the DualShock 4's speaker, such as the weapon upgrade chime) plays on the DualSense's own speaker instead of the main output. Needs USB (Windows lists the speaker as an output named after the pad); with no such output it stays on the main output. The device is looked up when the game opens the port, so connect the pad first. The log says which one it used. The pad starts with its audio routed to the headset jack only, so the port switches it to the speaker while nothing is plugged into the jack, and back to the jack when a headset goes in. It also sets the speaker's own level, which Windows' volume does not reach: add `speakergain=N` (0 to 7, default 4) to raise or lower it; it applies while the game runs. |
+| `speaker` | The game's pad speaker port (the sounds it made for the DualShock 4's speaker, such as the weapon upgrade chime) plays on the DualSense's own speaker instead of the main output. Needs USB (Windows lists the speaker as an output named after the pad); with no such output it stays on the main output. The device is looked up when the game opens the port, so connect the pad first. The log says which one it used. The pad starts with its audio routed to the headset jack only, so the port switches it to the speaker while nothing is plugged into the jack, and back to the jack when a headset goes in. It also sets the speaker's own level, which Windows' volume does not reach: add `speakergain=N` (0 to 7, default 4) to raise or lower it; it applies while the game runs, and a change made in the menu plays a short beep on the speaker at the new level. |
 | `motion` | The pad's gyro (rad/s) and accelerometer (g) are put in the PS4 pad data. |
 | `gyroaim` | Includes `motion`. While L2 is held, the gyro also moves the right stick (turn the pad to turn the view, tilt it to raise or lower it). |
 
@@ -28,7 +34,8 @@ Everything here needs a DualSense (SDL's PS5 gamepad type) and is off by default
 
 The effect encodings, the trigger packet layout and the light bar path are covered by
 `tests/test_dualsense.c` and `tests/test_pad.c`. The hit flash, the trigger feel and the gyro
-signs and gain (`GYRO_STICK_PER_RAD`) have not been tried on a real DualSense yet; the constants
+gain (`GYRO_STICK_PER_RAD`) have not been tuned on a real DualSense yet (the gyro pitch sign has
+been checked on one); the constants
 at the top of each block in `runtime_pad.c` are the places to tune them.
 
 ## Why SDL_SendGamepadEffect

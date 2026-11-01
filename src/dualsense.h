@@ -206,19 +206,31 @@ static inline unsigned ds_parse_features(const char *text) {
     }
 }
 
+/* The extras set in the in-game menu (Controller, spartanport.ini; gpu/shim/spartanportgpu.cpp). */
+unsigned spartanportgpu_dualsense_features(int *speaker_gain);
+
 /* The file dualsense.txt in SPARTAN_DATA_DIR (or SPARTAN_DUALSENSE_FILE) overrides the variable
- * while it exists, and is read again every second: the extras can be switched while the game runs.
- * speaker is the exception, taken when the game opens its audio ports at start. */
+ * while it exists, and the variable overrides the menu. Read again every second: the extras can be
+ * switched while the game runs. speaker is the exception, taken when the game opens its audio
+ * ports at start. */
 static int ds_gain_read __attribute__((unused))=DS_SPEAKER_GAIN_DEFAULT;
 /* The DS_* bits that are on now, from dualsense.txt or SPARTAN_DUALSENSE; also reads the speaker
  * gain. Checked at most once a second, and logged when it changes. */
 static inline unsigned ds_features(void) {
     static unsigned features, logged;
     static uint64_t checked;
-    static bool loaded;
+    static bool loaded, from_menu;
     const uint64_t now=SDL_GetTicks();
-    if (loaded && now-checked<1000) return features;
-    loaded=true; checked=now;
+    if (loaded && now-checked<1000) {
+        /* The menu's values cost nothing to read: follow them at once (the gain slider's beep). */
+        if (from_menu) {
+            int gain=DS_SPEAKER_GAIN_DEFAULT;
+            features=spartanportgpu_dualsense_features(&gain);
+            ds_gain_read=gain<0 ? 0 : gain>7 ? 7 : gain;
+        }
+        return features;
+    }
+    loaded=true; checked=now; from_menu=false;
     char path[1024];
     const char *file=getenv("SPARTAN_DUALSENSE_FILE"), *dir=getenv("SPARTAN_DATA_DIR");
     if (!file) { snprintf(path,sizeof(path),"%s%sdualsense.txt",dir ? dir : "",dir ? "/" : ""); file=path; }
@@ -230,10 +242,15 @@ static inline unsigned ds_features(void) {
         text[n]=0;
         features=ds_parse_features(text);
         ds_gain_read=ds_parse_speaker_gain(text);
-    } else {
+    } else if (getenv("SPARTAN_DUALSENSE")) {
         const char *text=getenv("SPARTAN_DUALSENSE");
-        features=text ? ds_parse_features(text) : 0;
+        features=ds_parse_features(text);
         ds_gain_read=ds_parse_speaker_gain(text);
+    } else {
+        int gain=DS_SPEAKER_GAIN_DEFAULT;
+        features=spartanportgpu_dualsense_features(&gain);
+        ds_gain_read=gain<0 ? 0 : gain>7 ? 7 : gain;
+        from_menu=true;
     }
     if (features!=logged) { logged=features; printf("Runtime: DualSense extras 0x%x\n",features); }
     return features;

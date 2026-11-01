@@ -400,6 +400,15 @@ std::string OverlayText() {
 constexpr const char* Unsupported = "Unavailable: game version or code signature mismatch.";
 
 void LanguageRow(); // with the trophy texts, below
+// A DualSense among the connected gamepads (its rows in Controller are shown only then).
+bool DualSenseConnected() {
+    int count = 0;
+    SDL_JoystickID* pads = SDL_GetGamepads(&count);
+    bool found = false;
+    for (int i = 0; i < count && !found; ++i) found = SDL_GetGamepadTypeForID(pads[i]) == SDL_GAMEPAD_TYPE_PS5;
+    SDL_free(pads);
+    return found;
+}
 
 void GameTab() {
     auto& s = SpartanSettings::Get();
@@ -453,6 +462,32 @@ void GameTab() {
         CheckRow("Keep mouse in window", s.mouse_lock,
                  "While you play, the mouse stays in the game window; this menu and other windows get it back.");
         ImGui::EndTable();
+    }
+
+    if (DualSenseConnected()) {
+        Separator("DualSense");
+        if (BeginRows("##dualsense")) {
+            CheckRow("Speaker", s.dualsense_speaker,
+                     "The sounds the game makes for the controller's speaker play on the DualSense's own speaker "
+                     "(USB only; a headset in the controller's jack gets them instead). Takes effect at the next start.");
+            ImGui::BeginDisabled(!s.dualsense_speaker.load());
+            SliderRow("Speaker gain", s.dualsense_speaker_gain, 0, 7, "%d",
+                      "The DualSense speaker's own level, which the Windows volume does not reach. The controller beeps "
+                      "at the new level when it changes.");
+            ImGui::EndDisabled();
+            CheckRow("Trigger click", s.dualsense_triggers,
+                     "R2 gets a wall that gives way near the end of its travel.");
+            CheckRow("Hit flash", s.dualsense_hitflash,
+                     "The light bar flashes red when Kratos loses health.");
+            CheckRow("QTE light bar", s.dualsense_qte,
+                     "While a QTE prompt is up, the light bar blinks in the colour of its button, with a short "
+                     "rumble at each new prompt.");
+            CheckRow("Motion sensors", s.dualsense_motion,
+                     "The controller's gyro and accelerometer are passed to the game.");
+            CheckRow("Gyro aim", s.dualsense_gyroaim,
+                     "While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.");
+            ImGui::EndTable();
+        }
     }
 
     Separator("Audio");

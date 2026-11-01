@@ -11,6 +11,7 @@ static int vibration_percent=100;
 static uint16_t rumble_low, rumble_high;
 int spartanportgpu_overlay_captures_input(void) { return capture; }
 int spartanportgpu_vibration_percent(void) { return vibration_percent; }
+unsigned spartanportgpu_dualsense_features(int *speaker_gain) { *speaker_gain=4; return 0; }
 static int engine_fps_cycles;
 void spartanportgpu_engine_fps_cycle(void) { ++engine_fps_cycles; }
 static int engine_fps_cap=-1, engine_fps_cap_calls, engine_fps_cap_type=-2, engine_fps_held_calls;

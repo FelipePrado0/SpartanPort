@@ -361,6 +361,15 @@ extern "C" int spartanportgpu_audio_channels(void) {
     return SpartanSettings::Get().audio_channels.load(std::memory_order_relaxed);
 }
 
+extern "C" unsigned spartanportgpu_dualsense_features(int* speaker_gain) {
+    const auto& v = SpartanSettings::Get();
+    *speaker_gain = v.dualsense_speaker_gain.load(std::memory_order_relaxed);
+    // The bits of src/dualsense.h (DS_TRIGGERS...); gyro aim includes motion.
+    return (v.dualsense_triggers ? 1u : 0u) | (v.dualsense_hitflash ? 2u : 0u) |
+           (v.dualsense_motion || v.dualsense_gyroaim ? 4u : 0u) | (v.dualsense_gyroaim ? 8u : 0u) |
+           (v.dualsense_qte ? 16u : 0u) | (v.dualsense_speaker ? 32u : 0u);
+}
+
 extern "C" void spartanportgpu_movie_picture(void) {
     Vulkan::MovieBars::Cutscenes().NotePicture(Vulkan::MovieBars::NowMs());
 }
