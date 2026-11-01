@@ -246,6 +246,21 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"Damage", "伤害"},
     {"All grades", "全部等级"},
     {"Square/G: grade", "方块/G：等级"},
+    {"DualSense", "DualSense"},
+    {"Speaker", "扬声器"},
+    {"The sounds the game makes for the controller's speaker play on the DualSense's own speaker (USB only; a headset in the controller's jack gets them instead). Takes effect at the next start.", "游戏为手柄扬声器发出的声音改由 DualSense 自身的扬声器播放（仅限 USB；手柄耳机孔插入耳机时改由耳机播放）。下次启动时生效。"},
+    {"Speaker gain", "扬声器增益"},
+    {"The DualSense speaker's own level, which the Windows volume does not reach. The controller beeps at the new level when it changes.", "DualSense 扬声器自身的音量，Windows 音量无法调节。更改时手柄会以新音量发出提示音。"},
+    {"Trigger click", "扳机段落感"},
+    {"R2 gets a wall that gives way near the end of its travel.", "R2 在行程末端附近有一道会被按破的阻力。"},
+    {"Hit flash", "受伤闪光"},
+    {"The light bar flashes red when Kratos loses health.", "奎托斯失去生命值时，灯条闪烁红色。"},
+    {"QTE light bar", "QTE 灯条"},
+    {"While a QTE prompt is up, the light bar blinks in the colour of its button, with a short rumble at each new prompt.", "QTE 提示出现时，灯条以对应按键的颜色闪烁，每次出现新提示时短暂震动。"},
+    {"Motion sensors", "体感传感器"},
+    {"The controller's gyro and accelerometer are passed to the game.", "将手柄的陀螺仪和加速度计数据传给游戏。"},
+    {"Gyro aim", "陀螺仪瞄准"},
+    {"While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.", "按住 L2 时，转动和倾斜手柄可移动视角。包含“体感传感器”。"},
 };
 using TextTable = std::pair<std::string_view, const char*>;
 
