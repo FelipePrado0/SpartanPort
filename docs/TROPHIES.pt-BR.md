@@ -18,7 +18,7 @@ jogo faz parte do port.
 
 | Onde | O quê |
 |------|-------|
-| No jogo, quando um troféu é desbloqueado | Uma notificação no tema escolhido na janela de troféus (abaixo). O padrão, **Original**, é um cartão no canto superior direito (abaixo do contador de FPS quando ele está ligado) com o ícone, o nome e a descrição do troféu; ele entra deslizando, fica 5 segundos e some. |
+| No jogo, quando um troféu é desbloqueado | Uma notificação no tema escolhido na janela de troféus (abaixo). O padrão, **Cartão, platina cinematográfica**, é um cartão escuro no canto superior direito com a arte do troféu, a classe e o nome; ele fica 7 segundos, a platina mais tempo e com luz em volta, e toca o som embutido. |
 | No jogo, **F8** ou **R3+R2** | A janela de troféus, em duas páginas. **Troféus**: todos os troféus com o ícone, um troféuzinho na cor da classe, o nome, o que fazer para desbloquear, o estado e quantos jogadores conseguiram; um troféu desbloqueado ganha a moldura da cor da classe (bronze, prata, ouro e uma platina que brilha). Acima da lista: a contagem, um filtro por estado (todos / desbloqueados / bloqueados), um por classe (todas / platina / ouro / prata / bronze, com quantos de cada estão desbloqueados; os dois se combinam) e a ordem. **Notificações**: o idioma, e a aparência e o som da notificação, com prévias. |
 | Launcher, página **Trophies** | A mesma lista, com a categoria (platina, ouro, prata, bronze) e um filtro. |
 
@@ -48,8 +48,9 @@ para a lista de 35 troféus deste jogo; outro pacote mantém a ordem da lista e 
 ## Notificações
 
 A página **Notificações** da janela de troféus (F8 ou R3+R2, depois L1/R1) escolhe como um troféu
-desbloqueado aparece e soa. Nada muda para quem não a abrir: a notificação **Original** continua
-sendo o padrão, como era, e nenhum som toca sem um arquivo de som.
+desbloqueado aparece e soa. Sem mudanças, ela usa **Cartão, platina cinematográfica**, 7 segundos na
+tela, luz da platina em 100%, a classe escrita e o som embutido em 80%. Um `notifications.ini` salvo
+antes mantém as escolhas.
 
 | Opção | O que faz |
 |-------|-----------|
@@ -68,11 +69,12 @@ fica no idioma do menu (abaixo).
 ### Seus próprios arquivos
 
 Coloque-os em `user/custom_trophy` (dentro da sua pasta de saves, então as atualizações os mantêm).
-Nenhum faz parte do port: sem eles, são usados a arte desenhada, as fontes embutidas e nenhum som.
+Nenhum faz parte do port: sem eles, são usados a arte desenhada, as fontes embutidas e o som embutido
+(algumas notas de sino subindo, geradas pelo port, duas a mais na platina).
 
 | Arquivo | Efeito |
 |---------|--------|
-| `bronze`, `silver`, `gold`, `platinum` `.wav .mp3 .ogg .flac .m4a .opus` | O som daquela classe (no máximo 20 segundos). `trophy.*` vale para toda classe sem som próprio. O dispositivo de áudio só é aberto quando há um arquivo de som, e nunca com `SPARTAN_AUDIO=none`. **Recarregar sons** lê os arquivos de novo durante o jogo. |
+| `bronze`, `silver`, `gold`, `platinum` `.wav .mp3 .ogg .flac .m4a .opus` | O som daquela classe (no máximo 20 segundos). `trophy.*` vale para toda classe sem som próprio. O dispositivo de áudio nunca é aberto com `SPARTAN_AUDIO=none`. **Recarregar sons** lê os arquivos de novo durante o jogo. |
 | `<classe>_anim.gif`, `.apng`, `.png`, `.webp`, `.jpg` | Substitui a arte da notificação daquela classe (Cartão e Pop-up no canto). Um GIF ou PNG animado toca uma vez no próprio tempo; uma imagem parada aparece como está. `trophy_anim.*` vale para toda classe sem arquivo próprio. |
 | `<classe>_anim.png` + `<classe>_anim.ini` | Uma folha de quadros: `frames=`, `columns=`, `fps=`, `loop=1` para repetir, `delay_ms=` para começar depois. |
 | `badge.png` | O disco à direita do Cartão. |

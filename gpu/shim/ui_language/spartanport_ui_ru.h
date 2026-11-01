@@ -215,7 +215,7 @@ inline constexpr std::pair<std::string_view, const char*> RussianText[] = {
     {"The game stops while this menu or the trophy list is open.", "Игра останавливается, пока открыто это меню или список трофеев."},
     {"Same as the launcher", "Как в лаунчере"},
     {"The language of this menu and of the trophies. Until you choose one, the launcher's is used.", "Язык этого меню и трофеев. Пока вы его не выберете, используется язык лаунчера."},
-    {"none", "нет"},
+    {"built-in", "встроенный"},
     {"drawn", "рисованная"},
     {"artwork", "картинка трофея"},
     {"Badge", "Значок"},

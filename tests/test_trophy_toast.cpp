@@ -125,7 +125,9 @@ static std::string Wav() {
 static void TestOptions() {
     const Options defaults = ParseOptions("");
     assert(defaults == Options{});
-    assert(defaults.theme == Theme::Original && defaults.volume == 80 && !defaults.muted);
+    assert(defaults.theme == Theme::CardCinematic && defaults.volume == 80 && !defaults.muted);
+    assert(Near(defaults.hold_seconds, 7.0f) && defaults.cinematic_intensity == 100);
+    assert(defaults.grade_label && defaults.platinum_animation);
 
     // Values, clamping, comments, a BOM, CRLF and spaces around '='.
     const Options o = ParseOptions("\xEF\xBB\xBF# comment\r\n"
@@ -150,6 +152,10 @@ static void TestOptions() {
     const Options bad = ParseOptions("theme=nonexistent\nvolume=loud\nmuted=maybe\nhold_seconds=1.5s\n"
                                      "cinematic_intensity=50x\nvolume=7%\nplatinum_animation=2\n");
     assert(bad == Options{});
+    // A file saved before keeps its choices.
+    const Options saved = ParseOptions("theme=original\nhold_seconds=0\ncinematic_intensity=70\ngrade_label=0\n");
+    assert(saved.theme == Theme::Original && saved.hold_seconds == 0.0f && saved.cinematic_intensity == 70 &&
+           !saved.grade_label);
 
     // What the menu writes reads back the same.
     Options all;
@@ -436,6 +442,20 @@ static void TestMedia(const fs::path& dir) {
     assert(SpartanToastMedia::DecodeSound(dir / "missing.mp3").empty());
 }
 
+// The built-in sound: 48 kHz stereo, never silent, never clipping, the platinum's longer.
+static void TestDefaultSound() {
+    for (int g = 0; g < 5; ++g) {
+        const auto pcm = DefaultSound(Grade(g));
+        assert(!pcm.empty() && pcm.size() % 2 == 0);
+        assert(pcm.size() <= size_t(SpartanToastMedia::kAudioRate * SpartanToastMedia::kMaxSoundSeconds) * 2);
+        float peak = 0.0f;
+        for (float s : pcm) peak = std::max(peak, std::abs(s));
+        assert(peak > 0.1f && peak <= 1.0f);
+    }
+    assert(DefaultSound(Grade::Platinum).size() > DefaultSound(Grade::Gold).size());
+    assert(DefaultSound(Grade::Bronze) == DefaultSound(Grade::Gold));
+}
+
 int main(int argc, char** argv) {
     assert(argc == 2 || argc == 3);
     av_log_set_level(AV_LOG_QUIET); // the broken file below is meant to fail
@@ -450,6 +470,7 @@ int main(int argc, char** argv) {
     TestGrades();
     TestTrophyTexts();
     TestRarity();
+    TestDefaultSound();
     if (argc == 3) TestGameGrades(argv[2]);
     TestMedia(dir);
     fs::remove_all(dir, ec);

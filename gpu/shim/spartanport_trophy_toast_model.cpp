@@ -182,6 +182,33 @@ std::string GradeName(const Options& o, int grade) {
     return o.grade_names[grade].empty() ? kGradeNames[grade] : o.grade_names[grade];
 }
 
+std::vector<float> DefaultSound(Grade grade) {
+    constexpr int kRate = 48000;
+    constexpr float kTwoPi = 6.2831853f;
+    // C6 E6 G6 C7, then E7 G7 for the platinum; each a short bell: three partials, fast attack.
+    constexpr std::array<float, 6> kNotes{1046.5f, 1318.5f, 1567.98f, 2093.0f, 2637.0f, 3135.96f};
+    constexpr std::array<std::array<float, 3>, 4> kPartials{{{1.0f, 1.0f, 1.0f}, {2.0f, 0.5f, 1.6f},
+                                                             {3.01f, 0.25f, 2.2f}, {4.2f, 0.12f, 3.0f}}};
+    const bool platinum = grade == Grade::Platinum;
+    const int notes = platinum ? 6 : 4;
+    std::vector<float> mono(size_t((platinum ? 1.8f : 1.2f) * kRate), 0.0f);
+    for (int n = 0; n < notes; ++n) {
+        const size_t start = size_t(0.045f * float(n) * kRate);
+        for (size_t i = start; i < mono.size(); ++i) {
+            const float t = float(i - start) / kRate;
+            float s = 0.0f;
+            for (const auto& [ratio, gain, fall] : kPartials)
+                s += gain * std::exp(-t * fall / 0.35f) * std::sin(kTwoPi * kNotes[n] * ratio * t);
+            mono[i] += 0.7f * std::min(1.0f, t / 0.003f) * s;
+        }
+    }
+    float peak = 0.0f;
+    for (float s : mono) peak = std::max(peak, std::abs(s));
+    std::vector<float> pcm(mono.size() * 2);
+    for (size_t i = 0; i < mono.size(); ++i) pcm[2 * i] = pcm[2 * i + 1] = 0.8f * mono[i] / peak;
+    return pcm;
+}
+
 AnimationSettings ParseAnimationSettings(std::string_view text) {
     AnimationSettings a;
     ForEachLine(text, [&](std::string_view key, std::string_view value) {

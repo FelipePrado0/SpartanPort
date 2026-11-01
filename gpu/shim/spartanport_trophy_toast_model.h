@@ -33,12 +33,12 @@ enum class Theme : int {
 constexpr std::array<const char*, 5> kGradeFileNames{"trophy", "bronze", "silver", "gold", "platinum"};
 
 struct Options {
-    Theme theme = Theme::Original;
-    int volume = 80;              ///< 0..100, the notification sound only
+    Theme theme = Theme::CardCinematic;
+    int volume = 80;               ///< 0..100, the notification sound only
     bool muted = false;
-    float hold_seconds = 0.0f;    ///< time fully shown, 0..20; 0 = the theme's own
-    int cinematic_intensity = 70; ///< 0..100, CardCinematic only
-    bool grade_label = false;     ///< the grade's name before the second line ("Gold  ·  ...")
+    float hold_seconds = 7.0f;     ///< time fully shown, 0..20; 0 = the theme's own
+    int cinematic_intensity = 100; ///< 0..100, CardCinematic only
+    bool grade_label = true;       ///< the grade's name before the second line ("Gold  ·  ...")
     bool platinum_animation = true; ///< false: the platinum shows its own artwork, like the others
     // Texts (empty: the built-in English). The player's own words, in any language (UTF-8).
     std::string text_unlocked;          ///< the card's second line, "Trophy unlocked!"
@@ -60,6 +60,10 @@ std::string CutUtf8(std::string_view text, size_t max_bytes);
 /// The text a toast shows: the option, else the English default.
 std::string UnlockedText(const Options& options);
 std::string GradeName(const Options& options, int grade);
+
+/// The built-in sound when the player has no sound file: a run of bell notes rising, two more for
+/// the platinum. 48 kHz stereo float, interleaved (as SpartanToastMedia::DecodeSound).
+std::vector<float> DefaultSound(Grade grade);
 
 /// <name>_anim.ini, beside an animation file. frames > 0 makes <name>_anim.png a sheet of that
 /// many frames, `columns` wide, read left to right and top to bottom at `fps`. For a GIF or an

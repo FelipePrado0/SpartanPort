@@ -215,7 +215,7 @@ inline constexpr std::pair<std::string_view, const char*> PolishText[] = {
     {"The game stops while this menu or the trophy list is open.", "Gra zatrzymuje się, gdy to menu lub lista trofeów jest otwarta."},
     {"Same as the launcher", "Jak w programie startowym"},
     {"The language of this menu and of the trophies. Until you choose one, the launcher's is used.", "Język tego menu i trofeów. Dopóki go nie wybierzesz, obowiązuje język programu startowego."},
-    {"none", "brak"},
+    {"built-in", "wbudowany"},
     {"drawn", "rysowana"},
     {"artwork", "obraz trofeum"},
     {"Badge", "Odznaka"},

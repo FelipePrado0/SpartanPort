@@ -215,7 +215,7 @@ inline constexpr std::pair<std::string_view, const char*> ItalianText[] = {
     {"The game stops while this menu or the trophy list is open.", "Il gioco si ferma finché questo menu o l’elenco dei trofei è aperto."},
     {"Same as the launcher", "Come il launcher"},
     {"The language of this menu and of the trophies. Until you choose one, the launcher's is used.", "La lingua di questo menu e dei trofei. Finché non ne scegli una, vale quella del launcher."},
-    {"none", "nessuno"},
+    {"built-in", "integrato"},
     {"drawn", "disegnata"},
     {"artwork", "immagine del trofeo"},
     {"Badge", "Distintivo"},

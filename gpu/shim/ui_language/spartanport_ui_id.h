@@ -215,7 +215,7 @@ inline constexpr std::pair<std::string_view, const char*> IndonesianText[] = {
     {"The game stops while this menu or the trophy list is open.", "Permainan berhenti selama menu ini atau daftar trofi terbuka."},
     {"Same as the launcher", "Sama dengan launcher"},
     {"The language of this menu and of the trophies. Until you choose one, the launcher's is used.", "Bahasa menu ini dan trofi. Sampai kamu memilih, bahasa launcher yang dipakai."},
-    {"none", "tidak ada"},
+    {"built-in", "bawaan"},
     {"drawn", "digambar"},
     {"artwork", "gambar trofi"},
     {"Badge", "Lencana"},

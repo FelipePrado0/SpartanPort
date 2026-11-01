@@ -19,7 +19,7 @@ del juego forma parte del port.
 
 | Dónde | Qué |
 |-------|-----|
-| En el juego, al desbloquear un trofeo | Una notificación en el tema elegido en la ventana de trofeos (abajo). El predeterminado, **Original**, es una tarjeta arriba a la derecha (debajo del contador de FPS cuando está activo) con el icono, el nombre y la descripción del trofeo; entra deslizándose, se queda 5 segundos y se desvanece. |
+| En el juego, al desbloquear un trofeo | Una notificación en el tema elegido en la ventana de trofeos (abajo). El predeterminado, **Tarjeta, platino cinematográfico**, es una tarjeta oscura arriba a la derecha con el arte del trofeo, su grado y su nombre; se queda 7 segundos, el platino más tiempo y con luz alrededor, y suena el sonido integrado. |
 | En el juego, **F8** o **R3+R2** | La ventana de trofeos, en dos páginas. **Trofeos**: todos los trofeos con su icono, una copa del color de su grado, su nombre, qué hacer para desbloquearlo, su estado y cuántos jugadores lo consiguieron; un trofeo desbloqueado lleva el marco del color de su grado (bronce, plata, oro y un platino que brilla). Encima de la lista: el recuento, un filtro por estado (todos / desbloqueados / bloqueados), otro por grado (todos / platino / oro / plata / bronce, con cuántos de cada uno están desbloqueados; los dos se combinan) y el orden. **Notificaciones**: el idioma, y el aspecto y el sonido de la notificación, con vistas previas. |
 | Launcher, página **Trophies** | La misma lista, con la categoría (platino, oro, plata, bronce) y un filtro. |
 
@@ -51,8 +51,9 @@ porcentajes.
 ## Notificaciones
 
 La página **Notificaciones** de la ventana de trofeos (F8 o R3+R2, luego L1/R1) elige cómo se ve y
-suena un desbloqueo. Nada cambia para quien no la abra: la notificación **Original** sigue siendo la
-predeterminada, como era, y no suena nada sin un archivo de sonido.
+suena un desbloqueo. Sin cambios usa **Tarjeta, platino cinematográfico**, 7 segundos en pantalla,
+la luz del platino al 100%, el grado escrito y el sonido integrado al 80%. Un `notifications.ini`
+guardado antes conserva sus elecciones.
 
 | Opción | Qué hace |
 |--------|----------|
@@ -72,11 +73,12 @@ La página está en el idioma del menú (abajo).
 
 Ponlos en `user/custom_trophy` (dentro de tu carpeta de partidas guardadas, así las actualizaciones
 los conservan). Ninguno forma parte del port: sin ellos se usan el arte dibujado, las fuentes
-integradas y ningún sonido.
+integradas y el sonido integrado (unas notas de campana subiendo, generadas por el port, dos más
+para el platino).
 
 | Archivo | Efecto |
 |---------|--------|
-| `bronze`, `silver`, `gold`, `platinum` `.wav .mp3 .ogg .flac .m4a .opus` | El sonido de ese grado (20 segundos como máximo). `trophy.*` sirve para todo grado sin sonido propio. El dispositivo de audio solo se abre cuando hay un archivo de sonido, y nunca con `SPARTAN_AUDIO=none`. **Recargar sonidos** los vuelve a leer mientras juegas. |
+| `bronze`, `silver`, `gold`, `platinum` `.wav .mp3 .ogg .flac .m4a .opus` | El sonido de ese grado (20 segundos como máximo). `trophy.*` sirve para todo grado sin sonido propio. El dispositivo de audio nunca se abre con `SPARTAN_AUDIO=none`. **Recargar sonidos** los vuelve a leer mientras juegas. |
 | `<grado>_anim.gif`, `.apng`, `.png`, `.webp`, `.jpg` | Reemplaza el arte de la notificación de ese grado (Tarjeta y Ventana en la esquina). Un GIF o un PNG animado se reproduce una vez con su propio tiempo; una imagen fija se muestra tal cual. `trophy_anim.*` sirve para todo grado sin archivo propio. |
 | `<grado>_anim.png` + `<grado>_anim.ini` | Una hoja de fotogramas: `frames=`, `columns=`, `fps=`, `loop=1` para repetir, `delay_ms=` para empezar más tarde. |
 | `badge.png` | El disco a la derecha de la Tarjeta. |

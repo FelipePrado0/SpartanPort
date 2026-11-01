@@ -297,7 +297,7 @@ const Animation* AnimationFor(Grade grade) {
 
 // Audio: one worker thread decodes, keeps the samples and feeds a stream of its own (mixed by
 // SDL beside the game's audio, which is never paused or cleared). The present thread only posts.
-// No file, no sound.
+// No file: the built-in sound (DefaultSound).
 
 struct Audio {
     std::mutex mutex;
@@ -366,6 +366,8 @@ void LoadSounds() { // worker thread
             sounds[g] = sounds[0];
             sources[g] = sources[0];
         }
+    for (size_t g = 0; g < 5; ++g) // no file at all: the built-in sound
+        if (sounds[g].empty()) sounds[g] = DefaultSound(Grade(g));
     const bool any = std::any_of(sounds.begin(), sounds.end(), [](const auto& s) { return !s.empty(); });
     a.sounds = std::move(sounds);
     {
@@ -1009,7 +1011,7 @@ std::string SoundSummary() {
     std::string out;
     for (int g = 1; g < 5; ++g) {
         if (g > 1) out += "  ·  ";
-        out += ShownGradeName(o, g) + ": " + (sources[size_t(g)].empty() ? SpartanUi::Tr("none") : sources[size_t(g)]);
+        out += ShownGradeName(o, g) + ": " + (sources[size_t(g)].empty() ? SpartanUi::Tr("built-in") : sources[size_t(g)]);
     }
     return out;
 }
