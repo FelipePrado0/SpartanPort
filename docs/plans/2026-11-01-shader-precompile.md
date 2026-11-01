@@ -753,10 +753,10 @@ melhorado em releases futuros.
 |:--|:--|:--|
 | Verificador em todos os caches gravados | Windows | 100% idênticos |
 | Verificador numa sessão gravada no Linux | Linux | 100% idênticos |
-| Instalação limpa, primeira abertura | Windows (NVIDIA do mantenedor) | tela de preparo, tempo anotado, jogo abre |
+| Instalação limpa, primeira abertura | Windows (AMD RX 6700 XT do mantenedor) | tela de preparo, tempo anotado, jogo abre |
 | Passada pelas áreas gravadas | Windows | 0 shaders e 0 pipelines compilados no jogo |
 | Instalação limpa, primeira abertura | Linux | idem |
-| GPU AMD (testador, se houver) | Windows ou Linux | idem; perfil diferente refaz tudo |
+| GPU NVIDIA e Intel (testadores) | Windows ou Linux | idem; perfil diferente refaz tudo |
 | Segunda abertura | ambas | sem preparo |
 | Troca de driver (simulada) | Windows | só pipelines |
 | Port com versão nova (build local) | Windows | shaders e pipelines |
