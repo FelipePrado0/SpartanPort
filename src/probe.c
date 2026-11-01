@@ -879,6 +879,7 @@ static void install_graphics(Segment *segments, uint64_t count, uint64_t size) {
  * does: GPU, audio and guest threads are still running, so no destructors. */
 static void menu_quit(void) {
     puts("Pause menu: Exit to Desktop");
+    spartanportgpu_flush_cache();
     fflush(NULL);
 #ifdef _WIN32
     TerminateProcess(GetCurrentProcess(),0);
@@ -955,6 +956,7 @@ static void apply_patches(const char *path, Segment *segments, uint64_t ns, cons
  * applied at start). Descriptors are closed first so the old GPU device and its memory are
  * released before the new process opens its own. */
 void runtime_restart(void) {
+    spartanportgpu_flush_cache();
     fflush(NULL);
 #ifdef _WIN32
     /* run.py sets SPARTAN_RESTART_COMMAND: the launch command line, started again (new patches). */

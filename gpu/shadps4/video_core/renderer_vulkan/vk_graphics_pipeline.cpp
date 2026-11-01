@@ -436,8 +436,13 @@ GraphicsPipeline::GraphicsPipeline(
     auto [pipeline_result, pipe] =
         CreateCachedGraphicsPipeline(device, pipeline_cache, pipeline_info, key,
                                      instance.GetPipelineBinaryGlobalKey(), binary_directory);
-    ASSERT_MSG(pipeline_result == vk::Result::eSuccess, "Failed to create graphics pipeline: {}",
-               vk::to_string(pipeline_result));
+    // spartanport: a refused pipeline skips its draws instead of ending the game.
+    if (pipeline_result != vk::Result::eSuccess) {
+        LOG_ERROR(Render_Vulkan,
+                  "Failed to create graphics pipeline {:#x} ({}): {}; its draws are skipped",
+                  std::hash<GraphicsPipelineKey>{}(key), debug_str, vk::to_string(pipeline_result));
+        return;
+    }
     pipeline = std::move(pipe);
     SetObjectName(device, *pipeline, "Graphics Pipeline {}", debug_str);
     RecordWaveSizes();
@@ -451,8 +456,15 @@ GraphicsPipeline::GraphicsPipeline(
         auto [square_result, square] =
             CreateCachedGraphicsPipeline(device, pipeline_cache, square_info, key,
                                          instance.GetPipelineBinaryGlobalKey(), binary_directory);
-        ASSERT_MSG(square_result == vk::Result::eSuccess,
-                   "Failed to create the squaring pipeline: {}", vk::to_string(square_result));
+        // spartanport: the main draw needs this pass too, so a refusal invalidates both.
+        if (square_result != vk::Result::eSuccess) {
+            LOG_ERROR(Render_Vulkan,
+                      "Failed to create squaring pipeline {:#x} ({}): {}; its draws are skipped",
+                      std::hash<GraphicsPipelineKey>{}(key), debug_str,
+                      vk::to_string(square_result));
+            pipeline.reset();
+            return;
+        }
         square_pipeline = std::move(square);
         SetObjectName(device, *square_pipeline, "Graphics Pipeline {} squaring pass", debug_str);
     }
