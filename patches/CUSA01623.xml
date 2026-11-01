@@ -604,6 +604,11 @@
         </PatchList>
         <Target Name="sixty" Address="0x006fc0d8" Pattern="c5 fa 59 85 9c fd ff ff c5 fa 59 05 ?? ?? ?? ?? e8 ?? ?? ?? ?? c5 f9 70 c0 00" At="12" Ref="1" Tail="0"/>
     </Metadata>
+    <Metadata Title="SpartanPort" Name="High FPS Wall Seam Fix" Note="Lets Kratos cross the Realm of Hades wall seam at high engine FPS: a ledge ray miss right after a hit reuses that hit. Swaps an equivalent xor encoding that SpartanPort turns into the fix. Validated on the first Realm of Hades wall at 240 FPS." Author="SpartanPort" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="true">
+        <PatchList>
+            <Line Type="bytes" Address="0x0045bfb7" Value="33c9" Pattern="e8 ?? ?? ?? ?? 31 c9 85 c0 0f 84 ?? ?? ?? ?? 48 8d 05 ?? ?? ?? ?? c5 f8 28 00" At="5"/>
+        </PatchList>
+    </Metadata>
     <Metadata Title="SpartanPort" Name="Skip Intro" Note="Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy." Author="cuesta4" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
         <PatchList>
             <Line Type="bytes" Address="0x00584950" Value="eb34" Pattern="48 89 e5 e8 ?? ?? ?? ?? 80 3d ?? ?? ?? ?? 00 75 34" At="15"/>

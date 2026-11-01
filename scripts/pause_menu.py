@@ -35,8 +35,11 @@ import struct
 
 from glyphs import entries
 
-VERSION = 22  # of the patch: a change rebuilds the cached copy
+VERSION = 23  # of the patch: a change rebuilds the cached copy
 WAD = 'EXEC/WAD/PS4_LE/R_UI.WAD'
+# The Graphics Settings controls that move left and right (Frames Queued, Sharpening Strength,
+# Anisotropic Filtering, Texture Quality); the others toggle.
+SLIDING_GRAPHICS = (0, 3, 4, 5)
 LABELS = {
     'en': b'Exit to Desktop',
     'ja': b'Exit to Desktop',
@@ -478,8 +481,8 @@ def native_cheats(data, spans, language=None):
     specs += [(f'NativeMultiplier{i}', 'NativeMultipliers', [left, right, UP, DOWN]) for i in range(6)]
     specs += [('NativeMultiplierReset', 'NativeMultipliers', [UP, DOWN, CONFIRM])]
     specs += [('NativeGraphics', 'pause', [[0xeb]])]
-    specs += [(f'NativeGraphic{i}', 'NativeGraphics', [left, right, UP, DOWN] if i in (0, 3, 4)
-               else [toggle, UP, DOWN]) for i in range(5)]
+    specs += [(f'NativeGraphic{i}', 'NativeGraphics', [left, right, UP, DOWN] if i in SLIDING_GRAPHICS
+               else [toggle, UP, DOWN]) for i in range(9)]
     specs += [('NativeGraphicsReset', 'NativeGraphics', [UP, DOWN, CONFIRM]),
               ('NativeGraphicsApply', 'NativeGraphics', [UP, DOWN, CONFIRM]),
               ('NativeGraphicsConfirm', 'pause', [[0xeb]]),
@@ -623,10 +626,12 @@ def native_cheats(data, spans, language=None):
     portuguese = resolve_label(language)[1] == 'pt'
     graphics_title = 'Configurações Gráficas' if portuguese else 'Graphics Settings'
     graphics_names = (['Quadros enfileirados', 'Shaders assíncronos', 'Nitidez RCAS',
-                       'Intensidade da nitidez', 'Filtragem anisotrópica', 'Restaurar padrões gráficos',
+                       'Intensidade da nitidez', 'Filtragem anisotrópica', 'Qualidade das texturas', 'Sombras',
+                       'Desfoque de movimento', 'Bloom', 'Restaurar padrões gráficos',
                        'Aplicar e reiniciar'] if portuguese else
                       ['Frames Queued', 'Async Shader Compilation', 'RCAS Sharpening',
-                       'Sharpening Strength', 'Anisotropic Filtering', 'Restore Graphics Defaults', 'Apply and Restart'])
+                       'Sharpening Strength', 'Anisotropic Filtering', 'Texture Quality', 'Shadows', 'Motion Blur',
+                       'Bloom', 'Restore Graphics Defaults', 'Apply and Restart'])
     controls_names = (['Tipo de controle', 'Intensidade da vibração', 'Sensibilidade da mira', 'Estilo da mira',
                        'Distância do mouse nos QTEs', 'Prender cursor à janela', 'Restaurar padrões dos controles',
                        'Aplicar e reiniciar'] if portuguese else
@@ -670,15 +675,13 @@ def native_cheats(data, spans, language=None):
                 assign(9 + slot)
         scrollbar(11, first, 8, 7)
 
-    def selection(name, index, function=None, selected=True, cheat=False, graphics=False):
+    def selection(name, index, function=None, selected=True, cheat=False):
         begin(name, 1 if selected else 2)
         if selected:
             builtin(0x6b)
             if cheat:
                 cheat_window(1 if name == 'NativeMultipliersLink' or int(name[-1]) >= 6 else 0)
-            if graphics:
-                graphics_values(index)
-            elif function is not None:
+            if function is not None:
                 query(index, function, True)
         elif function is not None:
             value(index)
@@ -779,18 +782,30 @@ def native_cheats(data, spans, language=None):
                 sound('SND_MM_NAV_LR')
                 end()
 
-    def graphics_values(selected=None):
+    # Graphics Settings' title and the eight rows it shows from row `first` (`selected` with its
+    # arrows; `change`, the builtin that changes it, runs instead of its query). The Sharpening
+    # Strength slider shows only while the page is at the top; scrollbar 13 follows the 8 rows of 11.
+    def graphics_window(first, selected=None, change=None):
         string(graphics_title)
         assign(0)
         for slot in range(8):
-            string(graphics_names[slot] if slot < len(graphics_names) else '')
+            row = first + slot
+            string(graphics_names[row])
             assign(1 + slot)
-        for index in range(5):
-            query(index, 0xf70 + index, index == selected)
-        slider(3, 0xfa3)
-        bars(True, (3,))
+            if row < 9:
+                query(slot, change if row == selected and change is not None else 0xf70 + row, row == selected)
+            else:
+                string('')
+                assign(9 + slot)
+        if first == 0:
+            slider(3, 0xfa3)
+        bars(first == 0, (3,))
+        scrollbar(13, first, 11, 8)
 
-    graphics_rows = [f'NativeGraphic{i}' for i in range(5)] + ['NativeGraphicsReset', 'NativeGraphicsApply']
+    # Graphics Settings: nine controls (builtins 0xf70 + i read them, 0xf80 + i and 0xf90 + i change
+    # them; Texture Quality, Shadows, Motion Blur and Bloom apply live), Restore Defaults behind a
+    # Yes/No question (0xfb0 restores) and Apply and Restart; eight rows show at a time.
+    graphics_rows = [f'NativeGraphic{i}' for i in range(9)] + ['NativeGraphicsReset', 'NativeGraphicsApply']
     confirmation_rows = ['NativeGraphicsResetYes', 'NativeGraphicsResetNo']
     for page, title, names_, rows in (
             ('NativeGraphics', graphics_title, graphics_names, graphics_rows),
@@ -809,22 +824,39 @@ def native_cheats(data, spans, language=None):
             assign(local)
         bars(False)
         if page == 'NativeGraphics':
-            graphics_values()
+            graphics_window(0)
         goto(rows[0] if page == 'NativeGraphics' else rows[1])
         end()
         begin(page, 2)
         bars(False)
+        if page == 'NativeGraphics':
+            string('sliderBar13')
+            integer(1)
+            builtin(0x59)
         end()
         begin(page, 'back')
         sound('SND_MM_BACK')
         goto('HLNativeGraphics' if page == 'NativeGraphics' else 'NativeGraphicsReset')
         end()
         for index, name in enumerate(rows):
-            function = 0xf70 + index if page == 'NativeGraphics' and index < 5 else None
-            selection(name, index, function, graphics=page == 'NativeGraphics')
-            selection(name, index, function, False)
+            control = page == 'NativeGraphics' and index < 9
+            first = max(0, index - 7)
+            if page == 'NativeGraphics':
+                begin(name, 1)
+                builtin(0x6b)
+                graphics_window(first, index)
+                animation(index - first, 8)
+                end()
+                begin(name, 2)
+                if control:
+                    value(index - first)
+                animation(index - first, 9)
+                end()
+            else:
+                selection(name, index)
+                selection(name, index, selected=False)
             navigation(name, index, rows)
-            if function is None:
+            if not control:
                 begin(name, 'confirm')
                 sound('SND_MM_SELECT')
                 if name == 'NativeGraphicsResetYes':
@@ -837,13 +869,12 @@ def native_cheats(data, spans, language=None):
                     goto('NativeGraphicsConfirm' if name == 'NativeGraphicsReset' else 'NativeGraphicsReset')
                 end()
             else:
-                actions = [('left', 0xf80 + index), ('right', 0xf90 + index)] if index in (0, 3, 4) else [('toggle', 0xf90 + index)]
+                actions = ([('left', 0xf80 + index), ('right', 0xf90 + index)] if index in SLIDING_GRAPHICS
+                           else [('toggle', 0xf90 + index)])
                 for kind, function in actions:
                     begin(name, kind)
                     call(repeat)
-                    for other in range(5):
-                        query(other, function if other == index else 0xf70 + other, other == index)
-                    slider(3, 0xfa3)
+                    graphics_window(first, index, function)
                     sound('SND_MM_NAV_LR')
                     end()
 
@@ -1150,10 +1181,10 @@ def native_cheats(data, spans, language=None):
             record += be((kind << 24) | (code_start + handlers[name, kind]))
         event_names = ['back'] if parent == 'pause' else (
             ['left', 'right', 'up', 'down'] if (name.startswith('NativeMultiplier') and name[-1:].isdigit())
-            or name in ('NativeGraphic0', 'NativeGraphic3', 'NativeGraphic4')
+            or name in [f'NativeGraphic{i}' for i in SLIDING_GRAPHICS]
             or name.startswith(('NativeDisplay', 'NativeControl')) and name[-1:].isdigit()
             else ['toggle', 'up', 'down'] if (name.startswith('NativeCheat') and name[-1:].isdigit())
-            or name in ('NativeGraphic1', 'NativeGraphic2')
+            or name.startswith('NativeGraphic') and name[-1:].isdigit()
             else ['up', 'down', 'confirm'])
         for event_name, triggers in zip(event_names, events):
             record += be(0x03000000 | (code_start + handlers[name, event_name]))
@@ -1176,6 +1207,7 @@ def native_cheats(data, spans, language=None):
     native_scrollbar(data, 10, 13, 8)
     native_scrollbar(data, 11, 8, 7)
     native_scrollbar(data, 12, 11, 8)
+    native_scrollbar(data, 13, 11, 8)
 
 
 def native_scrollbar(data, index, total, visible):

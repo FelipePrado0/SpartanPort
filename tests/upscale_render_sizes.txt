@@ -1,0 +1,22 @@
+# Upscaler preset render sizes, shared by the launcher (launcher-rust graphics_options.rs) and the
+# game's menus (gpu/shim/spartanport_settings.cpp UpscaleRenderSize). Columns: preset (spartanport.ini
+# preset=), output width, output height, render width, render height. Never the game's 1920x1080 nor
+# the output size: the game would composite straight into the display buffer.
+0 1920 1080 1918 1078
+0 2560 1440 2558 1438
+0 3840 2160 3838 2158
+5 1920 1080 1476 830
+5 2560 1440 1970 1108
+5 3840 2160 2954 1662
+1 1920 1080 1280 720
+1 2560 1440 1706 960
+1 3840 2160 2560 1440
+2 1920 1080 1130 636
+2 2560 1440 1506 848
+3 1920 1080 960 540
+3 2560 1440 1280 720
+3 3840 2160 1918 1078
+4 1920 1080 640 360
+4 2560 1440 854 480
+4 3840 2160 1280 720
+4 1280 720 640 360

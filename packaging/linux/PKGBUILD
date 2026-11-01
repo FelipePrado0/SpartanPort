@@ -12,10 +12,8 @@ depends=(
   'gcc-libs'
   'glibc'
   'libx11'
-  'python'
-  'python-pillow'
+  'libxkbcommon'
   'sdl3'
-  'tk'
   'vulkan-driver'
   'vulkan-icd-loader'
   'xxhash'
@@ -24,6 +22,7 @@ depends=(
 )
 makedepends=(
   'boost'
+  'cargo'
   'cmake'
   'git'
   'glslang'
@@ -36,7 +35,6 @@ makedepends=(
 optdepends=(
   'gamemode: optional GameMode integration'
   'mangohud: optional performance overlay'
-  'python-iced-x86: instruction rewriting for older CPUs (AUR)'
 )
 provides=("spartanport=${pkgver}")
 conflicts=('spartanport' 'gow3-pc' 'gow3-pc-git')
@@ -54,30 +52,29 @@ sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 # Accept an upstream fix or a repeated prepare(), but reject unexpected layouts.
 _replace_once() {
-  python - "$@" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-old, new = sys.argv[2:]
-text = path.read_text()
-old_count = text.count(old)
-# The replacement may be contained in the original, as with the retained relative RUNPATH.
-new_count = text.replace(old, '').count(new)
-if (old_count, new_count) == (1, 0):
-    path.write_text(text.replace(old, new, 1))
-elif (old_count, new_count) == (0, 1):
-    print(f'{path}: already contains the expected replacement')
-else:
-    raise SystemExit(f'{path}: expected one original or one replacement for {old!r}; '
-                     f'found {old_count} original and {new_count} replacement matches')
-PY
+  local path=$1 old=$2 new=$3 text kept stripped old_count new_count
+  text=$(cat -- "$path"; printf x)
+  text=${text%x}
+  kept=${text//"$old"/}
+  # The replacement may be contained in the original, as with the retained relative RUNPATH.
+  stripped=${kept//"$new"/}
+  old_count=$(( (${#text} - ${#kept}) / ${#old} ))
+  new_count=$(( (${#kept} - ${#stripped}) / ${#new} ))
+  if (( old_count == 1 && new_count == 0 )); then
+    printf '%s' "${text/"$old"/"$new"}" > "$path"
+  elif (( old_count == 0 && new_count == 1 )); then
+    printf '%s: already contains the expected replacement\n' "$path"
+  else
+    printf '%s: expected one original or one replacement for %q; found %s original and %s replacement matches\n' \
+      "$path" "$old" "$old_count" "$new_count" >&2
+    return 1
+  fi
 }
 
 pkgver() {
   cd "${srcdir}/spartanport"
   local version
-  version=$(sed -n "s/^VERSION = '\([^']*\)'.*/\1/p" launcher/spartanport_launcher_win.py)
+  version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' launcher-rust/Cargo.toml | head -n 1)
   if [[ -z $version ]]; then
     printf 'Unable to read the SpartanPort launcher version\n' >&2
     return 1
@@ -121,6 +118,7 @@ prepare() {
 build() {
   cd "${srcdir}/spartanport"
   SPARTAN_PGO=off SPARTAN_LTO=OFF bash build.sh
+  (cd launcher-rust && cargo build --release --locked)
 }
 
 package() {
@@ -128,26 +126,27 @@ package() {
 
   local sharedir="${pkgdir}/usr/share/spartanport"
   local libdir="${pkgdir}/usr/lib/spartanport"
-  install -d "${sharedir}"/{launcher,scripts,patches} "${libdir}/gpu"
+  install -d "${sharedir}"/{launcher,scripts} "${libdir}/gpu"
 
   install -m755 out/spartanport-probe out/spartanport-gpu-capabilities "${libdir}/"
   install -m755 out/gpu/libspartanportgpu.so "${libdir}/gpu/"
   ln -s ../../lib/spartanport "${sharedir}/bin"
 
-  install -m644 run.py "${sharedir}/"
-  install -m644 scripts/*.py "${sharedir}/scripts/"
-  install -m644 patches/*.xml "${sharedir}/patches/"
-  install -m644 launcher/*.py launcher/*.png launcher/*.ico \
-    launcher/*.ttf launcher/OFL-*.txt "${sharedir}/launcher/"
+  # The same layout as the AppImage: the Rust launcher runs from the share directory.
+  install -m755 launcher-rust/target/release/spartanport-launcher "${sharedir}/"
+  cp -r patches "${sharedir}/"
+  cp -r scripts/controller_diagrams "${sharedir}/scripts/"
+  install -m644 launcher/spartanport.png launcher/logo.png launcher/*.ttf launcher/OFL-*.txt \
+    "${sharedir}/launcher/"
 
   install -d "${pkgdir}/usr/bin"
   cat > "${pkgdir}/usr/bin/spartanport" <<'EOF'
 #!/bin/sh
 set -eu
 export SPARTAN_DATA_DIR="${SPARTAN_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/spartanport}"
-export PYTHONDONTWRITEBYTECODE=1
 mkdir -p -- "$SPARTAN_DATA_DIR"
-exec /usr/bin/python /usr/share/spartanport/launcher/spartanport_launcher_win.py "$@"
+cd /usr/share/spartanport
+exec ./spartanport-launcher "$@"
 EOF
   chmod 755 "${pkgdir}/usr/bin/spartanport"
 

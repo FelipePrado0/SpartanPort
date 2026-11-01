@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// spartanport: FSR reactive mask from the scene stencil. The game writes one stencil value for the
+// static world and others for characters and interactive objects; those animate without object
+// motion vectors, so the upscaler relies less on history there instead of ghosting them.
+#version 450
+#extension GL_EXT_samplerless_texture_functions : require
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(binding = 0) uniform utexture2D stencil_tex;
+layout(binding = 1, r8) uniform image2D reactive;
+
+layout(push_constant) uniform Params {
+    uint world;  // the static world's stencil value
+    float value; // reactivity of everything else
+    uint preserve; // combine with this frame's transparency mask
+};
+
+void main() {
+    const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(pixel, imageSize(reactive)))) {
+        return;
+    }
+    const uint s = texelFetch(stencil_tex, pixel, 0).r;
+    const float particles = preserve != 0 ? imageLoad(reactive, pixel).r : 0.0;
+    imageStore(reactive, pixel, vec4(max(particles, s == world ? 0.0 : value)));
+}

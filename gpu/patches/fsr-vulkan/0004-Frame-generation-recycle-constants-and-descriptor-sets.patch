@@ -1,0 +1,211 @@
+diff --git a/src/ffx_vk_fsr3_3_1_5_bridge.cpp b/src/ffx_vk_fsr3_3_1_5_bridge.cpp
+index 2ac0e2e..bd97217 100644
+--- a/src/ffx_vk_fsr3_3_1_5_bridge.cpp
++++ b/src/ffx_vk_fsr3_3_1_5_bridge.cpp
+@@ -53,11 +53,16 @@ struct BridgeConstantBuffer {
+     VkDeviceMemory memory = VK_NULL_HANDLE;
+     VkDeviceSize size = 0u;
+     uint64_t frameId = 0u;
++    /* Kept mapped and reused once retired: a frame stages dozens of constant buffers. */
++    VkDeviceSize capacity = 0u;
++    void* mapped = nullptr;
++    bool coherent = true;
+ };
+ 
+ struct BridgeDescriptorSet {
+     FfxVkFsr3_3_1_5DescriptorSet descriptorSet{};
+     uint64_t frameId = 0u;
++    const void* pipeline = nullptr; /* reused only with the pipeline it was made for */
+ };
+ 
+ } // namespace
+@@ -74,6 +79,9 @@ struct FfxVkFsr3_3_1_5Bridge {
+      * will recycle these against a caller fence; retaining is deliberately
+      * conservative and makes this first native graph recorder GPU-safe. */
+     std::vector<std::unique_ptr<BridgeDescriptorSet>> descriptorSets;
++    /* Retired ones, reused instead of a new allocation every dispatch. */
++    std::vector<std::unique_ptr<BridgeConstantBuffer>> freeConstantBuffers;
++    std::vector<std::unique_ptr<BridgeDescriptorSet>> freeDescriptorSets;
+     std::vector<FfxGpuJobDescription> jobs;
+     std::vector<int32_t> registeredImportedResources;
+     uint64_t activeFrameId = 0u;
+@@ -483,7 +491,21 @@ static bool record_compute_job(FfxVkFsr3_3_1_5Bridge* bridge,
+         cbIndex != job.pipeline->constCount)
+         return false;
+ 
+-    std::unique_ptr<BridgeDescriptorSet> descriptorSet(new (std::nothrow) BridgeDescriptorSet);
++    std::unique_ptr<BridgeDescriptorSet> descriptorSet;
++    {
++        std::lock_guard<std::mutex> lock(bridge->mutex);
++        for (auto it = bridge->freeDescriptorSets.begin(); it != bridge->freeDescriptorSets.end(); ++it) {
++            if ((*it)->pipeline == pipeline) {
++                descriptorSet = std::move(*it);
++                bridge->freeDescriptorSets.erase(it);
++                break;
++            }
++        }
++    }
++    if (!descriptorSet)
++        descriptorSet.reset(new (std::nothrow) BridgeDescriptorSet);
++    if (descriptorSet)
++        descriptorSet->pipeline = pipeline;
+     if (!descriptorSet || ffxVkFsr3_3_1_5CreateDescriptorSet(
+             &pipeline->pipeline, descriptorResources, descriptorCount,
+             &descriptorSet->descriptorSet) != FFX_VK_PORTABLE_OK)
+@@ -612,6 +634,10 @@ extern "C" void ffxVkFsr3_3_1_5DestroyBridge(FfxVkFsr3_3_1_5Bridge* bridge)
+         destroy_constant_buffer(bridge, constantBuffer.get());
+     for (const std::unique_ptr<BridgeDescriptorSet>& descriptorSet : bridge->descriptorSets)
+         destroy_descriptor_set(descriptorSet.get());
++    for (const std::unique_ptr<BridgeConstantBuffer>& constantBuffer : bridge->freeConstantBuffers)
++        destroy_constant_buffer(bridge, constantBuffer.get());
++    for (const std::unique_ptr<BridgeDescriptorSet>& descriptorSet : bridge->freeDescriptorSets)
++        destroy_descriptor_set(descriptorSet.get());
+     delete bridge;
+ }
+ 
+@@ -823,6 +849,29 @@ extern "C" FfxErrorCode ffxVkFsr3_3_1_5BridgeStageConstantBufferData(
+         return static_cast<FfxErrorCode>(FFX_ERROR_INVALID_POINTER);
+     if (bridge->physicalDevice == VK_NULL_HANDLE || size == 0u || size % sizeof(uint32_t) != 0u)
+         return static_cast<FfxErrorCode>(FFX_ERROR_INVALID_ARGUMENT);
++    {
++        std::lock_guard<std::mutex> lock(bridge->mutex);
++        for (auto it = bridge->freeConstantBuffers.begin(); it != bridge->freeConstantBuffers.end(); ++it) {
++            if ((*it)->capacity >= size) {
++                std::unique_ptr<BridgeConstantBuffer> reused = std::move(*it);
++                bridge->freeConstantBuffers.erase(it);
++                std::memcpy(reused->mapped, data, size);
++                if (!reused->coherent) {
++                    VkMappedMemoryRange range{};
++                    range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
++                    range.memory = reused->memory;
++                    range.size = VK_WHOLE_SIZE;
++                    vkFlushMappedMemoryRanges(bridge->device, 1u, &range);
++                }
++                reused->size = size;
++                reused->frameId = bridge->activeFrameId;
++                outConstantBuffer->num32BitEntries = size / sizeof(uint32_t);
++                outConstantBuffer->data = reinterpret_cast<uint32_t*>(reused.get());
++                bridge->constantBuffers.emplace_back(std::move(reused));
++                return FFX_OK;
++            }
++        }
++    }
+     if (!constantBuffer)
+         return static_cast<FfxErrorCode>(FFX_ERROR_OUT_OF_MEMORY);
+     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+@@ -845,7 +894,7 @@ extern "C" FfxErrorCode ffxVkFsr3_3_1_5BridgeStageConstantBufferData(
+         return static_cast<FfxErrorCode>(FFX_ERROR_OUT_OF_MEMORY);
+     }
+     void* mapped = nullptr;
+-    if (vkMapMemory(bridge->device, constantBuffer->memory, 0u, size, 0u, &mapped) != VK_SUCCESS) {
++    if (vkMapMemory(bridge->device, constantBuffer->memory, 0u, VK_WHOLE_SIZE, 0u, &mapped) != VK_SUCCESS) {
+         destroy_constant_buffer(bridge, constantBuffer.get());
+         return static_cast<FfxErrorCode>(FFX_ERROR_BACKEND_API_ERROR);
+     }
+@@ -853,12 +902,13 @@ extern "C" FfxErrorCode ffxVkFsr3_3_1_5BridgeStageConstantBufferData(
+     {
+         VkPhysicalDeviceMemoryProperties memoryProperties{};
+         vkGetPhysicalDeviceMemoryProperties(bridge->physicalDevice, &memoryProperties);
+-        if ((memoryProperties.memoryTypes[allocationInfo.memoryTypeIndex].propertyFlags &
+-             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0u) {
++        constantBuffer->coherent = (memoryProperties.memoryTypes[allocationInfo.memoryTypeIndex].propertyFlags &
++                                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0u;
++        if (!constantBuffer->coherent) {
+             VkMappedMemoryRange range{};
+             range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+             range.memory = constantBuffer->memory;
+-            range.size = size;
++            range.size = VK_WHOLE_SIZE;
+             if (vkFlushMappedMemoryRanges(bridge->device, 1u, &range) != VK_SUCCESS) {
+                 vkUnmapMemory(bridge->device, constantBuffer->memory);
+                 destroy_constant_buffer(bridge, constantBuffer.get());
+@@ -866,7 +916,8 @@ extern "C" FfxErrorCode ffxVkFsr3_3_1_5BridgeStageConstantBufferData(
+             }
+         }
+     }
+-    vkUnmapMemory(bridge->device, constantBuffer->memory);
++    constantBuffer->mapped = mapped;
++    constantBuffer->capacity = bufferInfo.size;
+     constantBuffer->size = size;
+     constantBuffer->frameId = bridge->activeFrameId;
+     outConstantBuffer->num32BitEntries = size / sizeof(uint32_t);
+@@ -911,10 +962,15 @@ extern "C" void ffxVkFsr3_3_1_5BridgeRetireFrame(FfxVkFsr3_3_1_5Bridge* bridge,
+                                std::make_move_iterator(bridge->constantBuffers.end()));
+         bridge->constantBuffers.erase(constantEnd, bridge->constantBuffers.end());
+     }
+-    for (const std::unique_ptr<BridgeDescriptorSet>& item : descriptorSets)
+-        destroy_descriptor_set(item.get());
+-    for (const std::unique_ptr<BridgeConstantBuffer>& item : constantBuffers)
+-        destroy_constant_buffer(bridge, item.get());
++    std::lock_guard<std::mutex> lock(bridge->mutex);
++    for (std::unique_ptr<BridgeDescriptorSet>& item : descriptorSets) {
++        if (item)
++            bridge->freeDescriptorSets.emplace_back(std::move(item));
++    }
++    for (std::unique_ptr<BridgeConstantBuffer>& item : constantBuffers) {
++        if (item)
++            bridge->freeConstantBuffers.emplace_back(std::move(item));
++    }
+ }
+ 
+ extern "C" FfxErrorCode ffxVkFsr3_3_1_5BridgeCreateResource(
+diff --git a/src/ffx_vk_fsr3_3_1_5_descriptor.c b/src/ffx_vk_fsr3_3_1_5_descriptor.c
+index 5117112..57c4686 100644
+--- a/src/ffx_vk_fsr3_3_1_5_descriptor.c
++++ b/src/ffx_vk_fsr3_3_1_5_descriptor.c
+@@ -43,6 +43,8 @@ FfxVkPortableResult ffxVkFsr3_3_1_5CreateDescriptorSet(
+     uint32_t poolCounts[5] = {0};
+     uint32_t writeCount = 0;
+     uint32_t poolCount = 0;
++    /* A set from an earlier frame (same pipeline, GPU done with it) is rewritten in place. */
++    VkDescriptorSet reused = VK_NULL_HANDLE;
+ 
+     if (!pipeline || !resources || !outDescriptorSet)
+         return FFX_VK_PORTABLE_ERROR_INVALID_POINTER;
+@@ -50,7 +52,11 @@ FfxVkPortableResult ffxVkFsr3_3_1_5CreateDescriptorSet(
+         pipeline->bindingCount == 0u || pipeline->bindingCount > FFX_VK_FSR3_3_1_5_MAX_PIPELINE_BINDINGS ||
+         resourceCount > FFX_VK_FSR3_3_1_5_MAX_PIPELINE_BINDINGS)
+         return FFX_VK_PORTABLE_ERROR_INVALID_ARGUMENT;
+-    memset(outDescriptorSet, 0, sizeof(*outDescriptorSet));
++    if (outDescriptorSet->descriptorPool != VK_NULL_HANDLE &&
++        outDescriptorSet->descriptorSet != VK_NULL_HANDLE)
++        reused = outDescriptorSet->descriptorSet;
++    else
++        memset(outDescriptorSet, 0, sizeof(*outDescriptorSet));
+ 
+     for (uint32_t index = 0; index < pipeline->bindingCount; ++index) {
+         const FfxVkFsr3_3_1_5DescriptorBinding* binding = &pipeline->bindings[index];
+@@ -143,6 +149,12 @@ FfxVkPortableResult ffxVkFsr3_3_1_5CreateDescriptorSet(
+         }
+     }
+ 
++    if (reused != VK_NULL_HANDLE) {
++        for (uint32_t index = 0; index < writeCount; ++index)
++            writes[index].dstSet = reused;
++        vkUpdateDescriptorSets(pipeline->device, writeCount, writes, 0u, NULL);
++        return FFX_VK_PORTABLE_OK;
++    }
+     outDescriptorSet->device = pipeline->device;
+     outDescriptorSet->allocationCallbacks = pipeline->allocationCallbacks;
+     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+diff --git a/src/ffx_vk_fsr3_3_1_6_framegen.cpp b/src/ffx_vk_fsr3_3_1_6_framegen.cpp
+index 9636cec..193564c 100644
+--- a/src/ffx_vk_fsr3_3_1_6_framegen.cpp
++++ b/src/ffx_vk_fsr3_3_1_6_framegen.cpp
+@@ -474,6 +474,8 @@ ffxVkFsr3_3_1_6FrameGenerationContextRecordPrepare(
+             return result_from_ffx(initResult);
+         context->initialized = true;
+     }
++    /* Tag this frame's staged constants and descriptor sets so RetireFrame can recycle them. */
++    ffxVkFsr3_3_1_5BridgeBeginFrame(context->bridge, info->frameId);
+     const FfxVkFsr3_3_1_5Resource color = import_frame_image(context->bridge, info->color, false);
+     const FfxVkFsr3_3_1_5Resource depth = import_frame_image(context->bridge, info->depth, false);
+     const FfxVkFsr3_3_1_5Resource motion = import_frame_image(context->bridge, info->motionVectors, false);
+@@ -666,6 +668,7 @@ ffxVkFsr3_3_1_6FrameGenerationContextRetireFrame(
+         context->renderWidth = 0u;
+         context->renderHeight = 0u;
+     }
++    ffxVkFsr3_3_1_5BridgeRetireFrame(context->bridge, completedFrameId);
+     auto retained = context->retainedFrames.begin();
+     while (retained != context->retainedFrames.end()) {
+         if (retained->frameId <= completedFrameId) {

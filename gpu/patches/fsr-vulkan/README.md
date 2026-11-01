@@ -10,3 +10,7 @@ patches here to its working tree when they are not applied yet:
 - `0003-...`: the rest of the standard includes the FFX 1.1.4 SDK relies on being pulled in
   transitively by libstdc++ but not by libc++ / MinGW: `<cstdlib>` for `_countof`, `<wchar.h>`
   for `swprintf_s`, `<cmath>` for `log2` and `<new>` for placement new.
+- `0004-...`: frame generation (3.1.6 FI/OF) frees what each frame stages. The context never tagged
+  the bridge's frame (`BridgeBeginFrame`) nor retired it (`BridgeRetireFrame`), so every constant
+  buffer and descriptor pool it made lived on and the lookups grew each frame. Retired ones are now
+  reused: constant buffers stay mapped and descriptor sets are rewritten in place.

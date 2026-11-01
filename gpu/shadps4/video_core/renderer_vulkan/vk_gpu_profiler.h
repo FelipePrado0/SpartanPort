@@ -7,6 +7,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <string>
@@ -25,7 +26,7 @@ class GpuProfiler {
 public:
     /// The profiler when SPARTAN_GPU_PROFILE=1, else null.
     static GpuProfiler* Get() noexcept {
-        return instance_ptr;
+        return instance_ptr.load(std::memory_order_acquire);
     }
     static void Init(const Instance& instance, Scheduler& scheduler);
 
@@ -63,7 +64,7 @@ private:
 
     static constexpr u32 NumSlices = 4;
     static constexpr u32 SliceQueries = 4096;
-    static inline GpuProfiler* instance_ptr = nullptr;
+    static inline std::atomic<GpuProfiler*> instance_ptr{nullptr};
 
     vk::Device device;
     Scheduler& scheduler;

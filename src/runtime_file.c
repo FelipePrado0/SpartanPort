@@ -5,6 +5,7 @@
  * Paths containing ".." components are rejected rather than normalized. */
 #define _GNU_SOURCE
 #include "runtime.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,7 +32,7 @@ typedef struct stat HostStat;
 #endif
 #define ERR(n) ((int32_t)(UINT32_C(0x80020000)|(n)))
 #define MAX_FILES 1024
-#define MAX_MOUNTS 16
+#define MAX_MOUNTS 32  /* glyphs (3), pause menu (1), switch attack tutorials (16 languages) */
 
 typedef struct { int64_t sec, nsec; } GuestTimespec;
 typedef struct {
@@ -198,6 +199,23 @@ static int game_path(const char *p) {
     return (!strncmp(p,"/app0",5) && (!p[5] || p[5]=='/')) ||
            (!strncmp(p,"/hostapp",8) && (!p[8] || p[8]=='/'));
 }
+/* Temporary F4.2: whether the last area WAD the game opened is a Cronos one (Crn*.WAD). Resource
+ * WADs (R_*) load in any area and leave it as it is. */
+static int area_cronos;
+int runtime_file_cronos(void) { return __atomic_load_n(&area_cronos,__ATOMIC_RELAXED); }
+static int prefix_nocase(const char *s,const char *prefix) {
+    for (; *prefix; ++s,++prefix) if (tolower((unsigned char)*s)!=tolower((unsigned char)*prefix)) return 0;
+    return 1;
+}
+static void note_area(const char *guest) {
+    const char *base=strrchr(guest,'/');
+    base=base ? base+1 : guest;
+    const size_t n=strlen(base);
+    if (n<5 || !prefix_nocase(base+n-4,".wad") || prefix_nocase(base,"R_")) return;
+    const int cronos=prefix_nocase(base,"Crn");
+    if (cronos!=runtime_file_cronos()) printf("Runtime: area %s, %s Cronos\n",base,cronos ? "in" : "out of");
+    __atomic_store_n(&area_cronos,cronos,__ATOMIC_RELAXED);
+}
 /* All operations return >=0 or -(host errno); wrappers adapt the convention. */
 static int64_t do_open(const char *guest,int flags,int mode) {
     if (game_path(guest) && (flags & (3|0x8|0x200|0x400|0x800))) return -EROFS;
@@ -245,6 +263,7 @@ static int64_t do_open(const char *guest,int flags,int mode) {
     snprintf(files[fd].path,sizeof(files[fd].path),"%s",guest);
     ++opens;
     pthread_mutex_unlock(&lock);
+    note_area(guest);
     if (audio_trace() && strstr(guest,"sound/")) printf("Audio trace: open(%s) -> fd %d, %lld bytes\n",guest,fd,(long long)s.st_size);
     const char *mod_trace=getenv("SPARTAN_MOD_TRACE"), *mod_root=getenv("SPARTAN_MODS_DIR");
     if (mod_trace && mod_trace[0]=='1' && mod_root) {
@@ -298,7 +317,9 @@ static int64_t do_read(int fd,void *buffer,uint64_t size) {
     int h=host_fd(fd);
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
+    const uint64_t wait_start=runtime_wait_begin();
     ssize_t n=host_read(h,buffer,size);
+    runtime_wait_end("file read",wait_start,"bytes",(long long)size);
     if (n<0) { if (audio_trace()) printf("Audio trace: read(fd %d, %llu) failed, errno %d\n",fd,(unsigned long long)size,errno); return -errno; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;
@@ -307,7 +328,9 @@ static int64_t do_pread(int fd,void *buffer,uint64_t size,int64_t offset) {
     int h=host_fd(fd);
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
+    const uint64_t wait_start=runtime_wait_begin();
     ssize_t n=pread(h,buffer,size,offset);
+    runtime_wait_end("file pread",wait_start,"bytes",(long long)size);
     if (n<0) { if (audio_trace()) printf("Audio trace: pread(fd %d, %llu @%lld) failed, errno %d\n",fd,(unsigned long long)size,(long long)offset,errno); return -errno; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;

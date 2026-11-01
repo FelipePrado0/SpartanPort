@@ -1,6 +1,7 @@
 """Arch source preparation, without makepkg, submodule downloads or a GPU build."""
 from paths import ROOT
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -95,3 +96,28 @@ class ArchPreparationTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('build.sh: expected one original or one replacement', result.stderr)
         self.assertEqual(build.read_text(), source)
+
+
+class PackageContentTests(unittest.TestCase):
+    """The package ships the Rust launcher: static checks of the PKGBUILD text."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = PKGBUILD.read_text()
+
+    def test_the_package_ships_no_python(self):
+        self.assertNotRegex(self.text, r'(?i)python')
+        self.assertNotRegex(self.text, r'\btk\b')
+        self.assertNotRegex(self.text, r'\.py\b')
+
+    def test_the_version_comes_from_the_cargo_manifest(self):
+        self.assertIn('launcher-rust/Cargo.toml', self.text)
+
+    def test_build_compiles_the_rust_launcher_and_the_probe(self):
+        self.assertIn('cargo build --release --locked', self.text)
+        self.assertIn('bash build.sh', self.text)
+        self.assertIn("'cargo'", self.text)
+
+    def test_package_installs_the_rust_exe(self):
+        self.assertIn('launcher-rust/target/release/spartanport-launcher', self.text)
+        self.assertIn('exec ./spartanport-launcher', self.text)

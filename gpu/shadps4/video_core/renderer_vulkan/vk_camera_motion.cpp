@@ -15,6 +15,7 @@
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
+#include "video_core/renderer_vulkan/vk_view_projection.h"
 #include "video_core/texture_cache/texture_cache.h"
 
 namespace Vulkan {
@@ -242,6 +243,37 @@ void CameraMotion::OnConstants(const float* data) {
 
 void CameraMotion::OnGBufferPass(VideoCore::ImageId depth) {
     depth_id = depth;
+}
+
+void CameraMotion::OnViewProjection(const float* matrix, VideoCore::ImageId depth) {
+    if (frame_has_camera) {
+        return;
+    }
+    const auto camera = ViewProjection::Decompose(matrix);
+    if (!camera.valid) {
+        static int rejected = 0;
+        if (rejected < 4) {
+            ++rejected;
+            std::printf("Camera motion: depth pre-pass constants rejected: %g %g %g %g | %g %g %g %g\n",
+                        matrix[0], matrix[1], matrix[2], matrix[3], matrix[12], matrix[13],
+                        matrix[14], matrix[15]);
+        }
+        return;
+    }
+    previous = current;
+    current.view = camera.view;
+    current.inv_view = camera.inv_view;
+    current.proj = camera.proj;
+    current.valid = true;
+    depth_id = depth;
+    prepass_camera = true;
+    const auto& image = texture_cache.GetImage(depth);
+    const std::array<u32, 2> size{image.info.size.width, image.info.size.height};
+    if (size != render_size) {
+        std::printf("Camera motion: depth pre-pass camera, scene render size %ux%u\n", size[0], size[1]);
+        render_size = size;
+    }
+    frame_has_camera = true;
 }
 
 void CameraMotion::OnDisplayPass(VideoCore::ImageId frame) {

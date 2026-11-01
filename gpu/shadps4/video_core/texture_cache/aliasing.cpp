@@ -33,14 +33,14 @@ std::optional<Extent3D> GetAliasCopyExtent(const ImageInfo& src, const ImageInfo
     const bool can_copy_intersection = !src.props.is_block && src.resources.levels == 1 &&
                                        dst.resources.levels == 1 && src.resources.layers == 1 &&
                                        dst.resources.layers == 1 && src.size.depth == 1 &&
-                                       dst.size.depth == 1 && src.size.width == dst.size.width &&
+                                       dst.size.depth == 1 &&
                                        IsVulkanFormatCompatible(src.pixel_format, dst.pixel_format);
     if (!can_copy_intersection) {
         return std::nullopt;
     }
 
     return Extent3D{
-        .width = src.size.width,
+        .width = std::min(src.size.width, dst.size.width),
         .height = std::min(src.size.height, dst.size.height),
         .depth = 1,
     };

@@ -5,7 +5,7 @@
 /* The settings menu of the GPU library restarts through probe.c, which tests do not link. */
 void runtime_restart(void) { abort(); }
 #include "gpu/spartanportgpu.h"
-__attribute__((weak)) void spartanportgpu_toast_trophy(const char *title, const char *detail, const unsigned char *png, uint64_t png_size) { (void)title; (void)detail; (void)png; (void)png_size; }
+__attribute__((weak)) void spartanportgpu_toast_trophy(int id, const char *title, const char *detail, const unsigned char *png, uint64_t png_size) { (void)id; (void)title; (void)detail; (void)png; (void)png_size; }
 __attribute__((weak)) void spartanportgpu_trophy_setup(const SpartanGpuTrophyLabels *labels, const SpartanGpuTrophyInfo *items, int count, const volatile uint32_t *unlocked) { (void)labels; (void)items; (void)count; (void)unlocked; }
 #include <assert.h>
 #include <stdio.h>
@@ -14,6 +14,9 @@ __attribute__((weak)) void spartanportgpu_trophy_setup(const SpartanGpuTrophyLab
 #include <pthread.h>
 #include <stdatomic.h>
 #include <time.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 typedef int (ABI *Register)(GuestCallback);
 typedef int (ABI *RegisterCxa)(void (ABI *)(void *), void *, void *);
@@ -132,6 +135,10 @@ static void mutexes(void) {
     assert(attr_init(&attr)==0);
     assert((uint32_t)type(&attr,99)==0x80020016);
     assert(type(&attr,2)==0 && init(&mutex,&attr,"recursive-test")==0);
+    /* The linked libc writes this flag after creating its internal heap mutex. */
+    uint32_t *libc_flags=(uint32_t *)((unsigned char *)mutex+0x20);
+    *libc_flags |= 0x100;
+    assert(*libc_flags==0x100);
     assert(attr_destroy(&attr)==0 && attr==NULL);
     assert(lock(&mutex)==0 && trylock(&mutex)==0);
     assert((uint32_t)destroy(&mutex)==0x80020010);
@@ -177,6 +184,47 @@ static void wall_time(void) {
     assert(t.canary==0xabcdef && z.canary==0x123456);
     assert(get(NULL,NULL)==0 && get(NULL,z.value)==0);
     assert(!runtime_resolve("n88vx3C5nW8#libc",0));
+}
+static void busy_mutex_lifetimes(void) {
+    AttrInit init_attr=GET(AttrInit,"dQHWEsJtoE4#libkernel");
+    AttrType type=GET(AttrType,"mDmgMOGVUqg#libkernel");
+    HandleOp destroy_attr=GET(HandleOp,"HF7lK46xzjY#libkernel");
+    typedef int32_t (ABI *Init)(void **,void **);
+    Init init=GET(Init,"ttHNfU+qDBU#libkernel");
+    HandleOp lock=GET(HandleOp,"7H0iTOciTLo#libkernel");
+    HandleOp trylock=GET(HandleOp,"K-jXhbt2gn4#libkernel");
+    HandleOp unlock=GET(HandleOp,"2Z+PpY6CaJg#libkernel");
+    HandleOp destroy=GET(HandleOp,"ltCfaGr2JGE#libkernel");
+    typedef int32_t (ABI *RelativeLock)(void **,uint32_t);
+    RelativeLock timed=GET(RelativeLock,"IafI2PxcPnQ#libkernel");
+    for (int kind=1;kind<=3;++kind) {
+        void *attr=NULL,*mutex=NULL;
+        assert(init_attr(&attr)==0 && type(&attr,kind)==0 && init(&mutex,&attr)==0);
+        assert(destroy_attr(&attr)==0);
+        assert(kind==3 ? timed(&mutex,1000000)==0 : lock(&mutex)==0);
+        if (kind==3) assert((uint32_t)timed(&mutex,1000)==0x8002003c);
+        void *original=mutex;
+        assert(destroy(&mutex)==16 && mutex==original);
+        if (kind==2) {
+            assert(trylock(&mutex)==0 && destroy(&mutex)==16 && mutex==original);
+            assert(unlock(&mutex)==0 && destroy(&mutex)==16 && mutex==original);
+        }
+        assert(unlock(&mutex)==0 && destroy(&mutex)==0);
+        assert(lock(&mutex)==22 && destroy(&mutex)==22);
+    }
+    typedef int32_t (ABI *CondInit)(void **,void **,const char *);
+    typedef int32_t (ABI *CondTimed)(void **,void **,uint32_t);
+    CondInit init_cond=GET(CondInit,"2Tb92quprl0#libkernel");
+    CondTimed wait_cond=GET(CondTimed,"BmMjYxmew1w#libkernel");
+    HandleOp destroy_cond=GET(HandleOp,"g+PZd2hiacg#libkernel");
+    assert(init_cond && wait_cond && destroy_cond);
+    void *mutex=NULL,*condition=NULL;
+    assert(init(&mutex,NULL)==0 && init_cond(&condition,NULL,"busy-test")==0);
+    assert(lock(&mutex)==0);
+    assert((uint32_t)wait_cond(&condition,&mutex,1000)==0x8002003c);
+    assert(destroy(&mutex)==16);
+    assert(unlock(&mutex)==0 && destroy(&mutex)==0 && destroy_cond(&condition)==0);
+    puts("PASS: busy mutex destruction preserves recursive depth and handle lifetime");
 }
 static void direct_memory(void) {
     Allocate alloc=GET(Allocate,"rTXw65xmLIA#libkernel");
@@ -328,6 +376,30 @@ static void rw_timeouts(void) {
     assert(rw_unlock(&f.lock)==0);
     fixture_destroy(&f);
 }
+/* The PS4's floating-point state: flush-to-zero and denormals-are-zero on (shadPS4#3568). */
+static void orbis_fpu(void) {
+    unsigned before, after; unsigned short cw;
+    __asm__ volatile("stmxcsr %0" : "=m"(before));
+    runtime_orbis_fpu();
+    __asm__ volatile("stmxcsr %0" : "=m"(after));
+    __asm__ volatile("fnstcw %0" : "=m"(cw));
+    assert(after==0x9fc0 && cw==0x037f);
+    volatile float tiny=1e-39f; /* a denormal: zero with DAZ */
+    assert(tiny*1.0f==0.0f);
+    __asm__ volatile("ldmxcsr %0" : : "m"(before));
+}
+/* A slow-wait line that cannot be written leaves errno to the caller (a failed read returns
+ * -errno). */
+static void slow_wait_keeps_errno(void) {
+    const int saved=dup(2), full=open("/dev/full",O_WRONLY);
+    assert(saved>=0 && full>=0 && dup2(full,2)==2);
+    errno=EINTR;
+    runtime_wait_end("test wait",1,"none",0); /* threshold 0: logs */
+    const int after=errno;
+    assert(dup2(saved,2)==2);
+    close(saved); close(full);
+    assert(after==EINTR);
+}
 int main(int argc,char **argv) {
     runtime_start(0); assert(runtime_resolve("bzQExy189ZI#libc",0)==0);
     runtime_start(1);
@@ -358,14 +430,21 @@ int main(int argc,char **argv) {
         alloc(0,536870912,16384,0,0,&a);
         return 99;
     }
+    if (argc>1 && !strcmp(argv[1],"--direct-memory-size")) {
+        /* sceKernelGetDirectMemorySize creates the pool first: the size the host granted. */
+        typedef uint64_t (ABI *DirectSize)(void);
+        printf("direct memory %llu MiB\n",(unsigned long long)(GET(DirectSize,"pO96TwzOm5E#libkernel")()>>20));
+        return 0;
+    }
     if (argc>1 && !strcmp(argv[1],"--stack-failure")) {
         GET(GuestCallback,"Ou3iL1abvng#libkernel")(); return 99;
     }
     if (argc>1 && !strcmp(argv[1],"--rwlock-lifecycle")) { rw_lifecycle(); return 0; }
+    if (argc>1 && !strcmp(argv[1],"--mutex-destroy-busy")) { busy_mutex_lifetimes(); return 0; }
     if (argc>1 && !strcmp(argv[1],"--rwlock-concurrency")) { rw_concurrency(); return 0; }
     if (argc>1 && !strcmp(argv[1],"--rwlock-timeouts")) { rw_timeouts(); return 0; }
-    libc_support(); posix_mutexes(); wall_time(); exit_handlers(); guards(); mutexes(); direct_memory(); memory_primitives();
-    rw_lifecycle(); rw_concurrency(); rw_timeouts();
-    puts("PASS: callback lifecycle, guard ABI, mutex errors, shared direct memory, memory primitives, resolver scope");
+    libc_support(); posix_mutexes(); busy_mutex_lifetimes(); wall_time(); exit_handlers(); guards(); mutexes(); direct_memory(); memory_primitives();
+    rw_lifecycle(); rw_concurrency(); rw_timeouts(); orbis_fpu(); slow_wait_keeps_errno();
+    puts("PASS: callback lifecycle, guard ABI, mutex errors, shared direct memory, memory primitives, resolver scope, the PS4's floating-point state, slow-wait log keeps errno");
     return 0;
 }

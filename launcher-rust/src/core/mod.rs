@@ -1,0 +1,36 @@
+//! Launcher logic with no UI dependency.
+
+pub mod catalog;
+pub mod controller_mappings;
+pub mod controls;
+pub mod desktop;
+pub mod draw;
+pub mod env;
+pub mod fs;
+pub mod game;
+pub mod gpu;
+pub mod graphics_options;
+pub mod i18n;
+pub mod ini;
+pub mod installation;
+pub mod joysticks;
+pub mod launch;
+pub mod legacy;
+pub mod log;
+pub mod mods;
+pub mod options;
+pub mod patches;
+pub mod paths;
+pub mod platform;
+pub mod psarc;
+pub mod python;
+pub mod release;
+pub mod save_backup;
+pub mod settings;
+pub mod sfo;
+pub mod steam;
+pub mod steam_art;
+pub mod store;
+pub mod trophies;
+pub mod update;
+pub mod voice_swap;

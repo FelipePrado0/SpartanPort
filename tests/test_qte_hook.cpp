@@ -69,6 +69,51 @@ static uint32_t call_charged(unsigned char* stub, void* pad) {
     return result;
 }
 
+// Runs only the counting prefix of a stub (its first SPARTAN_QTE_COUNT_LENGTH bytes, then a ret)
+// with known rax and flags and a marked red zone: all three come back unchanged. (The call's return
+// address takes the zone's top slot, as in the game; the prefix must not touch the 120 bytes below.)
+static bool check_count_prefix(const unsigned char* stub) {
+    auto* code = static_cast<unsigned char*>(
+        VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+    std::memcpy(code, stub, SPARTAN_QTE_COUNT_LENGTH);
+    code[SPARTAN_QTE_COUNT_LENGTH] = 0xc3;
+    FlushInstructionCache(GetCurrentProcess(), code, 4096);
+    const uint64_t rax_in = 0x1111222233334444ull, mark = 0x5a5a5a5a5a5a5a5aull;
+    uint64_t rax_out, flags_in, flags_out, intact;
+    asm volatile(
+        "lea -128(%%rsp), %%rdx\n"
+        "1: mov %[mark], (%%rdx)\n"
+        "add $8, %%rdx\n"
+        "lea -8(%%rsp), %%rcx\n"
+        "cmp %%rcx, %%rdx\n"
+        "jb 1b\n"
+        "mov %[rax_in], %%rax\n"
+        "pushfq\n"
+        "orq $0x8d5, (%%rsp)\n"  // CF PF AF ZF SF OF
+        "popfq\n"
+        "pushfq\n"
+        "pop %[flags_in]\n"
+        "call *%[code]\n"
+        "pushfq\n"
+        "pop %[flags_out]\n"
+        "mov %%rax, %[rax_out]\n"
+        "mov $1, %[intact]\n"
+        "lea -128(%%rsp), %%rdx\n"
+        "2: cmp %[mark], (%%rdx)\n"
+        "je 3f\n"
+        "mov $0, %[intact]\n"
+        "3: add $8, %%rdx\n"
+        "lea -8(%%rsp), %%rcx\n"
+        "cmp %%rcx, %%rdx\n"
+        "jb 2b\n"
+        : [rax_out] "=&r"(rax_out), [flags_in] "=&r"(flags_in), [flags_out] "=&r"(flags_out),
+          [intact] "=&r"(intact)
+        : [code] "r"(code), [rax_in] "r"(rax_in), [mark] "r"(mark)
+        : "rax", "rcx", "rdx", "memory", "cc");
+    VirtualFree(code, 0, MEM_RELEASE);
+    return intact && rax_out == rax_in && (flags_in & 0x8d5) == 0x8d5 && flags_out == flags_in;
+}
+
 int main(int argc, char** argv) {
     alignas(64) static SpartanQteState state;
     static bool automatic;
@@ -86,10 +131,16 @@ int main(int argc, char** argv) {
                                       reinterpret_cast<uintptr_t>(&qte_update_return)) < 128);
     assert(spartanport_qte_build_rotation_stub(rotation, reinterpret_cast<uintptr_t>(&state.pass), flag,
                                         reinterpret_cast<uintptr_t>(&qte_rotation_return)) < 128);
-    assert(spartanport_qte_build_timed_stub(timed, flag, reinterpret_cast<uintptr_t>(&qte_timed_return)) < 128);
-    assert(spartanport_qte_build_repeat_stub(repeat, flag, reinterpret_cast<uintptr_t>(&qte_repeat_original)) < 128);
-    assert(spartanport_qte_build_charged_stub(charged, flag, reinterpret_cast<uintptr_t>(&qte_charged_return)) < 128);
-    assert(spartanport_qte_build_circle_stub(circle, flag, reinterpret_cast<uintptr_t>(&qte_circle_pressed),
+    // Each Automatic QTE stub counts its prompt kind's frames (SpartanQteState.kinds), always.
+    const auto count = [&](unsigned kind) { return reinterpret_cast<uintptr_t>(&state.kinds[kind]); };
+    assert(spartanport_qte_build_timed_stub(timed, count(SPARTAN_QTE_COUNT_TIMED), flag,
+                                     reinterpret_cast<uintptr_t>(&qte_timed_return)) < 128);
+    assert(spartanport_qte_build_repeat_stub(repeat, count(SPARTAN_QTE_COUNT_REPEAT), flag,
+                                      reinterpret_cast<uintptr_t>(&qte_repeat_original)) < 128);
+    assert(spartanport_qte_build_charged_stub(charged, count(SPARTAN_QTE_COUNT_CHARGED), flag,
+                                       reinterpret_cast<uintptr_t>(&qte_charged_return)) < 128);
+    assert(spartanport_qte_build_circle_stub(circle, count(SPARTAN_QTE_COUNT_CIRCLE), flag,
+                                      reinterpret_cast<uintptr_t>(&qte_circle_pressed),
                                       reinterpret_cast<uintptr_t>(&qte_circle_skip)) < 128);
     FlushInstructionCache(GetCurrentProcess(), code, 4096);
 
@@ -121,6 +172,7 @@ int main(int argc, char** argv) {
     block[SPARTAN_QTE_TYPE_OFFSET] = 3;  // square
     assert(call_timed(timed, block, pad) == 0x80);
     automatic = false;
+    assert(state.kinds[SPARTAN_QTE_COUNT_TIMED] == 3 && state.kinds[SPARTAN_QTE_COUNT_REPEAT] == 0);
 
     // Repeat press: the game's own query, or a press every frame credited with the frame's time.
     alignas(8) float repeat_state[16] = {}, frame[32] = {};
@@ -131,6 +183,7 @@ int main(int argc, char** argv) {
     automatic = true;
     assert(call_repeat(repeat, repeat_state, rbp) == 1 && repeat_state[2] == dt);  // [state+8]
     automatic = false;
+    assert(state.kinds[SPARTAN_QTE_COUNT_REPEAT] == 2);
 
     // Circle struggle: a new Circle press goes on to the press, else it is skipped; always pressed
     // with Automatic QTE.
@@ -143,6 +196,7 @@ int main(int argc, char** argv) {
     automatic = true;
     assert(call_circle(circle, pad) == 1);
     automatic = false;
+    assert(state.kinds[SPARTAN_QTE_COUNT_CIRCLE] == 4);
     std::memcpy(pad + 0x94, &held, 4);
 
     // Charged press: the held buttons, or all of them.
@@ -150,6 +204,12 @@ int main(int argc, char** argv) {
     automatic = true;
     assert(call_charged(charged, pad) == 0xffffffffu);
     automatic = false;
+    assert(state.kinds[SPARTAN_QTE_COUNT_CHARGED] == 2 && state.heartbeat == 2);
+
+    // The count leaves the game's registers, flags and red zone alone: rax, rcx and r9 are the
+    // stubs' own (their bodies set them); everything else, the flags and [rsp-128, rsp) survive.
+    for (const unsigned char* stub : {timed, repeat, charged, circle}) assert(check_count_prefix(stub));
+    assert(state.kinds[SPARTAN_QTE_COUNT_TIMED] == 4 && state.kinds[SPARTAN_QTE_COUNT_CIRCLE] == 5);
 
     // The state block from the rotation check's lea r8,[rip+disp], a call's target from its rel32.
     unsigned char lea[SPARTAN_QTE_BLOCK_NEXT] = {};

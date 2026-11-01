@@ -9,6 +9,10 @@
   <a href="https://trendshift.io/repositories/299469?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-299469" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/299469/daily?language=C%2B%2B" alt="FelipePrado0%2FSpartanPort | Trendshift" width="250" height="55"/></a>
 </div>
 
+<p align="center">
+  <a href="https://discord.gg/WYvr634563"><img src="https://img.shields.io/badge/DISCORD_OFICIAL-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Unite al Discord oficial de SpartanPort" height="40"></a>
+</p>
+
 [English](https://github.com/FelipePrado0/SpartanPort/blob/main/README.md) | [Português (Brasil)](https://github.com/FelipePrado0/SpartanPort/blob/main/README.pt-BR.md) | **Español**
 
 **SpartanPort** es un port no oficial para PC de **God of War III Remastered** (PlayStation 4) para Windows 10/11
@@ -187,6 +191,14 @@ La corrupción gráfica en Steam Deck/RADV es un problema conocido del AppImage 
     CPU, RAM y VRAM, cada uno opcional, con tamaño de fuente, esquina, opacidad del fondo y diseño.
     Los números son el uso del propio juego, no el de todo el sistema.
 
+  El menú sigue el idioma del launcher (inglés, portugués, español, francés, alemán, italiano,
+  polaco, turco, indonesio, ruso o chino), o el elegido arriba de la pestaña **Juego**, al
+  instante. La elección queda en `spartanport.ini` (`ui_language`).
+- **Trofeos** (F8, o R3+R2 en el control): todos los trofeos con su nombre oficial y lo que piden,
+  su grado, cuántos jugadores lo consiguieron y filtros por estado y por grado; notificaciones de
+  trofeo en cuatro temas, con tus propios sonidos e imágenes si quieres. Consulta
+  [docs/TROPHIES.es.md](docs/TROPHIES.es.md).
+
 ## Disponibilidad de funciones
 
 Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/SpartanPort/releases/tag/windows-v2.2.0) y en el código el 14 de octubre de 2026.
@@ -197,7 +209,8 @@ Disponibilidad comprobada en la [release 2.2.0](https://github.com/FelipePrado0/
 | Corrección de pantalla negra / íconos de botones del control | Incluidos | Incluidos |
 | Discord Rich Presence | No incluido | Opcional en Advanced, desactivado por defecto; nombre del juego y tiempo transcurrido |
 | Corrección de la cola sparse en RADV | No incluida | Integrada en `main` |
-| FSR 1, FSR 3.1, FSR 4, TAA, DLSS | Desactivados | Desactivados en el flujo de ajustes del launcher/juego |
+| FSR 3.1, FSR 4, FSR 4.1, TAA | Desactivados | Gráficos → Upscaling y los menús del juego ([detalles](#upscaling)) |
+| FSR 1 | Desactivados | Desactivados en el flujo de ajustes del launcher/juego |
 | Nitidez RCAS | Disponible | Disponible |
 
 El AppImage Linux se recompiló el 14 de octubre para glibc 2.39 o posterior. Los paquetes
@@ -228,6 +241,33 @@ cubre toda GPU con esos dos drivers, incluidas las integradas; la línea del log
 multisampling off` u `on` indica lo que se aplicó. Elegí **Off** si las líneas aparecen en otra placa
 y **On** para mantener el multimuestreo de todas formas. Off y On establecen `SPARTAN_NO_MSAA=1` o `0`;
 Automatic deja pasar un `SPARTAN_NO_MSAA` heredado. Se aplica en el próximo inicio del juego.
+
+### Upscaling
+
+Elegí el upscaler y el preset de calidad en **Gráficos → Upscaling**, en el menú **Pantalla** del
+juego o en el menú **Insert** (**Image**). Los tres muestran los mismos valores. El valor por
+defecto es Desactivado. El preset renderiza una fracción de la resolución de renderizado y el
+upscaler reconstruye la resolución completa; cada preset muestra la resolución en que renderiza.
+Los cambios se aplican al reiniciar (**Aplicar y reiniciar** en el juego).
+
+- **FSR 3.1:** cualquier tarjeta gráfica.
+- **FSR 4:** el modelo abierto de FSR 4, incluido. Para AMD Radeon RX 6000 o posterior e Intel
+  Arc; Windows y Linux.
+- **TAA:** antialiasing a la resolución completa, sin upscaling.
+
+La generaci?n de fotogramas AMD FSR (2x) a?ade un fotograma generado entre los del juego.
+Act?vala en **Gr?ficos > Generaci?n de fotogramas** o en los men?s del juego, con un escalador
+seleccionado. Se aplica al instante; al desactivarla se mantiene el escalador.
+
+#### FSR 4.1 (AMD, Windows)
+
+FSR 4.1 funciona con el runtime Vulkan de AMD (`amdvkffx64.dll`), que viene con el driver de AMD
+(Adrenalin 26.10.1 o posterior).
+
+- RX 7000 y RX 9000: el driver debería incluirlo. Todavía no confirmado; los reportes son bienvenidos.
+- RX 6000: el driver actual trae FSR 4.1 solo para DirectX 12, sin el runtime Vulkan. SpartanPort
+  usa FSR 3.1 en su lugar e indica el motivo en el menú del juego (**Insert → Image**).
+- NVIDIA e Intel: FSR 3.1.
 
 ## Controles de teclado
 
@@ -269,6 +309,13 @@ En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic 
 y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad funciona como en la
 PS4, y Share/Create funciona como View.
 
+**Ataques de cambio con L1 + cruceta y L1 + Cruz** (desactivado por defecto, página Controls): L1 +
+una dirección de la cruceta cambia a esa arma con su ataque de cambio, y el arma que Kratos ya tiene en
+la mano repite su ataque; L1 + Cruz hace el ataque de cambio del arma en la mano en lugar de pasar a la
+siguiente arma. El ataque de cambio de la misma arma otra vez espera 0,8 segundos después del último
+(el de otra arma no espera). La cruceta sola cambia como antes. Los tutoriales de cambio de arma lo dicen así en todos los idiomas
+(en copias de los archivos de idioma en la carpeta de datos del port). Sin el launcher, definí `SPARTAN_SWITCH_ATTACKS=1`.
+
 Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls del launcher, en
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* o *Keyboard*. Reemplazan los íconos de
 PlayStation en los tutoriales, la lista de movimientos, las indicaciones de quick-time events y, con los estilos
@@ -277,7 +324,7 @@ presiona cada botón, según tu mapeo del teclado (una tecla cambiada aparece en
 *Match my controller* también muestra las teclas cuando no hay un control conectado. El launcher escribe una copia
 parcheada de hasta tres archivos del juego (unos 410 MB) en la carpeta de datos del port y nunca modifica tu carpeta del
 juego. Un control nuevo se detecta después de reiniciar. Sin el launcher, definí `SPARTAN_GLYPH_STYLE`
-como `auto`, `xbox`, `nintendo` o `keyboard` antes de iniciar `run.py`.
+como `auto`, `xbox`, `nintendo` o `keyboard` antes de iniciar `run.sh`.
 
 En el menú: L1/R1 o Q/E cambian de pestaña. En la lista de partidas: las flechas o la cruceta eligen,
 Enter o Cruz confirman, Esc o Círculo cancelan.
@@ -353,15 +400,10 @@ configuraciones, incluso en 1080p. Consultá los problemas conocidos en las nota
 
 ### Windows
 
-Instalá Python 3.10 o posterior de python.org, con soporte de Tk. Después instalá las
-dependencias del launcher y de la reescritura de instrucciones en PowerShell:
-
-```powershell
-python -m pip install pillow iced-x86==1.21.0
-```
-
-Los comandos de compilación siguientes usan MSYS2 CLANG64; los comandos del launcher marcados
-como PowerShell usan la instalación de Python para Windows.
+Instalá [rustup](https://rustup.rs) (stable) y Visual Studio Build Tools con la carga "Desarrollo
+para el escritorio con C++"; el launcher se compila con cargo y no necesita Python. Los comandos de
+compilación siguientes usan MSYS2 CLANG64; los comandos del launcher marcados como PowerShell se
+ejecutan en Windows.
 
 El desarrollo ocurre en la rama `spartanport`; `main` recibe merges ya probados.
 
@@ -379,7 +421,8 @@ El desarrollo ocurre en la rama `spartanport`; `main` recibe merges ya probados.
 3. Iniciá el launcher (en PowerShell, en la carpeta del proyecto):
 
    ```powershell
-   python launcher/spartanport_launcher_win.py
+   cd launcher-rust
+   cargo run --release
    ```
 
 4. En **Game**, elegí la carpeta del juego y los parches. Ajustá **Graphics** y **Performance**,
@@ -389,22 +432,23 @@ Para jugar con los ajustes guardados sin abrir la ventana del launcher (para un 
 Steam):
 
 ```powershell
-python launcher/spartanport_launcher_win.py --play
+cd launcher-rust
+cargo build --release
+.\target\release\spartanport-launcher.exe --play
 ```
 
-O sin el launcher:
+O sin los ajustes del launcher, desde Git Bash o una terminal MSYS2:
 
-```powershell
-$env:SPARTAN_GAME_DIR = 'D:\ruta\CUSA01623'
-python run.py
+```bash
+SPARTAN_GAME_DIR='D:\ruta\CUSA01623' bash run.sh
 ```
 
 ### Linux (Ubuntu 24.04)
 
 Para un clon nuevo, ejecutá los comandos siguientes en una terminal Linux. El script de
-dependencias instala paquetes del sistema con sudo, selecciona GCC 14 como compilador
-predeterminado y crea `out/venv` con PyInstaller, Pillow e iced-x86. Está destinado a Ubuntu
-24.04; adaptá las dependencias en otras distribuciones. Si ya clonaste, empezá en la carpeta
+dependencias instala paquetes del sistema con sudo y selecciona GCC 14 como compilador
+predeterminado. El launcher necesita además [rustup](https://rustup.rs) (stable). Está destinado a
+Ubuntu 24.04; adaptá las dependencias en otras distribuciones. Si ya clonaste, empezá en la carpeta
 del repositorio y omití los dos primeros comandos.
 
 ```bash
@@ -412,21 +456,41 @@ git clone --recursive https://github.com/FelipePrado0/SpartanPort
 cd SpartanPort
 bash packaging/linux/ci-deps.sh
 bash build.sh
-out/venv/bin/python launcher/spartanport_launcher_win.py
+cd launcher-rust
+cargo run --release
 ```
 
 Para generar un AppImage después de compilar:
 
 ```bash
-PATH="$PWD/out/venv/bin:$PATH" bash packaging/linux/build.sh
+bash packaging/linux/build.sh
 ./dist/spartanport-x86_64.AppImage
 ```
 
-El entorno de compilación se crea antes del comando de empaquetado. Compilar en una distribución
+`packaging/linux/build.sh` compila el launcher en Rust por su cuenta. Compilar en una distribución
 más nueva puede requerir una glibc más nueva; las builds públicas usan Ubuntu 24.04. En la carpeta
-del repositorio, usá `out/venv/bin/python launcher/spartanport_launcher_win.py --play` para los ajustes
-guardados del launcher, o `SPARTAN_GAME_DIR=/ruta/a/CUSA01623 out/venv/bin/python run.py` para
-iniciar directamente.
+del repositorio, usá `bash run.sh` para iniciar directamente (compila lo que falta y ejecuta el exe
+del launcher con `--run`), con `SPARTAN_GAME_DIR=/ruta/a/CUSA01623` para indicar la carpeta del
+juego. Para los ajustes guardados del launcher sin la ventana, ejecutá
+`launcher-rust/target/release/spartanport-launcher --play`.
+
+### Launcher en Rust
+
+El launcher está escrito en Rust (`launcher-rust/`, iced) y es el único que traen los paquetes.
+Compila con [rustup](https://rustup.rs) (stable). En Windows, instalá Visual Studio Build Tools con la carga "Desarrollo para el escritorio con C++"; en
+Ubuntu, `sudo apt-get install build-essential pkg-config libwayland-dev libxkbcommon-dev`.
+
+```bash
+cd launcher-rust
+cargo run --release
+```
+
+Abierto desde un checkout, encuentra solo las herramientas de `out/`; `SPARTAN_PORT_DIR` lo apunta
+a un port empaquetado (con `bin/`). PLAY inicia el propio exe del launcher con `--run`, así que
+nada necesita Python.
+
+En macOS, `main` compila solo el launcher (PLAY todavía no tiene juego para iniciar); mirá los pasos en
+[launcher-rust/README.md](launcher-rust/README.md#macos) (en inglés).
 
 ## Tests
 
@@ -434,11 +498,24 @@ Ejecutá desde la raíz del repositorio después de compilar. Los primeros tests
 
 ### Python
 
-En Windows, usá PowerShell. En Linux, reemplazá `python` por `out/venv/bin/python`.
+El código Python del launcher y del runner está congelado: no se empaqueta ni lo ejecuta el port.
+Queda en el repositorio como referencia de paridad del launcher en Rust. Sus tests siguen
+corriendo, con Python 3.10 o posterior (en Windows, en PowerShell):
 
 ```powershell
 python -m unittest discover -s tests -p "test_*.py"
 ```
+
+### Launcher en Rust
+
+```bash
+cd launcher-rust
+cargo test
+```
+
+Los snapshots de las páginas en `launcher-rust/snapshots/` se comparan píxel a píxel solo en
+Windows. `python -m unittest discover -s tests -p "test_launcher_parity_doc.py"` comprueba que cada
+test del launcher en Python tiene su fila en `docs/specs/2026-10-21-rust-launcher-parity.md`.
 
 ### Tests C++ en Windows (MSYS2 CLANG64)
 
@@ -500,13 +577,15 @@ Es un fork del [port para Windows de Supermedo](https://github.com/Supermedo/blo
 
 | Parte | Dónde | Qué hace |
 |---|---|---|
-| Preparación | `scripts/` | Lee `eboot.bin`, aplica sus relocaciones y enlaza las `libc` y `libSceFios2` propias del juego en una sola imagen |
+| Preparación | `launcher-rust/src/core`, `launcher-rust/src/runner` | Lee `eboot.bin`, aplica sus relocaciones y enlaza las `libc` y `libSceFios2` propias del juego en una sola imagen |
 | Loader | `src/probe.c` | Carga la imagen, instala los hooks validados (trucos, multiplicadores, barra de vida) e inicia el código original del juego |
 | Runtime | `src/runtime_*.c` | Reimplementa las funciones del sistema de la PS4: memoria, hilos, archivos, audio, video, control, partidas y servicios |
 | GPU | `gpu/shadps4/` | El video core de shadPS4, que traduce los comandos y shaders de la GPU de la PS4 a Vulkan, con las correcciones de cuesta4 para este juego (rama `eltutz`) y el trabajo de velocidad de este port (caché de shaders en segundo plano, lecturas diferidas) |
 | Menú dentro del juego | `gpu/shim/spartanport_overlay.cpp` | El menú Dear ImGui y el overlay de rendimiento; ajustes en `gpu/shim/spartanport_settings.cpp` |
-| Parches | `patches/CUSA01623.xml`, `scripts/patches.py` | Se aplican en memoria al iniciar, sin modificar los archivos del juego |
-| Launcher | `launcher/spartanport_launcher_win.py` | Ajustes, parches, mods, controles y el botón de jugar |
+| Parches | `patches/CUSA01623.xml`, `launcher-rust/src/core` | Se aplican en memoria al iniciar, sin modificar los archivos del juego |
+| Launcher | `launcher-rust/src/ui` | Ajustes, parches, mods, controles y el botón de jugar |
+
+El Python de `scripts/` y `launcher/` se conserva como la referencia congelada de la que se portó el código Rust; ya no se distribuye.
 
 Más documentación: [mods](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/MODS.es.md), [parches](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/PATCHES.es.md), [mapa de cuadros e historial de investigación de escaladores](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/upscaler.md)
 y [trabajo paralelo de GPU](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/parallel_gpu.md).
@@ -529,6 +608,8 @@ deadinside28:
   hace toda la traducción de GPU y shaders a Vulkan en este port.
 - **[WilkPrintes](https://github.com/WilkPrintes)**: diseñó y construyó el
   [sitio de SpartanPort](https://spartanport.com/es). Un agradecimiento especial por darle un hogar al proyecto.
+- **IFreemz** (eFMann en GitHub): [shadPS4 Bloodborne DLSS & FSR](https://github.com/eFMann/shadPS4-Bloodborne-DLSS-FSR). El puente de DLSS y la integración
+  de los upscalers temporales en que se basan DLSS, FSR 3.1 y FSR 4 de este port.
 
 Parches: kvicken y cuesta4 (resolución, corrección de texturas, 120 FPS y saltar videos, sobre los
 parches de PS3 de illusion0001), publicados para shadPS4 en
@@ -543,7 +624,8 @@ También se usan: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmp
 [sirit](https://github.com/shadps4-emu/sirit), [magic_enum](https://github.com/Neargye/magic_enum),
 [miniz](https://github.com/richgel999/miniz), [xbyak](https://github.com/herumi/xbyak),
 [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
-[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) y el AMD FidelityFX SDK,
+[FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) y el AMD FidelityFX SDK, [Q2RTX](https://github.com/FireBurn/Q2RTX) (los archivos
+del modelo abierto de FSR 4),
 [MSYS2](https://www.msys2.org), [LLVM](https://llvm.org) y [Pillow](https://python-pillow.org).
 
 ## Licencia
