@@ -174,6 +174,12 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   quick settings on the home page, graphics,
   performance, game folder and save backups, patches, mods (order, presets and conflicts),
   controls with PlayStation or Xbox button icons, updates and diagnostics.
+- **Save restore:** Game → Save backups lists automatic snapshots, older snapshots in the
+  port folder and permanent before-restore snapshots, with their source, time, game IDs,
+  file count, size and full path. Restoring verifies copies and keeps the previous saves in
+  `<user>/save-restore-safety/<time>/savedata`, outside the ten automatic backups' retention.
+  These safety copies are not automatically deleted. The launcher warns about a different
+  game ID without rewriting it and refuses a restore while a native game process is detected.
 - **In-game menu** (Insert on the keyboard, R3+L2 on the controller), with four tabs:
   - **Game:** cheats (infinite health, magic, item meter, Rage of Sparta, max red orbs,
     automatic QTE: button and stick-rotation prompts answer themselves);

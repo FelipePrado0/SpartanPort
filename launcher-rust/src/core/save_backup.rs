@@ -123,6 +123,7 @@ fn copy_backup(user_dir: &Path, now: Option<SystemTime>) -> io::Result<Option<Pa
 
 /// Copies savedata; returns the new folder, or `None` when there is nothing to save.
 pub fn backup(user_dir: &Path, now: Option<SystemTime>) -> io::Result<Option<PathBuf>> {
+    let _lock = super::save_restore::lock(user_dir)?;
     let made = copy_backup(user_dir, now)?;
     if made.is_some() {
         prune(user_dir, KEEP);
@@ -139,17 +140,8 @@ pub fn restore(
     if name.is_empty() || !list_backups(user_dir).iter().any(|n| n == name) {
         return Err(BackupError::Unknown(name.to_string()));
     }
-    let source = backups_dir(user_dir).join(name);
-    let savedata = user_dir.join("savedata");
-    // Pruning waits until the copy is done: the restored backup may be the oldest one.
-    let safety = copy_backup(user_dir, now)?;
-    let staging = user_dir.join("savedata.restoring");
-    let _ = fs::remove_dir_all(&staging);
-    copy_tree(&source, &staging)?;
-    let _ = fs::remove_dir_all(&savedata);
-    fs::rename(&staging, &savedata)?;
-    prune(user_dir, KEEP);
-    Ok(safety)
+    // Keep the public automatic-backup API, with the same verified transaction as the UI.
+    super::save_restore::restore(user_dir, user_dir, name, now).map_err(BackupError::Io)
 }
 
 #[cfg(test)]
@@ -310,7 +302,8 @@ mod tests {
             fs::read_to_string(safety.join(f.relative())).unwrap(),
             "current progress"
         );
-        assert_eq!(f.names()[0], name_of(&safety));
+        assert!(safety.starts_with(f.user.join("save-restore-safety")));
+        assert!(backups_dir(&f.user).join(&oldest).exists());
         assert_eq!(f.names().len(), KEEP);
     }
 

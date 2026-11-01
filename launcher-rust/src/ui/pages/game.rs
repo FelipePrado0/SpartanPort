@@ -14,12 +14,12 @@ use crate::core::i18n::{tr, tr_fmt};
 use crate::core::options::{AUDIO_CHANNELS, LANGUAGES};
 use crate::core::patches::{builtin_xml, game_patch_metas, selectable, PatchMeta};
 use crate::core::save_backup::{list_backups, restore, KEEP};
+use crate::core::save_restore;
 use crate::core::settings::mark_default_patches_offered;
 use crate::ui::app::{Message, State};
 use crate::ui::follow::{follow, Cause};
 use crate::ui::pages::controls::ini_number;
 use crate::ui::play::{refuse_while_live, LiveAction};
-use crate::ui::tasks::blocking;
 use crate::ui::theme;
 use crate::ui::widgets::{
     checkbox, folder, min_width, row, section, select, slider, toggle_row, Modal, SELECT_MIN,
@@ -78,7 +78,17 @@ fn user_dir(state: &State) -> PathBuf {
 
 /// Lists the backups of the saves folder and chooses the newest.
 pub(crate) fn refresh_backups(state: &mut State) {
-    state.backups = list_backups(&user_dir(state));
+    if state.restoring_saves {
+        return;
+    }
+    state.backup_details = save_restore::list(&user_dir(state), &state.paths.port_dir);
+    state.backups = state.backup_details.iter().map(|s| s.key.clone()).collect();
+    // Keep empty automatic directories visible as before; restoring one safely refuses it.
+    for name in list_backups(&user_dir(state)) {
+        if !state.backups.contains(&name) {
+            state.backups.push(name);
+        }
+    }
     state.backup_choice = state.backups.first().cloned().unwrap_or_default();
 }
 
@@ -95,9 +105,13 @@ pub fn restore_saves(user_dir: &Path, name: &str) -> Result<Option<String>, Stri
 pub fn backup_update(state: &mut State, message: BackupMessage) -> Task<Message> {
     let lang = state.lang.clone();
     match message {
-        BackupMessage::Refresh => refresh_backups(state),
-        BackupMessage::Choose(name) => state.backup_choice = name,
+        BackupMessage::Refresh if !state.restoring_saves => refresh_backups(state),
+        BackupMessage::Choose(name) if !state.restoring_saves => state.backup_choice = name,
+        BackupMessage::Refresh | BackupMessage::Choose(_) => {}
         BackupMessage::Restore => {
+            if state.restoring_saves {
+                return Task::none();
+            }
             let name = state.backup_choice.clone();
             if name.is_empty() {
                 return Task::none();
@@ -105,24 +119,44 @@ pub fn backup_update(state: &mut State, message: BackupMessage) -> Task<Message>
             if refuse_while_live(state, LiveAction::RestoreSaves) {
                 return Task::none();
             }
-            let text = tr_fmt(
+            let mut text = tr_fmt(
                 &lang,
                 "Replace the current saves with the backup {}? The current saves are backed up first.",
                 &[&name],
             );
+            if let Some(snapshot) = state.backup_details.iter().find(|s| s.key == name) {
+                text += &format!("\n\n{}", snapshot.path.display());
+                if state
+                    .installation
+                    .title_id()
+                    .is_some_and(|id| !snapshot.titles.is_empty() && !snapshot.titles.contains(id))
+                {
+                    text += &format!("\n\n{}", tr(&lang, "This backup is for a different game ID and may be incompatible. Game IDs will not be changed."));
+                }
+            }
             state.modal = Some(Modal::confirm(
                 text,
                 Message::Backup(BackupMessage::RestoreConfirmed),
             ));
         }
         BackupMessage::RestoreConfirmed => {
+            if state.restoring_saves || refuse_while_live(state, LiveAction::RestoreSaves) {
+                return Task::none();
+            }
             state.modal = None;
+            state.restoring_saves = true;
             let user = user_dir(state);
+            let port = state.paths.port_dir.clone();
             let name = state.backup_choice.clone();
-            return blocking(move || restore_saves(&user, &name))
+            return crate::ui::tasks::blocking_or(move || {
+                save_restore::restore(&user, &port, &name, None)
+                    .map(|path| path.map(|p| p.display().to_string()))
+                    .map_err(|e| e.to_string())
+            }, Err("Save restore stopped unexpectedly. Check the before-restore backup before trying again.".to_string()))
                 .map(|result| Message::Backup(BackupMessage::Restored(result)));
         }
         BackupMessage::Restored(Ok(safety)) => {
+            state.restoring_saves = false;
             // Every view of the saves folder follows, the trophies included; the backups are
             // listed again, which moves the choice: name the backup first.
             let name = state.backup_choice.clone();
@@ -135,6 +169,7 @@ pub fn backup_update(state: &mut State, message: BackupMessage) -> Task<Message>
             return saves;
         }
         BackupMessage::Restored(Err(error)) => {
+            state.restoring_saves = false;
             state.modal = Some(Modal::error(tr_fmt(
                 &lang,
                 "Could not restore: {}",
@@ -271,7 +306,7 @@ fn backups_row(state: &State) -> Element<'_, Message> {
     let refresh = button(text(tr(lang, "Refresh")))
         .style(theme::button_flat)
         .on_press(Message::Backup(BackupMessage::Refresh));
-    row(
+    let controls = row(
         state.rtl,
         &tr(lang, "Save backups"),
         layout![choose, restore, refresh]
@@ -280,10 +315,52 @@ fn backups_row(state: &State) -> Element<'_, Message> {
             .into(),
         Some(&tr_fmt(
             lang,
-            "Made before every start, newest first; the last {} are kept. Restoring backs up the current saves first.",
+            "Automatic backups keep the last {} starts. Before-restore backups are kept separately and are never automatically deleted.",
             &[&KEEP.to_string()],
         )),
-    )
+    );
+    let mut body = column![controls].spacing(4);
+    if let Some(snapshot) = state
+        .backup_details
+        .iter()
+        .find(|s| s.key == state.backup_choice)
+    {
+        let titles = snapshot
+            .titles
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        body = body.push(
+            text(tr_fmt(
+                lang,
+                "{} · {} files · {} bytes · Game IDs: {}",
+                &[
+                    &tr(lang, snapshot.source.label()),
+                    &snapshot.files.to_string(),
+                    &snapshot.bytes.to_string(),
+                    &titles,
+                ],
+            ))
+            .size(12),
+        );
+        body = body.push(
+            text(format!(
+                "{}\n{}",
+                snapshot.time_label(),
+                snapshot.path.display()
+            ))
+            .size(12),
+        );
+        if state
+            .installation
+            .title_id()
+            .is_some_and(|id| !snapshot.titles.is_empty() && !snapshot.titles.contains(id))
+        {
+            body = body.push(text(tr(lang, "This backup is for a different game ID and may be incompatible. Game IDs will not be changed.")).size(12));
+        }
+    }
+    body.into()
 }
 
 fn patches_section(state: &State) -> Element<'_, Message> {
