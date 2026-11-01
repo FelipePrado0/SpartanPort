@@ -315,7 +315,7 @@ fn rebuilding_keeps_the_status_of_a_running_game() {
     let listed = vec![Release {
         id: ReleaseId {
             channel: Channel::Release,
-            version: "2.9.0".to_string(),
+            version: "3.1.0".to_string(),
             build: None,
         },
         published: String::new(),
@@ -334,7 +334,7 @@ fn rebuilding_keeps_the_status_of_a_running_game() {
     assert!(state.log.text().contains("The game is running."));
     assert_eq!(
         state.updater.newer().map(|r| r.id.version.as_str()),
-        Some("2.9.0")
+        Some("3.1.0")
     );
 }
 
