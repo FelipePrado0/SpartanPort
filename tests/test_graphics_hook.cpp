@@ -102,7 +102,9 @@ int main() {
     unsigned char* bloom = page + 256;
     static unsigned char fx[0x470] = {};  // the fxBloom object; +0x469 is its "active this frame" byte
     volatile bool bloom_on = true;
-    assert(spartanport_bloom_build_stub(bloom, (uintptr_t)&bloom_on, (uintptr_t)&bloom_resume) < 256);
+    volatile int32_t menus[3] = {};  // inShell, inPauseMenu, inPowerUpMenu
+    const uintptr_t menu_flags[3] = {(uintptr_t)&menus[0], (uintptr_t)&menus[1], (uintptr_t)&menus[2]};
+    assert(spartanport_bloom_build_stub(bloom, (uintptr_t)&bloom_on, menu_flags, (uintptr_t)&bloom_resume) < 256);
     fx[0x469] = 1;
     assert(!run_bloom(bloom, fx));  // on + active: bloom passes run
     fx[0x469] = 0;
@@ -110,6 +112,24 @@ int main() {
     bloom_on = false;
     fx[0x469] = 1;
     assert(run_bloom(bloom, fx));   // off: skipped even when active
+    for (unsigned m = 0; m < 3; ++m) {
+        menus[m] = 1;
+        assert(!run_bloom(bloom, fx));  // off + a menu open: bloom runs, the menu text needs it (#1176)
+        fx[0x469] = 0;
+        assert(run_bloom(bloom, fx));   // off + menu + inactive: still the game's own skip
+        fx[0x469] = 1;
+        menus[m] = 0;
+    }
+    bloom_on = true;
+    assert(!run_bloom(bloom, fx));
+
+    // Menu flags not found: off skips as before.
+    const uintptr_t no_menus[3] = {};
+    assert(spartanport_bloom_build_stub(bloom, (uintptr_t)&bloom_on, no_menus, (uintptr_t)&bloom_resume) < 256);
+    bloom_on = false;
+    menus[1] = 1;
+    assert(run_bloom(bloom, fx));
+    menus[1] = 0;
     bloom_on = true;
     assert(!run_bloom(bloom, fx));
 

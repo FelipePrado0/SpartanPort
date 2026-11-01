@@ -110,13 +110,24 @@ static inline unsigned spartanport_shadows_build_stub(unsigned char *out, uintpt
     return spartanport_put64(out, n, resume);
 }
 
-/* Bloom: off jumps back with ZF set (from the cmp against the 0 toggle byte), so the game's
- * following je skips the bloom passes; on replays the original cmp. */
-static inline unsigned spartanport_bloom_build_stub(unsigned char *out, uintptr_t enabled, uintptr_t resume) {
-    unsigned n = 0;
+/* Bloom: off jumps back with ZF set (from the last cmp against 0), so the game's following je
+ * skips the bloom passes; on replays the original cmp. The menu text is drawn through bloom
+ * (#1176), so an open menu (inShell, inPauseMenu, inPowerUpMenu: the three lea's of the
+ * power-up menu site; 0 = not found) counts as on. */
+static inline unsigned spartanport_bloom_build_stub(unsigned char *out, uintptr_t enabled, const uintptr_t menus[3],
+                                                    uintptr_t resume) {
+    unsigned n = 0, jumps[4], count = 0;
     out[n++] = 0x48; out[n++] = 0xb8; n = spartanport_put64(out, n, enabled);     /* movabs rax, enabled */
     out[n++] = 0x80; out[n++] = 0x38; out[n++] = 0x00;                            /* cmp byte [rax], 0 */
-    out[n++] = 0x74; out[n++] = SPARTAN_BLOOM_HOOK_LENGTH;                        /* je off (ZF stays set) */
+    out[n++] = 0x75; jumps[count++] = n++;                                        /* jne on */
+    for (unsigned m = 0; m < 3; ++m) {
+        if (!menus[m]) continue;
+        out[n++] = 0x48; out[n++] = 0xb8; n = spartanport_put64(out, n, menus[m]); /* movabs rax, menu */
+        out[n++] = 0x83; out[n++] = 0x38; out[n++] = 0x00;                         /* cmp dword [rax], 0 */
+        out[n++] = 0x75; jumps[count++] = n++;                                     /* jne on */
+    }
+    out[n++] = 0xeb; out[n++] = SPARTAN_BLOOM_HOOK_LENGTH;                        /* jmp off (ZF stays set) */
+    for (unsigned j = 0; j < count; ++j) out[jumps[j]] = (unsigned char)(n - jumps[j] - 1);
     memcpy(out + n, spartanport_bloom_original, SPARTAN_BLOOM_HOOK_LENGTH);       /* on: the game's cmp */
     n += SPARTAN_BLOOM_HOOK_LENGTH;
     out[n++] = 0xff; out[n++] = 0x25; memset(out + n, 0, 4); n += 4;              /* off: jmp [rip+0] */
