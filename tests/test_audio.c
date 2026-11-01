@@ -80,6 +80,21 @@ static void test_invalid_parameters(void) {
     printf("Invalid parameters passed!\n");
 }
 
+/* #1165: SDL found no default device and reported no driver name; DirectSound must still be tried. */
+static void test_fallback_wanted(void) {
+    printf("Testing which drivers fall back to DirectSound...\n");
+    putenv("SDL_AUDIO_DRIVER=");
+    assert(directsound_fallback_wanted("wasapi"));
+    assert(directsound_fallback_wanted(NULL));
+    assert(!directsound_fallback_wanted("directsound"));
+    assert(!directsound_fallback_wanted("dummy"));
+    putenv("SDL_AUDIO_DRIVER=wasapi");
+    assert(!directsound_fallback_wanted("wasapi"));
+    assert(!directsound_fallback_wanted(NULL));
+    putenv("SDL_AUDIO_DRIVER=");
+    printf("Fallback choice passed!\n");
+}
+
 #ifdef _WIN32
 static void test_wasapi_fallback(void) {
     printf("Testing WASAPI fallback to DirectSound on failure...\n");
@@ -295,6 +310,7 @@ int main(void) {
     test_lifecycle();
     test_invalid_parameters();
     test_multiple_ports();
+    test_fallback_wanted();
 #ifdef _WIN32
     test_wasapi_fallback();
     test_env_override_prevents_fallback();

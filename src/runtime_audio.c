@@ -230,11 +230,17 @@ static int default_device_channels(void) {
     return SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&device,&device_frames) ? device.channels : 0;
 }
 
+/* Whether a failed stream on `driver` should retry on DirectSound: WASAPI, or no driver name at
+   all (#1165: SDL reported none and no default device), unless the user forced a driver. */
+static inline int directsound_fallback_wanted(const char *driver) {
+    const char *forced = getenv("SDL_AUDIO_DRIVER");
+    if (forced && *forced) return 0;
+    return !driver || !strcmp(driver, "wasapi");
+}
+
 #ifdef _WIN32
 static void try_audio_fallback(Port *p, int id) {
-    const char *driver = SDL_GetCurrentAudioDriver();
-    /* When WASAPI fails on Windows and the user hasn't forced a driver, try DirectSound. */
-    if (!driver || strcmp(driver, "wasapi") || getenv("SDL_AUDIO_DRIVER")) return;
+    if (!directsound_fallback_wanted(SDL_GetCurrentAudioDriver())) return;
 
     /* Only switch backend if no other port currently has an active stream. */
     for (int i = 0; i < PORTS; ++i) {
