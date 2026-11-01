@@ -71,7 +71,7 @@ static void sleep_until(uint64_t deadline) {
 static int sdl_audio(void) {
     if (sdl_ready<0) {
         const char *mode=getenv("SPARTAN_AUDIO");
-        sdl_ready = (!mode || strcmp(mode,"none")) && SDL_InitSubSystem(SDL_INIT_AUDIO);
+        sdl_ready = (!mode || strcmp(mode,"none")) && spartanportgpu_audio_init();
         printf("Runtime: audio backend %s\n", sdl_ready ? SDL_GetCurrentAudioDriver() : "timer (silent)");
     }
     return sdl_ready;
@@ -251,7 +251,7 @@ static void try_audio_fallback(Port *p, int id) {
     fprintf(stderr, "Runtime: SDL audio stream failed on wasapi (%s); trying directsound fallback for port %d\n", SDL_GetError(), id);
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
     SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER, "directsound", SDL_HINT_OVERRIDE);
-    sdl_ready = SDL_InitSubSystem(SDL_INIT_AUDIO);
+    sdl_ready = spartanportgpu_audio_init();
     const char *new_driver = sdl_ready ? SDL_GetCurrentAudioDriver() : NULL;
     if (sdl_ready && new_driver && !strcmp(new_driver, "directsound")) {
         printf("Runtime: audio backend %s (fallback from wasapi)\n", new_driver);

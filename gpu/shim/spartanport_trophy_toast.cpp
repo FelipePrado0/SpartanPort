@@ -25,6 +25,7 @@
 #include "imgui_internal.h"
 #include "spartanport_trophy_media.h"
 #include "spartanport_ui_language.h"
+#include "../spartanportgpu.h"
 
 // DejaVu Sans, embedded by the overlay (spartanport_overlay.cpp): fills in what the toast's fonts lack.
 extern "C" const unsigned char spartanport_font_ttf[];
@@ -379,7 +380,7 @@ void LoadSounds() { // worker thread
     const char* audio_mode = std::getenv("SPARTAN_AUDIO");
     if (any && !a.device_tried && !(audio_mode && !std::strcmp(audio_mode, "none"))) {
         a.device_tried = true;
-        if (SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+        if (spartanportgpu_audio_init()) {
             const SDL_AudioSpec spec{SDL_AUDIO_F32, 2, SpartanToastMedia::kAudioRate};
             a.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
             if (a.stream) SDL_ResumeAudioStreamDevice(a.stream);

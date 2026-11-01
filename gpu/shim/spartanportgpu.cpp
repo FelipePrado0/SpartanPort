@@ -380,6 +380,12 @@ extern "C" int spartanportgpu_audio_channels(void) {
     return SpartanSettings::Get().audio_channels.load(std::memory_order_relaxed);
 }
 
+extern "C" int spartanportgpu_audio_init(void) {
+    static std::mutex init_lock;
+    std::scoped_lock lock{init_lock};
+    return SDL_InitSubSystem(SDL_INIT_AUDIO);
+}
+
 extern "C" void spartanportgpu_movie_picture(void) {
     Vulkan::MovieBars::Cutscenes().NotePicture(Vulkan::MovieBars::NowMs());
 }
