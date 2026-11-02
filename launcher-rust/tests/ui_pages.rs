@@ -1726,6 +1726,42 @@ fn reopening_mods_reads_an_update_extracted_meanwhile() {
     assert_eq!(keys, ["Community.xml/Sharper Shadows"]);
 }
 
+/// A translated third-party row saves and reloads the original file/name selection.
+#[test]
+fn chinese_third_party_patch_selection_survives_save_and_reload() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = mods_state(dir.path());
+    let dump = dump_with_patches(dir.path());
+    std::fs::write(
+        dir.path().join("patches/Community.xml"),
+        "<Patch><TitleID><ID>CUSA01623</ID></TitleID>\
+         <Metadata Name=\"Skip Intro\" Author=\"Bo\" AppVer=\"01.02\" isEnabled=\"false\"><PatchList/></Metadata></Patch>",
+    )
+    .unwrap();
+    browsed(&mut state, "game_dir", &dump);
+    open(&mut state, Page::Mods);
+    load_mods(&mut state);
+    state.lang = "zh".into();
+    let key = "Community.xml/Skip Intro";
+    let label = format!("Community.xml/{}  ·  Bo", tr("zh", "Skip Intro"));
+    assert_ne!(tr("zh", "Skip Intro"), "Skip Intro");
+    assert!(!state.mods.external_enabled.contains(key));
+    click_tall(&mut state, &label);
+    assert!(state.mods.external_enabled.contains(key));
+    let _ = app::update(&mut state, Message::Save);
+    let saved: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(state.paths.patches_json()).unwrap()).unwrap();
+    assert_eq!(saved["enabled"], serde_json::json!([key]));
+    let mut restored = mods_state(dir.path());
+    open(&mut restored, Page::Mods);
+    load_mods(&mut restored);
+    restored.lang = "zh".into();
+    assert!(restored.mods.external_enabled.contains(key));
+    assert!(tall_has(&restored, &label));
+    click_tall(&mut restored, &label);
+    assert!(!restored.mods.external_enabled.contains(key));
+}
+
 /// Slashes inside third-party names stay visible once and preserve the selection key.
 #[test]
 fn third_party_patch_names_with_slashes_keep_the_original_identity() {
