@@ -307,9 +307,6 @@ target_link_libraries(cache-storage-test PRIVATE spartanportgpu)
 target_compile_options(cache-storage-test PRIVATE -UNDEBUG -fPIC)
 if (WIN32)
     target_sources(cache-storage-test PRIVATE ../src/compat_win.c)
-    target_compile_definitions(cache-storage-test PRIVATE sigjmp_buf=spartanport_jmp_buf)
-    target_compile_options(cache-storage-test PRIVATE
-        -include ${CMAKE_CURRENT_SOURCE_DIR}/../src/compat_win.h)
     target_link_libraries(cache-storage-test PRIVATE onecore)
 endif()
 add_executable(pipeline-binary-cache-test EXCLUDE_FROM_ALL ../tests/test_pipeline_binary_cache.cpp
