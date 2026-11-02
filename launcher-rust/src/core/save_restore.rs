@@ -68,29 +68,55 @@ fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::other(message.into())
 }
 
-/// Refuse symbolic links, Windows junctions and other reparse points, including ancestors.
+/// Refuse links at this path; callers check every component below an approved root.
 fn checked(path: &Path) -> io::Result<()> {
-    for ancestor in path.ancestors() {
-        let meta = match fs::symlink_metadata(ancestor) {
-            Ok(meta) => meta,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e),
-        };
-        #[cfg(windows)]
-        let reparse = {
-            use std::os::windows::fs::MetadataExt;
-            meta.file_attributes() & 0x400 != 0
-        };
-        #[cfg(not(windows))]
-        let reparse = false;
-        if meta.file_type().is_symlink() || reparse {
-            return Err(invalid(format!(
-                "Linked save paths are not supported: {}",
-                ancestor.display()
-            )));
-        }
+    let meta = match fs::symlink_metadata(path) {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    #[cfg(windows)]
+    let reparse = {
+        use std::os::windows::fs::MetadataExt;
+        meta.file_attributes() & 0x400 != 0
+    };
+    #[cfg(not(windows))]
+    let reparse = false;
+    if meta.file_type().is_symlink() || reparse {
+        return Err(invalid(format!(
+            "Linked save paths are not supported: {}",
+            path.display()
+        )));
     }
     Ok(())
+}
+
+/// Lists relative file sizes without opening save contents or hashing them.
+fn file_sizes(root: &Path) -> io::Result<BTreeMap<PathBuf, u64>> {
+    fn visit(root: &Path, folder: &Path, result: &mut BTreeMap<PathBuf, u64>) -> io::Result<()> {
+        checked(folder)?;
+        for entry in fs::read_dir(folder)? {
+            let path = entry?.path();
+            checked(&path)?;
+            let meta = fs::symlink_metadata(&path)?;
+            if meta.is_dir() {
+                visit(root, &path, result)?;
+            } else if meta.is_file() {
+                let relative = path
+                    .strip_prefix(root)
+                    .map_err(|e| invalid(e.to_string()))?;
+                result.insert(relative.into(), meta.len());
+            } else {
+                return Err(invalid(
+                    "Only regular save files and directories are supported",
+                ));
+            }
+        }
+        Ok(())
+    }
+    let mut result = BTreeMap::new();
+    visit(root, root, &mut result)?;
+    Ok(result)
 }
 
 fn inventory(root: &Path) -> io::Result<Inventory> {
@@ -179,7 +205,7 @@ pub fn list(user: &Path, port: &Path) -> Vec<Snapshot> {
     let mut seen = BTreeSet::new();
     let mut result = Vec::new();
     for (source, root) in roots(user, port) {
-        if checked(&root).is_err() {
+        if checked(root.parent().unwrap_or(&root)).is_err() || checked(&root).is_err() {
             continue;
         }
         let Ok(entries) = fs::read_dir(&root) else {
@@ -190,12 +216,15 @@ pub fn list(user: &Path, port: &Path) -> Vec<Snapshot> {
             if name.starts_with('.') {
                 continue;
             }
+            if checked(&entry.path()).is_err() {
+                continue;
+            }
             let path = if source == Source::Safety {
                 entry.path().join("savedata")
             } else {
                 entry.path()
             };
-            let Ok(files) = inventory(&path) else {
+            let Ok(files) = file_sizes(&path) else {
                 continue;
             };
             if files.is_empty() {
@@ -204,7 +233,7 @@ pub fn list(user: &Path, port: &Path) -> Vec<Snapshot> {
             let Ok(canonical) = path.canonicalize() else {
                 continue;
             };
-            if !seen.insert(canonical.clone()) {
+            if !seen.insert(canonical) {
                 continue;
             }
             let titles = files
@@ -228,10 +257,10 @@ pub fn list(user: &Path, port: &Path) -> Vec<Snapshot> {
             };
             result.push(Snapshot {
                 key,
-                path: canonical,
+                path,
                 source,
                 files: files.len(),
-                bytes: files.values().map(|v| v.bytes).sum(),
+                bytes: files.values().sum(),
                 titles,
                 modified,
             });
@@ -347,7 +376,10 @@ fn resolve(user: &Path, port: &Path, key: &str) -> io::Result<PathBuf> {
     {
         return Err(invalid("Invalid backup selection"));
     }
+    checked(root.parent().unwrap_or(&root))?;
+    checked(&root)?;
     let folder = root.join(name);
+    checked(&folder)?;
     let path = if safety {
         folder.join("savedata")
     } else {
@@ -471,6 +503,8 @@ mod tests {
             && e.bytes == 6
             && e.files == 1
             && e.titles.contains("CUSA01623")));
+        let legacy = entries.iter().find(|e| e.source == Source::Legacy).unwrap();
+        assert_eq!(legacy.path, temp.path().join("savedata_backups/older"));
         assert_eq!(list(&user, &user).len(), 2);
     }
     #[test]
@@ -576,6 +610,83 @@ mod tests {
             "current"
         );
     }
+    fn link_dir(link: &Path, target: &Path) {
+        #[cfg(windows)]
+        crate::core::platform::create_junction(link, target).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, link).unwrap();
+    }
+
+    /// OS-managed links above the selected user root do not disable backups or restores.
+    #[test]
+    fn allows_linked_ancestors_above_the_user_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let real = temp.path().join("real");
+        put(&real.join("user/savedata/a"), "current");
+        let alias = temp.path().join("alias");
+        link_dir(&alias, &real);
+        let user = alias.join("user");
+        let backup = crate::core::save_backup::backup(&user, None)
+            .unwrap()
+            .unwrap();
+        let snapshots = list(&user, temp.path());
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].path, backup);
+        put(&user.join("savedata/a"), "changed");
+        restore_checked(&user, temp.path(), &snapshots[0].key, None, || Ok(())).unwrap();
+        assert_eq!(
+            fs::read_to_string(user.join("savedata/a")).unwrap(),
+            "current"
+        );
+    }
+
+    /// Root and intermediate safety-directory links must still be rejected.
+    #[test]
+    fn rejects_linked_backup_roots_and_safety_parents() {
+        for safety in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let user = temp.path().join("user");
+            put(&user.join("savedata/a"), "current");
+            let external = temp.path().join("external");
+            let (link, key) = if safety {
+                put(&external.join("savedata/a"), "old");
+                (user.join("save-restore-safety/linked"), "safety/linked")
+            } else {
+                put(&external.join("old/a"), "old");
+                (user.join("savedata_backups"), "old")
+            };
+            fs::create_dir_all(link.parent().unwrap()).unwrap();
+            link_dir(&link, &external);
+            assert!(list(&user, temp.path()).is_empty());
+            assert!(restore_checked(&user, temp.path(), key, None, || Ok(())).is_err());
+            assert_eq!(
+                fs::read_to_string(user.join("savedata/a")).unwrap(),
+                "current"
+            );
+        }
+    }
+
+    /// Listing can inspect metadata even when save contents cannot be opened.
+    #[cfg(windows)]
+    #[test]
+    fn listing_does_not_open_snapshot_contents() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("savedata_backups/old/1/CUSA01623/data");
+        put(&source, "save");
+        let _held = OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&source)
+            .unwrap();
+        assert!(inventory(source.parent().unwrap()).is_err());
+        let snapshots = list(temp.path(), temp.path());
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].files, 1);
+        assert_eq!(snapshots[0].bytes, 4);
+        assert!(snapshots[0].titles.contains("CUSA01623"));
+    }
+
     #[test]
     fn rejects_linked_snapshot() {
         let temp = tempfile::tempdir().unwrap();
