@@ -725,6 +725,7 @@ fn unchecking_a_patch_lands_in_game_patches() {
     assert_eq!(saved["CUSA01623"], serde_json::json!(["Fix Alpha"]));
 }
 
+/// Chinese labels toggle the original patch name in persisted game settings.
 #[test]
 fn chinese_patch_labels_keep_the_original_saved_identity() {
     let dir = tempfile::tempdir().unwrap();
@@ -738,7 +739,10 @@ fn chinese_patch_labels_keep_the_original_saved_identity() {
     click_tall(&mut state, "跳过开场标志  (Ann)");
     assert!(!state.patches.chosen.contains("Skip Intro"));
     click_tall(&mut state, "跳过开场标志  (Ann)");
-    assert_eq!(state.store.json("game_patches").unwrap()["CUSA01623"], serde_json::json!(["Skip Intro"]));
+    assert_eq!(
+        state.store.json("game_patches").unwrap()["CUSA01623"],
+        serde_json::json!(["Skip Intro"])
+    );
 }
 
 #[test]
@@ -1720,6 +1724,34 @@ fn reopening_mods_reads_an_update_extracted_meanwhile() {
         .map(|(key, _, _)| key.as_str())
         .collect();
     assert_eq!(keys, ["Community.xml/Sharper Shadows"]);
+}
+
+/// Slashes inside third-party names stay visible once and preserve the selection key.
+#[test]
+fn third_party_patch_names_with_slashes_keep_the_original_identity() {
+    for lang in ["en", "zh"] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = mods_state(dir.path());
+        open(&mut state, Page::Mods);
+        state.lang = lang.into();
+        let key = "Community.xml/60/120 FPS";
+        state.mods.external.push((
+            key.into(),
+            dir.path().join("patches/Community.xml"),
+            spartanport_launcher::core::patches::PatchMeta {
+                name: "60/120 FPS".into(),
+                author: Some("Bo".into()),
+                note: None,
+                enabled_by_default: false,
+            },
+        ));
+        assert!(tall_has(&state, "Community.xml/60/120 FPS  ·  Bo"));
+        assert!(!tall_has(&state, "Community.xml/60/60/120 FPS  ·  Bo"));
+        click_tall(&mut state, "Community.xml/60/120 FPS  ·  Bo");
+        assert!(state.mods.external_enabled.contains(key));
+        click_tall(&mut state, "Community.xml/60/120 FPS  ·  Bo");
+        assert!(!state.mods.external_enabled.contains(key));
+    }
 }
 
 #[test]

@@ -286,6 +286,7 @@ fn backups_row(state: &State) -> Element<'_, Message> {
     )
 }
 
+/// Renders translated built-in patch labels with original names as toggle identities.
 fn patches_section(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
     let mut body = column![section(state.rtl, &tr(lang, "Game patches"))].spacing(2);

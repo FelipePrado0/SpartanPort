@@ -746,6 +746,7 @@ fn presets_section<'a>(state: &State) -> Element<'a, Message> {
     body.into()
 }
 
+/// Renders translated third-party labels while keeping file/name keys for toggles.
 fn patches_section<'a>(state: &State) -> Element<'a, Message> {
     let lang = state.lang.as_str();
     let mut body = column![section(state.rtl, &tr(lang, "Third-party patches"))].spacing(2);
@@ -756,7 +757,7 @@ fn patches_section<'a>(state: &State) -> Element<'a, Message> {
     }
     for (key, _, meta) in &state.mods.external {
         // Translate presentation only; the original file/name key remains the stored identity.
-        let display = key.rsplit_once('/').map_or_else(
+        let display = key.split_once('/').map_or_else(
             || tr(lang, &meta.name),
             |(file, _)| format!("{file}/{}", tr(lang, &meta.name)),
         );
