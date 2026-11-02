@@ -18,6 +18,9 @@ typedef struct {
 void spartanportgpu_register_kernel(void);
 /* Creates window, Vulkan device, presenter and GPU command processor. */
 int spartanportgpu_init(const SpartanGpuConfig *config);
+/* Unless SPARTAN_CACHE_FLUSH_ON_EXIT=0: waits at most two seconds for queued shader-cache
+ * writes before window close, guest exit or restart skips destructors. */
+void spartanportgpu_flush_cache(void);
 /* Function for an imported NID ("NID#lib#mod"), or 0 when the GPU library does not provide it. */
 uintptr_t spartanportgpu_resolve(const char *scoped_nid);
 /* Called first by the loader's SIGSEGV handler: 1 when a GPU page-tracking fault was handled. */
