@@ -373,6 +373,8 @@ uma correção para todas as configurações de overlay.
   texto em português com vozes em inglês).
 - O jogo não abre: veja **Advanced → Log**, ou envie o `user\last_run.log` junto com o relato.
   Se escolheu uma **Saves folder** personalizada, o `last_run.log` fica nessa pasta.
+  Ao lado dele, o `last_run.jsonl` tem as mesmas linhas com a hora, o nível e a área de cada uma,
+  para ferramentas e para saber qual evento veio primeiro; anexe os dois arquivos ao relatar um bug.
 - Texturas amarelas/laranjas/brancas ou iluminação errada: experimente desligar **Performance →
   GPU data → Deferred GPU readbacks** e reiniciar o jogo. Esse contorno pode causar travadas.
 - Falhas de renderização por GPU, crashes, problemas de áudio e bloqueios de progresso seguem

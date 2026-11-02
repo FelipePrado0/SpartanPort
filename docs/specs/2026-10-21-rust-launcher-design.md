@@ -345,7 +345,9 @@ com o motivo, contra a referência 2.6.0 (`541739b`).
 
 - Paridade de arquivos: `tools/launcher_fixtures.py` roda o launcher Python 2.6.0 sobre entradas
   conhecidas e grava `settings.json`, `spartanport.ini`, `mods.json`, `patches.json` e
-  `last_run.log` em `launcher-rust/fixtures/`; o Rust tem que produzir bytes iguais.
+  `last_run.log` em `launcher-rust/fixtures/`; o Rust tem que produzir bytes iguais. O Rust também
+  grava `last_run.jsonl`, que o Python não tem (`docs/specs/2026-11-02-run-log-journal.md`); o
+  `last_run.log` continua byte a byte igual.
 - Paridade de ambiente: as 33 variáveis `SPARTAN_*` para cada fixture, comparadas com a saída de
   `game_environment` capturada em JSON.
 - Parsers com casos válidos, truncados, vazios e inválidos: param.sfo, `.trp`, `--list` de GPUs

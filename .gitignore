@@ -9,6 +9,7 @@ pgo/
 # Documentation pictures are part of the repository.
 !docs/images/*.png
 last_run.log
+last_run.jsonl
 dist/
 fsr4_411/
 vkd3d-proton.cache

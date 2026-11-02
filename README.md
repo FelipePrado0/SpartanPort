@@ -427,6 +427,8 @@ read the joystick; the mapper does not install device drivers.
   Polish text with English voices).
 - The game does not open: check **Advanced → Log**, or send `user\last_run.log` with your report.
   With a custom **Saves folder**, `last_run.log` is in that folder instead.
+  Next to it, `last_run.jsonl` has the same lines with the time, level and area of each one, for
+  tools and for telling which event came first; attach both files when you report a bug.
 - Yellow/orange/white textures or wrong lighting: try disabling **Performance → GPU data →
   Deferred GPU readbacks**, then restart. This workaround can cause stutters.
 - GPU-specific rendering failures, crashes, audio problems and progress blockers remain under

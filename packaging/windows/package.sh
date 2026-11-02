@@ -50,7 +50,7 @@ cp gpu/third_party/fsr-vulkan/LICENSE.txt "$dest/LICENSES/FSR-Vulkan.txt"
 # No game files and nothing a player made (saves, shader caches built from the game's shaders,
 # settings, logs) may ship: stop when one is found.
 forbidden=$(find "$dest" -path "$dest/fsr4_shaders" -prune -o \( -iname eboot.bin -o -iname sce_module -o -iname sce_sys -o -iname savedata \
-    -o -iname user -o -iname cache -o -iname '*.log' -o -iname spartanport.ini -o -iname settings.json \
+    -o -iname user -o -iname cache -o -iname '*.log' -o -iname '*.jsonl' -o -iname spartanport.ini -o -iname settings.json \
     -o -iname game_icon.ico \
     -o -iname mods.json -o -iname patches.json \
     -o -iname '*.py' -o -iname _internal \

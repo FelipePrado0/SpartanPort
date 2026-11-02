@@ -25,7 +25,7 @@ if ($env:SPARTAN_RELEASE_TAG) {
 }
 
 # The same names package.sh refuses to ship: game files and anything a player makes.
-$forbidden = 'eboot.bin', 'sce_module', 'sce_sys', 'savedata', 'user', 'cache', '*.log', 'spartanport.ini',
+$forbidden = 'eboot.bin', 'sce_module', 'sce_sys', 'savedata', 'user', 'cache', '*.log', '*.jsonl', 'spartanport.ini',
     'settings.json', 'game_icon.ico', 'mods.json', 'patches.json', '*.spv', '*.pkg',
     '*.sprx', '*.prx', 'nvngx_dlss*.dll', 'spartanport_dlss.dll',
     'spartanport_streamline.dll', 'sl.*.dll'
