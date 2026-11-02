@@ -29,6 +29,8 @@
 // DejaVu Sans, embedded by the overlay (spartanport_overlay.cpp): fills in what the toast's fonts lack.
 extern "C" const unsigned char spartanport_font_ttf[];
 extern "C" const unsigned char spartanport_font_ttf_end[];
+// The runtime's one SDL audio start (runtime_audio.c), shared so two threads never start it at once.
+extern "C" int runtime_audio_ready(void);
 
 namespace SpartanToast {
 
@@ -379,7 +381,7 @@ void LoadSounds() { // worker thread
     const char* audio_mode = std::getenv("SPARTAN_AUDIO");
     if (any && !a.device_tried && !(audio_mode && !std::strcmp(audio_mode, "none"))) {
         a.device_tried = true;
-        if (SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+        if (runtime_audio_ready()) {
             const SDL_AudioSpec spec{SDL_AUDIO_F32, 2, SpartanToastMedia::kAudioRate};
             a.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
             if (a.stream) SDL_ResumeAudioStreamDevice(a.stream);

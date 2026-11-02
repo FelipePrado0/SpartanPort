@@ -103,6 +103,8 @@ int runtime_mp3_decode(Mp3Decoder *decoder, const unsigned char *data, int size,
 uintptr_t runtime_videodec_resolve(const char *name);
 uintptr_t runtime_audio_resolve(const char *name);
 void runtime_audio_report(void);
+/* Starts SDL audio once for every thread (the trophy sound too); nonzero when there is a backend. */
+int runtime_audio_ready(void);
 uintptr_t runtime_pad_resolve(const char *name);
 void runtime_pad_report(void);
 /* Kratos' object, stored by the player hook (src/player_hook.h); 0 until he first moves. */

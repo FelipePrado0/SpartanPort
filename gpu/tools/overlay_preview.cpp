@@ -63,6 +63,7 @@ uint64_t runtime_read_tsc() { return runtime_process_time_counter(); }
 int32_t* runtime_errno() { std::abort(); }
 int runtime_memory_write_backing(uintptr_t, const void*, uint64_t) { std::abort(); }
 void runtime_report() {}
+int runtime_audio_ready() { return 0; }
 }
 
 namespace {

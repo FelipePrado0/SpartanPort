@@ -33,5 +33,6 @@ void runtime_memory_read_backing(uintptr_t, void*, uint64_t) { std::abort(); }
 uint64_t runtime_wait_begin() { return 0; }
 void runtime_wait_end(const char*, uint64_t, const char*, long long) {}
 void runtime_report() {}
+int runtime_audio_ready() { return 0; }
 }
 

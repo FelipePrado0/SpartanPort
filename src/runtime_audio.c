@@ -54,6 +54,9 @@ typedef struct { uint16_t output; uint8_t channel, reserved; int16_t volume; uin
 _Static_assert(sizeof(PortState)==32,"AudioOut port state layout");
 
 static pthread_mutex_t table_lock=PTHREAD_MUTEX_INITIALIZER;
+/* Held while SDL audio starts or switches backend. SDL counts the subsystem as up before its driver
+   is, so the trophy sound starting it meanwhile got success with no driver (#1165). */
+static pthread_mutex_t sdl_lock=PTHREAD_MUTEX_INITIALIZER;
 static Port ports[PORTS];
 static int initialized, sdl_ready=-1;
 static size_t buffers_out, ports_opened;
@@ -68,13 +71,22 @@ static void sleep_until(uint64_t deadline) {
     while (clock_nanosleep(CLOCK_MONOTONIC,TIMER_ABSTIME,&t,NULL)) {}
 #endif
 }
-static int sdl_audio(void) {
+#ifdef TEST_AUDIO_HOOK
+static bool (*test_init_audio)(void) = NULL;
+#define INIT_AUDIO() (test_init_audio ? test_init_audio() : SDL_InitSubSystem(SDL_INIT_AUDIO))
+#else
+#define INIT_AUDIO() SDL_InitSubSystem(SDL_INIT_AUDIO)
+#endif
+int runtime_audio_ready(void) {
+    pthread_mutex_lock(&sdl_lock);
     if (sdl_ready<0) {
         const char *mode=getenv("SPARTAN_AUDIO");
-        sdl_ready = (!mode || strcmp(mode,"none")) && SDL_InitSubSystem(SDL_INIT_AUDIO);
+        sdl_ready = (!mode || strcmp(mode,"none")) && INIT_AUDIO();
         printf("Runtime: audio backend %s\n", sdl_ready ? SDL_GetCurrentAudioDriver() : "timer (silent)");
     }
-    return sdl_ready;
+    int ready=sdl_ready;
+    pthread_mutex_unlock(&sdl_lock);
+    return ready;
 }
 static int port_range(int type, int *first, int *last) {
     switch (type) {
@@ -255,10 +267,12 @@ static void try_audio_fallback(Port *p, int id) {
     if (!has_ds) return;
 
     fprintf(stderr, "Runtime: SDL audio stream failed on wasapi (%s); trying directsound fallback for port %d\n", SDL_GetError(), id);
+    pthread_mutex_lock(&sdl_lock);
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
     SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER, "directsound", SDL_HINT_OVERRIDE);
-    sdl_ready = SDL_InitSubSystem(SDL_INIT_AUDIO);
+    sdl_ready = INIT_AUDIO();
     const char *new_driver = sdl_ready ? SDL_GetCurrentAudioDriver() : NULL;
+    pthread_mutex_unlock(&sdl_lock);
     if (sdl_ready && new_driver && !strcmp(new_driver, "directsound")) {
         printf("Runtime: audio backend %s (fallback from wasapi)\n", new_driver);
         /* The new driver may have another channel count: lay the mix out for it. */
@@ -292,9 +306,9 @@ static ABI int32_t audio_open(int32_t user, int32_t type, int32_t index, uint32_
     p->used=1; p->type=type; p->channels=channels[format]; p->is_float=format>=3 && format!=6;
     p->sample_bytes=p->is_float ? 4 : 2; p->frames=(int)length; p->std_layout=format>=6;
     for (int c=0;c<8;++c) p->volume[c]=VOLUME_0DB;
-    int device_channels=sdl_audio() ? default_device_channels() : 0;
+    int device_channels=runtime_audio_ready() ? default_device_channels() : 0;
     p->out_channels=p->channels==8 ? output_channels(spartanportgpu_audio_channels(),device_channels) : p->channels;
-    if (sdl_audio()) {
+    if (runtime_audio_ready()) {
         SDL_AudioSpec spec={p->is_float ? SDL_AUDIO_F32 : SDL_AUDIO_S16, p->out_channels, 48000};
         p->stream=OPEN_AUDIO_STREAM(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,NULL,NULL);
 #ifdef _WIN32

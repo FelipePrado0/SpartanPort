@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 
 #include "../src/runtime_audio.c"
 
@@ -34,6 +35,35 @@ static SDL_AudioStream *mock_fail_all(SDL_AudioDeviceID dev, const SDL_AudioSpec
     (void)dev; (void)spec; (void)cb; (void)user;
     SDL_SetError("Mock audio device open failure");
     return NULL;
+}
+
+/* #1165: the runtime and the trophy sound start SDL audio from two threads. SDL counts the subsystem
+   as up before its driver is, so the second caller got success with no driver; one start must serve both. */
+static atomic_int init_calls;
+static bool slow_init_audio(void) {
+    ++init_calls;
+    SDL_Delay(200);
+    return SDL_InitSubSystem(SDL_INIT_AUDIO);
+}
+static void *audio_ready_thread(void *out) {
+    *(int *)out = runtime_audio_ready();
+    return NULL;
+}
+static void test_concurrent_audio_start_runs_once(void) {
+    printf("Testing concurrent audio start...\n");
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    sdl_ready = -1;
+    init_calls = 0;
+    test_init_audio = slow_init_audio;
+    int a = -1, b = -1;
+    pthread_t t;
+    assert(!pthread_create(&t, NULL, audio_ready_thread, &a));
+    audio_ready_thread(&b);
+    assert(!pthread_join(t, NULL));
+    assert(init_calls == 1);
+    assert(a == b);
+    test_init_audio = NULL;
+    printf("Concurrent audio start test passed!\n");
 }
 
 static void test_lifecycle(void) {
@@ -311,6 +341,7 @@ int main(void) {
     test_invalid_parameters();
     test_multiple_ports();
     test_fallback_wanted();
+    test_concurrent_audio_start_runs_once();
 #ifdef _WIN32
     test_wasapi_fallback();
     test_env_override_prevents_fallback();
