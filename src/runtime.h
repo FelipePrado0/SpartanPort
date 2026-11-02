@@ -82,6 +82,9 @@ void runtime_thread_keys_cleanup(void);
 /* Guest-visible errno values are FreeBSD's. */
 int32_t runtime_guest_errno(int host_errno);
 void *runtime_low_map(size_t size, int prot);
+/* Undoes runtime_low_map for a mapping of the given size (page-aligned up,
+ * as low_map_from mapped it). No-op for a NULL pointer or a zero size. */
+void runtime_low_unmap(void *pointer, size_t size);
 /* Zeroed, 64-byte aligned host records the guest sees by address, below 1 TiB (SPARTAN_LOW_HANDLES). */
 void *runtime_low_alloc(size_t size);
 void runtime_low_free(void *pointer);
