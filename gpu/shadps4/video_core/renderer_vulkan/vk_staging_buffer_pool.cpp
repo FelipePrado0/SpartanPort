@@ -26,6 +26,7 @@ namespace {
 // in between and copies into them ran at 0.3 GB/s (stutter). Blocks now live 30 s idle, the
 // upload ring keeps SPARTAN_STAGING_KEEP_MB (512) and is populated at startup.
 constexpr u64 RING_IDLE_FRAMES = 3000;
+constexpr u64 VRAM_RING_IDLE_FRAMES = 600; ///< spartanport: a few seconds
 constexpr u64 LARGE_IDLE_FRAMES = 3000;
 constexpr u64 PREWARM_BLOCKS = 8;
 constexpr u64 LARGE_MIN_GRANULARITY = 64_KB;
@@ -42,6 +43,10 @@ StagingBufferPool::StagingBufferPool(const Instance& instance_, Scheduler& sched
     : instance{instance_}, scheduler{scheduler_} {
     const char* env = std::getenv("SPARTAN_STAGING_KEEP_MB");
     keep_blocks = (env ? std::strtoull(env, nullptr, 10) : 512) * 1_MB / BLOCK_SIZE;
+    // spartanport: the VRAM ring (scratch for detiling and copies) keeps far less: blocks kept
+    // for a burst of uploads at an area load stayed in VRAM for good.
+    const char* vram_env = std::getenv("SPARTAN_STAGING_KEEP_VRAM_MB");
+    keep_vram_blocks = (vram_env ? std::strtoull(vram_env, nullptr, 10) : 32) * 1_MB / BLOCK_SIZE;
     Ring& ring = rings[u32(MemoryType::HostUncached)];
     for (u64 i = 0; i < PREWARM_BLOCKS; ++i) {
         auto& block = ring.blocks.emplace_back(Block{
@@ -70,8 +75,11 @@ StagingBufferRef StagingBufferPool::RequestFromRing(Ring& ring, u64 size, u64 al
                                                     MemoryType type) {
     Block* best{};
     u64 best_offset{};
+    // spartanport: the VRAM ring fills its first blocks first, so the ones a burst of uploads
+    // added fall idle and are trimmed; going round from the current block kept them all in use.
+    const size_t start = type == MemoryType::DeviceLocal ? 0 : ring.current;
     for (size_t i = 0; i < ring.blocks.size(); ++i) {
-        const size_t index = (ring.current + i) % ring.blocks.size();
+        const size_t index = (start + i) % ring.blocks.size();
         Block* block = &ring.blocks[index];
         if (const auto offset = block->buffer->Reserve(size, alignment, false)) {
             ring.current = index;
@@ -161,8 +169,10 @@ void StagingBufferPool::FreeDeferred(const StagingBufferRef& ref) {
 
 void StagingBufferPool::TickFrame() {
     ++frame;
-    for (Ring& ring : rings) {
-        TrimRing(ring);
+    for (u32 type = 0; type < rings.size(); ++type) {
+        const bool vram = type == u32(MemoryType::DeviceLocal);
+        TrimRing(rings[type], vram ? keep_vram_blocks : keep_blocks,
+                 vram ? VRAM_RING_IDLE_FRAMES : RING_IDLE_FRAMES);
     }
     for (auto& cache : large_caches) {
         TrimLarge(cache);
@@ -170,11 +180,11 @@ void StagingBufferPool::TickFrame() {
     PublishStats();
 }
 
-void StagingBufferPool::TrimRing(Ring& ring) {
+void StagingBufferPool::TrimRing(Ring& ring, u64 keep, u64 idle_frames) {
     auto& blocks = ring.blocks;
     for (size_t i = blocks.size(); i-- > 0;) {
         const Block& block = blocks[i];
-        if (blocks.size() <= keep_blocks || frame - block.last_used_frame < RING_IDLE_FRAMES ||
+        if (blocks.size() <= keep || frame - block.last_used_frame < idle_frames ||
             !scheduler.IsFree(block.buffer->LastTick())) {
             continue;
         }
