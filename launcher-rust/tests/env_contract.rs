@@ -142,6 +142,8 @@ fn runner_defaults_are_run_pys() {
         ("SPARTAN_STREAM_MEMORY", "cached"), // run.py: env.get('SPARTAN_STREAM_MEMORY', 'cached')
         ("SPARTAN_GLYPH_STYLE", "off"), // run.py: env.get('SPARTAN_GLYPH_STYLE', 'off')
         ("SPARTAN_LANGUAGE", "1"),     // the English text and voice, as the game assumes
+        // Rust only (the Python launcher has no such choice): absent counts as the main key.
+        ("SPARTAN_GLYPH_KEYS", "main"),
     ];
     for (name, literal) in expected {
         assert_eq!(catalog::run_default(name), Some(literal), "{name}");

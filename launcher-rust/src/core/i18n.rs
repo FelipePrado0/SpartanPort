@@ -104,6 +104,40 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("es", "L1 + una dirección de la cruceta cambia a esa arma con su ataque de cambio (el arma que Kratos ya tiene en la mano repite su ataque). L1 + X hace el ataque de cambio del arma en la mano en lugar de pasar a la siguiente arma. La cruceta sola cambia como antes. Se aplica al iniciar el juego."),
         ],
     ),
+    // Alternative keys of the Controls page.
+    (
+        "(alternative)",
+        &[("pt", "(alternativa)"), ("es", "(alternativa)")],
+    ),
+    (
+        "The second box of a row is an alternative input for the same button: keep Square on the left mouse button for combat and add J for the minigames, for example. \"Clear input\" empties the main box, the × button empties the alternative, and the arrow puts the row back on its default with no alternative.",
+        &[
+            ("pt", "A segunda caixa de uma linha é uma entrada alternativa para o mesmo botão: por exemplo, deixe o Quadrado no botão esquerdo do mouse para o combate e acrescente o J para os minigames. \"Limpar entrada\" esvazia a caixa principal, o botão × esvazia a alternativa e a seta devolve a linha ao padrão, sem alternativa."),
+            ("es", "La segunda casilla de una fila es una entrada alternativa para el mismo botón: por ejemplo, deja el Cuadrado en el botón izquierdo del ratón para el combate y añade la J para los minijuegos. \"Borrar entrada\" vacía la casilla principal, el botón × vacía la alternativa y la flecha devuelve la fila a su valor por defecto, sin alternativa."),
+        ],
+    ),
+    (
+        "Keys on the icons",
+        &[("pt", "Teclas nos ícones"), ("es", "Teclas en los iconos")],
+    ),
+    (
+        "Main key (default)",
+        &[
+            ("pt", "Tecla principal (padrão)"),
+            ("es", "Tecla principal (por defecto)"),
+        ],
+    ),
+    (
+        "Alternative key",
+        &[("pt", "Tecla alternativa"), ("es", "Tecla alternativa")],
+    ),
+    (
+        "Which input the keyboard icons in the game show for a button that has an alternative. A button without an alternative always shows its main input. Applied when the game starts.",
+        &[
+            ("pt", "Qual entrada os ícones de teclado no jogo mostram para um botão que tem alternativa. Um botão sem alternativa sempre mostra a entrada principal. Aplicado ao iniciar o jogo."),
+            ("es", "Qué entrada muestran los iconos de teclado en el juego para un botón que tiene alternativa. Un botón sin alternativa siempre muestra su entrada principal. Se aplica al iniciar el juego."),
+        ],
+    ),
     (
         "Graphics card not checked: the game picks one.",
         &[
