@@ -535,6 +535,18 @@ pub fn resolution_patch_xml(
         &format!("Name=\"Resolution Patch - {width}x{height}\""),
         1,
     );
+    // The 4K template keeps the game's MSAA scene buffers, which at some sizes (3300-3440 x 1440)
+    // overrun the script heap: a boot crash at 0x1d6263 (#1175). The 8K template's single-sample
+    // line (the game's low-memory mode) avoids it; the upscaler does the anti-aliasing.
+    const SINGLE_SAMPLE: &str = "Address=\"0x0055a876\"";
+    if name == "4K" && !block.contains(SINGLE_SAMPLE) {
+        let at = xml.find(SINGLE_SAMPLE)?;
+        let line = &xml[xml[..at].rfind("<Line ")?..at + xml[at..].find("/>")? + 2];
+        let close = block.find("</PatchList>")?;
+        let indent_at = block[..close].rfind('\n')? + 1;
+        let indent = block[indent_at..close].to_string();
+        block.insert_str(indent_at, &format!("    {indent}{line}\n"));
+    }
     // The templates are 16:9. Another output shape takes the display aspect, and a wider one the
     // Hor+ view too, from the built-in ultrawide patches' lines (#1182: a stretched 16:9 picture).
     let (ow, oh) = output;
@@ -1427,7 +1439,16 @@ render_resolution=native
                 .find(&format!("Name=\"Resolution Patch - {name}\""))
                 .unwrap();
             let block = &xml[start..start + xml[start..].find("</Metadata>").unwrap()];
-            assert_eq!(lines(&made), lines(block), "{name}");
+            let mut expected = lines(block);
+            if name == "4K" {
+                // Plus the 8K template's single-sample line (#1175).
+                expected.extend(
+                    lines(&made)
+                        .into_iter()
+                        .filter(|l| l.contains("0x0055a876")),
+                );
+            }
+            assert_eq!(lines(&made), expected, "{name}");
         }
         let made = resolution_patch_xml(&xml, 1280, 720, (1280, 720)).unwrap();
         assert!(made.contains("Name=\"Resolution Patch - 1280x720\""));
@@ -1455,6 +1476,23 @@ render_resolution=native
         ] {
             assert!(made.contains(&format!("Value=\"{value}\"")), "{value}");
         }
+    }
+
+    #[test]
+    fn resolution_patch_uses_single_sample_buffers_from_the_4k_template() {
+        // Issue #1175: with MSAA scene buffers, renders of about 3300-3440 x 1440 crash at boot
+        // (FSR Quality at 5120x2160 renders 3414x1440). The built-in 3440x1440 patch and every
+        // render made from the 4K template turn on single-sample buffers, as the 8K one does.
+        let xml = fs::read_to_string(repo("patches/CUSA01623.xml")).unwrap();
+        let single = "Address=\"0x0055a876\" Value=\"9090\"";
+        for (width, height) in [(3414, 1440), (3300, 1440), (3438, 1438), (3838, 2158)] {
+            let made = resolution_patch_xml(&xml, width, height, (5120, 2160)).unwrap();
+            assert_eq!(made.matches(single).count(), 1, "{width}x{height}");
+        }
+        let made = resolution_patch_xml(&xml, 1706, 960, (2560, 1440)).unwrap();
+        assert!(!made.contains(single));
+        let builtin = &xml[xml.find("Name=\"Resolution Patch - 3440x1440\"").unwrap()..];
+        assert!(builtin[..builtin.find("</Metadata>").unwrap()].contains(single));
     }
 
     #[test]

@@ -192,7 +192,7 @@
         <Target Name="second3" Address="0x005c9941" Line="28"/>
         <Target Name="back3" Address="0x005cc0f7" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="13"/>
     </Metadata>
-    <Metadata Title="SpartanPort" Name="Resolution Patch - 3440x1440" Note="Ultrawide 3440x1440 (2.389:1), Hor+. Sets the game output resolution and the display aspect ratio, widens the horizontal field of view so the 16:9 vertical view is kept (no zoom) and sets the Video Arena to 3.25 GiB. Requires setting DMEM to 4608 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="SpartanPort ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
+    <Metadata Title="SpartanPort" Name="Resolution Patch - 3440x1440" Note="Ultrawide 3440x1440 (2.389:1), Hor+. Sets the game output resolution and the display aspect ratio, widens the horizontal field of view so the 16:9 vertical view is kept (no zoom) and sets the Video Arena to 3.25 GiB. Uses single-sample scene buffers: at this size the MSAA ones crashed the game at boot (#1175). Requires setting DMEM to 4608 MB or more. Only leave one resolution patch enabled; do not enable it with Bug Fix - Texture Corruption Fix." Author="SpartanPort ultrawide" PatchVer="1.0" AppVer="01.02" AppElf="eboot.bin" isEnabled="false">
         <PatchList>
             <Line Type="bytes" Address="0x005f0b3b" Value="700d0000" Pattern="48 8d 75 a0 89 c7 e8 ?? ?? ?? ?? 41 c7 45 0c 80 07 00 00" At="15"/>
             <Line Type="bytes" Address="0x005f0b43" Value="a0050000" Pattern="41 c7 45 10 38 04 00 00 66 41 c7 45 14 80 07 66 41 c7 45 16 38 04" At="4"/>
@@ -223,6 +223,7 @@
             <Line Type="bytes" Address="0x005cc0ef" Value="e9{rel:first3:0}0f1f00" Pattern="e8 ?? ?? ?? ?? c5 fa 5e 85 2c ff ff ff c5 f9 70 c0 00" At="5"/>
             <Line Type="bytes" Address="0x005c6341" Value="c5fa5e852cffffffe9{rel:second3:0}" Pattern="c3 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 00 00 00 00 31 c0" At="1"/>
             <Line Type="bytes" Address="0x005c9941" Value="c5fa5905{rel:K:0}e9{rel:back3:0}" Pattern="eb 12 66 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00 4d 8b 3f" At="2"/>
+            <Line Type="bytes" Address="0x0055a876" Value="9090" Pattern="48 8d 05 ?? ?? ?? ?? 83 38 00 74 1e 41 c7 44 24 7c 00 00 00 00" At="10"/>
         </PatchList>
         <Target Name="K" Address="0x005c03c1" Line="16"/>
         <Target Name="first0" Address="0x005c0c31" Line="18"/>
