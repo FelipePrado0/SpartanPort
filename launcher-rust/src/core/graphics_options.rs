@@ -485,7 +485,12 @@ pub fn upscaler_render_size(
 /// A "Resolution Patch - <width>x<height>" patch file: the smallest built-in resolution patch of
 /// `xml` that fits the size, with its sizes and half sizes (bloom) replaced. None when `xml` lacks
 /// that patch.
-pub fn resolution_patch_xml(xml: &str, width: u32, height: u32) -> Option<String> {
+pub fn resolution_patch_xml(
+    xml: &str,
+    width: u32,
+    height: u32,
+    output: (u32, u32),
+) -> Option<String> {
     let (name, _) = PATCH_TEMPLATES
         .into_iter()
         .find(|(_, (cw, ch))| width <= *cw && height <= *ch)
@@ -525,11 +530,80 @@ pub fn resolution_patch_xml(xml: &str, width: u32, height: u32) -> Option<String
         rest = &rest[value_end..];
     }
     block.push_str(rest);
-    let block = block.replacen(
+    let mut block = block.replacen(
         &template,
         &format!("Name=\"Resolution Patch - {width}x{height}\""),
         1,
     );
+    // The templates are 16:9. Another output shape takes the display aspect, and a wider one the
+    // Hor+ view too, from the built-in ultrawide patches' lines (#1182: a stretched 16:9 picture).
+    let (ow, oh) = output;
+    if u64::from(ow) * 9 != u64::from(oh) * 16 {
+        let line = |address: &str, value: String| -> Option<String> {
+            let at = xml.find(&format!("Address=\"{address}\" Value=\""))?;
+            let start = xml[..at].rfind("<Line ")?;
+            let end = at + xml[at..].find("/>")? + 2;
+            let old = xml[at..].split('"').nth(3)?;
+            Some(xml[start..end].replacen(
+                &format!("Value=\"{old}\""),
+                &format!("Value=\"{value}\""),
+                1,
+            ))
+        };
+        let float = |value: f32| -> String {
+            value
+                .to_le_bytes()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect()
+        };
+        let aspect = float(ow as f32 / oh as f32);
+        let mut lines = vec![line("0x005f0b57", format!("{aspect}{aspect}"))?];
+        let mut targets = Vec::new();
+        let close = block.find("</PatchList>")?;
+        if u64::from(ow) * 9 > u64::from(oh) * 16 {
+            // Hor+ is the K line plus the hooks that apply K, taken whole from a built-in
+            // ultrawide patch; its targets name lines by index, so they move with the lines.
+            let hook = xml.find("Address=\"0x005cbeff\"")?;
+            let wide = &xml[xml[..hook].rfind("<Metadata")?..];
+            let wide = &wide[..wide.find("</Metadata>")?];
+            let wide_lines: Vec<&str> = wide
+                .match_indices("<Line ")
+                .map(|(at, _)| Some(&wide[at..at + wide[at..].find("/>")? + 2]))
+                .collect::<Option<_>>()?;
+            let first = wide_lines
+                .iter()
+                .position(|l| l.contains("Address=\"0x005f0b57\""))?;
+            let shift = block[..close].matches("<Line ").count() as i64 - first as i64;
+            let k = float((ow * 9) as f32 / (oh * 16) as f32);
+            for l in &wide_lines[first + 1..] {
+                lines.push(if l.contains("Address=\"0x005c03c1\"") {
+                    line("0x005c03c1", k.clone())?
+                } else {
+                    l.to_string()
+                });
+            }
+            for (at, _) in wide.match_indices("<Target ") {
+                let target = &wide[at..at + wide[at..].find("/>")? + 2];
+                targets.push(match target.split_once("Line=\"") {
+                    Some((head, tail)) => {
+                        let (index, tail) = tail.split_once('"')?;
+                        let index = index.parse::<i64>().ok()? + shift;
+                        format!("{head}Line=\"{index}\"{tail}")
+                    }
+                    None => target.to_string(),
+                });
+            }
+        }
+        let indent_at = block[..close].rfind('\n')? + 1;
+        let indent = block[indent_at..close].to_string();
+        let added: String = lines.iter().map(|l| format!("    {indent}{l}\n")).collect();
+        block.insert_str(indent_at, &added);
+        let end = block.rfind("</Metadata>")?;
+        let end = block[..end].rfind('\n')? + 1;
+        let added: String = targets.iter().map(|t| format!("{indent}{t}\n")).collect();
+        block.insert_str(end, &added);
+    }
     Some(format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>
 <Patch>
@@ -1348,16 +1422,16 @@ render_resolution=native
             ("4K", 3840, 2160),
             ("8K", 7680, 4320),
         ] {
-            let made = resolution_patch_xml(&xml, width, height).unwrap();
+            let made = resolution_patch_xml(&xml, width, height, (width, height)).unwrap();
             let start = xml
                 .find(&format!("Name=\"Resolution Patch - {name}\""))
                 .unwrap();
             let block = &xml[start..start + xml[start..].find("</Metadata>").unwrap()];
             assert_eq!(lines(&made), lines(block), "{name}");
         }
-        let made = resolution_patch_xml(&xml, 1280, 720).unwrap();
+        let made = resolution_patch_xml(&xml, 1280, 720, (1280, 720)).unwrap();
         assert!(made.contains("Name=\"Resolution Patch - 1280x720\""));
-        let small = resolution_patch_xml(&xml, 1706, 960).unwrap();
+        let small = resolution_patch_xml(&xml, 1706, 960, (2560, 1440)).unwrap();
         assert!(small.contains("Value=\"aa060000\"") && small.contains("Value=\"c0030000\""));
     }
 
@@ -1366,7 +1440,7 @@ render_resolution=native
         // The Video Arena (0x7cd918) grows with the template: 2.25 GiB up to 1080p, then 1440p, 4K, 8K.
         let xml = fs::read_to_string(repo("patches/CUSA01623.xml")).unwrap();
         let arena = |width, height| {
-            let made = resolution_patch_xml(&xml, width, height).unwrap();
+            let made = resolution_patch_xml(&xml, width, height, (width, height)).unwrap();
             let key = "Address=\"0x007cd918\" Value=\"";
             let at = made.find(key).unwrap() + key.len();
             made[at..at + 8].to_string()
@@ -1375,11 +1449,77 @@ render_resolution=native
         assert_eq!(arena(1970, 1108), "000000b0");
         assert_eq!(arena(2954, 1662), "000000f0");
         assert_eq!(arena(5118, 2878), "000000ff");
-        let made = resolution_patch_xml(&xml, 2954, 1662).unwrap();
+        let made = resolution_patch_xml(&xml, 2954, 1662, (3840, 2160)).unwrap();
         for value in [
             "8a0b0000", "7e060000", "8a0b", "7e06", "c5050000", "3f030000",
         ] {
             assert!(made.contains(&format!("Value=\"{value}\"")), "{value}");
         }
+    }
+
+    #[test]
+    fn resolution_patch_keeps_the_output_shape() {
+        // Issue #1182: an ultrawide output rendered below its size kept the 16:9 aspect of the
+        // template and showed a stretched 16:9 picture. Same aspect and Hor+ view as the built-in
+        // 5120x2160 patch; a taller output (1920x1200) only sets the aspect.
+        let xml = fs::read_to_string(repo("patches/CUSA01623.xml")).unwrap();
+        let value = |made: &str, address: &str| {
+            let key = format!("Address=\"{address}\" Value=\"");
+            made.find(&key).map(|at| {
+                let start = at + key.len();
+                made[start..start + made[start..].find('"').unwrap()].to_string()
+            })
+        };
+        for render in [(3414, 1440), (5118, 2158)] {
+            let made = resolution_patch_xml(&xml, render.0, render.1, (5120, 2160)).unwrap();
+            assert_eq!(
+                value(&made, "0x005f0b57").as_deref(),
+                Some("26b4174026b41740")
+            );
+            assert_eq!(value(&made, "0x005c03c1").as_deref(), Some("abaaaa3f"));
+            // Hor+ needs the hooks that apply K too, or the picture is zoomed 1.33x; their
+            // targets must still name the lines they jump to.
+            let lines: Vec<&str> = made.split("<Line ").skip(1).collect();
+            let builtin = &xml[xml.find("Name=\"Resolution Patch - 5120x2160\"").unwrap()..];
+            let builtin = &builtin[..builtin.find("</Metadata>").unwrap()];
+            let hooks: Vec<&str> = builtin.split("<Line ").skip(1).skip(15).collect();
+            assert_eq!(lines[lines.len() - hooks.len()..].len(), 14);
+            for (made_line, hook) in lines[lines.len() - hooks.len()..].iter().zip(&hooks) {
+                assert_eq!(made_line.split("/>").next(), hook.split("/>").next());
+            }
+            let targets: Vec<&str> = made.split("<Target ").skip(1).collect();
+            assert_eq!(targets.len(), builtin.matches("<Target ").count());
+            for target in targets.iter().filter(|t| t.contains("Line=\"")) {
+                let index: usize = target
+                    .split("Line=\"")
+                    .nth(1)
+                    .unwrap()
+                    .split('"')
+                    .next()
+                    .unwrap()
+                    .parse()
+                    .unwrap();
+                let address = target
+                    .split("Address=\"")
+                    .nth(1)
+                    .unwrap()
+                    .split('"')
+                    .next()
+                    .unwrap();
+                assert!(
+                    lines[index].contains(&format!("Address=\"{address}\"")),
+                    "{target}"
+                );
+            }
+        }
+        let made = resolution_patch_xml(&xml, 1278, 798, (1920, 1200)).unwrap();
+        assert_eq!(
+            value(&made, "0x005f0b57").as_deref(),
+            Some("cdcccc3fcdcccc3f")
+        );
+        assert_eq!(value(&made, "0x005c03c1"), None);
+        let made = resolution_patch_xml(&xml, 1918, 1078, (1920, 1080)).unwrap();
+        assert_eq!(value(&made, "0x005f0b57"), None);
+        assert_eq!(value(&made, "0x005c03c1"), None);
     }
 }

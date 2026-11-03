@@ -397,9 +397,9 @@ impl<'a> Runner<'a> {
             graphics_options::upscaler_render_size(&plan.config, &self.env)
         {
             let base = port.join("patches").join("CUSA01623.xml");
-            let patch = fs::read_to_string(&base)
-                .ok()
-                .and_then(|xml| graphics_options::resolution_patch_xml(&xml, width, height));
+            let patch = fs::read_to_string(&base).ok().and_then(|xml| {
+                graphics_options::resolution_patch_xml(&xml, width, height, output)
+            });
             match patch {
                 Some(text) => {
                     let file = out.join("upscale-resolution.xml");
