@@ -305,6 +305,16 @@ L2, y *Right stick sensitivity* define cuánto mouse hace falta. Sin el launcher
 propias teclas: E y Q para Cuadrado y Triángulo, 1 y 3 para L1 y R1, F para R2, C para R3, I, K, J,
 L para la cruceta, Enter para Options, Tab y Retroceso para el touchpad.
 
+**Teclas alternativas.** Cada botón puede tener una segunda tecla o entrada del mouse, en la segunda
+casilla de su fila en la página Controls (el botón x al lado la borra). Las dos presionan el botón,
+así que podés dejar el Cuadrado en el clic izquierdo para el combate y presionarlo también con la J
+en los minijuegos. En la lira de las Musas, por ejemplo, dejá Espacio, Ctrl izquierdo y los dos
+botones del mouse y agregá K, L, J e I, dispuestas como los cuatro botones (I arriba, J a la
+izquierda, L a la derecha, K abajo). Una tecla que ya usa otro botón se intercambia con él, como en
+las teclas principales. Los íconos de teclado en el juego muestran la tecla principal; *Keys on the
+icons* (página Controls, con el estilo Keyboard) puede mostrar la alternativa. Sin el launcher,
+uní los nombres con `|` en `SPARTAN_KEY_MAP`, por ejemplo `cross=Space|K,square=Mouse Left|J`.
+
 En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic del touchpad derecho)
 y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad funciona como en la
 PS4, y Share/Create funciona como View.
