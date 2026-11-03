@@ -240,6 +240,8 @@ bool PipelineBinaryCacheRequested() {
 }
 #endif
 
+// The global pipeline key (vkGetPipelineKeyKHR with no create info) into key: through the rbx-keeping
+// wrapper on x86-64 GCC/Clang, directly elsewhere. Returns the driver's result; key is unchecked.
 vk::Result GetGlobalPipelineKey(vk::Device device, vk::PipelineBinaryKeyKHR& key) {
 #if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
     return vk::Result{GetGlobalPipelineKeyKeepingRbx(static_cast<VkDevice>(device),
@@ -250,6 +252,9 @@ vk::Result GetGlobalPipelineKey(vk::Device device, vk::PipelineBinaryKeyKHR& key
 }
 }
 
+// Turns the pipeline binary disk cache on when settings allow it, the device supports it, every
+// binary entry point is loaded and the driver gives a global key of a valid size. Leaves that key in
+// global_key and returns true; otherwise clears global_key, logs why and returns false.
 bool InitializePipelineBinaryCache(vk::Device device, bool supported,
                                    vk::PipelineBinaryKeyKHR& global_key) {
     global_key = vk::PipelineBinaryKeyKHR{};
