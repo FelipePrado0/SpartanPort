@@ -5,9 +5,9 @@
 //! the lyre's discs are a corner of five level textures in `OLY150.WAD` (a gold mechanism with the
 //! PlayStation shapes shares that corner in two more). [`build`] writes patched copies of those
 //! WADs, with the glyphs of an Xbox or Nintendo controller (or the keyboard keys of
-//! `SPARTAN_KEY_MAP`) drawn over the PlayStation ones, and returns the guest paths the runner mounts
-//! them on. The lyre keeps its letters with the keyboard style. The game folder is never written: a
-//! texture keeps its size and format, so only its pixels change inside the copy.
+//! `SPARTAN_KEY_MAP`, on the lyre too) drawn over the PlayStation ones, and returns the guest paths
+//! the runner mounts them on. The game folder is never written: a texture keeps its size and
+//! format, so only its pixels change inside the copy.
 //!
 //! WAD (little-endian): entries of a 0x40 header (u16 tag, u16 flags, u32 size, name[56]) and
 //! `size` bytes padded to 16 (the EntityCount marker of level WADs, tag 0, carries a count in its
@@ -35,7 +35,7 @@ use crate::core::fs::atomic_write;
 use crate::runner::dxt;
 
 /// Of the drawing: a change redraws the cached copies.
-pub const VERSION: u32 = 12;
+pub const VERSION: u32 = 13;
 pub const WADS: [&str; 3] = [
     "EXEC/WAD/PS4_LE/R_UI.WAD",
     "EXEC/WAD/PS4_LE/R_PERM.WAD",
@@ -753,6 +753,15 @@ pub struct Choice<'a> {
     pub key_map: &'a str,
 }
 
+/// Game button -> what presses it: a key with the keyboard style, a gamepad button otherwise.
+fn host_buttons(choice: &Choice) -> IndexMap<String, String> {
+    if choice.style == "keyboard" {
+        key_buttons(choice.key_map)
+    } else {
+        pad_buttons(choice.pad_map)
+    }
+}
+
 /// Draws a letter label or an [`ICONS`] shape centred in `area`.
 fn draw_label(
     image: &mut Picture,
@@ -997,11 +1006,7 @@ pub fn render(
         return Ok(Picture::from_rgba(&art).resize(width, height, Filter::Lanczos));
     }
     let keyboard = choice.style == "keyboard";
-    let hosts = if keyboard {
-        key_buttons(choice.key_map)
-    } else {
-        pad_buttons(choice.pad_map)
-    };
+    let hosts = host_buttons(choice);
     let host = |button: &str| hosts.get(button).cloned().unwrap_or_default();
     if form == Form::Atlas {
         let mut image = Picture::new(Mode::Rgba, width, height, &[0, 0, 0, 255]);
@@ -1039,6 +1044,17 @@ pub fn render(
 }
 
 // -- The lyre -----------------------------------------------------------------------------------------
+
+/// The lyre's face has no arrows: an arrow key is spelled out on its disc.
+fn lyre_key_label(label: &str) -> &str {
+    match label {
+        "dpup" => "UP",
+        "dpdown" => "DOWN",
+        "dpleft" => "LEFT",
+        "dpright" => "RIGHT",
+        other => other,
+    }
+}
 
 /// An RGBA layer of `size` with `label` in the lyre's face, `cap` pixels of cap height (a longer
 /// label shrinks to the disc), centred on `centre`, `margin` pixels fatter.
@@ -1489,8 +1505,9 @@ fn lyre_relief(image: &Picture, height: &Picture) -> Picture {
 }
 
 /// The level texture `image` (the lyre's or the gold mechanism's, of `kind`) with its four discs
-/// showing the gamepad buttons: the letter is replaced by the disc's own interior (black in the
-/// glow mask) and the host button's letter drawn in its place.
+/// showing the gamepad buttons, or the keyboard keys with the keyboard style: the letter is
+/// replaced by the disc's own interior (black in the glow mask) and the host button's letter drawn
+/// in its place.
 pub fn lyre_paint(
     image: &Picture,
     form: Form,
@@ -1498,7 +1515,7 @@ pub fn lyre_paint(
     choice: &Choice,
     painter: &Painter,
 ) -> Result<Picture, GlyphError> {
-    let hosts = pad_buttons(choice.pad_map);
+    let hosts = host_buttons(choice);
     let look = LYRE_FORMS
         .iter()
         .find(|(f, _)| *f == form)
@@ -1581,11 +1598,14 @@ pub fn lyre_paint(
     let mut letters = Picture::new(Mode::Rgba, size, size, &[0, 0, 0, 0]);
     for (button, (cx, cy)) in LYRE_DISCS {
         let centre = (cx as f64, cy as f64);
-        let label = glyph(
+        let mut label = glyph(
             hosts.get(button).map(String::as_str).unwrap_or(""),
             choice.style,
             choice.faces,
         );
+        if choice.style == "keyboard" {
+            label.label = lyre_key_label(&label.label).to_string();
+        }
         if form == Form::Gold {
             // A line engraved into the gold: a light bevel around a dark groove.
             let median = medians.get(button).copied().unwrap_or([156, 116, 60]);
@@ -1824,18 +1844,13 @@ pub fn decode_texture(dds: &[u8], fourcc: FourCc) -> Result<Picture, GlyphError>
     Ok(picture.convert(fourcc.mode()))
 }
 
-/// The textures a style draws: the keyboard adds the stick and D-pad icons and leaves the lyre.
+/// The textures a style draws: the keyboard adds the stick and D-pad icons.
 pub fn textures(style: &str) -> Vec<(&'static str, Texture)> {
+    let mut drawn = TEXTURES.to_vec();
     if style == "keyboard" {
-        let mut drawn: Vec<(&str, Texture)> = TEXTURES
-            .iter()
-            .filter(|(_, t)| !t.form.is_lyre())
-            .copied()
-            .collect();
         drawn.extend(KEYBOARD_TEXTURES);
-        return drawn;
     }
-    TEXTURES.to_vec()
+    drawn
 }
 
 /// Replaces the glyph textures inside the WAD in `data`; returns how many. A texture that cannot be
@@ -2522,11 +2537,8 @@ pub(crate) mod tests {
             texture("TXCEE0EE2B.BC09F12D.dds", 2048, 2048, "DXT1", 12, 0),
         ]
         .concat();
-        let (keyboard, count) = patched(&original, "keyboard", "", "");
-        assert_eq!(count, 0); // the keys are the player's: left alone
-        assert_eq!(keyboard, original);
         let mut copies = Vec::new();
-        for style in ["xbox", "nintendo"] {
+        for style in ["xbox", "nintendo", "keyboard"] {
             let (data, count) = patched(&original, style, "", "");
             assert_eq!(count, 7);
             assert_eq!(data.len(), original.len());
@@ -2583,7 +2595,177 @@ pub(crate) mod tests {
             }
             copies.push(data);
         }
-        assert_ne!(copies[0], copies[1]);
+        for (i, first) in copies.iter().enumerate() {
+            for second in &copies[i + 1..] {
+                assert_ne!(first, second);
+            }
+        }
+    }
+
+    /// A flat 512 px level texture: its lyre corner is 128 px (a quarter), so painting is quick.
+    fn flat_level() -> Picture {
+        Picture::new(Mode::Rgb, 512, 512, &[60, 60, 60])
+    }
+
+    fn lyre_painted(form: Form, style: &str, pad_map: &str, key_map: &str, kind: &str) -> Picture {
+        let choice = Choice {
+            style,
+            faces: None,
+            pad_map,
+            key_map,
+        };
+        lyre_paint(&flat_level(), form, kind, &choice, &painter()).unwrap()
+    }
+
+    /// The box of a lyre disc in the 512 px texture: left, top, right, bottom.
+    fn disc_box(button: &str) -> [usize; 4] {
+        let (cx, cy) = LYRE_DISCS.iter().find(|(b, _)| *b == button).unwrap().1;
+        let radius = (LYRE_RADIUS / 4) as usize;
+        let (x, y) = (LYRE_CORNER[0] / 4 + cx as usize / 4, cy as usize / 4);
+        [x - radius, y - radius, x + radius, y + radius]
+    }
+
+    /// The box of the pixels of `disc` that differ between `a` and `b`.
+    fn changed_in(disc: &str, a: &Picture, b: &Picture) -> Option<[usize; 4]> {
+        let [x0, y0, x1, y1] = disc_box(disc);
+        let mut found: Option<[usize; 4]> = None;
+        for y in y0..y1 {
+            for x in x0..x1 {
+                if a.pixel(x, y) != b.pixel(x, y) {
+                    let [l, t, r, d] = found.unwrap_or([x, y, x, y]);
+                    found = Some([l.min(x), t.min(y), r.max(x), d.max(y)]);
+                }
+            }
+        }
+        found
+    }
+
+    fn changed_discs(a: &Picture, b: &Picture) -> Vec<&'static str> {
+        LYRE_DISCS
+            .iter()
+            .map(|(button, _)| *button)
+            .filter(|button| changed_in(button, a, b).is_some())
+            .collect()
+    }
+
+    #[test]
+    fn keyboard_style_paints_the_mapped_keys_on_the_lyre_discs() {
+        for form in [Form::Lyre, Form::Gold] {
+            let keys = lyre_painted(form, "keyboard", "", "", "diffuse");
+            let original = flat_level();
+            assert_eq!(
+                changed_discs(&original, &keys),
+                ["cross", "circle", "square", "triangle"],
+                "{form:?}"
+            );
+            // Nothing outside the four discs is touched.
+            let in_a_disc = |x: usize, y: usize| {
+                LYRE_DISCS.iter().any(|(button, _)| {
+                    let [x0, y0, x1, y1] = disc_box(button);
+                    (x0..x1).contains(&x) && (y0..y1).contains(&y)
+                })
+            };
+            for y in 0..original.height {
+                for x in 0..original.width {
+                    if !in_a_disc(x, y) {
+                        assert_eq!(keys.pixel(x, y), original.pixel(x, y), "{form:?} {x} {y}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_changed_key_changes_the_label_of_its_disc_only() {
+        let defaults = lyre_painted(Form::Lyre, "keyboard", "", "", "diffuse");
+        let moved = lyre_painted(Form::Lyre, "keyboard", "", "circle=L", "diffuse");
+        assert_eq!(changed_discs(&defaults, &moved), ["circle"]);
+    }
+
+    #[test]
+    fn lyre_keys_use_the_short_labels_of_the_other_keyboard_textures() {
+        for (name, label) in [
+            ("Mouse Left", "LMB"),
+            ("Mouse Right", "RMB"),
+            ("Left Ctrl", "CTRL"),
+            ("Space", "SPACE"),
+            ("Keypad 4", "NUM 4"),
+        ] {
+            let named = lyre_painted(
+                Form::Lyre,
+                "keyboard",
+                "",
+                &format!("triangle={name}"),
+                "diffuse",
+            );
+            let short = lyre_painted(
+                Form::Lyre,
+                "keyboard",
+                "",
+                &format!("triangle={label}"),
+                "diffuse",
+            );
+            assert_eq!(named, short, "{name}");
+        }
+    }
+
+    #[test]
+    fn long_key_names_fit_centred_inside_their_disc() {
+        let original = flat_level();
+        let keys = lyre_painted(
+            Form::Lyre,
+            "keyboard",
+            "",
+            "cross=Right Shift,circle=Keypad 4,square=Mouse Forward,triangle=Left Bracket",
+            "diffuse",
+        );
+        for (button, (cx, cy)) in LYRE_DISCS {
+            let [left, top, right, bottom] = changed_in(button, &original, &keys).unwrap();
+            let [x0, y0, x1, _] = disc_box(button);
+            let radius = (x1 - x0) / 2;
+            // Inside the disc, with room to the rim, and about at its centre.
+            assert!(right - left < radius * 2 - 6, "{button}: {left}..{right}");
+            assert!(bottom - top < radius * 2 - 6, "{button}: {top}..{bottom}");
+            let centre = ((left + right) as i64 / 2, (top + bottom) as i64 / 2);
+            let expected = ((x0 + radius) as i64, (y0 + radius) as i64);
+            assert!(
+                (centre.0 - expected.0).abs() <= 2 && (centre.1 - expected.1).abs() <= 2,
+                "{button} ({cx}, {cy}): {centre:?} against {expected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn arrow_keys_are_spelled_out_on_the_lyre() {
+        for (key, spelled) in [
+            ("Up", "UP"),
+            ("Down", "DOWN"),
+            ("Left", "LEFT"),
+            ("Right", "RIGHT"),
+        ] {
+            let label = glyph(key, "keyboard", None).label;
+            assert_eq!(lyre_key_label(&label), spelled);
+        }
+        assert_eq!(lyre_key_label("SPACE"), "SPACE");
+        let arrow = lyre_painted(Form::Lyre, "keyboard", "", "cross=Up", "diffuse");
+        let letter = lyre_painted(Form::Lyre, "keyboard", "", "cross=U", "diffuse");
+        assert!(changed_in("cross", &arrow, &letter).is_some());
+    }
+
+    #[test]
+    fn controller_styles_keep_their_lyre_whatever_the_key_map_says() {
+        for kind in ["diffuse", "glow"] {
+            for style in ["xbox", "nintendo"] {
+                let plain = lyre_painted(Form::Lyre, style, "", "", kind);
+                let keyed = lyre_painted(Form::Lyre, style, "", "cross=Q,circle=L", kind);
+                assert_eq!(plain, keyed, "{style} {kind}");
+                assert_eq!(changed_discs(&flat_level(), &plain).len(), 4);
+            }
+        }
+        // And the keyboard ignores the gamepad map.
+        let plain = lyre_painted(Form::Lyre, "keyboard", "", "", "diffuse");
+        let padded = lyre_painted(Form::Lyre, "keyboard", "cross=b", "", "diffuse");
+        assert_eq!(plain, padded);
     }
 
     #[test]
@@ -2871,7 +3053,7 @@ pub(crate) mod tests {
         assert_eq!(
             stamp,
             format!(
-                "[12, \"keyboard\", null, \"\", \"cross=Q\", null, [[\"EXEC/WAD/PS4_LE/R_UI.WAD\", {}, {mtime}]]]",
+                "[13, \"keyboard\", null, \"\", \"cross=Q\", null, [[\"EXEC/WAD/PS4_LE/R_UI.WAD\", {}, {mtime}]]]",
                 meta.len()
             )
         );
@@ -2892,13 +3074,9 @@ pub(crate) mod tests {
             .iter()
             .any(|(id, _)| TEXTURES.iter().any(|(t, _)| t == id)));
         assert_eq!(textures("xbox"), TEXTURES.to_vec());
-        let mut prompts: Vec<(&str, Texture)> = TEXTURES
-            .iter()
-            .filter(|(_, t)| !t.form.is_lyre())
-            .copied()
-            .collect();
-        prompts.extend(KEYBOARD_TEXTURES);
-        assert_eq!(textures("keyboard"), prompts); // the lyre keeps its letters
+        let mut keyboard = TEXTURES.to_vec();
+        keyboard.extend(KEYBOARD_TEXTURES);
+        assert_eq!(textures("keyboard"), keyboard); // the lyre too: it shows the keys
     }
 
     #[test]

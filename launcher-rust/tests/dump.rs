@@ -461,9 +461,12 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
             println!("{line}")
         })
         .unwrap();
-        let theirs = fs::read(python.join("glyphs/stamp.json")).unwrap();
+        // The drawing's version is the one thing that differs (deviation 17 of the parity spec).
+        let theirs = String::from_utf8(fs::read(python.join("glyphs/stamp.json")).unwrap())
+            .unwrap()
+            .replacen("[12,", &format!("[{},", glyphs::VERSION), 1);
         assert_eq!(
-            fs::read(rust.join("glyphs/stamp.json")).unwrap(),
+            fs::read_to_string(rust.join("glyphs/stamp.json")).unwrap(),
             theirs,
             "{style}: stamp.json"
         );
@@ -473,12 +476,15 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
                 rust.join("glyphs").join(file),
                 python.join("glyphs").join(file),
             );
+            // The Python leaves the lyre's PlayStation symbols with the keyboard style, and makes
+            // no copy of its WAD (deviation 17 of the parity spec).
+            let lyre_only_here = style == "keyboard" && name.ends_with("OLY150.WAD");
             assert_eq!(
                 ours.is_file(),
-                theirs.is_file(),
+                theirs.is_file() || lyre_only_here,
                 "{style}: {name} made by one side only"
             );
-            if !theirs.is_file() {
+            if !ours.is_file() {
                 continue;
             }
             assert!(
@@ -486,7 +492,12 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
                 "{style}: {name} not mounted"
             );
             let original = fs::read(game.join(name)).unwrap();
-            let (ours, theirs) = (fs::read(ours).unwrap(), fs::read(theirs).unwrap());
+            let ours = fs::read(ours).unwrap();
+            let theirs = if lyre_only_here {
+                original.clone()
+            } else {
+                fs::read(theirs).unwrap()
+            };
             assert_eq!(ours.len(), theirs.len(), "{style}: {name} size");
             assert_eq!(theirs.len(), original.len(), "{style}: {name} size");
             // Both sides repaint the same entries; inside those, a DXT block either side
@@ -496,14 +507,16 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
             for entry in glyphs::entries(&original) {
                 let (start, end) = (entry.offset + 0x40, entry.offset + 0x40 + entry.size);
                 let changed = |copy: &[u8]| copy[start..end] != original[start..end];
-                assert_eq!(
-                    changed(&ours),
-                    changed(&theirs),
-                    "{style}: {name}: {} repainted by one side only (Rust: {})",
-                    entry.name,
-                    changed(&ours)
-                );
-                if !changed(&theirs) {
+                if !lyre_only_here {
+                    assert_eq!(
+                        changed(&ours),
+                        changed(&theirs),
+                        "{style}: {name}: {} repainted by one side only (Rust: {})",
+                        entry.name,
+                        changed(&ours)
+                    );
+                }
+                if !changed(&ours) && !changed(&theirs) {
                     continue;
                 }
                 let Some(dds) = original[start..end]
