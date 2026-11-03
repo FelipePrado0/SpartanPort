@@ -7,11 +7,15 @@
 #include <cstring>
 #include <limits>
 #include "shader_recompiler/frontend/fetch_shader.h"
+#ifndef _WIN32
+#include <csignal>
+#include <pthread.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
 
-// Match async-fetch-snapshot-test: link the production fetch reader without a GPU runtime.
-extern "C" {
-u32 runtime_disabled_optimizations = 0;
-}
+// The GPU runtime symbols (runtime_fault_recover, runtime_disabled_optimizations) come from
+// test_gpu_runtime_stubs.cpp.
 void assert_fail_impl() {
     std::abort();
 }
@@ -24,6 +28,23 @@ bool ShouldLog(Level) {
 }
 void Write(std::string_view, Level, const char*, int, const char*, std::string&&) {}
 } // namespace Common::Log
+
+#ifndef _WIN32
+// Mirrors the game's handler (src/probe.c): a fault with a recovery point resumes it.
+static void FaultToRecovery(int sig) {
+    sigjmp_buf* recover = runtime_fault_recover;
+    if (!recover) {
+        std::signal(sig, SIG_DFL);
+        return;
+    }
+    runtime_fault_recover = nullptr;
+    sigset_t unblock;
+    sigemptyset(&unblock);
+    sigaddset(&unblock, sig);
+    pthread_sigmask(SIG_UNBLOCK, &unblock, nullptr);
+    siglongjmp(*recover, 1);
+}
+#endif
 
 int main() {
     constexpr u32 pointer_reg = 2;
@@ -148,6 +169,41 @@ int main() {
     assert(info.ReadUdReg<AmdGpu::Buffer>(Shader::IR::NumScalarRegs, 0) == AmdGpu::Buffer{});
     Shader::Info::num_ud_snapshots = 0;
 
+#ifndef _WIN32
+    // A table unmapped since the shader was built: the read faults and comes back empty.
+    {
+        std::signal(SIGSEGV, FaultToRecovery);
+        std::signal(SIGBUS, FaultToRecovery);
+        const long page_size = sysconf(_SC_PAGESIZE);
+        void* page = mmap(nullptr, page_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        assert(page != MAP_FAILED);
+        set_pointer(reinterpret_cast<u64>(page));
+        assert(!info.UdPointerNull(pointer_reg));
+        assert(read() == AmdGpu::Buffer{});
+        assert(runtime_fault_recover == nullptr);
+        // A recovery point the caller already set (a draw-preparation worker) keeps the fault.
+        sigjmp_buf outer;
+        volatile bool resumed_outer = false;
+        if (sigsetjmp(outer, 0)) {
+            resumed_outer = true;
+        } else {
+            runtime_fault_recover = &outer;
+            (void)read();
+            runtime_fault_recover = nullptr;
+        }
+        assert(resumed_outer && runtime_fault_recover == nullptr);
+        // The same table mapped again reads normally.
+        assert(mprotect(page, page_size, PROT_READ | PROT_WRITE) == 0);
+        std::memcpy(static_cast<u32*>(page) + descriptor_offset, &expected, sizeof(expected));
+        assert(read() == expected);
+        munmap(page, page_size);
+        std::signal(SIGSEGV, SIG_DFL);
+        std::signal(SIGBUS, SIG_DFL);
+    }
     std::puts("Shader user data: null/short tables, vertex consumers, stale V# copies, direct "
-              "registers and snapshots passed");
+              "registers, snapshots and unmapped tables passed");
+#else
+    std::puts("Shader user data: null/short tables, vertex consumers, stale V# copies, direct "
+              "registers and snapshots passed (unmapped tables are checked on Linux)");
+#endif
 }

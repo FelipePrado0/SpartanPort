@@ -18,6 +18,7 @@
 #include "shader_recompiler/params.h"
 #include "shader_recompiler/resource.h"
 #include "shader_recompiler/runtime_info.h"
+#include "spartanport_guest_memory.h"
 
 namespace Serialization {
 struct Archive;
@@ -236,6 +237,11 @@ struct Info : InfoPersistent {
             if (VAddr(base) < 0x10000) {
                 return data;
             }
+            // spartanport: a non-null table can be unmapped since the shader was built; a fault
+            // reads as an empty descriptor (evill33t 2756fa5dce).
+            SpartanGuest::Read(&data, reinterpret_cast<std::uintptr_t>(base + dword_offset),
+                               sizeof(T));
+            return data;
         } else if (dword_offset > ud.size() ||
                    sizeof(T) > (ud.size() - dword_offset) * sizeof(u32)) {
             return data;
@@ -275,9 +281,8 @@ struct Info : InfoPersistent {
         auto buf = ReadUdReg<AmdGpu::Buffer>(static_cast<u32>(tess_consts_ptr_base),
                                              static_cast<u32>(tess_consts_dword_offset));
         VAddr tess_constants_addr = buf.base_address;
-        memcpy(&tess_constants,
-               reinterpret_cast<TessellationDataConstantBuffer*>(tess_constants_addr),
-               sizeof(tess_constants));
+        // spartanport: a stale or null buffer reads as zeroed constants (evill33t 2756fa5dce).
+        SpartanGuest::Read(&tess_constants, tess_constants_addr, sizeof(tess_constants));
     }
 
     void Serialize(Serialization::Archive& ar) const;
