@@ -13,6 +13,21 @@ extern "C" void blur_resume();
 asm(".globl blur_resume\nblur_resume:\n"
     "    pop %r14\n    pop %r15\n    pop %rbp\n"
     "    movl $1, blur_resumed(%rip)\n    ret\n");
+// The effect's parameter controller update (image 0x2c7680 in CUSA01623 v01.00): notes its argument
+// and whether the stack was 16-byte aligned at the call, as the game's code expects.
+extern "C" uint64_t blur_update_arg;
+uint64_t blur_update_arg;
+extern "C" uint32_t blur_update_misaligned;
+uint32_t blur_update_misaligned;
+extern "C" void blur_update();
+asm(".globl blur_update\nblur_update:\n"
+    "    movq %rdi, blur_update_arg(%rip)\n"
+    "    leaq 8(%rsp), %rax\n    andl $15, %eax\n    movl %eax, blur_update_misaligned(%rip)\n    ret\n");
+// Enters the stub as the game does: `this` in rdi (SysV), rsp 16-byte aligned before the call.
+static void run_blur(unsigned char* stub, unsigned char* fx) {
+    asm volatile("push %%rbp\n    mov %%rsp, %%rbp\n    and $-16, %%rsp\n    call *%%rsi\n    mov %%rbp, %%rsp\n    pop %%rbp"
+                 : "+D"(fx), "+S"(stub) : : "rax", "rcx", "rdx", "r8", "r9", "r10", "r11", "r14", "r15", "memory", "cc");
+}
 // Shadows: like motion blur's prologue; the resume notes the casters list (rsi) it was given.
 extern "C" uint64_t shadow_rsi;
 uint64_t shadow_rsi;
@@ -44,6 +59,18 @@ int main() {
         assert(bytes[i] == spartanport_motion_blur_original[i]);
     assert(bytes[SPARTAN_MOTION_BLUR_GATE] == 0x4c && bytes[SPARTAN_MOTION_BLUR_GATE + 2] == 0x3d);    // lea r15
     assert(bytes[SPARTAN_MOTION_BLUR_QUEUED] == 0x4c && bytes[SPARTAN_MOTION_BLUR_QUEUED + 2] == 0x35);  // lea r14
+    {
+        // The controller update is a `call rel32` at SPARTAN_MOTION_BLUR_UPDATE_CALL.
+        static unsigned char image[0x100] = {};
+        const uint64_t at = 0x10 + SPARTAN_MOTION_BLUR_UPDATE_CALL;
+        const int32_t rel = 0x40;
+        image[at] = 0xe8;
+        std::memcpy(image + at + 1, &rel, 4);
+        assert(spartanport_call_target(image, sizeof(image), at) == at + 5 + 0x40);
+        image[at] = 0x90;
+        assert(spartanport_call_target(image, sizeof(image), at) == UINT64_MAX);
+        assert(spartanport_call_target(image, sizeof(image), sizeof(image) - 3) == UINT64_MAX);
+    }
     assert(spartanport_signature_parse(spartanport_bloom_site.pattern, bytes) == 23);
     for (unsigned i = 0; i < SPARTAN_BLOOM_HOOK_LENGTH; ++i)
         assert(bytes[i] == spartanport_bloom_original[i]);
@@ -89,14 +116,17 @@ int main() {
     volatile bool blur_on = true;
     volatile int32_t gate = 1, queued = 1;
     assert(spartanport_motion_blur_build_stub(page, (uintptr_t)&blur_on, (uintptr_t)&gate, (uintptr_t)&queued,
-                                              (uintptr_t)&blur_resume) < 256);
-    auto blur = reinterpret_cast<void (*)()>(page);
-    blur();
-    assert(blur_resumed == 1 && gate == 1 && queued == 1);  // on: the game's own function runs
+                                              (uintptr_t)&blur_update, (uintptr_t)&blur_resume) < 256);
+    static unsigned char blur_fx[0x230] = {};  // the MotionBlurFX object; +0x28 is its parameter controller
+    run_blur(page, blur_fx);
+    assert(blur_resumed == 1 && gate == 1 && queued == 1 && blur_update_arg == 0);  // on: the game's own function runs
     blur_resumed = 0;
     blur_on = false;
-    blur();
+    blur_update_misaligned = 99;
+    run_blur(page, blur_fx);
     assert(blur_resumed == 0 && gate == 0 && queued == 0);  // off: gates cleared, nothing queued
+    // off: the controller is still updated, or the parameter requests it frees fill the game's pool (#1186)
+    assert(blur_update_arg == (uintptr_t)(blur_fx + 0x28) && blur_update_misaligned == 0);
 
     // Bloom.
     unsigned char* bloom = page + 256;

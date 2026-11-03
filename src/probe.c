@@ -846,15 +846,17 @@ static void install_graphics(Segment *segments, uint64_t count, uint64_t size) {
     /* Same prologue bytes as the motion blur site. */
     int shadows = shadows_at != UINT64_MAX && mapped(segments, count, shadows_at, SPARTAN_SHADOWS_HOOK_LENGTH) &&
                   spartanport_motion_blur_signature_match(image + shadows_at, size - shadows_at);
-    int blur = blur_at != UINT64_MAX && mapped(segments, count, blur_at, 48) &&
+    int blur = blur_at != UINT64_MAX && mapped(segments, count, blur_at, SPARTAN_MOTION_BLUR_UPDATE_CALL + 5) &&
                spartanport_motion_blur_signature_match(image + blur_at, size - blur_at);
     int bloom = bloom_at != UINT64_MAX && mapped(segments, count, bloom_at, SPARTAN_BLOOM_HOOK_LENGTH) &&
                 spartanport_bloom_signature_match(image + bloom_at, size - bloom_at);
-    uint64_t gate = 0, queued = 0;
+    uint64_t gate = 0, queued = 0, update = UINT64_MAX;
     if (blur) {
         gate = spartanport_rip_target(image, blur_at + SPARTAN_MOTION_BLUR_GATE);
         queued = spartanport_rip_target(image, blur_at + SPARTAN_MOTION_BLUR_QUEUED);
-        blur = mapped(segments, count, gate, 4) && mapped(segments, count, queued, 4);
+        update = spartanport_call_target(image, size, blur_at + SPARTAN_MOTION_BLUR_UPDATE_CALL);
+        blur = mapped(segments, count, gate, 4) && mapped(segments, count, queued, 4) && update != UINT64_MAX &&
+               mapped(segments, count, update, 1);
     }
     if (!blur && !bloom && !shadows) {
         puts("Graphics: bloom, motion blur and shadows toggles unavailable (code not found in this eboot.bin)");
@@ -864,6 +866,7 @@ static void install_graphics(Segment *segments, uint64_t count, uint64_t size) {
     if (blur)
         spartanport_motion_blur_build_stub(stubs, spartanport_graphics_flag(SPARTAN_GRAPHICS_MOTION_BLUR),
                                            (uintptr_t)(image + gate), (uintptr_t)(image + queued),
+                                           (uintptr_t)(image + update),
                                            (uintptr_t)(image + blur_at + SPARTAN_MOTION_BLUR_HOOK_LENGTH));
     if (bloom) {
         uintptr_t menus[3] = {0};

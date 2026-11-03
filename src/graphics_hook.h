@@ -36,8 +36,13 @@ enum { SPARTAN_SHADOWS_HOOK_LENGTH = 8 };
  * FX manager's walker. It clears and then sets the two globals behind its two lea's: the first
  * gates the VelocityPass and MotionVectorResolve passes, the second marks the blur as queued.
  * Off: both are cleared and the function returns, so none of the three passes is queued (the
- * same state as a camera cut). The hook replaces the 8-byte prologue the stub replays. */
-enum { SPARTAN_MOTION_BLUR_HOOK_LENGTH = 8, SPARTAN_MOTION_BLUR_GATE = 13, SPARTAN_MOTION_BLUR_QUEUED = 27 };
+ * same state as a camera cut). The hook replaces the 8-byte prologue the stub replays.
+ * Off still runs the function's `call` at +0x5c (image 0x2c7680 in v01.00) on the effect's
+ * parameter controller (this+0x28): it frees the expired parameter requests that cutscene scripts
+ * send the blur. Skipped, they piled up in the game's shared node pool until an allocation came
+ * back null and the game wrote to 0x10 (#1186). */
+enum { SPARTAN_MOTION_BLUR_HOOK_LENGTH = 8, SPARTAN_MOTION_BLUR_GATE = 13, SPARTAN_MOTION_BLUR_QUEUED = 27,
+       SPARTAN_MOTION_BLUR_UPDATE_CALL = 0x5c };
 static const SpartanSignature spartanport_motion_blur_site = {
     "55 48 89 e5 41 57 41 56 53 50 48 89 fb 4c 8d 3d ?? ?? ?? ?? 41 c7 07 00 00 00 00 "
     "4c 8d 35 ?? ?? ?? ?? 41 c7 06 00 00 00 00 48 8d b3 1c 02 00 00", 0};
@@ -65,6 +70,14 @@ static inline uint64_t spartanport_rip_target(const unsigned char *image, uint64
     return (uint64_t)((int64_t)at + 7 + disp);
 }
 
+/* The image offset a `call rel32` at `at` calls, or UINT64_MAX when there is no such call. */
+static inline uint64_t spartanport_call_target(const unsigned char *image, uint64_t size, uint64_t at) {
+    if (at + 5 > size || image[at] != 0xe8) return UINT64_MAX;
+    int32_t rel;
+    memcpy(&rel, image + at + 1, 4);
+    return (uint64_t)((int64_t)at + 5 + rel);
+}
+
 static inline int spartanport_motion_blur_signature_match(const unsigned char *code, uint64_t size) {
     return size >= SPARTAN_MOTION_BLUR_HOOK_LENGTH &&
            !memcmp(code, spartanport_motion_blur_original, SPARTAN_MOTION_BLUR_HOOK_LENGTH);
@@ -81,11 +94,16 @@ static inline unsigned spartanport_put64(unsigned char *out, unsigned n, uintptr
 
 /* Returns the stub's size. */
 static inline unsigned spartanport_motion_blur_build_stub(unsigned char *out, uintptr_t enabled, uintptr_t gate,
-                                                         uintptr_t queued, uintptr_t resume) {
+                                                         uintptr_t queued, uintptr_t update, uintptr_t resume) {
     unsigned n = 0;
     out[n++] = 0x48; out[n++] = 0xb8; n = spartanport_put64(out, n, enabled);     /* movabs rax, enabled */
     out[n++] = 0x80; out[n++] = 0x38; out[n++] = 0x00;                            /* cmp byte [rax], 0 */
-    out[n++] = 0x75; out[n++] = 2 * 10 + 2 * 6 + 1;                               /* jne on (skip 33 bytes) */
+    out[n++] = 0x75; out[n++] = 18 + 2 * 10 + 2 * 6 + 1;                          /* jne on (skip 51 bytes) */
+    out[n++] = 0x57;                                                              /* push rdi (aligns rsp to 16) */
+    out[n++] = 0x48; out[n++] = 0x8d; out[n++] = 0x7f; out[n++] = 0x28;           /* lea rdi, [rdi+0x28] */
+    out[n++] = 0x48; out[n++] = 0xb8; n = spartanport_put64(out, n, update);      /* movabs rax, update */
+    out[n++] = 0xff; out[n++] = 0xd0;                                             /* call rax */
+    out[n++] = 0x5f;                                                              /* pop rdi */
     out[n++] = 0x48; out[n++] = 0xb8; n = spartanport_put64(out, n, gate);        /* movabs rax, gate */
     out[n++] = 0xc7; out[n++] = 0x00; memset(out + n, 0, 4); n += 4;              /* mov dword [rax], 0 */
     out[n++] = 0x48; out[n++] = 0xb8; n = spartanport_put64(out, n, queued);      /* movabs rax, queued */
