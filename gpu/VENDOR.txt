@@ -19,3 +19,4 @@ Backported from upstream after b4e7ae7 (2026-10-02), correctness fixes:
   ee0364a9c mip levels clamped to the extent's full mip chain (#5453).
   28ad5d998 blit pipelines use the backing images' real sample counts (#5595).
   12c5978f6 nested indirect-buffer coroutine frames freed (#5258), by the SCOPE_EXIT guards of f9d07487d (#5446).
+  e6c79a5fe constant-engine counter waits: no unsigned wrap, no null task resumed (#5406).
