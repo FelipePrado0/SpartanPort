@@ -33,6 +33,8 @@ gamecontrollerdb.txt
 
 # The launcher's data files when it runs from a checkout (data folder = this folder).
 /settings.json
+/launcher_gpu.txt
+/launcher_error.log
 /mods.json
 /mods_presets.json
 /patches.json
