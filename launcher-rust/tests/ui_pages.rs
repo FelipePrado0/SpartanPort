@@ -725,6 +725,26 @@ fn unchecking_a_patch_lands_in_game_patches() {
     assert_eq!(saved["CUSA01623"], serde_json::json!(["Fix Alpha"]));
 }
 
+/// Chinese labels toggle the original patch name in persisted game settings.
+#[test]
+fn chinese_patch_labels_keep_the_original_saved_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state(dir.path());
+    browsed(&mut state, "game_dir", &dump_with_patches(dir.path()));
+    open(&mut state, Page::Game);
+    state.lang = "zh".into();
+    state.patches.selectable[0].name = "Skip Intro".into();
+    state.patches.chosen.clear();
+    state.patches.chosen.insert("Skip Intro".into());
+    click_tall(&mut state, "跳过开场标志  (Ann)");
+    assert!(!state.patches.chosen.contains("Skip Intro"));
+    click_tall(&mut state, "跳过开场标志  (Ann)");
+    assert_eq!(
+        state.store.json("game_patches").unwrap()["CUSA01623"],
+        serde_json::json!(["Skip Intro"])
+    );
+}
+
 #[test]
 fn restore_asks_first_and_is_blocked_while_running() {
     let dir = tempfile::tempdir().unwrap();
@@ -1704,6 +1724,70 @@ fn reopening_mods_reads_an_update_extracted_meanwhile() {
         .map(|(key, _, _)| key.as_str())
         .collect();
     assert_eq!(keys, ["Community.xml/Sharper Shadows"]);
+}
+
+/// A translated third-party row saves and reloads the original file/name selection.
+#[test]
+fn chinese_third_party_patch_selection_survives_save_and_reload() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = mods_state(dir.path());
+    let dump = dump_with_patches(dir.path());
+    std::fs::write(
+        dir.path().join("patches/Community.xml"),
+        "<Patch><TitleID><ID>CUSA01623</ID></TitleID>\
+         <Metadata Name=\"Skip Intro\" Author=\"Bo\" AppVer=\"01.02\" isEnabled=\"false\"><PatchList/></Metadata></Patch>",
+    )
+    .unwrap();
+    browsed(&mut state, "game_dir", &dump);
+    open(&mut state, Page::Mods);
+    load_mods(&mut state);
+    state.lang = "zh".into();
+    let key = "Community.xml/Skip Intro";
+    let label = format!("Community.xml/{}  ·  Bo", tr("zh", "Skip Intro"));
+    assert_ne!(tr("zh", "Skip Intro"), "Skip Intro");
+    assert!(!state.mods.external_enabled.contains(key));
+    click_tall(&mut state, &label);
+    assert!(state.mods.external_enabled.contains(key));
+    let _ = app::update(&mut state, Message::Save);
+    let saved: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(state.paths.patches_json()).unwrap()).unwrap();
+    assert_eq!(saved["enabled"], serde_json::json!([key]));
+    let mut restored = mods_state(dir.path());
+    open(&mut restored, Page::Mods);
+    load_mods(&mut restored);
+    restored.lang = "zh".into();
+    assert!(restored.mods.external_enabled.contains(key));
+    assert!(tall_has(&restored, &label));
+    click_tall(&mut restored, &label);
+    assert!(!restored.mods.external_enabled.contains(key));
+}
+
+/// Slashes inside third-party names stay visible once and preserve the selection key.
+#[test]
+fn third_party_patch_names_with_slashes_keep_the_original_identity() {
+    for lang in ["en", "zh"] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = mods_state(dir.path());
+        open(&mut state, Page::Mods);
+        state.lang = lang.into();
+        let key = "Community.xml/60/120 FPS";
+        state.mods.external.push((
+            key.into(),
+            dir.path().join("patches/Community.xml"),
+            spartanport_launcher::core::patches::PatchMeta {
+                name: "60/120 FPS".into(),
+                author: Some("Bo".into()),
+                note: None,
+                enabled_by_default: false,
+            },
+        ));
+        assert!(tall_has(&state, "Community.xml/60/120 FPS  ·  Bo"));
+        assert!(!tall_has(&state, "Community.xml/60/60/120 FPS  ·  Bo"));
+        click_tall(&mut state, "Community.xml/60/120 FPS  ·  Bo");
+        assert!(state.mods.external_enabled.contains(key));
+        click_tall(&mut state, "Community.xml/60/120 FPS  ·  Bo");
+        assert!(!state.mods.external_enabled.contains(key));
+    }
 }
 
 #[test]
