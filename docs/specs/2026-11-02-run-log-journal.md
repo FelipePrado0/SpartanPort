@@ -39,6 +39,8 @@ Branch: `pr/run-log-timestamps`. Código em `launcher-rust/src/core/log.rs` e
   - `level`: `trace`, `debug`, `info`, `warning`, `error` ou `critical`.
   - `area`: texto ou `null`.
   - `text`: a linha sem `\r\n`.
+  - `t` e `time` de uma linha são a hora em que o primeiro pedaço dela chegou ao launcher, tomada
+    antes de gravar o `last_run.log`.
   - `code`: inteiro, ou `null` quando `wait` do processo falhou. `advice`: texto, ou `null` quando o
     launcher não escreveu aviso.
 * **Critérios de aceite:**
@@ -57,6 +59,8 @@ Branch: `pr/run-log-timestamps`. Código em `launcher-rust/src/core/log.rs` e
     hora em que o primeiro pedaço chegou.
   - QUANDO a saída terminar sem `\n` final O SISTEMA DEVE gravar a última linha como registro ao
     encerrar.
+  - QUANDO gravar o `last_run.log` demorar O SISTEMA DEVE manter no registro a hora de chegada do
+    pedaço, tomada antes dessa gravação.
   - QUANDO o jogo falhar com um aviso conhecido O SISTEMA DEVE gravar as linhas do aviso (a linha
     vazia e o aviso) como registros com `source` `launcher` e o `n` do `last_run.log`.
   - QUANDO o jogo terminar, por qualquer caminho de `spawn_game` O SISTEMA DEVE gravar o registro

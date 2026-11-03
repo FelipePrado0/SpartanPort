@@ -122,6 +122,7 @@ impl RunLog {
     }
 
     fn write_from(&mut self, text: &str, source: Source) {
+        let arrival = Arrival::now();
         if let Some(file) = &mut self.file {
             if file
                 .write_all(text.as_bytes())
@@ -131,7 +132,7 @@ impl RunLog {
                 self.file = None;
             }
         }
-        self.with_journal(|journal| journal.record_text(text, source));
+        self.with_journal(|journal| journal.record_text(text, source, arrival));
     }
 
     fn with_journal(&mut self, record: impl FnOnce(&mut RunJournal) -> io::Result<()>) {
@@ -235,22 +236,37 @@ fn area_prefix(text: &str) -> Option<&str> {
     is_label.then_some(label)
 }
 
+/// When a piece of output reached the launcher. It is taken before `last_run.log` is written, so a
+/// slow disk does not make the journal's times later than the output.
+#[derive(Debug, Clone, Copy)]
+struct Arrival {
+    at: Instant,
+    time: DateTime<Local>,
+}
+
+impl Arrival {
+    fn now() -> Arrival {
+        Arrival {
+            at: Instant::now(),
+            time: Local::now(),
+        }
+    }
+}
+
 /// A line whose `\n` has not arrived yet, with when and from whom its first piece came.
 #[derive(Debug)]
 struct OpenLine {
     text: String,
     source: Source,
-    at: Instant,
-    time: DateTime<Local>,
+    arrival: Arrival,
 }
 
 impl OpenLine {
-    fn begin(source: Source) -> OpenLine {
+    fn begin(source: Source, arrival: Arrival) -> OpenLine {
         OpenLine {
             text: String::new(),
             source,
-            at: Instant::now(),
-            time: Local::now(),
+            arrival,
         }
     }
 }
@@ -302,13 +318,13 @@ impl RunJournal {
 
     /// Takes `text` as the next piece of the log: each `\n` completes a line, and what follows
     /// the last one stays open, stamped by the piece that began it.
-    fn record_text(&mut self, text: &str, source: Source) -> io::Result<()> {
+    fn record_text(&mut self, text: &str, source: Source, arrival: Arrival) -> io::Result<()> {
         let mut rest = text;
         while let Some(end) = rest.find('\n') {
             let mut line = self
                 .open_line
                 .take()
-                .unwrap_or_else(|| OpenLine::begin(source));
+                .unwrap_or_else(|| OpenLine::begin(source, arrival));
             line.text.push_str(&rest[..end]);
             self.write_line(line)?;
             rest = &rest[end + 1..];
@@ -316,7 +332,7 @@ impl RunJournal {
         if !rest.is_empty() {
             let line = self
                 .open_line
-                .get_or_insert_with(|| OpenLine::begin(source));
+                .get_or_insert_with(|| OpenLine::begin(source, arrival));
             line.text.push_str(rest);
         }
         Ok(())
@@ -350,8 +366,8 @@ impl RunJournal {
         let mut record = json!({
             "type": "line",
             "n": self.line_number,
-            "t": self.seconds_since_open(line.at),
-            "time": format_time(line.time),
+            "t": self.seconds_since_open(line.arrival.at),
+            "time": format_time(line.arrival.time),
             "source": line.source.as_str(),
             "level": level.as_str(),
             "area": area,
@@ -827,6 +843,23 @@ mod tests {
         assert_eq!(kinds, ["start", "line", "line", "exit"]);
         assert_eq!(all[2]["n"], 2);
         assert_eq!(all[2]["text"], "last words");
+    }
+
+    #[test]
+    fn a_line_is_stamped_when_it_arrived_not_when_it_was_recorded() {
+        let (_dir, mut log, _, journal_path) = open_in_tempdir();
+        let journal = log.journal.as_mut().unwrap();
+        // As if writing last_run.log had stalled: the piece arrived 1.5 s after the journal opened.
+        let arrival = Arrival {
+            at: journal.opened + Duration::from_millis(1500),
+            time: Local::now(),
+        };
+        journal
+            .record_text("late\n", Source::Game, arrival)
+            .unwrap();
+        log.finish(Some(0), None);
+        let lines = line_records(&journal_path);
+        assert_eq!(seconds(&lines[0]), 1.5, "{lines:?}");
     }
 
     #[test]
