@@ -514,7 +514,15 @@ fn a_window_start_that_never_finished_moves_one_step_away() {
     let dir = tempfile::tempdir().unwrap();
     let state = dir.path().join(WINDOW_STATE);
     let read = || std::fs::read_to_string(&state).unwrap();
-    let prepare = |dx12| prepare_window(dir.path(), false, dx12);
+    // Each start here comes long after the last one, as a player opens it again after a crash.
+    let prepare = |dx12| {
+        if state.exists() {
+            let file = std::fs::File::options().write(true).open(&state).unwrap();
+            let past = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+            file.set_modified(past).unwrap();
+        }
+        prepare_window(dir.path(), false, dx12)
+    };
 
     // First start: the default, and a mark for the next one to find.
     assert_eq!(prepare(true), None);
@@ -556,6 +564,25 @@ fn a_window_start_that_never_finished_moves_one_step_away() {
         std::fs::write(&state, old).unwrap();
         assert_eq!(prepare(true), None);
         assert_eq!(read(), format!("starting {VERSION}"));
+    }
+}
+
+#[test]
+fn a_second_click_does_not_count_as_a_dead_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = dir.path().join(WINDOW_STATE);
+    let read = || std::fs::read_to_string(&state).unwrap();
+    for _ in 0..3 {
+        assert_eq!(prepare_window(dir.path(), false, true), None);
+        assert_eq!(read(), format!("starting {VERSION}"));
+    }
+    std::fs::write(&state, format!("trying-dx12 {VERSION}")).unwrap();
+    for _ in 0..3 {
+        assert_eq!(
+            prepare_window(dir.path(), false, true),
+            Some(("WGPU_BACKEND", "dx12"))
+        );
+        assert_eq!(read(), format!("trying-dx12 {VERSION}"));
     }
 }
 

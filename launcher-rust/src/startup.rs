@@ -177,6 +177,9 @@ pub fn apply_to_process(context: &Context) {
 pub const WINDOW_STATE: &str = "launcher_gpu.txt";
 /// In the data folder: what stopped the launcher. A windowed program has no console to say it on.
 const ERROR_LOG: &str = "launcher_error.log";
+/// A mark younger than this is another launcher still starting, not a dead one: a second click
+/// must not push a healthy PC towards the slow software renderer.
+const WINDOW_RETRY: Duration = Duration::from_secs(10);
 
 /// The environment variable the window has to start with, if any. `chosen`: a backend set by hand
 /// wins. `dx12`: the system has Direct3D 12, which leaves out the Vulkan drivers the default
@@ -192,13 +195,19 @@ pub fn prepare_window(
     let state = data_dir.join(WINDOW_STATE);
     let last = std::fs::read_to_string(&state).unwrap_or_default();
     let step = last.strip_suffix(VERSION).map(str::trim_end);
+    let fresh = std::fs::metadata(&state)
+        .and_then(|metadata| metadata.modified())
+        .is_ok_and(|at| at.elapsed().is_ok_and(|age| age < WINDOW_RETRY));
     let next = match step {
+        Some(going @ ("starting" | "trying-dx12")) if fresh => going,
         Some("software" | "trying-dx12") => "software",
         Some("starting") if !dx12 => "software",
         Some("starting" | "dx12") => "trying-dx12",
         _ => "starting",
     };
-    let _ = std::fs::write(&state, format!("{next} {VERSION}"));
+    if step != Some(next) {
+        let _ = std::fs::write(&state, format!("{next} {VERSION}"));
+    }
     match next {
         "software" => Some(("ICED_BACKEND", "tiny-skia")),
         "trying-dx12" => Some(("WGPU_BACKEND", "dx12")),
