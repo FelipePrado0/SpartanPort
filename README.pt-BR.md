@@ -332,8 +332,8 @@ não espera). O direcional sozinho troca como antes. Os tutoriais de troca de ar
 
 Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Controls do launcher, em
 *Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox*, *Nintendo* ou *Teclado*. Eles trocam os ícones
-PlayStation dos tutoriais, da lista de golpes, dos eventos rápidos e, nos estilos de controle, da lira das Musas
-na Câmara da Chama; o desenho do controle no menu de pausa continua sendo um DualShock 4. *Teclado* mostra a tecla que aperta cada botão, seguindo o seu
+PlayStation dos tutoriais, da lista de golpes, dos eventos rápidos e da lira das Musas
+na Câmara da Chama; o desenho do controle no menu de pausa continua sendo um DualShock 4. *Teclado* mostra a tecla que aperta cada botão, também na lira, seguindo o seu
 mapeamento do teclado (uma tecla trocada aparece no próximo início); *Igual ao meu controle* também mostra
 as teclas quando nenhum controle está conectado. O launcher grava uma cópia com patch de até três arquivos do
 jogo (cerca de 410 MB) na pasta de dados do port e nunca altera a pasta do jogo. Um controle novo é reconhecido após
