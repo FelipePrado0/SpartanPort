@@ -5,19 +5,32 @@
 #include "../src/graphics_hook.h"
 #include <windows.h>
 
-// Motion blur: the stub is entered as the function itself. On, it replays the prologue (push rbp;
-// mov rbp, rsp; push r15; push r14) and jumps here: undo it, note the visit and return.
-extern "C" int blur_resumed;
-int blur_resumed;
+// Motion blur: the stub replaces `test dl, dl; je epilogue`. The two targets return, so a call of
+// the stub records which side ran and the eax the branch has to keep.
+extern "C" int blur_went_resume;
+int blur_went_resume;
+extern "C" int blur_went_epilogue;
+int blur_went_epilogue;
+extern "C" uint32_t blur_eax;
+uint32_t blur_eax;
 extern "C" void blur_resume();
-asm(".globl blur_resume\nblur_resume:\n"
-    "    pop %r14\n    pop %r15\n    pop %rbp\n"
-    "    movl $1, blur_resumed(%rip)\n    ret\n");
-// Shadows: like motion blur's prologue; the resume notes the casters list (rsi) it was given.
+asm(".text\n.globl blur_resume\nblur_resume:\n"
+    "    movl %eax, blur_eax(%rip)\n"
+    "    movl $1, blur_went_resume(%rip)\n"
+    "    ret\n");
+extern "C" void blur_epilogue();
+asm(".text\n.globl blur_epilogue\nblur_epilogue:\n"
+    "    movl %eax, blur_eax(%rip)\n"
+    "    movl $1, blur_went_epilogue(%rip)\n"
+    "    ret\n");
+static void run_blur(unsigned char* stub, uint32_t eax, uint32_t edx) {
+    asm volatile("call *%2" : "+a"(eax), "+d"(edx) : "c"(stub) : "rsi", "memory", "cc");
+}
+// Shadows: replays an 8-byte prologue; the resume notes the casters list (rsi) it was given.
 extern "C" uint64_t shadow_rsi;
 uint64_t shadow_rsi;
 extern "C" void shadow_resume();
-asm(".globl shadow_resume\nshadow_resume:\n"
+asm(".text\n.globl shadow_resume\nshadow_resume:\n"
     "    pop %r14\n    pop %r15\n    pop %rbp\n"
     "    movq %rsi, shadow_rsi(%rip)\n    ret\n");
 static void run_shadows(unsigned char* stub, uint64_t casters) {
@@ -28,7 +41,7 @@ static void run_shadows(unsigned char* stub, uint64_t casters) {
 extern "C" uint8_t bloom_skipped;
 uint8_t bloom_skipped;
 extern "C" void bloom_resume();
-asm(".globl bloom_resume\nbloom_resume:\n    sete bloom_skipped(%rip)\n    ret\n");
+asm(".text\n.globl bloom_resume\nbloom_resume:\n    sete bloom_skipped(%rip)\n    ret\n");
 
 static bool run_bloom(unsigned char* stub, unsigned char* fx) {
     asm volatile("push %%rbx\n    mov %%rdi, %%rbx\n    call *%%rsi\n    pop %%rbx"
@@ -39,11 +52,21 @@ static bool run_bloom(unsigned char* stub, unsigned char* fx) {
 int main() {
     // The signatures name the sites they were made from.
     int bytes[SPARTAN_SIGNATURE_MAX];
-    assert(spartanport_signature_parse(spartanport_motion_blur_site.pattern, bytes) == 48);
-    for (unsigned i = 0; i < SPARTAN_MOTION_BLUR_HOOK_LENGTH; ++i)
-        assert(bytes[i] == spartanport_motion_blur_original[i]);
-    assert(bytes[SPARTAN_MOTION_BLUR_GATE] == 0x4c && bytes[SPARTAN_MOTION_BLUR_GATE + 2] == 0x3d);    // lea r15
-    assert(bytes[SPARTAN_MOTION_BLUR_QUEUED] == 0x4c && bytes[SPARTAN_MOTION_BLUR_QUEUED + 2] == 0x35);  // lea r14
+    assert(spartanport_signature_parse(spartanport_motion_blur_site.pattern, bytes) == 20);
+    assert(bytes[0] == 0x84 && bytes[1] == 0xd2 && bytes[2] == 0x0f && bytes[3] == 0x84);  // test dl, dl; je
+    assert(bytes[8] == 0x48 && bytes[9] == 0x8d && bytes[10] == 0x15);                    // lea rdx, [rip]
+    assert(bytes[15] == 0x85 && bytes[16] == 0xc0 && bytes[17] == 0x0f && bytes[18] == 0x94 && bytes[19] == 0xc0);
+    assert(spartanport_motion_blur_signature_match(spartanport_motion_blur_original, SPARTAN_MOTION_BLUR_HOOK_LENGTH));
+    assert(!spartanport_motion_blur_branch_match(spartanport_motion_blur_original, SPARTAN_MOTION_BLUR_HOOK_LENGTH));
+    {
+        // CUSA01623 v01.02 at image 0x16af5c: je +0x168 lands on the epilogue at 0x16b0cc.
+        const unsigned char site[] = {
+            0x84, 0xd2, 0x0f, 0x84, 0x68, 0x01, 0x00, 0x00, 0x48, 0x8d, 0x15, 0x65, 0xe1, 0x90, 0x01,
+            0x85, 0xc0, 0x0f, 0x94, 0xc0};
+        assert(spartanport_motion_blur_branch_match(site, sizeof(site)));
+        assert(spartanport_motion_blur_epilogue(site, 0) == 0x170);
+        assert(spartanport_signature_find(site, sizeof(site), &spartanport_motion_blur_site) == 0);
+    }
     assert(spartanport_signature_parse(spartanport_bloom_site.pattern, bytes) == 23);
     for (unsigned i = 0; i < SPARTAN_BLOOM_HOOK_LENGTH; ++i)
         assert(bytes[i] == spartanport_bloom_original[i]);
@@ -85,18 +108,25 @@ int main() {
         VirtualAlloc(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
     assert(page);
 
-    // Motion blur.
+    // Motion blur. eax is the previous-frame flag the bytes after the branch still read.
     volatile bool blur_on = true;
-    volatile int32_t gate = 1, queued = 1;
-    assert(spartanport_motion_blur_build_stub(page, (uintptr_t)&blur_on, (uintptr_t)&gate, (uintptr_t)&queued,
-                                              (uintptr_t)&blur_resume) < 256);
-    auto blur = reinterpret_cast<void (*)()>(page);
-    blur();
-    assert(blur_resumed == 1 && gate == 1 && queued == 1);  // on: the game's own function runs
-    blur_resumed = 0;
-    blur_on = false;
-    blur();
-    assert(blur_resumed == 0 && gate == 0 && queued == 0);  // off: gates cleared, nothing queued
+    assert(spartanport_motion_blur_build_stub(page, (uintptr_t)&blur_on, (uintptr_t)&blur_resume,
+                                              (uintptr_t)&blur_epilogue) < 256);
+    const uint32_t sentinel = 0xa5a5a5a5u;
+    auto check_blur = [&](bool on, uint32_t dl, bool resume) {
+        blur_on = on;
+        blur_went_resume = 0;
+        blur_went_epilogue = 0;
+        blur_eax = 0;
+        run_blur(page, sentinel, dl);
+        assert(blur_eax == sentinel);
+        assert(blur_went_resume == (resume ? 1 : 0));
+        assert(blur_went_epilogue == (resume ? 0 : 1));
+    };
+    check_blur(true, 1, true);    // on, camera moving: the queue path
+    check_blur(true, 0, false);   // on, camera cut: the game's own skip
+    check_blur(false, 1, false);  // off: skip even when the camera moved
+    check_blur(false, 0, false);
 
     // Bloom.
     unsigned char* bloom = page + 256;
