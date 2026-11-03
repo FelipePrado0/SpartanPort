@@ -350,6 +350,8 @@ void ApplyGain() { // worker thread
     SDL_SetAudioStreamGain(a.stream, o.muted ? 0.0f : float(o.volume) / 100.0f);
 }
 
+// The five grade sounds (the trophy folder's files, else the built-in ones), then the audio device
+// through spartanportgpu_audio_init() once there is a sound to play and SPARTAN_AUDIO is not none.
 void LoadSounds() { // worker thread
     Audio& a = audio();
     const fs::path dir = TrophyDir();
