@@ -17,6 +17,11 @@ uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *n
     (void)table; (void)count; (void)name;
     return 0;
 }
+/* The switch-attack scan asks for mapped guest memory; these tests map none. */
+int runtime_memory_is_mapped(uintptr_t address, uint64_t size) {
+    (void)address; (void)size;
+    return 0;
+}
 
 /* PS4 buttons a host source presses in `map`. */
 static uint32_t pressed_by(const ButtonMap *map, int source) {
