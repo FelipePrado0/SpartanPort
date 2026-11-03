@@ -2,6 +2,7 @@
 //! the window opens. None of these steps stops the launcher.
 
 use std::ffi::{OsStr, OsString};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -16,7 +17,7 @@ use crate::core::platform::tool::SystemTools;
 use crate::core::settings::load_app_settings;
 use crate::core::update::{self, is_packaged, update_dir};
 use crate::core::{desktop, legacy, platform};
-use crate::APP_NAME;
+use crate::{APP_NAME, VERSION};
 
 /// What the command line asks for, with the arguments each role takes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,6 +166,70 @@ pub fn apply_to_process(context: &Context) {
         if std::env::var_os(key).as_deref() != Some(OsStr::new(value)) {
             std::env::set_var(key, value);
         }
+    }
+}
+
+/// In the data folder: how the window starts. `starting VERSION` until the window has run a
+/// while; a mark still there means the start died, and a driver that takes the process down
+/// leaves nothing else behind. Each death moves one step away from the default: Direct3D 12 only
+/// (`trying-dx12` until it has run a while, then `dx12`), and last the software renderer, which
+/// opens anywhere but is slow.
+pub const WINDOW_STATE: &str = "launcher_gpu.txt";
+/// In the data folder: what stopped the launcher. A windowed program has no console to say it on.
+const ERROR_LOG: &str = "launcher_error.log";
+
+/// The environment variable the window has to start with, if any. `chosen`: a backend set by hand
+/// wins. `dx12`: the system has Direct3D 12, which leaves out the Vulkan drivers the default
+/// loads. A failed write only costs the fallback.
+pub fn prepare_window(
+    data_dir: &Path,
+    chosen: bool,
+    dx12: bool,
+) -> Option<(&'static str, &'static str)> {
+    if chosen {
+        return None;
+    }
+    let state = data_dir.join(WINDOW_STATE);
+    let last = std::fs::read_to_string(&state).unwrap_or_default();
+    let step = last.strip_suffix(VERSION).map(str::trim_end);
+    let next = match step {
+        Some("software" | "trying-dx12") => "software",
+        Some("starting") if !dx12 => "software",
+        Some("starting" | "dx12") => "trying-dx12",
+        _ => "starting",
+    };
+    let _ = std::fs::write(&state, format!("{next} {VERSION}"));
+    match next {
+        "software" => Some(("ICED_BACKEND", "tiny-skia")),
+        "trying-dx12" => Some(("WGPU_BACKEND", "dx12")),
+        _ => None,
+    }
+}
+
+/// The window works: the default needs no mark, and `dx12` stays for the next start. `software`
+/// stays until the next version.
+pub fn confirm_window(data_dir: &Path) {
+    let state = data_dir.join(WINDOW_STATE);
+    let Ok(last) = std::fs::read_to_string(&state) else {
+        return;
+    };
+    if last.starts_with("starting ") {
+        let _ = std::fs::remove_file(state);
+    } else if last.starts_with("trying-dx12 ") {
+        let _ = std::fs::write(state, format!("dx12 {VERSION}"));
+    }
+}
+
+/// Adds one line to the error log; with nowhere to write it, the failure stays unrecorded.
+pub fn log_failure(data_dir: &Path, text: &str) {
+    let at = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+    let line = format!("{at} {VERSION}: {}\n", text.replace('\n', " "));
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(data_dir.join(ERROR_LOG));
+    if let Ok(mut file) = file {
+        let _ = file.write_all(line.as_bytes());
     }
 }
 

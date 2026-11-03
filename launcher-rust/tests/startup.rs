@@ -8,11 +8,15 @@ use iced::{window, Point, Size};
 use spartanport_launcher::core::i18n::launcher_language;
 use spartanport_launcher::core::paths::Paths;
 use spartanport_launcher::core::settings::app_defaults;
-use spartanport_launcher::startup::{migrates, route, route_on, start, Route};
+use spartanport_launcher::startup::{
+    confirm_window, log_failure, migrates, prepare_window, route, route_on, start, Route,
+    WINDOW_STATE,
+};
 use spartanport_launcher::ui::app::{
     self, centred_position, fitted_window, window_message, Message, State, WINDOW_SIZE,
 };
 use spartanport_launcher::ui::theme::window_zoom;
+use spartanport_launcher::VERSION;
 
 #[test]
 fn arguments_route_to_their_roles() {
@@ -501,4 +505,106 @@ fn windows_names_are_upper_case() {
     let (_, context) = start(&[], Path::new("."), vars(&[("spartan_x", "1")]), true);
     assert_eq!(context.env["SPARTAN_X"], "1");
     assert!(!context.env.contains_key("spartan_x"));
+}
+
+#[test]
+fn a_window_start_that_never_finished_moves_one_step_away() {
+    const DX12: Option<(&str, &str)> = Some(("WGPU_BACKEND", "dx12"));
+    const SOFTWARE: Option<(&str, &str)> = Some(("ICED_BACKEND", "tiny-skia"));
+    let dir = tempfile::tempdir().unwrap();
+    let state = dir.path().join(WINDOW_STATE);
+    let read = || std::fs::read_to_string(&state).unwrap();
+    let prepare = |dx12| prepare_window(dir.path(), false, dx12);
+
+    // First start: the default, and a mark for the next one to find.
+    assert_eq!(prepare(true), None);
+    assert_eq!(read(), format!("starting {VERSION}"));
+
+    // The window came up: the mark goes and the default stays.
+    confirm_window(dir.path());
+    assert!(!state.exists());
+    assert_eq!(prepare(true), None);
+
+    // It died before that: Direct3D 12, which stays once it has worked.
+    assert_eq!(prepare(true), DX12);
+    assert_eq!(read(), format!("trying-dx12 {VERSION}"));
+    confirm_window(dir.path());
+    assert_eq!(read(), format!("dx12 {VERSION}"));
+    assert_eq!(prepare(true), DX12);
+    confirm_window(dir.path());
+
+    // Direct3D 12 died too: software, which stays with no crash in between.
+    assert_eq!(prepare(true), DX12);
+    assert_eq!(prepare(true), SOFTWARE);
+    assert_eq!(read(), format!("software {VERSION}"));
+    confirm_window(dir.path());
+    assert_eq!(read(), format!("software {VERSION}"));
+    assert_eq!(prepare(true), SOFTWARE);
+
+    // A system with no Direct3D 12 goes straight to software.
+    std::fs::remove_file(&state).unwrap();
+    assert_eq!(prepare(false), None);
+    assert_eq!(prepare(false), SOFTWARE);
+
+    // A new version tries the default again.
+    for old in [
+        "starting 0.0.1",
+        "trying-dx12 0.0.1",
+        "dx12 0.0.1",
+        "software 0.0.1",
+    ] {
+        std::fs::write(&state, old).unwrap();
+        assert_eq!(prepare(true), None);
+        assert_eq!(read(), format!("starting {VERSION}"));
+    }
+}
+
+#[test]
+fn a_chosen_backend_leaves_the_window_state_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = dir.path().join(WINDOW_STATE);
+    assert_eq!(prepare_window(dir.path(), true, true), None);
+    assert!(!state.exists());
+    std::fs::write(&state, format!("software {VERSION}")).unwrap();
+    assert_eq!(prepare_window(dir.path(), true, true), None);
+    assert_eq!(
+        std::fs::read_to_string(&state).unwrap(),
+        format!("software {VERSION}")
+    );
+}
+
+#[test]
+fn an_unwritable_folder_never_stops_the_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing");
+    assert_eq!(prepare_window(&missing, false, true), None);
+    confirm_window(&missing);
+    log_failure(&missing, "boom");
+}
+
+#[test]
+fn failures_add_up_in_the_error_log() {
+    let dir = tempfile::tempdir().unwrap();
+    log_failure(dir.path(), "first");
+    log_failure(dir.path(), "second");
+    let log = std::fs::read_to_string(dir.path().join("launcher_error.log")).unwrap();
+    assert_eq!(log.lines().count(), 2);
+    assert!(log.contains(VERSION) && log.contains("first") && log.contains("second"));
+}
+
+#[test]
+fn the_window_start_is_confirmed_after_it_has_run_a_while() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_with(dir.path(), "{}");
+    let marker = dir.path().join(WINDOW_STATE);
+    prepare_window(dir.path(), false, true);
+    let opened = state.now;
+    let _ = app::update(
+        &mut state,
+        Message::WindowOpened(window::Id::unique(), WINDOW_SIZE),
+    );
+    let _ = app::update(&mut state, Message::Tick(opened));
+    assert!(marker.exists());
+    let _ = app::update(&mut state, Message::Tick(opened + app::WINDOW_CONFIRM));
+    assert!(!marker.exists());
 }
