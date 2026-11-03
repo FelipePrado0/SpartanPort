@@ -378,7 +378,16 @@ void DrawPreparation::ScannerLoop(std::stop_token stop) {
     }
 }
 
+namespace {
+thread_local bool on_worker_thread = false;
+} // namespace
+
+bool DrawPreparation::OnWorkerThread() noexcept {
+    return on_worker_thread;
+}
+
 void DrawPreparation::WorkerLoop(std::stop_token stop, u32 index) {
+    on_worker_thread = true;
     Common::SetCurrentThreadName(("spartanport:DrawPrep" + std::to_string(index)).c_str());
     SpartanThreads::MakeBackground();
     auto regs = std::make_unique<AmdGpu::Regs>();
