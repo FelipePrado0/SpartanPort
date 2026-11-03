@@ -236,6 +236,10 @@ fn area_prefix(text: &str) -> Option<&str> {
     is_label.then_some(label)
 }
 
+/// The most text one journal record keeps, the size of one pipe read: the rest of a longer line
+/// is dropped and the record says so, so a line that never ends cannot grow the launcher's memory.
+const MAX_JOURNAL_LINE_BYTES: usize = 64 * 1024;
+
 /// When a piece of output reached the launcher. It is taken before `last_run.log` is written, so a
 /// slow disk does not make the journal's times later than the output.
 #[derive(Debug, Clone, Copy)]
@@ -257,6 +261,7 @@ impl Arrival {
 #[derive(Debug)]
 struct OpenLine {
     text: String,
+    truncated: bool,
     source: Source,
     arrival: Arrival,
 }
@@ -265,9 +270,25 @@ impl OpenLine {
     fn begin(source: Source, arrival: Arrival) -> OpenLine {
         OpenLine {
             text: String::new(),
+            truncated: false,
             source,
             arrival,
         }
+    }
+
+    /// Adds `piece` up to `MAX_JOURNAL_LINE_BYTES`, cut at a character boundary.
+    fn push(&mut self, piece: &str) {
+        let room = MAX_JOURNAL_LINE_BYTES.saturating_sub(self.text.len());
+        if piece.len() <= room {
+            self.text.push_str(piece);
+            return;
+        }
+        let mut end = room;
+        while !piece.is_char_boundary(end) {
+            end -= 1;
+        }
+        self.text.push_str(&piece[..end]);
+        self.truncated = true;
     }
 }
 
@@ -325,7 +346,7 @@ impl RunJournal {
                 .open_line
                 .take()
                 .unwrap_or_else(|| OpenLine::begin(source, arrival));
-            line.text.push_str(&rest[..end]);
+            line.push(&rest[..end]);
             self.write_line(line)?;
             rest = &rest[end + 1..];
         }
@@ -333,7 +354,7 @@ impl RunJournal {
             let line = self
                 .open_line
                 .get_or_insert_with(|| OpenLine::begin(source, arrival));
-            line.text.push_str(rest);
+            line.push(rest);
         }
         Ok(())
     }
@@ -374,6 +395,9 @@ impl RunJournal {
         });
         if continuation {
             record["continuation"] = json!(true);
+        }
+        if line.truncated {
+            record["truncated"] = json!(true);
         }
         record["text"] = json!(text);
         self.previous = Some(LineContext { level, area });
@@ -860,6 +884,42 @@ mod tests {
         log.finish(Some(0), None);
         let lines = line_records(&journal_path);
         assert_eq!(seconds(&lines[0]), 1.5, "{lines:?}");
+    }
+
+    #[test]
+    fn a_line_longer_than_the_limit_is_cut_and_marked_but_kept_whole_in_the_log() {
+        let (_dir, mut log, log_path, journal_path) = open_in_tempdir();
+        let long = "x".repeat(MAX_JOURNAL_LINE_BYTES + 100);
+        log.write(&long[..40_000]);
+        log.write(&long[40_000..]);
+        log.write("\nnext\n");
+        log.finish(Some(0), None);
+        let lines = line_records(&journal_path);
+        assert_eq!(lines.len(), 2, "two records");
+        assert_eq!(lines[0]["n"], 1);
+        assert_eq!(lines[0]["truncated"], true);
+        assert_eq!(
+            lines[0]["text"].as_str().unwrap().len(),
+            MAX_JOURNAL_LINE_BYTES
+        );
+        assert_eq!(lines[1]["n"], 2);
+        assert_eq!(lines[1]["text"], "next");
+        assert!(lines[1].get("truncated").is_none(), "{:?}", lines[1]);
+        assert_eq!(
+            std::fs::read_to_string(log_path).unwrap(),
+            format!("{long}\nnext\n")
+        );
+    }
+
+    #[test]
+    fn a_cut_line_ends_on_a_whole_character() {
+        // Three-byte characters: the limit falls inside one of them.
+        let euros = "€".repeat(MAX_JOURNAL_LINE_BYTES / 3 + 10);
+        let record = only_line_record(&format!("{euros}\n"));
+        let text = record["text"].as_str().unwrap();
+        assert!(text.len() <= MAX_JOURNAL_LINE_BYTES, "{}", text.len());
+        assert!(text.chars().all(|c| c == '€'));
+        assert_eq!(record["truncated"], true);
     }
 
     #[test]

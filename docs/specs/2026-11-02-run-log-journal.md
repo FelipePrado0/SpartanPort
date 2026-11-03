@@ -27,7 +27,7 @@ Branch: `pr/run-log-timestamps`. Código em `launcher-rust/src/core/log.rs` e
   | `type` | Campos | Quando |
   |---|---|---|
   | `start` | `schema` (1), `time`, `launcher` (versão), `os` | ao abrir o diário |
-  | `line` | `n`, `t`, `time`, `source`, `level`, `area`, `continuation` (só quando `true`), `text` | uma por linha do `last_run.log` |
+  | `line` | `n`, `t`, `time`, `source`, `level`, `area`, `continuation` (só quando `true`), `truncated` (só quando `true`), `text` | uma por linha do `last_run.log` |
   | `exit` | `t`, `time`, `code`, `advice` | depois que o jogo termina |
 
   - `time`: hora local em RFC 3339 com milissegundos e deslocamento (`2026-11-02T14:03:21.482-03:00`).
@@ -38,7 +38,9 @@ Branch: `pr/run-log-timestamps`. Código em `launcher-rust/src/core/log.rs` e
     (o aviso).
   - `level`: `trace`, `debug`, `info`, `warning`, `error` ou `critical`.
   - `area`: texto ou `null`.
-  - `text`: a linha sem `\r\n`.
+  - `text`: a linha sem `\r\n`, com no máximo 64 KiB (cortada num limite de caractere); quando a
+    linha for maior, o registro leva `"truncated":true` e o `last_run.log` continua com a linha
+    inteira.
   - `t` e `time` de uma linha são a hora em que o primeiro pedaço dela chegou ao launcher, tomada
     antes de gravar o `last_run.log`.
   - `code`: inteiro, ou `null` quando `wait` do processo falhou. `advice`: texto, ou `null` quando o
@@ -59,6 +61,9 @@ Branch: `pr/run-log-timestamps`. Código em `launcher-rust/src/core/log.rs` e
     hora em que o primeiro pedaço chegou.
   - QUANDO a saída terminar sem `\n` final O SISTEMA DEVE gravar a última linha como registro ao
     encerrar.
+  - QUANDO uma linha passar de 64 KiB O SISTEMA DEVE guardar só os primeiros 64 KiB no registro,
+    cortados num limite de caractere, marcar `"truncated":true` e manter a linha inteira no
+    `last_run.log`, sem que a memória do launcher cresça com o tamanho da linha.
   - QUANDO gravar o `last_run.log` demorar O SISTEMA DEVE manter no registro a hora de chegada do
     pedaço, tomada antes dessa gravação.
   - QUANDO o jogo falhar com um aviso conhecido O SISTEMA DEVE gravar as linhas do aviso (a linha
