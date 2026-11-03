@@ -1902,6 +1902,24 @@ void Rasterizer::EmitVertexBuffers() {
     });
 }
 
+// spartanport: draws whose prepared vertex inputs were stale, reported every 5 s at most.
+static void NoteStaleVertexInputs() {
+    static std::atomic<u64> stale{0};
+    static std::atomic<s64> last_report{0};
+    const u64 count = stale.fetch_add(1, std::memory_order_relaxed) + 1;
+    const s64 now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count();
+    s64 last = last_report.load(std::memory_order_relaxed);
+    if ((count != 1 && now - last < 5000) ||
+        !last_report.compare_exchange_strong(last, now, std::memory_order_relaxed)) {
+        return;
+    }
+    std::printf("Vertex inputs: %llu draws in all read their V#s again (the prepared ones were "
+                "stale)\n",
+                static_cast<unsigned long long>(count));
+}
+
 void Rasterizer::ResolveVertexBuffers(const GraphicsPipeline* pipeline,
                                       const PreparedDraw* prepared) {
     const auto& regs = Regs();
@@ -1925,6 +1943,13 @@ void Rasterizer::ResolveVertexBuffers(const GraphicsPipeline* pipeline,
                 !SpartanToggle::Disabled(SpartanToggle::PreparedResources)
             ? &prepared->vertex
             : nullptr;
+    // spartanport: a worker that read the V#s before the game rewrote their table has stale
+    // addresses or strides (stretched polygons across the screen): they are read again then.
+    if (ready &&
+        !fetch->SharpsUnchanged(pipeline->GetStage(Shader::SwStage::Vertex), ready->buffers)) {
+        NoteStaleVertexInputs();
+        ready = nullptr;
+    }
     if (ready) {
         attributes.assign(ready->attributes, ready->attributes + ready->count);
         bindings.assign(ready->bindings, ready->bindings + ready->count);

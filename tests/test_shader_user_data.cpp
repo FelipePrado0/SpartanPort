@@ -82,6 +82,18 @@ int main() {
     assert(vertex.base_address == expected.base_address + attribute.inst_offset);
     assert(vertex.data_format == attribute.data_format);
 
+    // A V# copy taken earlier (draw preparation) is stale once the game rewrites the table.
+    Shader::Gcn::FetchShaderData fetch{};
+    fetch.attributes = {attribute};
+    const AmdGpu::Buffer prepared[] = {vertex};
+    assert(fetch.SharpsUnchanged(info, prepared));
+    auto rewritten = expected;
+    rewritten.stride = 32;
+    std::memcpy(table.data() + descriptor_offset, &rewritten, sizeof(rewritten));
+    assert(!fetch.SharpsUnchanged(info, prepared));
+    std::memcpy(table.data() + descriptor_offset, &expected, sizeof(expected));
+    assert(fetch.SharpsUnchanged(info, prepared));
+
     // The direct-register path bypasses the pointer indirection.
     std::memcpy(registers.data() + descriptor_offset, &expected, sizeof(expected));
     assert(info.ReadUdReg<AmdGpu::Buffer>(Shader::IR::NumScalarRegs, descriptor_offset) ==
@@ -136,6 +148,6 @@ int main() {
     assert(info.ReadUdReg<AmdGpu::Buffer>(Shader::IR::NumScalarRegs, 0) == AmdGpu::Buffer{});
     Shader::Info::num_ud_snapshots = 0;
 
-    std::puts("Shader user data: null/short tables, vertex consumers, direct registers and "
-              "snapshots passed");
+    std::puts("Shader user data: null/short tables, vertex consumers, stale V# copies, direct "
+              "registers and snapshots passed");
 }
