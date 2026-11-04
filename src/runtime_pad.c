@@ -282,8 +282,12 @@ static void drop_sources(ButtonMap *map, uint32_t ps) {
  * PS4 button keeps its default. */
 static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
     if (!spec || !*spec) return 0;
-    char copy[2048];
-    snprintf(copy,sizeof(copy),"%s",spec);
+    /* The whole value, whatever its length: a copy cut short would drop the last entries unseen. */
+    char *copy=SDL_strdup(spec);
+    if (!copy) {
+        printf("Runtime: pad map: out of memory, no entry applied\n");
+        return 0;
+    }
     int used=0;
     char *entry=copy;
     while (entry) {
@@ -327,6 +331,7 @@ static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
             map->entries[map->count++]=(ButtonSource){sources[i],ps};
         ++used;
     }
+    SDL_free(copy);
     return used;
 }
 

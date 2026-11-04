@@ -433,15 +433,32 @@ pub fn pad_buttons(pad_map: &str) -> IndexMap<String, String> {
     buttons
 }
 
+/// The names of an entry of `SPARTAN_KEY_MAP` (`Space|K`) as the runtime reads them: trimmed, an
+/// empty one skipped and a repeat (in any case) counted once. `None` is not a key when another name
+/// is there, so it is skipped too.
+fn key_names(keys: &str) -> Vec<&str> {
+    let mut names: Vec<&str> = Vec::new();
+    for name in keys.split('|').map(str::trim) {
+        if !name.is_empty() && !names.iter().any(|seen| seen.eq_ignore_ascii_case(name)) {
+            names.push(name);
+        }
+    }
+    if names.len() > 1 {
+        names.retain(|name| !name.eq_ignore_ascii_case("none"));
+    }
+    names
+}
+
 /// A `SPARTAN_KEY_MAP` value with one key per entry, the one the icons draw: of `cross=Space|K` the
-/// main key (`Space`), or with `alternative` the alternative (`K`) where the button has one.
+/// main key (`Space`), or with `alternative` the first alternative (`K`) where the button has one.
+/// A second alternative (`cross=Space|K|Keypad 2`) is never drawn.
 pub fn shown_keys(key_map: &str, alternative: bool) -> String {
     let shown = |entry: &str| match entry.split_once('=') {
         Some((game, keys)) => {
-            let mut keys = keys.split('|').map(str::trim);
-            let main = keys.next().unwrap_or_default();
+            let names = key_names(keys);
+            let main = names.first().copied().unwrap_or_default();
             let key = if alternative {
-                keys.next().unwrap_or(main)
+                names.get(1).copied().unwrap_or(main)
             } else {
                 main
             };
@@ -2381,6 +2398,28 @@ pub(crate) mod tests {
         assert_eq!(keys["circle"], "Left Ctrl");
         assert_eq!(keys["square"], "J");
         assert_eq!(keys["triangle"], "Q");
+    }
+
+    #[test]
+    fn a_repeated_key_is_not_taken_as_the_alternative() {
+        assert_eq!(shown_keys("cross=Space|Space|K", true), "cross=K");
+        assert_eq!(shown_keys("cross=Space|space|K|Keypad 2", true), "cross=K");
+        // Nothing but the main key repeated: the button has no alternative.
+        assert_eq!(shown_keys("cross=Space|SPACE", true), "cross=Space");
+        assert_eq!(lyre_keys("cross=Q|q|K,circle=E|E"), "cross=K,circle=E");
+    }
+
+    #[test]
+    fn an_empty_name_does_not_hide_the_next_one() {
+        assert_eq!(shown_keys("cross=Space||K", true), "cross=K");
+        assert_eq!(shown_keys("cross=Space| |K", true), "cross=K");
+        assert_eq!(shown_keys("cross=Space|K|", true), "cross=K");
+        // An empty main name leaves the next one as the main key, as in the runtime.
+        assert_eq!(shown_keys("cross=|K", false), "cross=K");
+        assert_eq!(key_buttons("cross=|Q")["cross"], "Q");
+        // `None` beside a key is not a name; alone it still unbinds the button.
+        assert_eq!(shown_keys("l1=None|Q", false), "l1=Q");
+        assert_eq!(shown_keys("l1=None", true), "l1=None");
     }
 
     #[test]

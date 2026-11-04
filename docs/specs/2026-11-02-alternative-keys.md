@@ -10,8 +10,9 @@ Branch: `pr/alternative-keys`.
 * **Contrato:**
   - Runtime (`src/runtime_pad.c`): um valor de `SPARTAN_KEY_MAP` (e de `SPARTAN_PAD_MAP`) aceita
     vários nomes ligados por `|`: `cross=Space|K,square=Mouse Left|J`. A entrada troca as fontes do
-    botão por todas as listadas. Os limites são 4 fontes por botão, 128 entradas no mapa e 2048
-    bytes no valor; o mapa tem lugar para os 31 botões com 4 fontes cada. Um nome inválido da
+    botão por todas as listadas. Os limites são 4 fontes por botão e 128 entradas no mapa; o mapa
+    tem lugar para os 31 botões com 4 fontes cada, e o valor é lido inteiro, qualquer que seja o
+    tamanho. Um nome inválido da
     lista é registrado e pulado sozinho; sem nenhum nome válido a entrada é pulada inteira e o
     botão fica como estava; `None` sozinho continua tirando todas as fontes; nomes repetidos
     contam uma vez. Uma entrada de um só nome se comporta como antes.
@@ -60,6 +61,10 @@ Branch: `pr/alternative-keys`.
   - QUANDO nenhum nome da lista for válido O SISTEMA DEVE deixar o botão com as fontes que tinha.
   - QUANDO o valor for `None` O SISTEMA DEVE deixar o botão sem fontes, como hoje.
   - QUANDO todos os botões tiverem quatro fontes O SISTEMA DEVE guardar todas, sem estourar o mapa.
+  - QUANDO o valor de `SPARTAN_KEY_MAP` tiver mais de 2048 bytes O SISTEMA DEVE aplicar todas as
+    entradas, a última inclusive.
+  - QUANDO uma lista tiver um nome repetido ou vazio antes da alternativa (`cross=Space|Space|K`,
+    `cross=Space||K`) O SISTEMA DEVE desenhar `K` como a alternativa nos ícones.
   - QUANDO `move_up`, `rage` ou `grab` tiverem várias fontes O SISTEMA DEVE responder a qualquer uma.
   - QUANDO um `settings.json` não tiver `key_alt` (ou tiver outra forma que um objeto) O SISTEMA DEVE
     carregá-lo sem alternativas e gravar o mesmo `controls` de antes.
@@ -132,8 +137,15 @@ Branch: `pr/alternative-keys`.
     variável `SPARTAN_GLYPH_KEYS`; `glyph_mounts` entrega ao `build` o mapa já reduzido por
     `shown_keys` (e, com `lyre`, o mapa de `lyre_keys`), e `key_buttons` também fica com a principal
     quando recebe um mapa com `|`.
-  - Decisão: o runtime lê o valor em um buffer de 2048 bytes; o pior caso do
-    launcher (todas as linhas com os nomes mais longos) fica abaixo disso, e há um teste para isso.
+  - Decisão: o runtime copia o valor inteiro para o heap (`SDL_strdup`) antes de separá-lo, em vez
+    de um buffer de 2048 bytes que cortava em silêncio um mapa longo e perdia as últimas entradas;
+    sem memória, nada é aplicado (tudo ou nada). Há um teste com mais de 2048 bytes cuja última
+    entrada precisa valer, e outro no launcher com o pior caso (todas as linhas com os nomes mais
+    longos).
+  - Os ícones leem os nomes como o runtime: cortam os espaços, pulam nomes vazios e repetidos (sem
+    diferenciar maiúsculas) e o `None` ao lado de outro nome, então `cross=Space|Space|K` tem a
+    alternativa `K` e um nome vazio não esconde o seguinte. Um nome que o SDL não conhece não é
+    descartado (o launcher não tem a tabela dele).
 * **Validação:** `pad-map-test` (Windows, MSYS2 CLANG64), `cargo fmt --check`,
   `cargo clippy --all-targets -- -D warnings`, `cargo test` e `cargo build --release` no
   `launcher-rust/`; teste no jogo (lira das Musas) pelo mantenedor.
