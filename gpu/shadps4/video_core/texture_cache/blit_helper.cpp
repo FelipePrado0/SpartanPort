@@ -351,6 +351,7 @@ void BlitHelper::CreateColorToMSDepthPipeline(const MsPipelineKey& key) {
 
     auto [pipeline_result, pipeline] =
         instance.GetDevice().createGraphicsPipelineUnique(VK_NULL_HANDLE, pipeline_info);
+    // spartanport: shadPS4 #5595 logs the failed pipeline's key before the assertion.
     if (pipeline_result != vk::Result::eSuccess) {
         LOG_CRITICAL(Render_Vulkan,
                      "Failed to create Color to MS Depth pipeline (samples={}, format={}): {}",
@@ -435,6 +436,7 @@ void BlitHelper::CreateMsCopyPipeline(const MsPipelineKey& key) {
 
     auto [pipeline_result, pipeline] =
         instance.GetDevice().createGraphicsPipelineUnique(VK_NULL_HANDLE, pipeline_info);
+    // spartanport: shadPS4 #5595 logs the failed pipeline's key before the assertion.
     if (pipeline_result != vk::Result::eSuccess) {
         LOG_CRITICAL(Render_Vulkan,
                      "Failed to create MS copy pipeline (samples={}, format={}, src_msaa={}): {}",
