@@ -52,7 +52,7 @@ que não aparece em nenhum outro lugar.
   mesmo dos outros estilos.
 * **Arquivos afetados:** `launcher-rust/src/runner/glyphs.rs`, `launcher-rust/src/runner/mod.rs`
   (testes do carimbo), `launcher-rust/tests/dump.rs`, os três README e o registro de desvios do Python
-  (`docs/specs/2026-10-22-rust-runner-parity.md`, desvio 9).
+  (`docs/specs/2026-10-22-rust-runner-parity.md`, desvio 18).
 * **Plano técnico:** `lyre_paint` escolhe o mapa de botões como `render` já escolhia
   (`host_buttons`: teclado para `keyboard`, controle para os outros) e passa o rótulo pelo mesmo
   `glyph()`; `textures("keyboard")` deixa de filtrar as formas da lira. Os discos de ouro (mecanismo
@@ -69,4 +69,4 @@ que não aparece em nenhum outro lugar.
 
 O Python (`scripts/glyphs.py`, congelado) deixa a lira com os símbolos do PlayStation no estilo
 teclado e tem `VERSION = 12`. O launcher Rust passa a desenhar a lira e usa `VERSION = 13`; está
-registrado como desvio 9 em `docs/specs/2026-10-22-rust-runner-parity.md`.
+registrado como desvio 18 em `docs/specs/2026-10-22-rust-runner-parity.md`.
