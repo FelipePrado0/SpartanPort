@@ -1325,7 +1325,7 @@ mod tests {
         let drawn_main = stamp(&run);
         assert!(
             drawn_main.starts_with(
-                "[12, \"keyboard\", null, \"\", \"cross=Space,square=Mouse Left,triangle=Q\", null, "
+                "[13, \"keyboard\", null, \"\", \"cross=Space,square=Mouse Left,triangle=Q\", null, "
             ),
             "{drawn_main}"
         );
@@ -1339,7 +1339,7 @@ mod tests {
         let drawn_alternative = stamp(&run);
         assert!(
             drawn_alternative.starts_with(
-                "[12, \"keyboard\", null, \"\", \"cross=K,square=J,triangle=Q\", null, "
+                "[13, \"keyboard\", null, \"\", \"cross=K,square=J,triangle=Q\", null, "
             ),
             "{drawn_alternative}"
         );
