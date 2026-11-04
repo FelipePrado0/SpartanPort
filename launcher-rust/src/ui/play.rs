@@ -202,6 +202,13 @@ fn system_files_offer(
 /// PLAY (Python `play`): saves the settings, reads the folders again, checks them in the 2.6.0
 /// order and starts the game. Nothing happens while a game runs or system files are copied.
 pub fn play(state: &mut State) -> Task<Message> {
+    if state.restoring_saves {
+        state.modal = Some(Modal::info(tr(
+            &state.lang,
+            "Wait for the save restore to finish before starting the game.",
+        )));
+        return Task::none();
+    }
     if !matches!(state.game, GameState::Idle) {
         return Task::none();
     }

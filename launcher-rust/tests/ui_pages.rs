@@ -776,10 +776,8 @@ fn restore_asks_first_and_is_blocked_while_running() {
             no: Message::Modal(ModalMessage::Dismiss)
         }
     ));
-    assert_eq!(
-        asked.text,
-        "Replace the current saves with the backup 20261009-180000? The current saves are backed up first."
-    );
+    assert!(asked.text.starts_with("Replace the current saves with the backup 20261009-180000? The current saves are backed up first."));
+    assert!(asked.text.contains(&backup.display().to_string()));
     // Nothing was restored yet.
     assert_eq!(
         std::fs::read(user.join("savedata/data.bin")).unwrap(),

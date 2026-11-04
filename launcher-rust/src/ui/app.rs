@@ -115,6 +115,8 @@ pub struct State {
     pub backups: Vec<String>,
     /// The backup chosen in the Saves row.
     pub backup_choice: String,
+    pub backup_details: Vec<crate::core::save_restore::Snapshot>,
+    pub restoring_saves: bool,
     /// The release list, the installed release and the download; its host is a fake in the UI
     /// tests.
     pub updater: Updater,
@@ -230,6 +232,8 @@ impl State {
             patches: Default::default(),
             backups: Vec::new(),
             backup_choice: String::new(),
+            backup_details: Vec::new(),
+            restoring_saves: false,
             updater: Updater::new(host),
             lang_menu: Default::default(),
             version_menu: Default::default(),
