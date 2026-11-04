@@ -1030,6 +1030,15 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
     return true;
 }
 
+// spartanport: the stored profile: the shader profile plus one byte, whether the guest's multisampling
+// is off. One builder for every writer, so the size CheckCacheProfile compares never differs.
+std::vector<u8> PipelineCache::ProfileBlob() const {
+    std::vector<u8> blob(sizeof(profile) + 1);
+    std::memcpy(blob.data(), &profile, sizeof(profile));
+    blob[sizeof(profile)] = AmdGpu::NoMsaa() ? 1 : 0;
+    return blob;
+}
+
 bool PipelineCache::CheckCacheProfile() {
     if (!EmulatorSettings.IsPipelineCacheEnabled()) {
         return false;
@@ -1041,9 +1050,7 @@ bool PipelineCache::CheckCacheProfile() {
     // multisampling is off (TAA turns it off). The shaders and pipelines saved with it differ (a
     // multisampled depth fetch against a single-sampled one), so a cache written in the other mode
     // is rebuilt instead of replayed (it showed as a wrong brightness after switching TAA <-> FSR).
-    std::vector<u8> current(sizeof(profile) + 1);
-    std::memcpy(current.data(), &profile, sizeof(profile));
-    current[sizeof(profile)] = AmdGpu::NoMsaa() ? 1 : 0;
+    std::vector<u8> current = ProfileBlob();
 
     // Check if cache is compatible
     std::vector<u8> profile_data{};
@@ -1189,9 +1196,7 @@ void PipelineCache::StartOnDemand() {
             // Earlier on-demand sessions numbered permutations by first use and overwrote the
             // files by name, so a name may hold another session's shader: rebuilt once.
             db.Clear();
-            std::vector<u8> profile_data(sizeof(profile));
-            std::memcpy(profile_data.data(), &profile, sizeof(profile));
-            db.Save(Storage::BlobType::ShaderProfile, "profile", std::move(profile_data));
+            db.Save(Storage::BlobType::ShaderProfile, "profile", ProfileBlob());
             db.Save(Storage::BlobType::ShaderProfile, "disk_shaders", std::vector<u8>{1});
             std::printf("Pipeline startup: shader store rebuilt for on-demand reads\n");
         } else {

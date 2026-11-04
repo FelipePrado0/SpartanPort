@@ -85,7 +85,7 @@ void AaPass::Create(vk::Device device_, VmaAllocator allocator_, u32 num_images)
          .descriptorType = vk::DescriptorType::eCombinedImageSampler,
          .descriptorCount = 1,
          .stageFlags = vk::ShaderStageFlagBits::eCompute,
-         .pImmutableSamplers = &point_sampler.get()},
+         .pImmutableSamplers = &linear_sampler.get()}, // the reference reads the area texture bilinearly
         {.binding = BindSearch,
          .descriptorType = vk::DescriptorType::eCombinedImageSampler,
          .descriptorCount = 1,

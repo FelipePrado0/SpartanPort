@@ -222,8 +222,13 @@ void main() {
             // objects lacking object vectors, transparent effects and lighting changes.
             if (expected_depth >= 0.0 && coverage > 0.01) {
                 diagnostic_sample = history_rgb / coverage;
-                if (coverage > 0.99 && (variant & 32u) == 0u)
-                    diagnostic_sample = bicubicSample(history_tex, vec2(base) + fraction, size);
+                if (coverage > 0.99 && (variant & 32u) == 0u) {
+                    // The 4x4 footprint reaches taps the check above did not look at: a bad value
+                    // there keeps the validated bilinear sample.
+                    vec3 sharp_history = bicubicSample(history_tex, vec2(base) + fraction, size);
+                    if (!any(isnan(sharp_history)) && !any(isinf(sharp_history)))
+                        diagnostic_sample = sharp_history;
+                }
                 float moving = clamp(length(motion) / (ldr ? 4.0 : 8.0), 0.0, 1.0);
                 float clip_error = 0.0;
                 vec3 clipped;

@@ -2454,15 +2454,20 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
             }
             if (scan_camera && stage.sw_stage == Shader::SwStage::Vertex &&
                 vsharp.GetSize() >= 64 && vsharp.base_address != 0 &&
-                memory->IsValidGpuMapping(vsharp.base_address, 0) &&
-                memory->ClampRangeSize(vsharp.base_address, 64) >= 64) {
-                camera_motion->OnCameraCandidate(
-                    reinterpret_cast<const float*>(vsharp.base_address), u32(vsharp.GetSize()),
-                    scan_size[0], scan_size[1], 1);
+                memory->IsValidGpuMapping(vsharp.base_address, 0)) {
+                // The scan reads up to 1072 bytes: only as many as are mapped.
+                const u64 mapped = memory->ClampRangeSize(
+                    vsharp.base_address, std::min<u64>(vsharp.GetSize(), 1072));
+                if (mapped >= 64) {
+                    camera_motion->OnCameraCandidate(
+                        reinterpret_cast<const float*>(vsharp.base_address), u32(mapped),
+                        scan_size[0], scan_size[1], 1);
+                }
             }
             if (prepass_depth && buffer_index == 1 && vsharp.GetSize() >= 64 &&
                 stage.sw_stage == Shader::SwStage::Vertex &&
-                memory->IsValidGpuMapping(vsharp.base_address, 0)) {
+                memory->IsValidGpuMapping(vsharp.base_address, 0) &&
+                memory->ClampRangeSize(vsharp.base_address, 64) >= 64) {
                 camera_motion->OnViewProjection(reinterpret_cast<const float*>(vsharp.base_address),
                                                 prepass_depth);
             }
