@@ -1300,6 +1300,19 @@ void TemporalUpscaler::ExtraSharpen(vk::CommandBuffer cmdbuf, vk::Image target, 
                         on ? "on" : "off", rcas, on ? extra : 0.0f, settings.rcas_strength.load());
         }
     }
+    if (settings.upscaler == SpartanSettings::UpscalerFsr3Ui) {
+        // One line when the FSR 3.1 look settles (the sliders change it every frame while dragged).
+        static std::array<int, 2> logged{-1, -1}, pending{-1, -1};
+        static u32 stable_frames = 0;
+        const std::array<int, 2> now{settings.fsr_lod.load(), settings.fsr_objects.load()};
+        if (now != pending) {
+            pending = now;
+            stable_frames = 0;
+        } else if (stable_frames < 90 && ++stable_frames == 90 && pending != logged) {
+            logged = pending;
+            std::printf("FSR look: texture detail %d moving objects %d\n", now[0], now[1]);
+        }
+    }
     if (!SharpenOn() || extra <= 0.0f) {
         return;
     }

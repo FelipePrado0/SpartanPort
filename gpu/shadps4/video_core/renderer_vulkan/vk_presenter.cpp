@@ -682,6 +682,14 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
                              !aa_pass.Failed(aa_mode);
         image_view = apply_aa(image_view, frame->is_hdr);
         SpartanSettings::Get().aa_applied = aa_runs && !aa_pass.Failed(aa_mode);
+        // One line when the filter starts, stops or changes, so a log shows what ran.
+        static int logged_aa = -1;
+        const int running = aa_runs ? aa_mode : 0;
+        if (running != logged_aa) {
+            logged_aa = running;
+            std::printf("Anti-aliasing: %s%s (%ux%u)\n", SpartanGraphics::AntiAliasingNames[aa_mode],
+                        aa_runs ? " running" : " not running", image_size.width, image_size.height);
+        }
     }
     image_view = fsr_pass.Render(cmdbuf, image_view, image_size, {frame->width, frame->height},
                                  fsr_settings, frame->is_hdr);
