@@ -363,6 +363,7 @@ fn backups_row(state: &State) -> Element<'_, Message> {
     body.into()
 }
 
+/// Renders translated built-in patch labels with original names as toggle identities.
 fn patches_section(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
     let mut body = column![section(state.rtl, &tr(lang, "Game patches"))].spacing(2);
@@ -382,8 +383,8 @@ fn patches_section(state: &State) -> Element<'_, Message> {
     );
     for meta in &patches.selectable {
         let label = match &meta.author {
-            Some(author) => format!("{}  ({author})", meta.name),
-            None => meta.name.clone(),
+            Some(author) => format!("{}  ({author})", tr(lang, &meta.name)),
+            None => tr(lang, &meta.name),
         };
         let name = meta.name.clone();
         let note = meta.note.as_deref().map(|note| tr(lang, note));

@@ -308,6 +308,7 @@ pub fn environment(
     };
     put_choice(&mut env, "stick_prompts");
     put_choice(&mut env, "glyph_style");
+    put_choice(&mut env, "glyph_keys");
     env.shift_remove("SPARTAN_MENU_CONFIRM_SWAP");
     env.shift_remove("SPARTAN_MENU_CONFIRM");
     if let Some(val) = settings.get("menu_confirm_swap") {
@@ -538,6 +539,65 @@ mod tests {
         let at = keys.iter().position(|key| *key == "SPARTAN_SWITCH_ATTACKS");
         let key_map = keys.iter().position(|key| *key == "SPARTAN_KEY_MAP");
         assert!(key_map.is_some() && key_map < at, "{keys:?}");
+    }
+
+    #[test]
+    fn alternative_keys_reach_the_key_map() {
+        let (settings, paths, _dir) = setup(json!({"controls": {
+            "key": {"circle": "Left Ctrl"},
+            "key_alt": {"cross": "K", "circle": "L", "square": "J", "triangle": "I"}
+        }}));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert!(env["SPARTAN_KEY_MAP"].contains(
+            "cross=Space|K,circle=Left Ctrl|L,square=Mouse Left|J,triangle=Mouse Right|I,"
+        ));
+        // Without alternatives the map has no `|`, and the gamepad map never has one.
+        let (plain, paths, _dir) = setup(json!({}));
+        let env = game_environment(&plain, &paths, "en", &IndexMap::new(), true);
+        assert!(!env["SPARTAN_KEY_MAP"].contains('|'));
+        assert!(!env.contains_key("SPARTAN_PAD_MAP"));
+    }
+
+    #[test]
+    fn every_button_with_an_alternative_still_fits_the_runtime_buffer() {
+        // The runtime reads SPARTAN_KEY_MAP into a 2048-byte buffer (src/runtime_pad.c).
+        let rows = crate::core::controls::table_rows(crate::core::controls::Kind::Key);
+        let alternatives: serde_json::Map<String, Value> = rows
+            .into_iter()
+            .map(|row| (row.button.to_string(), json!("Keypad Enter")))
+            .collect();
+        let keys: serde_json::Map<String, Value> =
+            crate::core::controls::table_rows(crate::core::controls::Kind::Key)
+                .into_iter()
+                .map(|row| (row.button.to_string(), json!("Mouse Forward")))
+                .collect();
+        let (settings, paths, _dir) = setup(json!({
+            "rage_one_input": false,
+            "controls": {"key": keys, "key_alt": alternatives}
+        }));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert!(
+            env["SPARTAN_KEY_MAP"].len() < 2048,
+            "{}",
+            env["SPARTAN_KEY_MAP"].len()
+        );
+    }
+
+    #[test]
+    fn the_icon_keys_choice_is_sent_only_when_it_is_not_the_main_key() {
+        let inherited = base(&[("SPARTAN_GLYPH_KEYS", "alternative")]);
+        let (settings, paths, _dir) = setup(json!({}));
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert!(
+            !env.contains_key("SPARTAN_GLYPH_KEYS"),
+            "the saved choice wins"
+        );
+        let (chosen, paths, _dir) = setup(json!({"glyph_keys": "alternative"}));
+        let env = game_environment(&chosen, &paths, "en", &IndexMap::new(), true);
+        assert_eq!(env["SPARTAN_GLYPH_KEYS"], "alternative");
+        let (unknown, paths, _dir) = setup(json!({"glyph_keys": "both"}));
+        let env = game_environment(&unknown, &paths, "en", &IndexMap::new(), true);
+        assert!(!env.contains_key("SPARTAN_GLYPH_KEYS"));
     }
 
     #[test]

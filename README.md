@@ -340,6 +340,15 @@ how much mouse it takes. Without the launcher the game keeps its own keys: E and
 Triangle, 1 and 3 for L1 and R1, F for R2, C for R3, I, K, J, L for the d-pad, Enter for Options,
 Tab and Backspace for the touchpad.
 
+**Alternative keys.** Every button can have a second key or mouse input, in the second box of its
+row on the Controls page (the x button next to it clears it). Both press the button, so you can keep
+Square on the left click for combat and also press it with J in the minigames. On the Muses' lyre,
+for example, keep Space, Left Ctrl and the two mouse buttons and add K, L, J and I, laid out like the
+four buttons (I up, J left, L right, K down). A key already used by another button swaps with it, as
+for the main keys. The in-game keyboard icons show the main key; *Keys on the icons* (Controls page,
+with the Keyboard style) can show the alternative instead. Without the launcher, join the names with
+`|` in `SPARTAN_KEY_MAP`, for example `cross=Space|K,square=Mouse Left|J`.
+
 On a controller without a touchpad (Xbox and others), View opens the pause menu (the right
 touchpad click) and L1 + View opens photo mode (the left click). On a DualSense the touchpad
 works as on the PS4, and Share/Create works like View.
@@ -433,6 +442,8 @@ read the joystick; the mapper does not install device drivers.
   Polish text with English voices).
 - The game does not open: check **Advanced → Log**, or send `user\last_run.log` with your report.
   With a custom **Saves folder**, `last_run.log` is in that folder instead.
+  Next to it, `last_run.jsonl` has the same lines with the time, level and area of each one, for
+  tools and for telling which event came first; attach both files when you report a bug.
 - Yellow/orange/white textures or wrong lighting: try disabling **Performance → GPU data →
   Deferred GPU readbacks**, then restart. This workaround can cause stutters.
 - GPU-specific rendering failures, crashes, audio problems and progress blockers remain under

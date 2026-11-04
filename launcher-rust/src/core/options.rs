@@ -121,6 +121,12 @@ pub static GLYPH_STYLES: &[Choice] = &[
     c("keyboard", "Keyboard"),
 ];
 
+/// Which input of a keyboard row the in-game keyboard icons show.
+pub static GLYPH_KEYS: &[Choice] = &[
+    c("main", "Main key (default)"),
+    c("alternative", "Alternative key"),
+];
+
 pub static UPSCALERS: &[Choice] = &[
     cr("off", "Off", "Выключен"),
     cr("fsr3", "FSR 3.1 (every GPU)", "FSR 3.1 (любая видеокарта)"),
@@ -503,7 +509,7 @@ mod tests {
 
     #[test]
     fn every_table_has_unique_values() {
-        let tables: [&[Choice]; 23] = [
+        let tables: [&[Choice]; 24] = [
             FRAME_GENERATION,
             DISPLAY_MODES,
             ANISOTROPY,
@@ -514,6 +520,7 @@ mod tests {
             MENU_CONFIRM_STYLES,
             AUDIO_CHANNELS,
             GLYPH_STYLES,
+            GLYPH_KEYS,
             UPSCALERS,
             PRESETS,
             OUTPUTS,

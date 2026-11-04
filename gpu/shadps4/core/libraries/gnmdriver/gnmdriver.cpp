@@ -79,8 +79,15 @@ static u32 asc_next_offs_dw[Liverpool::NumComputeRings];
 static VAddr tessellation_factors_ring_addr = -1;
 static constexpr u32 tessellation_offchip_buffer_size = 0x800000u;
 
+// spartanport: remember which submissions the lock protects so an older idle cannot clear it.
+static u64 lock_generation{};
+
 static void ResetSubmissionLock(Platform::InterruptId irq) {
     std::unique_lock lock{m_wait_idle};
+    // spartanport: keep later command buffers locked until their own GPU work retires.
+    if (submission_lock && liverpool->IdleGeneration() < lock_generation) {
+        return;
+    }
     submission_lock = 0;
     cv_lock.notify_all();
 }
@@ -2360,8 +2367,13 @@ s32 PS4_SYSV_ABI sceGnmSubmitDone() {
     LOG_DEBUG(Lib_GnmDriver, "called");
     std::scoped_lock lk{m_submit_lock};
     WaitGpuIdle();
-    if (!liverpool->IsGpuIdle()) {
-        submission_lock = true;
+    // spartanport: serialize lock setup with idle handling and record the protected generation.
+    {
+        std::unique_lock lock{m_wait_idle};
+        if (!liverpool->IsGpuIdle()) {
+            submission_lock = true;
+            lock_generation = liverpool->SubmissionsTotal();
+        }
     }
     liverpool->SubmitDone();
     send_init_packet = true;

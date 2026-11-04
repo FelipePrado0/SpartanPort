@@ -506,6 +506,9 @@ static void publish_engine_fps(void) {
  * is set (texture_cache.cpp), so the red orb medallion stays sharp. */
 extern void spartanport_power_up_menu_global(uintptr_t flag);
 static uint64_t power_up_menu_at; /* image offset; 0: not found */
+/* inShell, inPauseMenu, inPowerUpMenu (image offsets; 0: not found): bloom stays on while a menu
+ * is open (install_graphics). */
+static uint64_t menu_flags_at[3];
 /* Before the image is protected, like find_engine_fps. */
 static void find_power_up_menu(Segment *segments, uint64_t count, uint64_t size) {
     const uint64_t at=spartanport_signature_find(image,size,&spartanport_power_up_menu_site);
@@ -513,12 +516,15 @@ static void find_power_up_menu(Segment *segments, uint64_t count, uint64_t size)
         puts("Texture Quality: upgrade menu exception unavailable (code not found in this eboot.bin)");
         return;
     }
-    const uint64_t flag=spartanport_rip_target(image,at+SPARTAN_POWER_UP_MENU_LEA);
-    if (!mapped(segments,count,flag,4)) {
+    for (unsigned m=0;m<3;++m) {
+        const uint64_t flag=spartanport_rip_target(image,at+m*(SPARTAN_POWER_UP_MENU_LEA/2));
+        if (mapped(segments,count,flag,4)) menu_flags_at[m]=flag;
+    }
+    if (!menu_flags_at[2]) {
         puts("Texture Quality: upgrade menu exception unavailable (global outside the image)");
         return;
     }
-    power_up_menu_at=flag;
+    power_up_menu_at=menu_flags_at[2];
 }
 static void publish_power_up_menu(void) {
     if (!power_up_menu_at) return;
@@ -837,18 +843,17 @@ static void install_graphics(Segment *segments, uint64_t count, uint64_t size) {
     const uint64_t blur_at = spartanport_signature_find(image, size, &spartanport_motion_blur_site);
     const uint64_t bloom_at = spartanport_signature_find(image, size, &spartanport_bloom_site);
     const uint64_t shadows_at = spartanport_signature_find(image, size, &spartanport_shadows_site);
-    /* Same prologue bytes as the motion blur site. */
     int shadows = shadows_at != UINT64_MAX && mapped(segments, count, shadows_at, SPARTAN_SHADOWS_HOOK_LENGTH) &&
                   spartanport_motion_blur_signature_match(image + shadows_at, size - shadows_at);
-    int blur = blur_at != UINT64_MAX && mapped(segments, count, blur_at, 48) &&
-               spartanport_motion_blur_signature_match(image + blur_at, size - blur_at);
+    int blur = blur_at != UINT64_MAX && mapped(segments, count, blur_at, SPARTAN_MOTION_BLUR_HOOK_LENGTH) &&
+               spartanport_motion_blur_branch_match(image + blur_at, size - blur_at);
     int bloom = bloom_at != UINT64_MAX && mapped(segments, count, bloom_at, SPARTAN_BLOOM_HOOK_LENGTH) &&
                 spartanport_bloom_signature_match(image + bloom_at, size - bloom_at);
-    uint64_t gate = 0, queued = 0;
+    uint64_t epilogue = 0;
     if (blur) {
-        gate = spartanport_rip_target(image, blur_at + SPARTAN_MOTION_BLUR_GATE);
-        queued = spartanport_rip_target(image, blur_at + SPARTAN_MOTION_BLUR_QUEUED);
-        blur = mapped(segments, count, gate, 4) && mapped(segments, count, queued, 4);
+        epilogue = spartanport_motion_blur_epilogue(image, blur_at);
+        blur = mapped(segments, count, blur_at + SPARTAN_MOTION_BLUR_HOOK_LENGTH, 1) &&
+               mapped(segments, count, epilogue, 1);
     }
     if (!blur && !bloom && !shadows) {
         puts("Graphics: bloom, motion blur and shadows toggles unavailable (code not found in this eboot.bin)");
@@ -857,11 +862,17 @@ static void install_graphics(Segment *segments, uint64_t count, uint64_t size) {
     unsigned char *stubs = allocate(page_size);
     if (blur)
         spartanport_motion_blur_build_stub(stubs, spartanport_graphics_flag(SPARTAN_GRAPHICS_MOTION_BLUR),
-                                           (uintptr_t)(image + gate), (uintptr_t)(image + queued),
-                                           (uintptr_t)(image + blur_at + SPARTAN_MOTION_BLUR_HOOK_LENGTH));
-    if (bloom)
-        spartanport_bloom_build_stub(stubs + 256, spartanport_graphics_flag(SPARTAN_GRAPHICS_BLOOM),
+                                           (uintptr_t)(image + blur_at + SPARTAN_MOTION_BLUR_HOOK_LENGTH),
+                                           (uintptr_t)(image + epilogue));
+    if (bloom) {
+        uintptr_t menus[3] = {0};
+        for (unsigned m = 0; m < 3; ++m)
+            if (menu_flags_at[m]) menus[m] = (uintptr_t)(image + menu_flags_at[m]);
+        if (!menus[0] && !menus[1] && !menus[2])
+            puts("Graphics: bloom stays off in menus too (menu flags not found in this eboot.bin)");
+        spartanport_bloom_build_stub(stubs + 256, spartanport_graphics_flag(SPARTAN_GRAPHICS_BLOOM), menus,
                                      (uintptr_t)(image + bloom_at + SPARTAN_BLOOM_HOOK_LENGTH));
+    }
     if (shadows)
         spartanport_shadows_build_stub(stubs + 768, spartanport_graphics_flag(SPARTAN_GRAPHICS_SHADOWS),
                                        (uintptr_t)(image + shadows_at + SPARTAN_SHADOWS_HOOK_LENGTH));
@@ -879,6 +890,7 @@ static void install_graphics(Segment *segments, uint64_t count, uint64_t size) {
  * does: GPU, audio and guest threads are still running, so no destructors. */
 static void menu_quit(void) {
     puts("Pause menu: Exit to Desktop");
+    spartanportgpu_flush_cache();
     fflush(NULL);
 #ifdef _WIN32
     TerminateProcess(GetCurrentProcess(),0);
@@ -955,6 +967,7 @@ static void apply_patches(const char *path, Segment *segments, uint64_t ns, cons
  * applied at start). Descriptors are closed first so the old GPU device and its memory are
  * released before the new process opens its own. */
 void runtime_restart(void) {
+    spartanportgpu_flush_cache();
     fflush(NULL);
 #ifdef _WIN32
     /* run.py sets SPARTAN_RESTART_COMMAND: the launch command line, started again (new patches). */

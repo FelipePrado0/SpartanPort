@@ -4,7 +4,8 @@
 //! The edited tables live in `ControlsView`, not in the settings: Task 32's `gather` writes their
 //! `control_changes` into `settings.controls`. A key box waits for an input after a click: the next
 //! key (`key_pressed`, fed by `Message::Key`), mouse button or wheel turn (`subscription`) is bound
-//! with `bind_key`, or the box gives up after `CAPTURE_SECONDS`.
+//! with `bind_key`, or the box gives up after `CAPTURE_SECONDS`. Each keyboard row has two boxes: the
+//! main input and an optional alternative that presses the same button.
 
 use std::time::Duration;
 
@@ -17,13 +18,15 @@ use indexmap::IndexMap;
 use serde_json::Value;
 
 use crate::core::controls::{
-    at_defaults, bind_key, control_values, default_input, sdl_key_name, table_rows, Kind, CONTROLS,
-    PAD_STYLES, RAGE_BUTTONS,
+    alternative_values, at_defaults, bind_key, control_values, default_input, sdl_key_name,
+    table_rows, Kind, Slot, CONTROLS, PAD_STYLES, RAGE_BUTTONS,
 };
 use crate::core::gpu::connected_gamepad;
 use crate::core::i18n::{tr, tr_fmt};
 use crate::core::ini::INI_DEFAULTS;
-use crate::core::options::{AIM_STYLES, GLYPH_STYLES, MENU_CONFIRM_STYLES, STICK_PROMPTS};
+use crate::core::options::{
+    AIM_STYLES, GLYPH_KEYS, GLYPH_STYLES, MENU_CONFIRM_STYLES, STICK_PROMPTS,
+};
 use crate::core::platform::tool::SystemTools;
 use crate::core::settings::Settings;
 use crate::ui::app::{apply_set, Message, State};
@@ -102,6 +105,10 @@ const PAD_NOTE: &str = "L2/R2 stay on the triggers. Touchpad right opens the gam
 const ICON_SIZE: f32 = 28.0;
 /// Width of a key box, enough for the countdown text.
 const BOX_WIDTH: f32 = 220.0;
+/// What an empty alternative box says.
+const ALTERNATIVE_EMPTY: &str = "(alternative)";
+const ALTERNATIVE_NOTE: &str = "The second box of a row is an alternative input for the same button: keep Square on the left mouse button for combat and add J for the minigames, for example. \"Clear input\" empties the main box, the × button empties the alternative, and the arrow puts the row back on its default with no alternative.";
+const GLYPH_KEYS_HINT: &str = "Which input the keyboard icons in the game show for a button that has an alternative. A button without an alternative always shows its main input. Applied when the game starts.";
 
 /// The device whose table the page shows; both keep working in the game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -147,11 +154,15 @@ pub struct ControlsView {
     /// Keyboard & mouse input by game button (`table_rows(Kind::Key)`).
     // Task 32: `gather` writes `control_changes` of `key` and `pad` into `settings.controls`.
     pub key: IndexMap<String, String>,
+    /// Alternative input by game button; a button without one has no entry.
+    pub key_alt: IndexMap<String, String>,
     /// SDL gamepad button by game button (`CONTROLS`); empty for L2, R2 and Touchpad left.
     pub pad: IndexMap<String, String>,
     pub pad_style: String,
     /// The game button whose key box waits for an input.
     pub capturing: Option<String>,
+    /// Which of its two boxes waits.
+    pub capturing_slot: Slot,
     pub capture_started: Option<Instant>,
     /// Whether the first open already looked for a gamepad.
     pub gamepad_probe_started: bool,
@@ -173,9 +184,11 @@ impl ControlsView {
             device: device.unwrap_or_default(),
             device_chosen: device.is_some(),
             key: table(saved, Kind::Key),
+            key_alt: alternative_values(saved),
             pad: table(saved, Kind::Pad),
             pad_style,
             capturing: None,
+            capturing_slot: Slot::Main,
             capture_started: None,
             gamepad_probe_started: false,
         }
@@ -202,16 +215,16 @@ fn table(saved: &Value, kind: Kind) -> IndexMap<String, String> {
 pub enum ControlsMessage {
     Device(Device),
     /// A key box was clicked: it waits for an input for this game button.
-    Capture(String),
+    Capture(String, Slot),
     /// The input (SDL name) the waiting box of this game button got.
-    Captured(String, String),
+    Captured(String, Slot, String),
     /// The waiting box gives up (Python `finish`): its time ran out, the window lost the focus,
     /// or a mouse button without an input name was pressed.
     CaptureTimeout,
-    /// The arrow of a row: that button back on its default.
+    /// The arrow of a row: that button back on its default, without an alternative.
     ResetKey(String),
-    /// "Clear input" of a row: that button on no input.
-    Clear(String),
+    /// "Clear input" of a row: that button's main input on none, or its alternative dropped.
+    Clear(String, Slot),
     ResetTable(Kind),
     PadStyle(String),
     /// A gamepad box: the game button and the SDL gamepad button chosen for it.
@@ -227,16 +240,20 @@ pub fn update(state: &mut State, message: ControlsMessage) -> Task<Message> {
             state.controls.device_chosen = true;
             return apply_set(state, "controls_device", Value::from(device.value()));
         }
-        ControlsMessage::Capture(button) => {
+        ControlsMessage::Capture(button, slot) => {
             let now = Instant::now();
             state.now = now;
             state.controls.capturing = Some(button);
+            state.controls.capturing_slot = slot;
             state.controls.capture_started = Some(now);
         }
         // An input that arrives for a box no longer waiting binds nothing.
-        ControlsMessage::Captured(button, name) => {
-            if state.controls.capturing.as_deref() == Some(button.as_str()) {
-                bind_key(&mut state.controls.key, &button, &name);
+        ControlsMessage::Captured(button, slot, name) => {
+            if state.controls.capturing.as_deref() == Some(button.as_str())
+                && state.controls.capturing_slot == slot
+            {
+                let view = &mut state.controls;
+                bind_key(&mut view.key, &mut view.key_alt, &button, slot, &name);
                 stop_capture(state);
             }
         }
@@ -247,13 +264,25 @@ pub fn update(state: &mut State, message: ControlsMessage) -> Task<Message> {
                 .find(|row| row.button == button)
             {
                 let default = default_input(row, Kind::Key).unwrap_or_default();
-                bind_key(&mut state.controls.key, &button, default);
+                let view = &mut state.controls;
+                view.key_alt.shift_remove(&button);
+                bind_key(
+                    &mut view.key,
+                    &mut view.key_alt,
+                    &button,
+                    Slot::Main,
+                    default,
+                );
             }
         }
-        ControlsMessage::Clear(button) => {
-            bind_key(&mut state.controls.key, &button, "None");
+        ControlsMessage::Clear(button, slot) => {
+            let view = &mut state.controls;
+            bind_key(&mut view.key, &mut view.key_alt, &button, slot, "None");
         }
         ControlsMessage::ResetTable(kind) => {
+            if kind == Kind::Key {
+                state.controls.key_alt.clear();
+            }
             let values = match kind {
                 Kind::Key => &mut state.controls.key,
                 Kind::Pad => &mut state.controls.pad,
@@ -313,8 +342,9 @@ pub fn key_pressed(state: &mut State, key: &Key, location: Location) -> Task<Mes
     let Some(button) = state.controls.capturing.clone() else {
         return Task::none();
     };
+    let slot = state.controls.capturing_slot;
     match neutral_key_name(key, location).and_then(|name| sdl_key_name(&name)) {
-        Some(name) => update(state, ControlsMessage::Captured(button, name)),
+        Some(name) => update(state, ControlsMessage::Captured(button, slot, name)),
         None => Task::none(),
     }
 }
@@ -337,10 +367,10 @@ pub fn subscription(state: &State) -> Subscription<Message> {
     event::listen_with(
         |event: Event, _status: event::Status, _window: window::Id| mouse_input(&event),
     )
-    .with(button)
-    .map(|(button, input)| {
+    .with((button, state.controls.capturing_slot))
+    .map(|((button, slot), input)| {
         Message::Controls(match input {
-            MouseInput::Bind(name) => ControlsMessage::Captured(button, name.to_string()),
+            MouseInput::Bind(name) => ControlsMessage::Captured(button, slot, name.to_string()),
             MouseInput::GiveUp => ControlsMessage::CaptureTimeout,
         })
     })
@@ -518,6 +548,11 @@ pub fn clear_id(button: &str) -> iced::widget::Id {
     iced::widget::Id::from(format!("controls-clear: {button}"))
 }
 
+/// The id of the button that drops the alternative of a keyboard row.
+pub fn clear_alternative_id(button: &str) -> iced::widget::Id {
+    iced::widget::Id::from(format!("controls-clear-alternative: {button}"))
+}
+
 /// The English name of a game button or action, which is also the translation key.
 fn button_name(button: &'static str) -> &'static str {
     PS_BUTTON_NAMES
@@ -548,6 +583,10 @@ pub struct KeyRow {
     pub title: String,
     /// What the key box shows: the input, `(none)`, or the countdown while it waits.
     pub input: String,
+    /// What the alternative box shows: the input, a hint when there is none, or the countdown.
+    pub alternative: String,
+    /// Whether the row has an alternative to drop.
+    pub has_alternative: bool,
     /// Off for L3 and R3 while Rage of Sparta is on one input, and for the Rage row otherwise.
     pub enabled: bool,
 }
@@ -566,24 +605,30 @@ pub fn key_rows(state: &State, lang: &str) -> Vec<KeyRow> {
             KeyRow {
                 button: row.button,
                 title: tr(lang, button_name(row.button)),
-                input: key_box_text(state, lang, row.button),
+                input: key_box_text(state, lang, row.button, Slot::Main),
+                alternative: key_box_text(state, lang, row.button, Slot::Alternative),
+                has_alternative: state.controls.key_alt.contains_key(row.button),
                 enabled,
             }
         })
         .collect()
 }
 
-fn key_box_text(state: &State, lang: &str, button: &str) -> String {
+fn key_box_text(state: &State, lang: &str, button: &str, slot: Slot) -> String {
     let view = &state.controls;
-    if view.capturing.as_deref() == Some(button) {
+    if view.capturing.as_deref() == Some(button) && view.capturing_slot == slot {
         let waited = view.capture_started.map_or(0, |started| {
             state.now.saturating_duration_since(started).as_secs()
         });
         let left = CAPTURE_SECONDS.saturating_sub(waited).max(1);
         return format!("{} ({left})", tr(lang, "Press a key or mouse"));
     }
-    match view.key.get(button).map(String::as_str) {
-        None | Some("" | "None") => tr(lang, "(none)"),
+    let (inputs, empty) = match slot {
+        Slot::Main => (&view.key, "(none)"),
+        Slot::Alternative => (&view.key_alt, ALTERNATIVE_EMPTY),
+    };
+    match inputs.get(button).map(String::as_str) {
+        None | Some("" | "None") => tr(lang, empty),
         Some(input) => input.to_string(),
     }
 }
@@ -715,11 +760,11 @@ fn radio<'a>(label: String, active: bool, message: Message) -> Element<'a, Messa
 /// The reset of the `kind` table: off while the table already holds the defaults, so a click,
 /// whose rows may be out of sight, still shows that it acted.
 fn reset_button<'a>(state: &State, label: String, kind: Kind) -> Element<'a, Message> {
-    let values = match kind {
-        Kind::Key => &state.controls.key,
-        Kind::Pad => &state.controls.pad,
+    let (values, has_alternatives) = match kind {
+        Kind::Key => (&state.controls.key, !state.controls.key_alt.is_empty()),
+        Kind::Pad => (&state.controls.pad, false),
     };
-    let reset = (!at_defaults(values, kind))
+    let reset = (has_alternatives || !at_defaults(values, kind))
         .then_some(Message::Controls(ControlsMessage::ResetTable(kind)));
     container(
         button(text(label))
@@ -737,16 +782,41 @@ fn key_line<'a>(row: KeyRow, lang: &str) -> Element<'a, Message> {
         .style(theme::button_flat);
     let mut reset = button(text("\u{21a9}")).style(theme::button_flat);
     let mut clear = button(text(tr(lang, "Clear input"))).style(theme::button_flat);
+    let mut alternative_label = text(row.alternative);
+    if !row.has_alternative {
+        alternative_label = alternative_label.style(theme::text_muted);
+    }
+    let mut alternative = button(alternative_label)
+        .width(BOX_WIDTH)
+        .style(theme::button_flat);
+    let mut clear_alternative = button(text("\u{00d7}")).style(theme::button_flat);
     if row.enabled {
         let button = row.button.to_string();
-        input = input.on_press(Message::Controls(ControlsMessage::Capture(button.clone())));
+        input = input.on_press(Message::Controls(ControlsMessage::Capture(
+            button.clone(),
+            Slot::Main,
+        )));
+        alternative = alternative.on_press(Message::Controls(ControlsMessage::Capture(
+            button.clone(),
+            Slot::Alternative,
+        )));
         reset = reset.on_press(Message::Controls(ControlsMessage::ResetKey(button.clone())));
-        clear = clear.on_press(Message::Controls(ControlsMessage::Clear(button)));
+        clear = clear.on_press(Message::Controls(ControlsMessage::Clear(
+            button.clone(),
+            Slot::Main,
+        )));
+        if row.has_alternative {
+            clear_alternative = clear_alternative.on_press(Message::Controls(
+                ControlsMessage::Clear(button, Slot::Alternative),
+            ));
+        }
     }
     layout![
         button_icon(icon, style, ICON_SIZE),
         text(row.title).width(Fill),
         input,
+        alternative,
+        container(clear_alternative).id(clear_alternative_id(row.button)),
         reset,
         container(clear).id(clear_id(row.button)),
     ]
@@ -809,6 +879,7 @@ fn keyboard_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
         )),
         container(lines).padding(Padding::ZERO.top(12)),
         note(tr_fmt(lang, KEY_NOTE, &[&CAPTURE_SECONDS.to_string()])),
+        note(tr(lang, ALTERNATIVE_NOTE)),
         reset_button(
             state,
             tr(lang, "Reset keyboard & mouse to defaults"),
@@ -952,6 +1023,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
             ),
             Some(&tr(lang, GLYPH_HINT)),
         ),
+        glyph_keys_row(state, lang),
         // For both devices, under the icons as in the Python's page.
         checkbox(
             state.rtl,
@@ -965,4 +1037,26 @@ pub fn view(state: &State) -> Element<'_, Message> {
     ]
     .spacing(2)
     .into()
+}
+
+/// Which input the keyboard icons show, for the styles that can draw the keyboard (the keyboard
+/// style, and "match my controller" while no gamepad is connected).
+fn glyph_keys_row<'a>(state: &State, lang: &str) -> Element<'a, Message> {
+    if !matches!(
+        state.store.text("glyph_style").as_str(),
+        "keyboard" | "auto"
+    ) {
+        return space().height(0).into();
+    }
+    row(
+        state.rtl,
+        &tr(lang, "Keys on the icons"),
+        select(
+            "glyph_keys",
+            GLYPH_KEYS,
+            &state.store.text("glyph_keys"),
+            lang,
+        ),
+        Some(&tr(lang, GLYPH_KEYS_HINT)),
+    )
 }

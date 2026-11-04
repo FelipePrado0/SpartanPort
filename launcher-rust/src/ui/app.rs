@@ -25,6 +25,7 @@ use crate::core::platform::tool::SystemTools;
 use crate::core::settings::SettingsFile;
 use crate::core::store::Store;
 use crate::core::update::{GitHubReleases, ReleaseHost};
+use crate::startup::confirm_window;
 use crate::ui::drawer::{self, DrawerState};
 use crate::ui::fire::{intensity_for, probe_gpu, Fire};
 use crate::ui::follow::{follow, Cause};
@@ -148,6 +149,8 @@ pub struct State {
     pub window_size: Size,
     /// The launcher window, once it has opened.
     pub window: Option<window::Id>,
+    /// When the window opened, until `WINDOW_CONFIRM` later says it works.
+    pub window_unconfirmed: Option<Instant>,
     /// Clock of the animations, advanced by `Tick` and by the messages that start them.
     pub now: Instant,
 }
@@ -251,6 +254,7 @@ impl State {
             focused: true,
             window_size: WINDOW_SIZE,
             window: None,
+            window_unconfirmed: None,
             now,
         };
         // Every view the start reads, at once: the Mods page's lists too, as the Python launcher
@@ -396,6 +400,7 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
         Message::Resized(size) => state.window_size = size,
         Message::WindowOpened(id, size) => {
             state.window = Some(id);
+            state.window_unconfirmed = Some(state.now);
             state.window_size = size;
             return Task::batch([
                 window::scale_factor(id).map(Message::DesktopScale),
@@ -449,6 +454,13 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
         }
         Message::Tick(at) => {
             tick(state, at);
+            if state
+                .window_unconfirmed
+                .is_some_and(|opened| at.saturating_duration_since(opened) >= WINDOW_CONFIRM)
+            {
+                state.window_unconfirmed = None;
+                confirm_window(&state.paths.data_dir);
+            }
             lang_menu::update(state, LangMessage::Tick(at));
             let check = version_menu::update(state, VersionMessage::Tick(at));
             if state.version_menu.open {
@@ -877,6 +889,10 @@ pub fn subscription(state: &State) -> Subscription<Message> {
         mapper::subscription(state),
     ])
 }
+
+/// How long the window has to run before its start counts as good: past the first frames, which
+/// a broken driver dies on after the window has already opened.
+pub const WINDOW_CONFIRM: Duration = Duration::from_secs(2);
 
 /// How fast the clock runs.
 #[doc(hidden)]

@@ -397,9 +397,9 @@ impl<'a> Runner<'a> {
             graphics_options::upscaler_render_size(&plan.config, &self.env)
         {
             let base = port.join("patches").join("CUSA01623.xml");
-            let patch = fs::read_to_string(&base)
-                .ok()
-                .and_then(|xml| graphics_options::resolution_patch_xml(&xml, width, height));
+            let patch = fs::read_to_string(&base).ok().and_then(|xml| {
+                graphics_options::resolution_patch_xml(&xml, width, height, output)
+            });
             match patch {
                 Some(text) => {
                     let file = out.join("upscale-resolution.xml");
@@ -927,8 +927,9 @@ pub const GAMEPAD_PROBE_LIMIT: Duration = Duration::from_secs(15);
 /// The probe arguments and style of the controller glyphs (`run.py` `glyph_mounts`): patched copies
 /// of the WADs that hold the game's button icons, mounted over them (`glyphs::build`). Opt-in:
 /// unless `SPARTAN_GLYPH_STYLE` is auto, xbox, nintendo or keyboard nothing is asked, drawn or
-/// mounted, and old copies are removed. The keyboard keys follow `SPARTAN_KEY_MAP`; auto shows them
-/// when no gamepad is connected. Whatever fails only reaches the Log: the game then keeps its own
+/// mounted, and old copies are removed. The keyboard keys follow `SPARTAN_KEY_MAP` (the main key of a
+/// button, or its alternative with `SPARTAN_GLYPH_KEYS=alternative`); auto shows them when no
+/// gamepad is connected. Whatever fails only reaches the Log: the game then keeps its own
 /// icons. `run_probe` runs a command (`[probe, --gamepad]`) within a time limit and returns its
 /// output or the error to print.
 pub fn glyph_mounts(
@@ -965,13 +966,18 @@ pub fn glyph_mounts(
         String::new()
     };
     let resolved = glyphs::resolve(choice, &pad);
+    // Only the key the icons show goes in, so a copy is redrawn when that key changes.
+    let key_map = glyphs::shown_keys(
+        get("SPARTAN_KEY_MAP"),
+        get("SPARTAN_GLYPH_KEYS") == "alternative",
+    );
     let mounts = match glyphs::build(
         game,
         out,
         &resolved.style,
         resolved.faces.as_ref(),
         get("SPARTAN_PAD_MAP"),
-        get("SPARTAN_KEY_MAP"),
+        &key_map,
         assets,
         log,
     ) {
@@ -1307,6 +1313,58 @@ mod tests {
             "{}",
             stamp(&run)
         );
+    }
+
+    #[test]
+    fn the_icons_show_the_main_key_unless_the_alternative_is_chosen() {
+        let run = glyph_run(true);
+        let map = "cross=Space|K,square=Mouse Left|J,triangle=Q";
+        let main = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", map),
+        ];
+        mounts_with(&run, &main, Ok(""));
+        let drawn_main = stamp(&run);
+        assert!(
+            drawn_main.starts_with(
+                "[12, \"keyboard\", null, \"\", \"cross=Space,square=Mouse Left,triangle=Q\", null, "
+            ),
+            "{drawn_main}"
+        );
+        // Choosing the alternative redraws the copy: only the keys a button shows are stamped.
+        let alternative = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", map),
+            ("SPARTAN_GLYPH_KEYS", "alternative"),
+        ];
+        mounts_with(&run, &alternative, Ok(""));
+        let drawn_alternative = stamp(&run);
+        assert!(
+            drawn_alternative.starts_with(
+                "[12, \"keyboard\", null, \"\", \"cross=K,square=J,triangle=Q\", null, "
+            ),
+            "{drawn_alternative}"
+        );
+        // Back to the main keys: the stamp is the first one again, so a copy made before is reused.
+        mounts_with(&run, &main, Ok(""));
+        assert_eq!(stamp(&run), drawn_main);
+    }
+
+    #[test]
+    fn a_new_alternative_does_not_redraw_the_icons_of_the_main_keys() {
+        let run = glyph_run(true);
+        let before = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", "cross=Space|K"),
+        ];
+        mounts_with(&run, &before, Ok(""));
+        let first = stamp(&run);
+        let after = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", "cross=Space|L"),
+        ];
+        mounts_with(&run, &after, Ok(""));
+        assert_eq!(stamp(&run), first);
     }
 
     #[test]

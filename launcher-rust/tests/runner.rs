@@ -1171,6 +1171,29 @@ fn play_writes_last_run_log_with_the_advice() {
 }
 
 #[test]
+fn play_writes_the_journal_next_to_the_run_log() {
+    let dir = tempfile::tempdir().unwrap();
+    let user = dir.path().join("saves");
+    let settings = play_settings(dir.path(), &user);
+    let line = "Runtime: cannot create 6080 MiB of guest memory (error 12)";
+    let args = ["--say", line, "--exit", "21"];
+    let (code, _, log, _) = played(&settings, dir.path(), &user, clean_environment(), &args);
+    assert_eq!(code, 21, "{log}");
+    let journal = fs::read_to_string(user.join("last_run.jsonl")).unwrap();
+    let records: Vec<serde_json::Value> = journal
+        .lines()
+        .map(|record| serde_json::from_str(record).unwrap())
+        .collect();
+    assert_eq!(records.first().unwrap()["type"], "start");
+    assert_eq!(records[1]["text"], line);
+    assert_eq!(records[1]["area"], "Runtime");
+    let exit = records.last().unwrap();
+    assert_eq!(exit["type"], "exit");
+    assert_eq!(exit["code"], 21);
+    assert!(exit["advice"].as_str().is_some(), "{journal}");
+}
+
+#[test]
 fn play_starts_the_game_with_the_saved_stream_memory() {
     // The saved choice, whatever the launcher inherited.
     let dir = tempfile::tempdir().unwrap();
