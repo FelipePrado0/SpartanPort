@@ -320,7 +320,8 @@ en los minijuegos. En la lira de las Musas, por ejemplo, dejá Espacio, Ctrl izq
 botones del mouse y agregá K, L, J e I, dispuestas como los cuatro botones (I arriba, J a la
 izquierda, L a la derecha, K abajo). Una tecla que ya usa otro botón se intercambia con él, como en
 las teclas principales. Los íconos de teclado en el juego muestran la tecla principal; *Keys on the
-icons* (página Controls, con el estilo Keyboard) puede mostrar la alternativa. Sin el launcher,
+icons* (página Controls, con el estilo Keyboard) puede mostrar la alternativa, o la alternativa solo en
+la lira (los demás íconos conservan la principal). Sin el launcher,
 uní los nombres con `|` en `SPARTAN_KEY_MAP`, por ejemplo `cross=Space|K,square=Mouse Left|J`.
 
 En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic del touchpad derecho)

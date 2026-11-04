@@ -452,6 +452,24 @@ pub fn shown_keys(key_map: &str, alternative: bool) -> String {
     key_map.split(',').map(shown).collect::<Vec<_>>().join(",")
 }
 
+/// The entries of a `SPARTAN_KEY_MAP` value for the four buttons on the Muses' lyre, each with its
+/// alternative where it has one (`cross=Space|K` -> `cross=K`). Only these are kept, so a copy of the
+/// icons is not redrawn when the alternative of a button the lyre does not show changes.
+pub fn lyre_keys(key_map: &str) -> String {
+    let on_the_lyre = |entry: &&str| {
+        let (game, _) = partition(entry);
+        LYRE_DISCS
+            .iter()
+            .any(|(button, _)| *button == game.to_lowercase())
+    };
+    let shown = shown_keys(key_map, true);
+    shown
+        .split(',')
+        .filter(on_the_lyre)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 /// Game button -> keyboard key, with a `SPARTAN_KEY_MAP` value (`cross=Q,circle=Left Shift`)
 /// applied. A button with an alternative (`cross=Space|K`) shows its main key. Unlike the gamepad, L2/R2 are keys too. `None` (a button left without a key) keeps the
 /// default, except L3/R3 with Rage of Sparta on one input: they show the rage key, which presses
@@ -744,13 +762,16 @@ impl<'a> Painter<'a> {
     }
 }
 
-/// What a build draws: the style, the controller's letters and the two button maps.
+/// What a build draws: the style, the controller's letters and the button maps. `lyre_key_map`
+/// ([`lyre_keys`]) is what the Muses' lyre shows with the keyboard style when it differs from
+/// `key_map`; empty, the lyre shows `key_map` like every other icon.
 #[derive(Clone, Copy, Debug)]
 pub struct Choice<'a> {
     pub style: &'a str,
     pub faces: Option<&'a Faces>,
     pub pad_map: &'a str,
     pub key_map: &'a str,
+    pub lyre_key_map: &'a str,
 }
 
 /// Game button -> what presses it: a key with the keyboard style, a gamepad button otherwise.
@@ -759,6 +780,15 @@ fn host_buttons(choice: &Choice) -> IndexMap<String, String> {
         key_buttons(choice.key_map)
     } else {
         pad_buttons(choice.pad_map)
+    }
+}
+
+/// [`host_buttons`] for the Muses' lyre.
+fn lyre_host_buttons(choice: &Choice) -> IndexMap<String, String> {
+    if choice.style == "keyboard" && !choice.lyre_key_map.is_empty() {
+        key_buttons(choice.lyre_key_map)
+    } else {
+        host_buttons(choice)
     }
 }
 
@@ -1515,7 +1545,7 @@ pub fn lyre_paint(
     choice: &Choice,
     painter: &Painter,
 ) -> Result<Picture, GlyphError> {
-    let hosts = host_buttons(choice);
+    let hosts = lyre_host_buttons(choice);
     let look = LYRE_FORMS
         .iter()
         .find(|(f, _)| *f == form)
@@ -1855,12 +1885,14 @@ pub fn textures(style: &str) -> Vec<(&'static str, Texture)> {
 
 /// Replaces the glyph textures inside the WAD in `data`; returns how many. A texture that cannot be
 /// drawn is left as it is, with a Log line.
+#[allow(clippy::too_many_arguments)]
 pub fn patch(
     data: &mut [u8],
     style: &str,
     faces: Option<&Faces>,
     pad_map: &str,
     key_map: &str,
+    lyre_key_map: &str,
     assets: &Assets,
     log: &mut dyn FnMut(String),
 ) -> usize {
@@ -1870,6 +1902,7 @@ pub fn patch(
         faces,
         pad_map,
         key_map,
+        lyre_key_map,
     };
     let drawn = textures(style);
     let mut count = 0;
@@ -1967,6 +2000,7 @@ pub fn build(
     faces: Option<&Faces>,
     pad_map: &str,
     key_map: &str,
+    lyre_key_map: &str,
     assets: &Assets,
     log: &mut dyn FnMut(String),
 ) -> Result<IndexMap<String, PathBuf>, GlyphError> {
@@ -1975,10 +2009,10 @@ pub fn build(
         let _ = std::fs::remove_dir_all(&target);
         return Ok(IndexMap::new());
     }
-    let (pad_map, key_map) = if style == "keyboard" {
-        ("", key_map)
+    let (pad_map, key_map, lyre_key_map) = if style == "keyboard" {
+        ("", key_map, lyre_key_map)
     } else {
-        (pad_map, "")
+        (pad_map, "", "")
     };
     let sources: Vec<(&str, PathBuf)> = WADS
         .iter()
@@ -2002,6 +2036,10 @@ pub fn build(
     ];
     if !key_map.is_empty() {
         stamp.push(json!(key_map));
+    }
+    // Tagged, so that it cannot be taken for the key map; absent unless the lyre shows other keys.
+    if !lyre_key_map.is_empty() {
+        stamp.push(json!(["lyre", lyre_key_map]));
     }
     stamp.push(json!(art_mtime));
     let mut listed = Vec::new();
@@ -2032,7 +2070,17 @@ pub fn build(
         made.clear();
         for (name, path) in &sources {
             let mut data = std::fs::read(path)?;
-            if patch(&mut data, style, faces, pad_map, key_map, assets, log) > 0 {
+            if patch(
+                &mut data,
+                style,
+                faces,
+                pad_map,
+                key_map,
+                lyre_key_map,
+                assets,
+                log,
+            ) > 0
+            {
                 atomic_write(&target.join(file_name(name)), &data)?;
                 made.push(file_name(name));
             }
@@ -2148,6 +2196,7 @@ pub(crate) mod tests {
             None,
             pad_map,
             key_map,
+            "",
             &assets(),
             &mut quiet(),
         );
@@ -2478,6 +2527,7 @@ pub(crate) mod tests {
             None,
             pad_map,
             key_map,
+            "",
             &assets(),
             &mut quiet(),
         )
@@ -2608,11 +2658,23 @@ pub(crate) mod tests {
     }
 
     fn lyre_painted(form: Form, style: &str, pad_map: &str, key_map: &str, kind: &str) -> Picture {
+        lyre_painted_with(form, style, pad_map, key_map, "", kind)
+    }
+
+    fn lyre_painted_with(
+        form: Form,
+        style: &str,
+        pad_map: &str,
+        key_map: &str,
+        lyre_key_map: &str,
+        kind: &str,
+    ) -> Picture {
         let choice = Choice {
             style,
             faces: None,
             pad_map,
             key_map,
+            lyre_key_map,
         };
         lyre_paint(&flat_level(), form, kind, &choice, &painter()).unwrap()
     }
@@ -2680,6 +2742,92 @@ pub(crate) mod tests {
         let defaults = lyre_painted(Form::Lyre, "keyboard", "", "", "diffuse");
         let moved = lyre_painted(Form::Lyre, "keyboard", "", "circle=L", "diffuse");
         assert_eq!(changed_discs(&defaults, &moved), ["circle"]);
+    }
+
+    #[test]
+    fn the_lyre_keys_are_the_alternatives_of_its_four_buttons() {
+        let map =
+            "cross=Space|K,l1=Q|G,square=Mouse Left | J,circle=Left Ctrl,Triangle=Mouse Right|I";
+        assert_eq!(
+            lyre_keys(map),
+            "cross=K,square=J,circle=Left Ctrl,Triangle=I"
+        );
+        assert_eq!(lyre_keys("l1=Q|G,move_up=W|T"), "");
+        assert_eq!(lyre_keys(""), "");
+    }
+
+    #[test]
+    fn the_lyre_alone_shows_the_alternatives_and_a_button_without_one_keeps_its_main_key() {
+        let map = "cross=Space|K,circle=Left Ctrl,square=Mouse Left|J,triangle=Mouse Right";
+        let (main, lyre) = (shown_keys(map, false), lyre_keys(map));
+        for form in [Form::Lyre, Form::Gold] {
+            let paint = |lyre_key_map: &str| {
+                lyre_painted_with(form, "keyboard", "", &main, lyre_key_map, "diffuse")
+            };
+            let (plain, lyre_only) = (paint(""), paint(&lyre));
+            // The discs with an alternative change; circle and triangle keep their main key.
+            assert_eq!(
+                changed_discs(&plain, &lyre_only),
+                ["cross", "square"],
+                "{form:?}"
+            );
+            // They read as the alternatives do everywhere.
+            let alternatives =
+                lyre_painted(form, "keyboard", "", &shown_keys(map, true), "diffuse");
+            assert_eq!(lyre_only, alternatives, "{form:?}");
+        }
+        // Only the keyboard style has keys to show: a lyre map changes nothing for the others.
+        assert_eq!(
+            lyre_painted_with(Form::Lyre, "xbox", "", "", &lyre, "diffuse"),
+            lyre_painted(Form::Lyre, "xbox", "", "", "diffuse")
+        );
+    }
+
+    #[test]
+    fn the_other_keyboard_textures_keep_the_main_key_when_the_lyre_shows_the_alternative() {
+        let original = [
+            texture("TX2CDFA5F8.F2C4FECB.dds", 512, 512, "DXT1", 10, 0),
+            wad(),
+        ]
+        .concat();
+        let map = "cross=Space|K,circle=Left Ctrl,square=Mouse Left|J";
+        let drawn = |key_map: &str, lyre_key_map: &str| {
+            let mut data = original.clone();
+            let count = patch(
+                &mut data,
+                "keyboard",
+                None,
+                "",
+                key_map,
+                lyre_key_map,
+                &assets(),
+                &mut quiet(),
+            );
+            assert_eq!(count, 5);
+            data
+        };
+        let main = drawn(&shown_keys(map, false), "");
+        let alternative = drawn(&shown_keys(map, true), "");
+        let lyre_only = drawn(&shown_keys(map, false), &lyre_keys(map));
+        let mut compared = Vec::new();
+        for e in entries(&original) {
+            let span = e.offset..e.offset + 0x40 + e.size;
+            if !e.name.ends_with(".dds") || !TEXTURES.iter().any(|(id, _)| e.name.starts_with(id)) {
+                continue;
+            }
+            if e.name.starts_with("TX2CDFA5F8") {
+                assert_eq!(lyre_only[span.clone()], alternative[span.clone()], "lyre");
+                assert_ne!(lyre_only[span.clone()], main[span], "lyre");
+            } else {
+                assert_eq!(lyre_only[span.clone()], main[span.clone()], "{}", e.name);
+                if e.name.starts_with("TX1BBACF4D") {
+                    // The cross icon does change with the alternative, so this is not a trivial match.
+                    assert_ne!(alternative[span.clone()], main[span], "{}", e.name);
+                }
+            }
+            compared.push(e.name);
+        }
+        assert_eq!(compared.len(), 5, "{compared:?}");
     }
 
     #[test]
@@ -2887,6 +3035,7 @@ pub(crate) mod tests {
             None,
             "",
             "",
+            "",
             &missing,
             &mut quiet(),
         )
@@ -2918,9 +3067,16 @@ pub(crate) mod tests {
         let mut data = texture("TX7FF61BF7.CC842B4F.dds", 128, 128, "DXT1", 0, 1000);
         let before = data.clone();
         let mut log = Vec::new();
-        let count = patch(&mut data, "xbox", None, "", "", &assets(), &mut |line| {
-            log.push(line)
-        });
+        let count = patch(
+            &mut data,
+            "xbox",
+            None,
+            "",
+            "",
+            "",
+            &assets(),
+            &mut |line| log.push(line),
+        );
         assert_eq!(count, 0);
         assert!(log.last().unwrap().contains("left as it is"), "{log:?}");
         assert_eq!(data, before);
@@ -2930,9 +3086,16 @@ pub(crate) mod tests {
     fn refused(data: &[u8]) -> Vec<String> {
         let mut copy = data.to_vec();
         let mut log = Vec::new();
-        let count = patch(&mut copy, "xbox", None, "", "", &assets(), &mut |line| {
-            log.push(line)
-        });
+        let count = patch(
+            &mut copy,
+            "xbox",
+            None,
+            "",
+            "",
+            "",
+            &assets(),
+            &mut |line| log.push(line),
+        );
         assert_eq!(count, 0, "{log:?}");
         assert_eq!(copy, data);
         log
@@ -3111,6 +3274,7 @@ pub(crate) mod tests {
             faces: None,
             pad_map: "",
             key_map: "",
+            lyre_key_map: "",
         }
     }
 

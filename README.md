@@ -353,7 +353,8 @@ Square on the left click for combat and also press it with J in the minigames. O
 for example, keep Space, Left Ctrl and the two mouse buttons and add K, L, J and I, laid out like the
 four buttons (I up, J left, L right, K down). A key already used by another button swaps with it, as
 for the main keys. The in-game keyboard icons show the main key; *Keys on the icons* (Controls page,
-with the Keyboard style) can show the alternative instead. Without the launcher, join the names with
+with the Keyboard style) can show the alternative instead, or the alternative on the lyre only (the
+other icons keep the main key). Without the launcher, join the names with
 `|` in `SPARTAN_KEY_MAP`, for example `cross=Space|K,square=Mouse Left|J`.
 
 On a controller without a touchpad (Xbox and others), View opens the pause menu (the right

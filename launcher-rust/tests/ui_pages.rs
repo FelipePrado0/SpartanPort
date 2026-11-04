@@ -1684,6 +1684,20 @@ fn the_icon_keys_choice_shows_with_the_styles_that_draw_the_keyboard() {
         Message::Set("glyph_keys".into(), serde_json::json!("alternative")),
     );
     assert_eq!(state.store.text("glyph_keys"), "alternative");
+    let _ = app::update(
+        &mut state,
+        Message::Set("glyph_keys".into(), serde_json::json!("lyre")),
+    );
+    assert_eq!(state.store.text("glyph_keys"), "lyre");
+}
+
+#[test]
+fn the_icon_keys_choice_offers_the_main_key_the_alternative_and_the_lyre_alone() {
+    let values: Vec<&str> = spartanport_launcher::core::options::GLYPH_KEYS
+        .iter()
+        .map(|choice| choice.value)
+        .collect();
+    assert_eq!(values, ["main", "alternative", "lyre"]);
 }
 
 #[test]

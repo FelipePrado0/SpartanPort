@@ -146,11 +146,19 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
         ],
     ),
     (
-        "Which input the keyboard icons in the game show for a button that has an alternative. A button without an alternative always shows its main input. Applied when the game starts.",
+        "Which input the keyboard icons in the game show for a button that has an alternative: its main key, its alternative key on every icon, or its alternative key only on the Muses' lyre while the other icons keep the main key. A button without an alternative always shows its main input. Applied when the game starts.",
         &[
-            ("zh", "当按键设置了备用输入时，游戏内键盘图标显示哪一个输入。没有备用输入的按键始终显示主输入。下次启动游戏生效。"),
-            ("pt", "Qual entrada os ícones de teclado no jogo mostram para um botão que tem alternativa. Um botão sem alternativa sempre mostra a entrada principal. Aplicado ao iniciar o jogo."),
-            ("es", "Qué entrada muestran los iconos de teclado en el juego para un botón que tiene alternativa. Un botón sin alternativa siempre muestra su entrada principal. Se aplica al iniciar el juego."),
+            ("zh", "当按键设置了备用输入时，游戏内键盘图标显示哪一个输入：主按键、所有图标上的备用按键，或仅在缪斯竖琴上显示备用按键（其他图标仍显示主按键）。没有备用输入的按键始终显示主输入。下次启动游戏生效。"),
+            ("pt", "Qual entrada os ícones de teclado no jogo mostram para um botão que tem alternativa: a tecla principal, a alternativa em todos os ícones, ou a alternativa só na lira das Musas, com os outros ícones na principal. Um botão sem alternativa sempre mostra a entrada principal. Aplicado ao iniciar o jogo."),
+            ("es", "Qué entrada muestran los iconos de teclado en el juego para un botón que tiene alternativa: la tecla principal, la alternativa en todos los iconos, o la alternativa solo en la lira de las Musas, con los demás iconos en la principal. Un botón sin alternativa siempre muestra su entrada principal. Se aplica al iniciar el juego."),
+        ],
+    ),
+    (
+        "Alternative key on the lyre only",
+        &[
+            ("zh", "仅在竖琴上显示备用按键"),
+            ("pt", "Tecla alternativa só na lira"),
+            ("es", "Tecla alternativa solo en la lira"),
         ],
     ),
     (

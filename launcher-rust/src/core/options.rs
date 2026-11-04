@@ -125,6 +125,7 @@ pub static GLYPH_STYLES: &[Choice] = &[
 pub static GLYPH_KEYS: &[Choice] = &[
     c("main", "Main key (default)"),
     c("alternative", "Alternative key"),
+    c("lyre", "Alternative key on the lyre only"),
 ];
 
 pub static UPSCALERS: &[Choice] = &[

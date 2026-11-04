@@ -733,6 +733,20 @@ fn save_failed_shown(state: &State) -> bool {
 }
 
 #[test]
+fn the_lyre_only_icon_keys_choice_is_saved_and_comes_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    change_and_save(
+        &mut state,
+        "glyph_keys",
+        Message::Set("glyph_keys".into(), json!("lyre")),
+    );
+    let reopened = state_in(dir.path());
+    assert_eq!(reopened.store.text("glyph_keys"), "lyre");
+    assert!(!dirty(&reopened));
+}
+
+#[test]
 fn closing_the_window_saves_first() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state_in(dir.path());

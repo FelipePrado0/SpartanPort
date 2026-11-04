@@ -33,12 +33,17 @@ Branch: `pr/alternative-keys`.
     principais já faziam. A tecla que um slot cede vai para o slot que tinha a tecla escolhida; sem
     nada para ceder, uma principal fica "None" e uma alternativa some.
   - Ícones de teclado no jogo (`src/runner/glyphs.rs`): mostram a tecla principal. O ajuste novo
-    *Keys on the icons* (`glyph_keys`: `main`, padrão, ou `alternative`; variável
-    `SPARTAN_GLYPH_KEYS`, enviada só quando é `alternative`) mostra a alternativa nos botões que
-    têm uma e a principal nos outros. A linha só aparece com os estilos que desenham o teclado
-    (*Keyboard* e *Match my controller*). `glyphs::shown_keys` reduz o mapa às teclas mostradas antes
-    de `glyphs::build` carimbar as cópias, então elas só são redesenhadas quando uma tecla mostrada
-    muda. `VERSION` dos glifos não muda.
+    *Keys on the icons* (`glyph_keys`: `main`, padrão, `alternative` ou `lyre`; variável
+    `SPARTAN_GLYPH_KEYS`, enviada só quando não é `main`) mostra a alternativa nos botões que
+    têm uma e a principal nos outros: com `alternative` em todos os ícones, com `lyre` ("Alternative
+    key on the lyre only") só na lira das Musas (os quatro discos e a legenda do mecanismo dourado),
+    e todos os outros ícones de teclado continuam com a principal. A linha só aparece com os estilos
+    que desenham o teclado (*Keyboard* e *Match my controller*). `glyphs::shown_keys` reduz o mapa às
+    teclas mostradas antes de `glyphs::build` carimbar as cópias, então elas só são redesenhadas
+    quando uma tecla mostrada muda. Com `lyre`, `glyphs::lyre_keys` reduz o mapa às alternativas dos
+    quatro botões da lira e `Choice::lyre_key_map` leva isso só ao desenho da lira; o carimbo ganha
+    o elemento `["lyre", "<mapa>"]` depois do mapa de teclas, e só nesse caso, então o carimbo de
+    `main` e de `alternative` não muda. `VERSION` dos glifos não muda.
 * **Critérios de aceite:**
   - QUANDO `SPARTAN_KEY_MAP` tiver `cross=Space|K` O SISTEMA DEVE apertar Cross com Space e com K, e
     com nenhuma tecla padrão do botão.
@@ -64,6 +69,15 @@ Branch: `pr/alternative-keys`.
     principal nos outros botões.
   - QUANDO só uma alternativa mudar e `glyph_keys` for `main` O SISTEMA NÃO DEVE redesenhar as
     cópias dos ícones.
+  - QUANDO `glyph_keys` for `lyre` O SISTEMA DEVE desenhar na lira das Musas (discos e mecanismo
+    dourado) a alternativa de cada botão que tem uma, a principal nos botões sem alternativa, e
+    desenhar a tecla principal em todas as outras texturas de teclado.
+  - QUANDO `glyph_keys` for `lyre` e a alternativa de um dos quatro botões da lira mudar O SISTEMA DEVE
+    redesenhar as cópias dos ícones; QUANDO mudar a de outro botão O SISTEMA NÃO DEVE.
+  - QUANDO `glyph_keys` for `main` ou `alternative` O SISTEMA DEVE carimbar as cópias exatamente como
+    antes da escolha `lyre` existir.
+  - QUANDO `settings.json` tiver `glyph_keys` `lyre` O SISTEMA DEVE enviar `SPARTAN_GLYPH_KEYS=lyre`
+    e, depois de salvar e reabrir, mostrar a mesma escolha na linha de três valores.
 * **Requisitos não funcionais:** o formato novo só aparece quando o jogador define uma alternativa;
   sem alternativas, `SPARTAN_KEY_MAP` e `settings.json` ficam idênticos aos de antes. O launcher
   Python continua congelado: o desvio está nos documentos de paridade (`2026-10-21-rust-launcher-parity.md`,
@@ -88,7 +102,8 @@ Branch: `pr/alternative-keys`.
   - `keyboard_map` escreve `principal|alternativa`; o gamepad não tem alternativas.
   - `glyph_keys` é um ajuste de `settings.json` fora do arquivo novo (como `controls_device`), com a
     variável `SPARTAN_GLYPH_KEYS`; `glyph_mounts` entrega ao `build` o mapa já reduzido por
-    `shown_keys`, e `key_buttons` também fica com a principal quando recebe um mapa com `|`.
+    `shown_keys` (e, com `lyre`, o mapa de `lyre_keys`), e `key_buttons` também fica com a principal
+    quando recebe um mapa com `|`.
   - Decisão: o runtime lê o valor em um buffer de 2048 bytes; o pior caso do
     launcher (todas as linhas com os nomes mais longos) fica abaixo disso, e há um teste para isso.
 * **Validação:** `pad-map-test` (Windows, MSYS2 CLANG64), `cargo fmt --check`,

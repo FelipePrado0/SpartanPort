@@ -457,9 +457,17 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
         if python_glyphs(&game, &python, style).is_none() {
             return;
         }
-        let mounts = glyphs::build(&game, &rust, style, None, "", "", &assets, &mut |line| {
-            println!("{line}")
-        })
+        let mounts = glyphs::build(
+            &game,
+            &rust,
+            style,
+            None,
+            "",
+            "",
+            "",
+            &assets,
+            &mut |line| println!("{line}"),
+        )
         .unwrap();
         // The drawing's version is the one thing that differs (deviation 17 of the parity spec).
         let theirs = String::from_utf8(fs::read(python.join("glyphs/stamp.json")).unwrap())

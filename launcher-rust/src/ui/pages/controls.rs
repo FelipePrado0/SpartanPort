@@ -108,7 +108,7 @@ const BOX_WIDTH: f32 = 220.0;
 /// What an empty alternative box says.
 const ALTERNATIVE_EMPTY: &str = "(alternative)";
 const ALTERNATIVE_NOTE: &str = "The second box of a row is an alternative input for the same button: keep Square on the left mouse button for combat and add J for the minigames, for example. \"Clear input\" empties the main box, the × button empties the alternative, and the arrow puts the row back on its default with no alternative.";
-const GLYPH_KEYS_HINT: &str = "Which input the keyboard icons in the game show for a button that has an alternative. A button without an alternative always shows its main input. Applied when the game starts.";
+const GLYPH_KEYS_HINT: &str = "Which input the keyboard icons in the game show for a button that has an alternative: its main key, its alternative key on every icon, or its alternative key only on the Muses' lyre while the other icons keep the main key. A button without an alternative always shows its main input. Applied when the game starts.";
 
 /// The device whose table the page shows; both keep working in the game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

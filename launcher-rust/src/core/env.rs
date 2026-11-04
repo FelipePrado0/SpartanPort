@@ -598,6 +598,9 @@ mod tests {
         let (chosen, paths, _dir) = setup(json!({"glyph_keys": "alternative"}));
         let env = game_environment(&chosen, &paths, "en", &IndexMap::new(), true);
         assert_eq!(env["SPARTAN_GLYPH_KEYS"], "alternative");
+        let (lyre, paths, _dir) = setup(json!({"glyph_keys": "lyre"}));
+        let env = game_environment(&lyre, &paths, "en", &IndexMap::new(), true);
+        assert_eq!(env["SPARTAN_GLYPH_KEYS"], "lyre");
         let (unknown, paths, _dir) = setup(json!({"glyph_keys": "both"}));
         let env = game_environment(&unknown, &paths, "en", &IndexMap::new(), true);
         assert!(!env.contains_key("SPARTAN_GLYPH_KEYS"));

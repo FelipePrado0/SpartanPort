@@ -926,8 +926,8 @@ pub const GAMEPAD_PROBE_LIMIT: Duration = Duration::from_secs(15);
 /// of the WADs that hold the game's button icons, mounted over them (`glyphs::build`). Opt-in:
 /// unless `SPARTAN_GLYPH_STYLE` is auto, xbox, nintendo or keyboard nothing is asked, drawn or
 /// mounted, and old copies are removed. The keyboard keys follow `SPARTAN_KEY_MAP` (the main key of a
-/// button, or its alternative with `SPARTAN_GLYPH_KEYS=alternative`); auto shows them when no
-/// gamepad is connected. Whatever fails only reaches the Log: the game then keeps its own
+/// button, or its alternative with `SPARTAN_GLYPH_KEYS=alternative`, or on the Muses' lyre alone with
+/// `SPARTAN_GLYPH_KEYS=lyre`); auto shows them when no gamepad is connected. Whatever fails only reaches the Log: the game then keeps its own
 /// icons. `run_probe` runs a command (`[probe, --gamepad]`) within a time limit and returns its
 /// output or the error to print.
 pub fn glyph_mounts(
@@ -964,11 +964,14 @@ pub fn glyph_mounts(
         String::new()
     };
     let resolved = glyphs::resolve(choice, &pad);
-    // Only the key the icons show goes in, so a copy is redrawn when that key changes.
-    let key_map = glyphs::shown_keys(
-        get("SPARTAN_KEY_MAP"),
-        get("SPARTAN_GLYPH_KEYS") == "alternative",
-    );
+    // Only the keys the icons show go in, so a copy is redrawn when one of them changes.
+    let icon_keys = get("SPARTAN_GLYPH_KEYS");
+    let key_map = glyphs::shown_keys(get("SPARTAN_KEY_MAP"), icon_keys == "alternative");
+    let lyre_key_map = if icon_keys == "lyre" {
+        glyphs::lyre_keys(get("SPARTAN_KEY_MAP"))
+    } else {
+        String::new()
+    };
     let mounts = match glyphs::build(
         game,
         out,
@@ -976,6 +979,7 @@ pub fn glyph_mounts(
         resolved.faces.as_ref(),
         get("SPARTAN_PAD_MAP"),
         &key_map,
+        &lyre_key_map,
         assets,
         log,
     ) {
@@ -1346,6 +1350,46 @@ mod tests {
         // Back to the main keys: the stamp is the first one again, so a copy made before is reused.
         mounts_with(&run, &main, Ok(""));
         assert_eq!(stamp(&run), drawn_main);
+    }
+
+    #[test]
+    fn the_lyre_alone_stamps_the_keys_it_shows_and_redraws_when_they_change() {
+        let run = glyph_run(true);
+        let lyre = |map: &'static str| {
+            [
+                ("SPARTAN_GLYPH_STYLE", "keyboard"),
+                ("SPARTAN_KEY_MAP", map),
+                ("SPARTAN_GLYPH_KEYS", "lyre"),
+            ]
+        };
+        mounts_with(&run, &lyre("cross=Space|K,l1=Q|G"), Ok(""));
+        let first = stamp(&run);
+        assert!(
+            first.starts_with(
+                "[13, \"keyboard\", null, \"\", \"cross=Space,l1=Q\", [\"lyre\", \"cross=K\"], null, "
+            ),
+            "{first}"
+        );
+        // An alternative on a button the lyre shows redraws the copy.
+        mounts_with(&run, &lyre("cross=Space|L,l1=Q|G"), Ok(""));
+        let moved = stamp(&run);
+        assert_ne!(moved, first);
+        assert!(moved.contains("[\"lyre\", \"cross=L\"]"), "{moved}");
+        // So does one on a button that had none.
+        mounts_with(&run, &lyre("cross=Space|L,square=Mouse Left|J"), Ok(""));
+        assert_ne!(stamp(&run), moved);
+        // An alternative on a button it does not show does not.
+        mounts_with(&run, &lyre("cross=Space|L,l1=Q|G,r1=E|T"), Ok(""));
+        let other_button = stamp(&run);
+        mounts_with(&run, &lyre("cross=Space|L,l1=Q|H,r1=E"), Ok(""));
+        assert_eq!(stamp(&run), other_button);
+        // Back to the main key: the stamp has no trace of the lyre, as before this choice existed.
+        let main = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", "cross=Space|L,l1=Q"),
+        ];
+        mounts_with(&run, &main, Ok(""));
+        assert!(!stamp(&run).contains("lyre"), "{}", stamp(&run));
     }
 
     #[test]

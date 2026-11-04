@@ -370,6 +370,7 @@ fn painted_textures_match_pillow_within_tolerance() {
             faces: None,
             pad_map: "",
             key_map: "",
+            lyre_key_map: "",
         };
         for path in names {
             let id = path.file_stem().unwrap().to_str().unwrap().to_string();
@@ -424,6 +425,7 @@ fn keyboard_glyphs_label_the_remapped_sticks() {
         faces: None,
         pad_map: "",
         key_map: "move_up=T,move_left=F,move_down=G,move_right=H,look_left=None",
+        lyre_key_map: "",
     };
     let mut names: Vec<PathBuf> = fs::read_dir(&folder)
         .unwrap()
