@@ -341,6 +341,9 @@ private:
     /// The draw's depth target takes the upscaler's jitter (the scene's, or SpartanPort's second one).
     bool JitteredDepth(VideoCore::ImageId depth);
     bool gbuffer_draw = false;
+    bool scan_camera = false;                    ///< depth pre-pass draw: look for the camera constants
+    std::array<u32, 2> scan_size{};              ///< its depth size
+    bool in_display_pass = false;                ///< the draws of one display pass count once
     /// SpartanPort: this draw's depth when it is a depth-only pass at the render size (the depth pre-pass).
     VideoCore::ImageId prepass_depth{};
     /// spartanport: the draws of the game's motion blur skipped when the setting is off
@@ -510,6 +513,7 @@ private:
     u32 pending_checks = 0;
     u64 proxy_samples = 0; ///< texture bindings that read a scene proxy (statistics)
     float sampler_lod_bias = 0.0f; ///< spartanport: extra bias of this draw's samplers
+    u64 scene_depth_address = 0;   ///< spartanport: guest address of the scene's depth (God of War III)
     bool scene_debug_frame = false; ///< SPARTAN_SCENE_DEBUG: this frame's passes are printed
     bool PendingWriteOverlaps(VAddr address, u64 size);
     /// Stage B: the ring bindings of the stages of the packet being recorded.

@@ -372,6 +372,7 @@ void SliderRow(const char* label, std::atomic<int>& value, int lo, int hi, const
 const char* UpscalerLabel(int upscaler) {
     switch (upscaler) {
     case SpartanSettings::UpscalerFsr3: return "FSR 3.1";
+    case SpartanSettings::UpscalerFsr3Ui: return "FSR 3.1 (native HUD and text)";
     case SpartanSettings::UpscalerFsr4: return "FSR 4";
     case SpartanSettings::UpscalerFsr411: return "FSR 4.1";
     case SpartanSettings::UpscalerTaa: return "TAA";
@@ -523,7 +524,67 @@ void ImageTab() {
     }
     const int iw = s.image_width, ih = s.image_height, ww = s.window_width, wh = s.window_height;
     const bool downscaling = iw > ww || ih > wh;
-    const bool rcas_blocked = s.rcas && !s.rcas_applied;
+    // With an upscaler the switch also controls the upscaler's own sharpening, so it stays usable; the
+    // strength slider belongs to the host RCAS pass, which needs the image and the window to match.
+    // The port's own sharpening (TAA, FSR 3.1 with native HUD) follows the switch; the other upscalers
+    // keep the upstream behaviour: the switch and the slider belong to the host pass only.
+    const bool own_sharpening = SpartanSettings::OwnSharpening(s.upscaler);
+    const bool rcas_host_blocked = s.rcas && !s.rcas_applied;
+    const bool rcas_blocked = rcas_host_blocked && !own_sharpening;
+    if (s.upscaler == SpartanSettings::UpscalerTaa) {
+        DisabledText(s.temporal_applied ? "Temporal anti-aliasing is running."
+                                        : "Temporal anti-aliasing is selected but not running (see last_run.log).");
+    }
+    Separator("Anti-aliasing");
+    if (BeginRows("##anti_aliasing")) {
+        ChoiceRow("Anti-aliasing", s.anti_aliasing, G::AntiAliasingNames.data(), nullptr, G::AntiAliasingCount,
+                  "Smooths jagged edges. FXAA is cheap and a little soft; SMAA keeps the picture sharper and "
+                  "costs a bit more. Both also touch the HUD slightly.");
+        ImGui::EndTable();
+    }
+    if (s.anti_aliasing != G::AaOff && !s.aa_applied) {
+        DisabledText("Anti-aliasing is not active: this graphics card could not set it up.");
+    }
+    if (s.upscaler == SpartanSettings::UpscalerTaa) {
+        Separator("TAA look (God of War III)");
+        if (BeginRows("##taa_look")) {
+            SliderRow("History on still picture", s.taa_static, 0, 99, "%d%%",
+                      "Higher: smoother edges on a still picture, a little more trail. Default 99%.");
+            SliderRow("History on moving picture", s.taa_moving, 0, 99, "%d%%",
+                      "Higher: smoother while the camera moves, more blur and trail. Default 55%.");
+            SliderRow("Colour tolerance", s.taa_tolerance, 30, 300, "%d%%",
+                      "Lower: less trail and ghosting, more flicker. Default 115%.");
+            SliderRow("Moving objects", s.taa_objects, 0, 100, "%d%%",
+                      "How much history a moving character or object loses. Higher: less ghosting there, "
+                      "rougher edges. Default 90%.");
+            SliderRow("Texture detail", s.taa_lod, 0, 150, "%d%%",
+                      "Sharper textures (a negative mip bias, in percent of one level): the accumulation "
+                      "turns the extra detail into a clean picture. Higher: more detail, more shimmer. "
+                      "Default 75%.");
+            SliderRow("Moving object edges", s.taa_spatial, 0, 100, "%d%%",
+                      "Smooths the stair-stepped edges of moving characters, where the history is refused: "
+                      "a spatial filter on those pixels only. Higher: smoother, slightly softer. Default 70%.");
+            CheckRow("Debug view (history)", s.taa_debug,
+                     "Shows where the history is used: red = rejected by depth, green = lost to colour "
+                     "change, blue = history weight used. For bug reports; not saved.");
+            SliderRow("TAA sharpening", s.taa_sharpen, 0, 200, "%d%%",
+                      "Sharpening after the accumulation; the Sharpening (RCAS) switch below turns it off. Default 165%.");
+            ImGui::EndTable();
+        }
+    }
+    if (s.upscaler == SpartanSettings::UpscalerFsr3Ui) {
+        Separator("FSR 3.1 look (God of War III)");
+        if (BeginRows("##fsr_look")) {
+            SliderRow("Texture detail", s.fsr_lod, 0, 150, "%d%%",
+                      "Sharper textures (a negative mip bias, in percent of one level) on top of FSR's own: "
+                      "the accumulation turns the extra detail into a clean picture. Higher: more detail, "
+                      "more shimmer. Default 0%.");
+            SliderRow("Moving objects", s.fsr_objects, 0, 100, "%d%%",
+                      "How much FSR distrusts its history on characters and objects. Higher: less ghosting "
+                      "behind them, rougher edges. Lower: smoother but more trails. Default 100%.");
+            ImGui::EndTable();
+        }
+    }
     Separator("Sharpening");
     if (BeginRows("##scaling")) {
         ImGui::BeginDisabled(rcas_blocked);
@@ -532,8 +593,11 @@ void ImageTab() {
                  : rcas_blocked              ? "No effect: the game's image is smaller than the window."
                                              : "Sharpens the final image.");
         ImGui::EndDisabled();
-        ImGui::BeginDisabled(!s.rcas || rcas_blocked);
-        SliderRow("Sharpening strength", s.rcas_strength, 0, 100, "%d%%", "How strong the sharpening is.");
+        // The strength also sets FSR's own sharpening (not the TAA's: it has its own slider above).
+        const bool strength_usable = s.rcas && (!rcas_host_blocked || s.upscaler == SpartanSettings::UpscalerFsr3Ui);
+        ImGui::BeginDisabled(!strength_usable);
+        SliderRow("Sharpening strength", s.rcas_strength, 0, 100, "%d%%",
+                  "How strong the sharpening is.");
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
@@ -542,17 +606,21 @@ void ImageTab() {
         // The launcher's choices and order (options.rs UPSCALERS, PRESETS); the same values as the
         // Display menu's rows.
 #ifdef _WIN32
-        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 4", "FSR 4.1", "TAA"};
-        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3, SpartanSettings::UpscalerFsr4,
+        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 3.1 (native HUD)", "FSR 4", "FSR 4.1", "TAA"};
+        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3,
+                                              SpartanSettings::UpscalerFsr3Ui, SpartanSettings::UpscalerFsr4,
                                               SpartanSettings::UpscalerFsr411,
                                               SpartanSettings::UpscalerTaa};
 #else
-        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 4", "TAA"};
-        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3, SpartanSettings::UpscalerFsr4,
+        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 3.1 (native HUD)", "FSR 4", "TAA"};
+        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3,
+                                              SpartanSettings::UpscalerFsr3Ui, SpartanSettings::UpscalerFsr4,
                                               SpartanSettings::UpscalerTaa};
 #endif
         ChoiceRow("Upscaler", s.upscaler, upscaler_labels, upscaler_values, int(std::size(upscaler_values)),
-                  "FSR 4.1 needs an AMD Radeon with Adrenalin 26.10.1 or newer.");
+                  "FSR 3.1 (native HUD) keeps the game at 1920x1080 so the HUD, text and loading screens are "
+                  "not stretched, and has the port's own sharpening. FSR 4.1 needs an AMD Radeon with "
+                  "Adrenalin 26.10.1 or newer.");
         // Each preset's render size at the chosen Render resolution, before the restart too.
         static const int preset_values[] = {SpartanSettings::NativeAA, SpartanSettings::UltraQuality,
                                             SpartanSettings::Quality, SpartanSettings::Balanced,
@@ -583,6 +651,8 @@ void ImageTab() {
     }
     Separator("Effects");
     if (BeginRows("##effects")) {
+        CheckRow("Motion blur", s.motion_blur,
+                 "The game's own motion blur on fast moving objects and the camera. Off removes it.");
         CheckRow("Depth of field", s.depth_of_field,
                  "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.");
         ImGui::EndTable();
@@ -617,7 +687,9 @@ void ImageTab() {
         InfoRow("Game image", text);
         std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
         InfoRow("Window", text);
-        InfoRow("Sharpening", s.rcas_applied ? "applied" : "not applied");
+        const bool upscaler_sharpens = s.rcas && own_sharpening;
+        InfoRow("Sharpening", s.rcas_applied ? "applied"
+                              : upscaler_sharpens ? "applied by the upscaler" : "not applied");
         ImGui::EndTable();
     }
 }
@@ -775,7 +847,7 @@ int RestartChanges() {
            (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
            (s.anisotropy != s.startup_anisotropy) + (s.preset != s.startup_preset) +
            ((s.upscaler == SpartanSettings::UpscalerOff) != (s.startup_upscaler == SpartanSettings::UpscalerOff) ||
-            (s.upscaler == SpartanSettings::UpscalerTaa) != (s.startup_upscaler == SpartanSettings::UpscalerTaa));
+            SpartanSettings::NeedsLivePath(s.upscaler) != SpartanSettings::NeedsLivePath(s.startup_upscaler));
 }
 
 // The menu's tabs: words in the title face, the open one in full colour with a red line under it,

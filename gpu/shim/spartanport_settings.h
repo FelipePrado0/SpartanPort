@@ -31,8 +31,24 @@ inline int ParseAudioChannels(std::string_view value) {
 }
 inline constexpr int MasterVolumeMin = 0, MasterVolumeMax = 200, MasterVolumeDefault = 100;
 
+// UpscalerFsr3Ui (appended: saved numbers keep their meaning) is FSR 3.1 with the game at its own
+// 1920x1080 targets, so the HUD, text and loading screens are not drawn small and stretched.
 enum Upscaler : int { UpscalerOff = 0, UpscalerFsr3 = 1, UpscalerFsr4 = 2, UpscalerFsr411 = 3,
-                      UpscalerTaa = 4, UpscalerCount };
+                      UpscalerTaa = 4, UpscalerFsr3Ui = 5, UpscalerCount };
+/// FSR 3.1, either variant.
+inline bool IsFsr3(int upscaler) {
+    return upscaler == UpscalerFsr3 || upscaler == UpscalerFsr3Ui;
+}
+/// The upscalers that need the game's own 1920x1080 targets (no resolution patch): a switch between
+/// them and the patched ones needs a restart.
+inline bool NeedsLivePath(int upscaler) {
+    return upscaler == UpscalerTaa || upscaler == UpscalerFsr3Ui;
+}
+/// The port's own sharpening (the RCAS switch and strength, the extra pass): the TAA and the
+/// native-HUD FSR 3.1. The other upscalers keep the upstream behaviour (`sharpen` and `sharpness`).
+inline bool OwnSharpening(int upscaler) {
+    return upscaler == UpscalerTaa || upscaler == UpscalerFsr3Ui;
+}
 /// FSR 4 v07 or FSR 4.1.1: the same inputs, settings and placement in the frame.
 inline bool IsFsr4(int upscaler) {
     return upscaler == UpscalerFsr4 || upscaler == UpscalerFsr411;
@@ -122,8 +138,34 @@ struct Values {
     std::atomic<bool> fsr1{false};
     std::atomic<bool> rcas{true};
     std::atomic<int> rcas_strength{75};
+    /// God of War III TAA look (percent; the in-game menu, Image tab). Live.
+    /// taa_static / taa_moving: share of the history on a still / fast moving pixel;
+    /// taa_tolerance: width of the colour range the history is clipped to; taa_objects: how much
+    /// history a changed patch (a moving object without motion vectors) loses; taa_sharpen: sharpening
+    /// after the accumulation.
+    std::atomic<int> taa_static{99}, taa_moving{55}, taa_tolerance{115}, taa_objects{90}, taa_sharpen{165};
+    /// Texture detail of the scene's materials: a negative mip bias of taa_lod / 100 levels, which the
+    /// accumulation (jitter) turns into detail instead of shimmer (the usual TAA texture bias).
+    std::atomic<int> taa_lod{75};
+    /// Edge smoothing of the pixels whose history was refused (moving characters): percent.
+    std::atomic<int> taa_spatial{70};
+    /// FSR 3.1 with native HUD and text (UpscalerFsr3Ui), percent, live: fsr_lod is the texture detail
+    /// (a negative mip bias of fsr_lod / 100 levels on top of FSR's own); fsr_objects the reactive
+    /// strength of characters and objects (the stencil mask: 100 is upstream's, lower is sharper but
+    /// ghosts more).
+    std::atomic<int> fsr_lod{0}, fsr_objects{100};
+    /// TAA debug view (not saved): red = history rejected by depth, green = lost to colour change /
+    /// moving-object detection, blue = history weight used.
+    std::atomic<bool> taa_debug{false};
     /// The game's depth of field (spartanport_depth_of_field.h); off keeps the whole picture sharp. Live.
     std::atomic<bool> depth_of_field{true};
+    /// Anti-aliasing of the finished frame (SpartanGraphics::AntiAliasing: off, FXAA, SMAA). Live.
+    std::atomic<int> anti_aliasing{0};
+    /// Set by the presenter: the anti-aliasing pass ran on the last frame (a mode that could not be
+    /// set up on this GPU falls back to off).
+    std::atomic<bool> aa_applied{false};
+    /// Set by the temporal upscaler: TAA or FSR ran on the last frame (the menu says when it did not).
+    std::atomic<bool> temporal_applied{false};
     /// Set by the presenter: sharpening ran on the last frame (it needs FSR 1 when the game's
     /// image is smaller than the window).
     std::atomic<bool> rcas_applied{false};

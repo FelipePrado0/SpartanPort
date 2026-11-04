@@ -8,10 +8,15 @@ use iced::widget::{button, column, text};
 use iced::Element;
 
 use crate::core::i18n::tr;
-use crate::core::options::{ANISOTROPY, DISPLAY_MODES, FRAME_GENERATION, PRESETS, UPSCALERS};
+use crate::core::options::{
+    ANISOTROPY, ANTI_ALIASING, DISPLAY_MODES, FRAME_GENERATION, PRESETS, UPSCALERS,
+};
 use crate::ui::app::{Message, State};
 use crate::ui::theme;
 use crate::ui::widgets::{checkbox, choice_pairs, row, section, select, select_pairs};
+
+/// The hint of the Anti-aliasing row: FXAA / SMAA here, and the port's own TAA under Upscaler.
+pub const AA_HINT: &str = "Smooths jagged edges. FXAA is cheap and a little soft; SMAA keeps the picture sharper and costs a bit more. Both also touch the HUD slightly. For temporal anti-aliasing at native resolution choose TAA under Upscaler (Native AA preset): the port's own, tuned for this game. Its default values are the optimized ones, and every setting can be adjusted to your taste in the in-game menu (Insert / R3+L2) > Image. Use TAA with this set to Off.";
 
 pub fn view(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
@@ -106,7 +111,11 @@ pub fn view(state: &State) -> Element<'_, Message> {
             state.rtl,
             &tr(lang, "Upscaler"),
             select("upscaler", UPSCALERS, &ini("upscaler"), lang),
-            Some(&hint("FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.")),
+            Some(&hint(if ini("upscaler") == "fsr3ui" {
+                "FSR 3.1 (native HUD and text): the game keeps its own 1920x1080 targets, so the HUD, text and loading screens are not stretched (FSR 3.1 draws everything at 1918x1078 with Native AA). Has the port's own sharpening in the in-game menu. Experimental."
+            } else {
+                "FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1."
+            })),
         ),
         row(
             state.rtl,
@@ -142,6 +151,12 @@ pub fn view(state: &State) -> Element<'_, Message> {
             Some(&hint(
                 "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp."
             )),
+        ),
+        row(
+            state.rtl,
+            &tr(lang, "Anti-aliasing"),
+            select("anti_aliasing", ANTI_ALIASING, &ini("anti_aliasing"), lang),
+            Some(&hint(AA_HINT)),
         ),
         section(state.rtl, &tr(lang, "Textures")),
         row(

@@ -470,6 +470,7 @@ pub fn upscaler_render_size(
         pick("SPARTAN_UPSCALER", "upscaler", "none").as_str(),
         "fsr3" | "fsr4" | "fsr411"
     ) {
+        // "fsr3ui" and "taa" run on the game's own targets: no resolution patch.
         return None;
     }
     let output = crate::core::options::resolution_size(
@@ -1404,6 +1405,22 @@ output_res=1280x720
         let mut off = on.clone();
         off.insert("SPARTAN_UPSCALER".into(), "off".into());
         assert_eq!(upscaler_render_size(&ini, &off), None);
+        // FSR 3.1 with Native AA at 1080p: the 1918x1078 patch (the game's own 1920x1080 would
+        // composite straight into the display buffer in that session).
+        fs::write(&ini, "upscaler=fsr3\npreset=0\nrender_resolution=native\n").unwrap();
+        assert_eq!(
+            upscaler_render_size(&ini, &on),
+            Some((1918, 1078, (1920, 1080)))
+        );
+        // FSR 3.1 with native HUD and text: no patch at any preset, the game keeps its own targets.
+        for preset in ["0", "1", "3"] {
+            fs::write(
+                &ini,
+                format!("upscaler=fsr3ui\npreset={preset}\nrender_resolution=native\n"),
+            )
+            .unwrap();
+            assert_eq!(upscaler_render_size(&ini, &on), None, "preset {preset}");
+        }
         fs::write(
             &ini,
             "upscaler=fsr3

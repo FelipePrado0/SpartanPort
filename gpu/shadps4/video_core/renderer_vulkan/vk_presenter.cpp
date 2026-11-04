@@ -319,6 +319,7 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
         free_queue.push(&frame);
     }
 
+    aa_pass.Create(device, instance.GetAllocator(), num_images);
     fsr_pass.Create(device, instance.GetAllocator(), num_images);
     pp_pass.Create(device, swapchain.GetSurfaceFormat().format);
     SpartanOverlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images);
@@ -663,6 +664,20 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         fsr_settings.use_rcas &&
         SpartanGraphics::FsrPassRuns(fsr_settings.enable, true, int(image_size.width), int(image_size.height),
                                   int(frame->width), int(frame->height));
+    // spartanport: anti-aliasing (FXAA, SMAA) of the game's image, before the sharpening so that the
+    // sharpening does not bring the edges back. Colour values: linear light for an sRGB view, perceptual
+    // for 10-bit sRGB values and HDR (the post pass below decodes them the same way).
+    {
+        using Format = Libraries::VideoOut::PixelFormat;
+        const bool encoded = attribute.attrib.pixel_format == Format::A2R10G10B10Srgb ||
+                             attribute.attrib.pixel_format == Format::A2R10G10B10Bt2020Pq;
+        const int aa_mode = graphics.anti_aliasing;
+        const bool aa_runs = SpartanGraphics::AaPassRuns(aa_mode, int(image_size.width), int(image_size.height)) &&
+                             !aa_pass.Failed(aa_mode);
+        image_view = aa_pass.Render(cmdbuf, image_view, image_size, aa_mode,
+                                    SpartanGraphics::AaInputIsLinear(encoded, frame->is_hdr));
+        SpartanSettings::Get().aa_applied = aa_runs && !aa_pass.Failed(aa_mode);
+    }
     image_view = fsr_pass.Render(cmdbuf, image_view, image_size, {frame->width, frame->height},
                                  fsr_settings, frame->is_hdr);
 

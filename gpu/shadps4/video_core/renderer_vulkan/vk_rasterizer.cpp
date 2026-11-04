@@ -281,18 +281,66 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
     if (gbuffer_draw) {
         camera_motion->OnGBufferPass(db_desc.first);
     }
-    // SpartanPort has no G-buffer: its depth pre-pass (no color target bound, its color slot may be
-    // declared; depth written at the render size; shadow cascades are square) binds the
-    // camera's view-projection in vertex slot 1.
+    scan_camera = false;
     prepass_depth = {};
-    bool color_bound = false;
-    for (s32 cb = 0; cb < std::bit_width(key.mrt_mask); ++cb) {
-        color_bound |= bool(cb_descs[cb].first);
-    }
-    if (camera_motion->Enabled() && !color_bound && db_desc.first &&
-        regs.depth_control.depth_write_enable) {
-        const auto& depth = texture_cache.GetImage(db_desc.first);
-        if (depth.info.size.width > depth.info.size.height) prepass_depth = db_desc.first;
+    if (upscaler->SceneTaa()) {
+        // spartanport (God of War III): the depth pre-pass: no colour target and a screen-sized depth
+        // (not the square shadow maps). Its depth is the scene depth, its vertex constants hold the
+        // main camera as a view-projection matrix (BindBuffers looks for it by content).
+        if (camera_motion->Enabled() && db_desc.first) {
+            bool no_color = true;
+            for (s32 cb = 0; cb < std::bit_width(key.mrt_mask); ++cb) {
+                no_color &= !cb_descs[cb].first;
+            }
+            const auto& depth = texture_cache.GetImage(db_desc.first);
+            const u32 depth_w = depth.info.size.width, depth_h = depth.info.size.height;
+            static u32 logged = 0;
+            if (no_color && depth_w >= 1000 && logged < 12 && regs.num_indices > 6) {
+                ++logged; // once: what the depth-only draws look like (last_run.log)
+                std::printf("Camera motion: depth-only draw %u: depth %ux%u indices %u mrt %x\n",
+                            logged, depth_w, depth_h, u32(regs.num_indices), u32(key.mrt_mask));
+            }
+            if (no_color && depth_w >= 1280 && depth_h >= 720 && depth_w * 10 > depth_h * 13) {
+                const auto& vp = regs.viewports[0];
+                const auto& vp_ctl = regs.viewport_control;
+                static u32 depth_range_logs = 0;
+                if (depth_range_logs < 3 && depth_range_logs++ >= 0) {
+                    std::printf("Camera motion: depth range scale %g offset %g (scale enable %u)\n",
+                                vp.zscale, vp.zoffset, u32(vp_ctl.zscale_enable));
+                }
+                scan_camera = camera_motion->OnScenePrepass(
+                    db_desc.first, {vp_ctl.xscale_enable ? vp.xscale : 1.0f,
+                                    vp_ctl.yscale_enable ? vp.yscale : 1.0f,
+                                    vp_ctl.xoffset_enable ? vp.xoffset : 0.0f,
+                                    vp_ctl.yoffset_enable ? vp.yoffset : 0.0f},
+                    {vp_ctl.zscale_enable ? vp.zscale : 1.0f,
+                     vp_ctl.zoffset_enable ? vp.zoffset : 0.0f});
+                scan_size = {depth_w, depth_h};
+                scene_depth_address = regs.depth_buffer.DepthAddress();
+                if (camera_motion->TakeSceneStart() && upscaler->Enabled()) {
+                    // One jitter per scene, for its draws, the motion shader and the TAA pass alike.
+                    upscaler->OnSceneStart();
+                    camera_motion->SetJitter(upscaler->Jitter());
+                }
+            }
+        }
+    } else {
+        // SpartanPort has no G-buffer: its depth pre-pass (no color target bound, its color slot may be
+        // declared; depth written at the render size; shadow cascades are square) binds the
+        // camera's view-projection in vertex slot 1.
+        bool color_bound = false;
+        for (s32 cb = 0; cb < std::bit_width(key.mrt_mask); ++cb) {
+            color_bound |= bool(cb_descs[cb].first);
+        }
+        if (camera_motion->Enabled() && !color_bound && db_desc.first &&
+            regs.depth_control.depth_write_enable) {
+            const auto& depth = texture_cache.GetImage(db_desc.first);
+            if (depth.info.size.width > depth.info.size.height) {
+                prepass_depth = db_desc.first;
+                // the material pass draws with this depth (FSR 3.1 native HUD's texture detail)
+                scene_depth_address = regs.depth_buffer.DepthAddress();
+            }
+        }
     }
     if (upscaler->Enabled() && cb_descs[0].first) {
         upscaler->OnColorTarget(cb_descs[0].first);
@@ -318,6 +366,9 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
 }
 
 bool Rasterizer::JitteredDepth(VideoCore::ImageId depth) {
+    if (upscaler->SceneTaa()) {
+        return depth && upscaler->JitterDepth(depth); // the scene TAA's own rule
+    }
     const auto scene = camera_motion->Depth();
     if (!depth || !scene) {
         return false;
@@ -1092,15 +1143,36 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         FrameCapture::Poll();
         scheduler.PopPendingOperations();
     }
+    upscaler->RunPending();
     DiagPassBoundary(false);
     const auto& regs = Regs();
     // spartanport: the pass copying a finished frame to a display buffer; the previous draw's
-    // target is that frame. Once per display buffer: SpartanPort copies with two draws and draws its
-    // HUD there too, and a second frame start would drop the camera history every frame.
-    if (camera_motion->Enabled() && regs.color_buffers[0] &&
-        FrameCapture::IsDisplayBuffer(regs.color_buffers[0].Address()) &&
-        regs.color_buffers[0].Address() != last_display_buffer) {
-        last_display_buffer = regs.color_buffers[0].Address();
+    // target is that frame. SpartanPort copies with two draws and draws its HUD there too: the
+    // frame starts once per display pass (scene TAA) or per display buffer (everything else), a
+    // second start would drop the camera history every frame.
+    const auto display_address = regs.color_buffers[0].Address();
+    const bool display_draw = regs.color_buffers[0] && FrameCapture::IsDisplayBuffer(display_address);
+    const bool new_display_pass = display_draw && !in_display_pass;
+    in_display_pass = display_draw;
+    const bool new_display_buffer = display_draw && display_address != last_display_buffer;
+    bool start_frame = false;
+    if (upscaler->SceneTaa()) {
+        // The game repeats a finished frame at 30 fps: a display pass without a scene (no composite
+        // since the last one) neither restarts the upscaler nor advances the jitter.
+        const bool repeated_frame = new_display_pass && camera_motion->Enabled() &&
+                                    camera_motion->ViewProjectionCamera() &&
+                                    !upscaler->CompositePassed();
+        if (repeated_frame) {
+            camera_motion->OnDisplayPass(cb_descs[0].first);
+        }
+        start_frame = camera_motion->Enabled() && new_display_pass && !repeated_frame;
+    } else {
+        start_frame = camera_motion->Enabled() && new_display_buffer;
+    }
+    if (new_display_buffer) {
+        last_display_buffer = display_address;
+    }
+    if (start_frame) {
         scene_started = false;
         const bool upscaler_changed = upscaler->OnFrameStart();
         camera_motion->OnDisplayPass(cb_descs[0].first);
@@ -1114,13 +1186,10 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         static const char* scene_debug = std::getenv("SPARTAN_SCENE_DEBUG");
         scene_debug_frame = scene_debug && std::remove(scene_debug) == 0;
         scene_targets->debug = scene_debug_frame;
-    } else if (regs.color_buffers[0] &&
-               FrameCapture::IsDisplayBuffer(regs.color_buffers[0].Address()) &&
-               regs.color_buffers[0].Address() != last_display_buffer) {
+    } else if (!camera_motion->Enabled() && new_display_buffer) {
         // Without an upscaler: still count the frame (SPARTAN_GPU_PROFILE, SPARTAN_BUFFER_STATS),
         // once per display buffer since the HUD draws into it as well.
         // ponytail: assumes flips rotate display buffers; a single-buffer game counts one frame.
-        last_display_buffer = regs.color_buffers[0].Address();
         NoteFrameStart();
     }
     bind_prepared = used_prepared;
@@ -1137,6 +1206,9 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         upscaler->OnDraw(pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash,
                          cb_descs[0].first, db_desc.first,
                          UiComposition::NativeViewport(viewport.xscale * 2, viewport.yscale * 2));
+        if (const auto* ps = pipeline->GetStages()[u32(Shader::SwStage::Fragment)]) {
+            upscaler->OnPixelShader(ps->pgm_hash, cb_descs[0].first);
+        }
     }
     const PreparedDraw* draw_prepared = bind_prepared;
     // spartanport: vertex and index buffers are resolved while the helper binds textures (their
@@ -1255,11 +1327,23 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     }
     pipeline->BindResources(set_writes, push_data);
     // spartanport: jitter geometry drawn with the scene depth, not full-screen passes (a shifted
-    // full-screen quad leaves an edge column unwritten).
+    // full-screen quad leaves an edge column unwritten). God of War III's screen passes are a
+    // triangle (3 indices) or a strip quad (4); its sky and sun glow are quads of 6 indices that
+    // belong to the world and must move with the jitter like the rest of the scene.
     draw_jitter = {};
-    if (upscaler->Enabled() && JitteredDepth(db_desc.first) &&
-        (regs.num_indices > 6 || regs.num_instances.NumInstances() > 1)) {
-        draw_jitter = upscaler->Jitter();
+    if (upscaler->Enabled() && JitteredDepth(db_desc.first)) {
+        if (upscaler->SceneTaa()) {
+            if (regs.num_indices > (camera_motion->ViewProjectionCamera() ? 4u : 6u) ||
+                regs.num_instances.NumInstances() > 1) {
+                draw_jitter = upscaler->Jitter();
+                upscaler->NoteJitterDraw(regs.IsClipDisabled() ? 2u
+                                         : (draw_jitter[0] != 0.0f || draw_jitter[1] != 0.0f) ? 0u : 3u);
+            } else {
+                upscaler->NoteJitterDraw(1);
+            }
+        } else if (regs.num_indices > 6 || regs.num_instances.NumInstances() > 1) {
+            draw_jitter = upscaler->Jitter();
+        }
     }
     UpdateDynamicState(pipeline, is_indexed);
     MarkPass(pipeline, state);
@@ -1355,6 +1439,7 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
     // Indirect arguments may be GPU-written: leave these draws on camera fallback.
     motion_draw = false;
     motion_geometry = 0;
+    upscaler->RunPending();
     PrepareRenderState(pipeline);
     if (upscaler->Enabled() && pipeline->GetGraphicsKey().mrt_mask) {
         upscaler->OnGraphicsDraw(pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
@@ -1400,6 +1485,8 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
     draw_jitter = {};
     if (upscaler->Enabled() && JitteredDepth(db_desc.first)) {
         draw_jitter = upscaler->Jitter();
+        upscaler->NoteJitterDraw(Regs().IsClipDisabled() ? 2u
+                                 : (draw_jitter[0] != 0.0f || draw_jitter[1] != 0.0f) ? 0u : 3u);
     }
     UpdateDynamicState(pipeline, is_indexed);
     MarkPass(pipeline, state);
@@ -1461,7 +1548,9 @@ void Rasterizer::DispatchDirect() {
 void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
     FrameCapture::Poll();
     gbuffer_draw = false;
+    upscaler->RunPending();
     prepass_depth = {};
+    scan_camera = false;
 
     scheduler.PopPendingOperations();
     DiagPassBoundary(true);
@@ -1749,6 +1838,42 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
         if (sampler_lod_bias != reported) {
             reported = sampler_lod_bias;
             std::printf("Upscaler: scene texture LOD bias %.2f\n", sampler_lod_bias);
+        }
+    }
+
+    // spartanport: God of War III materials (the pass drawing with the scene depth, no depth write):
+    // a negative mip bias for the accumulating TAA/FSR, as temporal upscalers recommend.
+    // FSR 3.1 with native HUD and text takes the same draws with its own texture detail (fsr_lod).
+    const bool fsr_textures = upscaler->FsrSceneTextures();
+    const int texture_lod = fsr_textures ? SpartanSettings::Get().fsr_lod.load()
+                                         : SpartanSettings::Get().taa_lod.load();
+    if (!pipeline->IsCompute() && sampler_lod_bias == 0.0f && upscaler->Enabled() &&
+        ((camera_motion->ViewProjectionCamera() && camera_motion->SceneOpen()) || fsr_textures) &&
+        scene_depth_address != 0) {
+        const auto& r = Regs();
+        static u32 same_depth = 0, writes = 0, small = 0, no_color = 0, applied = 0, calls = 0;
+        static bool bias_reported = false;
+        if (r.depth_buffer.DepthAddress() == scene_depth_address) {
+            ++same_depth;
+            if (r.depth_control.depth_write_enable) {
+                ++writes;
+            } else if (r.num_indices <= 4) {
+                ++small;
+            } else if (!r.color_buffers[0]) {
+                ++no_color;
+            } else {
+                ++applied;
+                sampler_lod_bias = -float(texture_lod) / 100.0f;
+            }
+        }
+        // once after a few frames (last_run.log), then rarely
+        if (++calls >= (bias_reported ? 4000000u : 20000u)) {
+            bias_reported = true;
+            std::printf("%s texture bias %.2f: %u of %u scene-depth draws (skipped: %u write, %u small, "
+                        "%u no colour; %u other draws)\n",
+                        fsr_textures ? "FSR" : "TAA", -float(texture_lod) / 100.0f, applied, same_depth, writes,
+                        small, no_color, calls - same_depth);
+            same_depth = writes = small = no_color = applied = calls = 0;
         }
     }
 
@@ -2250,6 +2375,11 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                     memory->IsValidGpuMapping(ring->address, 0)) {
                     camera_motion->OnConstants(reinterpret_cast<const float*>(ring->address));
                 }
+                if (scan_camera && stage.sw_stage == Shader::SwStage::Vertex && ring->size >= 64) {
+                    camera_motion->OnCameraCandidate(
+                        reinterpret_cast<const float*>(constant_ring->Data(ring->offset)),
+                        u32(ring->size), scan_size[0], scan_size[1], 0);
+                }
                 if (prepass_depth && buffer_index == 1 && ring->size >= 64 &&
                     stage.sw_stage == Shader::SwStage::Vertex) {
                     camera_motion->OnViewProjection(
@@ -2269,6 +2399,12 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                 if (FrameCapture::Active()) {
                     FrameCapture::Buffer(stage.pgm_hash, binding.buffer, 0,
                                          stage.FlatUserData().data(), ubo_size);
+                }
+                // The camera may also arrive as user data registers (a vertex shader variant).
+                if (scan_camera && stage.sw_stage == Shader::SwStage::Vertex && ubo_size >= 64) {
+                    camera_motion->OnCameraCandidate(
+                        reinterpret_cast<const float*>(stage.FlatUserData().data()), ubo_size,
+                        scan_size[0], scan_size[1], 2);
                 }
                 const u64 offset =
                     vk_buffer.Copy(stage.FlatUserData().data(), ubo_size, alignment);
@@ -2315,6 +2451,14 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
             if (vsharp.GetSize() == 864 && gbuffer_draw &&
                 memory->IsValidGpuMapping(vsharp.base_address, 0)) {
                 camera_motion->OnConstants(reinterpret_cast<const float*>(vsharp.base_address));
+            }
+            if (scan_camera && stage.sw_stage == Shader::SwStage::Vertex &&
+                vsharp.GetSize() >= 64 && vsharp.base_address != 0 &&
+                memory->IsValidGpuMapping(vsharp.base_address, 0) &&
+                memory->ClampRangeSize(vsharp.base_address, 64) >= 64) {
+                camera_motion->OnCameraCandidate(
+                    reinterpret_cast<const float*>(vsharp.base_address), u32(vsharp.GetSize()),
+                    scan_size[0], scan_size[1], 1);
             }
             if (prepass_depth && buffer_index == 1 && vsharp.GetSize() >= 64 &&
                 stage.sw_stage == Shader::SwStage::Vertex &&

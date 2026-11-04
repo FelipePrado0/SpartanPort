@@ -43,6 +43,28 @@ model in one gameplay process, including output captures and camera movement.
 `out/taa-launcher-validation.log` checks actual GTK controls and saved settings.
 TAA has not yet been tested on the tester's GTX 1060.
 
+## FSR 3.1 with native HUD and text (2026-11-03)
+
+Two FSR 3.1 choices. **FSR 3.1** is upstream's: with the Native AA preset the launcher patches the
+game to 1918x1078, so the HUD, text and loading screens are drawn at that size and stretched to
+1920x1080. **FSR 3.1 (native HUD and text)** (`upscaler=fsr3ui`) does not patch the render size: the
+game keeps its own 1920x1080 targets (the live path, as the TAA does) and only the scene is upscaled.
+Only this variant and the TAA use the port's own sharpening (the Sharpening (RCAS) switch and
+strength, and the extra pass above FSR's maximum); FSR 3.1, FSR 4 and FSR 4.1 keep upstream's
+(`sharpen`, `sharpness`). Switching between a patched and a live-path upscaler needs a restart.
+The Insert menu (Image tab) has an "FSR 3.1 look" section for it: Texture detail (`fsr_lod`, a negative
+mip bias in percent of a level, default 0) and Moving objects (`fsr_objects`, the strength of the
+stencil reactive mask on characters and objects, default 100 = upstream's), both live.
+
+Trade-off: upstream's FSR 3.1 normally runs on the scene colour before the game's composite compute
+shader. At exactly 1920x1080 the game composites straight into the display buffer (that is why the
+launcher patches Native AA to 1918x1078), so there is no such hook; the native variant therefore runs
+after the composite pixel shader, on the finished 8-bit frame and ahead of the HUD
+("FSR 3.1 running on the RGBA8 scene color ... (SpartanPort composite)" in `last_run.log`). That keeps the
+HUD, text and loading screens out of FSR, at the cost of a slightly lower scene quality than the patched
+variant (tonemapped 8-bit input instead of the earlier scene colour). The two are separate choices so
+each can be kept, changed or merged by the maintainer; upstream's FSR 3.1 is not changed.
+
 ## Startup patch is the default again for outputs other than 1080p (2026-10-02)
 
 The live path below made the Steam Deck and a GTX 1060 + 4-core Haswell drop to 7–8 FPS
@@ -304,3 +326,78 @@ pass0_post, проходы модели 1..12 (за каждым `_post`, обн
 **Поправка к A/B выше («кадр упирается в CPU»).** Те замеры шли, пока 12 зависших процессов
 shadPS4 занимали по ядру. На свободной системе: «host copies» 1.6%, ожидание GPU ~41% — кадр
 упирается в GPU, так что async compute для FSR снова имеет смысл.
+
+## God of War III Remastered layout (the port's TAA)
+
+The FSR 3.1 path (and its Native AA preset) is upstream's and is left untouched: the scene TAA below is
+active only when `upscaler=taa`, every hook is gated by `TemporalUpscaler::SceneTaa()`.
+
+The frame differs from the 5-target G-buffer layout above (found with `tools/spartanport_frame_map.py`
+on F11 captures).
+
+### Frame structure
+
+- Scene: depth pre-pass (no colour target, screen-sized depth, more than 6 indices per draw; square
+  shadow-map passes are skipped by aspect), then the material pass (colour target, the same depth,
+  no depth write), bloom / depth of field, and the composite. The display passes repeat at 60 Hz while
+  scenes come at 30 fps and are pipelined, so **a scene, not a display pass, is the frame**:
+  it opens at its first pre-pass draw (`CameraMotion::OnScenePrepass`) and closes at the composite
+  (`ResolveViewProjection`). A scene no composite closed within 24 display passes is dropped.
+- Camera: one vertex constant buffer of the pre-pass holds a column-major view-projection in its
+  first 16 floats. Which shader and slot differs, so it is recognised by content
+  (`camera_view_projection.h`, unit test `tests/test_camera_vp.cpp`). Depth is `0.5 + 0.5 z / w`
+  (the game's depth range scale/offset 0.5/0.5); the viewport is 960 x -540 around 960, 540.
+- Motion vectors: `camera_motion_vp.comp`, from `previousVP * inverse(currentVP)` through the game's
+  viewport; the push constants are 128 bytes (std430 `vec4` alignment, a static_assert guards it).
+  Characters have no motion vectors of their own (see the moving-object handling below).
+  `SPARTAN_VP_FLIP=x|y|xy` mirrors the screen axes for calibration.
+- Trigger: the draw whose pixel shader is the post-process composite (`0c20ededc9e7c40c`, override
+  `SPARTAN_UPSCALER_COMPOSITE_PS`). The upscale runs before the next draw or dispatch, on the 8-bit
+  sRGB scene colour (sampled through an sRGB view), before the HUD. The result is written back with
+  a blit; the game's alpha is kept (`ldr_alpha.comp`).
+- Guest MSAA is turned off for the TAA (`vk_instance.cpp`), and the pipeline cache profile records that
+  mode so a cache of the other mode is rebuilt. The game itself does not rely on MSAA; the half-resolution layer (instanced vegetation-like pass, own
+  depth) is not jittered.
+
+### Jitter
+
+One Halton(2,3) sample per scene (`TemporalUpscaler::OnSceneStart`, `Motion::JitterPhases`), applied
+as a viewport offset to the draws that use the scene depth or its same-size copy (transparents),
+skipping screen-space passes (3 or 4 indices) so a shifted full-screen quad leaves no edge column.
+
+### TAA (`taa.comp`, settings "TAA look (God of War III)" in the Image tab)
+
+- Current colour: Catmull-Rom unjitter, history: Catmull-Rom resample at the reprojected position,
+  depth rejection per bilinear tap, variance clipping in tonemapped YCoCg.
+- Moving objects (no vectors): a 3x3 patch whose luma differs from the history loses history
+  (`taa_objects`). The jitter makes textured pixels look changed in ~3% of a still picture, so a
+  pixel needs a changed neighbour in the **previous** frame to lose the full amount (otherwise 30%).
+  The flag lives in the sign of the history alpha (depth); every read of that alpha uses `abs()`.
+- Pixels whose history was refused get an edge-directed 3-tap spatial smoothing on the current picture
+  (`taa_spatial`; the history keeps the unfiltered result). Its strength is in `pad` bits 26..31.
+- Texture detail: a negative LOD bias (`taa_lod / 100`) on the scene's material draws
+  (`Rasterizer::BindResources`: scene depth address, no depth write, more than 4 indices, a colour
+  target); the accumulation turns it into detail.
+- Sharpening: RCAS-style pass `taa_sharpen.comp` after the accumulation (`taa_sharpen`, up to 200%);
+  the menu's "Sharpening (RCAS)" switch turns it off (and FSR's own sharpening, `SharpenOn()`).
+- `pad` bits: 0-7 diagnostic view (4 = history debug view: red depth-rejected, green history lost,
+  blue weight used), 8-15 A/B switches, 16-23 moving-object history loss in percent, 24 view-projection
+  depth, 25 8-bit scene, 26-31 spatial smoothing.
+- Defaults (tuned in game on a GTX 1070 Ti): history 99% still / 55% moving, tolerance 115%,
+  moving objects 90%, edges 70%, texture detail 75%, sharpening 165%. They live in
+  `shim/spartanport_settings.h` and in the menu hints.
+
+### Simulator
+
+The tuning used a software renderer of a procedural scene (static, slow and fast camera, moving box)
+run through `taa.comp` on lavapipe with PSNR against a 9-sample ground truth, a Laplacian sharpness
+ratio and the frame-to-frame flicker. It is not part of the repository; the numbers that mattered:
+the change flag persistence halved the flicker of a still picture (0.0021 -> 0.0010) for 1.5 dB less
+in the moving region.
+
+### Log
+
+`last_run.log` prints `Temporal AA status: ...` every 300 composites (`composite_seen`, `ldr_runs`,
+`skip`, `scenes`, `done_skips`), `TAA scene: skipped (reason)` / `running again` when a scene is not
+upscaled, and `TAA look: ...` once the sliders settle. `ran_last_frame` and the menu's "running"
+indicator follow the dispatches, not the display passes.

@@ -124,6 +124,7 @@ pub static GLYPH_STYLES: &[Choice] = &[
 pub static UPSCALERS: &[Choice] = &[
     cr("off", "Off", "Выключен"),
     cr("fsr3", "FSR 3.1 (every GPU)", "FSR 3.1 (любая видеокарта)"),
+    c("fsr3ui", "FSR 3.1 (native HUD and text)"),
     c("fsr4", "FSR 4 (AMD Radeon, Intel Arc)"),
     #[cfg(windows)]
     c("fsr411", "FSR 4.1 (AMD driver)"),
@@ -133,6 +134,10 @@ pub static UPSCALERS: &[Choice] = &[
         "TAA (нативное сглаживание)",
     ),
 ];
+
+/// Spatial anti-aliasing of the finished frame (`anti_aliasing` in spartanport.ini): FXAA or SMAA.
+/// The temporal TAA is the Upscaler choice "TAA", not a value of this key.
+pub static ANTI_ALIASING: &[Choice] = &[c("off", "Off"), c("fxaa", "FXAA"), c("smaa", "SMAA")];
 
 /// spartanport.ini frame_generation; the game reads the same values (frame_generation_policy.h).
 pub static FRAME_GENERATION: &[Choice] = &[
@@ -222,6 +227,7 @@ pub static UI_LANGUAGES: &[Choice] = &[
     c("de", "Deutsch"),
     c("it", "Italiano"),
     c("pl", "Polski"),
+    c("cs", "Čeština"),
     c("tr", "Türkçe"),
     c("zh", "简体中文"),
     c("ja", "日本語"),
@@ -503,7 +509,8 @@ mod tests {
 
     #[test]
     fn every_table_has_unique_values() {
-        let tables: [&[Choice]; 23] = [
+        let tables: [&[Choice]; 24] = [
+            ANTI_ALIASING,
             FRAME_GENERATION,
             DISPLAY_MODES,
             ANISOTROPY,

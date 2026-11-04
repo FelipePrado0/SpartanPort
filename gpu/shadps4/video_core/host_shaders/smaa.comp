@@ -1,0 +1,117 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// spartanport: SMAA 1x (Subpixel Morphological Anti-Aliasing, Jimenez et al.) of the finished frame,
+// as three compute passes (host_passes/aa_pass.cpp) around the unchanged reference code in smaa/SMAA.h:
+//   SMAA_EDGES   colour            -> edges     (luma contrast, local contrast adaptation)
+//   SMAA_WEIGHTS edges, area/search -> weights  (pattern search and the pre-computed area textures)
+//   SMAA_BLEND   colour, weights    -> output   (blends each pixel with the neighbour the edge crosses)
+//
+// The edge pass is this file's own because the reference one reads gamma encoded colours: here the
+// values are linear light for an sRGB view and are converted (linear_input) to perceptual luma.
+// The blend pass reads the same linear values, so the blend is done in linear light.
+
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+#define SMAA_GLSL_4 1
+#define SMAA_RT_METRICS pc.metrics
+#define SMAA_INCLUDE_VS 0
+#define SMAA_INCLUDE_PS 1
+#define SMAA_MAX_SEARCH_STEPS 32
+#define SMAA_MAX_SEARCH_STEPS_DIAG 16
+#define SMAA_CORNER_ROUNDING 25
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// Combined samplers with immutable samplers: bilinear for the colour and the edge/weight images (the
+// reference reads two texels at once through bilinear filtering), nearest for the lookup textures.
+layout(set = 0, binding = 0) uniform sampler2D ColorTexture;
+layout(set = 0, binding = 1) uniform sampler2D AuxTexture; // edges (weights pass) or weights (blend pass)
+layout(set = 0, binding = 2) uniform sampler2D AreaTexture;
+layout(set = 0, binding = 3) uniform sampler2D SearchTexture;
+#if SMAA_BLEND
+layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D OutputTexture;
+#else
+layout(set = 0, binding = 4, rgba8) uniform writeonly image2D OutputTexture;
+#endif
+
+layout(push_constant) uniform Constants {
+    vec4 metrics;           // 1 / width, 1 / height, width, height
+    float edge_threshold;   // luma contrast that makes an edge
+    float edge_threshold_min; // unused here, shared with fxaa.comp
+    float subpixel;         // unused here, shared with fxaa.comp
+    uint linear_input;      // 1: the colour values are linear light, 0: already perceptual
+} pc;
+
+#include "smaa/SMAA.h"
+
+#if SMAA_EDGES
+float perceptual_luma(ivec2 p) {
+    const ivec2 size = ivec2(pc.metrics.zw);
+    vec3 c = max(texelFetch(ColorTexture, clamp(p, ivec2(0), size - 1), 0).rgb, vec3(0.0));
+    if (pc.linear_input != 0u) {
+        c = sqrt(c);
+    }
+    return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+// SMAALumaEdgeDetectionPS, reading texels instead of gamma encoded colour samples.
+vec2 luma_edges(ivec2 p) {
+    const vec2 threshold = vec2(pc.edge_threshold);
+    const float l = perceptual_luma(p);
+    const float l_left = perceptual_luma(p + ivec2(-1, 0));
+    const float l_top = perceptual_luma(p + ivec2(0, -1));
+
+    vec4 delta;
+    delta.xy = abs(l - vec2(l_left, l_top));
+    vec2 edges = step(threshold, delta.xy);
+    if (dot(edges, vec2(1.0)) == 0.0) {
+        return vec2(0.0);
+    }
+
+    const float l_right = perceptual_luma(p + ivec2(1, 0));
+    const float l_bottom = perceptual_luma(p + ivec2(0, 1));
+    delta.zw = abs(l - vec2(l_right, l_bottom));
+    vec2 max_delta = max(delta.xy, delta.zw);
+
+    const float l_leftleft = perceptual_luma(p + ivec2(-2, 0));
+    const float l_toptop = perceptual_luma(p + ivec2(0, -2));
+    delta.zw = abs(vec2(l_left, l_top) - vec2(l_leftleft, l_toptop));
+    max_delta = max(max_delta.xy, delta.zw);
+    const float final_delta = max(max_delta.x, max_delta.y);
+
+    edges.xy *= step(final_delta, SMAA_LOCAL_CONTRAST_ADAPTATION_FACTOR * delta.xy);
+    return edges;
+}
+#endif
+
+void main() {
+    const ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(p, ivec2(pc.metrics.zw)))) {
+        return;
+    }
+    const vec2 texcoord = (vec2(p) + 0.5) * pc.metrics.xy;
+
+#if SMAA_EDGES
+    imageStore(OutputTexture, p, vec4(luma_edges(p), 0.0, 0.0));
+#endif
+
+#if SMAA_WEIGHTS
+    // The offsets the reference computes in its vertex shader (SMAABlendingWeightCalculationVS).
+    const vec2 pixcoord = texcoord * SMAA_RT_METRICS.zw;
+    vec4 offset[3];
+    offset[0] = mad(SMAA_RT_METRICS.xyxy, vec4(-0.25, -0.125, 1.25, -0.125), texcoord.xyxy);
+    offset[1] = mad(SMAA_RT_METRICS.xyxy, vec4(-0.125, -0.25, -0.125, 1.25), texcoord.xyxy);
+    offset[2] = mad(SMAA_RT_METRICS.xxyy, vec4(-2.0, 2.0, -2.0, 2.0) * float(SMAA_MAX_SEARCH_STEPS),
+                    vec4(offset[0].xz, offset[1].yw));
+    imageStore(OutputTexture, p,
+               SMAABlendingWeightCalculationPS(texcoord, pixcoord, offset, AuxTexture, AreaTexture,
+                                               SearchTexture, vec4(0.0)));
+#endif
+
+#if SMAA_BLEND
+    // SMAANeighborhoodBlendingVS.
+    const vec4 offset = mad(SMAA_RT_METRICS.xyxy, vec4(1.0, 0.0, 0.0, 1.0), texcoord.xyxy);
+    const vec4 blended = SMAANeighborhoodBlendingPS(texcoord, offset, ColorTexture, AuxTexture);
+    imageStore(OutputTexture, p, vec4(blended.rgb, 1.0));
+#endif
+}

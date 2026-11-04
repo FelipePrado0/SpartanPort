@@ -63,12 +63,40 @@ public:
     /// Before a compute dispatch: the post-processing combine shader triggers the upscale.
     void OnDispatch(u64 cs_hash);
 
+    /// God of War III: a draw whose pixel shader is the post-process composite, into the 8-bit
+    /// sRGB scene colour that the HUD and the display pass use next. The upscale runs before
+    /// the next draw or dispatch (RunPending), on the finished frame, before the HUD.
+    void OnPixelShader(u64 ps_hash, VideoCore::ImageId color);
+
+    /// Start of every draw and dispatch: runs the upscale queued by OnPixelShader.
+    void RunPending();
+
+    /// The temporal upscaler is the port's own TAA (God of War III's scene frames, camera found by
+    /// content, one jitter per scene); every other mode takes the FSR path.
+    [[nodiscard]] bool SceneTaa() const;
+    /// The upscaler's own sharpening is on (launcher setting and the menu's RCAS switch).
+    [[nodiscard]] bool SharpenOn() const;
+    /// FSR's own sharpness (0..1), from the menu's sharpening strength.
+    [[nodiscard]] float UpscalerSharpness() const;
+
+    /// Draws into this depth image are jittered: the scene depth, and the full-size copy the
+    /// transparent pass uses (same size as the scene depth, written by the game).
+    [[nodiscard]] bool JitterDepth(VideoCore::ImageId depth) const;
+
     /// Start of a frame in the command stream (display pass).
     bool OnFrameStart();
+    /// The first depth pre-pass draw of a scene (view-projection camera): this scene's jitter and
+    /// per-frame state, instead of the display pass's.
+    void OnSceneStart();
+    void PrintStatus();
+    void NoteSkip();
     bool RasterScaling() const;
     /// spartanport: LOD bias for scene materials, log2(render / output) while a reduced scene is
     /// upscaled (0 at native size, for TAA and without an upscaler).
     [[nodiscard]] float SceneMipBias() const;
+    /// FSR 3.1 with native HUD and text, before this frame's upscale: the scene's material draws take the
+    /// menu's texture detail (the TAA's own detection needs its camera; FSR has the depth pre-pass).
+    [[nodiscard]] bool FsrSceneTextures() const;
     /// spartanport: the state RedirectColor/RedirectDepth/RasterScaling depend on, for memoizing a
     /// draw's render state (Rasterizer::BeginRendering).
     [[nodiscard]] u64 RedirectState() const noexcept {
@@ -81,7 +109,17 @@ public:
     /// This frame's sub-pixel jitter in pixels (screen x right, y down); zero when off and after
     /// the upscale (post and UI are not jittered).
     [[nodiscard]] std::array<float, 2> Jitter() const noexcept {
-        return done_this_frame ? std::array<float, 2>{} : jitter;
+        return done_this_frame || composite_passed ? std::array<float, 2>{} : jitter;
+    }
+    /// Status line: scene draws by what happened to their jitter (0 shifted, 1 too small an
+    /// index count, 2 clipping disabled, 3 the jitter was zero).
+    void NoteJitterDraw(u32 kind) noexcept {
+        ++jitter_draws[kind & 3];
+    }
+    /// The composite of the scene was drawn since the last frame start (a repeated display
+    /// pass has none).
+    [[nodiscard]] bool CompositePassed() const noexcept {
+        return composite_passed;
     }
 
     // Scaled presets.
@@ -152,6 +190,8 @@ private:
     u64 view_uses = 0;
 
     void Run();
+    /// The 8-bit sRGB scene colour: the port's TAA on the tonemapped frame, native resolution.
+    void RunSceneTaa();
     void RunScaled();
     /// FSR 3 at 1:1 on an RGBA8 (sRGB) scene color, written back with a blit.
     void RunLdr();
@@ -201,6 +241,19 @@ private:
     int applied_preset = -1;
     int applied_upscaler = -1;
     bool dispatched_last_frame = false;
+    u32 frames_since_run = 1000; ///< display passes since a scene was last upscaled
+    u32 composite_status = 0, scene_counter = 0, done_skips = 0;
+    const char* logged_skip = "none";
+    u32 status_frames = 0;  // frames since the last status line in the log
+    u32 trigger_seen = 0;   // times the frame's trigger dispatch was seen since then
+    u32 composite_seen = 0; // composite draws seen since then (God of War III)
+    u32 ldr_runs = 0;       // upscales of the 8-bit scene colour since then
+    const char* skip_reason = "none"; // why the last queued upscale did not run
+    bool composite_pending = false;
+    bool composite_passed = false;
+    std::array<u32, 4> jitter_draws{};
+    bool jitter_enabled = false; ///< the scene is finished this frame: nothing after it is jittered
+    u64 composite_ps = 0x0c20ededc9e7c40c; // SPARTAN_UPSCALER_COMPOSITE_PS overrides it
     bool last_active = false, last_jitter = false;
 
 
@@ -300,6 +353,10 @@ private:
     std::array<vk::UniqueImageView, 2> taa_history_views;
     u32 taa_next = 0;
     vk::UniqueSampler taa_sampler;
+    // FSR gets the scene depth as plain clip z / w (the game's range is 0.5..1).
+    vk::UniqueDescriptorSetLayout ldr_alpha_desc_layout;
+    vk::UniquePipelineLayout ldr_alpha_pipeline_layout;
+    vk::UniquePipeline ldr_alpha_pipeline;
     vk::UniqueDescriptorSetLayout taa_desc_layout;
     vk::UniquePipelineLayout taa_pipeline_layout;
     vk::UniquePipeline taa_pipeline;

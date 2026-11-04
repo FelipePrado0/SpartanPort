@@ -1,4 +1,4 @@
-//! The 14 launcher languages: text lookup, language detection and small helpers.
+//! The 15 launcher languages: text lookup, language detection and small helpers.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -8,8 +8,8 @@ use serde::Deserialize;
 use super::platform;
 
 /// Launcher languages, in the order the interface lists them.
-pub const LANGS: [&str; 14] = [
-    "en", "ru", "ar", "es", "pt", "fr", "de", "it", "pl", "tr", "zh", "ja", "ko", "id",
+pub const LANGS: [&str; 15] = [
+    "en", "ru", "ar", "es", "pt", "fr", "de", "it", "pl", "cs", "tr", "zh", "ja", "ko", "id",
 ];
 
 /// Suffix marking a warning line; it is not translated.
@@ -87,6 +87,23 @@ fn lookup(lang: &str, en: &str) -> Option<String> {
 /// Rust-only UI strings absent from the Python tables, as (English, [(language, text)]). Other
 /// languages fall back to English: a translator gap to fill.
 static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
+    // Graphics > Effects: spatial anti-aliasing (FXAA / SMAA) and a pointer to the port's TAA.
+    (
+        "Anti-aliasing",
+        &[
+            ("zh", "抗锯齿"),
+            ("pt", "Suavização de bordas"), ("es", "Suavizado de bordes"),
+            ("cs", "Vyhlazování hran"),
+        ],
+    ),
+    (
+        "Smooths jagged edges. FXAA is cheap and a little soft; SMAA keeps the picture sharper and costs a bit more. Both also touch the HUD slightly. For temporal anti-aliasing at native resolution choose TAA under Upscaler (Native AA preset): the port's own, tuned for this game. Its default values are the optimized ones, and every setting can be adjusted to your taste in the in-game menu (Insert / R3+L2) > Image. Use TAA with this set to Off.",
+        &[
+            ("zh", "消除锯齿边缘。FXAA 开销小，但画面略软；SMAA 画面更锐利，开销略高。两者都会轻微影响 HUD。若要在原生分辨率下使用时间性抗锯齿，请在“超分辨率”下选择 TAA（原生 AA 预设）：这是本移植版自带、针对本游戏调校的方案。其默认值已经过优化，所有设置都可在游戏内菜单（Insert / R3+L2）> 图像 中按个人喜好调整。使用 TAA 时请将此项设为关闭。"),
+            ("pt", "Suaviza as bordas serrilhadas. O FXAA é barato e um pouco suave; o SMAA mantém a imagem mais nítida e custa um pouco mais. Ambos também afetam levemente a HUD. Para anti-aliasing temporal na resolução nativa, escolha TAA em Upscaler (preset Native AA): é o do próprio port, ajustado para este jogo. Seus valores padrão são os otimizados, e cada ajuste pode ser mudado a seu gosto no menu do jogo (Insert / R3+L2) > Image. Use o TAA com esta opção em Desligado."),
+            ("cs", "Vyhladí zubaté hrany. FXAA je levné a trochu měkké; SMAA drží obraz ostřejší a stojí o něco víc. Obojí se lehce dotkne i HUD. Pro časové vyhlazování hran v nativním rozlišení zvolte TAA v části Upscaler (předvolba Nativní AA): je to vlastní řešení portu, vyladěné pro tuto hru. Jeho výchozí hodnoty jsou optimalizované a každé nastavení můžete upravit podle sebe v herním menu (Insert / R3+L2) > Image. TAA používejte s tímto nastavením na Vypnuto."),
+        ],
+    ),
     // The switch attacks of the Controls page, in the Python's Portuguese and Spanish.
     (
         "Switch attacks on L1 + d-pad and L1 + Cross",
@@ -94,6 +111,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("zh", "使用 L1 + 方向键及 L1 + 叉键发动切换攻击"),
             ("pt", "Ataques de troca com L1 + direcional e L1 + X"),
             ("es", "Ataques de cambio con L1 + cruceta y L1 + X"),
+            ("cs", "Útoky při výměně zbraně na L1 + D-pad a L1 + Křížek"),
         ],
     ),
     (
@@ -102,74 +120,101 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("zh", "L1 + 方向键会切换至对应武器并使出切换攻击（若已持有该武器，则再次使出攻击）。L1 + 叉键会使出当前武器的切换攻击，不再轮换到下一把武器。单独按方向键仍按原方式切换。启动游戏时生效。"),
             ("pt", "L1 + uma direção do direcional troca para essa arma com o ataque de troca dela (a arma que já está na mão de Kratos repete o ataque). L1 + X faz o ataque de troca da arma na mão em vez de passar para a próxima arma. O direcional sozinho troca como antes. Aplicado ao iniciar o jogo."),
             ("es", "L1 + una dirección de la cruceta cambia a esa arma con su ataque de cambio (el arma que Kratos ya tiene en la mano repite su ataque). L1 + X hace el ataque de cambio del arma en la mano en lugar de pasar a la siguiente arma. La cruceta sola cambia como antes. Se aplica al iniciar el juego."),
+            ("cs", "L1 + směr D-padu přepne na danou zbraň jejím útokem při výměně (zbraň v rukou Krata svůj útok zopakuje). L1 + Křížek provede útok při výměně zbraně v rukou místo přepnutí na další zbraň. Samotný D-pad přepíná jako dřív. Použije se při spuštění hry."),
         ],
     ),
     (
         "Graphics card not checked: the game picks one.",
         &[
-            ("zh", "尚未检测显卡：由游戏自动选择。"),("pt", "Placa de vídeo não verificada: o jogo escolhe uma.")],
+            ("zh", "尚未检测显卡：由游戏自动选择。"),("pt", "Placa de vídeo não verificada: o jogo escolhe uma."),
+            ("cs", "Grafická karta není zkontrolována: hra si nějakou vybere."),
+        ],
     ),
     (
         "The port folder is incomplete. Missing from {}:\n\n{}\n\nDownload the package again from the releases page and extract all of it; the launcher must stay inside that folder.",
         &[
-            ("zh", "移植版文件夹不完整。{} 中缺少：\n\n{}\n\n请从发布页面重新下载安装包并完整解压；启动器必须保留在该文件夹内。"),("pt", "A pasta do port está incompleta. Faltando em {}:\n\n{}\n\nBaixe o pacote de novo na página de releases e extraia tudo; o launcher precisa ficar dentro dessa pasta.")],
+            ("zh", "移植版文件夹不完整。{} 中缺少：\n\n{}\n\n请从发布页面重新下载安装包并完整解压；启动器必须保留在该文件夹内。"),("pt", "A pasta do port está incompleta. Faltando em {}:\n\n{}\n\nBaixe o pacote de novo na página de releases e extraia tudo; o launcher precisa ficar dentro dessa pasta."),
+            ("cs", "Složka portu je neúplná. Chybí v {}:\n\n{}\n\nStáhněte balíček znovu ze stránky vydání a rozbalte ho celý; launcher musí zůstat uvnitř té složky."),
+        ],
     ),
     (
         "From a source checkout, build.sh builds them.",
         &[
-            ("zh", "使用源码时，可运行 build.sh 构建这些文件。"),("pt", "Num checkout do código-fonte, o build.sh gera esses arquivos.")],
+            ("zh", "使用源码时，可运行 build.sh 构建这些文件。"),("pt", "Num checkout do código-fonte, o build.sh gera esses arquivos."),
+            ("cs", "Ze zdrojového checkoutu je vytvoří build.sh."),
+        ],
     ),
     (
         "Missing or empty files:",
         &[
-            ("zh", "缺失或为空的文件："),("pt", "Arquivos ausentes ou vazios:")],
+            ("zh", "缺失或为空的文件："),("pt", "Arquivos ausentes ou vazios:"),
+            ("cs", "Chybějící nebo prázdné soubory:"),
+        ],
     ),
     (
         "Initial setup",
         &[
-            ("zh", "初始设置"),("pt", "Configuração inicial")],
+            ("zh", "初始设置"),("pt", "Configuração inicial"),
+            ("cs", "První nastavení"),
+        ],
     ),
     // The setup's step line, whole: the table's "Step {} of {}" ("Etapa") is the old controller
     // wizard's. "Skip" and "Back" come from the table.
     (
         "Step {} of {} · {}",
         &[
-            ("zh", "第 {} 步，共 {} 步 · {}"),("pt", "Passo {} de {} · {}")],
+            ("zh", "第 {} 步，共 {} 步 · {}"),("pt", "Passo {} de {} · {}"),
+            ("cs", "Krok {} z {} · {}"),
+        ],
     ),
     (
         "Video",
         &[
-            ("zh", "视频"),("pt", "Vídeo")],
+            ("zh", "视频"),("pt", "Vídeo"),
+            ("cs", "Video"),
+        ],
     ),
     (
         "Next",
         &[
-            ("zh", "下一步"),("pt", "Avançar")],
+            ("zh", "下一步"),("pt", "Avançar"),
+            ("cs", "Další"),
+        ],
     ),
     (
         "Finish",
         &[
-            ("zh", "完成"),("pt", "Concluir")],
+            ("zh", "完成"),("pt", "Concluir"),
+            ("cs", "Dokončit"),
+        ],
     ),
     (
         "Choose the folder of your game dump. The update folder is optional.",
         &[
-            ("zh", "选择游戏转储文件夹。更新文件夹可不选。"),("pt", "Escolha a pasta do dump do jogo. A pasta da atualização é opcional.")],
+            ("zh", "选择游戏转储文件夹。更新文件夹可不选。"),("pt", "Escolha a pasta do dump do jogo. A pasta da atualização é opcional."),
+            ("cs", "Vyberte složku s dumpem hry. Složka aktualizace je volitelná."),
+        ],
     ),
     (
         "The game runs on this graphics card.",
         &[
-            ("zh", "游戏使用此显卡运行。"),("pt", "O jogo roda nesta placa de vídeo.")],
+            ("zh", "游戏使用此显卡运行。"),("pt", "O jogo roda nesta placa de vídeo."),
+            ("cs", "Hra běží na této grafické kartě."),
+        ],
     ),
     (
         "Resolution and frame rate. The in-game menu (Insert or R3+L2) changes the same values.",
         &[
-            ("zh", "分辨率与帧率。游戏内菜单（Insert 或 R3+L2）也可修改这些设置。"),("pt", "Resolução e taxa de quadros. O menu do jogo (Insert ou R3+L2) muda os mesmos valores.")],
+            ("zh", "分辨率与帧率。游戏内菜单（Insert 或 R3+L2）也可修改这些设置。"),("pt", "Resolução e taxa de quadros. O menu do jogo (Insert ou R3+L2) muda os mesmos valores."),
+            ("cs", "Rozlišení a snímková frekvence. Herní menu (Insert nebo R3+L2) mění stejné hodnoty."),
+        ],
     ),
     (
         "You can change all of this later in the Graphics, Performance and Game tabs.",
         &[
-            ("zh", "之后可在“画面”“性能”和“游戏”页面修改这些设置。"),("pt", "Tudo isso pode ser mudado depois nas abas Graphics, Performance e Game.")],
+            ("zh", "之后可在“画面”“性能”和“游戏”页面修改这些设置。"),("pt", "Tudo isso pode ser mudado depois nas abas Graphics, Performance e Game."),
+            ("cs", "To vše můžete později změnit na kartách Grafika, Výkon a Hra."),
+        ],
     ),
     (
         "{} lines kept",
@@ -178,6 +223,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("pt", "{} linhas mantidas"),
             ("es", "{} líneas guardadas"),
             ("ru", "{} строк хранится"),
+            ("cs", "Uchováno řádků: {}"),
         ],
     ),
     (
@@ -187,17 +233,22 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("pt", "Abrir last_run.log"),
             ("es", "Abrir last_run.log"),
             ("ru", "Открыть last_run.log"),
+            ("cs", "Otevřít last_run.log"),
         ],
     ),
     (
         "Americas",
         &[
-            ("zh", "美洲"),("pt", "Américas"), ("es", "América"), ("ru", "Америка")],
+            ("zh", "美洲"),("pt", "Américas"), ("es", "América"), ("ru", "Америка"),
+            ("cs", "Amerika"),
+        ],
     ),
     (
         "Europe",
         &[
-            ("zh", "欧洲"),("pt", "Europa"), ("es", "Europa"), ("ru", "Европа")],
+            ("zh", "欧洲"),("pt", "Europa"), ("es", "Europa"), ("ru", "Европа"),
+            ("cs", "Evropa"),
+        ],
     ),
     (
         "Asia & Middle East",
@@ -206,6 +257,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("pt", "Ásia e Oriente Médio"),
             ("es", "Asia y Oriente Medio"),
             ("ru", "Азия и Ближний Восток"),
+            ("cs", "Asie a Blízký východ"),
         ],
     ),
     (
@@ -214,7 +266,9 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("zh", "无法读取以下文件：\n\n{}\n\n启动器会为无法读取的设置显示默认值。在点击“保存”或“开始游戏”前，文件保持原样；保存时会写入当前显示的设置。"),(
             "pt",
             "Não foi possível ler estes arquivos:\n\n{}\n\nO launcher mostra valores padrão no lugar do que não conseguiu ler. Os arquivos ficam como estão até você salvar (Salvar ou JOGAR), o que grava o que ele mostra.",
-        )],
+        ),
+            ("cs", "Tyto soubory se nepodařilo přečíst:\n\n{}\n\nLauncher zobrazuje výchozí hodnoty pro to, co nepřečetl. Soubory zůstanou beze změny, dokud neuložíte (Uložit nebo HRÁT), čímž se zapíše to, co launcher ukazuje."),
+        ],
     ),
     (
         "mods_presets.json could not be read, so no preset is listed and the file is left as it is. Fix or delete it to save presets again.",
@@ -222,7 +276,9 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("zh", "无法读取 mods_presets.json，因此不显示预设，文件保持原样。修复或删除该文件后，才可再次保存预设。"),(
             "pt",
             "Não foi possível ler mods_presets.json; nenhum preset é listado e o arquivo fica como está. Corrija ou apague o arquivo para voltar a salvar presets.",
-        )],
+        ),
+            ("cs", "Soubor mods_presets.json se nepodařilo přečíst, proto se nezobrazuje žádná předvolba a soubor zůstává beze změny. Opravte ho nebo smažte, abyste mohli předvolby znovu ukládat."),
+        ],
     ),
     // The drawer subtitles (ruling R56: the mockup's English and Portuguese). The Graphics and
     // Game ones are keys of the JSON table, and the Trophies and Mods ones are among its extra
@@ -233,12 +289,16 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("zh", "帧率、着色器与 GPU 数据传输方式。启动游戏时生效。"),(
             "pt",
             "Taxa de quadros, shaders e caminhos de dados da GPU. Aplicado ao iniciar o jogo.",
-        )],
+        ),
+            ("cs", "Cesty ke snímkové frekvenci, shaderům a datům GPU. Použije se při spuštění hry."),
+        ],
     ),
     (
         "Keyboard, mouse and gamepad mapping.",
         &[
-            ("zh", "键盘、鼠标与手柄映射。"),("pt", "Mapeamento de teclado, mouse e controle.")],
+            ("zh", "键盘、鼠标与手柄映射。"),("pt", "Mapeamento de teclado, mouse e controle."),
+            ("cs", "Mapování klávesnice, myši a gamepadu."),
+        ],
     ),
     (
         "Launcher options, diagnostics and system tools.",
@@ -246,7 +306,9 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("zh", "启动器选项、诊断与系统工具。"),(
             "pt",
             "Opções do launcher, diagnóstico e ferramentas do sistema.",
-        )],
+        ),
+            ("cs", "Možnosti launcheru, diagnostika a systémové nástroje."),
+        ],
     ),
     (
         "Output of the last start. last_run.log holds the same text.",
@@ -254,7 +316,9 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("zh", "上次启动的输出。相同内容也保存在 last_run.log。"),(
             "pt",
             "Saída da última execução. last_run.log tem o mesmo texto.",
-        )],
+        ),
+            ("cs", "Výstup posledního spuštění. last_run.log obsahuje stejný text."),
+        ],
     ),
     // The word of the native render resolution's label, when the tables have no whole label.
     ("Native", &[
@@ -266,6 +330,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("zh", "自动（适应屏幕）"),
             ("pt", "Automático (cabe na tela)"),
             ("es", "Automático (se ajusta a la pantalla)"),
+            ("cs", "Auto (přizpůsobí se obrazovce)"),
         ],
     ),
     // The Home saves chip (the Python's "• No saves yet: the game creates them in {}" and
@@ -275,7 +340,9 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     (
         "✓ Saves found",
         &[
-            ("zh", "✓ 已找到存档"),("pt", "✓ Saves encontrados"), ("es", "✓ Partidas guardadas")],
+            ("zh", "✓ 已找到存档"),("pt", "✓ Saves encontrados"), ("es", "✓ Partidas guardadas"),
+            ("cs", "✓ Uložené hry nalezeny"),
+        ],
     ),
     // The Home hint line after a start that left patches out (ruling R85): the Python's
     // "{} not found in this eboot.bin at the last start (see Log)" with the word it followed.
@@ -285,13 +352,17 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("zh", "上次启动时，有 {} 项补丁未在此 eboot.bin 中找到匹配位置（见“日志”）"),(
             "pt",
             "{} patches não encontrados neste eboot.bin na última inicialização (veja o Registro)",
-        )],
+        ),
+            ("cs", "Záplat nenalezeno při posledním startu v tomto eboot.bin: {} (viz Záznam)"),
+        ],
     ),
     // The Home graphics card chip when the probe did not answer.
     (
         "• GPU: not checked",
         &[
-            ("zh", "• GPU：尚未检测"),("pt", "• GPU: não verificada"), ("es", "• GPU: sin comprobar")],
+            ("zh", "• GPU：尚未检测"),("pt", "• GPU: não verificada"), ("es", "• GPU: sin comprobar"),
+            ("cs", "• GPU: nezkontrolováno"),
+        ],
     ),
     ("any key skips", &[
             ("zh", "按任意键跳过"),("pt", "qualquer tecla pula")]),
@@ -299,12 +370,16 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
     (
         "Checking the settings…",
         &[
-            ("zh", "正在检查设置…"),("pt", "Verificando as configurações…")],
+            ("zh", "正在检查设置…"),("pt", "Verificando as configurações…"),
+            ("cs", "Kontroluji nastavení…"),
+        ],
     ),
     (
         "Checking for updates…",
         &[
-            ("zh", "正在检查更新…"),("pt", "Verificando atualizações…")],
+            ("zh", "正在检查更新…"),("pt", "Verificando atualizações…"),
+            ("cs", "Kontroluji aktualizace…"),
+        ],
     ),
     (
         "Effects",
@@ -326,6 +401,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
                 "ru",
                 "Угли и пламя на главном экране. Выключено — экономия GPU.",
             ),
+            ("cs", "Žhavé uhlíky a plameny na domovské obrazovce. Vypnuto šetří čas GPU."),
         ],
     ),
     (
@@ -344,6 +420,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("ko", "릴리스"),
             ("id", "Rilis"),
             ("ru", "Релиз"),
+            ("cs", "Vydání"),
         ],
     ),
     (
@@ -362,6 +439,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("ko", "사전 릴리스"),
             ("id", "Pra-rilis"),
             ("ru", "Предрелиз"),
+            ("cs", "Předběžné vydání"),
         ],
     ),
     (
@@ -380,6 +458,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("ko", "릴리스"),
             ("id", "Rilis"),
             ("ru", "Релизы"),
+            ("cs", "Vydání"),
         ],
     ),
     (
@@ -398,6 +477,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("ko", "사전 릴리스"),
             ("id", "Pra-rilis"),
             ("ru", "Предрелизы"),
+            ("cs", "Předběžná vydání"),
         ],
     ),
     (
@@ -416,6 +496,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("ko", "신규"),
             ("id", "baru"),
             ("ru", "новое"),
+            ("cs", "nové"),
         ],
     ),
     (
@@ -434,6 +515,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("ko", "{} 사용 가능"),
             ("id", "{} tersedia"),
             ("ru", "{} доступно"),
+            ("cs", "Dostupné: {}"),
         ],
     ),
     (
@@ -452,6 +534,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("ko", "가져오는 중…"),
             ("id", "Mengambil…"),
             ("ru", "Загрузка…"),
+            ("cs", "Stahuji…"),
         ],
     ),
     (
@@ -470,6 +553,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("ko", "버전을 가져올 수 없습니다"),
             ("id", "Gagal mengambil versi"),
             ("ru", "Не удалось получить версии"),
+            ("cs", "Nepodařilo se načíst verze"),
         ],
     ),
     (
@@ -488,6 +572,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("ko", "테스트 빌드 없음"),
             ("id", "Tidak ada build uji"),
             ("ru", "Нет тестовых сборок"),
+            ("cs", "Žádná testovací sestavení"),
         ],
     ),
     (
@@ -506,6 +591,7 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("ko", "Linux용 테스트 빌드 없음"),
             ("id", "Tidak ada build uji untuk Linux"),
             ("ru", "Нет тестовых сборок для Linux"),
+            ("cs", "Žádná testovací sestavení pro Linux"),
         ],
     ),
     (
@@ -524,6 +610,25 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("ko", "이 버전은 설치된 버전보다 오래되었습니다."),
             ("id", "Versi ini lebih lama dari yang terpasang."),
             ("ru", "Эта версия старше установленной."),
+            ("cs", "Tato verze je starší než nainstalovaná."),
+        ],
+    ),
+    (
+        "FSR 3.1 (native HUD and text)",
+        &[
+            ("zh", "FSR 3.1（原生 HUD 与文字）"),
+            ("pt", "FSR 3.1 (HUD e texto nativos)"),
+            ("es", "FSR 3.1 (HUD y texto nativos)"),
+            ("cs", "FSR 3.1 (nativní HUD a text)"),
+        ],
+    ),
+    (
+        "FSR 3.1 (native HUD and text): the game keeps its own 1920x1080 targets, so the HUD, text and loading screens are not stretched (FSR 3.1 draws everything at 1918x1078 with Native AA). Has the port's own sharpening in the in-game menu. Experimental.",
+        &[
+            ("zh", "FSR 3.1（原生 HUD 与文字）：游戏保留自身的 1920x1080 渲染目标，因此 HUD、文字和加载画面不会被拉伸（原生 AA 下的 FSR 3.1 会以 1918x1078 绘制全部内容）。游戏内菜单提供本移植版自带的锐化。实验性功能。"),
+            ("pt", "FSR 3.1 (HUD e texto nativos): o jogo mantém seus próprios alvos de 1920x1080, então a HUD, o texto e as telas de carregamento não são esticados (o FSR 3.1 desenha tudo em 1918x1078 com Native AA). Tem a nitidez própria do port no menu do jogo. Experimental."),
+            ("es", "FSR 3.1 (HUD y texto nativos): el juego mantiene sus propios objetivos de 1920x1080, así que el HUD, el texto y las pantallas de carga no se estiran (el FSR 3.1 dibuja todo a 1918x1078 con Native AA). Tiene el enfoque propio del port en el menú del juego. Experimental."),
+            ("cs", "FSR 3.1 (nativní HUD a text): hra si ponechá vlastní cíle 1920×1080, takže HUD, text a loadingy se neroztahují (FSR 3.1 s Native AA kreslí všechno v 1918×1078). V herním menu má vlastní ostření portu. Experimentální."),
         ],
     ),
 ];
@@ -640,7 +745,7 @@ pub fn is_rtl(lang: &str) -> bool {
 
 pub fn region_of(lang: &str) -> Region {
     match lang {
-        "fr" | "de" | "it" | "pl" | "ru" | "tr" => Region::Europe,
+        "fr" | "de" | "it" | "pl" | "cs" | "ru" | "tr" => Region::Europe,
         "ar" | "zh" | "ja" | "ko" | "id" => Region::Asia,
         _ => Region::Americas,
     }
@@ -657,6 +762,7 @@ pub fn native_name(lang: &str) -> &'static str {
         "de" => "Deutsch",
         "it" => "Italiano",
         "pl" => "Polski",
+        "cs" => "Čeština",
         "tr" => "Türkçe",
         "zh" => "简体中文",
         "ja" => "日本語",
@@ -735,7 +841,7 @@ mod tests {
     fn embedded_table_parses() {
         let table = table();
         assert_eq!(table.keys.len(), 154);
-        assert_eq!(table.translations.len(), 12);
+        assert_eq!(table.translations.len(), 13);
     }
 
     #[test]
@@ -804,7 +910,7 @@ mod tests {
     }
 
     #[test]
-    fn regions_cover_all_14() {
+    fn regions_cover_all_15() {
         let mut seen = Vec::new();
         for region in [Region::Americas, Region::Europe, Region::Asia] {
             for lang in LANGS.iter().filter(|l| region_of(l) == region) {
@@ -839,7 +945,7 @@ mod tests {
         ];
         for en in KEYS {
             for lang in [
-                "ar", "es", "pt", "fr", "de", "it", "pl", "tr", "zh", "ja", "ko", "id", "ru",
+                "ar", "es", "pt", "fr", "de", "it", "pl", "cs", "tr", "zh", "ja", "ko", "id", "ru",
             ] {
                 let text = tr(lang, en);
                 assert!(!text.is_empty() && text != en, "no {lang} for {en:?}");

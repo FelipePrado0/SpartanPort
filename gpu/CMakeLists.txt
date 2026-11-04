@@ -102,7 +102,7 @@ function(add_host_shader FILENAME SHADER_NAME)
         COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADER_DIR}
         COMMAND ${GLSLANG_COMPILER} --target-env vulkan1.3 -o ${OUT} --vn ${SYMBOL} ${DEFINES} ${SHADER_SRC}/${FILENAME}
         COMMAND ${CMAKE_COMMAND} "-DHEADER_FILE=${OUT}" -P ${SHADER_SRC}/AddShaderHeaderInclude.cmake
-        DEPENDS ${SHADER_SRC}/${FILENAME} VERBATIM)
+        DEPENDS ${SHADER_SRC}/${FILENAME} ${SHADER_SRC}/smaa/SMAA.h VERBATIM)
     set(SHADER_HEADERS ${SHADER_HEADERS} ${OUT} PARENT_SCOPE)
 endfunction()
 add_host_shader(color_to_ms_depth.frag color_to_ms_depth_frag)
@@ -114,7 +114,14 @@ add_host_shader(fs_tri.vert fs_tri_vert)
 add_host_shader(fsr.comp fsr_easu_comp SAMPLE_EASU=1)
 add_host_shader(fsr.comp fsr_rcas_comp SAMPLE_RCAS=1)
 add_host_shader(post_process.frag post_process_frag)
+# spartanport: anti-aliasing of the finished frame (host_passes/aa_pass.cpp): FXAA and the three SMAA passes.
+add_host_shader(fxaa.comp fxaa_comp)
+add_host_shader(smaa.comp smaa_edges_comp SMAA_EDGES=1)
+add_host_shader(smaa.comp smaa_weights_comp SMAA_WEIGHTS=1)
+add_host_shader(smaa.comp smaa_blend_comp SMAA_BLEND=1)
 add_host_shader(camera_motion.comp camera_motion_comp)
+add_host_shader(camera_motion_vp.comp camera_motion_vp_comp)
+add_host_shader(ldr_alpha.comp ldr_alpha_comp)
 add_host_shader(upscale_merge.comp upscale_merge_comp)
 add_host_shader(upscale_reactive.comp upscale_reactive_comp)
 add_host_shader(stencil_reactive.comp stencil_reactive_comp)
@@ -463,6 +470,16 @@ set_source_files_properties(../tests/test_taa_shader.cpp PROPERTIES
     COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
 target_link_libraries(taa-shader-test PRIVATE spartanportgpu)
 add_dependencies(taa-shader-test host_shaders)
+# The anti-aliasing pass itself (not the whole library): FXAA and SMAA on synthetic images, on any Vulkan
+# device (Lavapipe works), under the validation layer when it is installed.
+add_executable(aa-pass-test EXCLUDE_FROM_ALL ../tests/test_aa_pass.cpp
+    shadps4/video_core/renderer_vulkan/host_passes/aa_pass.cpp shim/common/logging/log.cpp)
+target_include_directories(aa-pass-test PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include third_party/half/include)
+target_compile_definitions(aa-pass-test PRIVATE BOOST_ASIO_STANDALONE)
+target_compile_options(aa-pass-test PRIVATE -UNDEBUG -fPIC -Wno-deprecated-declarations -Wno-missing-field-initializers)
+target_link_libraries(aa-pass-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
+    tsl::robin_map GPUOpen::VulkanMemoryAllocator miniz::miniz ${CMAKE_DL_LIBS})
+add_dependencies(aa-pass-test host_shaders)
 
 add_executable(reactive-shader-test EXCLUDE_FROM_ALL ../tests/test_reactive_shader.cpp)
 target_include_directories(reactive-shader-test PRIVATE ${SHADER_INCLUDE})

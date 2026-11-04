@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// spartanport: copies the game's alpha into the upscaler's RGBA16F result before it is blitted back
+// into the 8-bit scene colour (the post-processing may keep data in alpha).
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(binding = 0) uniform sampler2D scene_tex; // the scene colour, nearest
+layout(binding = 1, rgba16f) uniform image2D result_img;
+
+void main() {
+    const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(pixel, imageSize(result_img)))) {
+        return;
+    }
+    const vec4 result = imageLoad(result_img, pixel);
+    const float alpha = texelFetch(scene_tex, pixel, 0).a;
+    imageStore(result_img, pixel, vec4(clamp(result.rgb, 0.0, 1.0), alpha));
+}

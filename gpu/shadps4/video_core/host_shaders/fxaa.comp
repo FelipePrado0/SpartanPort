@@ -1,0 +1,149 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// spartanport: FXAA-style anti-aliasing of the finished frame (host_passes/aa_pass.cpp).
+//
+// Written from the published idea of FXAA (T. Lottes): find edges from the local luma contrast, work
+// out whether the edge runs horizontally or vertically, search along it in both directions for its
+// ends, and move the sample half way to the other side of the edge by the pixel's position along it
+// (bilinear filtering does the blend). Isolated bright or dark pixels get a separate sub-pixel blend.
+// One compute dispatch, no history, no other input: the frame as it is presented.
+//
+// The values read are linear light for an sRGB view (the sampler decodes them) and already perceptual
+// for a 10-bit buffer; linear_input says which, so the edge test always sees perceptual luma.
+
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform sampler2D InputTexture; // bilinear, clamp to edge (immutable sampler)
+layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D OutputTexture;
+
+layout(push_constant) uniform Constants {
+    vec4 metrics;           // 1 / width, 1 / height, width, height
+    float edge_threshold;   // smallest contrast that is an edge, relative to the local maximum
+    float edge_threshold_min; // and in absolute luma, so dark areas are left alone
+    float subpixel;         // 0..1, how much isolated pixels are blended
+    uint linear_input;      // 1: the values are linear light, 0: already perceptual
+} pc;
+
+const int SEARCH_STEPS = 12;
+// Distance in pixels the search moves on each step: fine near the pixel, coarse far away.
+const float SEARCH_SCALE[SEARCH_STEPS] = float[](1.0, 1.0, 1.0, 1.0, 1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 8.0);
+
+float luma_of(vec3 c) {
+    c = max(c, vec3(0.0));
+    if (pc.linear_input != 0u) {
+        c = sqrt(c); // close to the sRGB curve, and cheap
+    }
+    return dot(c, vec3(0.299, 0.587, 0.114));
+}
+
+vec3 sample_at(vec2 uv) {
+    return textureLod(InputTexture, uv, 0.0).rgb;
+}
+
+float luma_uv(vec2 uv) {
+    return luma_of(sample_at(uv));
+}
+
+float luma_px(ivec2 p) {
+    const ivec2 size = ivec2(pc.metrics.zw);
+    return luma_of(texelFetch(InputTexture, clamp(p, ivec2(0), size - 1), 0).rgb);
+}
+
+void main() {
+    const ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 size = ivec2(pc.metrics.zw);
+    if (any(greaterThanEqual(p, size))) {
+        return;
+    }
+    const vec2 uv = (vec2(p) + 0.5) * pc.metrics.xy;
+    const vec3 rgb_m = texelFetch(InputTexture, p, 0).rgb;
+
+    const float l_m = luma_of(rgb_m);
+    const float l_n = luma_px(p + ivec2(0, -1));
+    const float l_s = luma_px(p + ivec2(0, 1));
+    const float l_w = luma_px(p + ivec2(-1, 0));
+    const float l_e = luma_px(p + ivec2(1, 0));
+
+    const float l_max = max(l_m, max(max(l_n, l_s), max(l_w, l_e)));
+    const float l_min = min(l_m, min(min(l_n, l_s), min(l_w, l_e)));
+    const float range = l_max - l_min;
+    if (range < max(pc.edge_threshold_min, l_max * pc.edge_threshold)) {
+        imageStore(OutputTexture, p, vec4(rgb_m, 1.0));
+        return;
+    }
+
+    const float l_nw = luma_px(p + ivec2(-1, -1));
+    const float l_ne = luma_px(p + ivec2(1, -1));
+    const float l_sw = luma_px(p + ivec2(-1, 1));
+    const float l_se = luma_px(p + ivec2(1, 1));
+
+    // Edge direction: the second derivative across the edge is large, along it small.
+    const float edge_h = 2.0 * abs(l_n + l_s - 2.0 * l_m) + abs(l_ne + l_se - 2.0 * l_e) +
+                         abs(l_nw + l_sw - 2.0 * l_w);
+    const float edge_v = 2.0 * abs(l_w + l_e - 2.0 * l_m) + abs(l_ne + l_nw - 2.0 * l_n) +
+                         abs(l_se + l_sw - 2.0 * l_s);
+    const bool horizontal = edge_h >= edge_v;
+
+    // The neighbour across the edge is the one with the larger step from this pixel.
+    const float l_a = horizontal ? l_n : l_w;
+    const float l_b = horizontal ? l_s : l_e;
+    const float grad_a = abs(l_a - l_m);
+    const float grad_b = abs(l_b - l_m);
+    const bool toward_b = grad_b >= grad_a;
+    const float l_across = toward_b ? l_b : l_a;
+    const float gradient = max(grad_a, grad_b);
+
+    vec2 normal_step = horizontal ? vec2(0.0, pc.metrics.y) : vec2(pc.metrics.x, 0.0);
+    if (!toward_b) {
+        normal_step = -normal_step;
+    }
+    const vec2 along = horizontal ? vec2(pc.metrics.x, 0.0) : vec2(0.0, pc.metrics.y);
+
+    // Walk along the border between this pixel and the one across the edge.
+    const float l_edge = 0.5 * (l_across + l_m);
+    const float gradient_end = 0.25 * gradient;
+    const vec2 uv_edge = uv + 0.5 * normal_step;
+
+    vec2 uv_pos = uv_edge + along;
+    vec2 uv_neg = uv_edge - along;
+    float end_pos = luma_uv(uv_pos) - l_edge;
+    float end_neg = luma_uv(uv_neg) - l_edge;
+    bool done_pos = abs(end_pos) >= gradient_end;
+    bool done_neg = abs(end_neg) >= gradient_end;
+    for (int i = 0; i < SEARCH_STEPS && !(done_pos && done_neg); ++i) {
+        if (!done_pos) {
+            uv_pos += along * SEARCH_SCALE[i];
+            end_pos = luma_uv(uv_pos) - l_edge;
+            done_pos = abs(end_pos) >= gradient_end;
+        }
+        if (!done_neg) {
+            uv_neg -= along * SEARCH_SCALE[i];
+            end_neg = luma_uv(uv_neg) - l_edge;
+            done_neg = abs(end_neg) >= gradient_end;
+        }
+    }
+
+    const float dist_pos = horizontal ? uv_pos.x - uv.x : uv_pos.y - uv.y;
+    const float dist_neg = horizontal ? uv.x - uv_neg.x : uv.y - uv_neg.y;
+    const bool nearer_pos = dist_pos < dist_neg;
+    const float dist = min(dist_pos, dist_neg);
+    const float span = dist_pos + dist_neg;
+    // At the middle of the edge the pixel moves half a pixel, at its end not at all.
+    const float edge_offset = 0.5 - dist / span;
+
+    // The end of the edge only counts when the luma there moves the same way as this pixel does,
+    // otherwise the edge ends in a corner or a line of another colour and nothing is moved.
+    const bool centre_darker = l_m < l_edge;
+    const bool good_end = ((nearer_pos ? end_pos : end_neg) < 0.0) != centre_darker;
+    float offset = good_end ? edge_offset : 0.0;
+
+    // Sub-pixel: a pixel that differs from the average of its surroundings (a thin line, a lone
+    // highlight) is blended with them whatever the edge search found.
+    const float l_avg = (2.0 * (l_n + l_s + l_w + l_e) + (l_nw + l_ne + l_sw + l_se)) * (1.0 / 12.0);
+    const float sub = clamp(abs(l_avg - l_m) / range, 0.0, 1.0);
+    const float sub_smooth = (-2.0 * sub + 3.0) * sub * sub;
+    offset = max(offset, sub_smooth * sub_smooth * pc.subpixel);
+
+    imageStore(OutputTexture, p, vec4(sample_at(uv + normal_step * offset), 1.0));
+}
