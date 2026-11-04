@@ -300,9 +300,9 @@ target_compile_options(shader-user-data-test PRIVATE -UNDEBUG)
 target_include_directories(shader-user-data-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(shader-user-data-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
 if (WIN32)
-    # The guarded guest read calls spartanport_setjmp (src/compat_win.c).
+    # The guarded guest read calls spartanport_setjmp (src/compat_win.c), whose compat_random needs bcrypt.
     target_sources(shader-user-data-test PRIVATE ../src/compat_win.c)
-    target_link_libraries(shader-user-data-test PRIVATE onecore)
+    target_link_libraries(shader-user-data-test PRIVATE onecore bcrypt)
 endif()
 add_executable(cache-storage-test EXCLUDE_FROM_ALL ../tests/test_cache_storage.cpp
     ../tests/test_gpu_runtime_stubs.cpp)
@@ -434,9 +434,9 @@ target_compile_options(async-fetch-snapshot-test PRIVATE -UNDEBUG)
 target_include_directories(async-fetch-snapshot-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(async-fetch-snapshot-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
 if (WIN32)
-    # The guarded guest read calls spartanport_setjmp (src/compat_win.c).
+    # The guarded guest read calls spartanport_setjmp (src/compat_win.c), whose compat_random needs bcrypt.
     target_sources(async-fetch-snapshot-test PRIVATE ../src/compat_win.c)
-    target_link_libraries(async-fetch-snapshot-test PRIVATE onecore)
+    target_link_libraries(async-fetch-snapshot-test PRIVATE onecore bcrypt)
 endif()
 target_compile_options(depth-stencil-state-test PRIVATE -UNDEBUG)
 target_include_directories(depth-stencil-state-test PRIVATE shim shadps4 third_party/gcn/include)
