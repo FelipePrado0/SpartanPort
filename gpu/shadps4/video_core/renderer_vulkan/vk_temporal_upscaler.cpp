@@ -824,7 +824,11 @@ bool TemporalUpscaler::JitterDepth(VideoCore::ImageId depth) const {
         return true;
     }
     // The transparent pass draws with a copy of the scene depth (a pass of the game over the
-    // same pixels): jittered like the original so both agree.
+    // same pixels): jittered like the original so both agree. The stored scene depth may have been
+    // freed or reused since it was recorded.
+    if (!camera_motion.DepthLive()) {
+        return false;
+    }
     const auto& scene = texture_cache.GetImage(camera_motion.Depth());
     const auto& image = texture_cache.GetImage(depth);
     return image.info.pixel_format == scene.info.pixel_format &&
@@ -2017,7 +2021,7 @@ bool TemporalUpscaler::Scaled() const {
 }
 
 void TemporalUpscaler::OnColorTarget(VideoCore::ImageId color) {
-    if (ui_phase || !camera_motion.Depth()) {
+    if (ui_phase || !camera_motion.DepthLive()) {
         return;
     }
     const auto& image = texture_cache.GetImage(color);
