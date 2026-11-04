@@ -20,8 +20,8 @@ const fn row(button: &'static str, key: &'static str, pad: Option<&'static str>)
     ControlRow { button, key, pad }
 }
 
-/// L2/R2 come from the analog triggers and the left touchpad click (photo mode) from L1 + the
-/// right click's button; neither is remapped on the gamepad.
+/// L2/R2 default to the analog triggers. The left touchpad click (photo mode) has no button of its
+/// own by default, as L1 + the right click's button presses it, so its default input is empty.
 pub static CONTROLS: [ControlRow; 17] = [
     row("cross", "Space", Some("a")),
     row("circle", "Left Shift", Some("b")),
@@ -29,12 +29,12 @@ pub static CONTROLS: [ControlRow; 17] = [
     row("triangle", "Q", Some("y")),
     row("l1", "1", Some("leftshoulder")),
     row("r1", "3", Some("rightshoulder")),
-    row("l2", "R", None),
-    row("r2", "F", None),
+    row("l2", "R", Some("lefttrigger")),
+    row("r2", "F", Some("righttrigger")),
     row("l3", "Z", Some("leftstick")),
     row("r3", "C", Some("rightstick")),
     row("options", "Return", Some("start")),
-    row("touchpad_left", "Tab", None),
+    row("touchpad_left", "Tab", Some("")),
     row("touchpad_right", "Backspace", Some("back")),
     row("up", "I", Some("dpup")),
     row("down", "K", Some("dpdown")),
@@ -53,6 +53,8 @@ pub static PAD_STYLES: &[(&str, &[(&str, &str)])] = &[
             ("y", "Triangle"),
             ("leftshoulder", "L1"),
             ("rightshoulder", "R1"),
+            ("lefttrigger", "L2"),
+            ("righttrigger", "R2"),
             ("leftstick", "L3"),
             ("rightstick", "R3"),
             ("start", "Options"),
@@ -75,6 +77,8 @@ pub static PAD_STYLES: &[(&str, &[(&str, &str)])] = &[
             ("y", "Y"),
             ("leftshoulder", "LB"),
             ("rightshoulder", "RB"),
+            ("lefttrigger", "LT"),
+            ("righttrigger", "RT"),
             ("leftstick", "LS (left stick click)"),
             ("rightstick", "RS (right stick click)"),
             ("start", "Menu"),
@@ -98,6 +102,8 @@ pub static PAD_STYLES: &[(&str, &[(&str, &str)])] = &[
             ("y", "X"),
             ("leftshoulder", "L"),
             ("rightshoulder", "R"),
+            ("lefttrigger", "ZL"),
+            ("righttrigger", "ZR"),
             ("leftstick", "Left stick click"),
             ("rightstick", "Right stick click"),
             ("start", "Plus (+)"),
@@ -360,6 +366,33 @@ pub fn bind_key(
     }
 }
 
+/// Gives gamepad input `name` to `button`, as `bind_key` does. A button with no input of its own
+/// has none to hand over, so the one that had `name` keeps it, and the page reports the conflict.
+pub fn bind_pad(values: &mut IndexMap<String, String>, button: &str, name: &str) {
+    if values.get(button).is_some_and(|old| old.is_empty()) {
+        values.insert(button.to_string(), name.to_string());
+    } else {
+        bind_key(values, button, name);
+    }
+}
+
+/// The inputs that press more than one game button, in table order. "None" presses nothing.
+pub fn conflicts(values: &IndexMap<String, String>) -> Vec<String> {
+    let mut seen: Vec<String> = Vec::new();
+    let mut twice = Vec::new();
+    for value in values.values() {
+        let value = value.trim().to_lowercase();
+        if value.is_empty() || value == "none" {
+            continue;
+        }
+        if seen.contains(&value) && !twice.contains(&value) {
+            twice.push(value.clone());
+        }
+        seen.push(value);
+    }
+    twice
+}
+
 /// The saved inputs (key) or gamepad names (pad) by game button, for the rows of that table.
 /// `touchpad`, saved before the sides were split, is the left click.
 pub fn control_values(controls: &Value, kind: Kind) -> IndexMap<String, String> {
@@ -376,7 +409,8 @@ fn table_values(chosen: Option<&Value>, kind: Kind) -> IndexMap<String, String> 
         .filter(|(button, _)| button.as_str() != "touchpad")
         .map(|(b, v)| (b.clone(), v.clone()))
         .collect();
-    if let Some(touchpad) = chosen.get("touchpad") {
+    // Only the keyboard table ever saved it: an old gamepad entry stays ignored.
+    if let Some(touchpad) = chosen.get("touchpad").filter(|_| kind == Kind::Key) {
         if !values.contains_key("touchpad_left") {
             values.insert("touchpad_left".to_string(), touchpad.clone());
         }
@@ -699,8 +733,10 @@ mod tests {
             .collect();
         pads.insert("cross".into(), "b".into());
         pads.insert("l2".into(), "a".into());
-        // L2/R2: triggers only
-        assert_eq!(control_changes(&pads, Kind::Pad), map(&[("cross", "b")]));
+        assert_eq!(
+            control_changes(&pads, Kind::Pad),
+            map(&[("cross", "b"), ("l2", "a")])
+        );
     }
 
     #[test]
@@ -708,7 +744,7 @@ mod tests {
         let row = |b: &str| CONTROLS.iter().find(|r| r.button == b);
         assert!(row("touchpad").is_none());
         let left = row("touchpad_left").unwrap();
-        assert_eq!((left.key, left.pad), ("Tab", None));
+        assert_eq!((left.key, left.pad), ("Tab", Some("")));
         let right = row("touchpad_right").unwrap();
         assert_eq!((right.key, right.pad), ("Backspace", Some("back")));
         assert_eq!(
@@ -745,7 +781,11 @@ mod tests {
     fn both_styles_name_every_default_gamepad_button() {
         assert_eq!(PAD_STYLES.len(), 3);
         for (_, labels) in PAD_STYLES {
-            for pad in CONTROLS.iter().filter_map(|r| r.pad) {
+            for pad in CONTROLS
+                .iter()
+                .filter_map(|r| r.pad)
+                .filter(|p| !p.is_empty())
+            {
                 assert!(labels.iter().any(|(name, _)| *name == pad), "{pad}");
             }
             let mut shown: Vec<&str> = labels.iter().map(|(_, l)| *l).collect();

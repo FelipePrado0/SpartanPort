@@ -6,6 +6,8 @@ pub mod folder;
 pub mod hairline;
 pub mod min_width;
 pub mod modal;
+pub mod pad_art;
+pub mod pad_diagram;
 pub mod row;
 pub mod section;
 pub mod select;

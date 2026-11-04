@@ -318,6 +318,11 @@ pub static SETTINGS: &[Setting] = &[
     ),
     app_unwritten("launcher_effects", Flag, Bool(true)),
     app_unwritten("controls_device", Kind::Text, Text("")),
+    // The page follows the connected controller's family until the player picks one.
+    app_unwritten("pad_style_auto", Flag, Bool(true)),
+    app_unwritten("pad_art", Kind::Text, Text("")),
+    app_unwritten("deadzone_left", Kind::Int, Int(0)),
+    app_unwritten("deadzone_right", Kind::Int, Int(0)),
     ini(
         "display_mode",
         Pick(DISPLAY_MODES),

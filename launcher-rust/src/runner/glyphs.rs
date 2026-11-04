@@ -417,7 +417,6 @@ fn partition(entry: &str) -> (String, String) {
 }
 
 /// Game button -> gamepad button, with a `SPARTAN_PAD_MAP` value (`cross=b,circle=a`) applied.
-/// L2/R2 stay on the triggers, as in the runtime.
 pub fn pad_buttons(pad_map: &str) -> IndexMap<String, String> {
     let mut buttons: IndexMap<String, String> = DEFAULT_MAP
         .iter()
@@ -426,7 +425,7 @@ pub fn pad_buttons(pad_map: &str) -> IndexMap<String, String> {
     for entry in pad_map.split(',') {
         let (game, host) = partition(entry);
         let (game, host) = (game.to_lowercase(), host.to_lowercase());
-        if buttons.contains_key(&game) && !host.is_empty() && game != "l2" && game != "r2" {
+        if buttons.contains_key(&game) && !host.is_empty() {
             buttons.insert(game, host);
         }
     }
@@ -2232,7 +2231,7 @@ pub(crate) mod tests {
         );
         assert_eq!(
             (buttons["l2"].as_str(), buttons["square"].as_str()),
-            ("lefttrigger", "x")
+            ("x", "x")
         );
         let defaults: IndexMap<String, String> = DEFAULT_MAP
             .iter()

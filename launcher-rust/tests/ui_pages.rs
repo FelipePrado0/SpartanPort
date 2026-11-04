@@ -10,6 +10,7 @@ use common::{
 use spartanport_launcher::core::env::game_environment;
 use spartanport_launcher::core::gpu::{display_label, parse_display_list};
 use spartanport_launcher::core::options::DISPLAY_MODES;
+use spartanport_launcher::core::pad_model::PadModel;
 use spartanport_launcher::ui::app::{self, Message};
 use spartanport_launcher::ui::follow::{follow, Cause};
 use spartanport_launcher::ui::pages::{performance, Page};
@@ -1120,9 +1121,11 @@ fn pressed_keys_become_sdl_names() {
         assert_eq!(state.controls.key["cross"], name, "{key:?} {location:?}");
         assert!(state.controls.capturing.is_none(), "{key:?}");
     }
-    // While no box waits, the keys navigate as before.
+    // While no box waits, the keyboard picture shows the key; it neither binds nor moves away.
+    let bound = state.controls.key.clone();
     press_key(&mut state, Key::Named(Named::ArrowLeft), Location::Standard);
-    assert_eq!(state.page, Page::Trophies);
+    assert_eq!(state.page, Page::Controls);
+    assert_eq!(state.controls.key, bound);
 }
 
 #[test]
@@ -1262,10 +1265,10 @@ fn nintendo_names_follow_the_button_positions() {
     let mut state = controls_state(dir.path());
     click(&mut state, "Gamepad");
     assert_eq!(state.controls.pad_style, "playstation");
-    click_tall(&mut state, "Nintendo");
+    click_tall(&mut state, "Switch Pro");
     assert_eq!(state.controls.pad_style, "nintendo");
     assert_eq!(state.store.text("pad_style"), "nintendo");
-    // The table relabels its boxes; L2, R2 and Touchpad left keep their fixed text.
+    // The table relabels its boxes, the triggers too; Touchpad left stays on its combination.
     let rows = controls::pad_rows(&state, "en");
     let row = |button: &str| {
         rows.iter()
@@ -1273,17 +1276,12 @@ fn nintendo_names_follow_the_button_positions() {
             .unwrap()
             .clone()
     };
-    let PadChoice::Pick { pairs, current } = row("cross").choice else {
-        panic!("cross has a box");
-    };
+    let PadChoice { pairs, current } = row("cross").choice;
     assert_eq!(current, "B");
     assert_eq!(pairs, controls::pad_labels("nintendo", "en"));
-    assert!(matches!(row("circle").choice, PadChoice::Pick { current, .. } if current == "A"));
-    assert!(matches!(row("l2").choice, PadChoice::Fixed(text) if text == "L2 trigger"));
-    assert!(
-        matches!(row("touchpad_left").choice, PadChoice::Fixed(text) if text == "L1 + Touchpad right")
-    );
-    page_has(&state, &["L2 trigger", "R2 trigger", "L1 + Touchpad right"]);
+    assert_eq!(row("circle").choice.current, "A");
+    assert_eq!(row("l2").choice.current, "ZL");
+    assert_eq!(row("touchpad_left").choice.current, "L1 + Touchpad right");
     // Choosing a label stores its SDL name: Nintendo's A is the east button.
     let pick = controls::pad_pick("cross", &pairs, "A");
     assert!(matches!(
@@ -1429,7 +1427,8 @@ fn reset_buttons_and_the_rage_rows() {
     );
     controls_update(&mut state, ControlsMessage::ResetTable(Kind::Pad));
     assert_eq!(state.controls.pad["cross"], "a");
-    assert_eq!(state.controls.pad["l2"], "");
+    assert_eq!(state.controls.pad["l2"], "lefttrigger");
+    assert_eq!(state.controls.pad["touchpad_left"], "");
 }
 
 /// `state` on the Controls page once the drawer has stopped (a key box's click restarts the clock).
@@ -1620,8 +1619,10 @@ fn a_gamepad_found_while_a_box_waits_ends_the_capture() {
     assert_eq!(state.controls.key, before);
     // No hidden box takes the next click: it reaches the gamepad section.
     assert!(matches!(
-        tall_messages(&state, "Nintendo").as_slice(),
-        [Message::Controls(ControlsMessage::PadStyle(style))] if style == "nintendo"
+        tall_messages(&state, "Switch Pro").as_slice(),
+        [Message::Controls(ControlsMessage::PadModel(
+            PadModel::SwitchPro
+        ))]
     ));
 }
 
@@ -1636,10 +1637,10 @@ fn losing_the_focus_ends_the_capture() {
     assert!(state.controls.capturing.is_none());
     assert!(state.controls.capture_started.is_none());
     assert_eq!(state.controls.key, before);
-    // The next key navigates again instead of binding.
+    // The next key binds nothing.
     let _ = app::update(&mut state, Message::WindowFocused(true));
     press_key(&mut state, Key::Named(Named::ArrowLeft), Location::Standard);
-    assert_eq!(state.page, Page::Trophies);
+    assert_eq!(state.page, Page::Controls);
     assert_eq!(state.controls.key, before);
 }
 

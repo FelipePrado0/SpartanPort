@@ -18,6 +18,7 @@ use crate::core::desktop::{linux_tools, open_path, LinuxTools};
 use crate::core::gpu::{list_displays, monitor_options, monitor_selection, Display, GpuRow};
 use crate::core::i18n::{is_rtl, launcher_language, system_language, tr};
 use crate::core::installation::Installation;
+use crate::core::joysticks::{JoyError, Joysticks};
 use crate::core::log::{LogBuffer, MAX_LOG_LINES};
 use crate::core::paths::Paths;
 use crate::core::platform;
@@ -33,6 +34,7 @@ use crate::ui::home::{self, HomeFacts};
 use crate::ui::hover_menu::HoverMenu;
 use crate::ui::lang_menu::{self, LangMenu, LangMessage};
 use crate::ui::pages::advanced;
+use crate::ui::pages::control_center::{self, LivePad};
 use crate::ui::pages::controls::{self, ControlsMessage, ControlsView};
 use crate::ui::pages::game::{self, BackupMessage, PatchesView};
 use crate::ui::pages::log::{self, LogMessage};
@@ -110,6 +112,10 @@ pub struct State {
     pub controls: ControlsView,
     /// The "Set up a controller" page while it is open, with the joysticks it reads.
     pub mapper: Option<MapperState>,
+    /// The pad the Controls page reads while it shows the gamepad.
+    pub live_pad: Option<LivePad>,
+    /// What opens that pad; the tests hand in a scripted one.
+    pub joystick_opener: fn(&Paths) -> Result<Box<dyn Joysticks>, JoyError>,
     pub patches: PatchesView,
     /// The names of the save backups, newest first.
     pub backups: Vec<String>,
@@ -227,6 +233,8 @@ impl State {
             mods: Default::default(),
             controls,
             mapper: None,
+            live_pad: None,
+            joystick_opener: control_center::open_sdl,
             patches: Default::default(),
             backups: Vec::new(),
             backup_choice: String::new(),
@@ -383,9 +391,20 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
             if state.mapper.is_some() {
                 return mapper::key_pressed(state, &key);
             }
+            // Esc gives up on a pad remap of the Controls page.
+            if control_center::capturing(state) && key == Key::Named(Named::Escape) {
+                control_center::stop_capture(state);
+                return Task::none();
+            }
             // While a key box of the Controls page waits, the key is its input.
             if state.controls.capturing.is_some() {
                 return controls::key_pressed(state, &key, location);
+            }
+            // The keyboard picture shows the arrows: there they do not change the page.
+            if controls::shows_keys(state)
+                && matches!(key, Key::Named(Named::ArrowLeft | Named::ArrowRight))
+            {
+                return Task::none();
             }
             return match key_message(state, &key) {
                 Some(Message::Play) => Task::done(Message::Play),
@@ -463,6 +482,7 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
                 state.lang_menu.open = false;
             }
             controls::tick(state, at);
+            control_center::tick(state, at);
             update::drain(state);
             // The game's output arrives with the clock.
             return Task::batch([check, play::drain(state)]);
@@ -574,6 +594,7 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
             if state.setup.is_some() || persist::collect_unless_unreadable(state) {
                 // The open controller mapper lets SDL go and saves nothing more.
                 mapper::close(state);
+                control_center::close_live(state);
                 return window::close(id);
             }
         }
@@ -665,6 +686,9 @@ pub fn scene_size(state: &State) -> Size {
 pub fn show_page(state: &mut State, page: Page) -> Task<Message> {
     if state.page == Page::Mapper && page != Page::Mapper {
         mapper::close(state);
+    }
+    if state.page == Page::Controls && page != Page::Controls {
+        control_center::close_live(state);
     }
     let now = Instant::now();
     state.now = now;
