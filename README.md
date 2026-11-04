@@ -347,15 +347,16 @@ how much mouse it takes. Without the launcher the game keeps its own keys: E and
 Triangle, 1 and 3 for L1 and R1, F for R2, C for R3, I, K, J, L for the d-pad, Enter for Options,
 Tab and Backspace for the touchpad.
 
-**Alternative keys.** Every button can have a second key or mouse input, in the second box of its
-row on the Controls page (the x button next to it clears it). Both press the button, so you can keep
-Square on the left click for combat and also press it with J in the minigames. On the Muses' lyre,
+**Alternative keys.** Every button can have a second and a third key or mouse input, in the second
+and third boxes of its row on the Controls page (the x button next to a box clears it). All of them
+press the button, so you can keep Square on the left click for combat and also press it with J, or
+with Keypad 4, in the minigames. On the Muses' lyre,
 for example, keep Space, Left Ctrl and the two mouse buttons and add K, L, J and I, laid out like the
 four buttons (I up, J left, L right, K down). A key already used by another button swaps with it, as
 for the main keys. The in-game keyboard icons show the main key; *Keys on the icons* (Controls page,
 with the Keyboard style) can show the alternative instead, or the alternative on the lyre only (the
-other icons keep the main key). Without the launcher, join the names with
-`|` in `SPARTAN_KEY_MAP`, for example `cross=Space|K,square=Mouse Left|J`.
+other icons keep the main key). The icons draw the second box, never the third. Without the launcher, join the names with
+`|` in `SPARTAN_KEY_MAP`, for example `cross=Space|K|Keypad 2,square=Mouse Left|J`.
 
 On a controller without a touchpad (Xbox and others), View opens the pause menu (the right
 touchpad click) and L1 + View opens photo mode (the left click). On a DualSense the touchpad

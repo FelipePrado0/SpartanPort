@@ -2362,6 +2362,19 @@ pub(crate) mod tests {
             "cross=K,circle=Left Ctrl,square=J,l3=None,nonsense"
         );
         assert_eq!(shown_keys("", true), "");
+        // The second alternative is never the one shown, with the main key or the first.
+        assert_eq!(
+            shown_keys("cross=Space|K|Keypad 2,square=Mouse Left|J|Keypad 4", false),
+            "cross=Space,square=Mouse Left"
+        );
+        assert_eq!(
+            shown_keys("cross=Space|K|Keypad 2,square=Mouse Left|J|Keypad 4", true),
+            "cross=K,square=J"
+        );
+        assert_eq!(
+            lyre_keys("cross=Space|K|Keypad 2,square=Mouse Left|J|Keypad 4"),
+            "cross=K,square=J"
+        );
         // The keys an alternative map draws are the alternatives, the others stay on the main key.
         let keys = key_buttons(&shown_keys(map, true));
         assert_eq!(keys["cross"], "K");

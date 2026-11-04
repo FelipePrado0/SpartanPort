@@ -5,7 +5,7 @@
 //! `control_changes` into `settings.controls`. A key box waits for an input after a click: the next
 //! key (`key_pressed`, fed by `Message::Key`), mouse button or wheel turn (`subscription`) is bound
 //! with `bind_key`, or the box gives up after `CAPTURE_SECONDS`. Each keyboard row has two boxes: the
-//! main input and an optional alternative that presses the same button.
+//! main input and two optional alternatives that press the same button.
 
 use std::time::Duration;
 
@@ -104,10 +104,11 @@ const PAD_NOTE: &str = "L2/R2 stay on the triggers. Touchpad right opens the gam
 /// Side of a button icon.
 const ICON_SIZE: f32 = 28.0;
 /// Width of a key box, enough for the countdown text.
-const BOX_WIDTH: f32 = 220.0;
+const BOX_WIDTH: f32 = 152.0;
 /// What an empty alternative box says.
 const ALTERNATIVE_EMPTY: &str = "(alternative)";
-const ALTERNATIVE_NOTE: &str = "The second box of a row is an alternative input for the same button: keep Square on the left mouse button for combat and add J for the minigames, for example. \"Clear input\" empties the main box, the × button empties the alternative, and the arrow puts the row back on its default with no alternative.";
+const SECOND_ALTERNATIVE_EMPTY: &str = "(2nd alternative)";
+const ALTERNATIVE_NOTE: &str = "The second and third boxes of a row are alternative inputs for the same button: keep Square on the left mouse button for combat and add J and Keypad 4 for the minigames, for example. \"Clear input\" empties the main box, the × button next to a box empties that alternative, and the arrow puts the row back on its default with no alternatives.";
 const GLYPH_KEYS_HINT: &str = "Which input the keyboard icons in the game show for a button that has an alternative: its main key, its alternative key on every icon, or its alternative key only on the Muses' lyre while the other icons keep the main key. A button without an alternative always shows its main input. Applied when the game starts.";
 
 /// The device whose table the page shows; both keep working in the game.
@@ -156,12 +157,14 @@ pub struct ControlsView {
     pub key: IndexMap<String, String>,
     /// Alternative input by game button; a button without one has no entry.
     pub key_alt: IndexMap<String, String>,
+    /// The second alternative input, kept like `key_alt`.
+    pub key_alt2: IndexMap<String, String>,
     /// SDL gamepad button by game button (`CONTROLS`); empty for L2, R2 and Touchpad left.
     pub pad: IndexMap<String, String>,
     pub pad_style: String,
     /// The game button whose key box waits for an input.
     pub capturing: Option<String>,
-    /// Which of its two boxes waits.
+    /// Which of its three boxes waits.
     pub capturing_slot: Slot,
     pub capture_started: Option<Instant>,
     /// Whether the first open already looked for a gamepad.
@@ -184,7 +187,8 @@ impl ControlsView {
             device: device.unwrap_or_default(),
             device_chosen: device.is_some(),
             key: table(saved, Kind::Key),
-            key_alt: alternative_values(saved),
+            key_alt: alternative_values(saved, Slot::Alternative),
+            key_alt2: alternative_values(saved, Slot::SecondAlternative),
             pad: table(saved, Kind::Pad),
             pad_style,
             capturing: None,
@@ -192,6 +196,13 @@ impl ControlsView {
             capture_started: None,
             gamepad_probe_started: false,
         }
+    }
+}
+
+impl ControlsView {
+    /// The main inputs, the alternatives and the second alternatives, as `bind_key` takes them.
+    fn key_tables(&mut self) -> [&mut IndexMap<String, String>; 3] {
+        [&mut self.key, &mut self.key_alt, &mut self.key_alt2]
     }
 }
 
@@ -221,9 +232,9 @@ pub enum ControlsMessage {
     /// The waiting box gives up (Python `finish`): its time ran out, the window lost the focus,
     /// or a mouse button without an input name was pressed.
     CaptureTimeout,
-    /// The arrow of a row: that button back on its default, without an alternative.
+    /// The arrow of a row: that button back on its default, without alternatives.
     ResetKey(String),
-    /// "Clear input" of a row: that button's main input on none, or its alternative dropped.
+    /// "Clear input" of a row: that button's main input on none, or an alternative dropped.
     Clear(String, Slot),
     ResetTable(Kind),
     PadStyle(String),
@@ -253,7 +264,7 @@ pub fn update(state: &mut State, message: ControlsMessage) -> Task<Message> {
                 && state.controls.capturing_slot == slot
             {
                 let view = &mut state.controls;
-                bind_key(&mut view.key, &mut view.key_alt, &button, slot, &name);
+                bind_key(view.key_tables(), &button, slot, &name);
                 stop_capture(state);
             }
         }
@@ -266,22 +277,18 @@ pub fn update(state: &mut State, message: ControlsMessage) -> Task<Message> {
                 let default = default_input(row, Kind::Key).unwrap_or_default();
                 let view = &mut state.controls;
                 view.key_alt.shift_remove(&button);
-                bind_key(
-                    &mut view.key,
-                    &mut view.key_alt,
-                    &button,
-                    Slot::Main,
-                    default,
-                );
+                view.key_alt2.shift_remove(&button);
+                bind_key(view.key_tables(), &button, Slot::Main, default);
             }
         }
         ControlsMessage::Clear(button, slot) => {
             let view = &mut state.controls;
-            bind_key(&mut view.key, &mut view.key_alt, &button, slot, "None");
+            bind_key(view.key_tables(), &button, slot, "None");
         }
         ControlsMessage::ResetTable(kind) => {
             if kind == Kind::Key {
                 state.controls.key_alt.clear();
+                state.controls.key_alt2.clear();
             }
             let values = match kind {
                 Kind::Key => &mut state.controls.key,
@@ -553,6 +560,11 @@ pub fn clear_alternative_id(button: &str) -> iced::widget::Id {
     iced::widget::Id::from(format!("controls-clear-alternative: {button}"))
 }
 
+/// The id of the button that drops the second alternative of a keyboard row.
+pub fn clear_second_alternative_id(button: &str) -> iced::widget::Id {
+    iced::widget::Id::from(format!("controls-clear-second-alternative: {button}"))
+}
+
 /// The English name of a game button or action, which is also the translation key.
 fn button_name(button: &'static str) -> &'static str {
     PS_BUTTON_NAMES
@@ -587,6 +599,10 @@ pub struct KeyRow {
     pub alternative: String,
     /// Whether the row has an alternative to drop.
     pub has_alternative: bool,
+    /// What the second alternative box shows, like `alternative`.
+    pub second_alternative: String,
+    /// Whether the row has a second alternative to drop.
+    pub has_second_alternative: bool,
     /// Off for L3 and R3 while Rage of Sparta is on one input, and for the Rage row otherwise.
     pub enabled: bool,
 }
@@ -608,6 +624,8 @@ pub fn key_rows(state: &State, lang: &str) -> Vec<KeyRow> {
                 input: key_box_text(state, lang, row.button, Slot::Main),
                 alternative: key_box_text(state, lang, row.button, Slot::Alternative),
                 has_alternative: state.controls.key_alt.contains_key(row.button),
+                second_alternative: key_box_text(state, lang, row.button, Slot::SecondAlternative),
+                has_second_alternative: state.controls.key_alt2.contains_key(row.button),
                 enabled,
             }
         })
@@ -626,6 +644,7 @@ fn key_box_text(state: &State, lang: &str, button: &str, slot: Slot) -> String {
     let (inputs, empty) = match slot {
         Slot::Main => (&view.key, "(none)"),
         Slot::Alternative => (&view.key_alt, ALTERNATIVE_EMPTY),
+        Slot::SecondAlternative => (&view.key_alt2, SECOND_ALTERNATIVE_EMPTY),
     };
     match inputs.get(button).map(String::as_str) {
         None | Some("" | "None") => tr(lang, empty),
@@ -761,7 +780,10 @@ fn radio<'a>(label: String, active: bool, message: Message) -> Element<'a, Messa
 /// whose rows may be out of sight, still shows that it acted.
 fn reset_button<'a>(state: &State, label: String, kind: Kind) -> Element<'a, Message> {
     let (values, has_alternatives) = match kind {
-        Kind::Key => (&state.controls.key, !state.controls.key_alt.is_empty()),
+        Kind::Key => (
+            &state.controls.key,
+            !state.controls.key_alt.is_empty() || !state.controls.key_alt2.is_empty(),
+        ),
         Kind::Pad => (&state.controls.pad, false),
     };
     let reset = (has_alternatives || !at_defaults(values, kind))
@@ -790,6 +812,14 @@ fn key_line<'a>(row: KeyRow, lang: &str) -> Element<'a, Message> {
         .width(BOX_WIDTH)
         .style(theme::button_flat);
     let mut clear_alternative = button(text("\u{00d7}")).style(theme::button_flat);
+    let mut second_label = text(row.second_alternative);
+    if !row.has_second_alternative {
+        second_label = second_label.style(theme::text_muted);
+    }
+    let mut second = button(second_label)
+        .width(BOX_WIDTH)
+        .style(theme::button_flat);
+    let mut clear_second = button(text("\u{00d7}")).style(theme::button_flat);
     if row.enabled {
         let button = row.button.to_string();
         input = input.on_press(Message::Controls(ControlsMessage::Capture(
@@ -800,6 +830,10 @@ fn key_line<'a>(row: KeyRow, lang: &str) -> Element<'a, Message> {
             button.clone(),
             Slot::Alternative,
         )));
+        second = second.on_press(Message::Controls(ControlsMessage::Capture(
+            button.clone(),
+            Slot::SecondAlternative,
+        )));
         reset = reset.on_press(Message::Controls(ControlsMessage::ResetKey(button.clone())));
         clear = clear.on_press(Message::Controls(ControlsMessage::Clear(
             button.clone(),
@@ -807,8 +841,14 @@ fn key_line<'a>(row: KeyRow, lang: &str) -> Element<'a, Message> {
         )));
         if row.has_alternative {
             clear_alternative = clear_alternative.on_press(Message::Controls(
-                ControlsMessage::Clear(button, Slot::Alternative),
+                ControlsMessage::Clear(button.clone(), Slot::Alternative),
             ));
+        }
+        if row.has_second_alternative {
+            clear_second = clear_second.on_press(Message::Controls(ControlsMessage::Clear(
+                button,
+                Slot::SecondAlternative,
+            )));
         }
     }
     layout![
@@ -817,6 +857,8 @@ fn key_line<'a>(row: KeyRow, lang: &str) -> Element<'a, Message> {
         input,
         alternative,
         container(clear_alternative).id(clear_alternative_id(row.button)),
+        second,
+        container(clear_second).id(clear_second_alternative_id(row.button)),
         reset,
         container(clear).id(clear_id(row.button)),
     ]

@@ -562,12 +562,29 @@ mod tests {
     }
 
     #[test]
+    fn both_alternatives_reach_the_key_map() {
+        let (settings, paths, _dir) = setup(json!({"controls": {
+            "key": {"circle": "Left Ctrl"},
+            "key_alt": {"cross": "9", "circle": "0", "square": "7", "triangle": "8"},
+            "key_alt2": {"cross": "Keypad 2", "circle": "Keypad 6", "square": "Keypad 4", "triangle": "Keypad 8"}
+        }}));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert!(env["SPARTAN_KEY_MAP"].contains(
+            "cross=Space|9|Keypad 2,circle=Left Ctrl|0|Keypad 6,square=Mouse Left|7|Keypad 4,triangle=Mouse Right|8|Keypad 8,"
+        ));
+    }
+
+    #[test]
     fn every_button_with_an_alternative_still_fits_the_runtime_buffer() {
         // The runtime reads SPARTAN_KEY_MAP into a 2048-byte buffer (src/runtime_pad.c).
         let rows = crate::core::controls::table_rows(crate::core::controls::Kind::Key);
         let alternatives: serde_json::Map<String, Value> = rows
-            .into_iter()
+            .iter()
             .map(|row| (row.button.to_string(), json!("Keypad Enter")))
+            .collect();
+        let second: serde_json::Map<String, Value> = rows
+            .into_iter()
+            .map(|row| (row.button.to_string(), json!("Keypad Period")))
             .collect();
         let keys: serde_json::Map<String, Value> =
             crate::core::controls::table_rows(crate::core::controls::Kind::Key)
@@ -576,7 +593,7 @@ mod tests {
                 .collect();
         let (settings, paths, _dir) = setup(json!({
             "rage_one_input": false,
-            "controls": {"key": keys, "key_alt": alternatives}
+            "controls": {"key": keys, "key_alt": alternatives, "key_alt2": second}
         }));
         let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
         assert!(

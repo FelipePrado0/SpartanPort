@@ -114,11 +114,19 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
         ],
     ),
     (
-        "The second box of a row is an alternative input for the same button: keep Square on the left mouse button for combat and add J for the minigames, for example. \"Clear input\" empties the main box, the × button empties the alternative, and the arrow puts the row back on its default with no alternative.",
+        "(2nd alternative)",
         &[
-            ("zh", "每行的第二个输入框是同一按键的备用输入：例如，战斗时将方块保留在鼠标左键，并为小游戏添加 J。“清除绑定”会清空主输入框，× 按钮会清空备用输入，箭头会将该行恢复为默认绑定并移除备用输入。"),
-            ("pt", "A segunda caixa de uma linha é uma entrada alternativa para o mesmo botão: por exemplo, deixe o Quadrado no botão esquerdo do mouse para o combate e acrescente o J para os minigames. \"Limpar entrada\" esvazia a caixa principal, o botão × esvazia a alternativa e a seta devolve a linha ao padrão, sem alternativa."),
-            ("es", "La segunda casilla de una fila es una entrada alternativa para el mismo botón: por ejemplo, deja el Cuadrado en el botón izquierdo del ratón para el combate y añade la J para los minijuegos. \"Borrar entrada\" vacía la casilla principal, el botón × vacía la alternativa y la flecha devuelve la fila a su valor por defecto, sin alternativa."),
+            ("zh", "（备用 2）"),
+            ("pt", "(2ª alternativa)"),
+            ("es", "(2.ª alternativa)"),
+        ],
+    ),
+    (
+        "The second and third boxes of a row are alternative inputs for the same button: keep Square on the left mouse button for combat and add J and Keypad 4 for the minigames, for example. \"Clear input\" empties the main box, the × button next to a box empties that alternative, and the arrow puts the row back on its default with no alternatives.",
+        &[
+            ("zh", "每行的第二个和第三个输入框是同一按键的备用输入：例如，战斗时将方块保留在鼠标左键，并为小游戏添加 J 和小键盘 4。“清除绑定”会清空主输入框，输入框旁的 × 按钮会清空该备用输入，箭头会将该行恢复为默认绑定并移除所有备用输入。"),
+            ("pt", "A segunda e a terceira caixa de uma linha são entradas alternativas para o mesmo botão: por exemplo, deixe o Quadrado no botão esquerdo do mouse para o combate e acrescente o J e o Keypad 4 para os minigames. \"Limpar entrada\" esvazia a caixa principal, o botão × ao lado de uma caixa esvazia essa alternativa e a seta devolve a linha ao padrão, sem alternativas."),
+            ("es", "La segunda y la tercera casilla de una fila son entradas alternativas para el mismo botón: por ejemplo, deja el Cuadrado en el botón izquierdo del ratón para el combate y añade la J y el Keypad 4 para los minijuegos. \"Borrar entrada\" vacía la casilla principal, el botón × junto a una casilla vacía esa alternativa y la flecha devuelve la fila a su valor por defecto, sin alternativas."),
         ],
     ),
     (

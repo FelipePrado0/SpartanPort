@@ -1484,6 +1484,13 @@ fn capture_alternative(state: &mut app::State, button: &str) {
     );
 }
 
+fn capture_second_alternative(state: &mut app::State, button: &str) {
+    controls_update(
+        state,
+        ControlsMessage::Capture(button.into(), Slot::SecondAlternative),
+    );
+}
+
 fn key_row(state: &app::State, button: &str) -> controls::KeyRow {
     controls::key_rows(state, "en")
         .into_iter()
@@ -1521,6 +1528,57 @@ fn an_alternative_box_binds_next_to_the_main_key() {
         ControlsMessage::Captured("cross".into(), Slot::Alternative, "Mouse Forward".into()),
     );
     assert_eq!(state.controls.key_alt["cross"], "Mouse Forward");
+}
+
+#[test]
+fn the_third_box_binds_a_second_alternative_next_to_the_other_two() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = controls_state(dir.path());
+    assert_eq!(
+        key_row(&state, "square").second_alternative,
+        "(2nd alternative)"
+    );
+    capture_alternative(&mut state, "square");
+    press_key(&mut state, char_key("j"), Location::Standard);
+    capture_second_alternative(&mut state, "square");
+    assert_eq!(
+        key_row(&state, "square").second_alternative,
+        "Press a key or mouse (5)"
+    );
+    // Only the clicked box waits.
+    assert_eq!(key_row(&state, "square").alternative, "J");
+    press_key(&mut state, char_key("k"), Location::Standard);
+    let row = key_row(&state, "square");
+    assert_eq!(
+        (
+            row.input.as_str(),
+            row.alternative.as_str(),
+            row.second_alternative.as_str()
+        ),
+        ("Mouse Left", "J", "K")
+    );
+    assert!(row.has_second_alternative && !key_row(&state, "cross").has_second_alternative);
+    assert_eq!(state.controls.key_alt2["square"], "K");
+    // A key of another box of the same button swaps with it.
+    capture_second_alternative(&mut state, "square");
+    press_key(&mut state, char_key("j"), Location::Standard);
+    assert_eq!(state.controls.key_alt["square"], "K");
+    assert_eq!(state.controls.key_alt2["square"], "J");
+    // Its × drops it and leaves the other box alone; the row arrow and the reset drop both.
+    controls_update(
+        &mut state,
+        ControlsMessage::Clear("square".into(), Slot::SecondAlternative),
+    );
+    assert!(state.controls.key_alt2.is_empty());
+    assert_eq!(state.controls.key_alt["square"], "K");
+    capture_second_alternative(&mut state, "square");
+    press_key(&mut state, char_key("m"), Location::Standard);
+    controls_update(&mut state, ControlsMessage::ResetKey("square".into()));
+    assert!(state.controls.key_alt.is_empty() && state.controls.key_alt2.is_empty());
+    capture_second_alternative(&mut state, "cross");
+    press_key(&mut state, char_key("m"), Location::Standard);
+    controls_update(&mut state, ControlsMessage::ResetTable(Kind::Key));
+    assert!(state.controls.key_alt2.is_empty());
 }
 
 #[test]
@@ -1659,6 +1717,46 @@ fn alternatives_are_saved_only_when_there_are_any() {
     let wrong = serde_json::json!({"controls_layout": 4, "controls": {"key_alt": ["J"]}});
     std::fs::write(dir.path().join("settings.json"), wrong.to_string()).unwrap();
     assert!(controls_state(dir.path()).controls.key_alt.is_empty());
+}
+
+#[test]
+fn second_alternatives_are_saved_only_when_there_are_any_and_come_back() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("settings.json"),
+        r#"{"controls_layout": 4, "controls": {"key": {"cross": "H"}, "key_alt": {"cross": "K"}}}"#,
+    )
+    .unwrap();
+    // Settings with one alternative load without a second and save the same controls.
+    let mut state = controls_state(dir.path());
+    assert!(state.controls.key_alt2.is_empty());
+    let saved = spartanport_launcher::ui::persist::gather(&state).app["controls"].clone();
+    assert_eq!(
+        saved,
+        serde_json::json!({"key": {"cross": "H"}, "pad": {}, "key_alt": {"cross": "K"}})
+    );
+    capture_second_alternative(&mut state, "cross");
+    controls_update(
+        &mut state,
+        ControlsMessage::Captured("cross".into(), Slot::SecondAlternative, "Keypad 2".into()),
+    );
+    let saved = spartanport_launcher::ui::persist::gather(&state).app["controls"].clone();
+    assert_eq!(
+        saved,
+        serde_json::json!({
+            "key": {"cross": "H"},
+            "pad": {},
+            "key_alt": {"cross": "K"},
+            "key_alt2": {"cross": "Keypad 2"}
+        })
+    );
+    let file = serde_json::json!({"controls_layout": 4, "controls": saved});
+    std::fs::write(dir.path().join("settings.json"), file.to_string()).unwrap();
+    let reopened = controls_state(dir.path());
+    assert_eq!(reopened.controls.key_alt2, state.controls.key_alt2);
+    let wrong = serde_json::json!({"controls_layout": 4, "controls": {"key_alt2": ["J"]}});
+    std::fs::write(dir.path().join("settings.json"), wrong.to_string()).unwrap();
+    assert!(controls_state(dir.path()).controls.key_alt2.is_empty());
 }
 
 #[test]

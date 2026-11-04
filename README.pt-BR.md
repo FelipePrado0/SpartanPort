@@ -309,15 +309,16 @@ pressionado (R), o mouse mira com o analógico direito, para a Cabeça de Hélio
 teclas: E e Q para Quadrado e Triângulo, 1 e 3 para L1 e R1, F para R2, C para R3, I, K, J, L para o
 direcional, Enter para Options, Tab e Backspace para o touchpad.
 
-**Teclas alternativas.** Todo botão pode ter uma segunda tecla ou entrada do mouse, na segunda caixa
-da linha dele na tela Controls (o botão x ao lado a limpa). As duas apertam o botão, então você pode
-manter o Quadrado no clique esquerdo para o combate e também apertá-lo com o J nos minigames. Na lira
+**Teclas alternativas.** Todo botão pode ter uma segunda e uma terceira tecla ou entrada do mouse, na
+segunda e na terceira caixa da linha dele na tela Controls (o botão x ao lado de uma caixa a limpa).
+Todas apertam o botão, então você pode manter o Quadrado no clique esquerdo para o combate e também
+apertá-lo com o J, ou com o Keypad 4, nos minigames. Na lira
 das Musas, por exemplo, mantenha Espaço, Ctrl esquerdo e os dois botões do mouse e acrescente K, L, J
 e I, dispostas como os quatro botões (I em cima, J à esquerda, L à direita, K embaixo). Uma tecla que
 já é de outro botão troca com ele, como nas teclas principais. Os ícones de teclado no jogo mostram a
 tecla principal; *Teclas nos ícones* (tela Controls, com o estilo Teclado) pode mostrar a alternativa
-no lugar, ou a alternativa só na lira (os outros ícones continuam com a principal). Sem o launcher, junte os nomes com `|` no `SPARTAN_KEY_MAP`, por exemplo
-`cross=Space|K,square=Mouse Left|J`.
+no lugar, ou a alternativa só na lira (os outros ícones continuam com a principal). Os ícones desenham a segunda caixa, nunca a terceira. Sem o launcher, junte os nomes com `|` no `SPARTAN_KEY_MAP`, por exemplo
+`cross=Space|K|Keypad 2,square=Mouse Left|J`.
 
 Em um controle sem touchpad (Xbox e outros), View abre o menu de pausa (o clique direito do
 touchpad) e L1 + View abre o modo foto (o clique esquerdo). No DualSense o touchpad funciona

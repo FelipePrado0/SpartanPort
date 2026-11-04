@@ -123,11 +123,13 @@ pub fn gather(state: &State) -> Persisted {
         string_map(control_changes(&state.controls.pad, Kind::Pad)),
     );
     // Only when there is one, so settings without alternatives are saved as before.
-    if !state.controls.key_alt.is_empty() {
-        controls.insert(
-            "key_alt".to_string(),
-            string_map(state.controls.key_alt.clone()),
-        );
+    for (field, alternatives) in [
+        ("key_alt", &state.controls.key_alt),
+        ("key_alt2", &state.controls.key_alt2),
+    ] {
+        if !alternatives.is_empty() {
+            controls.insert(field.to_string(), string_map(alternatives.clone()));
+        }
     }
     app.insert("controls".to_string(), Value::Object(controls));
     // The Controls page's own choice; `settings.pad_style` may still hold an unknown saved value.
