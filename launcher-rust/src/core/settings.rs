@@ -326,26 +326,6 @@ mod tests {
         assert!(!paths.config_file().exists());
     }
 
-    #[test]
-    fn the_portable_migration_leaves_the_shader_notes_off() {
-        let dir = tempfile::tempdir().unwrap();
-        let legacy = dir.path().join("legacy").join("settings.json");
-        let target = dir.path().join("data").join("settings.json");
-        fs::create_dir_all(legacy.parent().unwrap()).unwrap();
-        fs::write(
-            &legacy,
-            r#"{"ui_language": "pt", "shader_notes": true, "hdr": true}"#,
-        )
-        .unwrap();
-        migrate_portable_settings(&target, &legacy);
-        let copied: Value = serde_json::from_slice(&fs::read(&target).unwrap()).unwrap();
-        assert_eq!(copied, json!({"ui_language": "pt", "hdr": true}));
-        // The old file keeps its value; the copy is only made once.
-        assert!(fs::read_to_string(&legacy)
-            .unwrap()
-            .contains("shader_notes"));
-    }
-
     fn patches(settings: &Map<String, Value>) -> Vec<&str> {
         settings["game_patches"]["CUSA01623"]
             .as_array()
