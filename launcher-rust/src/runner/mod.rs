@@ -927,7 +927,8 @@ pub const GAMEPAD_PROBE_LIMIT: Duration = Duration::from_secs(15);
 /// unless `SPARTAN_GLYPH_STYLE` is auto, xbox, nintendo or keyboard nothing is asked, drawn or
 /// mounted, and old copies are removed. The keyboard keys follow `SPARTAN_KEY_MAP` (the main key of a
 /// button, or its alternative with `SPARTAN_GLYPH_KEYS=alternative`, or on the Muses' lyre alone with
-/// `SPARTAN_GLYPH_KEYS=lyre`); auto shows them when no gamepad is connected. Whatever fails only reaches the Log: the game then keeps its own
+/// `SPARTAN_GLYPH_KEYS=lyre`), coloured as `SPARTAN_GLYPH_KEY_COLORS` (and its `SPARTAN_GLYPH_KEY_COLOR_MAP`) says for the four face
+/// buttons; auto shows them when no gamepad is connected. Whatever fails only reaches the Log: the game then keeps its own
 /// icons. `run_probe` runs a command (`[probe, --gamepad]`) within a time limit and returns its
 /// output or the error to print.
 pub fn glyph_mounts(
@@ -972,6 +973,11 @@ pub fn glyph_mounts(
     } else {
         String::new()
     };
+    let face_colors = match get("SPARTAN_GLYPH_KEY_COLORS") {
+        "playstation" => glyphs::face_colors("playstation"),
+        "custom" => glyphs::face_colors(get("SPARTAN_GLYPH_KEY_COLOR_MAP")),
+        _ => String::new(),
+    };
     let mounts = match glyphs::build(
         game,
         out,
@@ -980,6 +986,7 @@ pub fn glyph_mounts(
         get("SPARTAN_PAD_MAP"),
         &key_map,
         &lyre_key_map,
+        &face_colors,
         assets,
         log,
     ) {
@@ -1390,6 +1397,62 @@ mod tests {
         ];
         mounts_with(&run, &main, Ok(""));
         assert!(!stamp(&run).contains("lyre"), "{}", stamp(&run));
+    }
+
+    #[test]
+    fn the_colors_are_stamped_with_the_keys_the_lyre_shows() {
+        let run = glyph_run(true);
+        // Square and Cross blue, Triangle and Circle orange; first alternatives 5, 6, 9, 0 and
+        // second alternatives on the keypad; the lyre alone shows the first alternatives.
+        let map = "cross=Space|6|Keypad 2,circle=Left Ctrl|0|Keypad 6,square=Mouse Left|5|Keypad 4,triangle=Mouse Right|9|Keypad 8";
+        let env = |colors: &'static str| {
+            let style = match colors {
+                "playstation" | "gray" => colors,
+                _ => "custom",
+            };
+            [
+                ("SPARTAN_GLYPH_STYLE", "keyboard"),
+                ("SPARTAN_KEY_MAP", map),
+                ("SPARTAN_GLYPH_KEYS", "lyre"),
+                ("SPARTAN_GLYPH_KEY_COLORS", style),
+                ("SPARTAN_GLYPH_KEY_COLOR_MAP", colors),
+            ]
+        };
+        mounts_with(
+            &run,
+            &env("square=blue,cross=blue,triangle=orange,circle=orange"),
+            Ok(""),
+        );
+        let first = stamp(&run);
+        assert!(
+            first.starts_with(
+                "[13, \"keyboard\", null, \"\", \"cross=Space,circle=Left Ctrl,square=Mouse Left,triangle=Mouse Right\", [\"lyre\", \"cross=6,circle=0,square=5,triangle=9\"], [\"colors\", \"cross=428ee8,circle=f28c28,square=428ee8,triangle=f28c28\"], null, "
+            ),
+            "{first}"
+        );
+        // A colour of another name or a hex that comes to the same colour is the same stamp.
+        mounts_with(
+            &run,
+            &env("triangle=#f28c28,circle=orange,cross=428ee8,square=Blue"),
+            Ok(""),
+        );
+        assert_eq!(stamp(&run), first);
+        // Another colour redraws the copies; PlayStation colors are one more stamp.
+        mounts_with(
+            &run,
+            &env("square=pink,cross=blue,triangle=orange,circle=orange"),
+            Ok(""),
+        );
+        let pink = stamp(&run);
+        assert_ne!(pink, first);
+        assert!(pink.contains("square=d683d6"), "{pink}");
+        mounts_with(&run, &env("playstation"), Ok(""));
+        assert!(stamp(&run).contains("cross=6b9ae8"), "{}", stamp(&run));
+        // Gray, or nothing, leaves no trace: the stamp is the one of before the colours.
+        for colors in ["", "gray", "cross=gray"] {
+            mounts_with(&run, &env(colors), Ok(""));
+            assert!(!stamp(&run).contains("colors"), "{colors}: {}", stamp(&run));
+        }
     }
 
     #[test]

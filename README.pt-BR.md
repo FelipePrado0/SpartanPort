@@ -336,7 +336,10 @@ Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na te
 PlayStation dos tutoriais, da lista de golpes, dos eventos rápidos e da lira das Musas
 na Câmara da Chama; o desenho do controle no menu de pausa continua sendo um DualShock 4. *Teclado* mostra a tecla que aperta cada botão, também na lira, seguindo o seu
 mapeamento do teclado (uma tecla trocada aparece no próximo início); *Igual ao meu controle* também mostra
-as teclas quando nenhum controle está conectado. O launcher grava uma cópia com patch de até três arquivos do
+as teclas quando nenhum controle está conectado.
+*Cores das teclas* (no mesmo lugar) pinta as teclas do X, Círculo, Quadrado e Triângulo, na lira e nos
+outros ícones de teclado: *Cores do PlayStation*, ou *Personalizadas* com uma cor de uma paleta curta
+para cada botão; os outros ícones e o *Cinza* padrão não mudam. O launcher grava uma cópia com patch de até três arquivos do
 jogo (cerca de 410 MB) na pasta de dados do port e nunca altera a pasta do jogo. Um controle novo é reconhecido após
 reiniciar. Sem o launcher, defina `SPARTAN_GLYPH_STYLE` como `auto`, `xbox`, `nintendo` ou `keyboard` antes de
 iniciar o `run.sh`.

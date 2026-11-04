@@ -465,6 +465,7 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
             "",
             "",
             "",
+            "",
             &assets,
             &mut |line| println!("{line}"),
         )

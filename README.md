@@ -376,6 +376,9 @@ tutorial, move-list and quick-time prompts and on the Muses' lyre in the
 Chamber of the Flame; the pause-menu controller drawing stays a DualShock 4.
 *Keyboard* shows the key that presses each button, on the lyre too, following your keyboard mapping (a changed key shows
 on the next start); *Match my controller* shows the keys too when no gamepad is connected.
+*Key colors* (same place) paints the key labels of Cross, Circle, Square and Triangle, on the lyre
+and on the other keyboard icons: *PlayStation colors*, or *Custom* with one color of a short palette
+for each button; the other icons and the default *Gray* are unchanged.
 The launcher writes a patched copy of up to three game files (about 410 MB) into the port's data folder and never changes
 your game folder. A new controller is picked up after a restart. Without the launcher, set
 `SPARTAN_GLYPH_STYLE` to `auto`, `xbox`, `nintendo` or `keyboard` before starting `run.sh`.

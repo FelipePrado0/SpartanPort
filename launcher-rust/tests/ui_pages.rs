@@ -1790,6 +1790,60 @@ fn the_icon_keys_choice_shows_with_the_styles_that_draw_the_keyboard() {
 }
 
 #[test]
+fn the_key_colors_choice_shows_with_the_keyboard_and_the_custom_boxes_with_custom() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = controls_state(dir.path());
+    assert_eq!(state.store.text("glyph_key_colors"), "gray");
+    for (style, shown) in [
+        ("off", false),
+        ("xbox", false),
+        ("nintendo", false),
+        ("auto", true),
+        ("keyboard", true),
+    ] {
+        let _ = app::update(
+            &mut state,
+            Message::Set("glyph_style".into(), serde_json::json!(style)),
+        );
+        assert_eq!(tall_has(&state, "Key colors"), shown, "{style}");
+    }
+    // The four boxes appear with Custom only.
+    assert!(!tall_has(&state, "Face button colors"));
+    let _ = app::update(
+        &mut state,
+        Message::Set("glyph_key_colors".into(), serde_json::json!("playstation")),
+    );
+    assert!(!tall_has(&state, "Face button colors"));
+    let _ = app::update(
+        &mut state,
+        Message::Set("glyph_key_colors".into(), serde_json::json!("custom")),
+    );
+    assert!(tall_has(&state, "Face button colors"));
+    let _ = app::update(
+        &mut state,
+        Message::Set("glyph_color_cross".into(), serde_json::json!("blue")),
+    );
+    assert_eq!(state.store.text("glyph_color_cross"), "blue");
+}
+
+#[test]
+fn the_key_colors_choice_offers_gray_playstation_and_custom() {
+    let styles: Vec<&str> = spartanport_launcher::core::options::KEY_COLOR_STYLES
+        .iter()
+        .map(|choice| choice.value)
+        .collect();
+    assert_eq!(styles, ["gray", "playstation", "custom"]);
+    let palette: Vec<&str> = spartanport_launcher::core::options::KEY_COLORS
+        .iter()
+        .map(|choice| choice.value)
+        .collect();
+    assert_eq!(
+        palette,
+        ["gray", "white", "blue", "orange", "green", "red", "pink", "yellow", "purple"]
+    );
+}
+
+#[test]
 fn the_icon_keys_choice_offers_the_main_key_the_alternative_and_the_lyre_alone() {
     let values: Vec<&str> = spartanport_launcher::core::options::GLYPH_KEYS
         .iter()

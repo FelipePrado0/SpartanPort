@@ -733,6 +733,28 @@ fn save_failed_shown(state: &State) -> bool {
 }
 
 #[test]
+fn the_key_colors_are_saved_and_come_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    for (name, key, value) in [
+        ("style", "glyph_key_colors", "custom"),
+        ("cross", "glyph_color_cross", "blue"),
+        ("circle", "glyph_color_circle", "orange"),
+    ] {
+        change_and_save(&mut state, name, Message::Set(key.into(), json!(value)));
+    }
+    let reopened = state_in(dir.path());
+    assert_eq!(reopened.store.text("glyph_key_colors"), "custom");
+    assert_eq!(reopened.store.text("glyph_color_cross"), "blue");
+    assert_eq!(reopened.store.text("glyph_color_circle"), "orange");
+    // A button left alone stays gray, and a file from before the colours loads as gray.
+    assert_eq!(reopened.store.text("glyph_color_square"), "gray");
+    assert!(!dirty(&reopened));
+    let old = tempfile::tempdir().unwrap();
+    assert_eq!(state_in(old.path()).store.text("glyph_key_colors"), "gray");
+}
+
+#[test]
 fn the_lyre_only_icon_keys_choice_is_saved_and_comes_back() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state_in(dir.path());

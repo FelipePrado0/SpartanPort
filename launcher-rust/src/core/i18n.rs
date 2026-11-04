@@ -170,6 +170,126 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
         ],
     ),
     (
+        "Key colors",
+        &[
+            ("zh", "按键颜色"),
+            ("pt", "Cores das teclas"),
+            ("es", "Colores de las teclas"),
+        ],
+    ),
+    (
+        "Gray (default)",
+        &[
+            ("zh", "灰色（默认）"),
+            ("pt", "Cinza (padrão)"),
+            ("es", "Gris (por defecto)"),
+        ],
+    ),
+    (
+        "PlayStation colors",
+        &[
+            ("zh", "PlayStation 配色"),
+            ("pt", "Cores do PlayStation"),
+            ("es", "Colores de PlayStation"),
+        ],
+    ),
+    (
+        "Custom",
+        &[
+            ("zh", "自定义"),
+            ("pt", "Personalizadas"),
+            ("es", "Personalizados"),
+        ],
+    ),
+    (
+        "Face button colors",
+        &[
+            ("zh", "面键颜色"),
+            ("pt", "Cores dos botões"),
+            ("es", "Colores de los botones"),
+        ],
+    ),
+    (
+        "Gray",
+        &[
+            ("zh", "灰色"),
+            ("pt", "Cinza"),
+            ("es", "Gris"),
+        ],
+    ),
+    (
+        "White",
+        &[
+            ("zh", "白色"),
+            ("pt", "Branco"),
+            ("es", "Blanco"),
+        ],
+    ),
+    (
+        "Blue",
+        &[
+            ("zh", "蓝色"),
+            ("pt", "Azul"),
+            ("es", "Azul"),
+        ],
+    ),
+    (
+        "Orange",
+        &[
+            ("zh", "橙色"),
+            ("pt", "Laranja"),
+            ("es", "Naranja"),
+        ],
+    ),
+    (
+        "Green",
+        &[
+            ("zh", "绿色"),
+            ("pt", "Verde"),
+            ("es", "Verde"),
+        ],
+    ),
+    (
+        "Red",
+        &[
+            ("zh", "红色"),
+            ("pt", "Vermelho"),
+            ("es", "Rojo"),
+        ],
+    ),
+    (
+        "Pink",
+        &[
+            ("zh", "粉色"),
+            ("pt", "Rosa"),
+            ("es", "Rosa"),
+        ],
+    ),
+    (
+        "Yellow",
+        &[
+            ("zh", "黄色"),
+            ("pt", "Amarelo"),
+            ("es", "Amarillo"),
+        ],
+    ),
+    (
+        "Purple",
+        &[
+            ("zh", "紫色"),
+            ("pt", "Roxo"),
+            ("es", "Morado"),
+        ],
+    ),
+    (
+        "Colour of the key labels of Cross, Circle, Square and Triangle on the keyboard icons, the Muses' lyre included; every other icon keeps its colour. PlayStation colors are the symbols' own colours; Custom picks one for each button. Applied when the game starts.",
+        &[
+            ("zh", "键盘图标上叉号、圆圈、方块和三角按键标签的颜色，缪斯竖琴上的也一样；其他图标保持原色。“PlayStation 配色”使用各符号自身的颜色；“自定义”可为每个按键单独选色。下次启动游戏生效。"),
+            ("pt", "Cor das teclas de X, Círculo, Quadrado e Triângulo nos ícones de teclado, inclusive na lira das Musas; os outros ícones ficam como estão. \"Cores do PlayStation\" usa as cores dos próprios símbolos; \"Personalizadas\" escolhe uma cor para cada botão. Aplicado ao iniciar o jogo."),
+            ("es", "Color de las teclas de X, Círculo, Cuadrado y Triángulo en los iconos de teclado, incluida la lira de las Musas; los demás iconos conservan su color. \"Colores de PlayStation\" usa los colores de los propios símbolos; \"Personalizados\" elige un color para cada botón. Se aplica al iniciar el juego."),
+        ],
+    ),
+    (
         "Graphics card not checked: the game picks one.",
         &[
             ("zh", "尚未检测显卡：由游戏自动选择。"),("pt", "Placa de vídeo não verificada: o jogo escolhe uma.")],

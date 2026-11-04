@@ -3,9 +3,9 @@
 
 use crate::core::options::{
     Choice, AIM_STYLES, ANISOTROPY, AUDIO_CHANNELS, DISPLAY_MODES, DRAW_PIPE, ENGINE_FPS_CHOICES,
-    FPS_LIMITS, FRAMES_QUEUED, FRAME_GENERATION, GLYPH_KEYS, GLYPH_STYLES, LANGUAGES,
-    LIVE_RESOLUTION, MENU_CONFIRM_STYLES, NO_MSAA, OUTPUTS, PRESETS, READBACKS, STICK_PROMPTS,
-    STREAM_MEMORY, UI_LANGUAGES, UI_SCALES, UPSCALERS, VIDEO_BACKENDS,
+    FPS_LIMITS, FRAMES_QUEUED, FRAME_GENERATION, GLYPH_KEYS, GLYPH_STYLES, KEY_COLORS,
+    KEY_COLOR_STYLES, LANGUAGES, LIVE_RESOLUTION, MENU_CONFIRM_STYLES, NO_MSAA, OUTPUTS, PRESETS,
+    READBACKS, STICK_PROMPTS, STREAM_MEMORY, UI_LANGUAGES, UI_SCALES, UPSCALERS, VIDEO_BACKENDS,
 };
 
 /// The file a setting lives in.
@@ -322,6 +322,16 @@ pub static SETTINGS: &[Setting] = &[
         env: env("SPARTAN_GLYPH_KEYS", "main"),
         ..app_unwritten("glyph_keys", Pick(GLYPH_KEYS), Text("main"))
     },
+    // Rust only, like `glyph_keys`: the colour of the key labels of the four face buttons. The
+    // four picks of a custom colouring are not variables; `game_environment` joins them.
+    Setting {
+        env: env("SPARTAN_GLYPH_KEY_COLORS", "gray"),
+        ..app_unwritten("glyph_key_colors", Pick(KEY_COLOR_STYLES), Text("gray"))
+    },
+    app_unwritten("glyph_color_cross", Pick(KEY_COLORS), Text("gray")),
+    app_unwritten("glyph_color_circle", Pick(KEY_COLORS), Text("gray")),
+    app_unwritten("glyph_color_square", Pick(KEY_COLORS), Text("gray")),
+    app_unwritten("glyph_color_triangle", Pick(KEY_COLORS), Text("gray")),
     app_unwritten("controls_device", Kind::Text, Text("")),
     ini(
         "display_mode",
@@ -556,7 +566,16 @@ mod tests {
 
     #[test]
     fn the_unwritten_rows_stay_out_of_a_new_settings_file() {
-        for key in ["launcher_effects", "controls_device", "glyph_keys"] {
+        for key in [
+            "launcher_effects",
+            "controls_device",
+            "glyph_keys",
+            "glyph_key_colors",
+            "glyph_color_cross",
+            "glyph_color_circle",
+            "glyph_color_square",
+            "glyph_color_triangle",
+        ] {
             let row = setting(key).unwrap();
             assert!(!row.written, "{key}");
             assert!(!app_defaults(&|_| None).contains_key(key), "{key}");

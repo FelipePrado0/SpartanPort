@@ -25,7 +25,8 @@ use crate::core::gpu::connected_gamepad;
 use crate::core::i18n::{tr, tr_fmt};
 use crate::core::ini::INI_DEFAULTS;
 use crate::core::options::{
-    AIM_STYLES, GLYPH_KEYS, GLYPH_STYLES, MENU_CONFIRM_STYLES, STICK_PROMPTS,
+    AIM_STYLES, GLYPH_KEYS, GLYPH_STYLES, KEY_COLORS, KEY_COLOR_STYLES, MENU_CONFIRM_STYLES,
+    STICK_PROMPTS,
 };
 use crate::core::platform::tool::SystemTools;
 use crate::core::settings::Settings;
@@ -35,7 +36,8 @@ use crate::ui::tasks::blocking;
 use crate::ui::theme::{self, mirror_x, palette};
 use crate::ui::widgets::button_icon::game_button;
 use crate::ui::widgets::{
-    button_icon, checkbox, min_width, row, section, select, slider, SELECT_MIN, SELECT_TEXT,
+    button_icon, checkbox, min_width, row, section, select, select_pairs_small, slider, SELECT_MIN,
+    SELECT_TEXT,
 };
 
 /// A waiting key box gives up after this long.
@@ -109,6 +111,7 @@ const BOX_WIDTH: f32 = 152.0;
 const ALTERNATIVE_EMPTY: &str = "(alternative)";
 const SECOND_ALTERNATIVE_EMPTY: &str = "(2nd alternative)";
 const ALTERNATIVE_NOTE: &str = "The second and third boxes of a row are alternative inputs for the same button: keep Square on the left mouse button for combat and add J and Keypad 4 for the minigames, for example. \"Clear input\" empties the main box, the × button next to a box empties that alternative, and the arrow puts the row back on its default with no alternatives.";
+const KEY_COLORS_HINT: &str = "Colour of the key labels of Cross, Circle, Square and Triangle on the keyboard icons, the Muses' lyre included; every other icon keeps its colour. PlayStation colors are the symbols' own colours; Custom picks one for each button. Applied when the game starts.";
 const GLYPH_KEYS_HINT: &str = "Which input the keyboard icons in the game show for a button that has an alternative: its main key, its alternative key on every icon, or its alternative key only on the Muses' lyre while the other icons keep the main key. A button without an alternative always shows its main input. Applied when the game starts.";
 
 /// The device whose table the page shows; both keep working in the game.
@@ -1066,6 +1069,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
             Some(&tr(lang, GLYPH_HINT)),
         ),
         glyph_keys_row(state, lang),
+        glyph_key_colors_rows(state, lang),
         // For both devices, under the icons as in the Python's page.
         checkbox(
             state.rtl,
@@ -1081,13 +1085,59 @@ pub fn view(state: &State) -> Element<'_, Message> {
     .into()
 }
 
+/// Whether the in-game icons can draw the keyboard: the keyboard style, and "match my controller"
+/// while no gamepad is connected.
+fn draws_the_keyboard(state: &State) -> bool {
+    matches!(
+        state.store.text("glyph_style").as_str(),
+        "keyboard" | "auto"
+    )
+}
+
+/// How the key labels of the face buttons are coloured, with a box for each button when the
+/// colours are custom.
+fn glyph_key_colors_rows<'a>(state: &State, lang: &str) -> Element<'a, Message> {
+    if !draws_the_keyboard(state) {
+        return space().height(0).into();
+    }
+    let style = state.store.text("glyph_key_colors");
+    let mut rows = column![row(
+        state.rtl,
+        &tr(lang, "Key colors"),
+        select("glyph_key_colors", KEY_COLOR_STYLES, &style, lang),
+        Some(&tr(lang, KEY_COLORS_HINT)),
+    )]
+    .spacing(2);
+    if style == "custom" {
+        let palette: Vec<(String, String)> = KEY_COLORS
+            .iter()
+            .map(|choice| (choice.value.to_string(), tr(lang, choice.en)))
+            .collect();
+        let boxes = ["cross", "circle", "square", "triangle"].map(|button| {
+            let key = format!("glyph_color_{button}");
+            column![
+                text(tr(lang, button_name(button)))
+                    .size(12)
+                    .style(theme::text_muted),
+                select_pairs_small(&key, &palette, &state.store.text(&key)),
+            ]
+            .spacing(2)
+            .into()
+        });
+        rows = rows.push(row(
+            state.rtl,
+            &tr(lang, "Face button colors"),
+            layout(boxes).spacing(10).into(),
+            None,
+        ));
+    }
+    rows.into()
+}
+
 /// Which input the keyboard icons show, for the styles that can draw the keyboard (the keyboard
 /// style, and "match my controller" while no gamepad is connected).
 fn glyph_keys_row<'a>(state: &State, lang: &str) -> Element<'a, Message> {
-    if !matches!(
-        state.store.text("glyph_style").as_str(),
-        "keyboard" | "auto"
-    ) {
+    if !draws_the_keyboard(state) {
         return space().height(0).into();
     }
     row(

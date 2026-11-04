@@ -132,6 +132,22 @@ fn choices(key: &str) -> &'static [Choice] {
     }
 }
 
+/// The custom colours of the four face buttons as `cross=blue,circle=orange`: only the buttons that
+/// are not gray, which is what an unpicked one is; a name outside the palette counts as gray.
+fn custom_key_colors(settings: &Settings) -> String {
+    ["cross", "circle", "square", "triangle"]
+        .iter()
+        .filter_map(|button| {
+            let color = settings.get_str(&format!("glyph_color_{button}"));
+            let named = crate::core::options::KEY_COLORS
+                .iter()
+                .any(|choice| choice.value == color);
+            (named && color != "gray").then(|| format!("{button}={color}"))
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 /// `1` or `0` for the flag `key`, always written.
 fn put_switch(env: &mut IndexMap<String, String>, settings: &Settings, key: &str) {
     env.insert(var(key).into(), one_or_zero(settings.flag(key)));
@@ -307,6 +323,15 @@ pub fn environment(
     put_choice(&mut env, "stick_prompts");
     put_choice(&mut env, "glyph_style");
     put_choice(&mut env, "glyph_keys");
+    put_choice(&mut env, "glyph_key_colors");
+    // The four picks of a custom colouring travel together, only with that choice.
+    env.shift_remove("SPARTAN_GLYPH_KEY_COLOR_MAP");
+    if env.get("SPARTAN_GLYPH_KEY_COLORS").map(String::as_str) == Some("custom") {
+        let custom = custom_key_colors(settings);
+        if !custom.is_empty() {
+            env.insert("SPARTAN_GLYPH_KEY_COLOR_MAP".into(), custom);
+        }
+    }
     env.shift_remove("SPARTAN_MENU_CONFIRM_SWAP");
     env.shift_remove("SPARTAN_MENU_CONFIRM");
     if let Some(val) = settings.get("menu_confirm_swap") {
@@ -621,6 +646,59 @@ mod tests {
         let (unknown, paths, _dir) = setup(json!({"glyph_keys": "both"}));
         let env = game_environment(&unknown, &paths, "en", &IndexMap::new(), true);
         assert!(!env.contains_key("SPARTAN_GLYPH_KEYS"));
+    }
+
+    #[test]
+    fn the_key_colors_are_sent_only_when_they_change_a_label() {
+        // The style, and with Custom the picks of the four buttons.
+        let colors = |edits: Value| {
+            let (settings, paths, _dir) = setup(edits);
+            let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+            (
+                env.get("SPARTAN_GLYPH_KEY_COLORS").cloned(),
+                env.get("SPARTAN_GLYPH_KEY_COLOR_MAP").cloned(),
+            )
+        };
+        let style = |name: &str| (Some(name.to_string()), None);
+        assert_eq!(colors(json!({})), (None, None));
+        assert_eq!(colors(json!({"glyph_key_colors": "gray"})), (None, None));
+        assert_eq!(
+            colors(json!({"glyph_key_colors": "playstation"})),
+            style("playstation")
+        );
+        // Custom joins the four picks, in the order of the buttons, leaving out the gray ones.
+        let custom = json!({
+            "glyph_key_colors": "custom",
+            "glyph_color_square": "blue", "glyph_color_cross": "blue",
+            "glyph_color_triangle": "orange", "glyph_color_circle": "orange"
+        });
+        assert_eq!(
+            colors(custom),
+            (
+                Some("custom".to_string()),
+                Some("cross=blue,circle=orange,square=blue,triangle=orange".to_string())
+            )
+        );
+        assert_eq!(
+            colors(json!({"glyph_key_colors": "custom", "glyph_color_circle": "red"})),
+            (Some("custom".to_string()), Some("circle=red".to_string()))
+        );
+        // Custom with nothing picked, or a name outside the palette, has no picks to send; picks
+        // while the style is not custom, and an unknown style, send nothing.
+        assert_eq!(
+            colors(json!({"glyph_key_colors": "custom"})),
+            style("custom")
+        );
+        assert_eq!(
+            colors(json!({"glyph_key_colors": "custom", "glyph_color_cross": "chartreuse"})),
+            style("custom")
+        );
+        assert_eq!(colors(json!({"glyph_color_cross": "blue"})), (None, None));
+        assert_eq!(colors(json!({"glyph_key_colors": "rainbow"})), (None, None));
+        assert_eq!(
+            colors(json!({"glyph_key_colors": "playstation", "glyph_color_cross": "blue"})),
+            style("playstation")
+        );
     }
 
     #[test]
