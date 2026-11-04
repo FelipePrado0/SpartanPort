@@ -311,6 +311,15 @@ pub fn view(state: &State) -> Element<'_, Message> {
                 "The highest frame rate the game itself runs at (a game patch)."
             )),
         ),
+        checkbox(
+            state.rtl,
+            "auto_safe_fps",
+            &tr(lang, "High Frame Rate Physics Fix"),
+            state.store.flag("auto_safe_fps"),
+            Some(&hint(
+                "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate."
+            )),
+        ),
         row(
             state.rtl,
             &tr(lang, "Aspect ratio"),

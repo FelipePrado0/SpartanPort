@@ -31,6 +31,8 @@ inline constexpr unsigned DefaultItems = Fps | FrameTime | Upscaler;
 
 struct Sample {
     float fps = 0.0f, frame_ms = 0.0f;
+    /// Frame generation on: the game's own frames per second (`fps` counts the shown ones).
+    float game_fps = 0.0f;
     std::string upscaler;
     std::string gpu_name;
     float gpu_percent = -1.0f, cpu_percent = -1.0f;
@@ -65,7 +67,11 @@ inline std::string Format(const Sample& s, unsigned mask, bool row) {
         }
     };
     if (mask & Fps) {
-        std::snprintf(part, sizeof(part), "%.0f FPS", s.fps);
+        if (s.game_fps > 0.0f) {
+            std::snprintf(part, sizeof(part), "FG %.0f FPS (%.0fFPS Game)", s.fps, s.game_fps);
+        } else {
+            std::snprintf(part, sizeof(part), "%.0f FPS", s.fps);
+        }
         add();
     }
     if (mask & FrameTime) {

@@ -31,18 +31,47 @@ static const SpartanSignature spartanport_qte_rotation_site = {
     "49 8b 58 10 0f b7 d3", 0};
 
 /* Shared by the stubs (game thread) and the pad (runtime_pad.c). block: the game's state block,
- * 0 while the hooks are not installed. */
+ * 0 while the hooks are not installed. kinds: frames seen by each Automatic QTE stub below, counted
+ * whether Automatic QTE is on or not (a prompt that never runs the update above still counts). */
+enum { SPARTAN_QTE_COUNT_TIMED, SPARTAN_QTE_COUNT_REPEAT, SPARTAN_QTE_COUNT_CHARGED, SPARTAN_QTE_COUNT_CIRCLE,
+       SPARTAN_QTE_COUNTS };
+/* The pad's prompt kinds (bits in the engine frame rate log): the update's count, then the stubs'. */
+enum { SPARTAN_QTE_KIND_UPDATE, SPARTAN_QTE_KIND_TIMED, SPARTAN_QTE_KIND_REPEAT, SPARTAN_QTE_KIND_CHARGED,
+       SPARTAN_QTE_KIND_CIRCLE, SPARTAN_QTE_KINDS };
 typedef struct {
     uint32_t heartbeat;  /* update calls */
     uint8_t pass;        /* set by the pad; the rotation stub answers 1 once and clears it */
     uint8_t pad[3];
     uint64_t block;
+    uint32_t kinds[SPARTAN_QTE_COUNTS];
 } SpartanQteState;
 #ifdef __cplusplus
 static_assert(offsetof(SpartanQteState, pass) == 4, "stubs address the fields directly");
+static_assert(offsetof(SpartanQteState, kinds) == 16, "the fields the stubs address stay put");
 #else
 _Static_assert(offsetof(SpartanQteState, pass) == 4, "stubs address the fields directly");
+_Static_assert(offsetof(SpartanQteState, kinds) == 16, "the fields the stubs address stay put");
 #endif
+
+/* Every Automatic QTE stub starts by counting its frame, leaving the game's registers, flags and
+ * red zone as they were: lea rsp,[rsp-0x80]; pushfq; push rax; movabs rax, count;
+ * lock inc dword [rax]; pop rax; popfq; lea rsp,[rsp+0x80] (lea leaves the flags alone). */
+enum { SPARTAN_QTE_COUNT_LENGTH = 30 };
+static inline unsigned spartanport_qte_count(unsigned char *out, uintptr_t count) {
+    static const unsigned char prefix[SPARTAN_QTE_COUNT_LENGTH] = {
+        0x48,0x8d,0x64,0x24,0x80,                 /* lea rsp, [rsp-0x80]: over the red zone */
+        0x9c,                                     /* pushfq */
+        0x50,                                     /* push rax */
+        0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, count */
+        0xf0,0xff,0x00,                           /* lock inc dword [rax] */
+        0x58,                                     /* pop rax */
+        0x9d,                                     /* popfq */
+        0x48,0x8d,0xa4,0x24,0x80,0x00,0x00,0x00,  /* lea rsp, [rsp+0x80] */
+    };
+    memcpy(out, prefix, sizeof(prefix));
+    memcpy(out + 9, &count, 8);
+    return sizeof(prefix);
+}
 
 /* The state block's image offset, read from the rotation check at its signature site. */
 static inline uint64_t spartanport_qte_block(const unsigned char *code, uint64_t site) {
@@ -110,7 +139,8 @@ static inline unsigned spartanport_qte_jump(unsigned char *out, unsigned n, uint
 enum { SPARTAN_QTE_TIMED_LENGTH = 15, SPARTAN_QTE_CHARGED_LENGTH = 7 };
 static const SpartanSignature spartanport_qte_timed_site = {
     "66 83 7b 10 03 77 ?? 8b 87 98 00 00 00 c4 e2 78 f2 8f 94 00 00 00 8b 53 10 8d 72 04", 7};
-static inline unsigned spartanport_qte_build_timed_stub(unsigned char *out, uintptr_t automatic, uintptr_t resume) {
+static inline unsigned spartanport_qte_build_timed_stub(unsigned char *out, uintptr_t count, uintptr_t automatic,
+                                                 uintptr_t resume) {
     static const unsigned char body[] = {
         0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, auto */
         0x80,0x38,0x00,                           /* cmp byte [rax], 0 */
@@ -126,9 +156,10 @@ static inline unsigned spartanport_qte_build_timed_stub(unsigned char *out, uint
         0xd3,0xe0,                                /* shl eax, cl */
         0x89,0xc1,                                /* mov ecx, eax: the prompt's button, alone */
     };
-    memcpy(out, body, sizeof(body));
-    memcpy(out + 2, &automatic, 8);
-    return spartanport_qte_jump(out, sizeof(body), resume);
+    const unsigned n0 = spartanport_qte_count(out, count);
+    memcpy(out + n0, body, sizeof(body));
+    memcpy(out + n0 + 2, &automatic, 8);
+    return spartanport_qte_jump(out, n0 + sizeof(body), resume);
 }
 
 /* Repeat press (mash): the update asks 0x72eb0(pad, button, &pressure) whether the prompt's button
@@ -139,7 +170,8 @@ static inline unsigned spartanport_qte_build_timed_stub(unsigned char *out, uint
  * (rbx: the state.) Site: the call, which becomes a call to the stub. */
 static const SpartanSignature spartanport_qte_repeat_site = {
     "41 0f b6 77 2c 48 8d 55 cc 48 8b 7d b8 e8 ?? ?? ?? ?? 41 89 c4 45 85 e4", 13};
-static inline unsigned spartanport_qte_build_repeat_stub(unsigned char *out, uintptr_t automatic, uintptr_t original) {
+static inline unsigned spartanport_qte_build_repeat_stub(unsigned char *out, uintptr_t count, uintptr_t automatic,
+                                                  uintptr_t original) {
     static const unsigned char body[] = {
         0x48,0xb8, 0,0,0,0,0,0,0,0,               /* movabs rax, auto */
         0x80,0x38,0x00,                           /* cmp byte [rax], 0 */
@@ -149,9 +181,10 @@ static inline unsigned spartanport_qte_build_repeat_stub(unsigned char *out, uin
         0xb8,0x01,0x00,0x00,0x00,                 /* mov eax, 1 */
         0xc3,                                     /* ret: pressed */
     };
-    memcpy(out, body, sizeof(body));
-    memcpy(out + 2, &automatic, 8);
-    return spartanport_qte_jump(out, sizeof(body), original);  /* original: the game's own answer */
+    const unsigned n0 = spartanport_qte_count(out, count);
+    memcpy(out + n0, body, sizeof(body));
+    memcpy(out + n0 + 2, &automatic, 8);
+    return spartanport_qte_jump(out, n0 + sizeof(body), original);  /* original: the game's own answer */
 }
 /* The call's target, from its rel32. */
 static inline uint64_t spartanport_qte_call_target(const unsigned char *code, uint64_t site) {
@@ -164,7 +197,8 @@ static inline uint64_t spartanport_qte_call_target(const unsigned char *code, ui
  * while bit button+2 is set. With the byte set every button is held. */
 static const SpartanSignature spartanport_qte_charged_site = {
     "83 c0 02 45 8b 8e 94 00 00 00 44 20 c2 31 f6 41 0f a3 c1", 3};
-static inline unsigned spartanport_qte_build_charged_stub(unsigned char *out, uintptr_t automatic, uintptr_t resume) {
+static inline unsigned spartanport_qte_build_charged_stub(unsigned char *out, uintptr_t count, uintptr_t automatic,
+                                                   uintptr_t resume) {
     static const unsigned char body[] = {
         0x49,0xb9, 0,0,0,0,0,0,0,0,               /* movabs r9, auto */
         0x41,0x80,0x39,0x00,                      /* cmp byte [r9], 0 */
@@ -172,9 +206,10 @@ static inline unsigned spartanport_qte_build_charged_stub(unsigned char *out, ui
         0x74,0x06,                                /* je back */
         0x41,0xb9,0xff,0xff,0xff,0xff,            /* mov r9d, -1: held */
     };
-    memcpy(out, body, sizeof(body));
-    memcpy(out + 2, &automatic, 8);
-    return spartanport_qte_jump(out, sizeof(body), resume);
+    const unsigned n0 = spartanport_qte_count(out, count);
+    memcpy(out + n0, body, sizeof(body));
+    memcpy(out + n0 + 2, &automatic, 8);
+    return spartanport_qte_jump(out, n0 + sizeof(body), resume);
 }
 
 /* Circle struggle (SCR_ExplosiveRain): its own bar, drained every frame and raised by each new
@@ -183,8 +218,8 @@ static inline unsigned spartanport_qte_build_charged_stub(unsigned char *out, ui
 enum { SPARTAN_QTE_CIRCLE_LENGTH = 18, SPARTAN_QTE_CIRCLE_SKIP = 0x26 };
 static const SpartanSignature spartanport_qte_circle_site = {
     "48 8b 40 10 48 8b 40 08 f6 80 94 00 00 00 20 74 1d f6 80 98 00 00 00 20 75 14 c4 c1 7a 10 04 24", 8};
-static inline unsigned spartanport_qte_build_circle_stub(unsigned char *out, uintptr_t automatic, uintptr_t pressed,
-                                                  uintptr_t skip) {
+static inline unsigned spartanport_qte_build_circle_stub(unsigned char *out, uintptr_t count, uintptr_t automatic,
+                                                  uintptr_t pressed, uintptr_t skip) {
     static const unsigned char body[] = {
         0x48,0xb9, 0,0,0,0,0,0,0,0,               /* movabs rcx, auto */
         0x80,0x39,0x00,                           /* cmp byte [rcx], 0 */
@@ -194,9 +229,10 @@ static inline unsigned spartanport_qte_build_circle_stub(unsigned char *out, uin
         0xf6,0x80,0x98,0x00,0x00,0x00,0x20,       /* test byte [rax+0x98], 0x20 */
         0x75,0x0e,                                /* jne skip; else on to pressed */
     };
-    memcpy(out, body, sizeof(body));
-    memcpy(out + 2, &automatic, 8);
-    unsigned n = spartanport_qte_jump(out, sizeof(body), pressed);
+    const unsigned n0 = spartanport_qte_count(out, count);
+    memcpy(out + n0, body, sizeof(body));
+    memcpy(out + n0 + 2, &automatic, 8);
+    unsigned n = spartanport_qte_jump(out, n0 + sizeof(body), pressed);
     return spartanport_qte_jump(out, n, skip);
 }
 #endif

@@ -91,8 +91,28 @@ fn main() {
 
 /// The launcher window; exit code 1 when it cannot open.
 fn open_window(paths: Paths) {
+    let data_dir = paths.data_dir.clone();
+    let hook = std::panic::take_hook();
+    let panic_dir = data_dir.clone();
+    std::panic::set_hook(Box::new(move |info| {
+        startup::log_failure(&panic_dir, &info.to_string());
+        hook(info);
+    }));
+    // Still a single thread: nothing has started the window's yet.
+    let chosen = ["ICED_BACKEND", "WGPU_BACKEND"]
+        .iter()
+        .any(|key| std::env::var_os(key).is_some());
+    if let Some((key, value)) = startup::prepare_window(&data_dir, chosen, cfg!(windows)) {
+        std::env::set_var(key, value);
+    }
     if let Err(error) = ui::app::run(paths) {
         eprintln!("{APP_NAME}: {error}");
+        startup::log_failure(&data_dir, &error.to_string());
+        rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_title(APP_NAME)
+            .set_description(error.to_string())
+            .show();
         std::process::exit(1);
     }
 }

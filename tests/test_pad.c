@@ -13,6 +13,12 @@ int spartanportgpu_overlay_captures_input(void) { return capture; }
 int spartanportgpu_vibration_percent(void) { return vibration_percent; }
 static int engine_fps_cycles;
 void spartanportgpu_engine_fps_cycle(void) { ++engine_fps_cycles; }
+static int engine_fps_cap=-1, engine_fps_cap_calls, engine_fps_cap_type=-2, engine_fps_held_calls;
+static unsigned engine_fps_cap_kinds, engine_fps_held_kinds;
+void spartanportgpu_engine_fps_cap(int fps) { engine_fps_cap=fps; ++engine_fps_cap_calls; }
+void spartanportgpu_engine_fps_cap_qte(unsigned kinds, int type) { engine_fps_cap_kinds=kinds; engine_fps_cap_type=type; }
+void spartanportgpu_engine_fps_cap_held(unsigned kinds) { engine_fps_held_kinds=kinds; ++engine_fps_held_calls; }
+int runtime_file_cronos(void) { return 0; }
 int spartanportgpu_mouse_prompt_distance(void) { return 48; }
 void spartanportgpu_mouse_pause_key(void) {}
 int spartanportgpu_mouse_aim_style(void) { return 0; }
@@ -47,7 +53,253 @@ static int touch_at(const PadData *d, int x) {
 }
 static void pump(void) { SDL_UpdateJoysticks(); SDL_UpdateGamepads(); }
 
+/* Switch attacks: move data in a buffer the scan may read, his stats, and the pad's requests. */
+static uint8_t *switch_data;
+int runtime_memory_is_mapped(uintptr_t address, uint64_t size) {
+    const uintptr_t lo=(uintptr_t)switch_data;
+    return switch_data && address>=lo && address+size<=lo+0x20000;
+}
+static uint8_t *switch_put(unsigned at, uint8_t weapon, unsigned target, uint16_t window_end) {
+    uint8_t *b=switch_data+at;
+    const int32_t rel=(int32_t)target-(int32_t)at;
+    memcpy(b,&rel,4);
+    b[0x10]=b[0x11]=0xaa; b[0x2c]=b[0x2d]=0xff; b[0x2e]=0x0f; b[0x2f]=weapon; b[0x30]=b[0x31]=1;
+    memcpy(b+0x16,&window_end,2);
+    return b;
+}
+static void test_switch_attack(void) {
+    setenv("SPARTAN_SWITCH_ATTACKS","1",1);
+    spartanport_switch_status(1);
+    switch_data=aligned_alloc(0x10000,0x20000);
+    memset(switch_data,0,0x20000);
+    /* Switch attack moves: Cestus 0x100 (common) and 0x200, Blades 0x300 and 0x400, Claws 0x500. */
+    const uint8_t *claws_to_cestus=switch_put(0x1000,0x10,0x100,0x3c00);
+    const uint8_t *claws_to_blades=switch_put(0x1038,0x12,0x300,0x3c00);  /* the Claws block */
+    switch_put(0x2000,0x12,0x300,0x3c00);
+    const uint8_t *blades_to_claws=switch_put(0x3000,0x13,0x500,0x3c00);
+    const uint8_t *blades_to_claws_short=switch_put(0x3100,0x13,0x500,0x3266);
+    switch_put(0x4000,0x10,0x100,0x3266);
+    const uint8_t *cestus_to_blades_short=switch_put(0x4038,0x12,0x300,0x3266);
+    const uint8_t *rare_to_cestus=switch_put(0x5000,0x10,0x200,0x3c00);
+    const uint8_t *rare_to_blades=switch_put(0x5038,0x12,0x400,0x3c00);
+    switch_put(0x6000,0x12,0x300,0x3c00);
+    switch_data[0x6000+0x31]=4;                                /* Cross held: found too */
+    uint8_t other[0x38]={0};
+    other[0x30]=other[0x31]=1; other[0x2f]=0x06;
+    static uint8_t stats[0x300];
+    stats[0x20b]=0x12;                                         /* the Blades in his hands */
+    const uint32_t owned=1u<<15 | 1u<<17 | 1u<<18;             /* Cestus, Blades, Claws */
+    memcpy(stats+0x1c4,&owned,4);
+    spartanport_switch.stats=(uintptr_t)stats;
+    spartanport_switch.caller=0x1234;
+
+    /* No request: switch branches fail (Cross alone no longer cycles), others are the game's. */
+    PadData d={0};
+    d.timestamp=now_us();
+    apply_switch_attack(&d);
+    assert(spartanport_switch_input(blades_to_claws,0x1234)==0 && sw.scanned && sw.found==10);
+    assert(spartanport_switch_input(other,0x1234)==2 && spartanport_switch_queue(other)==other);
+    assert(spartanport_switch_input(blades_to_claws,0x5678)==0);     /* another caller: never (no cycling) */
+    assert(spartanport_switch_input(other,0x5678)==2);
+    assert(sw.attack[0][0]==switch_data+0x100 && sw.attack[0][1]==switch_data+0x200);
+    assert(sw.attack[2][0]==switch_data+0x300 && sw.attack[2][1]==switch_data+0x400 && sw.attack[3][0]==switch_data+0x500);
+
+    /* L1 + d-pad down: the Cestus. The Blades block's branch to the Claws takes it, swapped for one
+     * to the Cestus's common switch attack, with the same timing. */
+    d.buttons=BTN_L1; d.timestamp=now_us(); apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_DOWN; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(sw.request==0x10);
+    assert(spartanport_switch_input(blades_to_claws,0x1234)==1);
+    assert(spartanport_switch_queue(blades_to_claws)==claws_to_cestus && !sw.request);
+    assert(spartanport_switch_input(blades_to_claws,0x1234)==0);              /* taken once */
+
+    /* L1 + Cross: the weapon in his hands, the Blades, from the Claws block's branch to the Cestus. */
+    sw.last_at=0;
+    d.buttons=BTN_L1; d.timestamp=now_us(); apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_CROSS; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(sw.request==SWITCH_CURRENT && spartanport_switch_input(claws_to_cestus,0x1234)==1);
+    assert(spartanport_switch_queue(claws_to_cestus)==claws_to_blades && !sw.request);
+    /* The same weapon again within SWITCH_REPEAT_US: held back; another weapon is not. */
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_CROSS; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(spartanport_switch_input(claws_to_cestus,0x1234)==0 && spartanport_switch_queue(claws_to_cestus)==claws_to_cestus);
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_RIGHT; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(spartanport_switch_input(blades_to_claws,0x1234)==1 && spartanport_switch_queue(blades_to_claws)==blades_to_claws);
+    sw.last_at=0;
+    /* A branch with the short timing gets one with the short timing. */
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_CROSS; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(spartanport_switch_queue(blades_to_claws_short)==cestus_to_blades_short);
+    /* The rare kind leads to the rare kind; a branch to the requested weapon stays. */
+    sw.last_at=0;
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_DOWN; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(spartanport_switch_queue(rare_to_blades)==rare_to_cestus);
+    sw.last_at=0;
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_RIGHT; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(spartanport_switch_queue(blades_to_claws)==blades_to_claws && !sw.request);
+
+    /* Not owned (the Whip, d-pad left), or without L1: nothing. A request no move takes lapses. */
+    d.buttons=BTN_L1; apply_switch_attack(&d);
+    d.buttons=BTN_L1|BTN_LEFT; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(sw.request==0x11 && spartanport_switch_input(blades_to_claws,0x1234)==0 && spartanport_switch_queue(blades_to_claws)==blades_to_claws);
+    d.buttons=0; d.timestamp+=SWITCH_REQUEST_US+1000; apply_switch_attack(&d);
+    assert(!sw.request);
+    d.buttons=BTN_DOWN; d.timestamp=now_us(); apply_switch_attack(&d);
+    assert(!sw.request);
+
+    spartanport_switch.stats=0;
+    free(switch_data);
+    switch_data=NULL;
+    setenv("SPARTAN_SWITCH_ATTACKS","0",1);
+    sw.loaded=0;
+}
+
+/* qte_fps_cap_hysteresis: the engine goes to 60 on a prompt's first frame and back only after
+ * QTE_ACTIVE_US + QTE_FPS_HOLD_US without one; a prompt in between keeps it (simulated clock). */
+static void test_qte_fps_cap(void) {
+    uint8_t block[0x20]={0};
+    block[SPARTAN_QTE_TYPE_OFFSET]=2;  /* cross */
+    uint64_t t=50000000;
+    qte_fps_cap(t);                    /* hooks not installed: nothing */
+    assert(engine_fps_cap_calls==0);
+    spartanport_qte.block=(uintptr_t)block;
+    qte_fps_cap(t+=16000);             /* no prompt frame yet */
+    assert(engine_fps_cap_calls==0);
+    __atomic_add_fetch(&spartanport_qte.heartbeat,1,__ATOMIC_RELAXED);
+    qte_fps_cap(t+=16000);
+    assert(engine_fps_cap_calls==1 && engine_fps_cap==60 && engine_fps_cap_type==2);
+    assert(engine_fps_cap_kinds==1u<<SPARTAN_QTE_KIND_UPDATE);
+    for (int i=0;i<30;++i) {
+        __atomic_add_fetch(&spartanport_qte.heartbeat,1,__ATOMIC_RELAXED);
+        qte_fps_cap(t+=16000);
+    }
+    assert(engine_fps_cap_calls==1);
+    const uint64_t last=t;             /* the prompt's last frame */
+    qte_fps_cap(last+QTE_ACTIVE_US+1); /* the prompt is gone, the cap holds */
+    qte_fps_cap(last+QTE_ACTIVE_US+QTE_FPS_HOLD_US);
+    assert(engine_fps_cap_calls==1 && engine_fps_cap==60);
+    /* The next prompt 400 ms after the last one ended: the cap stays, no call. */
+    block[SPARTAN_QTE_TYPE_OFFSET]=8;  /* 360CW */
+    t=last+QTE_ACTIVE_US+400000;
+    __atomic_add_fetch(&spartanport_qte.heartbeat,1,__ATOMIC_RELAXED);
+    qte_fps_cap(t);
+    assert(engine_fps_cap_calls==1 && engine_fps_cap==60);
+    /* Then nothing for the full window: back to the player's rate, once. */
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US);
+    assert(engine_fps_cap_calls==1);
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==2 && engine_fps_cap==0);
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+100000);
+    assert(engine_fps_cap_calls==2);
+    /* A new prompt later: down and up again, with its own type. */
+    t+=10000000;
+    __atomic_add_fetch(&spartanport_qte.heartbeat,1,__ATOMIC_RELAXED);
+    qte_fps_cap(t);
+    assert(engine_fps_cap_calls==3 && engine_fps_cap==60 && engine_fps_cap_type==8);
+    /* qte_active does not touch the stick-prompt minigame (qte_rotation resets it). */
+    qte.passed=true;
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==4 && engine_fps_cap==0 && qte.passed);
+    qte.passed=false;
+    spartanport_qte.block=0;
+}
+
+/* qte_fps_cap_sequence: a sequence of single presses with 4 s between the prompts (Poseidon's horse)
+ * stays at 60 from the first prompt to the last, then goes back once. */
+static void test_qte_fps_cap_sequence(void) {
+    const int calls=engine_fps_cap_calls;
+    spartanport_qte.block=0;
+    uint64_t t=400000000;
+    for (int press=0;press<5;++press) {
+        for (int i=0;i<30;++i) {       /* half a second of prompt frames */
+            __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_TIMED],1,__ATOMIC_RELAXED);
+            qte_fps_cap(t+=16000);
+        }
+        if (press<4) for (int i=0;i<250;++i) qte_fps_cap(t+=16000);  /* 4 s to the next prompt */
+        assert(engine_fps_cap_calls==calls+1 && engine_fps_cap==60);
+    }
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==calls+2 && engine_fps_cap==0);
+}
+
+/* A charged prompt (hold a button: chests, doors) is an animation, not physics: it never caps. */
+static void test_qte_fps_cap_charged(void) {
+    const int calls=engine_fps_cap_calls;
+    spartanport_qte.block=0;
+    uint64_t t=900000000;
+    for (int i=0;i<120;++i) {
+        __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_CHARGED],1,__ATOMIC_RELAXED);
+        qte_fps_cap(t+=16000);
+    }
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==calls);
+}
+
+/* The Automatic QTE stubs' counters (src/qte_hook.h) start a QTE too, without the rotation hooks;
+ * a pause of 1 s between mash bursts keeps the cap; a cap held 20 s is reported once, with the
+ * kinds still counting. */
+static void test_qte_fps_cap_kinds(void) {
+    const int calls=engine_fps_cap_calls;
+    spartanport_qte.block=0;           /* only the Automatic QTE hooks */
+    uint64_t t=200000000;
+    qte_fps_cap(t);
+    assert(engine_fps_cap_calls==calls);
+    __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_REPEAT],1,__ATOMIC_RELAXED);
+    qte_fps_cap(t+=16000);
+    assert(engine_fps_cap_calls==calls+1 && engine_fps_cap==60);
+    assert(engine_fps_cap_kinds==1u<<SPARTAN_QTE_KIND_REPEAT && engine_fps_cap_type==-1);
+    const uint64_t start=t;
+    /* Mash bursts of 3 s with 1 s pauses, for 24 s: the cap holds, one 20 s report. */
+    while (t-start<24000000) {
+        for (int i=0;i<187;++i) {
+            __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_REPEAT],1,__ATOMIC_RELAXED);
+            if (t-start>10000000) __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_TIMED],1,__ATOMIC_RELAXED);
+            qte_fps_cap(t+=16000);
+        }
+        for (int i=0;i<62;++i) qte_fps_cap(t+=16000);  /* about 1 s without a frame */
+        assert(engine_fps_cap_calls==calls+1 && engine_fps_cap==60);
+        if (t-start<20000000) assert(engine_fps_held_calls==0);
+    }
+    assert(engine_fps_held_calls==1);
+    assert(engine_fps_held_kinds==((1u<<SPARTAN_QTE_KIND_REPEAT)|(1u<<SPARTAN_QTE_KIND_TIMED)));
+    /* Over: back after the window, once. */
+    const uint64_t last=t-62*16000;
+    qte_fps_cap(last+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap_calls==calls+2 && engine_fps_cap==0 && engine_fps_held_calls==1);
+    /* The next long cap reports again. */
+    t=last+60000000;
+    for (int i=0;i<1300;++i) {
+        __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_CIRCLE],1,__ATOMIC_RELAXED);
+        qte_fps_cap(t+=16000);
+    }
+    assert(engine_fps_cap_calls==calls+3 && engine_fps_held_calls==2);
+    assert(engine_fps_held_kinds==1u<<SPARTAN_QTE_KIND_CIRCLE);
+    qte_fps_cap(t+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap==0);
+    /* The stick-prompt minigame follows only the rotation prompt's own frames. */
+    uint8_t block[0x20]={0};
+    block[SPARTAN_QTE_TYPE_OFFSET]=4;  /* Up180CW, stale from an earlier prompt */
+    spartanport_qte.block=(uintptr_t)block;
+    __atomic_add_fetch(&spartanport_qte.kinds[SPARTAN_QTE_COUNT_REPEAT],1,__ATOMIC_RELAXED);
+    t+=5000000;
+    assert(qte_rotation(t)==-1);
+    __atomic_add_fetch(&spartanport_qte.heartbeat,1,__ATOMIC_RELAXED);
+    assert(qte_rotation(t+16000)==0);
+    qte_fps_cap(t+16000);
+    qte_fps_cap(t+16000+QTE_ACTIVE_US+QTE_FPS_HOLD_US+1);
+    assert(engine_fps_cap==0);
+    spartanport_qte.block=0;
+}
+
 int main(void) {
+    test_qte_fps_cap();
+    test_qte_fps_cap_kinds();
+    test_qte_fps_cap_charged();
+    test_qte_fps_cap_sequence();
+    test_switch_attack();
     const char *tmp=getenv("TMPDIR") ? getenv("TMPDIR") : getenv("TEMP") ? getenv("TEMP") : "/tmp";
     char path[1024];
     snprintf(path,sizeof(path),"%s/spartanport-pad-test-XXXXXX",tmp);
@@ -153,6 +405,31 @@ int main(void) {
     data=read_pad();
     assert(data.buttons==0);
 
+    /* R3 + R2 opens the trophy list and R3 + L2 the menu: with R3 held the trigger never reaches
+     * the game (a stray R2 uses the item), until each one is released. */
+    inject(path,"r2");
+    data=read_pad();
+    assert(data.buttons==BTN_R2 && data.r2==255);
+    inject(path,"");
+    data=read_pad();
+    inject(path,"r3 r2");
+    data=read_pad();
+    assert(data.buttons==0 && data.r2==0);
+    inject(path,"r2");
+    data=read_pad();
+    assert(data.buttons==0 && data.r2==0);
+    inject(path,"r3 l2 cross");
+    data=read_pad();
+    assert(data.buttons==BTN_CROSS && data.l2==0);
+    inject(path,"");
+    data=read_pad();
+    inject(path,"r3");
+    data=read_pad();
+    assert(data.buttons==BTN_R3);
+    inject(path,"");
+    data=read_pad();
+    assert(data.buttons==0);
+
     SDL_VirtualJoystickTouchpadDesc touch={.nfingers=2};
     SDL_VirtualJoystickDesc desc;
     SDL_INIT_INTERFACE(&desc);
@@ -242,5 +519,5 @@ int main(void) {
     assert(SDL_DetachVirtualJoystick(id));
     SDL_Quit();
     unlink(path);
-    puts("PASS: pad ABI, staged left/right clicks, L1 chord, engine frame rate combo, SDL touch coordinates, overlay capture");
+    puts("PASS: pad ABI, staged left/right clicks, L1 chord, engine frame rate combo, QTE frame rate cap (all prompt kinds), SDL touch coordinates, overlay capture, switch attacks");
 }

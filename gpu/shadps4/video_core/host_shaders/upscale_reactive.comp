@@ -18,7 +18,7 @@ layout(push_constant) uniform Params {
 
 void main() {
     const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-    if (any(greaterThanEqual(pixel, imageSize(scene)))) {
+    if (any(greaterThanEqual(pixel, imageSize(reactive)))) {
         return;
     }
     const vec3 before = max(imageLoad(opaque, pixel).rgb, vec3(0.0));

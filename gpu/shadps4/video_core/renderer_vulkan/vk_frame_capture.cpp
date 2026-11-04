@@ -239,9 +239,10 @@ void FrameCapture::BeginPass(const VideoCore::ImageInfo* const* colors, u32 num_
             state.store(Idle, std::memory_order_release);
             return;
         }
+        // The pass that starts the recording bound its textures and buffers before it began
+        // (BindResources runs before BeginRendering), while the capture was only armed: they
+        // belong to its first draw and are kept, else that draw shows no samples or constants.
         entries.clear();
-        pending_sampled.clear();
-        pending_buffers.clear();
         pass_open = false;
         state.store(Recording, std::memory_order_release);
     }

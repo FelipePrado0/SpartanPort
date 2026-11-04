@@ -53,6 +53,13 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent);
 /// The menu is open or a text entry is shown: the game's input is held neutral.
 bool CapturesInput();
 
+/// The menu or the trophy list is open and the player keeps the game stopped meanwhile
+/// (SpartanSettings::pause_game): the present thread draws the last frame again for the overlay.
+bool GamePaused();
+
+/// Game threads, where they hand in a frame or a sound buffer: waits while GamePaused().
+void WaitWhilePaused();
+
 /// Window thread: the game's text dialog (sceImeDialog). Shown as a box on screen until
 /// `active` is false; typing goes to the window (sdl_window), the box only displays it.
 void SetTextEntry(bool active, const std::string& prompt, const std::string& text);

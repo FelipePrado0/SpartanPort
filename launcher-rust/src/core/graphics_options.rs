@@ -417,6 +417,214 @@ pub fn environment(options: &Options) -> IndexMap<String, String> {
     .collect()
 }
 
+/// Temporal upscaler presets (`spartanport.ini` preset=, gpu/shim/spartanport_settings.h Preset):
+/// render scale per axis. Native AA keeps the game's size; Ultra Quality (1.3x, FSR 1's name) is
+/// appended as 5.
+const PRESET_SCALES: [f64; 6] = [1.0, 1.5, 1.7, 2.0, 3.0, 1.3];
+
+/// The game's render size for an upscaler preset and output size: even, from 640x360 to 7680x4320.
+/// Never the game's own 1920x1080 nor the output size (Native AA): at that size the game composites
+/// straight into the display buffer, before the upscaler can run, so it is 2 pixels short instead.
+/// None for an unknown preset.
+pub fn upscale_render_size(preset: &str, output: (u32, u32)) -> Option<(u32, u32)> {
+    let scale = *PRESET_SCALES.get(preset.trim().parse::<usize>().ok()?)?;
+    let even = |value: f64| ((value / 2.0).round() * 2.0) as u32;
+    let size = (
+        even(f64::from(output.0) / scale).clamp(640, 7680),
+        even(f64::from(output.1) / scale).clamp(360, 4320),
+    );
+    if size == output || size == (1920, 1080) {
+        return Some((size.0 - 2, size.1 - 2));
+    }
+    Some(size)
+}
+
+/// The built-in resolution patches a render size is made from, smallest first, with the largest
+/// size each covers: the Video Arena (0x7cd918) and the passes the game sizes at 1080p grow with
+/// them.
+const PATCH_TEMPLATES: [(&str, (u32, u32)); 4] = [
+    ("720p", (1920, 1080)),
+    ("1440p", (2560, 1440)),
+    ("4K", (3840, 2160)),
+    ("8K", (7680, 4320)),
+];
+
+/// `(width, height, output)` when a temporal upscaler preset renders below the output size. The
+/// output is the chosen render resolution: the upscaler delivers it and the preset renders below
+/// it. The launcher's upscaler switch must be on; `SPARTAN_UPSCALER` and `SPARTAN_UPSCALE_PRESET`
+/// override `spartanport.ini` as in the game.
+pub fn upscaler_render_size(
+    config: &Path,
+    environment: &IndexMap<String, String>,
+) -> Option<(u32, u32, (u32, u32))> {
+    let ini = read_file_values(config);
+    let pick = |name: &str, key: &str, default: &str| {
+        environment
+            .get(name)
+            .filter(|value| !value.is_empty())
+            .or_else(|| ini.get(key))
+            .cloned()
+            .unwrap_or_else(|| default.to_string())
+    };
+    if !matches!(
+        pick("SPARTAN_UPSCALER", "upscaler", "none").as_str(),
+        "fsr3" | "fsr4" | "fsr411"
+    ) {
+        return None;
+    }
+    let output = crate::core::options::resolution_size(
+        ini.get("render_resolution")
+            .map_or("native", String::as_str),
+    )
+    .unwrap_or((1920, 1080));
+    let (width, height) =
+        upscale_render_size(&pick("SPARTAN_UPSCALE_PRESET", "preset", "0"), output)?;
+    Some((width, height, output))
+}
+
+/// A "Resolution Patch - <width>x<height>" patch file: the smallest built-in resolution patch of
+/// `xml` that fits the size, with its sizes and half sizes (bloom) replaced. None when `xml` lacks
+/// that patch.
+pub fn resolution_patch_xml(
+    xml: &str,
+    width: u32,
+    height: u32,
+    output: (u32, u32),
+) -> Option<String> {
+    let (name, _) = PATCH_TEMPLATES
+        .into_iter()
+        .find(|(_, (cw, ch))| width <= *cw && height <= *ch)
+        .unwrap_or(PATCH_TEMPLATES[3]);
+    let (tw, th) = crate::core::options::resolution_size(name)?;
+    let template = format!("Name=\"Resolution Patch - {name}\"");
+    let start = xml.find(&template)?;
+    let start = xml[..start].rfind("<Metadata")?;
+    let end = start + xml[start..].find("</Metadata>")? + "</Metadata>".len();
+    let le = |value: u32, size: usize| -> String {
+        value.to_le_bytes()[..size]
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
+    };
+    let swaps = [
+        (le(tw, 4), le(width, 4)),
+        (le(th, 4), le(height, 4)),
+        (le(tw, 2), le(width, 2)),
+        (le(th, 2), le(height, 2)),
+        (le(tw / 2, 4), le(width / 2, 4)),
+        (le(th / 2, 4), le(height / 2, 4)),
+    ];
+    let mut block = String::new();
+    let mut rest = &xml[start..end];
+    while let Some(at) = rest.find("Value=\"") {
+        let value_start = at + "Value=\"".len();
+        let value_end = value_start + rest[value_start..].find('"')?;
+        let value = &rest[value_start..value_end];
+        block.push_str(&rest[..value_start]);
+        block.push_str(
+            swaps
+                .iter()
+                .find(|(from, _)| from == value)
+                .map_or(value, |(_, to)| to.as_str()),
+        );
+        rest = &rest[value_end..];
+    }
+    block.push_str(rest);
+    let mut block = block.replacen(
+        &template,
+        &format!("Name=\"Resolution Patch - {width}x{height}\""),
+        1,
+    );
+    // The 4K template keeps the game's MSAA scene buffers, which at some sizes (3300-3440 x 1440)
+    // overrun the script heap: a boot crash at 0x1d6263 (#1175). The 8K template's single-sample
+    // line (the game's low-memory mode) avoids it; the upscaler does the anti-aliasing.
+    const SINGLE_SAMPLE: &str = "Address=\"0x0055a876\"";
+    if name == "4K" && !block.contains(SINGLE_SAMPLE) {
+        let at = xml.find(SINGLE_SAMPLE)?;
+        let line = &xml[xml[..at].rfind("<Line ")?..at + xml[at..].find("/>")? + 2];
+        let close = block.find("</PatchList>")?;
+        let indent_at = block[..close].rfind('\n')? + 1;
+        let indent = block[indent_at..close].to_string();
+        block.insert_str(indent_at, &format!("    {indent}{line}\n"));
+    }
+    // The templates are 16:9. Another output shape takes the display aspect, and a wider one the
+    // Hor+ view too, from the built-in ultrawide patches' lines (#1182: a stretched 16:9 picture).
+    let (ow, oh) = output;
+    if u64::from(ow) * 9 != u64::from(oh) * 16 {
+        let line = |address: &str, value: String| -> Option<String> {
+            let at = xml.find(&format!("Address=\"{address}\" Value=\""))?;
+            let start = xml[..at].rfind("<Line ")?;
+            let end = at + xml[at..].find("/>")? + 2;
+            let old = xml[at..].split('"').nth(3)?;
+            Some(xml[start..end].replacen(
+                &format!("Value=\"{old}\""),
+                &format!("Value=\"{value}\""),
+                1,
+            ))
+        };
+        let float = |value: f32| -> String {
+            value
+                .to_le_bytes()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect()
+        };
+        let aspect = float(ow as f32 / oh as f32);
+        let mut lines = vec![line("0x005f0b57", format!("{aspect}{aspect}"))?];
+        let mut targets = Vec::new();
+        let close = block.find("</PatchList>")?;
+        if u64::from(ow) * 9 > u64::from(oh) * 16 {
+            // Hor+ is the K line plus the hooks that apply K, taken whole from a built-in
+            // ultrawide patch; its targets name lines by index, so they move with the lines.
+            let hook = xml.find("Address=\"0x005cbeff\"")?;
+            let wide = &xml[xml[..hook].rfind("<Metadata")?..];
+            let wide = &wide[..wide.find("</Metadata>")?];
+            let wide_lines: Vec<&str> = wide
+                .match_indices("<Line ")
+                .map(|(at, _)| Some(&wide[at..at + wide[at..].find("/>")? + 2]))
+                .collect::<Option<_>>()?;
+            let first = wide_lines
+                .iter()
+                .position(|l| l.contains("Address=\"0x005f0b57\""))?;
+            let shift = block[..close].matches("<Line ").count() as i64 - first as i64;
+            let k = float((ow * 9) as f32 / (oh * 16) as f32);
+            for l in &wide_lines[first + 1..] {
+                lines.push(if l.contains("Address=\"0x005c03c1\"") {
+                    line("0x005c03c1", k.clone())?
+                } else {
+                    l.to_string()
+                });
+            }
+            for (at, _) in wide.match_indices("<Target ") {
+                let target = &wide[at..at + wide[at..].find("/>")? + 2];
+                targets.push(match target.split_once("Line=\"") {
+                    Some((head, tail)) => {
+                        let (index, tail) = tail.split_once('"')?;
+                        let index = index.parse::<i64>().ok()? + shift;
+                        format!("{head}Line=\"{index}\"{tail}")
+                    }
+                    None => target.to_string(),
+                });
+            }
+        }
+        let indent_at = block[..close].rfind('\n')? + 1;
+        let indent = block[indent_at..close].to_string();
+        let added: String = lines.iter().map(|l| format!("    {indent}{l}\n")).collect();
+        block.insert_str(indent_at, &added);
+        let end = block.rfind("</Metadata>")?;
+        let end = block[..end].rfind('\n')? + 1;
+        let added: String = targets.iter().map(|t| format!("{indent}{t}\n")).collect();
+        block.insert_str(end, &added);
+    }
+    Some(format!(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<Patch>
+    {block}
+</Patch>
+"
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1087,5 +1295,269 @@ mod tests {
             fs::read_to_string(&f.state).unwrap(),
             "{\n  \"x\": \"A\\u007fB\",\n  \"attempt\": true\n}"
         );
+    }
+
+    #[test]
+    fn upscale_render_size_follows_the_preset_scale() {
+        assert_eq!(upscale_render_size("1", (1920, 1080)), Some((1280, 720)));
+        assert_eq!(upscale_render_size("2", (1920, 1080)), Some((1130, 636)));
+        assert_eq!(upscale_render_size("3", (1920, 1080)), Some((960, 540)));
+        assert_eq!(upscale_render_size("4", (1920, 1080)), Some((640, 360)));
+        assert_eq!(upscale_render_size("5", (1920, 1080)), Some((1476, 830)));
+        assert_eq!(upscale_render_size("4", (1280, 720)), Some((640, 360)));
+        // Above the game's own 1080p.
+        assert_eq!(upscale_render_size("5", (2560, 1440)), Some((1970, 1108)));
+        assert_eq!(upscale_render_size("1", (3840, 2160)), Some((2560, 1440)));
+        assert_eq!(upscale_render_size("5", (3840, 2160)), Some((2954, 1662)));
+        // Never the game's 1920x1080 nor the output (Native AA): at that size the game composites
+        // straight into the display buffer, before the upscaler can run.
+        assert_eq!(upscale_render_size("0", (1920, 1080)), Some((1918, 1078)));
+        assert_eq!(upscale_render_size("0", (2560, 1440)), Some((2558, 1438)));
+        assert_eq!(upscale_render_size("0", (3840, 2160)), Some((3838, 2158)));
+        assert_eq!(upscale_render_size("3", (3840, 2160)), Some((1918, 1078)));
+        for preset in ["0", "1", "2", "3", "4", "5"] {
+            let (w, h) = upscale_render_size(preset, (2560, 1440)).unwrap();
+            assert_eq!((w % 2, h % 2), (0, 0), "{preset}");
+        }
+        assert_eq!(upscale_render_size("9", (1920, 1080)), None);
+        assert_eq!(upscale_render_size("x", (1920, 1080)), None);
+    }
+
+    #[test]
+    fn upscale_render_size_matches_the_games_menus() {
+        // tests/upscale_render_sizes.txt: the game's menus (spartanport_settings.cpp) read it too.
+        let table = fs::read_to_string(repo("tests/upscale_render_sizes.txt")).unwrap();
+        let mut cases = 0;
+        for line in table
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+        {
+            let v: Vec<u32> = line
+                .split_whitespace()
+                .map(|x| x.parse().unwrap())
+                .collect();
+            let preset = v[0].to_string();
+            assert_eq!(
+                upscale_render_size(&preset, (v[1], v[2])),
+                Some((v[3], v[4])),
+                "{line}"
+            );
+            cases += 1;
+        }
+        assert!(cases >= 10);
+    }
+
+    #[test]
+    fn unsupported_upscalers_do_not_patch_the_render_resolution() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("spartanport.ini");
+        for mode in ["dlss", "unknown"] {
+            std::fs::write(
+                &config,
+                format!("upscaler={mode}\npreset=3\nrender_resolution=1440p\n"),
+            )
+            .unwrap();
+            assert_eq!(upscaler_render_size(&config, &IndexMap::new()), None);
+            let inherited = IndexMap::from([("SPARTAN_UPSCALER".into(), mode.into())]);
+            assert_eq!(upscaler_render_size(&config, &inherited), None);
+        }
+    }
+
+    #[test]
+    fn upscaler_output_is_the_chosen_render_resolution() {
+        let dir = tempfile::tempdir().unwrap();
+        let ini = dir.path().join("spartanport.ini");
+        fs::write(
+            &ini,
+            "upscaler=fsr3
+preset=1
+render_resolution=1440p
+output_res=1280x720
+",
+        )
+        .unwrap();
+        let on: IndexMap<String, String> =
+            [("SPARTAN_EXPERIMENTAL_UPSCALER".to_string(), "1".to_string())]
+                .into_iter()
+                .collect();
+        assert_eq!(
+            upscaler_render_size(&ini, &on),
+            Some((1706, 960, (2560, 1440)))
+        );
+        let mut driver = on.clone();
+        driver.insert("SPARTAN_UPSCALER".into(), "fsr411".into());
+        assert_eq!(
+            upscaler_render_size(&ini, &driver),
+            Some((1706, 960, (2560, 1440)))
+        );
+        let mut native_aa = on.clone();
+        native_aa.insert("SPARTAN_UPSCALE_PRESET".into(), "0".into());
+        assert_eq!(
+            upscaler_render_size(&ini, &native_aa),
+            Some((2558, 1438, (2560, 1440)))
+        );
+        // The launcher no longer has a separate switch: the ini's upscaler decides.
+        assert_eq!(
+            upscaler_render_size(&ini, &IndexMap::new()),
+            Some((1706, 960, (2560, 1440)))
+        );
+        let mut off = on.clone();
+        off.insert("SPARTAN_UPSCALER".into(), "off".into());
+        assert_eq!(upscaler_render_size(&ini, &off), None);
+        fs::write(
+            &ini,
+            "upscaler=fsr3
+preset=1
+render_resolution=native
+",
+        )
+        .unwrap();
+        assert_eq!(
+            upscaler_render_size(&ini, &on),
+            Some((1280, 720, (1920, 1080)))
+        );
+    }
+
+    #[test]
+    fn resolution_patch_for_any_size_matches_the_built_in_ones() {
+        let xml = fs::read_to_string(repo("patches/CUSA01623.xml")).unwrap();
+        let lines = |text: &str| -> Vec<String> {
+            text.lines()
+                .map(str::trim)
+                .filter(|l| l.starts_with("<Line "))
+                .map(String::from)
+                .collect()
+        };
+        for (name, width, height) in [
+            ("720p", 1280, 720),
+            ("1440p", 2560, 1440),
+            ("4K", 3840, 2160),
+            ("8K", 7680, 4320),
+        ] {
+            let made = resolution_patch_xml(&xml, width, height, (width, height)).unwrap();
+            let start = xml
+                .find(&format!("Name=\"Resolution Patch - {name}\""))
+                .unwrap();
+            let block = &xml[start..start + xml[start..].find("</Metadata>").unwrap()];
+            let mut expected = lines(block);
+            if name == "4K" {
+                // Plus the 8K template's single-sample line (#1175).
+                expected.extend(
+                    lines(&made)
+                        .into_iter()
+                        .filter(|l| l.contains("0x0055a876")),
+                );
+            }
+            assert_eq!(lines(&made), expected, "{name}");
+        }
+        let made = resolution_patch_xml(&xml, 1280, 720, (1280, 720)).unwrap();
+        assert!(made.contains("Name=\"Resolution Patch - 1280x720\""));
+        let small = resolution_patch_xml(&xml, 1706, 960, (2560, 1440)).unwrap();
+        assert!(small.contains("Value=\"aa060000\"") && small.contains("Value=\"c0030000\""));
+    }
+
+    #[test]
+    fn resolution_patch_takes_the_smallest_template_that_fits() {
+        // The Video Arena (0x7cd918) grows with the template: 2.25 GiB up to 1080p, then 1440p, 4K, 8K.
+        let xml = fs::read_to_string(repo("patches/CUSA01623.xml")).unwrap();
+        let arena = |width, height| {
+            let made = resolution_patch_xml(&xml, width, height, (width, height)).unwrap();
+            let key = "Address=\"0x007cd918\" Value=\"";
+            let at = made.find(key).unwrap() + key.len();
+            made[at..at + 8].to_string()
+        };
+        assert_eq!(arena(1918, 1078), "00000090");
+        assert_eq!(arena(1970, 1108), "000000b0");
+        assert_eq!(arena(2954, 1662), "000000f0");
+        assert_eq!(arena(5118, 2878), "000000ff");
+        let made = resolution_patch_xml(&xml, 2954, 1662, (3840, 2160)).unwrap();
+        for value in [
+            "8a0b0000", "7e060000", "8a0b", "7e06", "c5050000", "3f030000",
+        ] {
+            assert!(made.contains(&format!("Value=\"{value}\"")), "{value}");
+        }
+    }
+
+    #[test]
+    fn resolution_patch_uses_single_sample_buffers_from_the_4k_template() {
+        // Issue #1175: with MSAA scene buffers, renders of about 3300-3440 x 1440 crash at boot
+        // (FSR Quality at 5120x2160 renders 3414x1440). The built-in 3440x1440 patch and every
+        // render made from the 4K template turn on single-sample buffers, as the 8K one does.
+        let xml = fs::read_to_string(repo("patches/CUSA01623.xml")).unwrap();
+        let single = "Address=\"0x0055a876\" Value=\"9090\"";
+        for (width, height) in [(3414, 1440), (3300, 1440), (3438, 1438), (3838, 2158)] {
+            let made = resolution_patch_xml(&xml, width, height, (5120, 2160)).unwrap();
+            assert_eq!(made.matches(single).count(), 1, "{width}x{height}");
+        }
+        let made = resolution_patch_xml(&xml, 1706, 960, (2560, 1440)).unwrap();
+        assert!(!made.contains(single));
+        let builtin = &xml[xml.find("Name=\"Resolution Patch - 3440x1440\"").unwrap()..];
+        assert!(builtin[..builtin.find("</Metadata>").unwrap()].contains(single));
+    }
+
+    #[test]
+    fn resolution_patch_keeps_the_output_shape() {
+        // Issue #1182: an ultrawide output rendered below its size kept the 16:9 aspect of the
+        // template and showed a stretched 16:9 picture. Same aspect and Hor+ view as the built-in
+        // 5120x2160 patch; a taller output (1920x1200) only sets the aspect.
+        let xml = fs::read_to_string(repo("patches/CUSA01623.xml")).unwrap();
+        let value = |made: &str, address: &str| {
+            let key = format!("Address=\"{address}\" Value=\"");
+            made.find(&key).map(|at| {
+                let start = at + key.len();
+                made[start..start + made[start..].find('"').unwrap()].to_string()
+            })
+        };
+        for render in [(3414, 1440), (5118, 2158)] {
+            let made = resolution_patch_xml(&xml, render.0, render.1, (5120, 2160)).unwrap();
+            assert_eq!(
+                value(&made, "0x005f0b57").as_deref(),
+                Some("26b4174026b41740")
+            );
+            assert_eq!(value(&made, "0x005c03c1").as_deref(), Some("abaaaa3f"));
+            // Hor+ needs the hooks that apply K too, or the picture is zoomed 1.33x; their
+            // targets must still name the lines they jump to.
+            let lines: Vec<&str> = made.split("<Line ").skip(1).collect();
+            let builtin = &xml[xml.find("Name=\"Resolution Patch - 5120x2160\"").unwrap()..];
+            let builtin = &builtin[..builtin.find("</Metadata>").unwrap()];
+            let hooks: Vec<&str> = builtin.split("<Line ").skip(1).skip(15).collect();
+            assert_eq!(lines[lines.len() - hooks.len()..].len(), 14);
+            for (made_line, hook) in lines[lines.len() - hooks.len()..].iter().zip(&hooks) {
+                assert_eq!(made_line.split("/>").next(), hook.split("/>").next());
+            }
+            let targets: Vec<&str> = made.split("<Target ").skip(1).collect();
+            assert_eq!(targets.len(), builtin.matches("<Target ").count());
+            for target in targets.iter().filter(|t| t.contains("Line=\"")) {
+                let index: usize = target
+                    .split("Line=\"")
+                    .nth(1)
+                    .unwrap()
+                    .split('"')
+                    .next()
+                    .unwrap()
+                    .parse()
+                    .unwrap();
+                let address = target
+                    .split("Address=\"")
+                    .nth(1)
+                    .unwrap()
+                    .split('"')
+                    .next()
+                    .unwrap();
+                assert!(
+                    lines[index].contains(&format!("Address=\"{address}\"")),
+                    "{target}"
+                );
+            }
+        }
+        let made = resolution_patch_xml(&xml, 1278, 798, (1920, 1200)).unwrap();
+        assert_eq!(
+            value(&made, "0x005f0b57").as_deref(),
+            Some("cdcccc3fcdcccc3f")
+        );
+        assert_eq!(value(&made, "0x005c03c1"), None);
+        let made = resolution_patch_xml(&xml, 1918, 1078, (1920, 1080)).unwrap();
+        assert_eq!(value(&made, "0x005f0b57"), None);
+        assert_eq!(value(&made, "0x005c03c1"), None);
     }
 }

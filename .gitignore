@@ -9,6 +9,7 @@ pgo/
 # Documentation pictures are part of the repository.
 !docs/images/*.png
 last_run.log
+last_run.jsonl
 dist/
 fsr4_411/
 vkd3d-proton.cache
@@ -33,6 +34,8 @@ gamecontrollerdb.txt
 
 # The launcher's data files when it runs from a checkout (data folder = this folder).
 /settings.json
+/launcher_gpu.txt
+/launcher_error.log
 /mods.json
 /mods_presets.json
 /patches.json
@@ -46,3 +49,5 @@ launcher-rust/target/
 !docs/specs/assets/**/*.png
 # Brainstorming companion sessions
 .superpowers/
+# Local agent plans and specs (superpowers skills), not shared for now
+/docs/superpowers/

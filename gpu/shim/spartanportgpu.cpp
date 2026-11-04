@@ -14,6 +14,7 @@
 #include <boost/asio/io_context.hpp>
 #include "common/polyfill_thread.h"
 #include "video_core/renderdoc.h"
+#include "video_core/cache_storage.h"
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -36,6 +37,7 @@ extern "C" {
 // runtime_memory.c
 int runtime_memory_is_mapped(uintptr_t address, uint64_t size);
 int runtime_memory_write_backing(uintptr_t address, const void* data, uint64_t size);
+void runtime_memory_read_backing(uintptr_t address, void* data, uint64_t size);
 uint64_t runtime_memory_clamp(uintptr_t address, uint64_t size);
 int runtime_memory_region(uintptr_t address, uintptr_t* start, uintptr_t* end, int* mapped);
 void runtime_memory_gpu_protect(uintptr_t address, uint64_t size, int read, int write);
@@ -108,18 +110,10 @@ void MemoryManager::InvalidateMemory(VAddr address, u64 size) {
 u64 MemoryManager::ClampRangeSize(VAddr virtual_addr, u64 size) {
     return runtime_memory_clamp(virtual_addr, size);
 }
+// Through the backing view: with SPARTAN_READBACKS=2 (precise) GPU-written pages are also
+// read-protected, and a copy thread faulting there would wait for the GPU thread waiting for it.
 static void CopySparseSerial(VAddr source, u8* dest, u64 size) {
-    while (size) {
-        uintptr_t start = 0, end = 0;
-        int mapped = 0;
-        if (!runtime_memory_region(source, &start, &end, &mapped)) {
-            end = source + size;
-        }
-        const u64 n = std::min<u64>(size, end - source);
-        if (mapped) std::memcpy(dest, reinterpret_cast<const void*>(source), n);
-        else std::memset(dest, 0, n);
-        source += n; dest += n; size -= n;
-    }
+    runtime_memory_read_backing(source, dest, size);
 }
 void MemoryManager::CopySparseMemory(VAddr source, u8* dest, u64 size) {
     // spartanport: large uploads (streaming) are split across the copy threads.
@@ -218,6 +212,23 @@ static void StartProfileWriter() {
 }
 #endif
 
+extern "C" void spartanportgpu_flush_cache(void) {
+    const char* env = std::getenv("SPARTAN_CACHE_FLUSH_ON_EXIT");
+    static const bool enabled = !(env && env[0] == '0');
+    auto& cache = Storage::DataBase::Instance();
+    if (!enabled || !cache.IsOpened()) {
+        return;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const bool done = cache.Flush(std::chrono::seconds(2));
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - start)
+                        .count();
+    std::printf("Shader cache: %s at exit in %lld ms\n",
+                done ? "queue drained" : "queued writes NOT finished",
+                static_cast<long long>(ms));
+}
+
 extern "C" int spartanportgpu_init(const SpartanGpuConfig* config) {
     SpartanSettings::Load();
 #ifdef SPARTAN_PGO_GENERATE
@@ -247,6 +258,7 @@ extern "C" int spartanportgpu_init(const SpartanGpuConfig* config) {
         }
         LOG_INFO(Frontend, "Window closed by user");
         runtime_report();
+        spartanportgpu_flush_cache();
         std::fflush(stdout);
         std::_Exit(0);
     });
@@ -360,6 +372,20 @@ extern "C" int spartanportgpu_vibration_percent(void) {
     return SpartanSettings::Get().vibration.load(std::memory_order_relaxed);
 }
 
+extern "C" int spartanportgpu_audio_volume_percent(void) {
+    return SpartanSettings::Get().master_volume.load(std::memory_order_relaxed);
+}
+
+extern "C" int spartanportgpu_audio_channels(void) {
+    return SpartanSettings::Get().audio_channels.load(std::memory_order_relaxed);
+}
+
+extern "C" int spartanportgpu_audio_init(void) {
+    static std::mutex init_lock;
+    std::scoped_lock lock{init_lock};
+    return SDL_InitSubSystem(SDL_INIT_AUDIO);
+}
+
 extern "C" void spartanportgpu_movie_picture(void) {
     Vulkan::MovieBars::Cutscenes().NotePicture(Vulkan::MovieBars::NowMs());
 }
@@ -394,6 +420,10 @@ extern "C" int spartanportgpu_overlay_captures_input(void) {
     return SpartanOverlay::CapturesInput() ? 1 : 0;
 }
 
+extern "C" void spartanportgpu_wait_while_paused(void) {
+    SpartanOverlay::WaitWhilePaused();
+}
+
 extern "C" void spartanportgpu_engine_fps_cycle(void) {
     SpartanOverlay::CycleEngineFps();
 }
@@ -403,6 +433,11 @@ extern "C" void spartanport_engine_fps_globals(uintptr_t fps, uintptr_t rounded)
     auto& s = SpartanSettings::Get();
     s.engine_fps_int_global = reinterpret_cast<int32_t*>(rounded);
     s.engine_fps_global = reinterpret_cast<float*>(fps);
+}
+
+// src/probe.c: the inPowerUpMenu script global (the Texture Quality bias skips the upgrade menu).
+extern "C" void spartanport_power_up_menu_global(uintptr_t flag) {
+    SpartanSettings::Get().power_up_menu_global = reinterpret_cast<int32_t*>(flag);
 }
 
 extern "C" int spartanportgpu_text_input_begin(const char* initial, const char* prompt) {

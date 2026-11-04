@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <deque>
 
 #include <condition_variable>
@@ -11,6 +12,7 @@
 #include "video_core/renderer_vulkan/host_passes/fsr_pass.h"
 #include "video_core/renderer_vulkan/host_passes/pp_pass.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
+#include "video_core/renderer_vulkan/frame_generation_policy.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_swapchain.h"
@@ -38,6 +40,9 @@ struct Frame {
     bool is_hdr{false};
     u8 id{};
     vk::Format format{}; ///< spartanport: of `image` (screenshots)
+    /// spartanport: frame generation's frame, shown before this one (Present), or null.
+    Frame* generated = nullptr;
+    bool is_generated = false; ///< spartanport: a frame generation frame (screenshots say so)
 };
 
 enum SchedulerType {
@@ -138,6 +143,8 @@ private:
     std::condition_variable free_cv;
     std::condition_variable_any frame_cv;
     std::vector<VAddr> vo_buffers_addr;
+    /// spartanport: frame generation pacing, the generated frame halfway between real ones.
+    FrameGenerationPolicy::Pacing frame_pacing;
 };
 
 } // namespace Vulkan

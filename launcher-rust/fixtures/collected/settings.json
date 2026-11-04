@@ -3,7 +3,6 @@
   "ui_scale": "auto",
   "game_dir": "D:\\Games\\GOW3",
   "update_dir": "",
-  "experimental_upscaler": false,
   "video_backend": "auto",
   "gamemode": false,
   "mangohud": false,
@@ -37,7 +36,8 @@
   "check_updates": false,
   "game_patches": {
     "CUSA01623": [
-      "Skip Intro"
+      "Skip Intro",
+      "High FPS Wall Seam Fix"
     ]
   },
   "controls": {
@@ -53,5 +53,9 @@
   "rage_one_input": true,
   "stick_prompts": "keyboard",
   "controls_layout": 4,
-  "glyph_style": "off"
+  "switch_attacks": false,
+  "glyph_style": "off",
+  "patches_offered": [
+    "High FPS Wall Seam Fix"
+  ]
 }

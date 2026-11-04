@@ -259,7 +259,7 @@ pub fn relaunch_appimage(target: &Path, env: &IndexMap<String, String>) -> io::R
 }
 
 /// Names the player owns: an update never copies them over, at any depth.
-pub const USER_FILES: [&str; 11] = [
+pub const USER_FILES: [&str; 12] = [
     "user",
     "out",
     "mods",
@@ -270,6 +270,7 @@ pub const USER_FILES: [&str; 11] = [
     "mods_presets.json",
     "patches.json",
     "last_run.log",
+    "last_run.jsonl",
     "gamecontrollerdb.txt",
 ];
 
@@ -730,6 +731,7 @@ mod tests {
                 "mods_presets.json",
                 "patches.json",
                 "last_run.log",
+                "last_run.jsonl",
                 "gamecontrollerdb.txt",
             ]
         );

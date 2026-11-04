@@ -10,6 +10,7 @@ use iced::time::Instant;
 use iced_test::simulator::{simulator, Simulator};
 use serde_json::{json, Value};
 use spartanport_launcher::core::catalog;
+use spartanport_launcher::core::controls::Slot;
 use spartanport_launcher::core::gpu::parse_display_list;
 use spartanport_launcher::core::i18n::tr;
 use spartanport_launcher::core::ini::{load_ini, INI_FLAGS};
@@ -83,6 +84,54 @@ fn click_save(state: &mut State) {
 
 fn save(state: &mut State) {
     send(state, Message::Save);
+}
+
+#[test]
+fn saving_persists_the_fixed_frame_generation_multiplier() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    set(&mut state, "frame_generation", json!("fsr"));
+    save(&mut state);
+    let ini = load_ini(&state.paths.ini_path());
+    assert!(ini.holds("frame_generation_frames"));
+    assert_eq!(ini.values["frame_generation_frames"], "1");
+    assert_eq!(ini.values["frame_generation"], "fsr");
+}
+
+#[test]
+fn saving_normalizes_legacy_frame_generation_multipliers() {
+    for frames in ["1", "2", "3", "9"] {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("spartanport.ini"),
+            format!("frame_generation=fsr\nframe_generation_frames={frames}\nexternal_runtime_key=keep\n"),
+        )
+        .unwrap();
+        let mut state = state_in(dir.path());
+        save(&mut state);
+        let ini = load_ini(&state.paths.ini_path());
+        assert_eq!(ini.values["frame_generation_frames"], "1", "{frames}");
+        assert_eq!(ini.values["frame_generation"], "fsr");
+        assert_eq!(ini.values["external_runtime_key"], "keep");
+    }
+}
+
+#[test]
+fn saving_normalizes_an_externally_changed_frame_generation_multiplier() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    save(&mut state);
+    fs::write(
+        state.paths.ini_path(),
+        "frame_generation=fsr\nframe_generation_frames=3\nexternal_runtime_key=keep\n",
+    )
+    .unwrap();
+    set(&mut state, "vsync", json!(false));
+    save(&mut state);
+    let ini = load_ini(&state.paths.ini_path());
+    assert_eq!(ini.values["frame_generation_frames"], "1");
+    assert_eq!(ini.values["frame_generation"], "fsr");
+    assert_eq!(ini.values["external_runtime_key"], "keep");
 }
 
 fn shows(state: &State, label: &str) -> bool {
@@ -267,7 +316,7 @@ fn rebuilding_keeps_the_status_of_a_running_game() {
     let listed = vec![Release {
         id: ReleaseId {
             channel: Channel::Release,
-            version: "2.9.0".to_string(),
+            version: "3.1.0".to_string(),
             build: None,
         },
         published: String::new(),
@@ -286,7 +335,7 @@ fn rebuilding_keeps_the_status_of_a_running_game() {
     assert!(state.log.text().contains("The game is running."));
     assert_eq!(
         state.updater.newer().map(|r| r.id.version.as_str()),
-        Some("2.9.0")
+        Some("3.1.0")
     );
 }
 
@@ -423,7 +472,7 @@ fn saving_patches_keeps_the_choice_of_other_game_versions() {
     assert!(!dirty(&state));
 }
 
-const HIDDEN_UPSCALING_INI: &str = "upscaler=fsr4\npreset=3\nfsr1=1\nsharpen=1\nsharpness=0.73\n\
+const HIDDEN_UPSCALING_INI: &str = "upscaler=fsr3\npreset=3\nfsr1=1\nsharpen=1\nsharpness=0.73\n\
      rcas=1\nrcas_strength=42\nobject_motion=0\noutput_res=2560x1440\n";
 
 #[test]
@@ -432,9 +481,10 @@ fn hidden_settings_are_preserved_without_migration() {
     fs::write(dir.path().join("spartanport.ini"), HIDDEN_UPSCALING_INI).unwrap();
     let mut state = state_in(dir.path());
     let before = load_ini(&state.paths.ini_path()).values;
+    for key in ["upscaler", "preset"] {
+        assert!(SHOWN_INI_KEYS.contains(&key), "{key}");
+    }
     for key in [
-        "upscaler",
-        "preset",
         "fsr1",
         "sharpen",
         "sharpness",
@@ -461,7 +511,7 @@ fn hidden_settings_are_preserved_without_migration() {
     set(&mut state, "ui_language", json!("ru"));
     save(&mut state);
     assert_eq!(state.lang, "ru");
-    assert_eq!(load_ini(&state.paths.ini_path()).values["upscaler"], "fsr4");
+    assert_eq!(load_ini(&state.paths.ini_path()).values["upscaler"], "fsr3");
 }
 
 #[test]
@@ -620,12 +670,34 @@ fn every_setting_lights_save_persists_and_comes_back() {
     );
     send(
         &mut state,
-        Message::Controls(ControlsMessage::Capture("cross".into())),
+        Message::Controls(ControlsMessage::Capture("cross".into(), Slot::Main)),
     );
     change_and_save(
         &mut state,
         "key cross",
-        Message::Controls(ControlsMessage::Captured("cross".into(), "Q".into())),
+        Message::Controls(ControlsMessage::Captured(
+            "cross".into(),
+            Slot::Main,
+            "Q".into(),
+        )),
+    );
+    send(
+        &mut state,
+        Message::Controls(ControlsMessage::Capture("square".into(), Slot::Alternative)),
+    );
+    change_and_save(
+        &mut state,
+        "alternative square",
+        Message::Controls(ControlsMessage::Captured(
+            "square".into(),
+            Slot::Alternative,
+            "J".into(),
+        )),
+    );
+    change_and_save(
+        &mut state,
+        "glyph_keys",
+        Message::Set("glyph_keys".into(), json!("alternative")),
     );
     change_and_save(
         &mut state,
@@ -642,6 +714,8 @@ fn every_setting_lights_save_persists_and_comes_back() {
     }
     assert_eq!(reopened.controls.pad_style, "xbox");
     assert_eq!(reopened.controls.key["cross"], "Q");
+    assert_eq!(reopened.controls.key_alt["square"], "J");
+    assert_eq!(reopened.store.text("glyph_keys"), "alternative");
     assert_eq!(reopened.controls.pad["cross"], "b");
     assert!(!dirty(&reopened));
 }
@@ -860,4 +934,104 @@ fn a_save_keeps_the_lines_of_an_ini_that_is_not_utf8() {
         "{text}"
     );
     assert!(text.lines().any(|line| line == "fps_limit=0"), "{text}");
+}
+
+/// The audio and effects options of the game's `spartanport.ini` (#968): the keys, values and
+/// defaults the runtime (`gpu/shim/spartanport_settings.cpp`) reads.
+const AUDIO_AND_EFFECTS: [(&str, &str); 4] = [
+    ("master_volume", "100"),
+    ("audio_channels", "auto"),
+    ("motion_blur", "1"),
+    ("depth_of_field", "1"),
+];
+
+#[test]
+fn audio_and_effects_options_default_like_the_game() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = state_in(dir.path());
+    let ini = load_ini(&state.paths.ini_path());
+    for (key, value) in AUDIO_AND_EFFECTS {
+        assert_eq!(state.store.text(key), value, "{key}");
+        assert_eq!(
+            ini.values.get(key).map(String::as_str),
+            Some(value),
+            "{key}"
+        );
+        assert!(SHOWN_INI_KEYS.contains(&key), "{key}");
+        assert_eq!(catalog::ini_setting(key).map(|row| row.key), Some(key));
+    }
+    assert!(INI_FLAGS.contains(&"motion_blur"));
+    assert!(INI_FLAGS.contains(&"depth_of_field"));
+    assert!(!INI_FLAGS.contains(&"master_volume"));
+    assert!(!INI_FLAGS.contains(&"audio_channels"));
+}
+
+#[test]
+fn audio_and_effects_options_are_saved_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    open(&mut state, Page::Game);
+    set(&mut state, "master_volume", json!(150));
+    set(&mut state, "audio_channels", json!("5.1"));
+    open(&mut state, Page::Graphics);
+    set(&mut state, "motion_blur", json!(false));
+    set(&mut state, "depth_of_field", json!(false));
+    assert!(save_enabled(&state));
+    click_save(&mut state);
+    let ini = fs::read_to_string(state.paths.ini_path()).unwrap();
+    for line in [
+        "master_volume=150",
+        "audio_channels=5.1",
+        "motion_blur=0",
+        "depth_of_field=0",
+    ] {
+        assert!(ini.lines().any(|l| l == line), "{line} in {ini}");
+    }
+    let settings = fs::read_to_string(state.paths.config_file()).unwrap();
+    for (key, _) in AUDIO_AND_EFFECTS {
+        assert!(!settings.contains(key), "{key} in settings.json");
+    }
+    let reopened = state_in(dir.path());
+    assert_eq!(reopened.store.text("master_volume"), "150");
+    assert_eq!(reopened.store.text("audio_channels"), "5.1");
+    assert!(!reopened.store.flag("motion_blur"));
+    assert!(!reopened.store.flag("depth_of_field"));
+    assert!(!dirty(&reopened));
+}
+
+/// F2 (`docs/specs/2026-10-29-high-fps-f2-qte.md`): the engine at 60 FPS during QTEs, the
+/// `auto_safe_fps` key the game reads (`gpu/shim/spartanport_settings.cpp`), on by default.
+#[test]
+fn auto_safe_fps_defaults_on_like_the_game() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = state_in(dir.path());
+    let ini = load_ini(&state.paths.ini_path());
+    assert_eq!(state.store.text("auto_safe_fps"), "1");
+    assert_eq!(
+        ini.values.get("auto_safe_fps").map(String::as_str),
+        Some("1")
+    );
+    assert!(SHOWN_INI_KEYS.contains(&"auto_safe_fps"));
+    assert!(INI_FLAGS.contains(&"auto_safe_fps"));
+    assert_eq!(
+        catalog::ini_setting("auto_safe_fps").map(|row| row.key),
+        Some("auto_safe_fps")
+    );
+}
+
+#[test]
+fn auto_safe_fps_is_saved_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    open(&mut state, Page::Performance);
+    set(&mut state, "auto_safe_fps", json!(false));
+    assert!(save_enabled(&state));
+    click_save(&mut state);
+    let ini = fs::read_to_string(state.paths.ini_path()).unwrap();
+    assert!(ini.lines().any(|l| l == "auto_safe_fps=0"), "{ini}");
+    let settings = fs::read_to_string(state.paths.config_file()).unwrap();
+    assert!(!settings.contains("auto_safe_fps"), "{settings}");
+    let reopened = state_in(dir.path());
+    assert!(!reopened.store.flag("auto_safe_fps"));
+    assert!(!dirty(&reopened));
 }

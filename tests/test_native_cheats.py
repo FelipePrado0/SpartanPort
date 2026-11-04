@@ -140,10 +140,48 @@ class NativeCheats(unittest.TestCase):
         texts = [self.script.string(self.script.lit + int.from_bytes(arg, 'big'))
                  for _, op, arg in entry if op == 0x16]
         self.assertEqual(texts.count('sliderBar7'), 3)  # hide, position, show
-        self.assertIn('Restore Graphics Defaults', texts)
-        for name in ('NativeGraphic1', 'NativeGraphic2'):
+        self.assertNotIn('Restore Graphics Defaults', texts)  # row 9: shown once the page scrolls
+        for name in ('NativeGraphic1', 'NativeGraphic2', 'NativeGraphic6', 'NativeGraphic7', 'NativeGraphic8'):
             trigger = next(t for k, v, t in self.script.blocks(self.script.one(name)) if k == 3 and 0xe9 in t)
             self.assertEqual(trigger, [0xe6, 0xe2, 0xee, 0xf2, 0xe9])
+
+    def test_graphics_live_rows_query_and_change_their_settings(self):
+        page = self.script.one('NativeGraphics')
+        for index in range(5, 9):
+            row = self.script.one(f'NativeGraphic{index}')
+            self.assertEqual(row['parent'], page['at'] - 4)
+            calls = lambda kind, triggers=None: [int.from_bytes(arg, 'big') for _, op, arg in  # noqa: E731
+                                                 self.block(row, kind, triggers) if op == 0x13]
+            self.assertIn(0xf70 + index, calls(1))
+            if index in pause_menu.SLIDING_GRAPHICS:
+                # Texture Quality: left steps toward High, right toward Very Low.
+                self.assertIn(0xf80 + index, calls(3, [0xe6, 0xf2]))
+                self.assertIn(0xf90 + index, calls(3, [0xe2, 0xee]))
+                self.assertNotIn(0xf90 + index, calls(3, [0xe6, 0xf2]))
+            else:
+                self.assertIn(0xf90 + index, calls(3, [0xe6, 0xe2, 0xee, 0xf2, 0xe9]))
+
+    def test_graphics_scrolls_and_hides_the_slider_and_its_scrollbar(self):
+        def texts(name, kind):
+            return [self.script.string(self.script.lit + int.from_bytes(arg, 'big'))
+                    for _, op, arg in self.block(self.script.one(name), kind) if op == 0x16]
+
+        def locals_(name):
+            entry = self.block(self.script.one(name), 1)
+            return {instruction[2][1]: self.script.string(self.script.lit + int.from_bytes(previous[2], 'big'))
+                    for previous, instruction in zip(entry, entry[1:]) if previous[1] == 0x16 and instruction[1] == 0x09}
+        # The eight first rows fit; Bloom, Restore Defaults and Apply scroll the page by one row each.
+        for index, first in ((0, 0), (7, 0), (8, 1), ('Reset', 2), ('Apply', 3)):
+            name = f'NativeGraphic{index}' if isinstance(index, int) else f'NativeGraphics{index}'
+            shown = locals_(name)
+            self.assertEqual(shown[0], 'Graphics Settings')
+            self.assertEqual(shown[1], ['Frames Queued', 'Async Shader Compilation', 'RCAS Sharpening',
+                                        'Sharpening Strength'][first])
+            self.assertIn('sliderBar13', texts(name, 1))
+            # The Sharpening Strength slider only lines up with its row at the top.
+            self.assertEqual(texts(name, 1).count('sliderBar7'), 2 if first == 0 else 1)
+        self.assertEqual(locals_('NativeGraphicsApply')[8], 'Apply and Restart')
+        self.assertIn('sliderBar13', texts('NativeGraphics', 2))
 
     def test_audio_clears_unused_rows_inherited_from_options(self):
         entry = self.block(self.script.one('PauseAudio'), 1)
@@ -291,7 +329,7 @@ class NativeCheats(unittest.TestCase):
                      'NativeMultiplierReset', *[f'NativeCheat{i}' for i in range(8)],
                      *[f'NativeMultiplier{i}' for i in range(6)], 'HLNativeGraphics', 'NativeGraphics',
                      'NativeGraphicsReset', 'NativeGraphicsConfirm', 'NativeGraphicsResetYes',
-                     'NativeGraphicsResetNo', *[f'NativeGraphic{i}' for i in range(4)],
+                     'NativeGraphicsResetNo', *[f'NativeGraphic{i}' for i in range(9)],
                      *[f'NativeDisplay{i}' for i in range(8)], 'NativeDisplayApply',
                      'NativeDisplayConfirm', 'NativeDisplayYes', 'NativeDisplayNo']:
             for kind, ref, triggers in self.script.blocks(self.script.one(name)):
@@ -326,7 +364,7 @@ class NativeCheats(unittest.TestCase):
         for name in ['HLNativeCheats', 'NativeCheats', 'NativeMultipliers', 'NativeMultiplierReset',
                      *[f'NativeCheat{i}' for i in range(8)], *[f'NativeMultiplier{i}' for i in range(6)],
                      'HLNativeGraphics', 'NativeGraphics', 'NativeGraphicsReset', 'NativeGraphicsConfirm',
-                     'NativeGraphicsResetYes', 'NativeGraphicsResetNo', *[f'NativeGraphic{i}' for i in range(4)],
+                     'NativeGraphicsResetYes', 'NativeGraphicsResetNo', *[f'NativeGraphic{i}' for i in range(9)],
                      *[f'NativeDisplay{i}' for i in range(8)], 'NativeDisplayApply',
                      'NativeDisplayConfirm', 'NativeDisplayYes', 'NativeDisplayNo']:
             for kind, ref, triggers in self.script.blocks(self.script.one(name)):

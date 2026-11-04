@@ -218,6 +218,88 @@ fn a_clean_exit_writes_no_advice() {
     assert_eq!(log, format!("{MEMORY_LINE}\n"));
 }
 
+/// The records of the `last_run.jsonl` next to `log_path`.
+fn journal_records(log_path: &Path) -> Vec<serde_json::Value> {
+    std::fs::read_to_string(log_path.with_extension("jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+/// Runs the fake game with `args`, then returns `last_run.log` and the records of `last_run.jsonl`.
+fn run_and_read_both(args: &[&str]) -> (String, Vec<serde_json::Value>) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("last_run.log");
+    let handle = start(args, RunLog::open(&path));
+    collect(&handle);
+    let log = std::fs::read_to_string(&path).unwrap();
+    (log, journal_records(&path))
+}
+
+/// The `n` and `text` of every `line` record.
+fn numbered_lines(records: &[serde_json::Value]) -> Vec<(u64, String)> {
+    records
+        .iter()
+        .filter(|record| record["type"] == "line")
+        .map(|record| {
+            (
+                record["n"].as_u64().unwrap(),
+                record["text"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn the_journal_reproduces_the_run_log_line_by_line() {
+    let (log, records) = run_and_read_both(&[
+        "--say",
+        "Texture cache: memory pressure, evicted 3 images",
+        "--lines",
+        "3",
+        "--delay-ms",
+        "0",
+        "--exit",
+        "0",
+    ]);
+    let expected: Vec<(u64, String)> = log
+        .lines()
+        .enumerate()
+        .map(|(index, line)| (index as u64 + 1, line.to_string()))
+        .collect();
+    assert_eq!(expected.len(), 4, "{log}");
+    assert_eq!(numbered_lines(&records), expected);
+    assert_eq!(records.first().unwrap()["type"], "start");
+    let exit = records.last().unwrap();
+    assert_eq!(exit["type"], "exit");
+    assert_eq!(exit["code"], 0);
+    assert_eq!(exit["advice"], serde_json::Value::Null);
+    assert_eq!(records[1]["area"], "Texture cache");
+    assert_eq!(records[1]["source"], "game");
+}
+
+#[test]
+fn a_failed_run_puts_its_advice_and_code_in_the_journal() {
+    let (log, records) = run_and_read_both(&["--say", MEMORY_LINE, "--exit", "1"]);
+    let expected: Vec<(u64, String)> = log
+        .lines()
+        .enumerate()
+        .map(|(index, line)| (index as u64 + 1, line.to_string()))
+        .collect();
+    assert_eq!(numbered_lines(&records), expected);
+    let launcher_lines: Vec<&str> = records
+        .iter()
+        .filter(|record| record["source"] == "launcher")
+        .map(|record| record["text"].as_str().unwrap())
+        .collect();
+    assert_eq!(launcher_lines, ["", advice()]);
+    let exit = records.last().unwrap();
+    assert_eq!(exit["type"], "exit");
+    assert_eq!(exit["code"], 1);
+    assert_eq!(exit["advice"], advice());
+}
+
 /// The process group of `pid`, from `ps`.
 #[cfg(unix)]
 fn group_of(pid: u32) -> u32 {

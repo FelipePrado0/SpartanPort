@@ -16,8 +16,8 @@ use crate::core::paths::Paths;
 use crate::core::settings::Settings;
 use crate::core::store::Store;
 use crate::core::trophies::{
-    read_trp_icons, read_unlocked_trophies, reset_trophies, tier_color, tier_label, trophy_tier,
-    Tier,
+    earned, read_trp_icons, read_unlocked_trophies, reset_trophies, sorted, tier_color, tier_label,
+    trophy_tier, Order, Rarity, Tier,
 };
 use crate::ui::app::{Message, State};
 use crate::ui::follow::{self, View};
@@ -60,6 +60,7 @@ pub struct TrophiesView {
     pub tiers: BTreeMap<u32, Option<Tier>>,
     pub unlocked: BTreeSet<u32>,
     pub filter: Filter,
+    pub order: Order,
     /// Whether a load is under way.
     pub loading: bool,
     /// The settings the read was made for (`follow::inputs`).
@@ -71,6 +72,7 @@ pub struct TrophiesView {
 pub enum TrophiesMessage {
     Refresh,
     Filter(Filter),
+    Order(Order),
     Reset,
     ResetConfirmed,
     /// A load finished.
@@ -147,14 +149,16 @@ pub fn update(state: &mut State, message: TrophiesMessage) -> Task<Message> {
     match message {
         TrophiesMessage::Refresh => return refresh(state),
         TrophiesMessage::Filter(filter) => state.trophies.filter = filter,
+        TrophiesMessage::Order(order) => state.trophies.order = order,
         // A read for folders typed over since is dropped: each keystroke starts one, and they
         // finish in any order (the read of the current folders is on its way or already in).
         TrophiesMessage::Loaded(view)
             if view.inputs != follow::inputs(View::Trophies, &state.store) => {}
         TrophiesMessage::Loaded(view) => {
-            let filter = state.trophies.filter;
+            let (filter, order) = (state.trophies.filter, state.trophies.order);
             state.trophies = *view;
             state.trophies.filter = filter;
+            state.trophies.order = order;
         }
         TrophiesMessage::Reset => {
             if refuse_while_live(state, LiveAction::ResetTrophies) {
@@ -221,6 +225,25 @@ fn filter_box<'a>(state: &State) -> Element<'a, Message> {
     .into()
 }
 
+fn order_box<'a>(state: &State) -> Element<'a, Message> {
+    let lang = state.lang.clone();
+    let label = |order: Order| tr(&lang, order.english());
+    let labels: Vec<String> = Order::ALL.into_iter().map(label).collect();
+    let selected = label(state.trophies.order);
+    let lang = state.lang.clone();
+    pick_list(labels, Some(selected), move |chosen: String| {
+        Order::ALL
+            .into_iter()
+            .find(|order| tr(&lang, order.english()) == chosen)
+            .map_or(Message::Noop, |order| {
+                Message::Trophies(TrophiesMessage::Order(order))
+            })
+    })
+    .text_size(SELECT_TEXT)
+    .style(theme::pick_list_dark)
+    .into()
+}
+
 fn header<'a>(state: &State) -> Element<'a, Message> {
     let lang = &state.lang;
     let view = &state.trophies;
@@ -244,6 +267,7 @@ fn header<'a>(state: &State) -> Element<'a, Message> {
     row![
         text(summary).size(18).font(theme::CINZEL_BOLD),
         space::horizontal(),
+        order_box(state),
         filter_box(state),
         flat(tr(lang, "Reset trophies"), TrophiesMessage::Reset),
         flat(tr(lang, "Refresh"), TrophiesMessage::Refresh),
@@ -288,11 +312,29 @@ fn card<'a>(state: &State, id: u32) -> Option<Element<'a, Message>> {
     } else {
         (tr(lang, "LOCKED"), palette::MUTED)
     };
+    // The state, then the rarity tier and the share of players, as in the game's window.
+    let mut side = column![text(badge).size(12).color(badge_ink)]
+        .spacing(2)
+        .align_x(iced::Right);
+    if let Some(percent) = earned(id, view.icons.len()) {
+        let rarity = Rarity::of(percent);
+        side = side
+            .push(
+                text(tr(lang, rarity.english()))
+                    .size(12)
+                    .color(parse_color(rarity.color())),
+            )
+            .push(
+                text(tr_fmt(lang, "{}% of players", &[&format!("{percent:.1}")]))
+                    .size(12)
+                    .color(palette::MUTED),
+            );
+    }
     let edge = if got { palette::RED } else { palette::LINE };
     let body = row![
         image(handle.clone()).width(ICON_SIZE).height(ICON_SIZE),
         container(info).width(Fill),
-        text(badge).size(12).color(badge_ink),
+        side,
     ]
     .spacing(12)
     .align_y(Center);
@@ -325,7 +367,8 @@ pub fn view(state: &State) -> Element<'_, Message> {
             );
         }
     } else {
-        for &id in view.icons.keys() {
+        let ids: Vec<u32> = view.icons.keys().copied().collect();
+        for id in sorted(&ids, view.order) {
             let got = view.unlocked.contains(&id);
             let shown = match view.filter {
                 Filter::All => true,

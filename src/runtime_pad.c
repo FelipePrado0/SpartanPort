@@ -13,6 +13,7 @@
 #include "runtime.h"
 #include "gpu/spartanportgpu.h"
 #include "qte_hook.h"
+#include "switch_hook.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -136,7 +137,8 @@ static SDL_Gamepad *current_gamepad(void) {
  * changed per PS4 button with SPARTAN_PAD_MAP (gamepad) and SPARTAN_KEY_MAP (keyboard), e.g.
  * SPARTAN_KEY_MAP="cross=Q,square=Left Shift" or SPARTAN_PAD_MAP="cross=b,circle=a": comma-separated
  * <ps4 button>=<SDL key or gamepad button name>. A mapped PS4 button loses its default sources;
- * <ps4 button>=None leaves it without any.
+ * <ps4 button>=None leaves it without any. Several names joined by | are all sources of the button
+ * (SPARTAN_KEY_MAP="cross=Space|K": Space or K), up to MAX_SOURCES_PER_BUTTON.
  * touchpad_left (alias touchpad) and touchpad_right are the two sides of the touchpad click:
  * photo mode and the pause menu. Back/View (Share on a DualSense) is the right click, and with
  * L1 held the left one. Keyboard stick directions are mapped too; gamepad axes, the real touchpad
@@ -151,7 +153,9 @@ static const struct { const char *name; uint32_t ps; } ps_names[]={
     {"look_up",LOOK_UP}, {"look_down",LOOK_DOWN}, {"look_left",LOOK_LEFT}, {"look_right",LOOK_RIGHT},
 };
 typedef struct { int source; uint32_t ps; } ButtonSource;
-typedef struct { ButtonSource entries[48]; size_t count; } ButtonMap;
+/* Room for every button of the map with its sources: 31 buttons (see ps_names) at most. */
+enum { MAX_SOURCES_PER_BUTTON=4, MAP_CAPACITY=128 };
+typedef struct { ButtonSource entries[MAP_CAPACITY]; size_t count; } ButtonMap;
 static ButtonMap pad_map={{
     {SDL_GAMEPAD_BUTTON_SOUTH,BTN_CROSS}, {SDL_GAMEPAD_BUTTON_EAST,BTN_CIRCLE},
     {SDL_GAMEPAD_BUTTON_WEST,BTN_SQUARE}, {SDL_GAMEPAD_BUTTON_NORTH,BTN_TRIANGLE},
@@ -258,11 +262,27 @@ static int key_source(const char *name) {
     return (int)SDL_GetScancodeFromName(name);
 }
 
-/* Applies a SPARTAN_PAD_MAP/SPARTAN_KEY_MAP value; returns how many entries were used. Bad entries are
- * logged and skipped, so their PS4 button keeps its default. */
+/* One source of an entry, by name; -1 when the name is not one (a gamepad button can be 0). */
+static int named_source(const char *name, bool keyboard) {
+    if (!*name) return -1;
+    const int mouse=keyboard ? mouse_source(name) : 0;
+    const int source=mouse ? mouse : keyboard ? key_source(name) : (int)SDL_GetGamepadButtonFromString(name);
+    return source>(keyboard ? (int)SDL_SCANCODE_UNKNOWN : (int)SDL_GAMEPAD_BUTTON_INVALID) ? source : -1;
+}
+
+static void drop_sources(ButtonMap *map, uint32_t ps) {
+    size_t kept=0;
+    for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
+    map->count=kept;
+}
+
+/* Applies a SPARTAN_PAD_MAP/SPARTAN_KEY_MAP value; returns how many entries were used. An entry is
+ * <button>=<name>[|<name>...]: every listed source replaces the button's own. A name that is not
+ * valid is logged and skipped by itself; an entry with no valid name is skipped as a whole, so its
+ * PS4 button keeps its default. */
 static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
     if (!spec || !*spec) return 0;
-    char copy[1024];
+    char copy[2048];
     snprintf(copy,sizeof(copy),"%s",spec);
     int used=0;
     char *entry=copy;
@@ -276,29 +296,35 @@ static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
             continue;
         }
         *eq=0;
-        const char *button=trim(entry), *name=trim(eq+1);
+        const char *button=trim(entry);
+        char *names=trim(eq+1);
         entry=next;
         uint32_t ps=0;
         for (size_t i=0;i<sizeof(ps_names)/sizeof(*ps_names);++i) if (!SDL_strcasecmp(button,ps_names[i].name)) ps=ps_names[i].ps;
         if (!keyboard && (ps & STICK_DIRECTIONS)) ps=0;
-        if (ps && !SDL_strcasecmp(name,"None")) { /* the button gets no source at all */
-            size_t kept=0;
-            for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
-            map->count=kept;
+        if (ps && !SDL_strcasecmp(names,"None")) { /* the button gets no source at all */
+            drop_sources(map,ps);
             ++used;
             continue;
         }
-        const int mouse=keyboard && *name ? mouse_source(name) : 0;
-        const int source=!*name ? -1 : mouse ? mouse : keyboard ? key_source(name)
-                                                         : (int)SDL_GetGamepadButtonFromString(name);
-        if (!ps || source<=(keyboard ? (int)SDL_SCANCODE_UNKNOWN : (int)SDL_GAMEPAD_BUTTON_INVALID)) {
-            printf("Runtime: pad map: ignored '%s=%s'\n",button,name);
-            continue;
+        int sources[MAX_SOURCES_PER_BUTTON];
+        size_t source_count=0;
+        char *name=names;
+        while (name) {
+            char *more=strchr(name,'|');
+            if (more) *more++=0;
+            const char *trimmed=trim(name);
+            name=more;
+            const int source=named_source(trimmed,keyboard);
+            bool repeated=false;
+            for (size_t i=0;i<source_count;++i) repeated|=sources[i]==source;
+            if (!ps || source<0) printf("Runtime: pad map: ignored '%s=%s'\n",button,trimmed);
+            else if (!repeated && source_count<MAX_SOURCES_PER_BUTTON) sources[source_count++]=source;
         }
-        size_t kept=0;
-        for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
-        map->count=kept;
-        if (map->count<sizeof(map->entries)/sizeof(*map->entries)) map->entries[map->count++]=(ButtonSource){source,ps};
+        if (!source_count) continue;
+        drop_sources(map,ps);
+        for (size_t i=0;i<source_count && map->count<sizeof(map->entries)/sizeof(*map->entries);++i)
+            map->entries[map->count++]=(ButtonSource){sources[i],ps};
         ++used;
     }
     return used;
@@ -332,8 +358,8 @@ static const char *const qte_defaults[QTE_ROTATIONS]={"A>W>D","D>W>A","D>S>A","A
 static struct { int keys[QTE_KEYS_MAX]; unsigned length; bool directions; } qte_sequences[QTE_ROTATIONS];
 static struct {
     int loaded, mode, rotation;
-    uint32_t heartbeat;
-    uint64_t seen;       /* the last read that saw the prompt's frame count move */
+    uint32_t beat[SPARTAN_QTE_KINDS];
+    uint64_t seen[SPARTAN_QTE_KINDS];  /* the last read that saw each kind's frame count move */
     unsigned step;
     bool fresh, passed;  /* fresh: keys already held when the prompt appeared do not count */
     bool held[SDL_SCANCODE_COUNT];
@@ -403,13 +429,25 @@ static void qte_reset(void) {
     __atomic_store_n(&spartanport_qte.pass,0,__ATOMIC_RELAXED);
 }
 
-/* The rotation (0..5) the prompt on screen asks for, else -1. A prompt is up while its update
- * keeps counting frames; QTE_ACTIVE_US without a frame ends it (and resets the minigame). */
+/* The prompt kinds (SPARTAN_QTE_KIND_* bits) up now: a kind is up while its frame count keeps moving,
+ * one frame within QTE_ACTIVE_US. The update's count (heartbeat) needs the rotation hooks; the
+ * others come from the Automatic QTE stubs, whether Automatic QTE is on or not. */
+static unsigned qte_active(uint64_t now) {
+    unsigned kinds=0;
+    for (unsigned k=0;k<SPARTAN_QTE_KINDS;++k) {
+        const uint32_t beat=__atomic_load_n(k==SPARTAN_QTE_KIND_UPDATE ? &spartanport_qte.heartbeat
+                                            : &spartanport_qte.kinds[k-1],__ATOMIC_RELAXED);
+        if (beat!=qte.beat[k]) { qte.beat[k]=beat; qte.seen[k]=now; }
+        if (now-qte.seen[k]<=QTE_ACTIVE_US) kinds|=1u<<k;
+    }
+    return kinds;
+}
+
+/* The rotation (0..5) the prompt on screen asks for, else -1. A prompt that ends resets the minigame.
+ * Only the update's frames count here: the type at +0x10 is its prompt's. */
 static int qte_rotation(uint64_t now) {
     if (!spartanport_qte.block) return -1;
-    const uint32_t beat=__atomic_load_n(&spartanport_qte.heartbeat,__ATOMIC_RELAXED);
-    if (beat!=qte.heartbeat) { qte.heartbeat=beat; qte.seen=now; }
-    if (now-qte.seen>QTE_ACTIVE_US) { qte_reset(); return -1; }
+    if (!(qte_active(now) & 1u<<SPARTAN_QTE_KIND_UPDATE)) { qte_reset(); return -1; }
     const unsigned type=*(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET);
     return type-QTE_FIRST_ROTATION<QTE_ROTATIONS ? (int)(type-QTE_FIRST_ROTATION) : -1;
 }
@@ -478,6 +516,69 @@ static bool qte_play(const bool *keys, uint64_t now) {
     }
     qte.fresh=false;
     return true;
+}
+
+/* The engine at 60 FPS during QTEs (gpu: spartanportgpu_engine_fps_cap, which does nothing when the
+ * menu's option is off or the engine already runs at 60): down on the first frame of any prompt kind,
+ * back after QTE_FPS_HOLD_US more without one, so prompts in a row keep it. A cap held
+ * QTE_FPS_REPORT_US is reported once with the kinds still counting (a site that also runs outside
+ * prompts would keep the game at 60). Atomics only on this thread. */
+/* 5 s: on Poseidon's horse the single presses of one sequence come seconds apart, and 1.5 s let the
+ * engine go back to the player's rate between them (maintainer's test, 2026-10-30); staying at 60 a
+ * few seconds after a QTE costs little. */
+enum { QTE_FPS_HOLD_US=5000000, QTE_FPS_REPORT_US=20000000 };
+static struct { bool capped, reported; uint64_t since; } qte_fps;
+/* In Cronos, one blade pull (R1) at 240 FPS throws Kratos out of the map, at 60 it works. R1 there
+ * caps the engine at 60 until R1_FPS_HOLD_US after the last R1; the QTE cap and this one only lift
+ * the cap when both are done. */
+uintptr_t runtime_player_object;
+enum { R1_FPS_HOLD_US=4000000 };
+static uint64_t r1_fps_until;
+/* Charged prompts (hold a button: chests, doors) only play an animation: they keep the player's rate
+ * (maintainer, 2026-10-31). */
+enum { QTE_FPS_KINDS=((1u<<SPARTAN_QTE_KINDS)-1) & ~(1u<<SPARTAN_QTE_KIND_CHARGED) };
+static void qte_fps_cap(uint64_t now) {
+    const unsigned kinds=qte_active(now) & QTE_FPS_KINDS;
+    uint64_t last=0;  /* the latest frame of any kind that caps */
+    for (unsigned k=0;k<SPARTAN_QTE_KINDS;++k) if (QTE_FPS_KINDS>>k & 1 && qte.seen[k]>last) last=qte.seen[k];
+    if (kinds) {
+        if (!qte_fps.capped) {
+            qte_fps.capped=true; qte_fps.reported=false; qte_fps.since=now;
+            const int type=(kinds & 1u<<SPARTAN_QTE_KIND_UPDATE) && spartanport_qte.block
+                ? *(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET) : -1;
+            spartanportgpu_engine_fps_cap_qte(kinds,type);
+            if (!r1_fps_until) spartanportgpu_engine_fps_cap(60);
+        } else if (!qte_fps.reported && now-qte_fps.since>=QTE_FPS_REPORT_US) {
+            qte_fps.reported=true;
+            spartanportgpu_engine_fps_cap_held(kinds);
+        }
+    } else if (qte_fps.capped && now-last>QTE_ACTIVE_US+QTE_FPS_HOLD_US) {
+        qte_fps.capped=false;
+        if (!r1_fps_until) spartanportgpu_engine_fps_cap(0);
+    }
+}
+/* The pull that fails, Kratos at obj+0xa0 when R1 starts it: between the maintainer's marks of
+ * 2026-10-31 (z 81 to 101) and the 9 pulls that validated the cap (z 64 to 90), each within 24. */
+static const float r1_pull_spot[3]={-90,372,80};
+enum { R1_PULL_RADIUS=25 };
+static void r1_fps_cap(const PadData *d, uintptr_t kratos) {
+    static bool was_down;
+    const bool down=(d->buttons & (BTN_R3|BTN_L1|BTN_R1))==BTN_R1;  /* not the frame rate combo */
+    if (down && !was_down && kratos && runtime_file_cronos()) {
+        float position[3], squared=0;
+        memcpy(position,(const void *)(kratos+0xa0),sizeof(position));
+        for (int i=0;i<3;++i) squared+=(position[i]-r1_pull_spot[i])*(position[i]-r1_pull_spot[i]);
+        if (squared>R1_PULL_RADIUS*R1_PULL_RADIUS) { was_down=down; return; }
+        /* +0x298: 0 for the player in the damage code (src/actor_hook.h), a check on the object. */
+        printf("Engine FPS: 60 for %d s, the Cronos blade pull at [%.1f,%.1f,%.1f] (player byte %u)\n",
+               R1_FPS_HOLD_US/1000000,position[0],position[1],position[2],*(const volatile uint8_t *)(kratos+0x298));
+        if (!r1_fps_until && !qte_fps.capped) spartanportgpu_engine_fps_cap(60);
+        r1_fps_until=d->timestamp+R1_FPS_HOLD_US;
+    } else if (r1_fps_until && d->timestamp>r1_fps_until) {
+        r1_fps_until=0;
+        if (!qte_fps.capped) spartanportgpu_engine_fps_cap(0);
+    }
+    was_down=down;
 }
 
 static void sample_keyboard(PadData *d, const bool *keys, SDL_MouseButtonFlags mouse, const bool wheel[2]) {
@@ -789,6 +890,151 @@ static void apply_weapon_cycle(PadData *d) {
     if (weapon_cycle.pressing) d->buttons|=weapon_cycle.button;
 }
 
+/* Switch attacks (SPARTAN_SWITCH_ATTACKS=1, src/switch_hook.h). L1 + Cross asks for the switch attack
+ * of the weapon in his hands, L1 + a d-pad direction for that weapon's (the game selects the
+ * weapon as always). The pad only leaves the request; the hooks let the move he is in take its
+ * branch to a switch attack for it (a block move has them) and swap that branch for one of the
+ * game's branches to the requested weapon's switch attack, of the same kind. A request no move
+ * takes lapses after SWITCH_REQUEST_US. Cross alone no longer cycles through the weapons.
+ * The same weapon's switch attack again waits SWITCH_REPEAT_US after the last one: in the game
+ * each L1 + Cross also changed the weapon, so the attacks' short recovery was not spammable. A
+ * switch attack of another weapon is not held back.
+ *
+ * The branches are found once, in the hero's move data around the first one the game asks about
+ * (all of them within SWITCH_SCAN_BYTES): per weapon, the switch attack most of them go to is
+ * the common kind, the other one the rare kind. */
+enum { SWITCH_REQUEST_US=200000, SWITCH_REPEAT_US=800000, SWITCH_CURRENT=0xff, SWITCH_FOUND=128, SWITCH_STEP=0x10000,
+       SWITCH_SCAN_BYTES=8<<20 };
+int runtime_memory_is_mapped(uintptr_t address, uint64_t size);
+static SpartanSwitchState spartanport_switch;
+typedef struct { const uint8_t *branch, *target; } SwitchFound;
+static struct {
+    int loaded, enabled, hooks;
+    uint32_t previous, request;    /* request: 0, a weapon, or SWITCH_CURRENT */
+    uint64_t until;
+    int scanned;                   /* the rest: game thread */
+    unsigned last;                 /* the weapon of the last switch attack, and when */
+    uint64_t last_at;
+    unsigned found;
+    SwitchFound branches[SWITCH_FOUND];
+    const uint8_t *attack[4][2];   /* per weapon: its switch attack moves, common kind first */
+} sw;
+uintptr_t spartanport_switch_state_address(void) { return (uintptr_t)&spartanport_switch; }
+void spartanport_switch_status(int supported) { sw.hooks=supported; }
+static const char *switch_name(unsigned w) {
+    static const char *names[4]={"Nemean Cestus","Nemesis Whip","Blades of Exile","Claws of Hades"};
+    return w>=0x10 && w<=0x13 ? names[w-0x10] : "?";
+}
+static const uint8_t *switch_target(const uint8_t *b) {
+    int32_t rel; memcpy(&rel,b,4);
+    return rel ? b+rel : NULL;
+}
+static void switch_scan(const uint8_t *seen) {
+    sw.scanned=1;
+    const uintptr_t at=(uintptr_t)seen & ~(uintptr_t)(SWITCH_STEP-1);
+    uintptr_t lo=at, hi=at+SWITCH_STEP;
+    while (at-lo<SWITCH_SCAN_BYTES && lo>=SWITCH_STEP && runtime_memory_is_mapped(lo-SWITCH_STEP,SWITCH_STEP)) lo-=SWITCH_STEP;
+    while (hi-at<SWITCH_SCAN_BYTES && runtime_memory_is_mapped(hi,SWITCH_STEP)) hi+=SWITCH_STEP;
+    unsigned counts[4][4]={{0}};
+    const uint8_t *targets[4][4]={{0}};
+    for (uintptr_t p=lo;p+0x38<=hi && sw.found<SWITCH_FOUND;p+=4) {
+        const uint8_t *b=(const uint8_t *)p;
+        if (!spartanport_switch_branch(b)) continue;
+        const uint8_t *target=switch_target(b);
+        if (!target || (uintptr_t)target<lo || (uintptr_t)target>=hi) continue;
+        sw.branches[sw.found++]=(SwitchFound){b,target};
+        const unsigned w=b[0x2f]-0x10;
+        for (unsigned i=0;i<4;++i) {
+            if (targets[w][i]==target || !targets[w][i]) { targets[w][i]=target; ++counts[w][i]; break; }
+        }
+    }
+    for (unsigned w=0;w<4;++w) {
+        for (unsigned k=0;k<2;++k) {
+            unsigned best=4;
+            for (unsigned i=0;i<4;++i)
+                if (targets[w][i] && targets[w][i]!=sw.attack[w][0] && (best==4 || counts[w][i]>counts[w][best])) best=i;
+            if (best<4) sw.attack[w][k]=targets[w][best];
+        }
+    }
+    printf("Switch attacks: %u branches to switch attacks in %llu KB of move data (Cestus %d, Whip %d, Blades %d, Claws %d kinds)\n",
+           sw.found,(unsigned long long)((hi-lo)>>10),!!sw.attack[0][0]+!!sw.attack[0][1],!!sw.attack[1][0]+!!sw.attack[1][1],
+           !!sw.attack[2][0]+!!sw.attack[2][1],!!sw.attack[3][0]+!!sw.attack[3][1]);
+}
+/* The weapon a live request is for, if he owns it and it is not a repeat too soon. */
+static unsigned switch_requested(void) {
+    const uint32_t request=__atomic_load_n(&sw.request,__ATOMIC_ACQUIRE);
+    const uint64_t now=now_us();
+    if (!request || now>__atomic_load_n(&sw.until,__ATOMIC_RELAXED)) return 0;
+    const uint8_t *stats=(const uint8_t *)(uintptr_t)__atomic_load_n(&spartanport_switch.stats,__ATOMIC_RELAXED);
+    if (!stats) return 0;
+    const unsigned w=request==SWITCH_CURRENT ? stats[0x20b] : request;
+    uint32_t owned; memcpy(&owned,stats+0x1c4,4);
+    if (w==sw.last && now-sw.last_at<SWITCH_REPEAT_US) return 0;
+    return w>=0x10 && w<=0x13 && (owned>>(w-1) & 1) ? w : 0;
+}
+/* One of the game's branches to weapon w's switch attack, of the kind branch b goes to. */
+static const uint8_t *switch_pick(const uint8_t *b, unsigned w) {
+    if (b[0x2f]==w) return b;
+    const uint8_t *target=switch_target(b);
+    const unsigned kind=target && target==sw.attack[b[0x2f]-0x10][1];
+    const uint8_t *want=sw.attack[w-0x10][kind] ? sw.attack[w-0x10][kind] : sw.attack[w-0x10][0];
+    const uint8_t *pick=NULL;
+    for (unsigned i=0;i<sw.found;++i) {
+        const SwitchFound *f=&sw.branches[i];
+        if (f->branch[0x2f]!=w || f->target!=want) continue;
+        if (!memcmp(f->branch+0x14,b+0x14,4)) return f->branch;  /* the same timing */
+        if (!pick) pick=f->branch;
+    }
+    return pick;
+}
+ABI int spartanport_switch_input(const unsigned char *b, uintptr_t caller) {
+    if (!spartanport_switch_branch(b)) return 2;
+    if (caller!=spartanport_switch.caller) return 0;  /* 0xe9a70 would take them on Cross: no cycling there either */
+    if (!sw.scanned) switch_scan(b);
+    const unsigned w=switch_requested();
+    return w && switch_pick(b,w);
+}
+ABI const unsigned char *spartanport_switch_queue(const unsigned char *b) {
+    if (!spartanport_switch_branch(b)) return b;
+    const unsigned w=switch_requested();
+    const uint8_t *pick=w ? switch_pick(b,w) : NULL;
+    if (!pick) return b;
+    const uint8_t *stats=(const uint8_t *)(uintptr_t)spartanport_switch.stats;
+    __atomic_store_n(&sw.request,0,__ATOMIC_RELEASE);
+    sw.last=w;
+    sw.last_at=now_us();
+    printf("Runtime: switch attack of the %s (in his hands: %s)\n",switch_name(w),switch_name(stats[0x20b]));
+    return pick;
+}
+
+static void reset_switch_attack(void) { __atomic_store_n(&sw.request,0,__ATOMIC_RELEASE); }
+static void apply_switch_attack(const PadData *d) {
+    if (!sw.loaded) {
+        sw.loaded=1;
+        const char *value=getenv("SPARTAN_SWITCH_ATTACKS");
+        sw.enabled=value && !strcmp(value,"1");
+        if (sw.enabled) printf("Runtime: switch attacks on L1 + d-pad and L1 + Cross%s\n",
+                               sw.hooks ? "" : " unavailable (hooks not installed)");
+    }
+    if (!sw.enabled || !sw.hooks) return;
+    const uint32_t pressed=d->buttons & ~sw.previous;
+    sw.previous=d->buttons;
+    const uint32_t request=__atomic_load_n(&sw.request,__ATOMIC_ACQUIRE);
+    if (request && d->timestamp>sw.until) {
+        printf("Runtime: switch attack request lapsed (no move could switch)\n");
+        reset_switch_attack();
+    }
+    if (!(d->buttons & BTN_L1)) return;
+    static const struct { uint32_t button, weapon; } asks[]={
+        {BTN_CROSS,SWITCH_CURRENT},{BTN_DOWN,0x10},{BTN_LEFT,0x11},{BTN_UP,0x12},{BTN_RIGHT,0x13}};
+    for (unsigned i=0;i<sizeof(asks)/sizeof(asks[0]);++i) {
+        if (!(pressed & asks[i].button)) continue;
+        __atomic_store_n(&sw.until,d->timestamp+SWITCH_REQUEST_US,__ATOMIC_RELAXED);
+        __atomic_store_n(&sw.request,asks[i].weapon,__ATOMIC_RELEASE);
+        break;
+    }
+}
+
 /* R3 + L1 + R1 goes through the engine frame rates live (60 for spots that break at a higher
  * rate). The three stay hidden from the game until each one is released: a stray R1 grabs. */
 enum { ENGINE_FPS_COMBO=BTN_R3|BTN_L1|BTN_R1 };
@@ -804,12 +1050,27 @@ static void engine_fps_combo(PadData *d) {
     engine_fps_hidden&=d->buttons;
     d->buttons&=~engine_fps_hidden;
 }
+/* R3 + L2 opens the port's menu and R3 + R2 the trophy list (gpu/shim/spartanport_overlay.cpp),
+ * at half a pull, while the game takes a trigger from a slight one. With R3 held, the trigger and
+ * R3 stay hidden from the game until each one is released: a stray R2 uses the item. */
+enum { OVERLAY_TRIGGERS=BTN_L2|BTN_R2 };
+static uint32_t overlay_chord_hidden;
+static void overlay_chords(PadData *d) {
+    if ((d->buttons & BTN_R3) && (d->buttons & OVERLAY_TRIGGERS))
+        overlay_chord_hidden|=BTN_R3|(d->buttons & OVERLAY_TRIGGERS);
+    overlay_chord_hidden&=d->buttons;
+    d->buttons&=~overlay_chord_hidden;
+    if (overlay_chord_hidden & BTN_L2) d->l2=0;
+    if (overlay_chord_hidden & BTN_R2) d->r2=0;
+}
 /* After the menu or the text dialog closes, buttons still held (the Cross that accepted a
  * name) stay hidden until released: the game would take them as a new press. */
 static int hold_after_capture;
 static void sample(PadData *d) {
     sample_host(d);
-    if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); return; }
+    qte_fps_cap(d->timestamp);
+    r1_fps_cap(d, __atomic_load_n(&runtime_player_object, __ATOMIC_RELAXED));
+    if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); reset_switch_attack(); return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */
     read_inject();
     replay_sample(d);
@@ -818,8 +1079,10 @@ static void sample(PadData *d) {
     if (injected.buttons & BTN_R2) d->r2=255;
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
+    overlay_chords(d);
     note_game_menu(d); /* before the actions turn into the buttons they press */
     apply_combos(d);
+    apply_switch_attack(d);
     apply_dodge(d);
     apply_weapon_cycle(d);
     apply_mouse_aim(d);

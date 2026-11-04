@@ -6,11 +6,13 @@ use std::path::{Path, PathBuf};
 /// `SPARTAN_PORT_DIR` names the port folder (default: the executable's; absolute, even when the
 /// variable is relative), whose `bin/` and `scripts/` the launcher uses;
 /// `SPARTAN_DATA_DIR` the data folder (default: the port folder, as the Python's
-/// `DATA_DIR = PORT_DIR`); `SPARTAN_CONFIG` the ini.
+/// `DATA_DIR = PORT_DIR`); `SPARTAN_USER_DIR` the default saves and trophy directory (default:
+/// `SPARTAN_DATA_DIR/user`); `SPARTAN_CONFIG` the ini.
 #[derive(Debug, Clone)]
 pub struct Paths {
     pub port_dir: PathBuf,
     pub data_dir: PathBuf,
+    user_dir_default: PathBuf,
     ini: PathBuf,
     /// `SPARTAN_GAME_DIR` as the environment given to `from_env` had it: the game folder a new
     /// `settings.json` starts with.
@@ -48,6 +50,10 @@ impl Paths {
             .filter(|dir| !dir.is_empty())
             .map(PathBuf::from)
             .unwrap_or_else(|| port_dir.clone());
+        let user_dir_default = env("SPARTAN_USER_DIR")
+            .filter(|dir| !dir.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| data_dir.join("user"));
         let ini = env("SPARTAN_CONFIG")
             .filter(|file| !file.is_empty())
             .map(PathBuf::from)
@@ -55,6 +61,7 @@ impl Paths {
         Paths {
             port_dir,
             data_dir,
+            user_dir_default,
             ini,
             game_dir_default: env("SPARTAN_GAME_DIR").unwrap_or_default(),
         }
@@ -72,9 +79,18 @@ impl Paths {
         self.ini.clone()
     }
 
-    /// The saves folder: the setting, or `data_dir/user` when it is empty.
+    /// The saves folder: the setting, or `user_dir_default` (`SPARTAN_USER_DIR` or `data_dir/user`)
+    /// when it is empty.
     pub fn user_dir(&self, settings_user_dir: &str) -> PathBuf {
-        self.setting_or_default(settings_user_dir, "user")
+        if settings_user_dir.is_empty() {
+            self.user_dir_default.clone()
+        } else {
+            PathBuf::from(settings_user_dir)
+        }
+    }
+
+    pub fn user_dir_default(&self) -> &Path {
+        &self.user_dir_default
     }
 
     pub fn mods_dir(&self, settings_mods_dir: &str) -> PathBuf {
@@ -115,10 +131,12 @@ impl Paths {
             .find(|candidate| candidate.is_file())
     }
 
-    /// Next to the port; in the data folder when the port folder is read-only (AppImage).
+    /// Next to the port, where the packages ship the open FSR 4 model; in the data folder when
+    /// the port folder has none and is read-only.
     pub fn fsr4_folder(&self) -> PathBuf {
+        let shipped = self.port_dir.join("fsr4_shaders").is_dir();
         let writable = cfg!(windows) || folder_is_writable(&self.port_dir);
-        if writable {
+        if shipped || writable {
             self.port_dir.join("fsr4_shaders")
         } else {
             self.data_dir.join("fsr4_shaders")
@@ -248,6 +266,60 @@ mod tests {
     }
 
     #[test]
+    fn user_dir_follows_spartan_user_dir() {
+        let paths = Paths::from_env(
+            Path::new("exe"),
+            &env_of(&[
+                ("SPARTAN_DATA_DIR", "data"),
+                ("SPARTAN_USER_DIR", "custom_user"),
+            ]),
+        );
+        assert_eq!(paths.user_dir_default(), Path::new("custom_user"));
+        assert_eq!(paths.user_dir(""), Path::new("custom_user"));
+        assert_eq!(
+            paths.run_log_path(""),
+            Path::new("custom_user").join("last_run.log")
+        );
+        // Explicit saved user_dir setting overrides inherited SPARTAN_USER_DIR
+        assert_eq!(paths.user_dir("saved_setting"), Path::new("saved_setting"));
+        assert_eq!(
+            paths.run_log_path("saved_setting"),
+            Path::new("saved_setting").join("last_run.log")
+        );
+    }
+
+    #[test]
+    fn empty_spartan_user_dir_falls_back_to_data_dir() {
+        let paths = Paths::from_env(
+            Path::new("exe"),
+            &env_of(&[("SPARTAN_DATA_DIR", "data"), ("SPARTAN_USER_DIR", "")]),
+        );
+        assert_eq!(paths.user_dir_default(), Path::new("data").join("user"));
+        assert_eq!(paths.user_dir(""), Path::new("data").join("user"));
+        assert_eq!(
+            paths.run_log_path(""),
+            Path::new("data").join("user").join("last_run.log")
+        );
+    }
+
+    #[test]
+    fn user_dir_with_spaces() {
+        let paths = Paths::from_env(
+            Path::new("exe"),
+            &env_of(&[("SPARTAN_USER_DIR", "my custom/user folder")]),
+        );
+        assert_eq!(paths.user_dir(""), Path::new("my custom/user folder"));
+        assert_eq!(
+            paths.run_log_path(""),
+            Path::new("my custom/user folder").join("last_run.log")
+        );
+        assert_eq!(
+            paths.user_dir("saved/path with spaces"),
+            Path::new("saved/path with spaces")
+        );
+    }
+
+    #[test]
     fn ini_path_follows_spartan_config() {
         let default = Paths::from_env(Path::new("exe"), &env_of(&[("SPARTAN_DATA_DIR", "data")]));
         assert_eq!(
@@ -298,5 +370,19 @@ mod tests {
         if !root_ignores_modes {
             assert_eq!(folder, Path::new("data").join("fsr4_shaders"));
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fsr4_folder_is_the_packaged_one_even_when_the_port_is_read_only() {
+        // The AppImage ships the open FSR 4 model next to the port, which cannot be written.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("fsr4_shaders")).unwrap();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o500)).unwrap();
+        let paths = Paths::from_env(dir.path(), &env_of(&[("SPARTAN_DATA_DIR", "data")]));
+        let folder = paths.fsr4_folder();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(folder, dir.path().join("fsr4_shaders"));
     }
 }

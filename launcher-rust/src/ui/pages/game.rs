@@ -1,4 +1,4 @@
-//! The Game page: cheats, folders, save backups, the game language and the game patches.
+//! The Game page: cheats, folders, save backups, the game language, audio and the game patches.
 //!
 //! Every read of the disk happens in `refresh_backups` and `refresh_game_patches`, which
 //! `follow` calls; `view` only draws what they stored in the state.
@@ -11,17 +11,24 @@ use iced::{Center, Element, Left, Right, Task};
 use serde_json::{Map, Value};
 
 use crate::core::i18n::{tr, tr_fmt};
-use crate::core::options::LANGUAGES;
+use crate::core::options::{AUDIO_CHANNELS, LANGUAGES};
 use crate::core::patches::{builtin_xml, game_patch_metas, selectable, PatchMeta};
 use crate::core::save_backup::{list_backups, restore, KEEP};
+use crate::core::save_restore;
+use crate::core::settings::mark_default_patches_offered;
 use crate::ui::app::{Message, State};
 use crate::ui::follow::{follow, Cause};
+use crate::ui::pages::controls::ini_number;
 use crate::ui::play::{refuse_while_live, LiveAction};
-use crate::ui::tasks::blocking;
 use crate::ui::theme;
 use crate::ui::widgets::{
-    checkbox, folder, min_width, row, section, select, toggle_row, Modal, SELECT_MIN, SELECT_TEXT,
+    checkbox, folder, min_width, row, section, select, slider, toggle_row, Modal, SELECT_MIN,
+    SELECT_TEXT,
 };
+
+/// The notes under the Audio rows (#968); the translation tables key on these texts.
+pub const VOLUME_NOTE: &str = "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.";
+pub const SPEAKERS_NOTE: &str = "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.";
 
 /// The note under the Game language row; the translation tables key on this text.
 pub const LANGUAGE_NOTE: &str = "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.";
@@ -71,7 +78,17 @@ fn user_dir(state: &State) -> PathBuf {
 
 /// Lists the backups of the saves folder and chooses the newest.
 pub(crate) fn refresh_backups(state: &mut State) {
-    state.backups = list_backups(&user_dir(state));
+    if state.restoring_saves {
+        return;
+    }
+    state.backup_details = save_restore::list(&user_dir(state), &state.paths.port_dir);
+    state.backups = state.backup_details.iter().map(|s| s.key.clone()).collect();
+    // Keep empty automatic directories visible as before; restoring one safely refuses it.
+    for name in list_backups(&user_dir(state)) {
+        if !state.backups.contains(&name) {
+            state.backups.push(name);
+        }
+    }
     state.backup_choice = state.backups.first().cloned().unwrap_or_default();
 }
 
@@ -88,9 +105,13 @@ pub fn restore_saves(user_dir: &Path, name: &str) -> Result<Option<String>, Stri
 pub fn backup_update(state: &mut State, message: BackupMessage) -> Task<Message> {
     let lang = state.lang.clone();
     match message {
-        BackupMessage::Refresh => refresh_backups(state),
-        BackupMessage::Choose(name) => state.backup_choice = name,
+        BackupMessage::Refresh if !state.restoring_saves => refresh_backups(state),
+        BackupMessage::Choose(name) if !state.restoring_saves => state.backup_choice = name,
+        BackupMessage::Refresh | BackupMessage::Choose(_) => {}
         BackupMessage::Restore => {
+            if state.restoring_saves {
+                return Task::none();
+            }
             let name = state.backup_choice.clone();
             if name.is_empty() {
                 return Task::none();
@@ -98,24 +119,44 @@ pub fn backup_update(state: &mut State, message: BackupMessage) -> Task<Message>
             if refuse_while_live(state, LiveAction::RestoreSaves) {
                 return Task::none();
             }
-            let text = tr_fmt(
+            let mut text = tr_fmt(
                 &lang,
                 "Replace the current saves with the backup {}? The current saves are backed up first.",
                 &[&name],
             );
+            if let Some(snapshot) = state.backup_details.iter().find(|s| s.key == name) {
+                text += &format!("\n\n{}", snapshot.path.display());
+                if state
+                    .installation
+                    .title_id()
+                    .is_some_and(|id| !snapshot.titles.is_empty() && !snapshot.titles.contains(id))
+                {
+                    text += &format!("\n\n{}", tr(&lang, "This backup is for a different game ID and may be incompatible. Game IDs will not be changed."));
+                }
+            }
             state.modal = Some(Modal::confirm(
                 text,
                 Message::Backup(BackupMessage::RestoreConfirmed),
             ));
         }
         BackupMessage::RestoreConfirmed => {
+            if state.restoring_saves || refuse_while_live(state, LiveAction::RestoreSaves) {
+                return Task::none();
+            }
             state.modal = None;
+            state.restoring_saves = true;
             let user = user_dir(state);
+            let port = state.paths.port_dir.clone();
             let name = state.backup_choice.clone();
-            return blocking(move || restore_saves(&user, &name))
+            return crate::ui::tasks::blocking_or(move || {
+                save_restore::restore(&user, &port, &name, None)
+                    .map(|path| path.map(|p| p.display().to_string()))
+                    .map_err(|e| e.to_string())
+            }, Err("Save restore stopped unexpectedly. Check the before-restore backup before trying again.".to_string()))
                 .map(|result| Message::Backup(BackupMessage::Restored(result)));
         }
         BackupMessage::Restored(Ok(safety)) => {
+            state.restoring_saves = false;
             // Every view of the saves folder follows, the trophies included; the backups are
             // listed again, which moves the choice: name the backup first.
             let name = state.backup_choice.clone();
@@ -128,6 +169,7 @@ pub fn backup_update(state: &mut State, message: BackupMessage) -> Task<Message>
             return saves;
         }
         BackupMessage::Restored(Err(error)) => {
+            state.restoring_saves = false;
             state.modal = Some(Modal::error(tr_fmt(
                 &lang,
                 "Could not restore: {}",
@@ -170,8 +212,16 @@ pub fn store_game_patches(state: &mut State) {
         Some(Value::Object(map)) => map.clone(),
         _ => Map::new(),
     };
-    all.insert(title_id, Value::Array(names));
+    all.insert(title_id.clone(), Value::Array(names));
     state.store.set("game_patches", Value::Object(all));
+    let mut offered = Map::new();
+    if let Some(saved) = state.store.json("patches_offered") {
+        offered.insert("patches_offered".into(), saved.clone());
+    }
+    mark_default_patches_offered(&mut offered, &title_id);
+    if let Some(list) = offered.remove("patches_offered") {
+        state.store.set("patches_offered", list);
+    }
 }
 
 /// Reads the built-in patches of the game in `state.installation` into `state.patches`, keeping
@@ -256,7 +306,7 @@ fn backups_row(state: &State) -> Element<'_, Message> {
     let refresh = button(text(tr(lang, "Refresh")))
         .style(theme::button_flat)
         .on_press(Message::Backup(BackupMessage::Refresh));
-    row(
+    let controls = row(
         state.rtl,
         &tr(lang, "Save backups"),
         layout![choose, restore, refresh]
@@ -265,12 +315,55 @@ fn backups_row(state: &State) -> Element<'_, Message> {
             .into(),
         Some(&tr_fmt(
             lang,
-            "Made before every start, newest first; the last {} are kept. Restoring backs up the current saves first.",
+            "Automatic backups keep the last {} starts. Before-restore backups are kept separately and are never automatically deleted.",
             &[&KEEP.to_string()],
         )),
-    )
+    );
+    let mut body = column![controls].spacing(4);
+    if let Some(snapshot) = state
+        .backup_details
+        .iter()
+        .find(|s| s.key == state.backup_choice)
+    {
+        let titles = snapshot
+            .titles
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        body = body.push(
+            text(tr_fmt(
+                lang,
+                "{} · {} files · {} bytes · Game IDs: {}",
+                &[
+                    &tr(lang, snapshot.source.label()),
+                    &snapshot.files.to_string(),
+                    &snapshot.bytes.to_string(),
+                    &titles,
+                ],
+            ))
+            .size(12),
+        );
+        body = body.push(
+            text(format!(
+                "{}\n{}",
+                snapshot.time_label(),
+                snapshot.path.display()
+            ))
+            .size(12),
+        );
+        if state
+            .installation
+            .title_id()
+            .is_some_and(|id| !snapshot.titles.is_empty() && !snapshot.titles.contains(id))
+        {
+            body = body.push(text(tr(lang, "This backup is for a different game ID and may be incompatible. Game IDs will not be changed.")).size(12));
+        }
+    }
+    body.into()
 }
 
+/// Renders translated built-in patch labels with original names as toggle identities.
 fn patches_section(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
     let mut body = column![section(state.rtl, &tr(lang, "Game patches"))].spacing(2);
@@ -290,8 +383,8 @@ fn patches_section(state: &State) -> Element<'_, Message> {
     );
     for meta in &patches.selectable {
         let label = match &meta.author {
-            Some(author) => format!("{}  ({author})", meta.name),
-            None => meta.name.clone(),
+            Some(author) => format!("{}  ({author})", tr(lang, &meta.name)),
+            None => tr(lang, &meta.name),
         };
         let name = meta.name.clone();
         let note = meta.note.as_deref().map(|note| tr(lang, note));
@@ -310,7 +403,9 @@ pub fn view(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
     let hint = |english: &str| tr(lang, english);
     let language = state.store.text("language");
-    let default_saves = state.paths.data_dir.join("user").display().to_string();
+    let default_saves = state.paths.user_dir("").display().to_string();
+    // The Python marks a row that needs a new start of the game with a small `restart` note.
+    let speakers_label = format!("{}  ·  {}", tr(lang, "Speakers"), tr(lang, "restart"));
 
     column![
         section(state.rtl, &tr(lang, "Cheats")),
@@ -367,6 +462,30 @@ pub fn view(state: &State) -> Element<'_, Message> {
             &tr(lang, "Game language"),
             select("language", LANGUAGES, &language, lang),
             Some(&hint(LANGUAGE_NOTE)),
+        ),
+        section(state.rtl, &tr(lang, "Audio")),
+        row(
+            state.rtl,
+            &tr(lang, "Volume"),
+            slider(
+                "master_volume",
+                0.0,
+                200.0,
+                "%",
+                ini_number(state, "master_volume")
+            ),
+            Some(&hint(VOLUME_NOTE)),
+        ),
+        row(
+            state.rtl,
+            &speakers_label,
+            select(
+                "audio_channels",
+                AUDIO_CHANNELS,
+                &state.store.text("audio_channels"),
+                lang
+            ),
+            Some(&hint(SPEAKERS_NOTE)),
         ),
         patches_section(state),
     ]

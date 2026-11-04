@@ -433,7 +433,8 @@ fn run_writes_every_derived_file_and_starts_the_probe_with_the_python_command_li
         var("SPARTAN_CONFIG"),
         Some(text(&port.root.join("spartanport.ini")))
     );
-    assert_eq!(var("SPARTAN_UPSCALER").as_deref(), Some("none"));
+    // The game reads spartanport.ini's upscaler (Off by default); the runner no longer forces it.
+    assert_eq!(var("SPARTAN_UPSCALER"), None);
     assert_eq!(var("SPARTAN_READBACK_LINEAR").as_deref(), Some("1"));
     assert_eq!(
         var("SPARTAN_WINDOW_ICON"),
@@ -921,7 +922,7 @@ fn a_pool_above_ram_warns() {
     host.memory_mb = Some(4096);
     let ran = port.run_on(host, &[("SPARTAN_DMEM_MB", "11200")], &[]);
     assert_eq!(ran.code, 0, "{ran}");
-    let warning = "Memory: the guest memory pool commits 12224 MiB and the game needs about \
+    let warning = "Memory: the guest memory pool holds up to 12224 MiB and the game needs about \
                    16320 MiB in all, more than the 4096 MiB of RAM.";
     assert!(
         ran.out.lines().any(|line| line.starts_with(warning)),
@@ -1184,6 +1185,29 @@ fn play_writes_last_run_log_with_the_advice() {
     assert_eq!(code, 0, "{log}");
     assert_eq!(log, console);
     assert!(told.is_empty());
+}
+
+#[test]
+fn play_writes_the_journal_next_to_the_run_log() {
+    let dir = tempfile::tempdir().unwrap();
+    let user = dir.path().join("saves");
+    let settings = play_settings(dir.path(), &user);
+    let line = "Runtime: cannot create 6080 MiB of guest memory (error 12)";
+    let args = ["--say", line, "--exit", "21"];
+    let (code, _, log, _) = played(&settings, dir.path(), &user, clean_environment(), &args);
+    assert_eq!(code, 21, "{log}");
+    let journal = fs::read_to_string(user.join("last_run.jsonl")).unwrap();
+    let records: Vec<serde_json::Value> = journal
+        .lines()
+        .map(|record| serde_json::from_str(record).unwrap())
+        .collect();
+    assert_eq!(records.first().unwrap()["type"], "start");
+    assert_eq!(records[1]["text"], line);
+    assert_eq!(records[1]["area"], "Runtime");
+    let exit = records.last().unwrap();
+    assert_eq!(exit["type"], "exit");
+    assert_eq!(exit["code"], 21);
+    assert!(exit["advice"].as_str().is_some(), "{journal}");
 }
 
 #[test]

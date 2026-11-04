@@ -81,10 +81,11 @@ class GameProfileTests(unittest.TestCase):
 
     def test_spartanport_defaults_and_extras(self):
         self.assertEqual(selected_patches(SPARTAN, '01.02', ''),
-                         ['Bug Fix - Texture Corruption Fix', 'Skip Any Video With X Button',
+                         ['Bug Fix - Texture Corruption Fix', 'High FPS Wall Seam Fix', 'Skip Any Video With X Button',
                           'Bug Fix - Startup Black Screen'])
         self.assertEqual(selected_patches(SPARTAN, '01.02', 'Resolution Patch - 720p; Skip Any Video With X Button'),
-                         ['Skip Any Video With X Button', 'Bug Fix - Startup Black Screen', 'Resolution Patch - 720p'])
+                         ['High FPS Wall Seam Fix', 'Skip Any Video With X Button', 'Bug Fix - Startup Black Screen',
+                          'Resolution Patch - 720p'])
         self.assertEqual(selected_patches(SPARTAN, '01.00', ''), [])
         # The launcher's selection is exact: unchecked defaults stay off, except the fixes that are
         # always on (a list saved before they existed must still get them).
@@ -95,7 +96,8 @@ class GameProfileTests(unittest.TestCase):
 
     def test_spartanport_resolution_patch_replaces_texture_fix(self):
         self.assertEqual(selected_patches(SPARTAN, '01.02', 'Resolution Patch - 4K'),
-                         ['Skip Any Video With X Button', 'Bug Fix - Startup Black Screen', 'Resolution Patch - 4K'])
+                         ['High FPS Wall Seam Fix', 'Skip Any Video With X Button', 'Bug Fix - Startup Black Screen',
+                          'Resolution Patch - 4K'])
         with self.assertRaises(ValueError):
             selected_patches(SPARTAN, '01.02', 'Resolution Patch - 4K;Resolution Patch - 720p')
 

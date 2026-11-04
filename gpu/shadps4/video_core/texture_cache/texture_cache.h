@@ -134,6 +134,13 @@ public:
     bool ResolveReadbacks(VAddr address, u64 size, bool assume_locks = true,
                           ReadbackSource source = ReadbackSource::Unknown);
     void CancelReadbacks(VAddr address, u64 size, bool exact = false);
+    // spartanport: whether a guest-view read of the range would fault on a pending readback, for
+    // readers that go through the backing view instead.
+    bool ReadbackBlocksRead(VAddr address, u64 size);
+    // spartanport: counts the readbacks that read-protect their pages. A backing-view reader that
+    // sees it change during its copy may have read a page a readback protected (and perhaps
+    // already retired) meanwhile. Zero when pending pages stay readable (stale readbacks).
+    u64 ReadbackGeneration() const;
 
     /// Retrieves the image handle of the image with the provided attributes.
     [[nodiscard]] ImageId FindImage(ImageDesc& desc, bool exact_fmt = false);
@@ -449,6 +456,8 @@ private:
     std::unordered_set<ImageId> download_images;
     u64 total_used_memory = 0;
     u64 gc_evictions = 0, gc_downloads = 0; ///< spartanport: pressure report
+    // spartanport: count old tiled images retained by the latest pass for pressure diagnostics.
+    u64 gc_kept = 0, gc_kept_bytes = 0;
     std::chrono::steady_clock::time_point gc_report_time{};
     u64 trigger_gc_memory = 0;
     u64 pressure_gc_memory = 0;
@@ -517,6 +526,7 @@ private:
     ReadbackQueue<Vulkan::StagingBufferRef> pending_readbacks;
     std::mutex readback_mutex;
     std::atomic<bool> has_pending_readbacks{false};
+    std::atomic<u64> readback_generation{0};
     u64 readbacks_queued = 0, readbacks_completed = 0, readbacks_waited = 0;
     u64 readbacks_canceled = 0, readbacks_peak_bytes = 0;
     std::chrono::steady_clock::time_point readback_report = std::chrono::steady_clock::now();

@@ -3,9 +3,10 @@
 use iced::alignment::Horizontal;
 use iced::font::{Family, Weight};
 use iced::widget::{button, checkbox, container, pick_list, text, text_input};
-use iced::{Background, Border, Color, Font, Padding, Theme};
+use iced::{Background, Border, Color, Font, Padding, Size, Theme};
 
 use crate::core::options::ui_scale_choice;
+use crate::ui::app::WINDOW_SIZE;
 
 /// Colours of the launcher (spec section 3.3).
 pub mod palette {
@@ -227,12 +228,33 @@ pub fn text_muted(_theme: &Theme) -> text::Style {
 }
 
 /// Zoom factor of the stored GUI Scale, in screen pixels per logical pixel whatever the desktop's
-/// scale (R90): 1x or 1.5x (`options::ui_scale_choice` maps an older file's values).
-pub fn ui_scale(mode: &str) -> f32 {
+/// scale (R90): 1x or 1.5x, or `None` for Auto (`options::ui_scale_choice` maps an older file's
+/// values).
+pub fn ui_scale(mode: &str) -> Option<f32> {
     match ui_scale_choice(mode) {
-        "1.5" => 1.5,
-        _ => 1.0,
+        "1" => Some(1.0),
+        "1.5" => Some(1.5),
+        _ => None,
     }
+}
+
+/// GUI Scale Auto: the desktop's own scale, at most what keeps the 1280 × 800 window within the
+/// 90 % of the monitor (`monitor_px`, in screen pixels) that `fitted_window` allows, and never
+/// below 1x.
+pub fn auto_zoom(desktop_scale: f32, monitor_px: Option<Size>) -> f32 {
+    let fit = monitor_px.map_or(f32::INFINITY, |monitor| {
+        (0.9 * monitor.width / WINDOW_SIZE.width).min(0.9 * monitor.height / WINDOW_SIZE.height)
+    });
+    if !desktop_scale.is_finite() || desktop_scale <= 0.0 {
+        return 1.0;
+    }
+    // `min` and `max` drop a NaN fit, so a bogus monitor leaves the desktop's scale.
+    desktop_scale.min(fit).max(1.0)
+}
+
+/// The zoom of the stored GUI Scale on this desktop and monitor (`auto_zoom` for Auto).
+pub fn zoom(mode: &str, desktop_scale: f32, monitor_px: Option<Size>) -> f32 {
+    ui_scale(mode).unwrap_or_else(|| auto_zoom(desktop_scale, monitor_px))
 }
 
 /// The scale factor iced applies on top of the desktop's own (which it already draws at), so the
@@ -308,14 +330,40 @@ mod tests {
 
     #[test]
     fn ui_scale_rules() {
-        // R90: GUI Scale is 1x or 1.5x, absolute on any desktop (`window_zoom` leaves the
-        // desktop's own scale out). An older file's "auto" loads as 1x and its "2" as 1.5x.
-        assert_eq!(ui_scale("1"), 1.0);
-        assert_eq!(ui_scale("1.5"), 1.5);
-        assert_eq!(ui_scale("auto"), 1.0);
-        assert_eq!(ui_scale("2"), 1.5);
-        assert_eq!(ui_scale("bogus"), 1.0);
-        assert_eq!(ui_scale(""), 1.0);
+        // 1x and 1.5x are absolute on any desktop (`window_zoom` leaves the desktop's own scale
+        // out); an older file's "2" is 1.5x. Auto (the default) has no fixed zoom.
+        assert_eq!(ui_scale("1"), Some(1.0));
+        assert_eq!(ui_scale("1.5"), Some(1.5));
+        assert_eq!(ui_scale("2"), Some(1.5));
+        assert_eq!(ui_scale("auto"), None);
+        assert_eq!(ui_scale("bogus"), None);
+        assert_eq!(ui_scale(""), None);
+    }
+
+    #[test]
+    fn auto_zoom_follows_the_desktop_and_fits_the_screen() {
+        let px = |w, h| Some(Size::new(w, h));
+        // A Retina Mac (2x, 2940 × 1912): the desktop's 2x, the window still fits.
+        assert_eq!(auto_zoom(2.0, px(2940.0, 1912.0)), 2.0);
+        // A 4K monitor at 150 %.
+        assert_eq!(auto_zoom(1.5, px(3840.0, 2160.0)), 1.5);
+        // A 1080p laptop at 125 %: 800 × 1.25 would not fit in 90 % of 1080, so 1.215.
+        assert!((auto_zoom(1.25, px(1920.0, 1080.0)) - 1.215).abs() < 1e-6);
+        // 100 % desktops and screens too small for 1280 × 800 stay at 1x.
+        assert_eq!(auto_zoom(1.0, px(1920.0, 1080.0)), 1.0);
+        assert_eq!(auto_zoom(1.5, px(1366.0, 768.0)), 1.0);
+        // Before the monitor is known, the desktop's scale alone; a bogus scale is 1x.
+        assert_eq!(auto_zoom(2.0, None), 2.0);
+        assert_eq!(auto_zoom(0.0, None), 1.0);
+        assert_eq!(auto_zoom(f32::NAN, px(1920.0, 1080.0)), 1.0);
+    }
+
+    #[test]
+    fn zoom_is_the_chosen_scale_or_auto() {
+        let monitor = Some(Size::new(2940.0, 1912.0));
+        assert_eq!(zoom("1", 2.0, monitor), 1.0);
+        assert_eq!(zoom("1.5", 2.0, monitor), 1.5);
+        assert_eq!(zoom("auto", 2.0, monitor), 2.0);
     }
 
     #[test]

@@ -262,15 +262,15 @@ static void instance_release(Instance *in) {
 static uint32_t mp3_next(Instance *in, const unsigned char *input, uint64_t input_size) {
     if (input_size<4) return RESULT_PARTIAL_INPUT;
     Mp3Frame f;
-    int ignore_ofl=in->codec_flags & 1;
-    if (runtime_mp3_parse(input,input_size>UINT32_MAX ? UINT32_MAX : (uint32_t)input_size,!ignore_ofl,1,&f))
+    int parse_ofl=!(in->codec_flags & 1) && !in->total_samples && !in->gapless_init.total_samples && !in->gapless_init.skip_samples;
+    if (runtime_mp3_parse(input,input_size>UINT32_MAX ? UINT32_MAX : (uint32_t)input_size,parse_ofl,1,&f))
         return RESULT_CODEC_ERROR|RESULT_FATAL;
     in->info.channels=(int)f.num_channels; in->info.samplingRate=(int)f.sample_rate;
     in->info.frameSamples=(int)f.samples_per_channel; in->info.framesInSuperframe=1;
     in->info.superframeSize=(int)f.frame_size; in->superframe_remain=(uint32_t)f.frame_size;
     in->mp3_header=(uint32_t)input[0]<<24|(uint32_t)input[1]<<16|(uint32_t)input[2]<<8|input[3];
     in->mp3_bitrate=f.bitrate;
-    if (f.total_samples || f.encoder_delay) {
+    if (parse_ofl && (f.total_samples || f.encoder_delay)) {
         in->gapless_init.total_samples=f.total_samples; in->gapless_init.skip_samples=(uint16_t)f.encoder_delay;
         gapless_reset(in);
     }
@@ -350,7 +350,7 @@ static void run_job(Context *ctx, uint32_t id, Job *job) {
     const unsigned char *control_end=control ? control+job->input_control.size : NULL;
     if (CONTROL_RESET(f)) {
         in->total_samples=0; gapless_reset(in);
-        if (in->codec==CODEC_MP3) runtime_mp3_reset(in->mp3);
+        if (in->codec==CODEC_MP3) { runtime_mp3_reset(in->mp3); in->gapless_init=(SidebandGapless){0}; }
         else if (in->initialized) at9_reset(in);
     }
     if (control && SIDEBAND_FORMAT(f) && control+24<=control_end) control+=24; /* output format fixed per instance */

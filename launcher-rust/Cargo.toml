@@ -1,6 +1,6 @@
 [package]
 name = "spartanport-launcher"
-version = "2.8.0"
+version = "3.0.0"
 edition = "2021"
 rust-version = "1.87"
 # `cargo run` starts the launcher; `fake-game` is a test helper.
@@ -44,6 +44,7 @@ zip = { version = "9", default-features = false, features = ["deflate"] }
 roxmltree = "0.21"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 sha2 = "0.10"
+fs2 = "0.4"
 flate2 = "1"
 md-5 = "0.10"
 crc32fast = "1"

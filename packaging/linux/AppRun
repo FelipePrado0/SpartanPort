@@ -8,7 +8,8 @@ share=$here/usr/share/spartanport
 
 export LD_LIBRARY_PATH="$here/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export SPARTAN_DATA_DIR=${SPARTAN_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/spartanport}
-mkdir -p "$SPARTAN_DATA_DIR"
+export SPARTAN_USER_DIR=${SPARTAN_USER_DIR:-$SPARTAN_DATA_DIR/user}
+mkdir -p "$SPARTAN_DATA_DIR" "$SPARTAN_USER_DIR"
 
 cd -- "$share"
 exec "$share/spartanport-launcher" "$@"

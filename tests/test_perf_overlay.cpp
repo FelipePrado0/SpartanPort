@@ -40,6 +40,14 @@ int main() {
     assert(P::Format(s, P::Cpu | P::Vram, true) == "CPU 34%   VRAM 5.4 / 12.0 GB");
     assert(P::Format(s, 0, true).empty());
 
+    P::Sample fg;
+    fg.fps = 120.0f;
+    fg.game_fps = 60.0f;
+    assert(P::Format(fg, P::Fps, true) == "FG 120 FPS (60FPS Game)");
+    assert(P::Format(fg, P::Fps, false) == "FG 120 FPS (60FPS Game)");
+    fg.game_fps = 0.0f;
+    assert(P::Format(fg, P::Fps, true) == "120 FPS");
+
     P::Sample unknown;
     unknown.upscaler = "";
     assert(P::Format(unknown, P::Upscaler | P::Gpu | P::Cpu | P::Ram | P::Vram, false) ==

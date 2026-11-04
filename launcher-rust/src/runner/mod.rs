@@ -15,6 +15,7 @@ pub mod plan;
 pub mod prepare;
 pub mod probe_image;
 pub mod sce;
+pub mod switch_text;
 pub mod window_icon;
 
 /// The synthetic probe inputs the runner's tests build (`tests/test_probe.py::package` and more).
@@ -360,7 +361,7 @@ impl<'a> Runner<'a> {
         // resolutions too (SPARTAN_EXTRA_RESOLUTIONS tells the game). A selection that cannot be
         // read stops the start, as run.py's.
         let mut game = plan.game.clone();
-        let mod_patch_files: Vec<PathBuf> = match mods::enabled_patch_files(
+        let mut mod_patch_files: Vec<PathBuf> = match mods::enabled_patch_files(
             &plan.mods_dir,
             &plan.mods_config,
             plan.mods_switch != "0",
@@ -375,7 +376,7 @@ impl<'a> Runner<'a> {
             .collect();
         self.derive("SPARTAN_EXTRA_RESOLUTIONS", extra.join(";"));
         // 5. The start-up graphics options of spartanport.ini.
-        let graphics = graphics_options::prepare(
+        let mut graphics = graphics_options::prepare(
             &plan.config,
             &out.join("graphics_state.json"),
             &extra,
@@ -386,6 +387,34 @@ impl<'a> Runner<'a> {
         }
         for (key, value) in graphics_options::environment(&graphics.options) {
             self.set(&key, value);
+        }
+        // A temporal upscaler preset: the game renders at the preset's size (a resolution patch of
+        // that size, never the display's) and the upscaler outputs the chosen resolution. Its
+        // full-size passes are the HUD's.
+        if let Some((width, height, output)) =
+            graphics_options::upscaler_render_size(&plan.config, &self.env)
+        {
+            let base = port.join("patches").join("CUSA01623.xml");
+            let patch = fs::read_to_string(&base).ok().and_then(|xml| {
+                graphics_options::resolution_patch_xml(&xml, width, height, output)
+            });
+            match patch {
+                Some(text) => {
+                    let file = out.join("upscale-resolution.xml");
+                    if let Err(error) = fs::write(&file, text) {
+                        return self.fail(&format!("Upscaler: {error}"));
+                    }
+                    mod_patch_files.push(file);
+                    graphics.options.render_resolution = format!("{width}x{height}");
+                    self.derive("SPARTAN_RENDER_RES", format!("{width}x{height}"));
+                }
+                None => self.say("Upscaler: no resolution patch to scale from"),
+            }
+            self.derive("SPARTAN_OUTPUT_RES", format!("{}x{}", output.0, output.1));
+            self.say(&format!(
+                "Upscaler: render {width}x{height}, output {}x{}",
+                output.0, output.1
+            ));
         }
         if plan.fsr411_dir.is_none()
             && !port.join("fsr4_411").is_dir()
@@ -511,12 +540,7 @@ impl<'a> Runner<'a> {
         if let Some(icon) = window_icon::write(&icon, out) {
             self.set_default("SPARTAN_WINDOW_ICON", python_path(&icon));
         }
-        // The temporal upscalers and motion vectors are not calibrated for this game yet: off
-        // unless the launcher's experimental switch is on; linear image readbacks fix its
-        // corrupted textures.
-        if self.get("SPARTAN_EXPERIMENTAL_UPSCALER") != Some("1") {
-            self.set_default("SPARTAN_UPSCALER", "none");
-        }
+        // Linear image readbacks fix the game's corrupted textures.
         self.set_default("SPARTAN_READBACK_LINEAR", "1");
         // 11 and 12. The patches.
         let applied = match self.patches(&plan, &game, &mod_patch_files, &graphics) {
@@ -754,9 +778,10 @@ impl<'a> Runner<'a> {
             .map_err(|error| self.fail(&format!("Patches: {error}")))
     }
 
-    /// Step 13: the probe arguments of the glyph copies and of the pause menu's copy; sets
-    /// `SPARTAN_GLYPHS` (the in-game menu names the buttons the same way). Failures only reach the
-    /// output: the game then keeps its own icons, or starts without the row.
+    /// Step 13: the probe arguments of the glyph copies, of the pause menu's copy and of the
+    /// switch attacks' tutorial texts; sets `SPARTAN_GLYPHS` (the in-game menu names the buttons the
+    /// same way). Failures only reach the output: the game then keeps its own icons, starts without
+    /// the row, or keeps its tutorial texts.
     fn mounts(&mut self, plan: &RunPlan, probe: &str, game: &Path) -> Vec<String> {
         let (port, out) = (&plan.port, &plan.out);
         let assets = glyphs::Assets::in_port(port);
@@ -790,7 +815,8 @@ impl<'a> Runner<'a> {
             &lookup,
             &mut |line| say(log, &line),
         );
-        [glyph_args, menu_args].concat()
+        let text_args = switch_text_mounts(env, game, out, &mut |line| say(log, &line));
+        [glyph_args, menu_args, text_args].concat()
     }
 
     /// Starts the probe with `command` and waits for it, with the Discord presence while it runs:
@@ -899,8 +925,9 @@ pub const GAMEPAD_PROBE_LIMIT: Duration = Duration::from_secs(15);
 /// The probe arguments and style of the controller glyphs (`run.py` `glyph_mounts`): patched copies
 /// of the WADs that hold the game's button icons, mounted over them (`glyphs::build`). Opt-in:
 /// unless `SPARTAN_GLYPH_STYLE` is auto, xbox, nintendo or keyboard nothing is asked, drawn or
-/// mounted, and old copies are removed. The keyboard keys follow `SPARTAN_KEY_MAP`; auto shows them
-/// when no gamepad is connected. Whatever fails only reaches the Log: the game then keeps its own
+/// mounted, and old copies are removed. The keyboard keys follow `SPARTAN_KEY_MAP` (the main key of a
+/// button, or its alternative with `SPARTAN_GLYPH_KEYS=alternative`); auto shows them when no
+/// gamepad is connected. Whatever fails only reaches the Log: the game then keeps its own
 /// icons. `run_probe` runs a command (`[probe, --gamepad]`) within a time limit and returns its
 /// output or the error to print.
 pub fn glyph_mounts(
@@ -937,13 +964,18 @@ pub fn glyph_mounts(
         String::new()
     };
     let resolved = glyphs::resolve(choice, &pad);
+    // Only the key the icons show goes in, so a copy is redrawn when that key changes.
+    let key_map = glyphs::shown_keys(
+        get("SPARTAN_KEY_MAP"),
+        get("SPARTAN_GLYPH_KEYS") == "alternative",
+    );
     let mounts = match glyphs::build(
         game,
         out,
         &resolved.style,
         resolved.faces.as_ref(),
         get("SPARTAN_PAD_MAP"),
-        get("SPARTAN_KEY_MAP"),
+        &key_map,
         assets,
         log,
     ) {
@@ -1003,6 +1035,41 @@ pub fn pause_menu_args(
             Vec::new()
         }
     }
+}
+
+/// Probe arguments for the Weapon Switching tutorials that match the switch attacks (`run.py`
+/// `switch_text_mounts`): patched copies of the language WADs (`switch_text::build`), only with
+/// `SPARTAN_SWITCH_ATTACKS=1`; without it old copies are removed. The game folder is never written;
+/// what fails only reaches the Log, and the tutorials then keep their own text.
+pub fn switch_text_mounts(
+    env: &IndexMap<String, String>,
+    game: &Path,
+    out: &Path,
+    log: &mut dyn FnMut(String),
+) -> Vec<String> {
+    if env.get("SPARTAN_SWITCH_ATTACKS").map(String::as_str) != Some("1") {
+        let _ = std::fs::remove_dir_all(out.join("switch_text"));
+        return Vec::new();
+    }
+    let mounts = match switch_text::build(game, out, log) {
+        Ok(mounts) => mounts,
+        Err(error) => {
+            log(format!(
+                "Switch attacks: {error}; the tutorials keep their own text"
+            ));
+            return Vec::new();
+        }
+    };
+    if !mounts.is_empty() {
+        log(format!(
+            "Switch attacks: tutorial text on copies in {}; game files untouched",
+            out.join("switch_text").display()
+        ));
+    }
+    mounts
+        .iter()
+        .flat_map(|(guest, path)| ["--mount".to_string(), format!("{guest}={}", path.display())])
+        .collect()
 }
 
 #[cfg(test)]
@@ -1247,6 +1314,58 @@ mod tests {
     }
 
     #[test]
+    fn the_icons_show_the_main_key_unless_the_alternative_is_chosen() {
+        let run = glyph_run(true);
+        let map = "cross=Space|K,square=Mouse Left|J,triangle=Q";
+        let main = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", map),
+        ];
+        mounts_with(&run, &main, Ok(""));
+        let drawn_main = stamp(&run);
+        assert!(
+            drawn_main.starts_with(
+                "[12, \"keyboard\", null, \"\", \"cross=Space,square=Mouse Left,triangle=Q\", null, "
+            ),
+            "{drawn_main}"
+        );
+        // Choosing the alternative redraws the copy: only the keys a button shows are stamped.
+        let alternative = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", map),
+            ("SPARTAN_GLYPH_KEYS", "alternative"),
+        ];
+        mounts_with(&run, &alternative, Ok(""));
+        let drawn_alternative = stamp(&run);
+        assert!(
+            drawn_alternative.starts_with(
+                "[12, \"keyboard\", null, \"\", \"cross=K,square=J,triangle=Q\", null, "
+            ),
+            "{drawn_alternative}"
+        );
+        // Back to the main keys: the stamp is the first one again, so a copy made before is reused.
+        mounts_with(&run, &main, Ok(""));
+        assert_eq!(stamp(&run), drawn_main);
+    }
+
+    #[test]
+    fn a_new_alternative_does_not_redraw_the_icons_of_the_main_keys() {
+        let run = glyph_run(true);
+        let before = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", "cross=Space|K"),
+        ];
+        mounts_with(&run, &before, Ok(""));
+        let first = stamp(&run);
+        let after = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", "cross=Space|L"),
+        ];
+        mounts_with(&run, &after, Ok(""));
+        assert_eq!(stamp(&run), first);
+    }
+
+    #[test]
     fn a_failure_starts_the_game_with_its_own_glyphs() {
         let run = glyph_run(true);
         let (result, _, log) =
@@ -1320,5 +1439,83 @@ mod tests {
                 && log[0].ends_with("; no Exit to Desktop row"),
             "{log:?}"
         );
+    }
+
+    // -- switch_text_mounts (run.py): the tutorials' copies, only with SPARTAN_SWITCH_ATTACKS=1 ----
+
+    /// A game folder with the synthetic English language WAD, and an `out` holding a copy left
+    /// from an earlier run.
+    fn text_run() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let temp = tempfile::tempdir().unwrap();
+        let (game, out) = (temp.path().join("game"), temp.path().join("out"));
+        let folder = game.join(switch_text::FOLDER);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("R_LANG_EN.WAD"), switch_text::tests::wad()).unwrap();
+        std::fs::create_dir_all(out.join("switch_text")).unwrap();
+        std::fs::write(out.join("switch_text/R_LANG_EN.WAD"), b"old").unwrap();
+        (temp, game, out)
+    }
+
+    /// What `switch_text_mounts` returned and the Log lines.
+    fn text_mounts(env: &[(&str, &str)], game: &Path, out: &Path) -> (Vec<String>, Vec<String>) {
+        let mut log = Vec::new();
+        let args = switch_text_mounts(&env_map(env), game, out, &mut |line| log.push(line));
+        (args, log)
+    }
+
+    #[test]
+    fn switch_text_off_mounts_nothing_and_removes_old_copies() {
+        for env in [vec![], vec![("SPARTAN_SWITCH_ATTACKS", "0")]] {
+            let (_temp, game, out) = text_run();
+            let (args, log) = text_mounts(&env, &game, &out);
+            assert!(args.is_empty() && log.is_empty(), "{args:?} {log:?}");
+            assert!(!out.join("switch_text").exists());
+        }
+    }
+
+    #[test]
+    fn switch_text_on_mounts_the_copies() {
+        let (_temp, game, out) = text_run();
+        let (args, log) = text_mounts(&[("SPARTAN_SWITCH_ATTACKS", "1")], &game, &out);
+        let copy = out.join("switch_text").join("R_LANG_EN.WAD");
+        assert_eq!(
+            args,
+            [
+                "--mount".to_string(),
+                format!("/app0/EXEC/WAD/PS4_LE/R_LANG_EN.WAD={}", copy.display()),
+            ]
+        );
+        assert_eq!(
+            log,
+            [format!(
+                "Switch attacks: tutorial text on copies in {}; game files untouched",
+                out.join("switch_text").display()
+            )]
+        );
+        let mut expected = switch_text::tests::wad();
+        assert_eq!(switch_text::patch(&mut expected, &switch_text::ENGLISH), 2);
+        assert_eq!(std::fs::read(&copy).unwrap(), expected);
+        assert_eq!(
+            std::fs::read(game.join(switch_text::FOLDER).join("R_LANG_EN.WAD")).unwrap(),
+            switch_text::tests::wad()
+        );
+    }
+
+    #[test]
+    fn switch_text_failures_start_the_game_with_its_own_text() {
+        let (_temp, game, out) = text_run();
+        // out/ is a file, so out/switch_text cannot be made.
+        let file = out.join("switch_text").join("R_LANG_EN.WAD");
+        let (args, log) = text_mounts(&[("SPARTAN_SWITCH_ATTACKS", "1")], &game, &file);
+        assert!(args.is_empty());
+        assert!(
+            log.len() == 1
+                && log[0].starts_with("Switch attacks: ")
+                && log[0].ends_with("; the tutorials keep their own text"),
+            "{log:?}"
+        );
+        // No language of the game in the folder: nothing to mount, nothing said.
+        let (args, log) = text_mounts(&[("SPARTAN_SWITCH_ATTACKS", "1")], &out, &out);
+        assert!(args.is_empty() && log.is_empty(), "{args:?} {log:?}");
     }
 }

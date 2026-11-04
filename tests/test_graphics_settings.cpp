@@ -6,9 +6,19 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 #include "spartanport_graphics.h"
 #include "spartanport_settings.h"
 #include "../gpu/spartanportgpu.h"
+#include "../src/graphics_hook.h"
+
+// src/probe.c's side of Options > Graphics (src/graphics_hook.h).
+extern "C" uintptr_t spartanport_graphics_flag(unsigned id);
+extern "C" void spartanport_graphics_status(unsigned id);
 
 namespace G = SpartanGraphics;
 
@@ -25,6 +35,170 @@ static std::string Read(const char* path) {
     std::stringstream s;
     s << in.rdbuf();
     return s.str();
+}
+
+// SyncEngineFps's log lines (stdout) while fn runs.
+template <typename Fn>
+static std::string CaptureLog(Fn fn) {
+    std::fflush(stdout);
+    const char* file = "graphics-settings-test.log";
+    const int saved = dup(1);
+    FILE* log = std::fopen(file, "w");
+    assert(saved >= 0 && log);
+    dup2(fileno(log), 1);
+    fn();
+    std::fflush(stdout);
+    dup2(saved, 1);
+    close(saved);
+    std::fclose(log);
+    const std::string text = Read(file);
+    std::remove(file);
+    return text;
+}
+
+// F2 (docs/specs/2026-10-29-high-fps-f2-qte.md): the QTE cap of the engine rate.
+static void TestEngineFpsCap(const char* path) {
+    auto& v = SpartanSettings::Get();
+    float live = 240;
+    int32_t live_int = 240;
+    v.engine_fps_global = &live;
+    v.engine_fps_int_global = &live_int;
+    v.applied_engine_fps = 240;
+    v.engine_fps = 144;
+    v.auto_safe_fps = true;
+    SpartanSettings::SyncEngineFps();
+    assert(live == 144 && live_int == 144);
+
+    // engine_fps_cap_limits_rate: 60 in effect, written in one sync, with one log line.
+    std::string log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap_qte(1u << 0 | 1u << 2, 2);  // update and repeat counting
+        spartanportgpu_engine_fps_cap(60);
+        assert(SpartanSettings::EngineFpsNow() == 60);
+        SpartanSettings::SyncEngineFps();
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 59.94f && live_int == 60);
+    assert(log == "Engine FPS: 60 during a QTE (was 144), kinds: update,repeat, prompt type 2\n");
+
+    // engine_fps_cap_not_saved: the file keeps the player's rate and never the cap.
+    SpartanSettings::Save();
+    std::string saved = Read(path);
+    assert(saved.find("engine_fps=144\n") != std::string::npos);
+    assert(saved.find("auto_safe_fps=1\n") != std::string::npos);
+    assert(saved.find("engine_fps_cap") == std::string::npos);
+    assert(v.engine_fps == 144);
+
+    // cycle_during_cap_keeps_choice: R3 + L1 + R1 goes on from 144, the cap stays until the QTE ends.
+    assert(SpartanSettings::CycleEngineFps() == 180);
+    assert(v.engine_fps == 180 && SpartanSettings::EngineFpsNow() == 60);
+    assert(Read(path).find("engine_fps=180\n") != std::string::npos);
+    log = CaptureLog([] { SpartanSettings::SyncEngineFps(); });
+    assert(live == 59.94f && log.empty());
+    // A cap held 20 s (runtime_pad.c): one line with the kinds still counting.
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap_held(1u << 1 | 1u << 4);
+        SpartanSettings::SyncEngineFps();
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 59.94f && log == "Engine FPS: QTE cap held 20 s, kinds: timed,circle\n");
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap(0);
+        SpartanSettings::SyncEngineFps();
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 180 && live_int == 180 && SpartanSettings::EngineFpsNow() == 180);
+    assert(log == "Engine FPS: back to 180 after the QTE\n");
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap_held(1u << 2);  // late, the cap is gone: nothing
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(log.empty());
+
+    // A menu change during the cap is kept the same way.
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap_qte(1u << 3, -1);
+        spartanportgpu_engine_fps_cap(60);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(log == "Engine FPS: 60 during a QTE (was 180), kinds: charged\n");
+    v.engine_fps = 240;
+    log = CaptureLog([] {
+        SpartanSettings::SyncEngineFps();
+        spartanportgpu_engine_fps_cap(0);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 240 && log == "Engine FPS: back to 240 after the QTE\n");
+
+    // qte_fps_cap_disabled: auto_safe_fps=0 behaves as before (no cap, no line).
+    v.auto_safe_fps = false;
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap(60);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(SpartanSettings::EngineFpsNow() == 240 && live == 240 && log.empty());
+    // Turned on again in the menu while the prompt is up: the cap applies at once.
+    v.auto_safe_fps = true;
+    log = CaptureLog([] { SpartanSettings::SyncEngineFps(); });
+    assert(live == 59.94f && log == "Engine FPS: 60 during a QTE (was 240), kinds: charged\n");
+    // Turned off while capped: back to the player's rate.
+    v.auto_safe_fps = false;
+    log = CaptureLog([] { SpartanSettings::SyncEngineFps(); });
+    assert(live == 240 && log == "Engine FPS: back to 240 after the QTE\n");
+    spartanportgpu_engine_fps_cap(0);
+    v.auto_safe_fps = true;
+
+    // A player rate of 60: the cap changes nothing and logs nothing.
+    v.engine_fps = 60;
+    log = CaptureLog([] {
+        SpartanSettings::SyncEngineFps();
+        spartanportgpu_engine_fps_cap(60);
+        SpartanSettings::SyncEngineFps();
+        spartanportgpu_engine_fps_cap(0);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 59.94f && log == "Engine FPS: 60\n");
+
+    // No frame rate patch (applied 60) or no globals: nothing.
+    v.engine_fps = 240;
+    v.applied_engine_fps = 60;
+    live = 59.94f;
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap(60);
+        SpartanSettings::SyncEngineFps();
+        spartanportgpu_engine_fps_cap(0);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(live == 59.94f && log.empty());
+    v.applied_engine_fps = 240;
+    v.engine_fps_global = nullptr;
+    v.engine_fps_int_global = nullptr;
+    log = CaptureLog([] {
+        spartanportgpu_engine_fps_cap(60);
+        SpartanSettings::SyncEngineFps();
+        spartanportgpu_engine_fps_cap(0);
+        SpartanSettings::SyncEngineFps();
+    });
+    assert(log.empty());
+
+    // auto_safe_fps in the ini: on by default, 0 read and written back; SPARTAN_AUTO_SAFE_FPS overrides.
+    {
+        std::ofstream out(path);
+        out << "engine_fps=240\n";
+    }
+    SpartanSettings::Load();
+    assert(v.auto_safe_fps);
+    {
+        std::ofstream out(path);
+        out << "engine_fps=240\nauto_safe_fps=0\nengine_fps_cap=60\n";
+    }
+    SpartanSettings::Load();
+    assert(!v.auto_safe_fps && v.engine_fps_cap == 0);
+    SpartanSettings::Save();
+    assert(Read(path).find("auto_safe_fps=0\n") != std::string::npos);
+    SetEnvironment("SPARTAN_AUTO_SAFE_FPS", "1");
+    SpartanSettings::Load();
+    assert(v.auto_safe_fps);
+    SetEnvironment("SPARTAN_AUTO_SAFE_FPS", "");
 }
 
 int main() {
@@ -159,6 +333,101 @@ int main() {
     assert(v.rcas_strength == 75 && v.frames_queued == 1);
     assert(v.async_shaders);
     {
+        // Audio (src/runtime_audio.c): the master volume is 0 to 200 percent, the speaker layout is
+        // named by key, anything unknown is automatic; both survive a save and the environment wins.
+        namespace S = SpartanSettings;
+        assert(S::ParseAudioChannels("auto") == S::AudioChannelsAuto && S::ParseAudioChannels("stereo") == S::AudioStereo);
+        assert(S::ParseAudioChannels("5.1") == S::Audio51 && S::ParseAudioChannels("7.1") == S::Audio71);
+        assert(S::ParseAudioChannels("2.0") == S::AudioStereo && S::ParseAudioChannels("6") == S::Audio51);
+        assert(S::ParseAudioChannels("8") == S::Audio71 && S::ParseAudioChannels("") == S::AudioChannelsAuto);
+        assert(S::ParseAudioChannels("bogus") == S::AudioChannelsAuto && S::ParseAudioChannels("7") == S::AudioChannelsAuto);
+        for (int c = 0; c < S::AudioChannelsCount; ++c) assert(S::ParseAudioChannels(S::AudioChannelKeys[c]) == c);
+        {
+            std::ofstream out(path);
+            out << "master_volume=150\naudio_channels=5.1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 150 && v.audio_channels == S::Audio51);
+        SpartanSettings::Save();
+        const std::string audio_ini = Read(path);
+        assert(audio_ini.find("master_volume=150\n") != std::string::npos);
+        assert(audio_ini.find("audio_channels=5.1\n") != std::string::npos);
+        {
+            std::ofstream out(path);
+            out << "master_volume=900\naudio_channels=7.1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 200 && v.audio_channels == S::Audio71);
+        {
+            std::ofstream out(path);
+            out << "master_volume=-5\naudio_channels=bogus\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 0 && v.audio_channels == S::AudioChannelsAuto);
+        {
+            std::ofstream out(path);
+            out << "master_volume=\n";
+        }
+        SpartanSettings::Load();
+        assert(v.master_volume == 100);
+        SetEnvironment("SPARTAN_AUDIO_VOLUME", "80");
+        SetEnvironment("SPARTAN_AUDIO_CHANNELS", "stereo");
+        SpartanSettings::Load();
+        assert(v.master_volume == 80 && v.audio_channels == S::AudioStereo);
+        SetEnvironment("SPARTAN_AUDIO_VOLUME", "");
+        SetEnvironment("SPARTAN_AUDIO_CHANNELS", "");
+    }
+
+    {
+        // The game's motion blur (spartanport_motion_blur.h): on by default, a saved 0 turns it off,
+        // the environment wins, and an empty value is off like any other flag.
+        {
+            std::ofstream out(path);
+            out << "motion_blur=0\n";
+        }
+        SpartanSettings::Load();
+        assert(!v.motion_blur);
+        SpartanSettings::Save();
+        assert(Read(path).find("motion_blur=0\n") != std::string::npos);
+        SetEnvironment("SPARTAN_MOTION_BLUR", "1");
+        SpartanSettings::Load();
+        assert(v.motion_blur);
+        SetEnvironment("SPARTAN_MOTION_BLUR", "");
+        {
+            std::ofstream out(path);
+            out << "motion_blur=1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.motion_blur);
+        SpartanSettings::Save();
+        assert(Read(path).find("motion_blur=1\n") != std::string::npos);
+    }
+
+    {
+        // The game's depth of field (spartanport_depth_of_field.h): the same way.
+        {
+            std::ofstream out(path);
+            out << "depth_of_field=0\n";
+        }
+        SpartanSettings::Load();
+        assert(!v.depth_of_field);
+        SpartanSettings::Save();
+        assert(Read(path).find("depth_of_field=0\n") != std::string::npos);
+        SetEnvironment("SPARTAN_DEPTH_OF_FIELD", "1");
+        SpartanSettings::Load();
+        assert(v.depth_of_field);
+        SetEnvironment("SPARTAN_DEPTH_OF_FIELD", "");
+        {
+            std::ofstream out(path);
+            out << "depth_of_field=1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.depth_of_field);
+        SpartanSettings::Save();
+        assert(Read(path).find("depth_of_field=1\n") != std::string::npos);
+    }
+
+    {
         std::ofstream out(path);
         out << "cheat_double_jumps=1\ncheat_very_hard=1\n";
     }
@@ -180,6 +449,56 @@ int main() {
     assert(spartanportgpu_enemy_health_bar(0) == 1);
     assert(spartanportgpu_enemy_health_bar(1) == 0 && !v.enemy_health_bar);
     assert(Read(path).find("enemy_health_bar=0\n") != std::string::npos);
+
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=1\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1 && spartanportgpu_menu_confirm_swap() == 1);
+    SpartanSettings::Save();
+    assert(Read(path).find("menu_confirm_swap=1\n") != std::string::npos);
+
+    {
+        std::ofstream out(path);
+        out << "menu_confirm=circle\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1);
+
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=0\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 0 && spartanportgpu_menu_confirm_swap() == 0);
+    SpartanSettings::Save();
+    assert(Read(path).find("menu_confirm_swap=0\n") != std::string::npos);
+
+    // Conflicting keys in INI: primary menu_confirm_swap always overrides alias menu_confirm
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=0\nmenu_confirm=circle\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 0);
+    {
+        std::ofstream out(path);
+        out << "menu_confirm=circle\nmenu_confirm_swap=0\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 0);
+    {
+        std::ofstream out(path);
+        out << "menu_confirm_swap=1\nmenu_confirm=cross\n";
+    }
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1);
+
+    SetEnvironment("SPARTAN_MENU_CONFIRM_SWAP", "1");
+    SpartanSettings::Load();
+    assert(v.menu_confirm_swap == 1);
+    SetEnvironment("SPARTAN_MENU_CONFIRM_SWAP", "");
     const auto text = [](unsigned id) { return reinterpret_cast<const char*>(spartanportgpu_native_setting(id)); };
     v.anisotropy = 0;
     assert(spartanportgpu_native_setting(0xf74) != 0);
@@ -342,6 +661,18 @@ int main() {
     assert(v.fps_limit == 30);
     spartanportgpu_native_setting(0xfd2);
     assert(v.fps_limit == 0);
+    for (const char* language : {"1", "17"}) {
+        SetEnvironment("SPARTAN_LANGUAGE", language);
+        const char* english[] = {"Windowed", "Borderless", "Fullscreen"};
+        const char* portuguese[] = {"Janela", "Sem bordas", "Tela cheia"};
+        for (int mode = -1; mode <= G::DisplayModeCount; ++mode) {
+            v.display_mode = mode;
+            const int expected = std::clamp(mode, 0, G::DisplayModeCount - 1);
+            const char* label = language[0] == '1' && language[1] == '7' ? portuguese[expected] : english[expected];
+            assert(std::string(text(0xfc5)) == std::string("[ArrowSpacer]") + label + "[ArrowSpacer]");
+        }
+    }
+    SetEnvironment("SPARTAN_LANGUAGE", "");
     v.display_mode = G::Windowed;
     spartanportgpu_native_setting(0xfe5);
     assert(v.display_mode == G::Borderless);
@@ -379,6 +710,39 @@ int main() {
     SpartanSettings::Load();
     assert(v.glyph_style == 1 && !SpartanSettings::GraphicsNeedRestart());
     assert(std::string(text(0xfa4)).find("Xbox") != std::string::npos);
+
+    // Options > Graphics: f75+i query, f85+i toggle/next, f95 (and f8d) prev; "Unavailable" until the hook reports in.
+    // Rows: 0 Texture Quality (f75, f85 next, f95/f8d prev), 1 Shadows (f76, f86), 2 Motion Blur (f77, f87), 3 Bloom (f78, f88).
+    assert(std::string(text(0xf78)) == "Unavailable" && std::string(text(0xf87)) == "Unavailable");
+    assert(v.bloom && v.motion_blur);
+    spartanport_graphics_status(SPARTAN_GRAPHICS_BLOOM);
+    spartanport_graphics_status(SPARTAN_GRAPHICS_MOTION_BLUR);
+    spartanport_graphics_status(SPARTAN_GRAPHICS_TEXTURE_QUALITY);  // no toggle (no hook): ignored
+    spartanport_graphics_status(7);  // no such toggle: ignored
+    assert(v.graphics_supported == ((1u << SPARTAN_GRAPHICS_BLOOM) | (1u << SPARTAN_GRAPHICS_MOTION_BLUR)));
+    assert(spartanport_graphics_flag(SPARTAN_GRAPHICS_BLOOM) == reinterpret_cast<uintptr_t>(&v.bloom) &&
+           spartanport_graphics_flag(SPARTAN_GRAPHICS_TEXTURE_QUALITY) == 0);
+    assert(std::string(text(0xf78)) == "On" && std::string(text(0xf88)) == "Off" && !v.bloom);
+    assert(std::string(text(0xf87)) == "Off" && !v.motion_blur && std::string(text(0xf77)) == "Off");
+    assert(Read(path).find("bloom=0\n") != std::string::npos && Read(path).find("motion_blur=0\n") != std::string::npos);
+    assert(std::string(text(0xf88)) == "On" && v.bloom);
+    assert(std::string(text(0xf76)) == "Unavailable");  // Shadows not reported
+    // Texture Quality: no hook, always available. f85 steps toward Very Low, f95 (and f8d) toward High;
+    // both stop at the ends.
+    assert(std::string(text(0xf75)) == "High" && SpartanSettings::TextureLodBias(v.texture_quality) == 0.0f);
+    assert(std::string(text(0xf95)) == "High" && v.texture_quality == 0);
+    assert(std::string(text(0xf85)) == "Medium" && SpartanSettings::TextureLodBias(v.texture_quality) == 1.0f);
+    assert(std::string(text(0xf85)) == "Low" && std::string(text(0xf85)) == "Very Low");
+    assert(std::string(text(0xf85)) == "Very Low" && SpartanSettings::TextureLodBias(v.texture_quality) == 3.0f);
+    assert(Read(path).find("texture_quality=3\n") != std::string::npos);
+    assert(std::string(text(0xf95)) == "Low" && std::string(text(0xf95)) == "Medium");
+    assert(std::string(text(0xf95)) == "High" && v.texture_quality == 0);
+    assert(std::string(text(0xf85)) == "Medium");
+    assert(std::string(text(0xf8d)) == "High" && v.texture_quality == 0);
+    const bool blur_before = v.motion_blur;
+    assert(std::string(text(0xf97)) == "On" && v.motion_blur != blur_before);  // toggles toggle with f90 too
+    assert(SpartanSettings::TextureLodBias(-1) == 0.0f && SpartanSettings::TextureLodBias(9) == 0.0f);
+    TestEngineFpsCap(path);
     std::remove(path);
     std::puts("PASS: graphics settings");
 }

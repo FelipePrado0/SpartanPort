@@ -150,6 +150,10 @@ mod imp {
     /// repeated here because core never names the runner.
     const WRITE_TIMEOUT: Duration = Duration::from_millis(100);
 
+    /// `EINVAL` in `<sys/errno.h>` on macOS.
+    #[cfg(target_os = "macos")]
+    const EINVAL: i32 = 22;
+
     /// A Unix socket (Python `SocketTransport`); a write gives up after WRITE_TIMEOUT.
     struct SocketTransport {
         stream: Option<UnixStream>,
@@ -188,7 +192,13 @@ mod imp {
         fn read(&mut self, size: usize, timeout: Option<Duration>) -> io::Result<Vec<u8>> {
             use std::io::Read;
             let stream = self.stream()?;
-            stream.set_read_timeout(timeout)?;
+            match stream.set_read_timeout(timeout) {
+                // macOS refuses SO_RCVTIMEO once the peer has closed; the read cannot block then,
+                // it returns what the peer wrote and then the end.
+                #[cfg(target_os = "macos")]
+                Err(error) if error.raw_os_error() == Some(EINVAL) => {}
+                result => result?,
+            }
             let mut data = vec![0; size];
             let read = stream.read(&mut data)?;
             data.truncate(read);
@@ -216,5 +226,20 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let error = connect(&dir.path().join("discord-ipc-0")).err().unwrap();
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+
+    /// What the peer wrote before closing is still read, then the end; macOS refuses a read
+    /// timeout on a socket whose peer has closed.
+    #[cfg(not(windows))]
+    #[test]
+    fn reads_what_the_peer_wrote_before_closing() {
+        use std::io::Write;
+        let (ours, mut theirs) = std::os::unix::net::UnixStream::pair().unwrap();
+        theirs.write_all(b"last frame").unwrap();
+        drop(theirs);
+        let mut transport = from_stream(ours);
+        let timeout = Some(Duration::from_secs(1));
+        assert_eq!(transport.read(64, timeout).unwrap(), b"last frame");
+        assert_eq!(transport.read(64, timeout).unwrap(), b"");
     }
 }

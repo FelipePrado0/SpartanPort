@@ -105,7 +105,8 @@ impl GameHandle {
 
 /// Starts the game with stdin closed and stdout and stderr merged into one pipe. A thread reads
 /// that pipe and sends the events; it writes the run log, and when the game fails after printing
-/// a line with a known cause it adds the advice for it to the log.
+/// a line with a known cause it adds the advice for it to the log. The run log is finished on
+/// every way out, so its journal always ends with the exit.
 pub fn spawn_game(launch: Launch<'_>) -> Result<GameHandle, LaunchError> {
     let Launch {
         command,
@@ -157,11 +158,12 @@ pub fn spawn_game(launch: Launch<'_>) -> Result<GameHandle, LaunchError> {
             hint = exit_hint(&text).or(hint);
             let _ = tx.send(GameEvent::Output(text));
         }
-        let code = child.wait().map_or(-1, returncode);
-        if let Some(hint) = hint.filter(|_| code != 0) {
-            run_log.write(&format!("\n{}\n", tr(&lang, hint.text_en())));
-        }
-        drop(run_log);
+        let status_code = child.wait().map(returncode).ok();
+        let code = status_code.unwrap_or(-1);
+        let advice = hint
+            .filter(|_| code != 0)
+            .map(|hint| tr(&lang, hint.text_en()));
+        run_log.finish(status_code, advice.as_deref());
         let _ = tx.send(GameEvent::Exited(Exit { code, hint }));
     });
     Ok(GameHandle { pid, events, job })

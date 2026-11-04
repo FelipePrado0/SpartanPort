@@ -20,17 +20,14 @@ use crate::core::gpu::{list_displays, monitor_options, monitor_selection, Displa
 use crate::core::i18n::{is_rtl, launcher_language, system_language, tr, tr_fmt};
 use crate::core::ini::{load_ini, save_ini};
 use crate::core::platform::tool::SystemTools;
-use crate::core::settings::{save_settings, Settings};
+use crate::core::settings::{mark_default_patches_offered, save_settings, Settings};
 use crate::ui::app::{self, Message, State};
 use crate::ui::follow::{follow, Cause};
-use crate::ui::theme;
 use crate::ui::widgets::Modal;
 
-/// The `spartanport.ini` keys the window has a control for, in the order the Python launcher
-/// creates their variables (Home, Graphics, Performance, Game, Controls): `collect` writes only
-/// these, in this order, so a first save appends the same lines. The parked Upscaling keys
-/// (`upscaler`, `preset`, `object_motion`, `output_res`, `live_resolution`) have no control and are
-/// never written: a file keeps whatever it holds for them. Taken from the catalog's written Ini rows.
+/// The `spartanport.ini` keys with visible controls, in catalog order. Saving also writes the
+/// fixed legacy frame generation multiplier returned by `Store::ini_to_write`. Hidden settings
+/// outside that map keep their existing values.
 pub static SHOWN_INI_KEYS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
     SETTINGS
         .iter()
@@ -113,6 +110,7 @@ pub fn gather(state: &State) -> Persisted {
         };
         all.insert(title_id.clone(), strings(chosen));
         app.insert("game_patches".to_string(), Value::Object(all));
+        mark_default_patches_offered(&mut app, title_id);
     }
     let ini = state.store.ini_to_write();
     let mut controls = Map::new();
@@ -124,6 +122,13 @@ pub fn gather(state: &State) -> Persisted {
         "pad".to_string(),
         string_map(control_changes(&state.controls.pad, Kind::Pad)),
     );
+    // Only when there is one, so settings without alternatives are saved as before.
+    if !state.controls.key_alt.is_empty() {
+        controls.insert(
+            "key_alt".to_string(),
+            string_map(state.controls.key_alt.clone()),
+        );
+    }
     app.insert("controls".to_string(), Value::Object(controls));
     // The Controls page's own choice; `settings.pad_style` may still hold an unknown saved value.
     app.insert(
@@ -180,7 +185,9 @@ fn refresh_monitors(state: &mut State) -> bool {
     if cfg!(windows) || backend == state.displays_backend {
         return false;
     }
-    let displays = list_displays(&SystemTools, &state.paths, &backend);
+    let displays = list_displays(&SystemTools, &state.paths, &backend, &|key| {
+        std::env::var(key).ok()
+    });
     state.monitor_pairs = monitor_options(&displays);
     let visible = state.store.text("monitor");
     let selected = if state
@@ -238,12 +245,12 @@ pub fn collect(state: &mut State) -> Result<(), PersistError> {
         .as_ref()
         .map_or(&disk.values, |saved| &saved.ini);
     let mut edited = IndexMap::new();
-    for key in SHOWN_INI_KEYS.iter() {
-        let Some(value) = pending.ini.get(*key) else {
-            continue;
-        };
-        if !persisted.contains(key) || baseline.get(*key) != Some(value) {
-            edited.insert((*key).to_string(), value.clone());
+    for (key, value) in &pending.ini {
+        if key == "frame_generation_frames"
+            || !persisted.contains(key.as_str())
+            || baseline.get(key) != Some(value)
+        {
+            edited.insert(key.clone(), value.clone());
         }
     }
     write_files(state, &pending, &edited, &disk.lines)?;
@@ -334,7 +341,7 @@ pub fn save(state: &mut State) -> Task<Message> {
         return Task::none();
     }
     let language = launcher_language(&state.store.text("ui_language"), system_language);
-    let scale = theme::ui_scale(&state.store.text("ui_scale"));
+    let scale = app::current_zoom(state);
     let rezoomed = scale != state.scale;
     if language != state.lang || rezoomed {
         let rebuilt = rebuild(state, language, scale);
