@@ -308,8 +308,18 @@ void CameraMotion::OnConstants(const float* data) {
     frame_has_camera = true;
 }
 
+bool CameraMotion::DepthLive() const {
+    return depth_id && texture_cache.TryGetImage(depth_id, depth_uid) != nullptr;
+}
+
+void CameraMotion::SetDepth(VideoCore::ImageId id) {
+    depth_id = id;
+    const auto* image = id ? texture_cache.TryGetImage(id, 0) : nullptr;
+    depth_uid = image ? image->image_uid : 0;
+}
+
 void CameraMotion::OnGBufferPass(VideoCore::ImageId depth) {
-    depth_id = depth;
+    SetDepth(depth);
 }
 
 bool CameraMotion::OnScenePrepass(VideoCore::ImageId depth, std::array<float, 4> viewport,
@@ -361,7 +371,7 @@ bool CameraMotion::OnScenePrepass(VideoCore::ImageId depth, std::array<float, 4>
         }
     }
     if (best && best->depth != depth_id) {
-        depth_id = best->depth;
+        SetDepth(best->depth);
         vp_viewport = best->viewport;
         vp_depth = best->depth_range;
         // SPARTAN_VP_FLIP=x|y|xy mirrors an axis, for calibration against the picture.
@@ -475,6 +485,7 @@ bool CameraMotion::ResolveViewProjection() {
     vp_resolved = true;
     scene_open = false;
     main_depth = depth_id;
+    main_depth_uid = depth_uid;
     tally_has_entries = false;
     vp_previous = vp_current;
     vp_previous_valid = vp_current_valid;
@@ -508,7 +519,7 @@ void CameraMotion::OnViewProjection(const float* matrix, VideoCore::ImageId dept
     current.inv_view = camera.inv_view;
     current.proj = camera.proj;
     current.valid = true;
-    depth_id = depth;
+    SetDepth(depth);
     prepass_camera = true;
     const auto& image = texture_cache.GetImage(depth);
     const std::array<u32, 2> size{image.info.size.width, image.info.size.height};
@@ -529,6 +540,15 @@ void CameraMotion::OnDisplayPass(VideoCore::ImageId frame) {
         frame_has_camera = false;
         depth_id = {};
         return;
+    }
+    // A depth image the texture cache freed or reused (a resize, a level change) is forgotten before
+    // anything reads it: the scene state outlives the display passes of the scene TAA.
+    if (depth_id && !texture_cache.TryGetImage(depth_id, depth_uid)) {
+        depth_id = {};
+        InvalidateHistory();
+    }
+    if (main_depth && !texture_cache.TryGetImage(main_depth, main_depth_uid)) {
+        main_depth = {};
     }
     // A scene (pre-pass) that no composite closed for a few frames is dropped.
     // The game repeats display passes at 60 Hz while a heavy scene (an arena) takes several of them

@@ -252,6 +252,16 @@ bool TemporalUpscaler::ReactiveOn() const {
 
 void TemporalUpscaler::OnSceneColor(VideoCore::ImageId color) {
     scene_color = color;
+    const auto* image = color ? texture_cache.TryGetImage(color, 0) : nullptr;
+    scene_color_uid = image ? image->image_uid : 0;
+}
+
+bool TemporalUpscaler::SceneColorLive() const {
+    return scene_color && texture_cache.TryGetImage(scene_color, scene_color_uid) != nullptr;
+}
+
+bool TemporalUpscaler::SceneImagesLive() const {
+    return SceneColorLive() && camera_motion.DepthLive();
 }
 
 namespace {
@@ -547,6 +557,9 @@ void TemporalUpscaler::RunLdr() {
     if ((UseFsr4() && (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerFsr411 ||
                        !fsr4->DriverAvailable())) ||
         SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+        return;
+    }
+    if (!SceneImagesLive()) {
         return;
     }
     auto& color = texture_cache.GetImage(scene_color);
@@ -1375,7 +1388,7 @@ void TemporalUpscaler::ExtraSharpen(vk::CommandBuffer cmdbuf, vk::Image target, 
 
 void TemporalUpscaler::OnBlendedSceneDraw() {
     // Water and particles need color changes beyond the scene stencil.
-    if (snapshot_taken || !scene_color || !Active() || !ReactiveOn()) {
+    if (snapshot_taken || !SceneColorLive() || !Active() || !ReactiveOn()) {
         return;
     }
     snapshot_taken = true;
@@ -1447,7 +1460,7 @@ void TemporalUpscaler::OnBlendedSceneDraw() {
 }
 
 void TemporalUpscaler::OnSceneComposite() {
-    if (!opaque_valid || mask_ready || failed || !ReactiveOn()) {
+    if (!opaque_valid || mask_ready || failed || !ReactiveOn() || !SceneColorLive()) {
         return;
     }
     auto& color = texture_cache.GetImage(scene_color);
@@ -1554,6 +1567,9 @@ void TemporalUpscaler::Run() {
             ? "upscaler Run (TAA)" : "upscaler Run (FSR)";
         profiler->Mark(0xF5A0'0000ull ^ std::hash<std::string_view>{}(label),
                        [label] { return std::string{label}; });
+    }
+    if (!SceneImagesLive()) {
+        return;
     }
     auto& color = texture_cache.GetImage(scene_color);
     auto& depth = texture_cache.GetImage(camera_motion.Depth());
@@ -1787,6 +1803,9 @@ void TemporalUpscaler::RunSceneTaa() {
         const char* label = "upscaler RunSceneTaa";
         profiler->Mark(0xF5A0'0000ull ^ std::hash<std::string_view>{}(label),
                        [label] { return std::string{label}; });
+    }
+    if (!SceneImagesLive()) {
+        return;
     }
     auto& color = texture_cache.GetImage(scene_color);
     auto& depth = texture_cache.GetImage(camera_motion.Depth());

@@ -80,6 +80,9 @@ public:
     [[nodiscard]] VideoCore::ImageId Depth() const noexcept {
         return depth_id;
     }
+    /// The scene depth is still the image the texture cache holds (it may free or reuse the slot
+    /// after a resize or a level change).
+    [[nodiscard]] bool DepthLive() const;
     /// The camera came from a depth pre-pass (SpartanPort): characters and effects draw with another
     /// depth target of the same size, and need the jitter too.
     [[nodiscard]] bool PrepassCamera() const noexcept {
@@ -201,6 +204,9 @@ private:
     std::array<float, 2> jitter{}, previous_jitter{};
     std::array<u32, 2> render_size{};
     VideoCore::ImageId depth_id{};
+    u64 depth_uid = 0;       ///< image_uid of depth_id when it was recorded
+    u64 main_depth_uid = 0;  ///< the same for main_depth
+    void SetDepth(VideoCore::ImageId id);
     bool prepass_camera = false;
 
     vk::UniqueDescriptorSetLayout desc_layout;

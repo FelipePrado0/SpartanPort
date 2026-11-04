@@ -261,6 +261,10 @@ private:
     bool failed = false;
     u64 trigger_hash = 0x9a9cf8a9;
     VideoCore::ImageId scene_color{};
+    u64 scene_color_uid = 0; ///< image_uid of scene_color when it was recorded
+    /// scene_color and the scene depth are still the images the texture cache holds.
+    [[nodiscard]] bool SceneColorLive() const;
+    [[nodiscard]] bool SceneImagesLive() const;
     /// SpartanPort's composite pass (frame_20261024-233122_3.txt pass #73): its target is the scene
     /// color before the HUD. SPARTAN_UPSCALER_LDR_TRIGGER overrides it (hex).
     u64 ldr_trigger_ps = 0x0c20ededc9e7c40cull;
