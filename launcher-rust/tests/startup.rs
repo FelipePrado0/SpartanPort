@@ -10,8 +10,7 @@ use spartanport_launcher::core::paths::Paths;
 use spartanport_launcher::core::release::ReleaseId;
 use spartanport_launcher::core::settings::app_defaults;
 use spartanport_launcher::startup::{
-    confirm_window, log_failure, prepare_window, route, route_on, start, Route,
-    WINDOW_STATE,
+    confirm_window, log_failure, prepare_window, route, route_on, start, Route, WINDOW_STATE,
 };
 use spartanport_launcher::ui::app::{
     self, centred_position, fitted_window, window_message, Message, State, WINDOW_SIZE,
