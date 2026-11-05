@@ -68,10 +68,12 @@ static void sleep_until(uint64_t deadline) {
     while (clock_nanosleep(CLOCK_MONOTONIC,TIMER_ABSTIME,&t,NULL)) {}
 #endif
 }
+/* SDL audio for the ports, set up on the first call through spartanportgpu_audio_init(), never with
+ * SPARTAN_AUDIO=none. 1 when SDL can play, 0 when the ports run on the silent timer. */
 static int sdl_audio(void) {
     if (sdl_ready<0) {
         const char *mode=getenv("SPARTAN_AUDIO");
-        sdl_ready = (!mode || strcmp(mode,"none")) && SDL_InitSubSystem(SDL_INIT_AUDIO);
+        sdl_ready = (!mode || strcmp(mode,"none")) && spartanportgpu_audio_init();
         printf("Runtime: audio backend %s\n", sdl_ready ? SDL_GetCurrentAudioDriver() : "timer (silent)");
     }
     return sdl_ready;
@@ -231,6 +233,8 @@ static int default_device_channels(void) {
 }
 
 #ifdef _WIN32
+/* Port id's stream failed to open: when SDL runs on WASAPI, the user forced no driver, no other port
+ * has a stream and SDL has DirectSound, restart SDL audio on DirectSound and reopen p->stream there. */
 static void try_audio_fallback(Port *p, int id) {
     const char *driver = SDL_GetCurrentAudioDriver();
     /* When WASAPI fails on Windows and the user hasn't forced a driver, try DirectSound. */
@@ -251,7 +255,7 @@ static void try_audio_fallback(Port *p, int id) {
     fprintf(stderr, "Runtime: SDL audio stream failed on wasapi (%s); trying directsound fallback for port %d\n", SDL_GetError(), id);
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
     SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER, "directsound", SDL_HINT_OVERRIDE);
-    sdl_ready = SDL_InitSubSystem(SDL_INIT_AUDIO);
+    sdl_ready = spartanportgpu_audio_init();
     const char *new_driver = sdl_ready ? SDL_GetCurrentAudioDriver() : NULL;
     if (sdl_ready && new_driver && !strcmp(new_driver, "directsound")) {
         printf("Runtime: audio backend %s (fallback from wasapi)\n", new_driver);

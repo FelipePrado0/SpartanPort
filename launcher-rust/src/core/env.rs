@@ -11,7 +11,6 @@ use crate::core::catalog::{run_default, setting, Kind};
 use crate::core::controls::{control_map, keyboard_map, Kind as ControlKind};
 use crate::core::i18n::{tr, trophy_text, LANGS};
 use crate::core::installation::Installation;
-use crate::core::legacy::forward_environment;
 use crate::core::options::Choice;
 use crate::core::paths::Paths;
 use crate::core::settings::Settings;
@@ -27,16 +26,15 @@ const VULKAN_LAYERS_DISABLE: (&str, &str) = (
     "VK_LAYER_AMD_switchable_graphics",
 );
 
-/// What the launcher changes in its own environment before anything reads it, as the Python does
-/// on import: the old `GOW3_*` names are forwarded and, on Windows, the AMD switchable-graphics
-/// layer is disabled unless the player set the variable. The game and the probes inherit it.
+/// What the launcher changes in its own environment before anything reads it: on Windows, the AMD
+/// switchable-graphics layer is disabled unless the player set the variable. The game and the
+/// probes inherit it.
 pub fn start_up_environment(env: &mut IndexMap<String, String>, windows: bool) {
     if windows {
         let (key, value) = VULKAN_LAYERS_DISABLE;
         env.entry(key.to_string())
             .or_insert_with(|| value.to_string());
     }
-    forward_environment(env);
 }
 
 fn one_or_zero(on: bool) -> String {
@@ -308,6 +306,7 @@ pub fn environment(
     };
     put_choice(&mut env, "stick_prompts");
     put_choice(&mut env, "glyph_style");
+    put_choice(&mut env, "glyph_keys");
     env.shift_remove("SPARTAN_MENU_CONFIRM_SWAP");
     env.shift_remove("SPARTAN_MENU_CONFIRM");
     if let Some(val) = settings.get("menu_confirm_swap") {
@@ -344,20 +343,25 @@ mod tests {
 
     #[test]
     fn windows_hides_the_amd_switchable_layer() {
-        let mut env = variables(&[("GOW3_DATA_DIR", "/old")]);
+        let mut env = variables(&[]);
         start_up_environment(&mut env, true);
         assert_eq!(
             env.get("VK_LOADER_LAYERS_DISABLE").map(String::as_str),
             Some("VK_LAYER_AMD_switchable_graphics")
         );
-        // The old names are forwarded in the same step.
-        assert_eq!(
-            env.get("SPARTAN_DATA_DIR").map(String::as_str),
-            Some("/old")
-        );
         let mut env = IndexMap::new();
         start_up_environment(&mut env, false);
         assert!(!env.contains_key("VK_LOADER_LAYERS_DISABLE"));
+    }
+
+    #[test]
+    fn the_old_gow3_names_are_not_forwarded() {
+        for windows in [true, false] {
+            let mut env = variables(&[("GOW3_DATA_DIR", "/old")]);
+            start_up_environment(&mut env, windows);
+            assert_eq!(env.get("SPARTAN_DATA_DIR"), None, "{windows}");
+            assert_eq!(env.get("GOW3_DATA_DIR").map(String::as_str), Some("/old"));
+        }
     }
 
     #[test]
@@ -538,6 +542,65 @@ mod tests {
         let at = keys.iter().position(|key| *key == "SPARTAN_SWITCH_ATTACKS");
         let key_map = keys.iter().position(|key| *key == "SPARTAN_KEY_MAP");
         assert!(key_map.is_some() && key_map < at, "{keys:?}");
+    }
+
+    #[test]
+    fn alternative_keys_reach_the_key_map() {
+        let (settings, paths, _dir) = setup(json!({"controls": {
+            "key": {"circle": "Left Ctrl"},
+            "key_alt": {"cross": "K", "circle": "L", "square": "J", "triangle": "I"}
+        }}));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert!(env["SPARTAN_KEY_MAP"].contains(
+            "cross=Space|K,circle=Left Ctrl|L,square=Mouse Left|J,triangle=Mouse Right|I,"
+        ));
+        // Without alternatives the map has no `|`, and the gamepad map never has one.
+        let (plain, paths, _dir) = setup(json!({}));
+        let env = game_environment(&plain, &paths, "en", &IndexMap::new(), true);
+        assert!(!env["SPARTAN_KEY_MAP"].contains('|'));
+        assert!(!env.contains_key("SPARTAN_PAD_MAP"));
+    }
+
+    #[test]
+    fn every_button_with_an_alternative_still_fits_the_runtime_buffer() {
+        // The runtime reads SPARTAN_KEY_MAP into a 2048-byte buffer (src/runtime_pad.c).
+        let rows = crate::core::controls::table_rows(crate::core::controls::Kind::Key);
+        let alternatives: serde_json::Map<String, Value> = rows
+            .into_iter()
+            .map(|row| (row.button.to_string(), json!("Keypad Enter")))
+            .collect();
+        let keys: serde_json::Map<String, Value> =
+            crate::core::controls::table_rows(crate::core::controls::Kind::Key)
+                .into_iter()
+                .map(|row| (row.button.to_string(), json!("Mouse Forward")))
+                .collect();
+        let (settings, paths, _dir) = setup(json!({
+            "rage_one_input": false,
+            "controls": {"key": keys, "key_alt": alternatives}
+        }));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert!(
+            env["SPARTAN_KEY_MAP"].len() < 2048,
+            "{}",
+            env["SPARTAN_KEY_MAP"].len()
+        );
+    }
+
+    #[test]
+    fn the_icon_keys_choice_is_sent_only_when_it_is_not_the_main_key() {
+        let inherited = base(&[("SPARTAN_GLYPH_KEYS", "alternative")]);
+        let (settings, paths, _dir) = setup(json!({}));
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert!(
+            !env.contains_key("SPARTAN_GLYPH_KEYS"),
+            "the saved choice wins"
+        );
+        let (chosen, paths, _dir) = setup(json!({"glyph_keys": "alternative"}));
+        let env = game_environment(&chosen, &paths, "en", &IndexMap::new(), true);
+        assert_eq!(env["SPARTAN_GLYPH_KEYS"], "alternative");
+        let (unknown, paths, _dir) = setup(json!({"glyph_keys": "both"}));
+        let env = game_environment(&unknown, &paths, "en", &IndexMap::new(), true);
+        assert!(!env.contains_key("SPARTAN_GLYPH_KEYS"));
     }
 
     #[test]

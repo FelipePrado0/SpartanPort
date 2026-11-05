@@ -80,7 +80,8 @@ pub fn timing(state: &State) -> bool {
     hover_menu::timing(&state.version_menu)
 }
 
-/// The installed release, with the newer stable noted; the download's progress while one runs.
+/// The installed release, with the newer stable or the next build of the series noted; the
+/// download's progress while one runs.
 pub fn button_text(state: &State) -> String {
     let lang = state.lang.as_str();
     if let Some((release, percent)) = state.updater.downloading() {
@@ -90,10 +91,20 @@ pub fn button_text(state: &State) -> String {
             &[&release.id.short(), &percent.to_string()],
         );
     }
-    let mut label = state.updater.installed().label(lang);
+    let installed = state.updater.installed();
+    let mut label = installed.label(lang);
     if let Some(newer) = state.updater.newer() {
         label.push_str(" · ");
-        label.push_str(&tr_fmt(lang, "{} available", &[&newer.id.version]));
+        // A series offer names the build; any other offer names the version.
+        let same_series = match (installed.series(), newer.id.series()) {
+            (Some((mine, _)), Some((theirs, _))) => mine == theirs,
+            _ => false,
+        };
+        let offered = match (&newer.id.build, same_series) {
+            (Some(build), true) => build,
+            _ => &newer.id.version,
+        };
+        label.push_str(&tr_fmt(lang, "{} available", &[offered]));
     }
     label.push_str(" ▾");
     label
@@ -201,7 +212,12 @@ pub fn menu(state: &State) -> Element<'_, Message> {
                 list = list.push(muted_row(tr(lang, key)));
             } else {
                 let rows = column(pre.into_iter().map(|r| {
-                    release_row(r, r.id.same_build(state.updater.installed()), false, lang)
+                    release_row(
+                        r,
+                        r.id.same_build(state.updater.installed()),
+                        newer == Some(&r.id),
+                        lang,
+                    )
                 }))
                 .spacing(2);
                 list = list.push(

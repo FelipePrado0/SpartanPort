@@ -66,6 +66,10 @@ int spartanportgpu_audio_volume_percent(void);
 /* Speaker layout for the game's 7.1 audio, set in the menu or spartanport.ini (audio_channels):
  * 0 automatic (the device's), 1 stereo, 2 5.1, 3 7.1. Read when an audio port is opened. */
 int spartanportgpu_audio_channels(void);
+/* SDL_InitSubSystem(SDL_INIT_AUDIO) for every caller in the process (runtime AudioOut, trophy sound),
+ * one at a time: SDL's subsystem count is not thread-safe, and a second caller during the first's
+ * driver setup gets true with no driver yet, so its streams fail and the game runs silent. */
+int spartanportgpu_audio_init(void);
 /* R3 + L1 + R1 (pad) or F9: the next engine frame rate (60, 100, 120, 144, 180, 240), applied live. */
 void spartanportgpu_engine_fps_cycle(void);
 /* The pad thread during a QTE (src/runtime_pad.c): caps the engine frame rate at fps, 0 for no cap.
