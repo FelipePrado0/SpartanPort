@@ -13,7 +13,7 @@
 | F0 | Preparação, linha de base e decisões | em andamento (falta medir o driver) | `feat/shader-precompile` |
 | F1 | Captura das entradas no momento da tradução | código e testes prontos; falta sessão de jogo | `feat/shader-precompile` |
 | F2 | API de tradução offline e verificador 100% | não iniciada | `feat/shader-precompile` |
-| F3 | Leitura do código dos shaders nos WADs | não iniciada | `feat/shader-precompile` |
+| F3 | Leitura do código dos shaders nos WADs | leitor e testes prontos; falta `app0` (F5) | `feat/shader-precompile` |
 | F4 | Manifesto: formato e ferramenta que o gera | não iniciada | `feat/shader-precompile` |
 | F5 | Materialização na primeira abertura (shaders) | não iniciada | `feat/shader-precompile` |
 | F6 | Pré-compilação dos pipelines no driver | não iniciada | `feat/shader-precompile` |
@@ -454,7 +454,8 @@ Transforme a POC em `shader-replay-test` definitivo:
 
 ### 10.1 Regras de busca (3.1)
 
-- Procure `OrbShdr` alinhado a 4 bytes. Leia `length` e `shader_hash`.
+- Procure `OrbShdr` em qualquer byte: nos WADs reais os shaders ficam em posições ímpares do arquivo.
+  Leia `length` e `shader_hash`.
 - Ache o início: procure para trás (no máximo 64 KB) o token `0xBEEB03FF` tal que
   `início + (imm + 1) * 8 == posição do rodapé`. Sem token, descarte (não chute).
 - Código = `length` bytes a partir do início.
@@ -481,13 +482,18 @@ Transforme a POC em `shader-replay-test` definitivo:
 
 ### 10.4 Testes (antes do código)
 
-- [ ] WAD sintético gerado no teste (bytes inventados, nunca código real do jogo) com 3 shaders:
+- [x] WAD sintético gerado no teste (bytes inventados, nunca código real do jogo) com 3 shaders:
       token certo, rodapé certo, e um com rodapé sem token. O leitor acha os 2 válidos e ignora o terceiro.
-- [ ] Dica certa, dica com deslocamento errado (cai na varredura), arquivo da dica inexistente.
-- [ ] Hash XXH3 diferente: o shader é recusado.
+- [x] Dica certa, dica com deslocamento errado (cai na varredura), arquivo da dica inexistente.
+      A queda para a varredura fica no materializador (F5); o leitor recusa e devolve nada.
+- [x] Hash XXH3 diferente: o shader é recusado.
+- [x] Local que sai da pasta do jogo (`..` ou caminho absoluto): recusado.
 
 **Pronto quando:** testes passando; no dump real, o leitor acha os 4.550+ programas do cache do
 mantenedor e o índice completo bate com os 97.567. Commit.
+
+Resultado em 2026-11-05: `dump-index-test` achou 97.567 shaders em 81 s, e os 4.734 programas do
+cache local estão no índice.
 
 ---
 
