@@ -307,17 +307,15 @@ void main() {
                 if (expected_depth < 0.0) {
                     debug_view = vec3(0.0); // black: the pixel did not reproject (w <= 0)
                 } else {
-                    // The previous depth did not match. Whole colours only (the game's colour grading
-                    // crushes the values in between): the power of ten of a number, k = floor(-log10(x))
-                    // from 0 to 7, as the colour (k bit 0, k bit 1, k bit 2): 0 black, 1 red, 2 green,
-                    // 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white.
-                    // Left half of the picture: x = 1 - the expected depth (how far the surface is: the
-                    // tolerance is 2% of it). Right half: x = |expected depth - this frame's depth| (the
-                    // error of the reprojection, which is 0 on a still camera).
-                    float x = p.x < size.x / 2 ? 1.0 - expected_depth : abs(expected_depth - depth);
-                    int k = clamp(int(floor(-log2(max(x, 1e-12)) * 0.30103)), 0, 7);
-                    debug_view = (p.x & 1) == 0 ? vec3(1.0, 0.0, 0.0)
-                                                : vec3(float(k & 1), float((k >> 1) & 1), float((k >> 2) & 1));
+                    // The previous depth did not match. Instead of colours the bits of four numbers, so they
+                    // can be read back exactly from a screenshot: the pixel column picks the bit (x mod 32,
+                    // the most significant on the left, white = 1, black = 0), the pixel row picks the number
+                    // (y mod 4): 0 the expected previous depth, 1 this frame's depth, 2 the depth stored at the
+                    // nearest history texel, 3 the depth tolerance.
+                    vec4 near_tap = texelFetch(history_tex, clamp(base + ivec2(round(fraction)), ivec2(0), size - 1), 0);
+                    int row = p.y & 3;
+                    float q = row == 0 ? expected_depth : row == 1 ? depth : row == 2 ? near_tap.a : threshold;
+                    debug_view = vec3(float((floatBitsToUint(q) >> uint(31 - (p.x & 31))) & 1u));
                 }
             }
         } else if (diag == 4) {

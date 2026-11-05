@@ -381,13 +381,12 @@ skipping screen-space passes (3 or 4 indices) so a shifted full-screen quad leav
 - Sharpening: RCAS-style pass `taa_sharpen.comp` after the accumulation (`taa_sharpen`, up to 200%);
   the menu's "Sharpening (RCAS)" switch turns it off (and FSR's own sharpening, `SharpenOn()`).
 - `pad` bits: 0-7 diagnostic view (4 = history debug view: red depth-rejected, green history lost,
-  blue weight used; the debug view uses whole colours only (the game's colour grading crushes small values). Even columns
-  show the route of the pixel: blue / cyan / yellow / green = the history matched 99% / 50% / 10% / less of the
-  bilinear footprint, red = the depth did not match, black = the pixel did not reproject, magenta = the motion
-  vector leaves the picture, white = history reset. Odd columns: with history, the weight used (blue 0.5+, yellow
-  0.1+, green less); with a depth mismatch, the power of ten k = floor(-log10(x)), 0..7, as (k bit 0, bit 1,
-  bit 2) = black, red, green, yellow, blue, magenta, cyan, white, where x is 1 - the expected depth on the left
-  half of the picture and |expected depth - this frame's depth| on the right half), 8-15 A/B switches, 16-23 moving-object history loss in percent, 24 view-projection
+  blue weight used; the debug view uses whole colours only (the game's colour grading crushes small values). With history: even
+  columns = how much of the bilinear footprint matched (blue 99%+, cyan 50%+, yellow 10%+, green less), odd columns =
+  the weight used (blue 0.5+, yellow 0.1+, green less). Without history because the depth did not match: the bits
+  of four numbers as black/white, column x mod 32 = bit (most significant on the left), row y mod 4 = number (expected
+  previous depth, this frame's depth, depth stored at the nearest history texel, tolerance). Black = the pixel did
+  not reproject, magenta = the motion vector leaves the picture, white = history reset), 8-15 A/B switches, 16-23 moving-object history loss in percent, 24 view-projection
   depth, 25 8-bit scene, 26-31 spatial smoothing.
 - Defaults (tuned in game on a GTX 1070 Ti): history 99% still / 55% moving, tolerance 115%,
   moving objects 90%, edges 70%, texture detail 75%, sharpening 165%. They live in
