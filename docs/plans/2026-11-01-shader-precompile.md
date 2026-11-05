@@ -381,7 +381,7 @@ Crie uma struct (por exemplo em `shader_recompiler/replay.h`) com:
 
 ### 8.5 Validação
 
-- [ ] Build Windows e Linux. Windows passou; Linux não foi rodado.
+- [ ] Build Windows e Linux. Windows passou; Linux pendente de registro aqui.
 - [ ] Sessão curta com o mantenedor: cache novo (pasta antiga renomeada), jogo até o primeiro
       combate. Confira no log que os `.meta` foram gravados e que nada mudou visualmente.
 
@@ -634,6 +634,21 @@ pipelines das chaves uma vez, para que o driver guarde os binários (`pipeline-b
   progresso". Se não, descreva o que falta.
 - Confira o que o `WarmUp(progress)` em massa já faz (ele cria pipelines das chaves com várias
   threads). O ideal é reusar esse caminho, chamado uma vez depois da F5, e depois seguir sob demanda.
+
+Resultado da leitura em 2026-11-05 (só código, sem jogo):
+
+- **Gráficos: sim.** `LoadGraphicsPipeline` cria `GraphicsPipeline`, que chama
+  `CreateCachedGraphicsPipeline`. Sem binário salvo, ele compila e grava em `pipeline-binaries/`.
+  O caminho é o mesmo do sob demanda: `preloading` só reaproveita `sdata`, que veio do disco.
+- **`WarmUp(progress)` serve de base:** percorre todas as chaves com `WarmupPool`, informa progresso,
+  e um pipeline que falha não para o resto. O diário entra nas tarefas que ele empurra para o pool.
+- **Compute não grava binário:** `vk_compute_pipeline.cpp` chama `createComputePipelineUnique` direto,
+  só com o `VkPipelineCache`. São poucos shaders compute (6 rodapés no dump), então a F6 pode deixá-los
+  no `VkPipelineCache`.
+- **Cuidado 1:** `WarmUp` deixa todos os pipelines em memória nos mapas. Para a F6 eles devem ser
+  destruídos depois de gravar o binário, ou o preparo guarda tudo na RAM.
+- **Cuidado 2:** `StartOnDemand` faz `db.Clear()` quando falta o marcador `disk_shaders`. O preparo
+  grava esse marcador (F5) antes de chamar `StartOnDemand`, ou apaga o que acabou de gerar.
 
 ### 13.2 Requisitos
 
