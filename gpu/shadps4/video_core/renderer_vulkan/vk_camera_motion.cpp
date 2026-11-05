@@ -309,7 +309,12 @@ void CameraMotion::OnConstants(const float* data) {
 }
 
 bool CameraMotion::DepthLive() const {
-    return depth_id && texture_cache.TryGetImage(depth_id, depth_uid) != nullptr;
+    if (!depth_id) {
+        return false;
+    }
+    // An unregistered image is on its way out of the cache (deleted later): not to be read.
+    const auto* image = texture_cache.TryGetImage(depth_id, depth_uid);
+    return image != nullptr && True(image->flags & VideoCore::ImageFlagBits::Registered);
 }
 
 void CameraMotion::SetDepth(VideoCore::ImageId id) {
@@ -543,7 +548,7 @@ void CameraMotion::OnDisplayPass(VideoCore::ImageId frame) {
     }
     // A depth image the texture cache freed or reused (a resize, a level change) is forgotten before
     // anything reads it: the scene state outlives the display passes of the scene TAA.
-    if (depth_id && !texture_cache.TryGetImage(depth_id, depth_uid)) {
+    if (depth_id && !DepthLive()) {
         depth_id = {};
         InvalidateHistory();
     }

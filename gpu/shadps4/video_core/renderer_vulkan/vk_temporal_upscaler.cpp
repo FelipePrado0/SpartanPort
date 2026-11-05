@@ -257,7 +257,11 @@ void TemporalUpscaler::OnSceneColor(VideoCore::ImageId color) {
 }
 
 bool TemporalUpscaler::SceneColorLive() const {
-    return scene_color && texture_cache.TryGetImage(scene_color, scene_color_uid) != nullptr;
+    if (!scene_color) {
+        return false;
+    }
+    const auto* image = texture_cache.TryGetImage(scene_color, scene_color_uid);
+    return image != nullptr && True(image->flags & VideoCore::ImageFlagBits::Registered);
 }
 
 bool TemporalUpscaler::SceneImagesLive() const {
