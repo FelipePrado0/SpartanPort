@@ -316,11 +316,11 @@ L para la cruceta, Enter para Options, Tab y Retroceso para el touchpad.
 **Teclas alternativas.** Cada botón puede tener una segunda y una tercera tecla o entrada del mouse, en
 la segunda y la tercera casilla de su fila en la página Controls (el botón x al lado de una casilla
 la borra). Todas presionan el botón, así que podés dejar el Cuadrado en el clic izquierdo para el
-combate y presionarlo también con la J, o con el Keypad 4, en los minijuegos. En la lira de las Musas, por ejemplo, dejá Espacio, Ctrl izquierdo y los dos
+combate y presionarlo también con la J, o con el Keypad 4, en los minijuegos. En la lira de las Musas, por ejemplo, dejá Espacio, Shift izquierdo y los dos
 botones del mouse y agregá K, L, J e I, dispuestas como los cuatro botones (I arriba, J a la
 izquierda, L a la derecha, K abajo). Una tecla que ya usa otro botón se intercambia con él, como en
 las teclas principales. Los íconos de teclado en el juego muestran la tecla principal; *Keys on the
-icons* (página Controls, con el estilo Keyboard) puede mostrar la alternativa, o la alternativa solo en
+icons* (página Controls, con el estilo Keyboard o Match my controller) puede mostrar la alternativa, o la alternativa solo en
 la lira (los demás íconos conservan la principal). Los íconos dibujan la segunda casilla, nunca la tercera. Sin el launcher,
 uní los nombres con `|` en `SPARTAN_KEY_MAP`, por ejemplo `cross=Space|K|Keypad 2,square=Mouse Left|J`.
 

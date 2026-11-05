@@ -313,10 +313,10 @@ direcional, Enter para Options, Tab e Backspace para o touchpad.
 segunda e na terceira caixa da linha dele na tela Controls (o botão x ao lado de uma caixa a limpa).
 Todas apertam o botão, então você pode manter o Quadrado no clique esquerdo para o combate e também
 apertá-lo com o J, ou com o Keypad 4, nos minigames. Na lira
-das Musas, por exemplo, mantenha Espaço, Ctrl esquerdo e os dois botões do mouse e acrescente K, L, J
+das Musas, por exemplo, mantenha Espaço, Shift esquerdo e os dois botões do mouse e acrescente K, L, J
 e I, dispostas como os quatro botões (I em cima, J à esquerda, L à direita, K embaixo). Uma tecla que
 já é de outro botão troca com ele, como nas teclas principais. Os ícones de teclado no jogo mostram a
-tecla principal; *Teclas nos ícones* (tela Controls, com o estilo Teclado) pode mostrar a alternativa
+tecla principal; *Teclas nos ícones* (tela Controls, com o estilo Teclado ou Igual ao meu controle) pode mostrar a alternativa
 no lugar, ou a alternativa só na lira (os outros ícones continuam com a principal). Os ícones desenham a segunda caixa, nunca a terceira. Sem o launcher, junte os nomes com `|` no `SPARTAN_KEY_MAP`, por exemplo
 `cross=Space|K|Keypad 2,square=Mouse Left|J`.
 
