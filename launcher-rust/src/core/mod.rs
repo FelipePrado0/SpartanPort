@@ -1,6 +1,7 @@
 //! Launcher logic with no UI dependency.
 
 pub mod catalog;
+pub mod control_profiles;
 pub mod controller_mappings;
 pub mod controls;
 pub mod desktop;
@@ -18,6 +19,7 @@ pub mod launch;
 pub mod log;
 pub mod mods;
 pub mod options;
+pub mod pad_model;
 pub mod patches;
 pub mod paths;
 pub mod platform;

@@ -15,7 +15,7 @@ use spartanport_launcher::core::controller_mappings::{
     STEPS,
 };
 use spartanport_launcher::core::joysticks::{
-    Device, JoyError, Joysticks, Sdl3, VirtualInput, VirtualJoystick,
+    Device, JoyError, JoystickThread, Joysticks, Sdl3, VirtualInput, VirtualJoystick,
 };
 use tempfile::TempDir;
 
@@ -346,4 +346,35 @@ fn the_fake_answers_like_the_sdl_adapter() {
         fake.warnings(),
         ["Controller mappings: could not read x: y"]
     );
+}
+
+/// The real SDL3 starts, answers and stops on the live view's own thread.
+#[test]
+fn sdl_runs_on_its_own_thread() {
+    let Some(library) = std::env::var_os("SPARTAN_TEST_SDL3").filter(|path| !path.is_empty())
+    else {
+        println!("skipped: set SPARTAN_TEST_SDL3");
+        return;
+    };
+    let _lock = SDL.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().to_path_buf();
+    let mut joysticks = JoystickThread::spawn(move || {
+        let sdl = Sdl3::open(&folder, &folder, Some(std::path::Path::new(&library)))?;
+        Ok(Box::new(sdl) as Box<dyn Joysticks>)
+    });
+    for _ in 0..5000 {
+        assert_eq!(joysticks.failure(), None);
+        if !joysticks.platform().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    assert!(!joysticks.platform().is_empty());
+    assert!(joysticks.devices().is_ok());
+    drop(joysticks);
+    // Stopped for real: the next one opens.
+    let dir = tempfile::tempdir().unwrap();
+    let library = std::env::var_os("SPARTAN_TEST_SDL3").unwrap();
+    assert!(Sdl3::open(dir.path(), dir.path(), Some(std::path::Path::new(&library))).is_ok());
 }

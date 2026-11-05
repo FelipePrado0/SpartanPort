@@ -46,6 +46,7 @@ gamecontrollerdb.txt
 # Rust launcher (docs/specs/2026-10-21-rust-launcher-design.md)
 launcher-rust/target/
 !launcher-rust/assets/*.png
+!launcher-rust/assets/pads/**/*.png
 !docs/specs/assets/**/*.png
 # Brainstorming companion sessions
 .superpowers/

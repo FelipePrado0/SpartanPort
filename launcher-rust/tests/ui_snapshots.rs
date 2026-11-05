@@ -41,10 +41,12 @@ use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 use joysticks::{pad, FakeJoysticks};
 use spartanport_launcher::core::installation::Installation;
+use spartanport_launcher::core::pad_model::PadModel;
 use spartanport_launcher::core::paths::Paths;
 use spartanport_launcher::ui::app::{self, Message, State};
 use spartanport_launcher::ui::home;
 use spartanport_launcher::ui::lang_menu::LangMessage;
+use spartanport_launcher::ui::pages::controls::{ControlsMessage, Device as Shown};
 use spartanport_launcher::ui::pages::mapper::MapperMessage;
 use spartanport_launcher::ui::pages::Page;
 use spartanport_launcher::ui::persist;
@@ -83,6 +85,8 @@ enum Shot {
     Page(Page),
     Setup(Step),
     Mapper,
+    /// The Controls page's live picture of one controller family, with buttons and sticks moving.
+    Live(PadModel),
 }
 
 impl Shot {
@@ -92,6 +96,7 @@ impl Shot {
             Shot::Page(page) => page.label_en().to_lowercase(),
             Shot::Setup(step) => format!("setup{}", step.number()),
             Shot::Mapper => "mapper".to_string(),
+            Shot::Live(model) => format!("live-{}", model.value()),
         }
     }
 }
@@ -157,8 +162,40 @@ fn fixture(dir: &Path, shot: Shot, size: Size, lang: &str) -> State {
             state.open_mapper_with(Box::new(mapper_joysticks()));
             let _ = app::update(&mut state, Message::Mapper(MapperMessage::Poll));
         }
+        Shot::Live(model) => {
+            open(&mut state, Page::Controls);
+            finish_reads(&mut state);
+            let _ = app::update(
+                &mut state,
+                Message::Controls(ControlsMessage::Device(Shown::Gamepad)),
+            );
+            let _ = app::update(
+                &mut state,
+                Message::Controls(ControlsMessage::PadModel(model)),
+            );
+            let _ = app::update(
+                &mut state,
+                Message::Set("deadzone_right".to_string(), serde_json::Value::from(25)),
+            );
+            let _ = app::update(
+                &mut state,
+                Message::Set("deadzone_left".to_string(), serde_json::Value::from(50)),
+            );
+            state.controls.live_error = None;
+            let fake = mapper_joysticks();
+            {
+                let mut script = fake.script();
+                script.pressed = vec!["Cross / A", "L1 / LB", "D-pad left"];
+                script.axes = [20000, -14000, 3000, 2000, 24000, 0];
+            }
+            state.open_live_pad_with(Box::new(fake));
+            let _ = app::update(&mut state, Message::Controls(ControlsMessage::LivePoll));
+        }
     }
     state.now = state.splash.started + CLOCK;
+    if matches!(shot, Shot::Live(_)) {
+        let _ = app::update(&mut state, Message::Controls(ControlsMessage::Rumble(true)));
+    }
     show_fixed_paths(&mut state);
     if let Shot::Setup(step) = shot {
         // The setup opens over the folder it shows, as the first start reads it.
@@ -381,6 +418,9 @@ fn mods() {
 #[test]
 fn mapper() {
     check(Shot::Mapper);
+    for model in PadModel::ALL {
+        check(Shot::Live(model));
+    }
 }
 
 #[test]
