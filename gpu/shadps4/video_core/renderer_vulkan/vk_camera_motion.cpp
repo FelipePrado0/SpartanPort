@@ -536,7 +536,7 @@ void CameraMotion::OnViewProjection(const float* matrix, VideoCore::ImageId dept
 }
 
 void CameraMotion::OnDisplayPass(VideoCore::ImageId frame) {
-    if (debug_overlay && frame && depth_id && current.valid && previous.valid) {
+    if (debug_overlay && frame && DepthLive() && current.valid && previous.valid) {
         Overlay(frame);
     }
     if (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa) {

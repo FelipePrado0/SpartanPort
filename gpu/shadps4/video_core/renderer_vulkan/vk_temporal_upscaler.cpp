@@ -492,7 +492,7 @@ void TemporalUpscaler::OnGraphicsDraw(u64 ps_hash, VideoCore::ImageId color) {
     if (ps_hash == ldr_trigger_ps && color && !done_this_frame) {
         // All HDR effects are complete; capture them before scene_color becomes the LDR target.
         OnSceneComposite();
-        scene_color = color;
+        OnSceneColor(color); // keeps the image uid in step
         ldr_pending = true;
     }
 }
@@ -795,7 +795,7 @@ void TemporalUpscaler::OnPixelShader(u64 ps_hash, VideoCore::ImageId color) {
         NoteSkip();
         return;
     }
-    scene_color = color;
+    OnSceneColor(color); // keeps the image uid in step
     composite_pending = true;
 }
 
