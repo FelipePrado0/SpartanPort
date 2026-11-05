@@ -1242,11 +1242,11 @@ void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
         if (matrix_frames++ % 150 == 0) {
             const auto& m = params.reproject;
             std::printf("TAA reproject: %g %g %g %g | %g %g %g %g | %g %g %g %g | %g %g %g %g "
-                        "depth %g %g viewport %g %g %g %g reset %u\n",
+                        "depth %g %g viewport %g %g %g %g reset %u near %g\n",
                         m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11],
                         m[12], m[13], m[14], m[15], params.depth[0][0], params.depth[0][1],
                         params.depth[2][0], params.depth[2][1], params.depth[2][2],
-                        params.depth[2][3], params.reset);
+                        params.depth[2][3], params.reset, camera_motion.Near());
         }
         static u32 diagnostic_frames = 0;
         if (diagnostic_frames++ < 16)
