@@ -1068,10 +1068,29 @@ fn draw_inline(
 }
 
 /// A QTE label: bright on black (the game adds these textures to the picture). `cap` frames it as a
-/// keyboard key.
+/// keyboard key. `color` paints the frame and the glow, `fill` the label on top of them.
 fn draw_prompt(
     label: &str,
     color: [u8; 3],
+    fill: [u8; 3],
+    width: usize,
+    height: usize,
+    cap: bool,
+    painter: &Painter,
+) -> Result<Picture, GlyphError> {
+    let glow = prompt_layer(label, color, color, width, height, cap, painter)?;
+    let layer = prompt_layer(label, color, fill, width, height, cap, painter)?;
+    let mut image = Picture::new(Mode::Rgba, width * SCALE, height * SCALE, &[0, 0, 0, 255]);
+    image.alpha_composite(&glow.gaussian_blur(SCALE as f32 * 2.5));
+    image.alpha_composite(&layer);
+    Ok(image.resize(width, height, Filter::Lanczos))
+}
+
+/// The sharp layer of [`draw_prompt`], on transparent.
+fn prompt_layer(
+    label: &str,
+    color: [u8; 3],
+    fill: [u8; 3],
     width: usize,
     height: usize,
     cap: bool,
@@ -1094,7 +1113,7 @@ fn draw_prompt(
             &mut layer,
             [w * 0.15, h * 0.22, w * 0.85, h * 0.78],
             label,
-            color,
+            fill,
             painter,
         )?;
     } else {
@@ -1102,14 +1121,11 @@ fn draw_prompt(
             &mut layer,
             [w * 0.24, h * 0.2, w * 0.76, h * 0.8],
             label,
-            color,
+            fill,
             painter,
         )?;
     }
-    let mut image = Picture::new(Mode::Rgba, width * SCALE, height * SCALE, &[0, 0, 0, 255]);
-    image.alpha_composite(&layer.gaussian_blur(SCALE as f32 * 2.5));
-    image.alpha_composite(&layer);
-    Ok(image.resize(width, height, Filter::Lanczos))
+    Ok(layer)
 }
 
 /// The picture that replaces a texture of [`TEXTURES`] (not the lyre's), at its size.
@@ -1143,7 +1159,7 @@ pub fn render(
             let mut half = Picture::new(Mode::Rgba, width, height / 2, &[0, 0, 0, 255]);
             let label = glyph(&host(button), choice.style, choice.faces).label;
             half.paste(
-                &draw_prompt(&label, INK, width, height / 2, keyboard, painter)?,
+                &draw_prompt(&label, INK, INK, width, height / 2, keyboard, painter)?,
                 0,
                 -offset,
                 None,
@@ -1159,13 +1175,22 @@ pub fn render(
     }
     let button = buttons.first().copied().unwrap_or("");
     let mut glyph = glyph(&host(button), choice.style, choice.faces);
+    let frame = glyph.color;
     if let Some(color) = face_color(choice, button) {
         glyph.color = color;
     }
     if form == Form::Inline {
         draw_inline(&glyph, width, height, painter)
     } else {
-        draw_prompt(&glyph.label, glyph.color, width, height, keyboard, painter)
+        draw_prompt(
+            &glyph.label,
+            frame,
+            glyph.color,
+            width,
+            height,
+            keyboard,
+            painter,
+        )
     }
 }
 
@@ -1738,9 +1763,10 @@ pub fn lyre_paint(
         }
         if form == Form::Gold {
             // A line engraved into the gold: a light bevel around a dark groove. A coloured label
-            // is engraved in shades of its colour instead of the gold's own.
-            let median =
-                tint.unwrap_or_else(|| medians.get(button).copied().unwrap_or([156, 116, 60]));
+            // is engraved in shades of its colour instead of the gold's own; its shine stays gold.
+            let median = tint
+                .filter(|_| kind != "specular")
+                .unwrap_or_else(|| medians.get(button).copied().unwrap_or([156, 116, 60]));
             let groove = if kind == "diffuse" {
                 // The far wall of the groove catches the light.
                 let light = median.map(|c| (f64::from(c) * 1.2).min(255.0) as u8);
@@ -2569,7 +2595,16 @@ pub(crate) mod tests {
             let cross = label_colour(&draw(&colored, form, "cross"));
             assert!(cross[2] > cross[0] + 20.0, "{form:?} cross {cross:?}");
             let circle = label_colour(&draw(&colored, form, "circle"));
-            assert!(circle[0] > circle[2] + 60.0, "{form:?} circle {circle:?}");
+            // The QTE frame stays ink and counts among the bright pixels.
+            let margin = if form == Form::Qte { 20.0 } else { 60.0 };
+            assert!(circle[0] > circle[2] + margin, "{form:?} circle {circle:?}");
+            if form == Form::Qte {
+                let frame = |image: Picture| image.data[(4 * 64 + 32) * 4..][..3].to_vec();
+                assert_eq!(
+                    frame(draw(&colored, form, "circle")),
+                    frame(draw(&plain, form, "circle"))
+                );
+            }
             assert_ne!(draw(&colored, form, "square"), draw(&plain, form, "square"));
             // Every other button is drawn as before.
             for button in ["l1", "r2", "options", "up"] {

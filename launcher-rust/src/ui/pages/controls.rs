@@ -105,8 +105,8 @@ const DEADZONE_HINT: &str = "How far a stick must move before the game sees it. 
 
 /// Side of a button icon.
 const ICON_SIZE: f32 = 28.0;
-/// Width of a key box, enough for the countdown text.
-const BOX_WIDTH: f32 = 152.0;
+/// Width of a key box. Three boxes must leave the row's title two readable lines at 1280x800.
+const BOX_WIDTH: f32 = 144.0;
 /// What an empty alternative box says.
 const ALTERNATIVE_EMPTY: &str = "(alternative)";
 const SECOND_ALTERNATIVE_EMPTY: &str = "(2nd alternative)";
@@ -1012,7 +1012,7 @@ fn key_line<'a>(row: KeyRow, lang: &str) -> Element<'a, Message> {
         .push(container(clear_second).id(clear_second_alternative_id(row.button)))
         .push(reset)
         .push(container(clear).id(clear_id(row.button)))
-        .spacing(10)
+        .spacing(6)
         .align_y(Center)
         .into()
 }

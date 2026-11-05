@@ -454,7 +454,7 @@ The rows against `src/core/legacy.rs`, `src/core/save_backup.rs` and the discove
 Rows marked `ported` or `replaced by` whose Rust tests cover the behaviour but not every assertion of
 the Python test:
 
-- `tests/test_glyphs.py::GlyphPatchTest::test_lyre_discs_are_repainted_in_place` and `KeyboardStickTest::test_stick_and_dpad_textures_are_keyboard_only`: the Python asserts that the keyboard style leaves the lyre alone; the Rust tests assert the opposite (deviation 17) and keep the Xbox and Nintendo assertions
+- `tests/test_glyphs.py::GlyphPatchTest::test_lyre_discs_are_repainted_in_place` and `KeyboardStickTest::test_stick_and_dpad_textures_are_keyboard_only`: the Python asserts that the keyboard style leaves the lyre alone; the Rust tests assert the opposite (deviation 18) and keep the Xbox and Nintendo assertions
 - `tests/test_isa_rewrite.py::TableTests::test_fixture_file_is_current`: the Rust test compares the table and the sites with the generator fixture; whether the fixture is current is tests/test_runner_generators.py's job.
 - `tests/test_run_isa.py::RunIsaTests::test_parse_cpu_features`: the Rust test runs the runner in process on a fake host; the names read from the `CPU: missing` line are not asserted, only that a missing set asks for the ISA table and `CPU: complete` does not.
 - `tests/test_mods.py::ModTests::test_run_uses_overlay_propagates_exit_and_cleans_view`: the test runs the Rust runner in process on a fake host, whose game start reads the mod's file under `--app0` (not the Python shebang script that is skipped on Windows).

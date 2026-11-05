@@ -317,7 +317,7 @@ das Musas, por exemplo, mantenha Espaço, Shift esquerdo e os dois botões do mo
 e I, dispostas como os quatro botões (I em cima, J à esquerda, L à direita, K embaixo). Uma tecla que
 já é de outro botão troca com ele, como nas teclas principais. Os ícones de teclado no jogo mostram a
 tecla principal; *Teclas nos ícones* (tela Controls, com o estilo Teclado ou Igual ao meu controle) pode mostrar a alternativa
-no lugar, ou a alternativa só na lira (os outros ícones continuam com a principal). Os ícones desenham a segunda caixa, nunca a terceira. Sem o launcher, junte os nomes com `|` no `SPARTAN_KEY_MAP`, por exemplo
+no lugar, ou a alternativa só na lira (os outros ícones continuam com a principal). Os ícones desenham a primeira alternativa preenchida: a segunda caixa, ou a terceira se a segunda estiver vazia. Sem o launcher, junte os nomes com `|` no `SPARTAN_KEY_MAP`, por exemplo
 `cross=Space|K|Keypad 2,square=Mouse Left|J`.
 
 Em um controle sem touchpad (Xbox e outros), View abre o menu de pausa (o clique direito do

@@ -355,7 +355,7 @@ for example, keep Space, Left Shift and the two mouse buttons and add K, L, J an
 four buttons (I up, J left, L right, K down). A key already used by another button swaps with it, as
 for the main keys. The in-game keyboard icons show the main key; *Keys on the icons* (Controls page,
 with the Keyboard or Match my controller style) can show the alternative instead, or the alternative on the lyre only (the
-other icons keep the main key). The icons draw the second box, never the third. Without the launcher, join the names with
+other icons keep the main key). The icons draw the first alternative that is set: the second box, or the third when the second is empty. Without the launcher, join the names with
 `|` in `SPARTAN_KEY_MAP`, for example `cross=Space|K|Keypad 2,square=Mouse Left|J`.
 
 On a controller without a touchpad (Xbox and others), View opens the pause menu (the right

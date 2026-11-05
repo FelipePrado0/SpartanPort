@@ -470,7 +470,7 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
             &mut |line| println!("{line}"),
         )
         .unwrap();
-        // The drawing's version is the one thing that differs (deviation 17 of the parity spec).
+        // The drawing's version is the one thing that differs (deviation 18 of the parity spec).
         let theirs = String::from_utf8(fs::read(python.join("glyphs/stamp.json")).unwrap())
             .unwrap()
             .replacen("[12,", &format!("[{},", glyphs::VERSION), 1);
@@ -486,7 +486,7 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
                 python.join("glyphs").join(file),
             );
             // The Python leaves the lyre's PlayStation symbols with the keyboard style, and makes
-            // no copy of its WAD (deviation 17 of the parity spec).
+            // no copy of its WAD (deviation 18 of the parity spec).
             let lyre_only_here = style == "keyboard" && name.ends_with("OLY150.WAD");
             assert_eq!(
                 ours.is_file(),

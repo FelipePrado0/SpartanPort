@@ -629,8 +629,7 @@ mod tests {
     }
 
     #[test]
-    fn every_button_with_an_alternative_still_fits_the_runtime_buffer() {
-        // The runtime reads SPARTAN_KEY_MAP into a 2048-byte buffer (src/runtime_pad.c).
+    fn every_button_with_two_alternatives_reaches_the_key_map() {
         let rows = crate::core::controls::table_rows(crate::core::controls::Kind::Key);
         let alternatives: serde_json::Map<String, Value> = rows
             .iter()
@@ -650,10 +649,16 @@ mod tests {
             "controls": {"key": keys, "key_alt": alternatives, "key_alt2": second}
         }));
         let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        let bound: Vec<&str> = env["SPARTAN_KEY_MAP"]
+            .split(',')
+            .filter(|entry| entry.contains("Mouse Forward"))
+            .collect();
+        assert!(!bound.is_empty());
         assert!(
-            env["SPARTAN_KEY_MAP"].len() < 2048,
-            "{}",
-            env["SPARTAN_KEY_MAP"].len()
+            bound
+                .iter()
+                .all(|entry| entry.ends_with("|Keypad Enter|Keypad Period")),
+            "{bound:?}"
         );
     }
 

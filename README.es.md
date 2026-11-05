@@ -321,7 +321,7 @@ botones del mouse y agregá K, L, J e I, dispuestas como los cuatro botones (I a
 izquierda, L a la derecha, K abajo). Una tecla que ya usa otro botón se intercambia con él, como en
 las teclas principales. Los íconos de teclado en el juego muestran la tecla principal; *Keys on the
 icons* (página Controls, con el estilo Keyboard o Match my controller) puede mostrar la alternativa, o la alternativa solo en
-la lira (los demás íconos conservan la principal). Los íconos dibujan la segunda casilla, nunca la tercera. Sin el launcher,
+la lira (los demás íconos conservan la principal). Los íconos dibujan la primera alternativa definida: la segunda casilla, o la tercera si la segunda está vacía. Sin el launcher,
 uní los nombres con `|` en `SPARTAN_KEY_MAP`, por ejemplo `cross=Space|K|Keypad 2,square=Mouse Left|J`.
 
 En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic del touchpad derecho)
