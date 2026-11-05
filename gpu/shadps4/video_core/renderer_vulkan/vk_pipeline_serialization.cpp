@@ -1425,6 +1425,24 @@ bool PipelineCache::NewPipelineKey(const std::string& name) {
     return true;
 }
 
+// On demand has no end of warm-up to print these, so ReportDiskShaders prints them as it goes.
+static void PrintPipelineBuildTime() {
+    std::printf("Pipeline binary profile: keys %.3f thread-s, disk/decode/migration %.3f thread-s, "
+                "binary handles %.3f thread-s, driver restore %.3f thread-s, "
+                "driver compile %.3f thread-s\n",
+                binary_key_ns.load() / 1e9, binary_load_ns.load() / 1e9,
+                binary_handles_ns.load() / 1e9, binary_restore_ns.load() / 1e9,
+                binary_compile_ns.load() / 1e9);
+    extern std::atomic<u64> g_spartanport_pipeline_total_ns, g_spartanport_pipeline_driver_ns;
+    extern std::atomic<u32> g_spartanport_pipelines_built;
+    const u32 built = std::max(1u, g_spartanport_pipelines_built.load());
+    std::printf("Pipeline build time: %u graphics pipelines, %.1f ms each (driver %.1f ms, the rest "
+                "%.1f ms), %.1f s in all\n",
+                built, g_spartanport_pipeline_total_ns / 1e6 / built, g_spartanport_pipeline_driver_ns / 1e6 / built,
+                (g_spartanport_pipeline_total_ns - g_spartanport_pipeline_driver_ns) / 1e6 / built,
+                g_spartanport_pipeline_total_ns / 1e9);
+}
+
 void PipelineCache::ReportDiskShaders() {
     if (disk_shaders && !disk_store_untrusted && SpartanToggle::Disabled(SpartanToggle::DiskShaders)) {
         // Switched off live: later permutations follow first-use order again (see StartOnDemand).
@@ -1450,6 +1468,7 @@ void PipelineCache::ReportDiskShaders() {
                 static_cast<unsigned long long>(s.compiled),
                 static_cast<unsigned long long>(s.keys_written),
                 static_cast<unsigned long long>(s.keys_skipped));
+    PrintPipelineBuildTime();
 }
 
 // spartanport: one cached shader stage read by the background warm-up, shared by every cached
@@ -1771,20 +1790,7 @@ void PipelineCache::PumpWarmUp() {
                 warm.pump_ns / 1e9, warm.pump_max_ns / 1e6, warm.pump_gap_max_ns / 1e6,
                 warm.batches, warm.build_ns.load() / 1e9, warm.read_queue_ns.load() / 1e9,
                 warm.build_queue_ns.load() / 1e9);
-    std::printf("Pipeline binary profile: keys %.3f thread-s, disk/decode/migration %.3f thread-s, "
-                "binary handles %.3f thread-s, driver restore %.3f thread-s, "
-                "driver compile %.3f thread-s\n",
-                binary_key_ns.load() / 1e9, binary_load_ns.load() / 1e9,
-                binary_handles_ns.load() / 1e9, binary_restore_ns.load() / 1e9,
-                binary_compile_ns.load() / 1e9);
-    extern std::atomic<u64> g_spartanport_pipeline_total_ns, g_spartanport_pipeline_driver_ns;
-    extern std::atomic<u32> g_spartanport_pipelines_built;
-    const u32 built = std::max(1u, g_spartanport_pipelines_built.load());
-    std::printf("Pipeline build time: %u graphics pipelines, %.1f ms each (driver %.1f ms, the rest "
-                "%.1f ms), %.1f s in all\n",
-                built, g_spartanport_pipeline_total_ns / 1e6 / built, g_spartanport_pipeline_driver_ns / 1e6 / built,
-                (g_spartanport_pipeline_total_ns - g_spartanport_pipeline_driver_ns) / 1e6 / built,
-                g_spartanport_pipeline_total_ns / 1e9);
+    PrintPipelineBuildTime();
     // The idle threads stay parked (StopWarmUp).
     warm.finished = true;
     SpartanOverlay::SetBackgroundLoading(0, 0);
