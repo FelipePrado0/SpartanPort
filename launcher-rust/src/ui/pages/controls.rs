@@ -4,19 +4,21 @@
 //! The edited tables live in `ControlsView`, not in the settings: Task 32's `gather` writes their
 //! `control_changes` into `settings.controls`. A key box waits for an input after a click: the next
 //! key (`key_pressed`, fed by `Message::Key`), mouse button or wheel turn (`subscription`) is bound
-//! with `bind_key`, or the box gives up after `CAPTURE_SECONDS`. Each keyboard row has two boxes: the
+//! with `bind_key`, or the box gives up after `CAPTURE_SECONDS`. Each keyboard row has three boxes: the
 //! main input and two optional alternatives that press the same button.
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use iced::keyboard::key::Named;
-use iced::keyboard::{Key, Location};
+use iced::keyboard::{self, Key, Location};
 use iced::time::Instant;
 use iced::widget::{button, column, container, mouse_area, pick_list, row as layout, space, text};
-use iced::{event, mouse, window, Center, Element, Event, Fill, Left, Padding, Subscription, Task};
+use iced::{event, mouse, window, Center, Element, Event, Fill, Padding, Subscription, Task};
 use indexmap::IndexMap;
 use serde_json::Value;
 
+use crate::core::control_profiles::{Profile, DEFAULT_PROFILE};
 use crate::core::controls::{
     alternative_values, at_defaults, bind_key, control_values, default_input, sdl_key_name,
     table_rows, Kind, Slot, CONTROLS, PAD_STYLES, RAGE_BUTTONS,
@@ -28,13 +30,17 @@ use crate::core::options::{
     AIM_STYLES, GLYPH_KEYS, GLYPH_STYLES, KEY_COLORS, KEY_COLOR_STYLES, MENU_CONFIRM_STYLES,
     STICK_PROMPTS,
 };
+use crate::core::pad_model::PadModel;
 use crate::core::platform::tool::SystemTools;
 use crate::core::settings::Settings;
 use crate::ui::app::{apply_set, Message, State};
+use crate::ui::pages::control_center;
 use crate::ui::pages::mapper::MapperMessage;
+use crate::ui::pages::Page;
 use crate::ui::tasks::blocking;
-use crate::ui::theme::{self, mirror_x, palette};
+use crate::ui::theme::{self, palette};
 use crate::ui::widgets::button_icon::game_button;
+use crate::ui::widgets::pad_diagram::input_glyph;
 use crate::ui::widgets::{
     button_icon, checkbox, min_width, row, section, select, select_pairs_small, slider, SELECT_MIN,
     SELECT_TEXT,
@@ -81,13 +87,6 @@ pub const ACTION_NAMES: &[(&str, &str)] = &[
     ("look_right", "Right stick right"),
 ];
 
-/// The controller types, in `PAD_STYLES` order; the names are not translated.
-pub const PAD_STYLE_NAMES: &[(&str, &str)] = &[
-    ("playstation", "PlayStation"),
-    ("xbox", "Xbox"),
-    ("nintendo", "Nintendo"),
-];
-
 const GLYPH_HINT: &str = "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of up to three game files in the port's data folder (about 410 MB); your game folder is never changed. Applied when the game starts.";
 const SWITCH_CHECK: &str = "Switch attacks on L1 + d-pad and L1 + Cross";
 const SWITCH_HINT: &str = "L1 + a d-pad direction switches to that weapon with its switch attack (the weapon in Kratos' hands does its attack again). L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the next weapon. The d-pad alone switches as before. Applied when the game starts.";
@@ -101,7 +100,8 @@ const SENSITIVITY_HINT: &str = "Aiming with the mouse while L2 is held: lower ne
 const MOUSE_LOCK_HINT: &str = "While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.";
 const VIBRATION_HINT: &str = "Strength of the gamepad's vibration; 0% turns it off.";
 const CONFIRM_HINT: &str = "Which button confirms choices in save/load dialogs and menu lists. Default: Cross confirms, Circle cancels. Swapped: Circle confirms, Cross cancels. Does not change gameplay or combat controls.";
-const PAD_NOTE: &str = "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.";
+const PAD_NOTE: &str = "Touchpad right opens the game's pause menu. Touchpad left (photo mode) is L1 + Touchpad right, or a button of its own if you choose one. R3+L2 always opens the port's menu. Applied when the game starts.";
+const DEADZONE_HINT: &str = "How far a stick must move before the game sees it. Raise it if the camera or Kratos moves by itself. 0% is the game's own stick. Applied when the game starts.";
 
 /// Side of a button icon.
 const ICON_SIZE: f32 = 28.0;
@@ -162,9 +162,12 @@ pub struct ControlsView {
     pub key_alt: IndexMap<String, String>,
     /// The second alternative input, kept like `key_alt`.
     pub key_alt2: IndexMap<String, String>,
-    /// SDL gamepad button by game button (`CONTROLS`); empty for L2, R2 and Touchpad left.
+    /// SDL gamepad button by game button (`CONTROLS`); empty for a Touchpad left left on L1 +
+    /// Touchpad right.
     pub pad: IndexMap<String, String>,
     pub pad_style: String,
+    /// The controller the picture shows.
+    pub pad_model: PadModel,
     /// The game button whose key box waits for an input.
     pub capturing: Option<String>,
     /// Which of its three boxes waits.
@@ -172,6 +175,23 @@ pub struct ControlsView {
     pub capture_started: Option<Instant>,
     /// Whether the first open already looked for a gamepad.
     pub gamepad_probe_started: bool,
+    /// The game button that waits for a press on the pad.
+    pub pad_capturing: Option<String>,
+    pub pad_capture_started: Option<Instant>,
+    /// Keys and mouse buttons held, for the keyboard picture.
+    pub held: Vec<String>,
+    /// Why the pad could not be read.
+    pub live_error: Option<String>,
+    /// The saved profiles, the one chosen, and the name box.
+    pub profiles: IndexMap<String, Profile>,
+    pub profile: String,
+    pub profile_name: String,
+    /// Whether the name box is open.
+    pub profile_naming: bool,
+    /// The profile file could not be read, so it must not be replaced.
+    pub profiles_damaged: bool,
+    /// The last thing the page has to say.
+    pub status: String,
 }
 
 impl ControlsView {
@@ -193,11 +213,22 @@ impl ControlsView {
             key_alt: alternative_values(saved, Slot::Alternative),
             key_alt2: alternative_values(saved, Slot::SecondAlternative),
             pad: table(saved, Kind::Pad),
+            pad_model: PadModel::saved(&settings.get_str("pad_art"), &pad_style),
             pad_style,
             capturing: None,
             capturing_slot: Slot::Main,
             capture_started: None,
             gamepad_probe_started: false,
+            pad_capturing: None,
+            pad_capture_started: None,
+            held: Vec::new(),
+            live_error: None,
+            profiles: IndexMap::new(),
+            profile: DEFAULT_PROFILE.to_string(),
+            profile_name: String::new(),
+            profile_naming: false,
+            profiles_damaged: false,
+            status: String::new(),
         }
     }
 }
@@ -240,11 +271,33 @@ pub enum ControlsMessage {
     /// "Clear input" of a row: that button's main input on none, or an alternative dropped.
     Clear(String, Slot),
     ResetTable(Kind),
-    PadStyle(String),
+    /// A controller picked by hand; it stops following the connected one.
+    PadModel(PadModel),
     /// A gamepad box: the game button and the SDL gamepad button chosen for it.
     PadPick(String, String),
     /// What the probe of the first open found.
     GamepadDetected(bool),
+    /// The "Automatic" controller type.
+    PadStyleAuto,
+    /// A click on the picture, with the input's SDL name.
+    PartPressed(String),
+    /// The pad's clock.
+    LivePoll,
+    /// A key or mouse button went down or up.
+    Held(String, bool),
+    MeasureDrift,
+    ApplyDrift,
+    /// The test of a motor: left when true.
+    Rumble(bool),
+    ProfilePick(String),
+    ProfileName(String),
+    ProfileNaming,
+    ProfileSave,
+    ProfileDelete,
+    ProfileImport,
+    ProfileExport,
+    ProfileImported(Option<PathBuf>),
+    ProfileExported(Option<PathBuf>),
 }
 
 pub fn update(state: &mut State, message: ControlsMessage) -> Task<Message> {
@@ -252,6 +305,7 @@ pub fn update(state: &mut State, message: ControlsMessage) -> Task<Message> {
         ControlsMessage::Device(device) => {
             show_device(state, device);
             state.controls.device_chosen = true;
+            control_center::open_live(state);
             return apply_set(state, "controls_device", Value::from(device.value()));
         }
         ControlsMessage::Capture(button, slot) => {
@@ -303,10 +357,38 @@ pub fn update(state: &mut State, message: ControlsMessage) -> Task<Message> {
                 }
             }
         }
-        ControlsMessage::PadStyle(style) => {
-            state.controls.pad_style = style.clone();
-            return apply_set(state, "pad_style", Value::String(style));
+        ControlsMessage::PadModel(model) => {
+            state.controls.pad_model = model;
+            state.controls.pad_style = model.style().to_string();
+            return Task::batch([
+                apply_set(state, "pad_style_auto", Value::Bool(false)),
+                apply_set(state, "pad_art", Value::from(model.value())),
+                apply_set(state, "pad_style", Value::from(model.style())),
+            ]);
         }
+        ControlsMessage::PadStyleAuto => {
+            return apply_set(state, "pad_style_auto", Value::Bool(true));
+        }
+        ControlsMessage::PartPressed(part) => return control_center::part_pressed(state, &part),
+        ControlsMessage::LivePoll => control_center::poll(state),
+        ControlsMessage::Held(input, down) => {
+            state.controls.held.retain(|known| *known != input);
+            if down {
+                state.controls.held.push(input);
+            }
+        }
+        ControlsMessage::MeasureDrift => control_center::measure_drift(state),
+        ControlsMessage::ApplyDrift => return control_center::apply_drift(state),
+        ControlsMessage::Rumble(left) => control_center::rumble(state, left),
+        ControlsMessage::ProfilePick(name) => return control_center::pick_profile(state, &name),
+        ControlsMessage::ProfileName(name) => state.controls.profile_name = name,
+        ControlsMessage::ProfileNaming => state.controls.profile_naming = true,
+        ControlsMessage::ProfileSave => control_center::save_profile(state),
+        ControlsMessage::ProfileDelete => control_center::delete_profile(state),
+        ControlsMessage::ProfileImport => return control_center::import_dialog(),
+        ControlsMessage::ProfileExport => return control_center::export_dialog(state),
+        ControlsMessage::ProfileImported(path) => return control_center::imported(state, path),
+        ControlsMessage::ProfileExported(path) => control_center::exported(state, path),
         ControlsMessage::PadPick(button, name) => {
             if let Some(value) = state.controls.pad.get_mut(&button) {
                 *value = name;
@@ -315,6 +397,7 @@ pub fn update(state: &mut State, message: ControlsMessage) -> Task<Message> {
         ControlsMessage::GamepadDetected(found) => {
             if found && !state.controls.device_chosen {
                 show_device(state, Device::Gamepad);
+                control_center::open_live(state);
             }
         }
     }
@@ -326,7 +409,10 @@ pub fn update(state: &mut State, message: ControlsMessage) -> Task<Message> {
 fn show_device(state: &mut State, device: Device) {
     if device != Device::Keyboard {
         stop_capture(state);
+    } else {
+        control_center::close_live(state);
     }
+    state.controls.held.clear();
     state.controls.device = device;
 }
 
@@ -337,6 +423,8 @@ fn stop_capture(state: &mut State) {
 
 /// The first open without a chosen device looks for a gamepad, once, in the background.
 pub fn opened(state: &mut State) -> Task<Message> {
+    control_center::load_profiles(state);
+    control_center::open_live(state);
     if state.controls.device_chosen || state.controls.gamepad_probe_started {
         return Task::none();
     }
@@ -371,6 +459,58 @@ pub fn tick(state: &mut State, at: Instant) {
 
 /// While a box waits: mouse buttons and wheel turns, as its input.
 pub fn subscription(state: &State) -> Subscription<Message> {
+    if state.page != Page::Controls {
+        return Subscription::none();
+    }
+    let live = match state.controls.device {
+        Device::Keyboard => event::listen_with(|event: Event, _, _| held_input(&event))
+            .map(|(input, down)| Message::Controls(ControlsMessage::Held(input, down))),
+        Device::Gamepad if state.live_pad.is_some() => iced::time::every(control_center::POLL)
+            .map(|_| Message::Controls(ControlsMessage::LivePoll)),
+        Device::Gamepad => Subscription::none(),
+    };
+    Subscription::batch([live, capture_subscription(state)])
+}
+
+/// Whether the keyboard picture is on screen.
+pub fn shows_keys(state: &State) -> bool {
+    state.page == Page::Controls && state.controls.device == Device::Keyboard
+}
+
+/// A key or mouse button that went down or up, with its input name, for the keyboard picture.
+pub fn held_input(event: &Event) -> Option<(String, bool)> {
+    let key_name = |key: &Key, location: Location| {
+        neutral_key_name(key, location).and_then(|name| sdl_key_name(&name))
+    };
+    match event {
+        Event::Keyboard(keyboard::Event::KeyPressed { key, location, .. }) => {
+            Some((key_name(key, *location)?, true))
+        }
+        Event::Keyboard(keyboard::Event::KeyReleased { key, location, .. }) => {
+            Some((key_name(key, *location)?, false))
+        }
+        Event::Mouse(mouse::Event::ButtonPressed(button)) => {
+            Some((mouse_button(*button)?.to_string(), true))
+        }
+        Event::Mouse(mouse::Event::ButtonReleased(button)) => {
+            Some((mouse_button(*button)?.to_string(), false))
+        }
+        _ => None,
+    }
+}
+
+fn mouse_button(button: mouse::Button) -> Option<&'static str> {
+    Some(match button {
+        mouse::Button::Left => "Mouse Left",
+        mouse::Button::Middle => "Mouse Middle",
+        mouse::Button::Right => "Mouse Right",
+        mouse::Button::Back => "Mouse Back",
+        mouse::Button::Forward => "Mouse Forward",
+        mouse::Button::Other(_) => return None,
+    })
+}
+
+fn capture_subscription(state: &State) -> Subscription<Message> {
     let Some(button) = state.controls.capturing.clone() else {
         return Subscription::none();
     };
@@ -411,13 +551,9 @@ pub enum MouseInput {
 /// `mouse_name`); `None` for any other event.
 pub fn mouse_input(event: &Event) -> Option<MouseInput> {
     let name = match event {
-        Event::Mouse(mouse::Event::ButtonPressed(button)) => match button {
-            mouse::Button::Left => "Mouse Left",
-            mouse::Button::Middle => "Mouse Middle",
-            mouse::Button::Right => "Mouse Right",
-            mouse::Button::Back => "Mouse Back",
-            mouse::Button::Forward => "Mouse Forward",
-            mouse::Button::Other(_) => return Some(MouseInput::GiveUp),
+        Event::Mouse(mouse::Event::ButtonPressed(button)) => match mouse_button(*button) {
+            Some(name) => name,
+            None => return Some(MouseInput::GiveUp),
         },
         Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
             let (mouse::ScrollDelta::Lines { y, .. } | mouse::ScrollDelta::Pixels { y, .. }) =
@@ -569,12 +705,21 @@ pub fn clear_second_alternative_id(button: &str) -> iced::widget::Id {
 }
 
 /// The English name of a game button or action, which is also the translation key.
-fn button_name(button: &'static str) -> &'static str {
+pub(crate) fn button_name(button: &'static str) -> &'static str {
     PS_BUTTON_NAMES
         .iter()
         .chain(ACTION_NAMES)
         .find(|(name, _)| *name == button)
         .map_or(button, |(_, english)| *english)
+}
+
+/// `button_name` of a game button held as text.
+pub(crate) fn button_name_of(button: &str) -> &'static str {
+    PS_BUTTON_NAMES
+        .iter()
+        .chain(ACTION_NAMES)
+        .find(|(name, _)| *name == button)
+        .map_or("", |(_, english)| *english)
 }
 
 /// The game button's icon as `(icon, style)`: its PlayStation button, a pill for the two-button
@@ -655,16 +800,12 @@ fn key_box_text(state: &State, lang: &str, button: &str, slot: Slot) -> String {
     }
 }
 
-/// What a row of the gamepad table offers.
+/// What a row of the gamepad table offers: a drop-down over `(SDL name, label)` pairs; `current`
+/// is the label shown.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PadChoice {
-    /// A drop-down over `(SDL name, label)` pairs; `current` is the label shown.
-    Pick {
-        pairs: Vec<(String, String)>,
-        current: String,
-    },
-    /// L2, R2 and Touchpad left are not remapped on the gamepad: a fixed text.
-    Fixed(String),
+pub struct PadChoice {
+    pub pairs: Vec<(String, String)>,
+    pub current: String,
 }
 
 /// One row of the gamepad table as the page draws it.
@@ -705,22 +846,17 @@ pub fn pad_rows(state: &State, lang: &str) -> Vec<PadRow> {
             } else {
                 chosen.clone()
             };
-            let choice = match row.pad {
-                Some(_) => PadChoice::Pick {
-                    current: pairs
-                        .iter()
-                        .find(|(name, _)| *name == chosen)
-                        .map_or(chosen, |(_, label)| label.clone()),
-                    pairs: pairs.clone(),
-                },
-                None if row.button == "touchpad_left" => {
-                    PadChoice::Fixed(tr(lang, "L1 + Touchpad right"))
-                }
-                None => PadChoice::Fixed(tr_fmt(
-                    lang,
-                    "{} trigger",
-                    &[&tr(lang, button_name(row.button))],
-                )),
+            // Touchpad left can stay on the combination it has by default.
+            let mut pairs = pairs.clone();
+            if row.button == "touchpad_left" {
+                pairs.insert(0, (String::new(), tr(lang, "L1 + Touchpad right")));
+            }
+            let choice = PadChoice {
+                current: pairs
+                    .iter()
+                    .find(|(name, _)| *name == chosen)
+                    .map_or(chosen, |(_, label)| label.clone()),
+                pairs,
             };
             PadRow {
                 button: row.button,
@@ -802,6 +938,9 @@ fn reset_button<'a>(state: &State, label: String, kind: Kind) -> Element<'a, Mes
 
 fn key_line<'a>(row: KeyRow, lang: &str) -> Element<'a, Message> {
     let (icon, style) = game_icon(row.button);
+    let glyph = input_glyph(&row.input);
+    let alternative_glyph = input_glyph(&row.alternative);
+    let second_glyph = input_glyph(&row.second_alternative);
     let mut input = button(text(row.input))
         .width(BOX_WIDTH)
         .style(theme::button_flat);
@@ -854,40 +993,44 @@ fn key_line<'a>(row: KeyRow, lang: &str) -> Element<'a, Message> {
             )));
         }
     }
-    layout![
+    let mut line = layout![
         button_icon(icon, style, ICON_SIZE),
         text(row.title).width(Fill),
+        glyph.unwrap_or_else(|| space().width(28).into()),
         input,
-        alternative,
-        container(clear_alternative).id(clear_alternative_id(row.button)),
-        second,
-        container(clear_second).id(clear_second_alternative_id(row.button)),
-        reset,
-        container(clear).id(clear_id(row.button)),
-    ]
-    .spacing(10)
-    .align_y(Center)
-    .into()
+    ];
+    if let Some(glyph) = alternative_glyph {
+        line = line.push(glyph);
+    }
+    line = line
+        .push(alternative)
+        .push(container(clear_alternative).id(clear_alternative_id(row.button)));
+    if let Some(glyph) = second_glyph {
+        line = line.push(glyph);
+    }
+    line.push(second)
+        .push(container(clear_second).id(clear_second_alternative_id(row.button)))
+        .push(reset)
+        .push(container(clear).id(clear_id(row.button)))
+        .spacing(10)
+        .align_y(Center)
+        .into()
 }
 
 fn pad_line<'a>(row: PadRow, pad_style: &str) -> Element<'a, Message> {
     let (icon, style) = game_icon(row.button);
-    let choice: Element<'a, Message> = match row.choice {
-        PadChoice::Pick { pairs, current } => {
-            let labels: Vec<String> = pairs.iter().map(|(_, label)| label.clone()).collect();
-            let button = row.button;
-            min_width(
-                SELECT_MIN,
-                pick_list(labels, Some(current), move |label: String| {
-                    pad_pick(button, &pairs, &label)
-                })
-                .text_size(SELECT_TEXT)
-                .style(theme::pick_list_dark),
-            )
-            .into()
-        }
-        PadChoice::Fixed(fixed) => text(fixed).style(theme::text_muted).into(),
-    };
+    let PadChoice { pairs, current } = row.choice;
+    let labels: Vec<String> = pairs.iter().map(|(_, label)| label.clone()).collect();
+    let button = row.button;
+    let choice: Element<'a, Message> = min_width(
+        SELECT_MIN,
+        pick_list(labels, Some(current), move |label: String| {
+            pad_pick(button, &pairs, &label)
+        })
+        .text_size(SELECT_TEXT)
+        .style(theme::pick_list_dark),
+    )
+    .into();
     layout![
         button_icon(icon, style, ICON_SIZE),
         text(row.title).width(Fill),
@@ -983,16 +1126,28 @@ fn keyboard_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
     .into()
 }
 
-fn gamepad_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
-    let styles = PAD_STYLE_NAMES
-        .iter()
-        .fold(layout![].spacing(14), |radios, (style, name)| {
+/// Which controller the page draws: the one found, or the one the player picks.
+fn pad_type_row<'a>(state: &State, lang: &str) -> Element<'a, Message> {
+    let auto = state.store.flag("pad_style_auto");
+    let styles = PadModel::ALL.into_iter().fold(
+        layout![radio(
+            tr(lang, "Automatic"),
+            auto,
+            Message::Controls(ControlsMessage::PadStyleAuto),
+        )]
+        .spacing(10),
+        |radios, model| {
             radios.push(radio(
-                name.to_string(),
-                state.controls.pad_style == *style,
-                Message::Controls(ControlsMessage::PadStyle(style.to_string())),
+                model.name().to_string(),
+                !auto && state.controls.pad_model == model,
+                Message::Controls(ControlsMessage::PadModel(model)),
             ))
-        });
+        },
+    );
+    row(state.rtl, &tr(lang, "Controller type"), styles.into(), None)
+}
+
+fn gamepad_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
     let lines = pad_rows(state, lang)
         .into_iter()
         .fold(column![].spacing(6), |lines, pad_row| {
@@ -1004,7 +1159,10 @@ fn gamepad_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
             lang,
             "Which gamepad button presses each button of the game."
         )),
-        row(state.rtl, &tr(lang, "Controller type"), styles.into(), None),
+        container(lines).padding(Padding::ZERO.top(12)),
+        note(tr(lang, PAD_NOTE)),
+        reset_button(state, tr(lang, "Reset gamepad to defaults"), Kind::Pad),
+        control_center::pad_tools(state, lang),
         row(
             state.rtl,
             &tr(lang, "Vibration"),
@@ -1022,15 +1180,13 @@ fn gamepad_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
             ),
             Some(&tr(lang, CONFIRM_HINT)),
         ),
-        container(lines).padding(Padding::ZERO.top(12)),
-        note(tr(lang, PAD_NOTE)),
-        reset_button(state, tr(lang, "Reset gamepad to defaults"), Kind::Pad),
+        note(tr(lang, DEADZONE_HINT)),
     ]
     .spacing(2)
     .into()
 }
 
-/// The in-game icons, the device, then only the chosen device's section (Python `show_device`).
+/// The device, its picture and only its section (Python `show_device`), then what both share.
 pub fn view(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
     let devices = Device::ALL
@@ -1046,17 +1202,28 @@ pub fn view(state: &State) -> Element<'_, Message> {
         Device::Keyboard => keyboard_section(state, lang),
         Device::Gamepad => gamepad_section(state, lang),
     };
-    // The generic controller mapper, as in the Python's first row.
-    let mapper = container(
-        button(text(tr(lang, "Set up a controller")))
-            .style(theme::button_flat)
-            .on_press(Message::Mapper(MapperMessage::Open)),
-    )
-    .width(Fill)
-    .align_x(mirror_x(Left, state.rtl))
-    .padding(Padding::ZERO.top(8).bottom(4));
+    // The generic controller mapper belongs to the gamepad only.
+    let devices: Element<'_, Message> = match state.controls.device {
+        Device::Keyboard => devices.into(),
+        Device::Gamepad => layout![
+            button(text(tr(lang, "Set up a controller")))
+                .style(theme::button_flat)
+                .on_press(Message::Mapper(MapperMessage::Open)),
+            devices
+        ]
+        .spacing(18)
+        .align_y(Center)
+        .into(),
+    };
+    let pad_type = match state.controls.device {
+        Device::Keyboard => space().height(0).into(),
+        Device::Gamepad => pad_type_row(state, lang),
+    };
     column![
-        mapper,
+        row(state.rtl, &tr(lang, "Device"), devices, None),
+        pad_type,
+        control_center::picture_panel(state, lang),
+        device_section,
         row(
             state.rtl,
             &tr(lang, "In-game button icons"),
@@ -1078,8 +1245,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
             state.store.flag("switch_attacks"),
             Some(&tr(lang, SWITCH_HINT)),
         ),
-        row(state.rtl, &tr(lang, "Device"), devices.into(), None),
-        device_section,
+        control_center::profile_section(state, lang),
     ]
     .spacing(2)
     .into()

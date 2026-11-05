@@ -12,6 +12,7 @@ use crate::core::controls::{control_map, keyboard_map, Kind as ControlKind};
 use crate::core::i18n::{tr, trophy_text, LANGS};
 use crate::core::installation::Installation;
 use crate::core::options::Choice;
+use crate::core::pad_model::MAX_DEADZONE;
 use crate::core::paths::Paths;
 use crate::core::settings::Settings;
 
@@ -307,6 +308,17 @@ pub fn environment(
     if !value.is_empty() {
         env.insert("SPARTAN_PAD_MAP".into(), value);
     }
+    // 0 is the game's own stick, so only a real dead zone is sent.
+    for (key, name) in [
+        ("deadzone_left", "SPARTAN_DEADZONE_LEFT"),
+        ("deadzone_right", "SPARTAN_DEADZONE_RIGHT"),
+    ] {
+        env.shift_remove(name);
+        let percent = settings.get(key).and_then(Value::as_u64).unwrap_or(0);
+        if percent > 0 && percent <= u64::from(MAX_DEADZONE) {
+            env.insert(name.into(), percent.to_string());
+        }
+    }
     // The saved choice wins over an inherited variable, as in the Python.
     env.shift_remove(var("switch_attacks"));
     put_if_on(&mut env, settings, "switch_attacks");
@@ -364,6 +376,23 @@ mod tests {
             .iter()
             .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect()
+    }
+
+    #[test]
+    fn a_dead_zone_is_sent_only_when_it_is_set_and_sane() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut settings = Settings(app_defaults(&|_| None));
+        let paths = Paths::from_env(dir.path(), &|_| None);
+        let run =
+            |settings: &Settings| game_environment(settings, &paths, "en", &IndexMap::new(), true);
+        let env = run(&settings);
+        assert!(!env.contains_key("SPARTAN_DEADZONE_LEFT"));
+        assert!(!env.contains_key("SPARTAN_DEADZONE_RIGHT"));
+        settings.set("deadzone_left", json!(12));
+        settings.set("deadzone_right", json!(99));
+        let env = run(&settings);
+        assert_eq!(env["SPARTAN_DEADZONE_LEFT"], "12");
+        assert!(!env.contains_key("SPARTAN_DEADZONE_RIGHT"));
     }
 
     #[test]

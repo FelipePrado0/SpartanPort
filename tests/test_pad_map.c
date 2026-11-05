@@ -31,6 +31,37 @@ static uint32_t pressed_by(const ButtonMap *map, int source) {
 }
 
 int main(void) {
+    /* The triggers are gamepad sources, and a mapped PS4 trigger leaves its physical one. */
+    ButtonMap triggers=pad_map;
+    assert(!trigger_mapped[0] && !trigger_mapped[1]);
+    assert(apply_button_map(&triggers,"l1=lefttrigger,l2=leftshoulder",false)==2);
+    assert(pressed_by(&triggers,PAD_LEFT_TRIGGER)==BTN_L1);
+    assert(pressed_by(&triggers,SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)==BTN_L2);
+    assert(trigger_mapped[0] && !trigger_mapped[1]);
+    assert(apply_button_map(&triggers,"r2=None",false)==1 && trigger_mapped[1]);
+    trigger_mapped[0]=trigger_mapped[1]=false;
+
+    /* Photo mode on a button of its own, without L1. */
+    ButtonMap photo=pad_map;
+    assert(apply_button_map(&photo,"touchpad_left=guide",false)==1);
+    assert(pressed_by(&photo,SDL_GAMEPAD_BUTTON_GUIDE)==CLICK_LEFT);
+
+    /* Dead zone: off changes nothing, inside is centre, past it the stick starts from zero. */
+    uint8_t x=140, y=128;
+    apply_deadzone(&x,&y,0);
+    assert(x==140 && y==128);
+    apply_deadzone(&x,&y,20);
+    assert(x==128 && y==128);
+    x=153; y=128;   /* 25/127, just past 19% */
+    apply_deadzone(&x,&y,19);
+    assert(x>=128 && x<=132 && y==128);
+    x=255; y=128;
+    apply_deadzone(&x,&y,20);
+    assert(x==255 && y==128);
+    x=0; y=128;
+    apply_deadzone(&x,&y,20);
+    assert(x==1 && y==128);   /* length past 1 is cut back to full tilt */
+
     ButtonMap directions=key_map;
     assert(apply_button_map(&directions,"move_up=T,move_down=G,move_left=F,move_right=H,"
                                        "look_up=Keypad 8,look_down=Keypad 2,"

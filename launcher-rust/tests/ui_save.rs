@@ -14,6 +14,7 @@ use spartanport_launcher::core::controls::Slot;
 use spartanport_launcher::core::gpu::parse_display_list;
 use spartanport_launcher::core::i18n::tr;
 use spartanport_launcher::core::ini::{load_ini, INI_FLAGS};
+use spartanport_launcher::core::pad_model::PadModel;
 use spartanport_launcher::core::patches::PatchMeta;
 use spartanport_launcher::core::paths::Paths;
 use spartanport_launcher::core::release::{Channel, Release, ReleaseId};
@@ -666,7 +667,7 @@ fn every_setting_lights_save_persists_and_comes_back() {
     change_and_save(
         &mut state,
         "pad_style",
-        Message::Controls(ControlsMessage::PadStyle("xbox".into())),
+        Message::Controls(ControlsMessage::PadModel(PadModel::Xbox)),
     );
     send(
         &mut state,

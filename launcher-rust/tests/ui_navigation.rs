@@ -219,6 +219,8 @@ fn arrows_cycle_pages_in_order() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state_in(dir.path());
     assert_eq!(state.page, Page::Home);
+    // On the keyboard picture the arrows are shown, not followed.
+    state.controls.device = spartanport_launcher::ui::pages::controls::Device::Gamepad;
 
     let mut forward = Vec::new();
     for _ in 0..ORDER.len() {
