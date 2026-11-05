@@ -1237,6 +1237,17 @@ void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
                   (SpartanToggle::Disabled(SpartanToggle::TaaKeepNearerHistory) ? 16u << 8 : 0u);
     cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, *taa_pipeline);
     if (params.pad & 0xffu) {
+        // The numbers the shader reprojects with, twice a second at most (debug view only).
+        static u32 matrix_frames = 0;
+        if (matrix_frames++ % 150 == 0) {
+            const auto& m = params.reproject;
+            std::printf("TAA reproject: %g %g %g %g | %g %g %g %g | %g %g %g %g | %g %g %g %g "
+                        "depth %g %g viewport %g %g %g %g reset %u\n",
+                        m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11],
+                        m[12], m[13], m[14], m[15], params.depth[0][0], params.depth[0][1],
+                        params.depth[2][0], params.depth[2][1], params.depth[2][2],
+                        params.depth[2][3], params.reset);
+        }
         static u32 diagnostic_frames = 0;
         if (diagnostic_frames++ < 16)
             std::printf("TAA diagnostic: reset=%u jitter=%.6f,%.6f mode=%u\n",

@@ -308,6 +308,15 @@ void main() {
                                                  : abs(expected_depth - depth) / threshold;
                     debug_view = vec3(1.0, clamp(log2(max(off, 1.0)) / 12.0, 0.0, 1.0),
                                       clamp(length(motion) / 16.0, 0.0, 1.0));
+                    // Not a number anywhere in the comparison (the numbers above would read 0 then):
+                    // violet = this frame's depth or the expected depth, pink = the stored depth,
+                    // white = the stored colour.
+                    if (isnan(depth) || isinf(depth) || isnan(expected_depth) || isinf(expected_depth))
+                        debug_view = vec3(0.6, 0.0, 1.0);
+                    else if (isnan(near_tap.a) || isinf(near_tap.a))
+                        debug_view = vec3(1.0, 0.4, 0.7);
+                    else if (any(isnan(near_tap.rgb)) || any(isinf(near_tap.rgb)))
+                        debug_view = vec3(1.0, 1.0, 1.0);
                 }
             }
         } else if (diag == 4) {

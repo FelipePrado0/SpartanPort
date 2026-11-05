@@ -383,7 +383,7 @@ skipping screen-space passes (3 or 4 indices) so a shifted full-screen quad leav
 - `pad` bits: 0-7 diagnostic view (4 = history debug view: red depth-rejected, green history lost,
   blue weight used; no history at all is coloured by reason: red with green = the depth did not match
   (green: log2 of the tolerances it is off, left half of the picture: stored depth against the one the
-  reprojection expects, right half: expected against this frame's own depth; blue: motion in pixels), cyan = the pixel did not reproject, yellow = the motion
+  reprojection expects, right half: expected against this frame's own depth; blue: motion in pixels; violet / pink / white: the depth of this frame / the stored depth / the stored colour is not a number), cyan = the pixel did not reproject, yellow = the motion
   vector leaves the picture, magenta = history reset this frame), 8-15 A/B switches, 16-23 moving-object history loss in percent, 24 view-projection
   depth, 25 8-bit scene, 26-31 spatial smoothing.
 - Defaults (tuned in game on a GTX 1070 Ti): history 99% still / 55% moving, tolerance 115%,
