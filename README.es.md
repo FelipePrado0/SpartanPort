@@ -313,15 +313,16 @@ L2, y *Right stick sensitivity* define cuánto mouse hace falta. Sin el launcher
 propias teclas: E y Q para Cuadrado y Triángulo, 1 y 3 para L1 y R1, F para R2, C para R3, I, K, J,
 L para la cruceta, Enter para Options, Tab y Retroceso para el touchpad.
 
-**Teclas alternativas.** Cada botón puede tener una segunda tecla o entrada del mouse, en la segunda
-casilla de su fila en la página Controls (el botón x al lado la borra). Las dos presionan el botón,
-así que podés dejar el Cuadrado en el clic izquierdo para el combate y presionarlo también con la J
-en los minijuegos. En la lira de las Musas, por ejemplo, dejá Espacio, Ctrl izquierdo y los dos
+**Teclas alternativas.** Cada botón puede tener una segunda y una tercera tecla o entrada del mouse, en
+la segunda y la tercera casilla de su fila en la página Controls (el botón x al lado de una casilla
+la borra). Todas presionan el botón, así que podés dejar el Cuadrado en el clic izquierdo para el
+combate y presionarlo también con la J, o con el Keypad 4, en los minijuegos. En la lira de las Musas, por ejemplo, dejá Espacio, Shift izquierdo y los dos
 botones del mouse y agregá K, L, J e I, dispuestas como los cuatro botones (I arriba, J a la
 izquierda, L a la derecha, K abajo). Una tecla que ya usa otro botón se intercambia con él, como en
 las teclas principales. Los íconos de teclado en el juego muestran la tecla principal; *Keys on the
-icons* (página Controls, con el estilo Keyboard) puede mostrar la alternativa. Sin el launcher,
-uní los nombres con `|` en `SPARTAN_KEY_MAP`, por ejemplo `cross=Space|K,square=Mouse Left|J`.
+icons* (página Controls, con el estilo Keyboard o Match my controller) puede mostrar la alternativa, o la alternativa solo en
+la lira (los demás íconos conservan la principal). Los íconos dibujan la primera alternativa definida: la segunda casilla, o la tercera si la segunda está vacía. Sin el launcher,
+uní los nombres con `|` en `SPARTAN_KEY_MAP`, por ejemplo `cross=Space|K|Keypad 2,square=Mouse Left|J`.
 
 En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic del touchpad derecho)
 y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad funciona como en la
@@ -336,10 +337,13 @@ siguiente arma. El ataque de cambio de la misma arma otra vez espera 0,8 segundo
 
 Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls del launcher, en
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* o *Keyboard*. Reemplazan los íconos de
-PlayStation en los tutoriales, la lista de movimientos, las indicaciones de quick-time events y, con los estilos
-de control, en la lira de las Musas en la Cámara de la Llama; el dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* muestra la tecla que
-presiona cada botón, según tu mapeo del teclado (una tecla cambiada aparece en el próximo inicio);
-*Match my controller* también muestra las teclas cuando no hay un control conectado. El launcher escribe una copia
+PlayStation en los tutoriales, la lista de movimientos, las indicaciones de quick-time events y en la lira de las
+Musas en la Cámara de la Llama; el dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* muestra la tecla que
+presiona cada botón, también en la lira, según tu mapeo del teclado (una tecla cambiada aparece en el próximo inicio);
+*Match my controller* también muestra las teclas cuando no hay un control conectado.
+*Key colors* (en el mismo lugar) pinta las teclas de X, Círculo, Cuadrado y Triángulo, en la lira y en
+los demás íconos de teclado: *PlayStation colors*, o *Custom* con un color de una paleta corta para
+cada botón; los demás íconos y el *Gray* por defecto no cambian. El launcher escribe una copia
 parcheada de hasta tres archivos del juego (unos 410 MB) en la carpeta de datos del port y nunca modifica tu carpeta del
 juego. Un control nuevo se detecta después de reiniciar. Sin el launcher, definí `SPARTAN_GLYPH_STYLE`
 como `auto`, `xbox`, `nintendo` o `keyboard` antes de iniciar `run.sh`.

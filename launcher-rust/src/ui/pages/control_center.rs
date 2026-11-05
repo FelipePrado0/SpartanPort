@@ -337,6 +337,8 @@ pub fn part_pressed(state: &mut State, part: &str) -> Task<Message> {
                         Slot::Main
                     } else if view.key_alt.get(row.button).is_some_and(matches) {
                         Slot::Alternative
+                    } else if view.key_alt2.get(row.button).is_some_and(matches) {
+                        Slot::SecondAlternative
                     } else {
                         return None;
                     };
@@ -437,6 +439,7 @@ fn current(state: &State) -> Profile {
     Profile {
         key: control_changes(&state.controls.key, Kind::Key),
         key_alt: state.controls.key_alt.clone(),
+        key_alt2: state.controls.key_alt2.clone(),
         pad: control_changes(&state.controls.pad, Kind::Pad),
         deadzone_left: number("deadzone_left"),
         deadzone_right: number("deadzone_right"),
@@ -457,6 +460,7 @@ fn fail(state: &mut State, error: &ProfileError) {
 
 pub fn apply_profile(state: &mut State, profile: &Profile) -> Task<Message> {
     state.controls.key_alt = profile.key_alt.clone();
+    state.controls.key_alt2 = profile.key_alt2.clone();
     for kind in [Kind::Key, Kind::Pad] {
         let (values, chosen) = match kind {
             Kind::Key => (&mut state.controls.key, &profile.key),
@@ -611,7 +615,12 @@ fn pad_label(state: &State, lang: &str, name: &str) -> String {
 /// The inputs of the table on show that press more than one game button.
 fn shown_conflicts(view: &controls::ControlsView) -> Vec<String> {
     match view.device {
-        Shown::Keyboard => conflicts(view.key.values().chain(view.key_alt.values())),
+        Shown::Keyboard => conflicts(
+            view.key
+                .values()
+                .chain(view.key_alt.values())
+                .chain(view.key_alt2.values()),
+        ),
         Shown::Gamepad => conflicts(view.pad.values()),
     }
 }
@@ -626,11 +635,15 @@ fn live_view(state: &State, lang: &str, picture: Picture) -> Live {
     let mut bound: Vec<(String, String)> = Vec::new();
     let mut changed = Vec::new();
     for row in table_rows(kind) {
-        let alternative = match picture {
-            Picture::Keyboard => view.key_alt.get(row.button),
-            Picture::Pad(_) => None,
+        let [alternative, second] = match picture {
+            Picture::Keyboard => [view.key_alt.get(row.button), view.key_alt2.get(row.button)],
+            Picture::Pad(_) => [None, None],
         };
-        for (input, extra) in [(values.get(row.button), false), (alternative, true)] {
+        for (input, extra) in [
+            (values.get(row.button), false),
+            (alternative, true),
+            (second, true),
+        ] {
             let Some(input) = input.filter(|value| !value.is_empty()) else {
                 continue;
             };
@@ -683,6 +696,7 @@ fn live_view(state: &State, lang: &str, picture: Picture) -> Live {
                 .and_then(|button| match view.capturing_slot {
                     Slot::Main => view.key.get(button),
                     Slot::Alternative => view.key_alt.get(button),
+                    Slot::SecondAlternative => view.key_alt2.get(button),
                 })
                 .and_then(|input| part_id(picture, input).map(str::to_string));
             live.caption = match view.held.last() {
@@ -696,9 +710,11 @@ fn live_view(state: &State, lang: &str, picture: Picture) -> Live {
                             .get(button)
                             .is_some_and(|key| key.trim().eq_ignore_ascii_case(input))
                     };
-                    let game = table_rows(Kind::Key)
-                        .into_iter()
-                        .find(|row| same(&view.key, row.button) || same(&view.key_alt, row.button));
+                    let game = table_rows(Kind::Key).into_iter().find(|row| {
+                        [&view.key, &view.key_alt, &view.key_alt2]
+                            .iter()
+                            .any(|table| same(table, row.button))
+                    });
                     let icon = input_icon(input).map(|icon| icon.plain);
                     pressed_line(lang, icon, game.map(|row| row.button))
                 });

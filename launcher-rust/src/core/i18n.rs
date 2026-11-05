@@ -114,11 +114,19 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
         ],
     ),
     (
-        "The second box of a row is an alternative input for the same button: keep Square on the left mouse button for combat and add J for the minigames, for example. \"Clear input\" empties the main box, the × button empties the alternative, and the arrow puts the row back on its default with no alternative.",
+        "(2nd alternative)",
         &[
-            ("zh", "每行的第二个输入框是同一按键的备用输入：例如，战斗时将方块保留在鼠标左键，并为小游戏添加 J。“清除绑定”会清空主输入框，× 按钮会清空备用输入，箭头会将该行恢复为默认绑定并移除备用输入。"),
-            ("pt", "A segunda caixa de uma linha é uma entrada alternativa para o mesmo botão: por exemplo, deixe o Quadrado no botão esquerdo do mouse para o combate e acrescente o J para os minigames. \"Limpar entrada\" esvazia a caixa principal, o botão × esvazia a alternativa e a seta devolve a linha ao padrão, sem alternativa."),
-            ("es", "La segunda casilla de una fila es una entrada alternativa para el mismo botón: por ejemplo, deja el Cuadrado en el botón izquierdo del ratón para el combate y añade la J para los minijuegos. \"Borrar entrada\" vacía la casilla principal, el botón × vacía la alternativa y la flecha devuelve la fila a su valor por defecto, sin alternativa."),
+            ("zh", "（备用 2）"),
+            ("pt", "(2ª alternativa)"),
+            ("es", "(2.ª alternativa)"),
+        ],
+    ),
+    (
+        "The second and third boxes of a row are alternative inputs for the same button: keep Square on the left mouse button for combat and add J and Keypad 4 for the minigames, for example. \"Clear input\" empties the main box, the × button next to a box empties that alternative, and the arrow puts the row back on its default with no alternatives.",
+        &[
+            ("zh", "每行的第二个和第三个输入框是同一按键的备用输入：例如，战斗时将方块保留在鼠标左键，并为小游戏添加 J 和小键盘 4。“清除绑定”会清空主输入框，输入框旁的 × 按钮会清空该备用输入，箭头会将该行恢复为默认绑定并移除所有备用输入。"),
+            ("pt", "A segunda e a terceira caixa de uma linha são entradas alternativas para o mesmo botão: por exemplo, deixe o Quadrado no botão esquerdo do mouse para o combate e acrescente o J e o Keypad 4 para os minigames. \"Limpar entrada\" esvazia a caixa principal, o botão × ao lado de uma caixa esvazia essa alternativa e a seta devolve a linha ao padrão, sem alternativas."),
+            ("es", "La segunda y la tercera casilla de una fila son entradas alternativas para el mismo botón: por ejemplo, deja el Cuadrado en el botón izquierdo del ratón para el combate y añade la J y el Keypad 4 para los minijuegos. \"Borrar entrada\" vacía la casilla principal, el botón × junto a una casilla vacía esa alternativa y la flecha devuelve la fila a su valor por defecto, sin alternativas."),
         ],
     ),
     (
@@ -146,11 +154,139 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
         ],
     ),
     (
-        "Which input the keyboard icons in the game show for a button that has an alternative. A button without an alternative always shows its main input. Applied when the game starts.",
+        "Which input the keyboard icons in the game show for a button that has an alternative: its main key, its alternative key on every icon, or its alternative key only on the Muses' lyre while the other icons keep the main key. A button without an alternative always shows its main input. Applied when the game starts.",
         &[
-            ("zh", "当按键设置了备用输入时，游戏内键盘图标显示哪一个输入。没有备用输入的按键始终显示主输入。下次启动游戏生效。"),
-            ("pt", "Qual entrada os ícones de teclado no jogo mostram para um botão que tem alternativa. Um botão sem alternativa sempre mostra a entrada principal. Aplicado ao iniciar o jogo."),
-            ("es", "Qué entrada muestran los iconos de teclado en el juego para un botón que tiene alternativa. Un botón sin alternativa siempre muestra su entrada principal. Se aplica al iniciar el juego."),
+            ("zh", "当按键设置了备用输入时，游戏内键盘图标显示哪一个输入：主按键、所有图标上的备用按键，或仅在缪斯竖琴上显示备用按键（其他图标仍显示主按键）。没有备用输入的按键始终显示主输入。下次启动游戏生效。"),
+            ("pt", "Qual entrada os ícones de teclado no jogo mostram para um botão que tem alternativa: a tecla principal, a alternativa em todos os ícones, ou a alternativa só na lira das Musas, com os outros ícones na principal. Um botão sem alternativa sempre mostra a entrada principal. Aplicado ao iniciar o jogo."),
+            ("es", "Qué entrada muestran los iconos de teclado en el juego para un botón que tiene alternativa: la tecla principal, la alternativa en todos los iconos, o la alternativa solo en la lira de las Musas, con los demás iconos en la principal. Un botón sin alternativa siempre muestra su entrada principal. Se aplica al iniciar el juego."),
+        ],
+    ),
+    (
+        "Alternative key on the lyre only",
+        &[
+            ("zh", "仅在竖琴上显示备用按键"),
+            ("pt", "Tecla alternativa só na lira"),
+            ("es", "Tecla alternativa solo en la lira"),
+        ],
+    ),
+    (
+        "Key colors",
+        &[
+            ("zh", "按键颜色"),
+            ("pt", "Cores das teclas"),
+            ("es", "Colores de las teclas"),
+        ],
+    ),
+    (
+        "Gray (default)",
+        &[
+            ("zh", "灰色（默认）"),
+            ("pt", "Cinza (padrão)"),
+            ("es", "Gris (por defecto)"),
+        ],
+    ),
+    (
+        "PlayStation colors",
+        &[
+            ("zh", "PlayStation 配色"),
+            ("pt", "Cores do PlayStation"),
+            ("es", "Colores de PlayStation"),
+        ],
+    ),
+    (
+        "Custom",
+        &[
+            ("zh", "自定义"),
+            ("pt", "Personalizadas"),
+            ("es", "Personalizados"),
+        ],
+    ),
+    (
+        "Face button colors",
+        &[
+            ("zh", "面键颜色"),
+            ("pt", "Cores dos botões"),
+            ("es", "Colores de los botones"),
+        ],
+    ),
+    (
+        "Gray",
+        &[
+            ("zh", "灰色"),
+            ("pt", "Cinza"),
+            ("es", "Gris"),
+        ],
+    ),
+    (
+        "White",
+        &[
+            ("zh", "白色"),
+            ("pt", "Branco"),
+            ("es", "Blanco"),
+        ],
+    ),
+    (
+        "Blue",
+        &[
+            ("zh", "蓝色"),
+            ("pt", "Azul"),
+            ("es", "Azul"),
+        ],
+    ),
+    (
+        "Orange",
+        &[
+            ("zh", "橙色"),
+            ("pt", "Laranja"),
+            ("es", "Naranja"),
+        ],
+    ),
+    (
+        "Green",
+        &[
+            ("zh", "绿色"),
+            ("pt", "Verde"),
+            ("es", "Verde"),
+        ],
+    ),
+    (
+        "Red",
+        &[
+            ("zh", "红色"),
+            ("pt", "Vermelho"),
+            ("es", "Rojo"),
+        ],
+    ),
+    (
+        "Pink",
+        &[
+            ("zh", "粉色"),
+            ("pt", "Rosa"),
+            ("es", "Rosa"),
+        ],
+    ),
+    (
+        "Yellow",
+        &[
+            ("zh", "黄色"),
+            ("pt", "Amarelo"),
+            ("es", "Amarillo"),
+        ],
+    ),
+    (
+        "Purple",
+        &[
+            ("zh", "紫色"),
+            ("pt", "Roxo"),
+            ("es", "Morado"),
+        ],
+    ),
+    (
+        "Colour of the key labels of Cross, Circle, Square and Triangle on the keyboard icons, the Muses' lyre included; every other icon keeps its colour. PlayStation colors are the symbols' own colours; Custom picks one for each button. Applied when the game starts.",
+        &[
+            ("zh", "键盘图标上叉号、圆圈、方块和三角按键标签的颜色，缪斯竖琴上的也一样；其他图标保持原色。“PlayStation 配色”使用各符号自身的颜色；“自定义”可为每个按键单独选色。下次启动游戏生效。"),
+            ("pt", "Cor das teclas de X, Círculo, Quadrado e Triângulo nos ícones de teclado, inclusive na lira das Musas; os outros ícones ficam como estão. \"Cores do PlayStation\" usa as cores dos próprios símbolos; \"Personalizadas\" escolhe uma cor para cada botão. Aplicado ao iniciar o jogo."),
+            ("es", "Color de las teclas de X, Círculo, Cuadrado y Triángulo en los iconos de teclado, incluida la lira de las Musas; los demás iconos conservan su color. \"Colores de PlayStation\" usa los colores de los propios símbolos; \"Personalizados\" elige un color para cada botón. Se aplica al iniciar el juego."),
         ],
     ),
     (

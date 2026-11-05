@@ -347,14 +347,16 @@ how much mouse it takes. Without the launcher the game keeps its own keys: E and
 Triangle, 1 and 3 for L1 and R1, F for R2, C for R3, I, K, J, L for the d-pad, Enter for Options,
 Tab and Backspace for the touchpad.
 
-**Alternative keys.** Every button can have a second key or mouse input, in the second box of its
-row on the Controls page (the x button next to it clears it). Both press the button, so you can keep
-Square on the left click for combat and also press it with J in the minigames. On the Muses' lyre,
-for example, keep Space, Left Ctrl and the two mouse buttons and add K, L, J and I, laid out like the
+**Alternative keys.** Every button can have a second and a third key or mouse input, in the second
+and third boxes of its row on the Controls page (the x button next to a box clears it). All of them
+press the button, so you can keep Square on the left click for combat and also press it with J, or
+with Keypad 4, in the minigames. On the Muses' lyre,
+for example, keep Space, Left Shift and the two mouse buttons and add K, L, J and I, laid out like the
 four buttons (I up, J left, L right, K down). A key already used by another button swaps with it, as
 for the main keys. The in-game keyboard icons show the main key; *Keys on the icons* (Controls page,
-with the Keyboard style) can show the alternative instead. Without the launcher, join the names with
-`|` in `SPARTAN_KEY_MAP`, for example `cross=Space|K,square=Mouse Left|J`.
+with the Keyboard or Match my controller style) can show the alternative instead, or the alternative on the lyre only (the
+other icons keep the main key). The icons draw the first alternative that is set: the second box, or the third when the second is empty. Without the launcher, join the names with
+`|` in `SPARTAN_KEY_MAP`, for example `cross=Space|K|Keypad 2,square=Mouse Left|J`.
 
 On a controller without a touchpad (Xbox and others), View opens the pause menu (the right
 touchpad click) and L1 + View opens photo mode (the left click). On a DualSense the touchpad
@@ -370,10 +372,13 @@ How the game picks Kratos' moves, for further changes: [docs/moves.md](docs/move
 
 **In-game button icons** (off by default) are chosen on the launcher's Controls page, under
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* or *Keyboard*. They replace the PlayStation icons in the
-tutorial, move-list and quick-time prompts and, for the controller styles, on the Muses' lyre in the
+tutorial, move-list and quick-time prompts and on the Muses' lyre in the
 Chamber of the Flame; the pause-menu controller drawing stays a DualShock 4.
-*Keyboard* shows the key that presses each button, following your keyboard mapping (a changed key shows
+*Keyboard* shows the key that presses each button, on the lyre too, following your keyboard mapping (a changed key shows
 on the next start); *Match my controller* shows the keys too when no gamepad is connected.
+*Key colors* (same place) paints the key labels of Cross, Circle, Square and Triangle, on the lyre
+and on the other keyboard icons: *PlayStation colors*, or *Custom* with one color of a short palette
+for each button; the other icons and the default *Gray* are unchanged.
 The launcher writes a patched copy of up to three game files (about 410 MB) into the port's data folder and never changes
 your game folder. A new controller is picked up after a restart. Without the launcher, set
 `SPARTAN_GLYPH_STYLE` to `auto`, `xbox`, `nintendo` or `keyboard` before starting `run.sh`.

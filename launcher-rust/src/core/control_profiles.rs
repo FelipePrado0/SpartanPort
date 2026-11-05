@@ -46,6 +46,8 @@ pub struct Profile {
     pub key: IndexMap<String, String>,
     /// Alternative keyboard inputs by game button (`controls.key_alt`).
     pub key_alt: IndexMap<String, String>,
+    /// Second alternative keyboard inputs by game button (`controls.key_alt2`).
+    pub key_alt2: IndexMap<String, String>,
     pub pad: IndexMap<String, String>,
     pub deadzone_left: u32,
     pub deadzone_right: u32,
@@ -77,6 +79,9 @@ fn to_json(profile: &Profile) -> Map<String, Value> {
     out.insert("key".to_string(), json!(profile.key));
     if !profile.key_alt.is_empty() {
         out.insert("key_alt".to_string(), json!(profile.key_alt));
+    }
+    if !profile.key_alt2.is_empty() {
+        out.insert("key_alt2".to_string(), json!(profile.key_alt2));
     }
     out.insert("pad".to_string(), json!(profile.pad));
     out.insert("deadzone_left".to_string(), json!(profile.deadzone_left));
@@ -113,13 +118,18 @@ fn deadzone(value: &Value) -> Option<u32> {
         .filter(|percent| *percent <= MAX_DEADZONE)
 }
 
+/// An optional table of alternative inputs; profiles from before it have none.
+fn alternatives(value: &Value, field: &str) -> Option<IndexMap<String, String>> {
+    value
+        .get(field)
+        .map_or_else(|| Some(IndexMap::new()), |saved| table(saved, Kind::Key))
+}
+
 fn from_json(value: &Value) -> Option<Profile> {
     Some(Profile {
         key: table(value.get("key")?, Kind::Key)?,
-        key_alt: match value.get("key_alt") {
-            Some(alternatives) => table(alternatives, Kind::Key)?,
-            None => IndexMap::new(),
-        },
+        key_alt: alternatives(value, "key_alt")?,
+        key_alt2: alternatives(value, "key_alt2")?,
         pad: table(value.get("pad")?, Kind::Pad)?,
         deadzone_left: deadzone(value.get("deadzone_left")?)?,
         deadzone_right: deadzone(value.get("deadzone_right")?)?,
@@ -220,6 +230,8 @@ mod tests {
         let mut profile = built_in(MOUSE_SIDE_BUTTONS).unwrap();
         profile.pad.insert("l1".into(), "lefttrigger".into());
         profile.pad.insert("l2".into(), "leftshoulder".into());
+        profile.key_alt.insert("cross".into(), "K".into());
+        profile.key_alt2.insert("cross".into(), "Keypad 2".into());
         profile.deadzone_left = 7;
         profile
     }
@@ -258,12 +270,13 @@ mod tests {
             "format": FORMAT, "version": 1, "name": "X", "key": {"cross": "Q"}, "pad": {},
             "deadzone_left": 0, "deadzone_right": 0,
         });
-        let cases: [(&str, Value); 8] = [
+        let cases: [(&str, Value); 9] = [
             ("format", json!("other")),
             ("version", json!(2)),
             ("name", json!("")),
             ("key", json!({"nothing": "Q"})),
             ("key", json!({"cross": "Q,square=E"})),
+            ("key_alt2", json!({"cross": "Q|E"})),
             ("pad", json!({"cross": "not-a-button"})),
             ("deadzone_left", json!(51)),
             ("deadzone_right", json!(-1)),
@@ -316,7 +329,12 @@ mod tests {
         // Still editable row by row.
         let mut alternatives = IndexMap::new();
         assert_eq!(
-            bind_key(&mut values, &mut alternatives, "l1", Slot::Main, "G"),
+            bind_key(
+                [&mut values, &mut alternatives, &mut IndexMap::new()],
+                "l1",
+                Slot::Main,
+                "G"
+            ),
             None
         );
     }

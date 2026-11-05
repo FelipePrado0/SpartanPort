@@ -309,15 +309,16 @@ pressionado (R), o mouse mira com o analógico direito, para a Cabeça de Hélio
 teclas: E e Q para Quadrado e Triângulo, 1 e 3 para L1 e R1, F para R2, C para R3, I, K, J, L para o
 direcional, Enter para Options, Tab e Backspace para o touchpad.
 
-**Teclas alternativas.** Todo botão pode ter uma segunda tecla ou entrada do mouse, na segunda caixa
-da linha dele na tela Controls (o botão x ao lado a limpa). As duas apertam o botão, então você pode
-manter o Quadrado no clique esquerdo para o combate e também apertá-lo com o J nos minigames. Na lira
-das Musas, por exemplo, mantenha Espaço, Ctrl esquerdo e os dois botões do mouse e acrescente K, L, J
+**Teclas alternativas.** Todo botão pode ter uma segunda e uma terceira tecla ou entrada do mouse, na
+segunda e na terceira caixa da linha dele na tela Controls (o botão x ao lado de uma caixa a limpa).
+Todas apertam o botão, então você pode manter o Quadrado no clique esquerdo para o combate e também
+apertá-lo com o J, ou com o Keypad 4, nos minigames. Na lira
+das Musas, por exemplo, mantenha Espaço, Shift esquerdo e os dois botões do mouse e acrescente K, L, J
 e I, dispostas como os quatro botões (I em cima, J à esquerda, L à direita, K embaixo). Uma tecla que
 já é de outro botão troca com ele, como nas teclas principais. Os ícones de teclado no jogo mostram a
-tecla principal; *Teclas nos ícones* (tela Controls, com o estilo Teclado) pode mostrar a alternativa
-no lugar. Sem o launcher, junte os nomes com `|` no `SPARTAN_KEY_MAP`, por exemplo
-`cross=Space|K,square=Mouse Left|J`.
+tecla principal; *Teclas nos ícones* (tela Controls, com o estilo Teclado ou Igual ao meu controle) pode mostrar a alternativa
+no lugar, ou a alternativa só na lira (os outros ícones continuam com a principal). Os ícones desenham a primeira alternativa preenchida: a segunda caixa, ou a terceira se a segunda estiver vazia. Sem o launcher, junte os nomes com `|` no `SPARTAN_KEY_MAP`, por exemplo
+`cross=Space|K|Keypad 2,square=Mouse Left|J`.
 
 Em um controle sem touchpad (Xbox e outros), View abre o menu de pausa (o clique direito do
 touchpad) e L1 + View abre o modo foto (o clique esquerdo). No DualSense o touchpad funciona
@@ -332,10 +333,13 @@ não espera). O direcional sozinho troca como antes. Os tutoriais de troca de ar
 
 Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Controls do launcher, em
 *Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox*, *Nintendo* ou *Teclado*. Eles trocam os ícones
-PlayStation dos tutoriais, da lista de golpes, dos eventos rápidos e, nos estilos de controle, da lira das Musas
-na Câmara da Chama; o desenho do controle no menu de pausa continua sendo um DualShock 4. *Teclado* mostra a tecla que aperta cada botão, seguindo o seu
+PlayStation dos tutoriais, da lista de golpes, dos eventos rápidos e da lira das Musas
+na Câmara da Chama; o desenho do controle no menu de pausa continua sendo um DualShock 4. *Teclado* mostra a tecla que aperta cada botão, também na lira, seguindo o seu
 mapeamento do teclado (uma tecla trocada aparece no próximo início); *Igual ao meu controle* também mostra
-as teclas quando nenhum controle está conectado. O launcher grava uma cópia com patch de até três arquivos do
+as teclas quando nenhum controle está conectado.
+*Cores das teclas* (no mesmo lugar) pinta as teclas do X, Círculo, Quadrado e Triângulo, na lira e nos
+outros ícones de teclado: *Cores do PlayStation*, ou *Personalizadas* com uma cor de uma paleta curta
+para cada botão; os outros ícones e o *Cinza* padrão não mudam. O launcher grava uma cópia com patch de até três arquivos do
 jogo (cerca de 410 MB) na pasta de dados do port e nunca altera a pasta do jogo. Um controle novo é reconhecido após
 reiniciar. Sem o launcher, defina `SPARTAN_GLYPH_STYLE` como `auto`, `xbox`, `nintendo` ou `keyboard` antes de
 iniciar o `run.sh`.

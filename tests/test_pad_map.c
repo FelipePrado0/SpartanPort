@@ -590,6 +590,21 @@ int main(void) {
     key_map=original_keys;
     spartanport_qte.block=0;
 
+    /* A value longer than 2048 bytes is read whole: the last entry still applies. */
+    static char long_map[4096];
+    static const char *const long_names="Mouse Forward   |   Mouse Middle   |   Left Ctrl   |   Right Ctrl";
+    static const char *const last_names="Keypad 7   |   Keypad 9   |   Keypad 1   |   Right Ctrl";
+    const size_t all_count=sizeof(all_buttons)/sizeof(*all_buttons);
+    long_map[0]=0;
+    for (size_t i=0;i<all_count;++i)
+        snprintf(long_map+strlen(long_map),sizeof(long_map)-strlen(long_map),"%s  %s  =  %s  ",
+                 i ? "," : "",all_buttons[i],i+1==all_count ? last_names : long_names);
+    assert(strlen(long_map)>2048 && strlen(long_map)<sizeof(long_map));
+    ButtonMap long_keys=key_map;
+    assert(apply_button_map(&long_keys,long_map,true)==(int)all_count);
+    assert(pressed_by(&long_keys,SDL_SCANCODE_KP_7)==LOOK_RIGHT && pressed_by(&long_keys,SDL_SCANCODE_KP_1)==LOOK_RIGHT);
+    assert((pressed_by(&long_keys,SDL_SCANCODE_RCTRL) & BTN_CROSS)!=0 && (pressed_by(&long_keys,SDL_SCANCODE_RCTRL) & LOOK_RIGHT)!=0);
+    assert((pressed_by(&long_keys,MOUSE_FORWARD) & BTN_CROSS)!=0 && (pressed_by(&long_keys,MOUSE_FORWARD) & LOOK_RIGHT)==0);
     /* Either source presses the button in a read of the keyboard, and the main one still works. */
     const ButtonMap before_alternatives=key_map;
     key_map=alternatives;

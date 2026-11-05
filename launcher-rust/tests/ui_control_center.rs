@@ -423,10 +423,14 @@ fn alternative_keys_stay_with_the_profile_and_the_picture() {
     state.lang = "en".into();
     open(&mut state, Page::Controls);
     state.controls.key_alt.insert("cross".into(), "K".into());
+    state.controls.key_alt2.insert("cross".into(), "J".into());
 
     send(&mut state, ControlsMessage::PartPressed("K".into()));
     assert_eq!(state.controls.capturing.as_deref(), Some("cross"));
     assert_eq!(state.controls.capturing_slot, Slot::Alternative);
+    send(&mut state, ControlsMessage::CaptureTimeout);
+    send(&mut state, ControlsMessage::PartPressed("J".into()));
+    assert_eq!(state.controls.capturing_slot, Slot::SecondAlternative);
     send(&mut state, ControlsMessage::CaptureTimeout);
 
     send(&mut state, ControlsMessage::ProfileName("Mine".into()));
@@ -434,11 +438,14 @@ fn alternative_keys_stay_with_the_profile_and_the_picture() {
     let file = state.paths.data_dir.join(control_profiles::FILENAME);
     let saved = control_profiles::load(&file).unwrap();
     assert_eq!(saved["Mine"].key_alt["cross"], "K");
+    assert_eq!(saved["Mine"].key_alt2["cross"], "J");
 
     send(&mut state, ControlsMessage::ProfilePick("Default".into()));
     assert!(state.controls.key_alt.is_empty());
+    assert!(state.controls.key_alt2.is_empty());
     send(&mut state, ControlsMessage::ProfilePick("Mine".into()));
     assert_eq!(state.controls.key_alt["cross"], "K");
+    assert_eq!(state.controls.key_alt2["cross"], "J");
 }
 
 #[test]

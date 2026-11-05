@@ -144,6 +144,7 @@ fn runner_defaults_are_run_pys() {
         ("SPARTAN_LANGUAGE", "1"),     // the English text and voice, as the game assumes
         // Rust only (the Python launcher has no such choice): absent counts as the main key.
         ("SPARTAN_GLYPH_KEYS", "main"),
+        ("SPARTAN_GLYPH_KEY_COLORS", "gray"),
     ];
     for (name, literal) in expected {
         assert_eq!(catalog::run_default(name), Some(literal), "{name}");
