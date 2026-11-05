@@ -10,8 +10,8 @@
 
 | Fase | Assunto | Estado | Branch / PR |
 |:--|:--|:--|:--|
-| F0 | Preparação, linha de base e decisões | não iniciada (POC commitada) | `feat/shader-precompile` |
-| F1 | Captura das entradas no momento da tradução | não iniciada | `feat/shader-precompile` |
+| F0 | Preparação, linha de base e decisões | em andamento (falta medir o driver) | `feat/shader-precompile` |
+| F1 | Captura das entradas no momento da tradução | código e testes prontos; falta sessão de jogo | `feat/shader-precompile` |
 | F2 | API de tradução offline e verificador 100% | não iniciada | `feat/shader-precompile` |
 | F3 | Leitura do código dos shaders nos WADs | não iniciada | `feat/shader-precompile` |
 | F4 | Manifesto: formato e ferramenta que o gera | não iniciada | `feat/shader-precompile` |
@@ -311,15 +311,17 @@ Caminhos do mantenedor: dump em `settings.json` (`game_dir`), cache em `user/cac
 
 - [ ] Leia este documento inteiro, depois `CONTEXT.md`, `docs/adr/` e o README (seções de build e testes).
 - [ ] Confirme a branch: `git branch --show-current` mostra `feat/shader-precompile`.
-- [ ] Rode a linha de base: build do jogo, os três testes C++ e `cargo test`. Anote qualquer falha
+- [x] Rode a linha de base: build do jogo, os três testes C++ e `cargo test`. Anote qualquer falha
       que já existia antes de mexer (não é sua para consertar; registre).
+      Resultado em 2026-11-05: build e os três testes C++ passaram. `cargo test` teve 776 aprovados e
+      1 falha que já existia: `core::patches::compile_tests::built_in_file_is_not_external`.
 - [ ] Rode a POC (seção 5) e confirme os números de 3.3 na sua máquina. Para o índice, use o
       verificador da F2 quando existir; até lá, refaça o índice com a regra de 3.1.
 - [ ] Meça o tempo de compilação no driver, que ainda é desconhecido: abra o jogo com cache vazio
       (pasta do cache renomeada, **nunca apagada**, para poder voltar) e leia no log os contadores
       de pipeline (`g_spartanport_pipeline_driver_ns`, linhas `Disk shaders`). Isso dá a estimativa da
       tela de preparo da F6.
-- [ ] Escreva a spec da F0 com as decisões de 4.1 e o plano das fases. **PARE.**
+- [x] Escreva a spec da F0 com as decisões de 4.1 e o plano das fases. **PARE.** Aprovada em 2026-11-05.
 - [x] POC commitada como base da F2 (`tests/test_shader_replay.cpp`, alvo no CMake e o gancho
       provisório `replay_skip_srt_walk` em `info.h`, que não faz nada no jogo). Na F2 o gancho é
       trocado pela API `ReplayTranslate`.
@@ -368,16 +370,18 @@ Crie uma struct (por exemplo em `shader_recompiler/replay.h`) com:
 
 ### 8.4 Testes (antes do código)
 
-- [ ] Teste de ida e volta: serializar e ler um `.meta` com `ReplayInputs` preenchido devolve os
+- [x] Teste de ida e volta: serializar e ler um `.meta` com `ReplayInputs` preenchido devolve os
       mesmos bytes. Coloque num teste C++ novo (alvo `EXCLUDE_FROM_ALL`, mesmo padrão de
       `scene-resolution-test` no CMake).
-- [ ] Teste que um `.meta` da versão antiga é recusado sem travar.
-- [ ] Teste (com stubs, sem GPU) que, no caminho assíncrono, as entradas gravadas são as da build e
+- [x] Teste que um `.meta` da versão antiga é recusado sem travar.
+- [x] Teste (com stubs, sem GPU) que, no caminho assíncrono, as entradas gravadas são as da build e
       não as de `program->info`. Se for difícil isolar, documente na spec e cubra pelo verificador da F2.
+      O teste cobre `CaptureReplayInputs`. A escolha da build no caminho assíncrono só é provada pelo
+      verificador da F2, numa sessão gravada.
 
 ### 8.5 Validação
 
-- [ ] Build Windows e Linux.
+- [ ] Build Windows e Linux. Windows passou; Linux não foi rodado.
 - [ ] Sessão curta com o mantenedor: cache novo (pasta antiga renomeada), jogo até o primeiro
       combate. Confira no log que os `.meta` foram gravados e que nada mudou visualmente.
 

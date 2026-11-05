@@ -42,7 +42,7 @@
 namespace Serialization {
 /* You should increment versions below once corresponding serialization scheme is changed. */
 static constexpr u32 ShaderBinaryVersion = 7u; // spartanport: interpolated integer fix (Pascal)
-static constexpr u32 ShaderMetaVersion = 7u; // spartanport: ImageResource::needs_native
+static constexpr u32 ShaderMetaVersion = 8u; // spartanport: Shader::ReplayInputs at the end
 static constexpr u32 PipelineKeyVersion = 5u; // spartanport: Info layout (ImageResource::needs_native)
 } // namespace Serialization
 
@@ -737,8 +737,8 @@ void RegisterPipelineData(const GraphicsPipelineKey& key, u64 hash,
 
 void RegisterShaderMeta(const Shader::Info& info,
                         const std::optional<Shader::Gcn::FetchShaderData>& fetch_shader_data,
-                        const Shader::StageSpecialization& spec, size_t perm_hash,
-                        size_t perm_idx) {
+                        const Shader::StageSpecialization& spec, size_t perm_hash, size_t perm_idx,
+                        const Shader::ReplayInputs& replay) {
     if (!Storage::DataBase::Instance().IsOpened()) {
         return;
     }
@@ -754,6 +754,7 @@ void RegisterShaderMeta(const Shader::Info& info,
 
     spec.Serialize(ar);
     info.Serialize(ar);
+    replay.Serialize(ar);
 
     Storage::DataBase::Instance().Save(Storage::BlobType::ShaderMeta,
                                        fmt::format("{:#018x}", perm_hash), ar.TakeOff());
