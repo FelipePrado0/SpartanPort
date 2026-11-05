@@ -14,7 +14,7 @@
 | F1 | Captura das entradas no momento da tradução | código e testes prontos; falta sessão de jogo | `feat/shader-precompile` |
 | F2 | API de tradução offline e verificador 100% | API e verificador prontos; falta provar 100% em cache novo | `feat/shader-precompile` |
 | F3 | Leitura do código dos shaders nos WADs | leitor e testes prontos; falta `app0` (F5) | `feat/shader-precompile` |
-| F4 | Manifesto: formato e ferramenta que o gera | não iniciada | `feat/shader-precompile` |
+| F4 | Manifesto: formato e ferramenta que o gera | formato, ferramenta e testes prontos; falta gerar de cache real | `feat/shader-precompile` |
 | F5 | Materialização na primeira abertura (shaders) | não iniciada | `feat/shader-precompile` |
 | F6 | Pré-compilação dos pipelines no driver | não iniciada | `feat/shader-precompile` |
 | F7 | Invalidação: GPU, driver e versão | não iniciada | `feat/shader-precompile` |
@@ -505,7 +505,11 @@ cache local estão no índice.
 
 ### 11.1 Formato `shaders/<serial>.spm`
 
-Binário, little-endian, comprimido com miniz:
+Binário, little-endian, comprimido com miniz. Implementado em `vk_shader_manifest.{h,cpp}`: o cabeçalho
+guarda só magic, formato, `manifest_id` e tamanho; serial e versões ficam no conteúdo, protegidos pelo
+hash. A prioridade vem do horário dos `.meta`: os dois primeiros minutos da gravação contam como
+menus e título, o resto como jogo.
+
 
 - Cabeçalho: magic `SPSM`, versão do formato, serial (`CUSA01623`), `ShaderMetaVersion`,
   `ShaderBinaryVersion` e `PipelineKeyVersion` com que foi gerado, número de entradas, hash de todo o
@@ -541,12 +545,12 @@ shader-manifest info shaders/CUSA01623.spm
 
 ### 11.3 Testes (antes do código)
 
-- [ ] Ida e volta do formato.
-- [ ] Junção de dois caches com sobreposição: repetidos somem, a contagem fecha.
-- [ ] Remapeamento: uma chave de pipeline que apontava para `perm_hash` de sessão aponta para a
+- [x] Ida e volta do formato.
+- [x] Junção de dois caches com sobreposição: repetidos somem, a contagem fecha.
+- [x] Remapeamento: uma chave de pipeline que apontava para `perm_hash` de sessão aponta para a
       permutação certa no manifesto.
-- [ ] Determinismo: duas execuções, mesmo arquivo.
-- [ ] Nenhum byte de código no arquivo: o teste usa um WAD sintético com um padrão de bytes
+- [x] Determinismo: duas execuções, mesmo arquivo.
+- [x] Nenhum byte de código no arquivo: o teste usa um WAD sintético com um padrão de bytes
       marcador no código e confere que o padrão não aparece no `.spm`.
 
 **Pronto quando:** testes passando; manifesto gerado do cache da F2 com tamanho anotado (meta: menos

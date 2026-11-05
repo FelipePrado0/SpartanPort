@@ -25,6 +25,7 @@
 #include "common/serdes.h"
 #include "common/scope_exit.h"
 #include "video_core/renderer_vulkan/vk_pipeline_serialization.h"
+#include "video_core/renderer_vulkan/vk_shader_manifest.h"
 #include "common/thread.h"
 #include "spartanport_overlay.h"
 #include "spartanport_toggles.h"
@@ -58,6 +59,13 @@ u32 CurrentShaderBinaryVersion() {
                                        AmdPathsOff::Current().shaderext));
 }
 } // namespace
+
+namespace Manifest {
+Versions CurrentVersions() {
+    return {Serialization::ShaderMetaVersion, CurrentShaderBinaryVersion(),
+            Serialization::PipelineKeyVersion};
+}
+} // namespace Manifest
 
 namespace PipelineBinaryCache {
 bool ValidKey(const Key& key) {
