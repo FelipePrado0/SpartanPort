@@ -386,7 +386,7 @@ mod tests {
             }
         }
         for row in &CONTROLS {
-            if let Some(pad) = row.pad {
+            if let Some(pad) = row.pad.filter(|pad| !pad.is_empty()) {
                 for (style, _) in PAD_STYLES {
                     assert!(spec(pad, style).is_some(), "{style} {pad}");
                 }

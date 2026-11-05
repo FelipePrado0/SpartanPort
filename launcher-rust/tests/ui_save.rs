@@ -10,9 +10,11 @@ use iced::time::Instant;
 use iced_test::simulator::{simulator, Simulator};
 use serde_json::{json, Value};
 use spartanport_launcher::core::catalog;
+use spartanport_launcher::core::controls::Slot;
 use spartanport_launcher::core::gpu::parse_display_list;
 use spartanport_launcher::core::i18n::tr;
 use spartanport_launcher::core::ini::{load_ini, INI_FLAGS};
+use spartanport_launcher::core::pad_model::PadModel;
 use spartanport_launcher::core::patches::PatchMeta;
 use spartanport_launcher::core::paths::Paths;
 use spartanport_launcher::core::release::{Channel, Release, ReleaseId};
@@ -665,16 +667,38 @@ fn every_setting_lights_save_persists_and_comes_back() {
     change_and_save(
         &mut state,
         "pad_style",
-        Message::Controls(ControlsMessage::PadStyle("xbox".into())),
+        Message::Controls(ControlsMessage::PadModel(PadModel::Xbox)),
     );
     send(
         &mut state,
-        Message::Controls(ControlsMessage::Capture("cross".into())),
+        Message::Controls(ControlsMessage::Capture("cross".into(), Slot::Main)),
     );
     change_and_save(
         &mut state,
         "key cross",
-        Message::Controls(ControlsMessage::Captured("cross".into(), "Q".into())),
+        Message::Controls(ControlsMessage::Captured(
+            "cross".into(),
+            Slot::Main,
+            "Q".into(),
+        )),
+    );
+    send(
+        &mut state,
+        Message::Controls(ControlsMessage::Capture("square".into(), Slot::Alternative)),
+    );
+    change_and_save(
+        &mut state,
+        "alternative square",
+        Message::Controls(ControlsMessage::Captured(
+            "square".into(),
+            Slot::Alternative,
+            "J".into(),
+        )),
+    );
+    change_and_save(
+        &mut state,
+        "glyph_keys",
+        Message::Set("glyph_keys".into(), json!("alternative")),
     );
     change_and_save(
         &mut state,
@@ -691,6 +715,8 @@ fn every_setting_lights_save_persists_and_comes_back() {
     }
     assert_eq!(reopened.controls.pad_style, "xbox");
     assert_eq!(reopened.controls.key["cross"], "Q");
+    assert_eq!(reopened.controls.key_alt["square"], "J");
+    assert_eq!(reopened.store.text("glyph_keys"), "alternative");
     assert_eq!(reopened.controls.pad["cross"], "b");
     assert!(!dirty(&reopened));
 }
@@ -705,6 +731,42 @@ fn save_failed_shown(state: &State) -> bool {
         .modal
         .as_ref()
         .is_some_and(|modal| matches!(modal.kind, ModalKind::Error) && modal.text == SAVE_FAILED)
+}
+
+#[test]
+fn the_key_colors_are_saved_and_come_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    for (name, key, value) in [
+        ("style", "glyph_key_colors", "custom"),
+        ("cross", "glyph_color_cross", "blue"),
+        ("circle", "glyph_color_circle", "orange"),
+    ] {
+        change_and_save(&mut state, name, Message::Set(key.into(), json!(value)));
+    }
+    let reopened = state_in(dir.path());
+    assert_eq!(reopened.store.text("glyph_key_colors"), "custom");
+    assert_eq!(reopened.store.text("glyph_color_cross"), "blue");
+    assert_eq!(reopened.store.text("glyph_color_circle"), "orange");
+    // A button left alone stays gray, and a file from before the colours loads as gray.
+    assert_eq!(reopened.store.text("glyph_color_square"), "gray");
+    assert!(!dirty(&reopened));
+    let old = tempfile::tempdir().unwrap();
+    assert_eq!(state_in(old.path()).store.text("glyph_key_colors"), "gray");
+}
+
+#[test]
+fn the_lyre_only_icon_keys_choice_is_saved_and_comes_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    change_and_save(
+        &mut state,
+        "glyph_keys",
+        Message::Set("glyph_keys".into(), json!("lyre")),
+    );
+    let reopened = state_in(dir.path());
+    assert_eq!(reopened.store.text("glyph_keys"), "lyre");
+    assert!(!dirty(&reopened));
 }
 
 #[test]

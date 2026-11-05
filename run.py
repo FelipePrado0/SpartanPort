@@ -385,6 +385,8 @@ def main():
                    '--user', str(user_dir),
                    '--timeout', env.get('SPARTAN_TIMEOUT', '0'), *isa_args, *mount_args, *args]
         # No stdin: an inherited pipe (shells such as Git Bash) cost the game its console output.
+        if WINDOWS:
+            ctypes.windll.user32.AllowSetForegroundWindow(-1)
         process = subprocess.Popen(command, stdin=subprocess.DEVNULL, creationflags=no_console())
         presence = None
         try:

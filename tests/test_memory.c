@@ -148,6 +148,15 @@ static void batch_retires_only_maps_that_run(void) {
     CHECK(direct_release((uint64_t)phys, 4 * PAGE) == 0);
 }
 
+/* sceKernelGetDirectMemorySize takes the exclusive lock only until the pool exists, so later calls
+ * leave the threads' region caches valid. */
+static void direct_size_keeps_region_caches(void) {
+    const uint64_t size = direct_size();
+    const uint64_t generation = __atomic_load_n(&table_generation, __ATOMIC_ACQUIRE);
+    CHECK(direct_size() == size && size == POOL_SIZE);
+    CHECK(__atomic_load_n(&table_generation, __ATOMIC_ACQUIRE) == generation);
+}
+
 /* More notifications than the queue's first allocation: one protect over many pieces. */
 static void hook_queue_grows(void) {
     enum { PIECES = 100 };
@@ -185,9 +194,10 @@ int main(void) {
     fixed_map_replaces_for_the_gpu();
     fixed_map_retires_before_replacing();
     batch_retires_only_maps_that_run();
+    direct_size_keeps_region_caches();
     hook_queue_grows();
     write_backing_stores_each_byte();
     if (failures) { fprintf(stderr, "%d failure(s)\n", failures); return 1; }
-    printf("PASS: flexible split keeps each half's pages, fixed maps retire the GPU's view before replacing, batches retire only maps that run, hook queue grows, backing writes (%zu GPU notifications)\n", event_count);
+    printf("PASS: flexible split keeps each half's pages, fixed maps retire the GPU's view before replacing, batches retire only maps that run, the pool size leaves region caches alone, hook queue grows, backing writes (%zu GPU notifications)\n", event_count);
     return 0;
 }

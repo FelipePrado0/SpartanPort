@@ -213,14 +213,14 @@ impl Port {
     }
 }
 
-/// This process's environment without the variables a run reads (`SPARTAN_*`, the old `GOW3_*`
-/// names and the fake probe's), so the developer's own settings never reach a test.
+/// This process's environment without the variables a run reads (`SPARTAN_*` and the fake
+/// probe's), so the developer's own settings never reach a test.
 fn clean_environment() -> IndexMap<String, String> {
     std::env::vars_os()
         .filter_map(|(key, value)| Some((key.into_string().ok()?, value.into_string().ok()?)))
         .filter(|(key, _)| {
             let key = key.to_uppercase();
-            !["SPARTAN_", "GOW3_", "FAKE_PROBE_"]
+            !["SPARTAN_", "FAKE_PROBE_"]
                 .iter()
                 .any(|prefix| key.starts_with(prefix))
         })
@@ -712,6 +712,23 @@ fn a_relative_data_dir_is_from_the_port() {
 }
 
 #[test]
+fn a_run_does_not_take_the_old_game_settings() {
+    let port = Port::in_folder("port");
+    let host = FakeHost::default();
+    let mut out = Vec::new();
+    let mut program = port.program(&[]);
+    program
+        .env
+        .insert("SPARTAN_DATA_DIR".into(), "data2".into());
+    fs::create_dir_all(port.root.join("data2")).unwrap();
+    fs::write(port.root.join("data2/gow3.ini"), "[OldName]\nmarker=gow3\n").unwrap();
+    let code = run_with(Port::context(&program, &mut out), &host);
+    assert_eq!(code, 0, "{}", String::from_utf8_lossy(&out));
+    let ini = fs::read_to_string(port.root.join("data2/spartanport.ini")).unwrap_or_default();
+    assert!(!ini.contains("marker=gow3"), "{ini}");
+}
+
+#[test]
 fn run_starts_the_probe_in_the_port() {
     let port = Port::with_probe();
     let file = port.out().join("cwd.txt");
@@ -1168,6 +1185,29 @@ fn play_writes_last_run_log_with_the_advice() {
     assert_eq!(code, 0, "{log}");
     assert_eq!(log, console);
     assert!(told.is_empty());
+}
+
+#[test]
+fn play_writes_the_journal_next_to_the_run_log() {
+    let dir = tempfile::tempdir().unwrap();
+    let user = dir.path().join("saves");
+    let settings = play_settings(dir.path(), &user);
+    let line = "Runtime: cannot create 6080 MiB of guest memory (error 12)";
+    let args = ["--say", line, "--exit", "21"];
+    let (code, _, log, _) = played(&settings, dir.path(), &user, clean_environment(), &args);
+    assert_eq!(code, 21, "{log}");
+    let journal = fs::read_to_string(user.join("last_run.jsonl")).unwrap();
+    let records: Vec<serde_json::Value> = journal
+        .lines()
+        .map(|record| serde_json::from_str(record).unwrap())
+        .collect();
+    assert_eq!(records.first().unwrap()["type"], "start");
+    assert_eq!(records[1]["text"], line);
+    assert_eq!(records[1]["area"], "Runtime");
+    let exit = records.last().unwrap();
+    assert_eq!(exit["type"], "exit");
+    assert_eq!(exit["code"], 21);
+    assert!(exit["advice"].as_str().is_some(), "{journal}");
 }
 
 #[test]

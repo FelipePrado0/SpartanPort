@@ -34,7 +34,6 @@ use crate::core::env::{game_environment, Lookup};
 use crate::core::graphics_options::{self, DEFAULT_VBLANK_HZ};
 use crate::core::i18n::{launcher_language, system_language, tr};
 use crate::core::launch::{run_command, spawn_game, GameEvent, Group, Launch, LaunchError};
-use crate::core::legacy;
 use crate::core::log::RunLog;
 use crate::core::mods::{self, Overlay};
 use crate::core::options::RESOLUTIONS;
@@ -340,7 +339,6 @@ impl<'a> Runner<'a> {
         self.port.clone_from(&port);
         // 3. The data folder, its out/ and the ini.
         let (data, out) = (&plan.data, &plan.out);
-        legacy::copy_game_settings(data);
         if let Err(error) = fs::create_dir_all(out) {
             return self.fail(&format!("{}: {error}", python_path(out)));
         }
@@ -397,9 +395,9 @@ impl<'a> Runner<'a> {
             graphics_options::upscaler_render_size(&plan.config, &self.env)
         {
             let base = port.join("patches").join("CUSA01623.xml");
-            let patch = fs::read_to_string(&base)
-                .ok()
-                .and_then(|xml| graphics_options::resolution_patch_xml(&xml, width, height));
+            let patch = fs::read_to_string(&base).ok().and_then(|xml| {
+                graphics_options::resolution_patch_xml(&xml, width, height, output)
+            });
             match patch {
                 Some(text) => {
                     let file = out.join("upscale-resolution.xml");
@@ -927,8 +925,10 @@ pub const GAMEPAD_PROBE_LIMIT: Duration = Duration::from_secs(15);
 /// The probe arguments and style of the controller glyphs (`run.py` `glyph_mounts`): patched copies
 /// of the WADs that hold the game's button icons, mounted over them (`glyphs::build`). Opt-in:
 /// unless `SPARTAN_GLYPH_STYLE` is auto, xbox, nintendo or keyboard nothing is asked, drawn or
-/// mounted, and old copies are removed. The keyboard keys follow `SPARTAN_KEY_MAP`; auto shows them
-/// when no gamepad is connected. Whatever fails only reaches the Log: the game then keeps its own
+/// mounted, and old copies are removed. The keyboard keys follow `SPARTAN_KEY_MAP` (the main key of a
+/// button, or its alternative with `SPARTAN_GLYPH_KEYS=alternative`, or on the Muses' lyre alone with
+/// `SPARTAN_GLYPH_KEYS=lyre`), coloured as `SPARTAN_GLYPH_KEY_COLORS` (and its `SPARTAN_GLYPH_KEY_COLOR_MAP`) says for the four face
+/// buttons; auto shows them when no gamepad is connected. Whatever fails only reaches the Log: the game then keeps its own
 /// icons. `run_probe` runs a command (`[probe, --gamepad]`) within a time limit and returns its
 /// output or the error to print.
 pub fn glyph_mounts(
@@ -965,13 +965,28 @@ pub fn glyph_mounts(
         String::new()
     };
     let resolved = glyphs::resolve(choice, &pad);
+    // Only the keys the icons show go in, so a copy is redrawn when one of them changes.
+    let icon_keys = get("SPARTAN_GLYPH_KEYS");
+    let key_map = glyphs::shown_keys(get("SPARTAN_KEY_MAP"), icon_keys == "alternative");
+    let lyre_key_map = if icon_keys == "lyre" {
+        glyphs::lyre_keys(get("SPARTAN_KEY_MAP"))
+    } else {
+        String::new()
+    };
+    let face_colors = match get("SPARTAN_GLYPH_KEY_COLORS") {
+        "playstation" => glyphs::face_colors("playstation"),
+        "custom" => glyphs::face_colors(get("SPARTAN_GLYPH_KEY_COLOR_MAP")),
+        _ => String::new(),
+    };
     let mounts = match glyphs::build(
         game,
         out,
         &resolved.style,
         resolved.faces.as_ref(),
         get("SPARTAN_PAD_MAP"),
-        get("SPARTAN_KEY_MAP"),
+        &key_map,
+        &lyre_key_map,
+        &face_colors,
         assets,
         log,
     ) {
@@ -1238,7 +1253,7 @@ mod tests {
         // glyphs::build got the controller's style and letters and the gamepad map, no key map.
         let faces = r#"{"south": "a", "east": "b", "west": "x", "north": "y"}"#;
         assert!(
-            stamp(&run).starts_with(&format!("[12, \"xbox\", {faces}, \"cross=b\", 1")),
+            stamp(&run).starts_with(&format!("[13, \"xbox\", {faces}, \"cross=b\", 1")),
             "{}",
             stamp(&run)
         );
@@ -1269,7 +1284,7 @@ mod tests {
         assert_eq!(result, (vec![], None));
         assert!(calls.is_empty());
         assert!(
-            stamp(&run).starts_with("[12, \"nintendo\", null, \"\", 1"),
+            stamp(&run).starts_with("[13, \"nintendo\", null, \"\", 1"),
             "{}",
             stamp(&run)
         );
@@ -1287,7 +1302,7 @@ mod tests {
         assert_eq!(style.as_deref(), Some("keyboard"));
         assert!(calls.is_empty());
         assert!(
-            stamp(&run).starts_with("[12, \"keyboard\", null, \"\", \"cross=Q\", null, "),
+            stamp(&run).starts_with("[13, \"keyboard\", null, \"\", \"cross=Q\", null, "),
             "{}",
             stamp(&run)
         );
@@ -1303,10 +1318,158 @@ mod tests {
         let ((_, style), _, _) = mounts_with(&run, &env, Ok("Gamepad: none\n"));
         assert_eq!(style.as_deref(), Some("keyboard"));
         assert!(
-            stamp(&run).starts_with("[12, \"keyboard\", null, \"\", \"square=G\", null, "),
+            stamp(&run).starts_with("[13, \"keyboard\", null, \"\", \"square=G\", null, "),
             "{}",
             stamp(&run)
         );
+    }
+
+    #[test]
+    fn the_icons_show_the_main_key_unless_the_alternative_is_chosen() {
+        let run = glyph_run(true);
+        let map = "cross=Space|K,square=Mouse Left|J,triangle=Q";
+        let main = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", map),
+        ];
+        mounts_with(&run, &main, Ok(""));
+        let drawn_main = stamp(&run);
+        assert!(
+            drawn_main.starts_with(
+                "[13, \"keyboard\", null, \"\", \"cross=Space,square=Mouse Left,triangle=Q\", null, "
+            ),
+            "{drawn_main}"
+        );
+        // Choosing the alternative redraws the copy: only the keys a button shows are stamped.
+        let alternative = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", map),
+            ("SPARTAN_GLYPH_KEYS", "alternative"),
+        ];
+        mounts_with(&run, &alternative, Ok(""));
+        let drawn_alternative = stamp(&run);
+        assert!(
+            drawn_alternative.starts_with(
+                "[13, \"keyboard\", null, \"\", \"cross=K,square=J,triangle=Q\", null, "
+            ),
+            "{drawn_alternative}"
+        );
+        // Back to the main keys: the stamp is the first one again, so a copy made before is reused.
+        mounts_with(&run, &main, Ok(""));
+        assert_eq!(stamp(&run), drawn_main);
+    }
+
+    #[test]
+    fn the_lyre_alone_stamps_the_keys_it_shows_and_redraws_when_they_change() {
+        let run = glyph_run(true);
+        let lyre = |map: &'static str| {
+            [
+                ("SPARTAN_GLYPH_STYLE", "keyboard"),
+                ("SPARTAN_KEY_MAP", map),
+                ("SPARTAN_GLYPH_KEYS", "lyre"),
+            ]
+        };
+        mounts_with(&run, &lyre("cross=Space|K,l1=Q|G"), Ok(""));
+        let first = stamp(&run);
+        assert!(
+            first.starts_with(
+                "[13, \"keyboard\", null, \"\", \"cross=Space,l1=Q\", [\"lyre\", \"cross=K\"], null, "
+            ),
+            "{first}"
+        );
+        // An alternative on a button the lyre shows redraws the copy.
+        mounts_with(&run, &lyre("cross=Space|L,l1=Q|G"), Ok(""));
+        let moved = stamp(&run);
+        assert_ne!(moved, first);
+        assert!(moved.contains("[\"lyre\", \"cross=L\"]"), "{moved}");
+        // So does one on a button that had none.
+        mounts_with(&run, &lyre("cross=Space|L,square=Mouse Left|J"), Ok(""));
+        assert_ne!(stamp(&run), moved);
+        // An alternative on a button it does not show does not.
+        mounts_with(&run, &lyre("cross=Space|L,l1=Q|G,r1=E|T"), Ok(""));
+        let other_button = stamp(&run);
+        mounts_with(&run, &lyre("cross=Space|L,l1=Q|H,r1=E"), Ok(""));
+        assert_eq!(stamp(&run), other_button);
+        // Back to the main key: the stamp has no trace of the lyre, as before this choice existed.
+        let main = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", "cross=Space|L,l1=Q"),
+        ];
+        mounts_with(&run, &main, Ok(""));
+        assert!(!stamp(&run).contains("lyre"), "{}", stamp(&run));
+    }
+
+    #[test]
+    fn the_colors_are_stamped_with_the_keys_the_lyre_shows() {
+        let run = glyph_run(true);
+        // Square and Cross blue, Triangle and Circle orange; first alternatives 5, 6, 9, 0 and
+        // second alternatives on the keypad; the lyre alone shows the first alternatives.
+        let map = "cross=Space|6|Keypad 2,circle=Left Ctrl|0|Keypad 6,square=Mouse Left|5|Keypad 4,triangle=Mouse Right|9|Keypad 8";
+        let env = |colors: &'static str| {
+            let style = match colors {
+                "playstation" | "gray" => colors,
+                _ => "custom",
+            };
+            [
+                ("SPARTAN_GLYPH_STYLE", "keyboard"),
+                ("SPARTAN_KEY_MAP", map),
+                ("SPARTAN_GLYPH_KEYS", "lyre"),
+                ("SPARTAN_GLYPH_KEY_COLORS", style),
+                ("SPARTAN_GLYPH_KEY_COLOR_MAP", colors),
+            ]
+        };
+        mounts_with(
+            &run,
+            &env("square=blue,cross=blue,triangle=orange,circle=orange"),
+            Ok(""),
+        );
+        let first = stamp(&run);
+        assert!(
+            first.starts_with(
+                "[13, \"keyboard\", null, \"\", \"cross=Space,circle=Left Ctrl,square=Mouse Left,triangle=Mouse Right\", [\"lyre\", \"cross=6,circle=0,square=5,triangle=9\"], [\"colors\", \"cross=428ee8,circle=f28c28,square=428ee8,triangle=f28c28\"], null, "
+            ),
+            "{first}"
+        );
+        // A colour of another name or a hex that comes to the same colour is the same stamp.
+        mounts_with(
+            &run,
+            &env("triangle=#f28c28,circle=orange,cross=428ee8,square=Blue"),
+            Ok(""),
+        );
+        assert_eq!(stamp(&run), first);
+        // Another colour redraws the copies; PlayStation colors are one more stamp.
+        mounts_with(
+            &run,
+            &env("square=pink,cross=blue,triangle=orange,circle=orange"),
+            Ok(""),
+        );
+        let pink = stamp(&run);
+        assert_ne!(pink, first);
+        assert!(pink.contains("square=d683d6"), "{pink}");
+        mounts_with(&run, &env("playstation"), Ok(""));
+        assert!(stamp(&run).contains("cross=6b9ae8"), "{}", stamp(&run));
+        // Gray, or nothing, leaves no trace: the stamp is the one of before the colours.
+        for colors in ["", "gray", "cross=gray"] {
+            mounts_with(&run, &env(colors), Ok(""));
+            assert!(!stamp(&run).contains("colors"), "{colors}: {}", stamp(&run));
+        }
+    }
+
+    #[test]
+    fn a_new_alternative_does_not_redraw_the_icons_of_the_main_keys() {
+        let run = glyph_run(true);
+        let before = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", "cross=Space|K"),
+        ];
+        mounts_with(&run, &before, Ok(""));
+        let first = stamp(&run);
+        let after = [
+            ("SPARTAN_GLYPH_STYLE", "keyboard"),
+            ("SPARTAN_KEY_MAP", "cross=Space|L"),
+        ];
+        mounts_with(&run, &after, Ok(""));
+        assert_eq!(stamp(&run), first);
     }
 
     #[test]

@@ -23,11 +23,19 @@ y Linux (AppImage experimental).
 > Este proyecto no está afiliado a Sony Interactive Entertainment ni a Santa Monica Studio, ni cuenta con su respaldo.
 > God of War es una marca registrada de Sony Interactive Entertainment.
 
-> **Antes gow3_pc.** Actualizar desde la 2.5.0 con el launcher conserva tus partidas y ajustes: en el
-> primer inicio, los ajustes del juego (`gow3.ini`), los del launcher y, en Linux, la carpeta de datos
-> (`~/.local/share/gow3`) se copian a sus nombres nuevos. Los archivos viejos quedan donde estaban y
-> los accesos directos existentes siguen funcionando. En Linux, el AppImage ahora es
-> `spartanport-x86_64.AppImage`: actualizá las opciones de inicio de Steam que usan el nombre viejo.
+> **Antes gow3_pc.** Las versiones anteriores a la 2.8.0 no se migran: descargá la 2.8.0 de la
+> [página de releases](https://github.com/FelipePrado0/SpartanPort/releases) e instalala desde cero.
+> Para conservar tus partidas y ajustes en Windows, copiá estos elementos de la carpeta vieja a la
+> nueva, si existen: `user/`, `mods/`, `spartanport.ini`, `settings.json`, `mods.json`,
+> `mods_presets.json`, `patches.json` y `gamecontrollerdb.txt`. Desde la 2.5.0 o anterior, copiá
+> `gow3.ini` como `spartanport.ini` y sacá el `settings.json` de `%APPDATA%\gow3-launcher`. En
+> Linux, reemplazá el AppImage (ahora `spartanport-x86_64.AppImage`: actualizá las opciones de
+> lanzamiento de Steam que usan el nombre viejo del archivo). Desde la 2.5.0 o anterior, copiá
+> también `~/.local/share/gow3` a `~/.local/share/spartanport` (sin `user/cache` ni `out/`),
+> renombrá ahí el `gow3.ini` a `spartanport.ini` y copiá `~/.config/gow3-launcher/settings.json` al
+> lado. Si actualizaste la 2.6.0 o la 2.7.0 desde el propio launcher, borrá `God of War III.exe` y
+> `_internal/` de su carpeta, y el viejo acceso directo `God of War III` del escritorio: todavía
+> abren el launcher viejo.
 
 ## Índice
 
@@ -305,6 +313,17 @@ L2, y *Right stick sensitivity* define cuánto mouse hace falta. Sin el launcher
 propias teclas: E y Q para Cuadrado y Triángulo, 1 y 3 para L1 y R1, F para R2, C para R3, I, K, J,
 L para la cruceta, Enter para Options, Tab y Retroceso para el touchpad.
 
+**Teclas alternativas.** Cada botón puede tener una segunda y una tercera tecla o entrada del mouse, en
+la segunda y la tercera casilla de su fila en la página Controls (el botón x al lado de una casilla
+la borra). Todas presionan el botón, así que podés dejar el Cuadrado en el clic izquierdo para el
+combate y presionarlo también con la J, o con el Keypad 4, en los minijuegos. En la lira de las Musas, por ejemplo, dejá Espacio, Shift izquierdo y los dos
+botones del mouse y agregá K, L, J e I, dispuestas como los cuatro botones (I arriba, J a la
+izquierda, L a la derecha, K abajo). Una tecla que ya usa otro botón se intercambia con él, como en
+las teclas principales. Los íconos de teclado en el juego muestran la tecla principal; *Keys on the
+icons* (página Controls, con el estilo Keyboard o Match my controller) puede mostrar la alternativa, o la alternativa solo en
+la lira (los demás íconos conservan la principal). Los íconos dibujan la primera alternativa definida: la segunda casilla, o la tercera si la segunda está vacía. Sin el launcher,
+uní los nombres con `|` en `SPARTAN_KEY_MAP`, por ejemplo `cross=Space|K|Keypad 2,square=Mouse Left|J`.
+
 En un control sin touchpad (Xbox y otros), View abre el menú de pausa (el clic del touchpad derecho)
 y L1 + View abre el modo foto (el clic izquierdo). En un DualSense el touchpad funciona como en la
 PS4, y Share/Create funciona como View.
@@ -318,10 +337,13 @@ siguiente arma. El ataque de cambio de la misma arma otra vez espera 0,8 segundo
 
 Los **íconos de botones en el juego** (desactivados por defecto) se eligen en la página Controls del launcher, en
 *In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* o *Keyboard*. Reemplazan los íconos de
-PlayStation en los tutoriales, la lista de movimientos, las indicaciones de quick-time events y, con los estilos
-de control, en la lira de las Musas en la Cámara de la Llama; el dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* muestra la tecla que
-presiona cada botón, según tu mapeo del teclado (una tecla cambiada aparece en el próximo inicio);
-*Match my controller* también muestra las teclas cuando no hay un control conectado. El launcher escribe una copia
+PlayStation en los tutoriales, la lista de movimientos, las indicaciones de quick-time events y en la lira de las
+Musas en la Cámara de la Llama; el dibujo del control en el menú de pausa sigue siendo un DualShock 4. *Keyboard* muestra la tecla que
+presiona cada botón, también en la lira, según tu mapeo del teclado (una tecla cambiada aparece en el próximo inicio);
+*Match my controller* también muestra las teclas cuando no hay un control conectado.
+*Key colors* (en el mismo lugar) pinta las teclas de X, Círculo, Cuadrado y Triángulo, en la lira y en
+los demás íconos de teclado: *PlayStation colors*, o *Custom* con un color de una paleta corta para
+cada botón; los demás íconos y el *Gray* por defecto no cambian. El launcher escribe una copia
 parcheada de hasta tres archivos del juego (unos 410 MB) en la carpeta de datos del port y nunca modifica tu carpeta del
 juego. Un control nuevo se detecta después de reiniciar. Sin el launcher, definí `SPARTAN_GLYPH_STYLE`
 como `auto`, `xbox`, `nintendo` o `keyboard` antes de iniciar `run.sh`.
@@ -379,6 +401,8 @@ para todas las configuraciones de overlay.
   **Opciones → Audio → Diálogos** (por ejemplo, texto en español con voces en inglés).
 - El juego no abre: revisá **Advanced → Log**, o enviá `user\last_run.log` junto con tu reporte.
   Con una **Saves folder** personalizada, `last_run.log` está en esa carpeta.
+  Junto a él, `last_run.jsonl` tiene las mismas líneas con la hora, el nivel y el área de cada una,
+  para herramientas y para saber qué evento vino primero; adjuntá los dos archivos al reportar un bug.
 - Texturas amarillas/naranjas/blancas o iluminación incorrecta: probá desactivar **Performance →
   GPU data → Deferred GPU readbacks** y reiniciar el juego. Esta alternativa puede causar tirones.
 - Los fallos gráficos por GPU, cierres, problemas de audio y bloqueos de progreso siguen bajo

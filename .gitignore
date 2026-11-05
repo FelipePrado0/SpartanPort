@@ -9,6 +9,7 @@ pgo/
 # Documentation pictures are part of the repository.
 !docs/images/*.png
 last_run.log
+last_run.jsonl
 dist/
 fsr4_411/
 vkd3d-proton.cache
@@ -33,6 +34,8 @@ gamecontrollerdb.txt
 
 # The launcher's data files when it runs from a checkout (data folder = this folder).
 /settings.json
+/launcher_gpu.txt
+/launcher_error.log
 /mods.json
 /mods_presets.json
 /patches.json
@@ -43,9 +46,8 @@ gamecontrollerdb.txt
 # Rust launcher (docs/specs/2026-10-21-rust-launcher-design.md)
 launcher-rust/target/
 !launcher-rust/assets/*.png
+!launcher-rust/assets/pads/**/*.png
 !docs/specs/assets/**/*.png
-# Release stamp: the workflows' Stamp step writes it here; a stale local copy would be packaged.
-/release.json
 # Brainstorming companion sessions
 .superpowers/
 # Local agent plans and specs (superpowers skills), not shared for now

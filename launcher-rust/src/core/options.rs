@@ -121,6 +121,33 @@ pub static GLYPH_STYLES: &[Choice] = &[
     c("keyboard", "Keyboard"),
 ];
 
+/// Which input of a keyboard row the in-game keyboard icons show.
+pub static GLYPH_KEYS: &[Choice] = &[
+    c("main", "Main key (default)"),
+    c("alternative", "Alternative key"),
+    c("lyre", "Alternative key on the lyre only"),
+];
+
+/// How the keyboard icons colour the key labels of the four face buttons.
+pub static KEY_COLOR_STYLES: &[Choice] = &[
+    c("gray", "Gray (default)"),
+    c("playstation", "PlayStation colors"),
+    c("custom", "Custom"),
+];
+
+/// The palette of a custom colour; `gray` is the ink of every other label.
+pub static KEY_COLORS: &[Choice] = &[
+    c("gray", "Gray"),
+    c("white", "White"),
+    c("blue", "Blue"),
+    c("orange", "Orange"),
+    c("green", "Green"),
+    c("red", "Red"),
+    c("pink", "Pink"),
+    c("yellow", "Yellow"),
+    c("purple", "Purple"),
+];
+
 pub static UPSCALERS: &[Choice] = &[
     cr("off", "Off", "Выключен"),
     cr("fsr3", "FSR 3.1 (every GPU)", "FSR 3.1 (любая видеокарта)"),
@@ -503,7 +530,7 @@ mod tests {
 
     #[test]
     fn every_table_has_unique_values() {
-        let tables: [&[Choice]; 23] = [
+        let tables: [&[Choice]; 26] = [
             FRAME_GENERATION,
             DISPLAY_MODES,
             ANISOTROPY,
@@ -514,6 +541,9 @@ mod tests {
             MENU_CONFIRM_STYLES,
             AUDIO_CHANNELS,
             GLYPH_STYLES,
+            GLYPH_KEYS,
+            KEY_COLOR_STYLES,
+            KEY_COLORS,
             UPSCALERS,
             PRESETS,
             OUTPUTS,

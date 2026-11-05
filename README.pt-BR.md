@@ -22,11 +22,19 @@ e Linux (AppImage experimental).
 > CUSA01623 e CUSA01715, versões 01.00 e 01.02). Este projeto não tem relação com a Sony Interactive Entertainment nem com o
 > Santa Monica Studio, nem é endossado por elas. God of War é marca registrada da Sony Interactive Entertainment.
 
-> **Antes gow3_pc.** Atualizar a partir da 2.5.0 pelo launcher mantém seus saves e configurações:
-> na primeira abertura, as configurações do jogo (`gow3.ini`), as do launcher e, no Linux, a pasta de
-> dados (`~/.local/share/gow3`) são copiadas para os nomes novos. Os arquivos antigos continuam onde
-> estavam, e os atalhos existentes continuam funcionando. No Linux, a AppImage agora é
-> `spartanport-x86_64.AppImage`: atualize as opções de inicialização do Steam que usam o nome antigo.
+> **Antes gow3_pc.** As versões anteriores à 2.8.0 não são migradas: baixe a 2.8.0 na
+> [página de releases](https://github.com/FelipePrado0/SpartanPort/releases) e instale do zero. Para
+> manter seus saves e configurações no Windows, copie estes itens da pasta antiga para a nova, se
+> existirem: `user/`, `mods/`, `spartanport.ini`, `settings.json`, `mods.json`,
+> `mods_presets.json`, `patches.json` e `gamecontrollerdb.txt`. Da 2.5.0 ou anterior, copie
+> `gow3.ini` como `spartanport.ini` e pegue o `settings.json` em `%APPDATA%\gow3-launcher`. No
+> Linux, troque a AppImage (agora `spartanport-x86_64.AppImage`: atualize as opções de inicialização
+> da Steam que usam o nome antigo do arquivo). Da 2.5.0 ou anterior, copie também
+> `~/.local/share/gow3` para `~/.local/share/spartanport` (sem `user/cache` e `out/`), renomeie
+> lá o `gow3.ini` para `spartanport.ini` e copie `~/.config/gow3-launcher/settings.json` para o
+> lado dele. Se você atualizou a 2.6.0 ou a 2.7.0 por dentro do launcher, apague
+> `God of War III.exe` e `_internal/` da pasta dele, e o atalho antigo `God of War III` da área de
+> trabalho: eles ainda abrem o launcher antigo.
 
 ## Sumário
 
@@ -301,6 +309,17 @@ pressionado (R), o mouse mira com o analógico direito, para a Cabeça de Hélio
 teclas: E e Q para Quadrado e Triângulo, 1 e 3 para L1 e R1, F para R2, C para R3, I, K, J, L para o
 direcional, Enter para Options, Tab e Backspace para o touchpad.
 
+**Teclas alternativas.** Todo botão pode ter uma segunda e uma terceira tecla ou entrada do mouse, na
+segunda e na terceira caixa da linha dele na tela Controls (o botão x ao lado de uma caixa a limpa).
+Todas apertam o botão, então você pode manter o Quadrado no clique esquerdo para o combate e também
+apertá-lo com o J, ou com o Keypad 4, nos minigames. Na lira
+das Musas, por exemplo, mantenha Espaço, Shift esquerdo e os dois botões do mouse e acrescente K, L, J
+e I, dispostas como os quatro botões (I em cima, J à esquerda, L à direita, K embaixo). Uma tecla que
+já é de outro botão troca com ele, como nas teclas principais. Os ícones de teclado no jogo mostram a
+tecla principal; *Teclas nos ícones* (tela Controls, com o estilo Teclado ou Igual ao meu controle) pode mostrar a alternativa
+no lugar, ou a alternativa só na lira (os outros ícones continuam com a principal). Os ícones desenham a primeira alternativa preenchida: a segunda caixa, ou a terceira se a segunda estiver vazia. Sem o launcher, junte os nomes com `|` no `SPARTAN_KEY_MAP`, por exemplo
+`cross=Space|K|Keypad 2,square=Mouse Left|J`.
+
 Em um controle sem touchpad (Xbox e outros), View abre o menu de pausa (o clique direito do
 touchpad) e L1 + View abre o modo foto (o clique esquerdo). No DualSense o touchpad funciona
 como no PS4, e Share/Create funciona como View.
@@ -314,10 +333,13 @@ não espera). O direcional sozinho troca como antes. Os tutoriais de troca de ar
 
 Os **ícones de botões no jogo** (desligados por padrão) são escolhidos na tela Controls do launcher, em
 *Ícones dos botões no jogo*: *Igual ao meu controle*, *Xbox*, *Nintendo* ou *Teclado*. Eles trocam os ícones
-PlayStation dos tutoriais, da lista de golpes, dos eventos rápidos e, nos estilos de controle, da lira das Musas
-na Câmara da Chama; o desenho do controle no menu de pausa continua sendo um DualShock 4. *Teclado* mostra a tecla que aperta cada botão, seguindo o seu
+PlayStation dos tutoriais, da lista de golpes, dos eventos rápidos e da lira das Musas
+na Câmara da Chama; o desenho do controle no menu de pausa continua sendo um DualShock 4. *Teclado* mostra a tecla que aperta cada botão, também na lira, seguindo o seu
 mapeamento do teclado (uma tecla trocada aparece no próximo início); *Igual ao meu controle* também mostra
-as teclas quando nenhum controle está conectado. O launcher grava uma cópia com patch de até três arquivos do
+as teclas quando nenhum controle está conectado.
+*Cores das teclas* (no mesmo lugar) pinta as teclas do X, Círculo, Quadrado e Triângulo, na lira e nos
+outros ícones de teclado: *Cores do PlayStation*, ou *Personalizadas* com uma cor de uma paleta curta
+para cada botão; os outros ícones e o *Cinza* padrão não mudam. O launcher grava uma cópia com patch de até três arquivos do
 jogo (cerca de 410 MB) na pasta de dados do port e nunca altera a pasta do jogo. Um controle novo é reconhecido após
 reiniciar. Sem o launcher, defina `SPARTAN_GLYPH_STYLE` como `auto`, `xbox`, `nintendo` ou `keyboard` antes de
 iniciar o `run.sh`.
@@ -373,6 +395,8 @@ uma correção para todas as configurações de overlay.
   texto em português com vozes em inglês).
 - O jogo não abre: veja **Advanced → Log**, ou envie o `user\last_run.log` junto com o relato.
   Se escolheu uma **Saves folder** personalizada, o `last_run.log` fica nessa pasta.
+  Ao lado dele, o `last_run.jsonl` tem as mesmas linhas com a hora, o nível e a área de cada uma,
+  para ferramentas e para saber qual evento veio primeiro; anexe os dois arquivos ao relatar um bug.
 - Texturas amarelas/laranjas/brancas ou iluminação errada: experimente desligar **Performance →
   GPU data → Deferred GPU readbacks** e reiniciar o jogo. Esse contorno pode causar travadas.
 - Falhas de renderização por GPU, crashes, problemas de áudio e bloqueios de progresso seguem

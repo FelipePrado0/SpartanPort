@@ -137,7 +137,8 @@ static SDL_Gamepad *current_gamepad(void) {
  * changed per PS4 button with SPARTAN_PAD_MAP (gamepad) and SPARTAN_KEY_MAP (keyboard), e.g.
  * SPARTAN_KEY_MAP="cross=Q,square=Left Shift" or SPARTAN_PAD_MAP="cross=b,circle=a": comma-separated
  * <ps4 button>=<SDL key or gamepad button name>. A mapped PS4 button loses its default sources;
- * <ps4 button>=None leaves it without any.
+ * <ps4 button>=None leaves it without any. Several names joined by | are all sources of the button
+ * (SPARTAN_KEY_MAP="cross=Space|K": Space or K), up to MAX_SOURCES_PER_BUTTON.
  * touchpad_left (alias touchpad) and touchpad_right are the two sides of the touchpad click:
  * photo mode and the pause menu. Back/View (Share on a DualSense) is the right click, and with
  * L1 held the left one. Keyboard stick directions are mapped too; gamepad axes, the real touchpad
@@ -152,7 +153,9 @@ static const struct { const char *name; uint32_t ps; } ps_names[]={
     {"look_up",LOOK_UP}, {"look_down",LOOK_DOWN}, {"look_left",LOOK_LEFT}, {"look_right",LOOK_RIGHT},
 };
 typedef struct { int source; uint32_t ps; } ButtonSource;
-typedef struct { ButtonSource entries[48]; size_t count; } ButtonMap;
+/* Room for every button of the map with its sources: 31 buttons (see ps_names) at most. */
+enum { MAX_SOURCES_PER_BUTTON=4, MAP_CAPACITY=128 };
+typedef struct { ButtonSource entries[MAP_CAPACITY]; size_t count; } ButtonMap;
 static ButtonMap pad_map={{
     {SDL_GAMEPAD_BUTTON_SOUTH,BTN_CROSS}, {SDL_GAMEPAD_BUTTON_EAST,BTN_CIRCLE},
     {SDL_GAMEPAD_BUTTON_WEST,BTN_SQUARE}, {SDL_GAMEPAD_BUTTON_NORTH,BTN_TRIANGLE},
@@ -173,6 +176,41 @@ static ButtonMap key_map={{
     {SDL_SCANCODE_UP,LOOK_UP}, {SDL_SCANCODE_DOWN,LOOK_DOWN},
     {SDL_SCANCODE_LEFT,LOOK_LEFT}, {SDL_SCANCODE_RIGHT,LOOK_RIGHT},
 },25};
+
+/* The triggers as gamepad-map sources, numbered above every SDL gamepad button. Mapping l2 or r2
+ * takes the PS4 trigger off its physical trigger, so two inputs never fight over it. */
+enum { PAD_LEFT_TRIGGER=0x100, PAD_RIGHT_TRIGGER, TRIGGER_DOWN=30 };
+static bool trigger_mapped[2];
+static int pad_source(const char *name) {
+    if (!SDL_strcasecmp(name,"lefttrigger")) return PAD_LEFT_TRIGGER;
+    if (!SDL_strcasecmp(name,"righttrigger")) return PAD_RIGHT_TRIGGER;
+    return (int)SDL_GetGamepadButtonFromString(name);
+}
+static bool pad_source_down(SDL_Gamepad *g, int source) {
+    if (source==PAD_LEFT_TRIGGER) return trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFT_TRIGGER))>TRIGGER_DOWN;
+    if (source==PAD_RIGHT_TRIGGER) return trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHT_TRIGGER))>TRIGGER_DOWN;
+    return SDL_GetGamepadButton(g,(SDL_GamepadButton)source);
+}
+
+/* SPARTAN_DEADZONE_LEFT and SPARTAN_DEADZONE_RIGHT: the stick's radial dead zone in percent, 0 (the
+ * default) leaves it as read. Past the zone the stick is rescaled, so it still starts from zero. */
+static int stick_deadzone[2];
+static int deadzone_setting(const char *name) {
+    const char *value=getenv(name);
+    const int percent=value ? atoi(value) : 0;
+    return percent<0 ? 0 : percent>90 ? 90 : percent;
+}
+static void apply_deadzone(uint8_t *x, uint8_t *y, int percent) {
+    if (percent<=0) return;
+    const float dx=((float)*x-128.0f)/127.0f, dy=((float)*y-128.0f)/127.0f;
+    const float length=SDL_sqrtf(dx*dx+dy*dy), zone=(float)percent/100.0f;
+    if (length<=zone) { *x=*y=128; return; }
+    float scale=(length-zone)/(1.0f-zone)/length;
+    if (length*scale>1.0f) scale=1.0f/length;
+    const float sx=128.0f+dx*scale*127.0f, sy=128.0f+dy*scale*127.0f;
+    *x=(uint8_t)SDL_clamp(sx+0.5f,0.0f,255.0f);
+    *y=(uint8_t)SDL_clamp(sy+0.5f,0.0f,255.0f);
+}
 
 static char *trim(char *text) {
     while (*text==' ' || *text=='\t') ++text;
@@ -259,12 +297,34 @@ static int key_source(const char *name) {
     return (int)SDL_GetScancodeFromName(name);
 }
 
-/* Applies a SPARTAN_PAD_MAP/SPARTAN_KEY_MAP value; returns how many entries were used. Bad entries are
- * logged and skipped, so their PS4 button keeps its default. */
+/* One source of an entry, by name; -1 when the name is not one (a gamepad button can be 0). */
+static int named_source(const char *name, bool keyboard) {
+    if (!*name) return -1;
+    const int mouse=keyboard ? mouse_source(name) : 0;
+    const int source=mouse ? mouse : keyboard ? key_source(name) : pad_source(name);
+    return source>(keyboard ? (int)SDL_SCANCODE_UNKNOWN : (int)SDL_GAMEPAD_BUTTON_INVALID) ? source : -1;
+}
+
+static void drop_sources(ButtonMap *map, uint32_t ps, bool keyboard) {
+    size_t kept=0;
+    for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
+    map->count=kept;
+    if (!keyboard && ps==BTN_L2) trigger_mapped[0]=true;
+    if (!keyboard && ps==BTN_R2) trigger_mapped[1]=true;
+}
+
+/* Applies a SPARTAN_PAD_MAP/SPARTAN_KEY_MAP value; returns how many entries were used. An entry is
+ * <button>=<name>[|<name>...]: every listed source replaces the button's own. A name that is not
+ * valid is logged and skipped by itself; an entry with no valid name is skipped as a whole, so its
+ * PS4 button keeps its default. */
 static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
     if (!spec || !*spec) return 0;
-    char copy[1024];
-    snprintf(copy,sizeof(copy),"%s",spec);
+    /* The whole value, whatever its length: a copy cut short would drop the last entries unseen. */
+    char *copy=SDL_strdup(spec);
+    if (!copy) {
+        printf("Runtime: pad map: out of memory, no entry applied\n");
+        return 0;
+    }
     int used=0;
     char *entry=copy;
     while (entry) {
@@ -277,31 +337,38 @@ static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
             continue;
         }
         *eq=0;
-        const char *button=trim(entry), *name=trim(eq+1);
+        const char *button=trim(entry);
+        char *names=trim(eq+1);
         entry=next;
         uint32_t ps=0;
         for (size_t i=0;i<sizeof(ps_names)/sizeof(*ps_names);++i) if (!SDL_strcasecmp(button,ps_names[i].name)) ps=ps_names[i].ps;
         if (!keyboard && (ps & STICK_DIRECTIONS)) ps=0;
-        if (ps && !SDL_strcasecmp(name,"None")) { /* the button gets no source at all */
-            size_t kept=0;
-            for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
-            map->count=kept;
+        if (ps && !SDL_strcasecmp(names,"None")) { /* the button gets no source at all */
+            drop_sources(map,ps,keyboard);
             ++used;
             continue;
         }
-        const int mouse=keyboard && *name ? mouse_source(name) : 0;
-        const int source=!*name ? -1 : mouse ? mouse : keyboard ? key_source(name)
-                                                         : (int)SDL_GetGamepadButtonFromString(name);
-        if (!ps || source<=(keyboard ? (int)SDL_SCANCODE_UNKNOWN : (int)SDL_GAMEPAD_BUTTON_INVALID)) {
-            printf("Runtime: pad map: ignored '%s=%s'\n",button,name);
-            continue;
+        int sources[MAX_SOURCES_PER_BUTTON];
+        size_t source_count=0;
+        char *name=names;
+        while (name) {
+            char *more=strchr(name,'|');
+            if (more) *more++=0;
+            const char *trimmed=trim(name);
+            name=more;
+            const int source=named_source(trimmed,keyboard);
+            bool repeated=false;
+            for (size_t i=0;i<source_count;++i) repeated|=sources[i]==source;
+            if (!ps || source<0) printf("Runtime: pad map: ignored '%s=%s'\n",button,trimmed);
+            else if (!repeated && source_count<MAX_SOURCES_PER_BUTTON) sources[source_count++]=source;
         }
-        size_t kept=0;
-        for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
-        map->count=kept;
-        if (map->count<sizeof(map->entries)/sizeof(*map->entries)) map->entries[map->count++]=(ButtonSource){source,ps};
+        if (!source_count) continue;
+        drop_sources(map,ps,keyboard);
+        for (size_t i=0;i<source_count && map->count<sizeof(map->entries)/sizeof(*map->entries);++i)
+            map->entries[map->count++]=(ButtonSource){sources[i],ps};
         ++used;
     }
+    SDL_free(copy);
     return used;
 }
 
@@ -312,6 +379,9 @@ static void load_button_maps(void) {
     const int pad=apply_button_map(&pad_map,getenv("SPARTAN_PAD_MAP"),false);
     const int keys=apply_button_map(&key_map,getenv("SPARTAN_KEY_MAP"),true);
     if (pad || keys) printf("Runtime: pad map: %d gamepad and %d keyboard buttons remapped\n",pad,keys);
+    stick_deadzone[0]=deadzone_setting("SPARTAN_DEADZONE_LEFT");
+    stick_deadzone[1]=deadzone_setting("SPARTAN_DEADZONE_RIGHT");
+    if (stick_deadzone[0] || stick_deadzone[1]) printf("Runtime: stick dead zone: left %d%%, right %d%%\n",stick_deadzone[0],stick_deadzone[1]);
 }
 
 static void key_axis(uint8_t *axis, bool negative, bool positive) {
@@ -584,13 +654,16 @@ static void sample_host(PadData *d) {
     load_button_maps();
     if (g) {
         for (size_t i=0;i<pad_map.count;++i)
-            if (SDL_GetGamepadButton(g,(SDL_GamepadButton)pad_map.entries[i].source)) d->buttons|=pad_map.entries[i].ps;
+            if (pad_source_down(g,pad_map.entries[i].source)) d->buttons|=pad_map.entries[i].ps;
         const uint32_t mapped=d->buttons;
         d->left_x=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFTX)); d->left_y=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFTY));
         d->right_x=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHTX)); d->right_y=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHTY));
-        d->l2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFT_TRIGGER)); d->r2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
-        if (d->l2>30) d->buttons|=BTN_L2;
-        if (d->r2>30) d->buttons|=BTN_R2;
+        apply_deadzone(&d->left_x,&d->left_y,stick_deadzone[0]);
+        apply_deadzone(&d->right_x,&d->right_y,stick_deadzone[1]);
+        if (!trigger_mapped[0]) d->l2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFT_TRIGGER));
+        if (!trigger_mapped[1]) d->r2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
+        if (d->l2>TRIGGER_DOWN) d->buttons|=BTN_L2;
+        if (d->r2>TRIGGER_DOWN) d->buttons|=BTN_R2;
         if (mapped & BTN_L2) d->l2=255;
         if (mapped & BTN_R2) d->r2=255;
         if (SDL_GetNumGamepadTouchpads(g)>0) {

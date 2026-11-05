@@ -24,8 +24,6 @@ use super::python::{py_hex, py_int, py_list, py_repr, python_json};
 
 /// Fixes with nothing to choose: not offered in the launcher and always applied.
 const ALWAYS_ON: &[&str] = &["Bug Fix - Startup Black Screen"];
-/// An older build's patch file, left in `patches/` by an update.
-const LEGACY_PATCH_FILE: &str = "God_of_War_III_Remastered.xml";
 
 #[derive(Debug, thiserror::Error)]
 pub enum PatchError {
@@ -273,8 +271,8 @@ pub fn external_patches(
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        // The profile's file (patches/ in a checkout) and an older build's are not external.
-        if same_file(&path, exclude) || name == "CUSA01623.xml" || name == LEGACY_PATCH_FILE {
+        // The profile's file (patches/ in a checkout) is not external.
+        if same_file(&path, exclude) || name == "CUSA01623.xml" {
             continue;
         }
         let Ok(text) = std::fs::read_to_string(&path) else {
@@ -1935,7 +1933,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let builtin = write(dir.path(), "builtin.xml", GAME_XML);
         write(dir.path(), "CUSA01623.xml", GAME_XML);
-        write(dir.path(), LEGACY_PATCH_FILE, GAME_XML);
         write(dir.path(), "other.xml", EXTRA_XML);
         write(dir.path(), "broken.xml", "<a>");
         write(dir.path(), "notes.txt", MINE_XML);
@@ -2361,13 +2358,16 @@ mod compile_tests {
     }
 
     #[test]
-    fn an_older_builds_patch_file_left_by_an_update_is_not_external() {
+    fn a_file_named_like_an_older_builds_patch_is_external() {
         let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join(LEGACY_PATCH_FILE), EXTERNAL).unwrap();
+        fs::write(dir.path().join("God_of_War_III_Remastered.xml"), EXTERNAL).unwrap();
         fs::write(dir.path().join("extra.xml"), EXTERNAL).unwrap();
         let found = external_patches(dir.path(), "01.02", &spartan(), &["CUSA01623"]);
         let files: HashSet<&str> = found.iter().filter_map(|f| f.0.split('/').next()).collect();
-        assert_eq!(files, HashSet::from(["extra.xml"]));
+        assert_eq!(
+            files,
+            HashSet::from(["God_of_War_III_Remastered.xml", "extra.xml"])
+        );
     }
 
     #[test]

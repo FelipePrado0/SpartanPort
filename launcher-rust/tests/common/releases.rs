@@ -35,7 +35,7 @@ impl FakeReleases {
     pub fn new() -> (FakeReleases, Receiver<Call>) {
         let (sender, receiver) = mpsc::channel();
         let fake = FakeReleases {
-            installed: ReleaseId::fallback(),
+            installed: ReleaseId::this(),
             target: InstallTarget::WindowsPackage,
             list: Ok(Vec::new()),
             install: Ok(()),
