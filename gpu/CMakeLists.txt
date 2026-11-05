@@ -320,6 +320,10 @@ if (WIN32)
     target_sources(dump-index-test PRIVATE ../src/compat_win.c)
     target_link_libraries(dump-index-test PRIVATE onecore)
 endif()
+add_executable(precompile-state-test EXCLUDE_FROM_ALL ../tests/test_precompile_state.cpp
+    shadps4/video_core/renderer_vulkan/vk_precompile_state.cpp)
+target_include_directories(precompile-state-test PRIVATE shadps4)
+target_compile_options(precompile-state-test PRIVATE -UNDEBUG)
 foreach(tool shader-manifest-test shader-manifest)
     if (tool STREQUAL shader-manifest)
         add_executable(${tool} EXCLUDE_FROM_ALL tools/shader_manifest.cpp

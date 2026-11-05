@@ -16,8 +16,8 @@
 | F3 | Leitura do código dos shaders nos WADs | leitor e testes prontos; falta `app0` (F5) | `feat/shader-precompile` |
 | F4 | Manifesto: formato e ferramenta que o gera | formato, ferramenta e testes prontos; falta gerar de cache real | `feat/shader-precompile` |
 | F5 | Materialização na primeira abertura (shaders) | não iniciada | `feat/shader-precompile` |
-| F6 | Pré-compilação dos pipelines no driver | não iniciada | `feat/shader-precompile` |
-| F7 | Invalidação: GPU, driver e versão | não iniciada | `feat/shader-precompile` |
+| F6 | Pré-compilação dos pipelines no driver | só o diário de crash pronto (`CrashJournal`) | `feat/shader-precompile` |
+| F7 | Invalidação: GPU, driver e versão | decisão, marcador e testes prontos; falta ligar no jogo (F5) | `feat/shader-precompile` |
 | F8 | Interface: tela de preparo, launcher e textos | não iniciada | `feat/shader-precompile` |
 | F9 | Campanha de gravação e empacotamento | não iniciada | `feat/shader-precompile` |
 | F10 | Validação final e release | não iniciada | `feat/shader-precompile` |
@@ -689,8 +689,10 @@ Um blob novo (por exemplo `BlobType::ShaderProfile`, nome `precompile`) com:
 
 ### 14.3 Testes (antes do código)
 
-- [ ] Teste de tabela para cada linha acima, com marcador falso em memória (sem GPU).
-- [ ] Marcador corrompido ou ausente: tratado como "falta tudo", sem travar.
+- [x] Teste de tabela para cada linha acima, com marcador falso em memória (sem GPU).
+      Implementado em `vk_precompile_state.{h,cpp}`. Mudança de versão de `.meta` ou `.spv` recomeça o
+      cache, que é o caminho mais simples para "shaders e pipelines".
+- [x] Marcador corrompido ou ausente: tratado como "falta tudo", sem travar.
 
 ### 14.4 Validação no jogo
 
