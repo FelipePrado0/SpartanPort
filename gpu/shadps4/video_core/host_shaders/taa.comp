@@ -297,11 +297,17 @@ void main() {
                 if (expected_depth < 0.0) {
                     debug_view = vec3(0.0, 1.0, 1.0); // cyan: the pixel did not reproject (w <= 0)
                 } else {
-                    // Red family: the previous depth did not match. How far off, in units of the tolerance
-                    // at the nearest history texel: orange = just over it, red = over, dark red = far over.
+                    // Red family (red channel 1): the previous depth did not match. Green: how far off, as
+                    // log2 of the number of tolerances (0 = within, 1 = 4096 and more). Left half of the
+                    // picture: the stored depth at the nearest history texel against the depth the
+                    // reprojection expects. Right half: the expected depth against this frame's own depth
+                    // (0 on a still camera if the reprojection is right). Blue: the motion in pixels
+                    // (0..16).
                     vec4 near_tap = texelFetch(history_tex, clamp(base + ivec2(round(fraction)), ivec2(0), size - 1), 0);
-                    float off = abs(abs(near_tap.a) - expected_depth) / threshold;
-                    debug_view = off < 4.0 ? vec3(1.0, 0.5, 0.0) : off < 64.0 ? vec3(1.0, 0.0, 0.0) : vec3(0.45, 0.0, 0.0);
+                    float off = p.x < size.x / 2 ? abs(abs(near_tap.a) - expected_depth) / threshold
+                                                 : abs(expected_depth - depth) / threshold;
+                    debug_view = vec3(1.0, clamp(log2(max(off, 1.0)) / 12.0, 0.0, 1.0),
+                                      clamp(length(motion) / 16.0, 0.0, 1.0));
                 }
             }
         } else if (diag == 4) {
