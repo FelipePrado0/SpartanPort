@@ -22,6 +22,10 @@
 | F9 | Campanha de gravação e empacotamento | não iniciada | `feat/shader-precompile` |
 | F10 | Validação final e release | não iniciada | `feat/shader-precompile` |
 
+**Autorização do mantenedor (2026-11-05):** spec de F0 a F4 e F7 aprovada, com as decisões
+recomendadas de 4.1. Nesta tarefa, commit e push nesta branch a cada passo, sem pedir aprovação de
+cada mensagem. PR, merge, release e `main` continuam exigindo aprovação explícita.
+
 ---
 
 ## 1. Objetivo
@@ -495,7 +499,8 @@ Binário, little-endian, comprimido com miniz:
 - Tabela de programas: `pgm_hash`, estágio, dica de local (caminho relativo dentro do dump,
   deslocamento), `code_size`, `code_xxh3`.
 - Tabela de permutações: índice do programa, `perm_idx` final (0, 1, 2... em ordem determinística),
-  `StageSpecialization` serializada, `ReplayInputs`.
+  `StageSpecialization` serializada, `ReplayInputs`, prioridade (`u8`: 0 menus e título, 1 usadas em
+  jogo, 2 o resto). O preparo processa por prioridade, para que pular no meio já deixe pronto o mais útil.
 - Tabela de pipelines: chaves gráficas e de compute (`GraphicsPipelineKey` + `SerializationSupport`,
   como em `RegisterPipelineData`) com os `stage_hashes` **remapeados**: em vez de `perm_hash` da
   sessão de quem gravou, guarde (índice do programa, índice da permutação). O materializador
@@ -617,6 +622,14 @@ pipelines das chaves uma vez, para que o driver guarde os binários (`pipeline-b
 - Usa as mesmas threads e a mesma tela da F5 (uma barra só, em duas etapas: "shaders" e "pipelines").
 - Pode pular, como a F5.
 - Pipeline que falha ao criar: registra e segue (o jogo cria sob demanda depois).
+- **Diário de crash do driver:** erro retornado não cobre o caso em que o compilador do driver derruba
+  o processo (visto no NVIDIA 615.78.08 em outro projeto, sempre na mesma variante). Sem isso, a pessoa
+  trava a cada abertura. Antes de entregar cada pipeline ao driver, a thread grava a chave num slot
+  próprio de um arquivo de diário, direto no sistema operacional, e zera o slot ao voltar. Terminar
+  bem apaga o diário. Na abertura seguinte, um diário que sobrou move essas chaves para uma lista de
+  pulo marcada com GPU e versão do driver, e o preparo não as compila. Elas ficam para o primeiro uso.
+  Driver novo tenta de novo. Ideia vinda de `valentderah/totk-pc-recomp` (`runtime/vk_pipeline.c`,
+  `skip_init`), projeto MIT; o código é escrito do zero aqui.
 - Ao terminar, grava no marcador a chave global do driver usada
   (`instance.GetPipelineBinaryGlobalKey()`).
 
@@ -653,6 +666,7 @@ Um blob novo (por exemplo `BlobType::ShaderProfile`, nome `precompile`) com:
 | `ShaderBinaryVersion` ou `ShaderMetaVersion` (port novo) | shaders e pipelines |
 | `PipelineKeyVersion` | pipelines e chaves |
 | `manifest_id` (manifesto novo no release) | só o que for novo: materialize as entradas que faltam; refaça pipelines das chaves novas |
+| Lista de pulo de outro driver | ignora a lista antiga; tenta aquelas chaves de novo |
 | Nada | nada; o jogo abre direto |
 
 ### 14.3 Testes (antes do código)
@@ -798,6 +812,8 @@ melhorado em releases futuros.
 9. O SISTEMA DEVE sempre manter `.meta`, `.spv` e `.key` de uma permutação consistentes entre si.
 10. O SISTEMA NUNCA DEVE incluir código de shader do jogo no repositório ou nos pacotes.
 11. O SISTEMA NUNCA DEVE escrever na pasta do jogo.
+12. SE o driver derrubar o processo durante o preparo, O SISTEMA DEVE pular as chaves do diário na
+    próxima execução, só para aquela GPU e versão do driver.
 
 ---
 
