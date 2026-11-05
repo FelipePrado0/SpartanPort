@@ -11,6 +11,11 @@
 namespace Shader {
 
 struct Info;
+struct Pools;
+struct Profile;
+struct StageSpecialization;
+enum class HwStage : u32;
+enum class SwStage : u32;
 namespace Gcn {
 struct FetchShaderSnapshot;
 }
@@ -35,5 +40,12 @@ struct ReplayInputs {
 ReplayInputs CaptureReplayInputs(const Info& info, std::span<const u32> user_data,
                                  std::span<const u32> code,
                                  const Gcn::FetchShaderSnapshot& fetch);
+
+/// Translates a recorded permutation without guest memory. info receives the result of the
+/// translation. Empty when the recorded inputs do not fit the specialization. Thread safe.
+std::vector<u32> ReplayTranslate(std::span<const u32> code, HwStage hw_stage, SwStage sw_stage,
+                                 u64 pgm_hash, const ReplayInputs& inputs,
+                                 const StageSpecialization& spec, const Profile& profile,
+                                 Pools& pools, Info& info);
 
 } // namespace Shader

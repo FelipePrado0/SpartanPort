@@ -12,7 +12,7 @@
 |:--|:--|:--|:--|
 | F0 | Preparação, linha de base e decisões | em andamento (falta medir o driver) | `feat/shader-precompile` |
 | F1 | Captura das entradas no momento da tradução | código e testes prontos; falta sessão de jogo | `feat/shader-precompile` |
-| F2 | API de tradução offline e verificador 100% | não iniciada | `feat/shader-precompile` |
+| F2 | API de tradução offline e verificador 100% | API e verificador prontos; falta provar 100% em cache novo | `feat/shader-precompile` |
 | F3 | Leitura do código dos shaders nos WADs | leitor e testes prontos; falta `app0` (F5) | `feat/shader-precompile` |
 | F4 | Manifesto: formato e ferramenta que o gera | não iniciada | `feat/shader-precompile` |
 | F5 | Materialização na primeira abertura (shaders) | não iniciada | `feat/shader-precompile` |
@@ -249,7 +249,7 @@ Windows (MSYS2 CLANG64), na raiz do repositório:
 source ./msys2-env.sh
 ninja -C out/gpu spartanport-probe                  # jogo
 ninja -C out/gpu shader-replay-test                 # POC / verificador
-out/gpu/shader-replay-test.exe user/cache/CUSA01623 <indice> [primeiro] [quantos]
+out/gpu/shader-replay-test.exe user/cache/CUSA01623 <pasta do jogo ou indice> [primeiro] [quantos]
 ninja -C out/gpu perf-overlay-test warmup-inbox-test graphics-settings-test
 out/gpu/perf-overlay-test.exe && out/gpu/warmup-inbox-test.exe && out/gpu/graphics-settings-test.exe
 ```
@@ -436,6 +436,10 @@ Transforme a POC em `shader-replay-test` definitivo:
   já as recusa) e conta separado.
 
 ### 9.3 Validação
+
+Resultado em 2026-11-05 no cache antigo (`.meta` versão 7, sem entradas gravadas, sessões anteriores à
+F1): 5.049 traduzidos, 0 travamentos, 4.131 idênticos (81,8%), 1,13 ms cada. As 918 diferenças são
+todas fragment, o defeito de 3.3. Isso não prova a F1: a prova é a sessão abaixo.
 
 - [ ] Sessão de gravação com o mantenedor num cache novo (pasta antiga renomeada). Pelo menos 30
       minutos, com várias áreas.
