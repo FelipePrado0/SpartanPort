@@ -442,6 +442,38 @@ fn alternative_keys_stay_with_the_profile_and_the_picture() {
 }
 
 #[test]
+fn a_motor_test_reds_its_grip_until_it_stops() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeJoysticks::new("Windows", vec![sony()]);
+    let mut state = with_pad(dir.path(), &fake);
+    assert_eq!(control_center::motors(&state), [false, false]);
+    send(&mut state, ControlsMessage::Rumble(true));
+    assert_eq!(control_center::motors(&state), [true, false]);
+    send(&mut state, ControlsMessage::Rumble(false));
+    assert_eq!(control_center::motors(&state), [false, true]);
+    state.now += std::time::Duration::from_secs(1);
+    assert_eq!(control_center::motors(&state), [false, false]);
+
+    let none = FakeJoysticks::new("Windows", Vec::new());
+    let mut state = with_pad(dir.path(), &none);
+    send(&mut state, ControlsMessage::Rumble(true));
+    assert_eq!(control_center::motors(&state), [false, false]);
+}
+
+#[test]
+fn the_name_box_opens_only_to_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state(dir.path());
+    open(&mut state, Page::Controls);
+    assert!(!state.controls.profile_naming);
+    send(&mut state, ControlsMessage::ProfileNaming);
+    assert!(state.controls.profile_naming);
+    send(&mut state, ControlsMessage::ProfileName("Mine".into()));
+    send(&mut state, ControlsMessage::ProfileSave);
+    assert!(!state.controls.profile_naming);
+}
+
+#[test]
 fn a_damaged_profile_file_is_not_replaced() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state(dir.path());

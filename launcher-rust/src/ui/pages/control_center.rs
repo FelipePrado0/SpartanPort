@@ -9,7 +9,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use iced::time::Instant;
-use iced::widget::{button, column, container, pick_list, row as layout, text, text_input};
+use iced::widget::{
+    button, column, container, pick_list, row as layout, slider as track, text, text_input,
+};
 use iced::{Center, Element, Fill, Length, Padding, Task};
 use indexmap::IndexMap;
 use serde_json::Value;
@@ -23,14 +25,19 @@ use crate::core::controls::{
 };
 use crate::core::i18n::{tr, tr_fmt};
 use crate::core::joysticks::{Device, JoyError, JoystickThread, Joysticks, Sdl3};
-use crate::core::pad_model::{detect_model, sdl_button, stick_percent, suggest_deadzone};
+use crate::core::pad_model::{
+    detect_model, sdl_button, stick_percent, suggest_deadzone, MAX_DEADZONE,
+};
 use crate::core::paths::Paths;
 use crate::ui::app::{apply_set, Message, State};
 use crate::ui::pages::controls::{self, ini_number, ControlsMessage, Device as Shown};
 use crate::ui::pages::Page;
 use crate::ui::theme::{self, palette};
-use crate::ui::widgets::pad_diagram::{pad_diagram, parts, Live, Picture};
-use crate::ui::widgets::{section, SELECT_TEXT};
+use crate::ui::widgets::pad_diagram::{
+    game_icon, input_icon, pad_diagram, pad_icon, parts, picture_width, Live, Picture,
+    Shown as ShownInput,
+};
+use crate::ui::widgets::SELECT_TEXT;
 
 /// How often the page reads the pad.
 pub const POLL: Duration = Duration::from_millis(20);
@@ -41,6 +48,9 @@ const SCAN_POLLS: u32 = 15;
 /// Polls a drift measure lasts: two seconds.
 const DRIFT_POLLS: u32 = 100;
 const RUMBLE_MS: u32 = 500;
+/// The columns on each side of the controller picture.
+const SIDE_WIDTH: f32 = 190.0;
+const SIDE_GAP: f32 = 12.0;
 /// A pad remap gives up after this long, as a key box does.
 const CAPTURE_SECONDS: u64 = 5;
 
@@ -75,6 +85,8 @@ pub struct LivePad {
     pub drift: Option<Drift>,
     /// What the last measure suggests: left and right.
     pub suggestion: Option<[u32; 2]>,
+    /// The motor under test, left or right, and when it stops.
+    motor: Option<(bool, Instant)>,
     scan: u32,
 }
 
@@ -93,6 +105,7 @@ impl LivePad {
             unmapped: false,
             drift: None,
             suggestion: None,
+            motor: None,
             scan: 0,
         }
     }
@@ -122,6 +135,7 @@ impl LivePad {
         self.pressed.clear();
         self.axes = [0; 6];
         self.drift = None;
+        self.motor = None;
     }
 
     /// One read. The inputs newly pressed since the last one.
@@ -388,8 +402,19 @@ pub fn apply_drift(state: &mut State) -> Task<Message> {
 pub fn rumble(state: &mut State, left: bool) {
     let strength = (ini_number(state, "vibration") / 100.0 * 65535.0) as u16;
     let (low, high) = if left { (strength, 0) } else { (0, strength) };
-    if let Some(live) = state.live_pad.as_mut() {
-        live.joysticks.rumble(low, high, RUMBLE_MS);
+    let now = state.now;
+    if let Some(live) = state.live_pad.as_mut().filter(|live| live.device.is_some()) {
+        if live.joysticks.rumble(low, high, RUMBLE_MS) {
+            live.motor = Some((left, now + Duration::from_millis(u64::from(RUMBLE_MS))));
+        }
+    }
+}
+
+/// The left and right motors under test now.
+pub fn motors(state: &State) -> [bool; 2] {
+    match state.live_pad.as_ref().and_then(|live| live.motor) {
+        Some((left, until)) if state.now < until => [left, !left],
+        _ => [false, false],
     }
 }
 
@@ -477,6 +502,7 @@ pub fn save_profile(state: &mut State) {
                     );
                     state.controls.profile = name;
                     state.controls.profile_name.clear();
+                    state.controls.profile_naming = false;
                 }
                 Err(error) => fail(state, &error),
             }
@@ -640,6 +666,8 @@ fn live_view(state: &State, lang: &str, picture: Picture) -> Live {
         changed,
         conflicts: conflicting,
         clickable: true,
+        shown: pad_shown(state, lang, picture),
+        motors: motors(state),
         ..Live::default()
     };
     match picture {
@@ -661,6 +689,20 @@ fn live_view(state: &State, lang: &str, picture: Picture) -> Live {
                 Some(input) => tr_fmt(lang, PRESSED, &[input]),
                 None => tr(lang, IDLE_KEYS),
             };
+            if view.capturing.is_none() {
+                live.shown = view.held.last().map(|input| {
+                    let same = |table: &IndexMap<String, String>, button: &str| {
+                        table
+                            .get(button)
+                            .is_some_and(|key| key.trim().eq_ignore_ascii_case(input))
+                    };
+                    let game = table_rows(Kind::Key)
+                        .into_iter()
+                        .find(|row| same(&view.key, row.button) || same(&view.key_alt, row.button));
+                    let icon = input_icon(input).map(|icon| icon.plain);
+                    pressed_line(lang, icon, game.map(|row| row.button))
+                });
+            }
         }
         Picture::Pad(_) => {
             live.selected = view
@@ -681,6 +723,40 @@ fn live_view(state: &State, lang: &str, picture: Picture) -> Live {
         }
     }
     live
+}
+
+/// The caption's icons: what was pressed, then the game's own button.
+fn pressed_line(lang: &str, input: Option<&'static [u8]>, game: Option<&str>) -> ShownInput {
+    ShownInput {
+        words: tr_fmt(lang, PRESSED, &[""]).trim_end().to_string(),
+        input,
+        game: game.and_then(game_icon),
+        game_name: game
+            .map(|button| tr(lang, controls::button_name_of(button)))
+            .unwrap_or_default(),
+    }
+}
+
+/// The last pad input with the game button it presses, while nothing waits for a press.
+fn pad_shown(state: &State, lang: &str, picture: Picture) -> Option<ShownInput> {
+    let view = &state.controls;
+    let Picture::Pad(model) = picture else {
+        return None;
+    };
+    let live = state
+        .live_pad
+        .as_ref()
+        .filter(|live| live.device.is_some())?;
+    let name = live
+        .last
+        .as_ref()
+        .filter(|_| view.pad_capturing.is_none())?;
+    let game = view
+        .pad
+        .iter()
+        .find(|(_, value)| value.eq_ignore_ascii_case(name))
+        .map(|(button, _)| button.as_str());
+    Some(pressed_line(lang, pad_icon(model, name), game))
 }
 
 fn pad_caption(state: &State, lang: &str) -> String {
@@ -755,12 +831,29 @@ pub fn picture_panel<'a>(state: &State, lang: &str) -> Element<'a, Message> {
     let Length::Fixed(height) = height else {
         return column![].into();
     };
-    let mut panel = column![pad_diagram(
-        picture,
-        live_view(state, lang, picture),
-        height
-    )]
-    .spacing(2);
+    let diagram = pad_diagram(picture, live_view(state, lang, picture), height);
+    let top: Element<'a, Message> = match picture {
+        // The sides stay beside the controller, however wide the page is.
+        Picture::Pad(_) => {
+            let wide = picture_width(picture, height) + 2.0 * (SIDE_WIDTH + SIDE_GAP);
+            container(
+                container(
+                    layout![
+                        stick_side(state, lang, true),
+                        diagram,
+                        stick_side(state, lang, false)
+                    ]
+                    .spacing(SIDE_GAP)
+                    .align_y(Center),
+                )
+                .max_width(wide),
+            )
+            .center_x(Fill)
+            .into()
+        }
+        Picture::Keyboard => diagram,
+    };
+    let mut panel = column![top].spacing(2);
     for input in shown_conflicts(view) {
         let shown = match picture {
             Picture::Keyboard => input,
@@ -782,31 +875,58 @@ pub fn picture_panel<'a>(state: &State, lang: &str) -> Element<'a, Message> {
     panel.into()
 }
 
-/// The stick and motor tools, under the dead zones.
+fn pad_ready(state: &State) -> bool {
+    state
+        .live_pad
+        .as_ref()
+        .is_some_and(|live| live.device.is_some() && !live.unmapped)
+}
+
+/// One side of the controller: its motor test and the dead zone of the stick on that side.
+fn stick_side<'a>(state: &State, lang: &str, left: bool) -> Element<'a, Message> {
+    let (motor, name, key) = if left {
+        ("Test left motor", "Left stick dead zone", "deadzone_left")
+    } else {
+        (
+            "Test right motor",
+            "Right stick dead zone",
+            "deadzone_right",
+        )
+    };
+    let value = ini_number(state, key);
+    let zone = track(0.0..=MAX_DEADZONE as f32, value, move |value| {
+        Message::Set(key.to_string(), Value::from(value as i64))
+    })
+    .step(1.0_f32);
+    column![
+        flat(
+            tr(lang, motor),
+            pad_ready(state).then_some(Message::Controls(ControlsMessage::Rumble(left)))
+        ),
+        text(tr(lang, name)).size(13),
+        layout![zone, text(format!("{} %", value as i64)).size(13)]
+            .spacing(8)
+            .align_y(Center),
+    ]
+    .spacing(8)
+    .width(SIDE_WIDTH)
+    .into()
+}
+
+/// The drift measure, under the mapping.
 pub fn pad_tools<'a>(state: &State, lang: &str) -> Element<'a, Message> {
     let live = state.live_pad.as_ref();
-    let ready = live.is_some_and(|live| live.device.is_some() && !live.unmapped);
     let measuring = live.is_some_and(|live| live.drift.is_some());
-    let message = |message: ControlsMessage| ready.then_some(Message::Controls(message));
     let measure_label = if measuring {
         "Leave the sticks alone..."
     } else {
         "Measure stick drift"
     };
-    let mut tools = layout![
-        flat(
-            tr(lang, measure_label),
-            message(ControlsMessage::MeasureDrift).filter(|_| !measuring)
-        ),
-        flat(
-            tr(lang, "Test left motor"),
-            message(ControlsMessage::Rumble(true))
-        ),
-        flat(
-            tr(lang, "Test right motor"),
-            message(ControlsMessage::Rumble(false))
-        ),
-    ]
+    let mut tools = layout![flat(
+        tr(lang, measure_label),
+        (pad_ready(state) && !measuring)
+            .then_some(Message::Controls(ControlsMessage::MeasureDrift))
+    )]
     .spacing(8)
     .align_y(Center);
     if let Some([left, right]) = live.and_then(|live| live.suggestion) {
@@ -844,41 +964,49 @@ pub fn profile_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
     })
     .text_size(SELECT_TEXT)
     .style(theme::pick_list_dark);
-    let can_save = !view.profile_name.trim().is_empty();
+    let naming = view.profile_naming;
+    let can_save = !naming || !view.profile_name.trim().is_empty();
     let can_delete = view.profiles.contains_key(&view.profile);
-    let name = text_input(&tr(lang, "New profile name"), &view.profile_name)
-        .on_input(|name| Message::Controls(ControlsMessage::ProfileName(name)))
-        .on_submit(Message::Controls(ControlsMessage::ProfileSave))
-        .width(200)
-        .size(SELECT_TEXT);
-    let actions = layout![
-        picker,
-        name,
-        flat(
-            tr(lang, "Save"),
-            can_save.then_some(Message::Controls(ControlsMessage::ProfileSave))
-        ),
-        flat(
-            tr(lang, "Delete"),
-            can_delete.then_some(Message::Controls(ControlsMessage::ProfileDelete))
-        ),
-        flat(
-            tr(lang, "Import"),
-            Some(Message::Controls(ControlsMessage::ProfileImport))
-        ),
-        flat(
-            tr(lang, "Export"),
-            Some(Message::Controls(ControlsMessage::ProfileExport))
-        ),
+    let save = if naming {
+        ControlsMessage::ProfileSave
+    } else {
+        ControlsMessage::ProfileNaming
+    };
+    let mut actions = layout![
+        text(tr(lang, "Control Profiles"))
+            .size(13)
+            .color(palette::MUTED),
+        picker
     ]
     .spacing(8)
-    .align_y(Center)
-    .width(Fill);
-    column![
-        section(state.rtl, &tr(lang, "Control profiles")),
-        container(actions).padding(Padding::ZERO.top(8)),
-    ]
-    .into()
+    .align_y(Center);
+    if naming {
+        actions = actions.push(
+            text_input(&tr(lang, "New profile name"), &view.profile_name)
+                .on_input(|name| Message::Controls(ControlsMessage::ProfileName(name)))
+                .on_submit(Message::Controls(ControlsMessage::ProfileSave))
+                .width(180)
+                .size(SELECT_TEXT),
+        );
+    }
+    let actions = actions
+        .push(flat(
+            tr(lang, "Save"),
+            can_save.then_some(Message::Controls(save)),
+        ))
+        .push(flat(
+            tr(lang, "Delete"),
+            can_delete.then_some(Message::Controls(ControlsMessage::ProfileDelete)),
+        ))
+        .push(flat(
+            tr(lang, "Import"),
+            Some(Message::Controls(ControlsMessage::ProfileImport)),
+        ))
+        .push(flat(
+            tr(lang, "Export"),
+            Some(Message::Controls(ControlsMessage::ProfileExport)),
+        ));
+    container(actions).padding(Padding::ZERO.top(18)).into()
 }
 
 #[cfg(test)]
@@ -892,7 +1020,8 @@ mod tests {
             part_id(Picture::Keyboard, " left shift "),
             Some("Left Shift")
         );
-        assert_eq!(part_id(Picture::Keyboard, "F5"), None);
+        assert_eq!(part_id(Picture::Keyboard, "f5"), Some("F5"));
+        assert_eq!(part_id(Picture::Keyboard, "Keypad 7"), None);
         assert_eq!(part_id(Picture::Pad(PadModel::Xbox), "A"), Some("a"));
         assert_eq!(part_id(Picture::Pad(PadModel::Xbox), "touchpad"), None);
     }

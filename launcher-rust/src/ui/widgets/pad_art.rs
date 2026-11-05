@@ -19,6 +19,8 @@ pub struct Art {
     pub width: u32,
     pub height: u32,
     pub base: &'static [u8],
+    /// The left and right grips, the whole picture's size, red where the hand holds it.
+    pub grips: [&'static [u8]; 2],
     pub parts: &'static [ArtPart],
 }
 
@@ -26,6 +28,7 @@ pub static DUALSENSE: Art = Art {
     width: 1100,
     height: 879,
     base: include_bytes!("../../../assets/pads/dualsense/base.png"),
+    grips: GRIPS_DUALSENSE,
     parts: &[
         ArtPart {
             id: "touchpad",
@@ -205,6 +208,7 @@ pub static DUALSHOCK4: Art = Art {
     width: 1100,
     height: 869,
     base: include_bytes!("../../../assets/pads/dualshock4/base.png"),
+    grips: GRIPS_DUALSHOCK4,
     parts: &[
         ArtPart {
             id: "touchpad",
@@ -375,6 +379,7 @@ pub static XBOX: Art = Art {
     width: 1100,
     height: 925,
     base: include_bytes!("../../../assets/pads/xbox/base.png"),
+    grips: GRIPS_XBOX,
     parts: &[
         ArtPart {
             id: "leftstick",
@@ -536,6 +541,7 @@ pub static SWITCH_PRO: Art = Art {
     width: 1100,
     height: 763,
     base: include_bytes!("../../../assets/pads/switch_pro/base.png"),
+    grips: GRIPS_SWITCH_PRO,
     parts: &[
         ArtPart {
             id: "leftstick",
@@ -701,3 +707,23 @@ pub static SWITCH_PRO: Art = Art {
         },
     ],
 };
+
+const GRIPS_DUALSENSE: [&[u8]; 2] = [
+    include_bytes!("../../../assets/pads/dualsense/grip_left.png"),
+    include_bytes!("../../../assets/pads/dualsense/grip_right.png"),
+];
+
+const GRIPS_DUALSHOCK4: [&[u8]; 2] = [
+    include_bytes!("../../../assets/pads/dualshock4/grip_left.png"),
+    include_bytes!("../../../assets/pads/dualshock4/grip_right.png"),
+];
+
+const GRIPS_XBOX: [&[u8]; 2] = [
+    include_bytes!("../../../assets/pads/xbox/grip_left.png"),
+    include_bytes!("../../../assets/pads/xbox/grip_right.png"),
+];
+
+const GRIPS_SWITCH_PRO: [&[u8]; 2] = [
+    include_bytes!("../../../assets/pads/switch_pro/grip_left.png"),
+    include_bytes!("../../../assets/pads/switch_pro/grip_right.png"),
+];

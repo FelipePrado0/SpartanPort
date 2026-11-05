@@ -226,6 +226,7 @@ fn mapper_is_not_opened_over_a_running_game() {
     let _ = app::update(&mut state, Message::Play);
     assert!(state.game.is_live());
     common::open(&mut state, Page::Controls);
+    state.controls.device = spartanport_launcher::ui::pages::controls::Device::Gamepad;
     let sent = common::messages(&state, "Set up a controller");
     assert!(
         matches!(sent.as_slice(), [Message::Mapper(MapperMessage::Open)]),

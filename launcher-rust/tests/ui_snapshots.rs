@@ -177,6 +177,10 @@ fn fixture(dir: &Path, shot: Shot, size: Size, lang: &str) -> State {
                 &mut state,
                 Message::Set("deadzone_right".to_string(), serde_json::Value::from(25)),
             );
+            let _ = app::update(
+                &mut state,
+                Message::Set("deadzone_left".to_string(), serde_json::Value::from(50)),
+            );
             state.controls.live_error = None;
             let fake = mapper_joysticks();
             {
@@ -189,6 +193,9 @@ fn fixture(dir: &Path, shot: Shot, size: Size, lang: &str) -> State {
         }
     }
     state.now = state.splash.started + CLOCK;
+    if matches!(shot, Shot::Live(_)) {
+        let _ = app::update(&mut state, Message::Controls(ControlsMessage::Rumble(true)));
+    }
     show_fixed_paths(&mut state);
     if let Shot::Setup(step) = shot {
         // The setup opens over the folder it shows, as the first start reads it.

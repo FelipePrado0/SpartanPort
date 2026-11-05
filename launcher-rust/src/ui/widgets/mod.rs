@@ -4,6 +4,7 @@ pub mod checkbox;
 pub mod chip;
 pub mod folder;
 pub mod hairline;
+pub mod input_icons;
 pub mod min_width;
 pub mod modal;
 pub mod pad_art;

@@ -1,5 +1,6 @@
-//! The Controls page's live picture: the real outline of each controller (`pad_art`), or a keyboard
-//! and mouse, where each input lights up as it is pressed and a click picks it.
+//! The Controls page's live picture: the outline of each controller (`pad_art`), or a keyboard and
+//! mouse made of ready icons (`input_icons`), where each input lights up as it is pressed and a
+//! click picks it.
 //!
 //! The parts live in a fixed design space and the picture scales to fit, so hit tests and drawing
 //! share one list, [`parts`].
@@ -7,7 +8,8 @@
 use iced::alignment::{Horizontal, Vertical};
 use iced::mouse;
 use iced::widget::canvas::{self, stroke, Action, Frame, Geometry, Path, Stroke, Text};
-use iced::widget::image::Handle;
+use iced::widget::image::{self as image_widget, Handle};
+use iced::widget::stack;
 use iced::{Color, Element, Event, Fill, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector};
 use std::collections::BTreeMap;
 use std::sync::{Mutex, PoisonError};
@@ -16,6 +18,11 @@ use crate::core::pad_model::PadModel;
 use crate::ui::app::Message;
 use crate::ui::pages::controls::ControlsMessage;
 use crate::ui::theme::palette;
+use crate::ui::widgets::button_icon::game_button;
+use crate::ui::widgets::input_icons::{
+    Icon, INPUT_ICONS, MOUSE_SIDE, MOUSE_TOP, PLAYSTATION4, PLAYSTATION5, SWITCH,
+    XBOX as XBOX_ICONS,
+};
 use crate::ui::widgets::pad_art::{Art, ArtPart, DUALSENSE, DUALSHOCK4, SWITCH_PRO, XBOX};
 
 /// What the picture shows.
@@ -40,14 +47,23 @@ pub struct Part {
     pub shape: Shape,
 }
 
-const KEYBOARD_SIZE: Size = Size::new(860.0, 268.0);
+const KEYBOARD_SIZE: Size = Size::new(1040.0, 296.0);
+/// A key's icon, and the distance from one key to the next.
+const KEY: f32 = 44.0;
+const KEY_STEP: f32 = 48.0;
+/// The two mouse icons beside the keyboard: from above, and with the side buttons.
+const MOUSE_X: f32 = 884.0;
+const MOUSE_SIZE: f32 = 148.0;
+/// A full stick's dead zone reads this many times the stick's well, so a small one still shows.
+const ZONE_SCALE: f32 = 2.0;
 /// The stick's cap travels this share of its well, so full tilt reads at a glance.
 const CAP_TRAVEL: f32 = 0.55;
 /// The height of the caption under the picture.
-const CAPTION: f32 = 26.0;
+const CAPTION: f32 = 38.0;
+/// An icon of the caption.
+const CAPTION_ICON: f32 = 30.0;
 /// What a controller button's cap reads at, in picture pixels.
 const PAD_CAP: f32 = 34.0;
-const WHITE_KEY: Color = Color::from_rgb(0.145, 0.118, 0.118);
 
 const fn boxed(id: &'static str, cap: &'static str, x: f32, y: f32, w: f32, h: f32) -> Part {
     Part {
@@ -105,100 +121,123 @@ fn pad_parts(model: PadModel) -> Vec<Part> {
         .collect()
 }
 
-/// Rows of the keyboard: SDL name, cap and width. Only what a compact board shows; the table still
-/// binds every key.
-const KEY_ROWS: [&[(&str, &str, f32)]; 5] = [
-    &[
-        ("Escape", "Esc", 44.0),
-        ("1", "1", 44.0),
-        ("2", "2", 44.0),
-        ("3", "3", 44.0),
-        ("4", "4", 44.0),
-        ("5", "5", 44.0),
-        ("6", "6", 44.0),
-        ("7", "7", 44.0),
-        ("8", "8", 44.0),
-        ("9", "9", 44.0),
-        ("0", "0", 44.0),
-        ("Backspace", "Back", 76.0),
-    ],
-    &[
-        ("Tab", "Tab", 60.0),
-        ("Q", "Q", 44.0),
-        ("W", "W", 44.0),
-        ("E", "E", 44.0),
-        ("R", "R", 44.0),
-        ("T", "T", 44.0),
-        ("Y", "Y", 44.0),
-        ("U", "U", 44.0),
-        ("I", "I", 44.0),
-        ("O", "O", 44.0),
-        ("P", "P", 44.0),
-        ("[", "[", 44.0),
-        ("]", "]", 12.0),
-    ],
-    &[
-        ("CapsLock", "Caps", 72.0),
-        ("A", "A", 44.0),
-        ("S", "S", 44.0),
-        ("D", "D", 44.0),
-        ("F", "F", 44.0),
-        ("G", "G", 44.0),
-        ("H", "H", 44.0),
-        ("J", "J", 44.0),
-        ("K", "K", 44.0),
-        ("L", "L", 44.0),
-        ("Return", "Enter", 92.0),
-    ],
-    &[
-        ("Left Shift", "Shift", 92.0),
-        ("Z", "Z", 44.0),
-        ("X", "X", 44.0),
-        ("C", "C", 44.0),
-        ("V", "V", 44.0),
-        ("B", "B", 44.0),
-        ("N", "N", 44.0),
-        ("M", "M", 44.0),
-        ("Comma", ",", 44.0),
-        (".", ".", 44.0),
-    ],
-    &[
-        ("Left Ctrl", "Ctrl", 60.0),
-        ("Left Alt", "Alt", 60.0),
-        ("Space", "Space", 230.0),
-        ("Right Alt", "Alt", 60.0),
-        ("Right Ctrl", "Ctrl", 60.0),
-    ],
-];
-const KEY_HEIGHT: f32 = 44.0;
-const KEY_GAP: f32 = 4.0;
-
 fn keyboard_parts() -> Vec<Part> {
     let mut parts = Vec::new();
-    for (index, row) in KEY_ROWS.iter().enumerate() {
-        let y = 16.0 + index as f32 * (KEY_HEIGHT + KEY_GAP);
-        let mut x = 8.0;
-        for (id, cap, width) in *row {
-            parts.push(boxed(id, cap, x, y, *width, KEY_HEIGHT));
-            x += width + KEY_GAP;
+    let mut keys = |row: f32, from: f32, names: &[&'static str]| {
+        for (index, id) in names.iter().enumerate() {
+            let x = (from + index as f32) * KEY_STEP;
+            parts.push(boxed(id, "", x, row * KEY_STEP, KEY, KEY));
         }
-    }
-    let bottom = 16.0 + 4.0 * (KEY_HEIGHT + KEY_GAP);
+    };
+    keys(0.0, 0.0, &["Escape"]);
+    keys(
+        0.0,
+        2.0,
+        &[
+            "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+        ],
+    );
+    keys(0.0, 15.0, &["PrintScreen", "ScrollLock", "Pause"]);
+    keys(
+        1.0,
+        0.0,
+        &[
+            "`",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "0",
+            "-",
+            "Equals",
+            "Backspace",
+        ],
+    );
+    keys(1.0, 15.0, &["Insert", "Home", "PageUp"]);
+    keys(
+        2.0,
+        0.0,
+        &[
+            "Tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "\\",
+        ],
+    );
+    keys(2.0, 15.0, &["Delete", "End", "PageDown"]);
+    keys(
+        3.0,
+        0.25,
+        &[
+            "CapsLock", "A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'", "Return",
+        ],
+    );
+    keys(
+        4.0,
+        0.5,
+        &[
+            "Left Shift",
+            "Z",
+            "X",
+            "C",
+            "V",
+            "B",
+            "N",
+            "M",
+            "Comma",
+            ".",
+            "/",
+            "Right Shift",
+        ],
+    );
+    keys(4.0, 16.0, &["Up"]);
+    keys(5.0, 0.0, &["Left Ctrl", "Left GUI", "Left Alt"]);
+    keys(5.0, 9.0, &["Right Alt", "Right Ctrl"]);
+    keys(5.0, 15.0, &["Left", "Down", "Right"]);
+    let space = 6.0 * KEY_STEP - (KEY_STEP - KEY);
     parts.extend([
-        boxed("Up", "", 548.0, bottom - 48.0, KEY_HEIGHT, KEY_HEIGHT),
-        boxed("Left", "", 500.0, bottom, KEY_HEIGHT, KEY_HEIGHT),
-        boxed("Down", "", 548.0, bottom, KEY_HEIGHT, KEY_HEIGHT),
-        boxed("Right", "", 596.0, bottom, KEY_HEIGHT, KEY_HEIGHT),
-        // The mouse.
-        boxed("Mouse Left", "", 686.0, 22.0, 66.0, 92.0),
-        boxed("Mouse Right", "", 776.0, 22.0, 66.0, 92.0),
-        boxed("Wheel Up", "", 756.0, 26.0, 16.0, 26.0),
-        boxed("Mouse Middle", "", 756.0, 56.0, 16.0, 26.0),
-        boxed("Wheel Down", "", 756.0, 86.0, 16.0, 26.0),
-        boxed("Mouse Forward", "", 666.0, 122.0, 14.0, 34.0),
-        boxed("Mouse Back", "", 666.0, 160.0, 14.0, 34.0),
+        boxed("Space", "", 3.0 * KEY_STEP, 5.0 * KEY_STEP, space, KEY),
+        boxed("Mouse Left", "", MOUSE_X + 34.0, 22.0, 31.0, 37.0),
+        boxed("Mouse Right", "", MOUSE_X + 83.0, 22.0, 31.0, 37.0),
+        boxed("Wheel Up", "", MOUSE_X + 65.0, 22.0, 18.0, 12.0),
+        boxed("Mouse Middle", "", MOUSE_X + 65.0, 34.0, 18.0, 13.0),
+        boxed("Wheel Down", "", MOUSE_X + 65.0, 47.0, 18.0, 12.0),
+        boxed("Mouse Forward", "", MOUSE_X + 20.0, 170.0, 18.0, 36.0),
+        boxed("Mouse Back", "", MOUSE_X + 20.0, 213.0, 18.0, 33.0),
     ]);
     parts
+}
+
+/// The icon of a keyboard or mouse input.
+pub fn input_icon(input: &str) -> Option<&'static Icon> {
+    let input = input.trim();
+    INPUT_ICONS
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(input))
+        .map(|(_, icon)| icon)
+}
+
+/// The icon of a gamepad input on `model`.
+pub fn pad_icon(model: PadModel, input: &str) -> Option<&'static [u8]> {
+    let find = |table: &'static [(&str, &[u8])]| {
+        table
+            .iter()
+            .find(|(name, _)| *name == input)
+            .map(|(_, icon)| *icon)
+    };
+    match model {
+        PadModel::DualSense => find(PLAYSTATION5),
+        PadModel::DualShock4 => find(PLAYSTATION4).or_else(|| find(PLAYSTATION5)),
+        PadModel::Xbox => find(XBOX_ICONS),
+        PadModel::SwitchPro => find(SWITCH),
+    }
+}
+
+/// The game's own icon of a game button: always the PlayStation one, as the game was made for it.
+pub fn game_icon(button: &str) -> Option<&'static [u8]> {
+    pad_icon(PadModel::DualSense, game_button(button)?)
 }
 
 /// Every input of a picture.
@@ -267,8 +306,21 @@ pub struct Live {
     pub selected: Option<String>,
     /// The line under the picture when the mouse is elsewhere.
     pub caption: String,
+    /// The input just pressed and the game button it presses, shown as icons over the caption.
+    pub shown: Option<Shown>,
+    /// The left and right motors while they run: that grip turns red.
+    pub motors: [bool; 2],
     /// Whether a click picks an input.
     pub clickable: bool,
+}
+
+/// What the caption shows of the input just pressed.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Shown {
+    pub words: String,
+    pub input: Option<&'static [u8]>,
+    pub game: Option<&'static [u8]>,
+    pub game_name: String,
 }
 
 pub struct PadDiagram {
@@ -304,26 +356,6 @@ fn line(path: &Path, frame: &mut Frame, color: Color, width: f32) {
     );
 }
 
-/// A small triangle on an arrow key.
-fn arrow(frame: &mut Frame, id: &str, at: Point, color: Color) {
-    const S: f32 = 5.0;
-    let (dx, dy) = match id {
-        "Up" | "Wheel Up" => (0.0, -1.0),
-        "Down" | "Wheel Down" => (0.0, 1.0),
-        "Left" => (-1.0, 0.0),
-        "Right" => (1.0, 0.0),
-        _ => return,
-    };
-    let tip = at + Vector::new(dx * S, dy * S);
-    let path = Path::new(|p| {
-        p.move_to(tip);
-        p.line_to(at + Vector::new(-dx * S - dy * S, -dy * S - dx * S));
-        p.line_to(at + Vector::new(-dx * S + dy * S, -dy * S + dx * S));
-        p.close();
-    });
-    frame.fill(&path, color);
-}
-
 fn cap_text(frame: &mut Frame, cap: &str, at: Point, ink: Color, size: f32) {
     frame.fill_text(Text {
         content: cap.to_string(),
@@ -343,6 +375,50 @@ fn caption(frame: &mut Frame, words: &str, width: f32, top: f32) {
         color: palette::TEXT,
         size: Pixels(14.0),
         align_x: Horizontal::Center.into(),
+        align_y: Vertical::Center,
+        ..Text::default()
+    });
+}
+
+/// The input, a small arrow and the game button it presses, side by side.
+fn icon_caption(frame: &mut Frame, shown: &Shown, width: f32, top: f32) {
+    let middle = width / 2.0;
+    let y = top + (CAPTION - CAPTION_ICON) / 2.0;
+    let centre_y = top + CAPTION / 2.0;
+    let edge = middle - CAPTION_ICON - 16.0;
+    frame.fill_text(Text {
+        content: shown.words.clone(),
+        position: Point::new(edge - 6.0, centre_y),
+        color: palette::TEXT,
+        size: Pixels(14.0),
+        align_x: Horizontal::Right.into(),
+        align_y: Vertical::Center,
+        ..Text::default()
+    });
+    let square = |x: f32| Rectangle {
+        x,
+        y,
+        width: CAPTION_ICON,
+        height: CAPTION_ICON,
+    };
+    if let Some(input) = shown.input {
+        frame.draw_image(square(edge), canvas::Image::new(handle(input)));
+    }
+    let head = Path::new(|path| {
+        path.move_to(Point::new(middle - 5.0, centre_y - 6.0));
+        path.line_to(Point::new(middle + 5.0, centre_y));
+        path.line_to(Point::new(middle - 5.0, centre_y + 6.0));
+        path.close();
+    });
+    frame.fill(&head, palette::SILVER);
+    if let Some(game) = shown.game {
+        frame.draw_image(square(middle + 16.0), canvas::Image::new(handle(game)));
+    }
+    frame.fill_text(Text {
+        content: shown.game_name.clone(),
+        position: Point::new(middle + CAPTION_ICON + 22.0, centre_y),
+        color: palette::TEXT,
+        size: Pixels(14.0),
         align_y: Vertical::Center,
         ..Text::default()
     });
@@ -370,43 +446,47 @@ impl PadDiagram {
         }
     }
 
-    fn draw_part(&self, frame: &mut Frame, part: &Part, hovered: bool) {
-        let id = part.id;
-        let pressed = self.is(&self.live.pressed, id);
-        let selected = self.live.selected.as_deref() == Some(id);
-        let path = shape_path(part.shape);
-        let bound = self.live.bound.iter().any(|(known, _)| known == id);
-        let rest = if bound {
-            Color::from_rgb(0.2, 0.16, 0.16)
-        } else {
-            WHITE_KEY
-        };
-        let fill = if pressed {
-            palette::RED_HI
-        } else if hovered {
-            palette::LINE
-        } else {
-            rest
-        };
-        frame.fill(&path, fill);
-        self.draw_ring(frame, part, selected);
-        let ink = if pressed {
-            palette::TEXT
-        } else if bound {
-            palette::SILVER
-        } else {
-            palette::MUTED
-        };
-        let at = centre(part.shape);
-        if part.cap.is_empty() {
-            arrow(frame, id, at, ink);
-        } else {
-            cap_text(
-                frame,
-                part.cap,
-                at,
-                ink,
-                if part.cap.len() > 3 { 11.0 } else { 14.0 },
+    /// The keyboard and mouse: every key's own icon, brighter when a game button uses it.
+    fn draw_keyboard(
+        &self,
+        frame: &mut Frame,
+        hovered: Option<&str>,
+        place: impl Fn(f32, f32, f32, f32) -> Rectangle,
+    ) {
+        let (x, side) = (MOUSE_X, MOUSE_SIZE);
+        let top = place(x, 0.0, side, side);
+        let below = place(x, side, side, side);
+        frame.draw_image(top, canvas::Image::new(handle(MOUSE_TOP)));
+        frame.draw_image(below, canvas::Image::new(handle(MOUSE_SIDE)));
+        for part in parts(self.picture) {
+            let Shape::Boxed { x, y, w, h } = part.shape else {
+                continue;
+            };
+            let Some(icon) = input_icon(part.id) else {
+                continue;
+            };
+            let pressed = self.is(&self.live.pressed, part.id);
+            let over = hovered == Some(part.id);
+            if x >= MOUSE_X {
+                // Each mouse icon is the whole mouse with that input in red.
+                if pressed || over {
+                    let at = if y < MOUSE_SIZE { top } else { below };
+                    frame.draw_image(at, canvas::Image::new(handle(icon.plain)));
+                }
+                continue;
+            }
+            let bound = self.live.bound.iter().any(|(id, _)| id == part.id);
+            let (bytes, opacity) = match (pressed, over, bound) {
+                (true, _, _) => (icon.lit, 1.0_f32),
+                (_, true, _) => (icon.plain, 1.0),
+                (_, _, true) => (icon.plain, 0.9),
+                _ => (icon.plain, 0.4),
+            };
+            // The bar of the keyboard reads across more than one key.
+            let size = if w > KEY { KEY * 2.0 } else { KEY };
+            frame.draw_image(
+                place(x + (w - size) / 2.0, y + (h - size) / 2.0, size, size),
+                canvas::Image::new(handle(bytes)).opacity(opacity),
             );
         }
     }
@@ -420,8 +500,6 @@ impl PadDiagram {
             line(&path, frame, palette::RED_HI, 2.5 / self.line_scale());
         } else if self.is(&self.live.changed, part.id) {
             line(&path, frame, palette::GOLD, 1.5 / self.line_scale());
-        } else if self.picture == Picture::Keyboard {
-            line(&path, frame, palette::LINE, 1.0);
         }
     }
 
@@ -457,7 +535,6 @@ impl PadDiagram {
             frame.draw_image(rect, mask(0.35));
         }
         if let Some((sx, sy, zone)) = self.axis_of(id) {
-            let scale = rect.width / part.w as f32;
             let reach = rect.width / 2.0;
             let tilted = sx.hypot(sy) > zone;
             if tilted && !pressed {
@@ -468,23 +545,47 @@ impl PadDiagram {
                 };
                 frame.draw_image(moved, mask(0.55));
             }
-            let middle = rect.center();
-            if zone > 0.0 {
-                line(
-                    &Path::circle(middle, reach * zone),
-                    frame,
-                    palette::GOLD,
-                    1.5,
-                );
-            }
-            frame.fill(
-                &Path::circle(
-                    middle + Vector::new(sx * reach, sy * reach),
-                    6.0 * scale.max(0.5),
-                ),
-                palette::TEXT,
-            );
         }
+    }
+
+    /// A stick's dead zone as a gold disc with how much it is, and where the stick is now.
+    fn draw_stick(&self, frame: &mut Frame, part: &Part) {
+        let (Some((sx, sy, zone)), Shape::Round { x, y, r }) = (self.axis_of(part.id), part.shape)
+        else {
+            return;
+        };
+        let middle = Point::new(x, y);
+        let tip = Path::circle(middle + Vector::new(sx * r, sy * r), 12.0);
+        if zone <= 0.0 {
+            frame.fill(&tip, palette::TEXT);
+            return;
+        }
+        let disc = Path::circle(middle, r * ZONE_SCALE * zone);
+        frame.fill(
+            &disc,
+            Color {
+                a: 0.45,
+                ..palette::GOLD
+            },
+        );
+        line(&disc, frame, palette::GOLD, 3.0 / self.line_scale());
+        let percent = format!("{}%", (zone * 100.0).round() as u32);
+        let below = middle + Vector::new(0.0, r + PAD_CAP * 0.75);
+        cap_text(frame, &percent, below, palette::GOLD, PAD_CAP);
+        frame.fill(&tip, palette::TEXT);
+    }
+
+    /// What sits over the picture.
+    fn draw_marks(&self, frame: &mut Frame, scale: f32, offset: Vector) {
+        frame.with_save(|frame| {
+            frame.translate(offset);
+            frame.scale(scale);
+            for part in parts(self.picture) {
+                let selected = self.live.selected.as_deref() == Some(part.id);
+                self.draw_ring(frame, &part, selected);
+                self.draw_stick(frame, &part);
+            }
+        });
     }
 
     fn hovered(&self, bounds: Rectangle, cursor: mouse::Cursor) -> Option<Part> {
@@ -543,34 +644,24 @@ impl canvas::Program<Message> for PadDiagram {
         let mut frame = Frame::new(renderer, bounds.size());
         let (scale, offset) = placement(self.picture, bounds.size());
         let hovered = self.hovered(bounds, cursor).filter(|_| self.live.clickable);
-        frame.with_save(|frame| {
-            frame.translate(offset);
-            frame.scale(scale);
-            if self.picture == Picture::Keyboard {
-                // The mouse's shell under its buttons.
-                let shell = Path::rounded_rectangle(
-                    Point::new(680.0, 16.0),
-                    Size::new(168.0, 230.0),
-                    60.0.into(),
-                );
-                frame.fill(&shell, palette::CARD);
-                line(&shell, frame, palette::LINE, 2.0);
-                for part in parts(self.picture) {
-                    let over = hovered.is_some_and(|hover| hover.id == part.id);
-                    self.draw_part(frame, &part, over);
-                }
-            }
-        });
+        let place = |x: f32, y: f32, w: f32, h: f32| Rectangle {
+            x: offset.x + x * scale,
+            y: offset.y + y * scale,
+            width: w * scale,
+            height: h * scale,
+        };
+        if self.picture == Picture::Keyboard {
+            self.draw_keyboard(&mut frame, hovered.as_ref().map(|part| part.id), place);
+        }
         if let Picture::Pad(model) = self.picture {
             let art = art(model);
-            let place = |x: f32, y: f32, w: f32, h: f32| Rectangle {
-                x: offset.x + x * scale,
-                y: offset.y + y * scale,
-                width: w * scale,
-                height: h * scale,
-            };
             let (w, h) = (art.width as f32, art.height as f32);
             frame.draw_image(place(0.0, 0.0, w, h), canvas::Image::new(handle(art.base)));
+            for (grip, running) in art.grips.into_iter().zip(self.live.motors) {
+                if running {
+                    frame.draw_image(place(0.0, 0.0, w, h), canvas::Image::new(handle(grip)));
+                }
+            }
             for part in art.parts {
                 let over = hovered.is_some_and(|hover| hover.id == part.id);
                 self.draw_pad_part(&mut frame, part, over, place);
@@ -579,8 +670,6 @@ impl canvas::Program<Message> for PadDiagram {
                 frame.translate(offset);
                 frame.scale(scale);
                 for part in parts(self.picture) {
-                    let selected = self.live.selected.as_deref() == Some(part.id);
-                    self.draw_ring(frame, &part, selected);
                     if !part.cap.is_empty() {
                         let ink = if self.is(&self.live.pressed, part.id) {
                             palette::TEXT
@@ -592,11 +681,13 @@ impl canvas::Program<Message> for PadDiagram {
                 }
             });
         }
-        let words = hovered
-            .as_ref()
-            .and_then(|part| self.hover_words(part))
-            .unwrap_or_else(|| self.live.caption.clone());
-        caption(&mut frame, &words, bounds.width, bounds.height - CAPTION);
+        let top = bounds.height - CAPTION;
+        let words = hovered.as_ref().and_then(|part| self.hover_words(part));
+        match (words, &self.live.shown) {
+            (Some(words), _) => caption(&mut frame, &words, bounds.width, top),
+            (None, Some(shown)) => icon_caption(&mut frame, shown, bounds.width, top),
+            (None, None) => caption(&mut frame, &self.live.caption, bounds.width, top),
+        }
         vec![frame.into_geometry()]
     }
 
@@ -614,18 +705,10 @@ impl canvas::Program<Message> for PadDiagram {
     }
 }
 
-/// The picture at the page's width.
-pub fn pad_diagram<'a>(picture: Picture, live: Live, height: f32) -> Element<'a, Message> {
-    canvas::Canvas::new(PadDiagram { picture, live })
-        .width(Fill)
-        .height(height)
-        .into()
-}
+/// What sits over the picture, on a layer of its own: inside one canvas images cover shapes.
+struct PadMarks(PadDiagram);
 
-/// The little mouse beside a mouse input in the key table: the part it names is lit.
-struct MouseGlyph(&'static str);
-
-impl canvas::Program<Message> for MouseGlyph {
+impl canvas::Program<Message> for PadMarks {
     type State = ();
 
     fn draw(
@@ -636,52 +719,40 @@ impl canvas::Program<Message> for MouseGlyph {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        const W: f32 = 18.0;
-        const H: f32 = 26.0;
         let mut frame = Frame::new(renderer, bounds.size());
-        let shell = Path::rounded_rectangle(
-            Point::new(4.0, 1.0),
-            Size::new(W - 2.0, H - 2.0),
-            8.0.into(),
-        );
-        line(&shell, &mut frame, palette::SILVER, 1.5);
-        let lit = match self.0 {
-            "Mouse Left" => Some((Point::new(5.0, 2.0), Size::new(7.0, 10.0))),
-            "Mouse Right" => Some((Point::new(12.0, 2.0), Size::new(7.0, 10.0))),
-            "Mouse Middle" => Some((Point::new(10.5, 4.0), Size::new(3.0, 7.0))),
-            "Wheel Up" => Some((Point::new(10.5, 2.0), Size::new(3.0, 5.0))),
-            "Wheel Down" => Some((Point::new(10.5, 7.0), Size::new(3.0, 5.0))),
-            "Mouse Back" => Some((Point::new(0.0, 14.0), Size::new(3.0, 5.0))),
-            "Mouse Forward" => Some((Point::new(0.0, 8.0), Size::new(3.0, 5.0))),
-            _ => None,
-        };
-        if let Some((at, size)) = lit {
-            frame.fill(
-                &Path::rounded_rectangle(at, size, 1.5.into()),
-                palette::RED_HI,
-            );
-        }
+        let (scale, offset) = placement(self.0.picture, bounds.size());
+        self.0.draw_marks(&mut frame, scale, offset);
         vec![frame.into_geometry()]
     }
 }
 
-/// The mouse glyph of an input name, or `None` for a key.
-pub fn mouse_glyph<'a>(input: &str) -> Option<Element<'a, Message>> {
-    const NAMES: [&str; 7] = [
-        "Mouse Left",
-        "Mouse Right",
-        "Mouse Middle",
-        "Mouse Back",
-        "Mouse Forward",
-        "Wheel Up",
-        "Wheel Down",
-    ];
-    let name = NAMES
-        .into_iter()
-        .find(|name| name.eq_ignore_ascii_case(input.trim()))?;
+/// The picture at the page's width.
+pub fn pad_diagram<'a>(picture: Picture, live: Live, height: f32) -> Element<'a, Message> {
+    let marks = PadMarks(PadDiagram {
+        picture,
+        live: live.clone(),
+    });
+    stack![
+        canvas::Canvas::new(PadDiagram { picture, live })
+            .width(Fill)
+            .height(height),
+        canvas::Canvas::new(marks).width(Fill).height(height),
+    ]
+    .into()
+}
+
+/// How wide the picture is at `height`.
+pub fn picture_width(picture: Picture, height: f32) -> f32 {
+    let size = design_size(picture);
+    (height - CAPTION) * size.width / size.height
+}
+
+/// The icon beside a key or mouse input in the key table.
+pub fn input_glyph<'a>(input: &str) -> Option<Element<'a, Message>> {
+    let icon = input_icon(input)?;
     Some(
-        canvas::Canvas::new(MouseGlyph(name))
-            .width(24.0)
+        image_widget::Image::new(handle(icon.plain))
+            .width(28.0)
             .height(28.0)
             .into(),
     )
@@ -767,15 +838,38 @@ mod tests {
     }
 
     #[test]
+    fn every_key_of_the_picture_has_an_icon() {
+        for part in parts(Picture::Keyboard) {
+            assert!(input_icon(part.id).is_some(), "{}", part.id);
+        }
+    }
+
+    #[test]
+    fn every_input_of_a_controller_has_an_icon_and_the_game_is_always_playstation() {
+        for model in PADS {
+            for part in parts(Picture::Pad(model)) {
+                // The pack has no PS button.
+                let playstation = model.style() == "playstation";
+                if !(playstation && part.id == "guide") {
+                    assert!(pad_icon(model, part.id).is_some(), "{model:?} {}", part.id);
+                }
+            }
+        }
+        assert_eq!(game_icon("cross"), pad_icon(PadModel::DualSense, "a"),);
+        assert_ne!(game_icon("cross"), pad_icon(PadModel::Xbox, "a"));
+    }
+
+    #[test]
     fn the_picture_scales_to_fit() {
-        let (scale, offset) = placement(Picture::Keyboard, Size::new(430.0, 400.0));
+        let (scale, offset) = placement(Picture::Keyboard, Size::new(520.0, 400.0));
         assert_eq!(scale, 0.5);
         assert_eq!(offset.x, 0.0);
     }
 
     #[test]
-    fn only_mouse_inputs_get_the_glyph() {
-        assert!(mouse_glyph("mouse left").is_some());
-        assert!(mouse_glyph("Q").is_none());
+    fn keys_and_mouse_inputs_get_their_icon() {
+        assert!(input_glyph("mouse left").is_some());
+        assert!(input_glyph(" q ").is_some());
+        assert!(input_glyph("None").is_none());
     }
 }

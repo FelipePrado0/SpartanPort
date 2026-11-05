@@ -14,7 +14,7 @@ use iced::keyboard::key::Named;
 use iced::keyboard::{self, Key, Location};
 use iced::time::Instant;
 use iced::widget::{button, column, container, mouse_area, pick_list, row as layout, space, text};
-use iced::{event, mouse, window, Center, Element, Event, Fill, Left, Padding, Subscription, Task};
+use iced::{event, mouse, window, Center, Element, Event, Fill, Padding, Subscription, Task};
 use indexmap::IndexMap;
 use serde_json::Value;
 
@@ -29,7 +29,7 @@ use crate::core::ini::INI_DEFAULTS;
 use crate::core::options::{
     AIM_STYLES, GLYPH_KEYS, GLYPH_STYLES, MENU_CONFIRM_STYLES, STICK_PROMPTS,
 };
-use crate::core::pad_model::{PadModel, MAX_DEADZONE};
+use crate::core::pad_model::PadModel;
 use crate::core::platform::tool::SystemTools;
 use crate::core::settings::Settings;
 use crate::ui::app::{apply_set, Message, State};
@@ -37,9 +37,9 @@ use crate::ui::pages::control_center;
 use crate::ui::pages::mapper::MapperMessage;
 use crate::ui::pages::Page;
 use crate::ui::tasks::blocking;
-use crate::ui::theme::{self, mirror_x, palette};
+use crate::ui::theme::{self, palette};
 use crate::ui::widgets::button_icon::game_button;
-use crate::ui::widgets::pad_diagram::mouse_glyph;
+use crate::ui::widgets::pad_diagram::input_glyph;
 use crate::ui::widgets::{
     button_icon, checkbox, min_width, row, section, select, slider, SELECT_MIN, SELECT_TEXT,
 };
@@ -180,6 +180,8 @@ pub struct ControlsView {
     pub profiles: IndexMap<String, Profile>,
     pub profile: String,
     pub profile_name: String,
+    /// Whether the name box is open.
+    pub profile_naming: bool,
     /// The profile file could not be read, so it must not be replaced.
     pub profiles_damaged: bool,
     /// The last thing the page has to say.
@@ -217,6 +219,7 @@ impl ControlsView {
             profiles: IndexMap::new(),
             profile: DEFAULT_PROFILE.to_string(),
             profile_name: String::new(),
+            profile_naming: false,
             profiles_damaged: false,
             status: String::new(),
         }
@@ -274,6 +277,7 @@ pub enum ControlsMessage {
     Rumble(bool),
     ProfilePick(String),
     ProfileName(String),
+    ProfileNaming,
     ProfileSave,
     ProfileDelete,
     ProfileImport,
@@ -368,6 +372,7 @@ pub fn update(state: &mut State, message: ControlsMessage) -> Task<Message> {
         ControlsMessage::Rumble(left) => control_center::rumble(state, left),
         ControlsMessage::ProfilePick(name) => return control_center::pick_profile(state, &name),
         ControlsMessage::ProfileName(name) => state.controls.profile_name = name,
+        ControlsMessage::ProfileNaming => state.controls.profile_naming = true,
         ControlsMessage::ProfileSave => control_center::save_profile(state),
         ControlsMessage::ProfileDelete => control_center::delete_profile(state),
         ControlsMessage::ProfileImport => return control_center::import_dialog(),
@@ -908,7 +913,8 @@ fn reset_button<'a>(state: &State, label: String, kind: Kind) -> Element<'a, Mes
 
 fn key_line<'a>(row: KeyRow, lang: &str) -> Element<'a, Message> {
     let (icon, style) = game_icon(row.button);
-    let glyph = mouse_glyph(&row.input);
+    let glyph = input_glyph(&row.input);
+    let alternative_glyph = input_glyph(&row.alternative);
     let mut input = button(text(row.input))
         .width(BOX_WIDTH)
         .style(theme::button_flat);
@@ -943,19 +949,22 @@ fn key_line<'a>(row: KeyRow, lang: &str) -> Element<'a, Message> {
             ));
         }
     }
-    layout![
+    let mut line = layout![
         button_icon(icon, style, ICON_SIZE),
         text(row.title).width(Fill),
-        glyph.unwrap_or_else(|| space().width(24).into()),
+        glyph.unwrap_or_else(|| space().width(28).into()),
         input,
-        alternative,
-        container(clear_alternative).id(clear_alternative_id(row.button)),
-        reset,
-        container(clear).id(clear_id(row.button)),
-    ]
-    .spacing(10)
-    .align_y(Center)
-    .into()
+    ];
+    if let Some(glyph) = alternative_glyph {
+        line = line.push(glyph);
+    }
+    line.push(alternative)
+        .push(container(clear_alternative).id(clear_alternative_id(row.button)))
+        .push(reset)
+        .push(container(clear).id(clear_id(row.button)))
+        .spacing(10)
+        .align_y(Center)
+        .into()
 }
 
 fn pad_line<'a>(row: PadRow, pad_style: &str) -> Element<'a, Message> {
@@ -1067,7 +1076,8 @@ fn keyboard_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
     .into()
 }
 
-fn gamepad_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
+/// Which controller the page draws: the one found, or the one the player picks.
+fn pad_type_row<'a>(state: &State, lang: &str) -> Element<'a, Message> {
     let auto = state.store.flag("pad_style_auto");
     let styles = PadModel::ALL.into_iter().fold(
         layout![radio(
@@ -1084,6 +1094,10 @@ fn gamepad_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
             ))
         },
     );
+    row(state.rtl, &tr(lang, "Controller type"), styles.into(), None)
+}
+
+fn gamepad_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
     let lines = pad_rows(state, lang)
         .into_iter()
         .fold(column![].spacing(6), |lines, pad_row| {
@@ -1095,7 +1109,10 @@ fn gamepad_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
             lang,
             "Which gamepad button presses each button of the game."
         )),
-        row(state.rtl, &tr(lang, "Controller type"), styles.into(), None),
+        container(lines).padding(Padding::ZERO.top(12)),
+        note(tr(lang, PAD_NOTE)),
+        reset_button(state, tr(lang, "Reset gamepad to defaults"), Kind::Pad),
+        control_center::pad_tools(state, lang),
         row(
             state.rtl,
             &tr(lang, "Vibration"),
@@ -1113,40 +1130,13 @@ fn gamepad_section<'a>(state: &State, lang: &str) -> Element<'a, Message> {
             ),
             Some(&tr(lang, CONFIRM_HINT)),
         ),
-        row(
-            state.rtl,
-            &tr(lang, "Left stick dead zone"),
-            slider(
-                "deadzone_left",
-                0.0,
-                MAX_DEADZONE as f32,
-                "%",
-                ini_number(state, "deadzone_left")
-            ),
-            Some(&tr(lang, DEADZONE_HINT)),
-        ),
-        row(
-            state.rtl,
-            &tr(lang, "Right stick dead zone"),
-            slider(
-                "deadzone_right",
-                0.0,
-                MAX_DEADZONE as f32,
-                "%",
-                ini_number(state, "deadzone_right")
-            ),
-            None,
-        ),
-        control_center::pad_tools(state, lang),
-        container(lines).padding(Padding::ZERO.top(12)),
-        note(tr(lang, PAD_NOTE)),
-        reset_button(state, tr(lang, "Reset gamepad to defaults"), Kind::Pad),
+        note(tr(lang, DEADZONE_HINT)),
     ]
     .spacing(2)
     .into()
 }
 
-/// The in-game icons, the device, then only the chosen device's section (Python `show_device`).
+/// The device, its picture and only its section (Python `show_device`), then what both share.
 pub fn view(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
     let devices = Device::ALL
@@ -1162,20 +1152,28 @@ pub fn view(state: &State) -> Element<'_, Message> {
         Device::Keyboard => keyboard_section(state, lang),
         Device::Gamepad => gamepad_section(state, lang),
     };
-    // The generic controller mapper, as in the Python's first row.
-    let mapper = container(
-        button(text(tr(lang, "Set up a controller")))
-            .style(theme::button_flat)
-            .on_press(Message::Mapper(MapperMessage::Open)),
-    )
-    .width(Fill)
-    .align_x(mirror_x(Left, state.rtl))
-    .padding(Padding::ZERO.top(8).bottom(4));
+    // The generic controller mapper belongs to the gamepad only.
+    let devices: Element<'_, Message> = match state.controls.device {
+        Device::Keyboard => devices.into(),
+        Device::Gamepad => layout![
+            button(text(tr(lang, "Set up a controller")))
+                .style(theme::button_flat)
+                .on_press(Message::Mapper(MapperMessage::Open)),
+            devices
+        ]
+        .spacing(18)
+        .align_y(Center)
+        .into(),
+    };
+    let pad_type = match state.controls.device {
+        Device::Keyboard => space().height(0).into(),
+        Device::Gamepad => pad_type_row(state, lang),
+    };
     column![
+        row(state.rtl, &tr(lang, "Device"), devices, None),
+        pad_type,
         control_center::picture_panel(state, lang),
-        row(state.rtl, &tr(lang, "Device"), devices.into(), None),
-        control_center::profile_section(state, lang),
-        mapper,
+        device_section,
         row(
             state.rtl,
             &tr(lang, "In-game button icons"),
@@ -1196,7 +1194,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
             state.store.flag("switch_attacks"),
             Some(&tr(lang, SWITCH_HINT)),
         ),
-        device_section,
+        control_center::profile_section(state, lang),
     ]
     .spacing(2)
     .into()
