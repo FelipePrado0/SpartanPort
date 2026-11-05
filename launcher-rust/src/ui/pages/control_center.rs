@@ -19,7 +19,7 @@ use crate::core::control_profiles::{
 };
 use crate::core::controller_mappings::{self, load_mapping};
 use crate::core::controls::{
-    bind_pad, conflicts, control_changes, default_input, table_rows, Kind,
+    bind_pad, conflicts, control_changes, default_input, table_rows, Kind, Slot,
 };
 use crate::core::i18n::{tr, tr_fmt};
 use crate::core::joysticks::{Device, JoyError, JoystickThread, Joysticks, Sdl3};
@@ -314,13 +314,24 @@ pub fn part_pressed(state: &mut State, part: &str) -> Task<Message> {
     match state.controls.device {
         Shown::Keyboard => {
             let enabled = controls::key_rows(state, &lang);
-            let button = enabled
+            let input = enabled
                 .into_iter()
                 .filter(|row| row.enabled)
-                .find(|row| state.controls.key.get(row.button).is_some_and(matches))
-                .map(|row| row.button.to_string());
-            match button {
-                Some(button) => controls::update(state, ControlsMessage::Capture(button)),
+                .find_map(|row| {
+                    let view = &state.controls;
+                    let slot = if view.key.get(row.button).is_some_and(matches) {
+                        Slot::Main
+                    } else if view.key_alt.get(row.button).is_some_and(matches) {
+                        Slot::Alternative
+                    } else {
+                        return None;
+                    };
+                    Some((row.button.to_string(), slot))
+                });
+            match input {
+                Some((button, slot)) => {
+                    controls::update(state, ControlsMessage::Capture(button, slot))
+                }
                 None => {
                     state.controls.status = tr(&lang, NO_INPUT);
                     Task::none()
@@ -400,6 +411,7 @@ fn current(state: &State) -> Profile {
     let number = |key: &str| ini_number(state, key) as u32;
     Profile {
         key: control_changes(&state.controls.key, Kind::Key),
+        key_alt: state.controls.key_alt.clone(),
         pad: control_changes(&state.controls.pad, Kind::Pad),
         deadzone_left: number("deadzone_left"),
         deadzone_right: number("deadzone_right"),
@@ -419,6 +431,7 @@ fn fail(state: &mut State, error: &ProfileError) {
 }
 
 pub fn apply_profile(state: &mut State, profile: &Profile) -> Task<Message> {
+    state.controls.key_alt = profile.key_alt.clone();
     for kind in [Kind::Key, Kind::Pad] {
         let (values, chosen) = match kind {
             Kind::Key => (&mut state.controls.key, &profile.key),
@@ -569,6 +582,14 @@ fn pad_label(state: &State, lang: &str, name: &str) -> String {
         .map_or_else(|| name.to_string(), |(_, label)| label)
 }
 
+/// The inputs of the table on show that press more than one game button.
+fn shown_conflicts(view: &controls::ControlsView) -> Vec<String> {
+    match view.device {
+        Shown::Keyboard => conflicts(view.key.values().chain(view.key_alt.values())),
+        Shown::Gamepad => conflicts(view.pad.values()),
+    }
+}
+
 /// The picture's state: the tables say what each input does, the pad what it is doing now.
 fn live_view(state: &State, lang: &str, picture: Picture) -> Live {
     let view = &state.controls;
@@ -579,32 +600,38 @@ fn live_view(state: &State, lang: &str, picture: Picture) -> Live {
     let mut bound: Vec<(String, String)> = Vec::new();
     let mut changed = Vec::new();
     for row in table_rows(kind) {
-        let Some(input) = values.get(row.button).filter(|value| !value.is_empty()) else {
-            continue;
+        let alternative = match picture {
+            Picture::Keyboard => view.key_alt.get(row.button),
+            Picture::Pad(_) => None,
         };
-        let Some(id) = part_id(picture, input) else {
-            continue;
-        };
-        let name = tr(lang, controls::button_name(row.button));
-        match bound.iter_mut().find(|(known, _)| known == id) {
-            Some((_, words)) => {
-                words.push_str(" + ");
-                words.push_str(&name);
+        for (input, extra) in [(values.get(row.button), false), (alternative, true)] {
+            let Some(input) = input.filter(|value| !value.is_empty()) else {
+                continue;
+            };
+            let Some(id) = part_id(picture, input) else {
+                continue;
+            };
+            let name = tr(lang, controls::button_name(row.button));
+            match bound.iter_mut().find(|(known, _)| known == id) {
+                Some((_, words)) => {
+                    words.push_str(" + ");
+                    words.push_str(&name);
+                }
+                None => {
+                    let shown = match picture {
+                        Picture::Keyboard => input.clone(),
+                        Picture::Pad(_) => pad_label(state, lang, id),
+                    };
+                    bound.push((id.to_string(), format!("{shown}: {name}")));
+                }
             }
-            None => {
-                let shown = match picture {
-                    Picture::Keyboard => input.clone(),
-                    Picture::Pad(_) => pad_label(state, lang, id),
-                };
-                bound.push((id.to_string(), format!("{shown}: {name}")));
+            let default = default_input(row, kind).unwrap_or_default();
+            if extra || !input.eq_ignore_ascii_case(default) {
+                changed.push(id.to_string());
             }
-        }
-        let default = default_input(row, kind).unwrap_or_default();
-        if !input.eq_ignore_ascii_case(default) {
-            changed.push(id.to_string());
         }
     }
-    let conflicting = conflicts(values)
+    let conflicting = shown_conflicts(view)
         .into_iter()
         .filter_map(|input| part_id(picture, &input).map(str::to_string))
         .collect();
@@ -625,7 +652,10 @@ fn live_view(state: &State, lang: &str, picture: Picture) -> Live {
             live.selected = view
                 .capturing
                 .as_ref()
-                .and_then(|button| view.key.get(button))
+                .and_then(|button| match view.capturing_slot {
+                    Slot::Main => view.key.get(button),
+                    Slot::Alternative => view.key_alt.get(button),
+                })
                 .and_then(|input| part_id(picture, input).map(str::to_string));
             live.caption = match view.held.last() {
                 Some(input) => tr_fmt(lang, PRESSED, &[input]),
@@ -731,11 +761,7 @@ pub fn picture_panel<'a>(state: &State, lang: &str) -> Element<'a, Message> {
         height
     )]
     .spacing(2);
-    let values = match view.device {
-        Shown::Keyboard => &view.key,
-        Shown::Gamepad => &view.pad,
-    };
-    for input in conflicts(values) {
+    for input in shown_conflicts(view) {
         let shown = match picture {
             Picture::Keyboard => input,
             Picture::Pad(_) => pad_label(state, lang, &input),

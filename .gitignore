@@ -48,8 +48,6 @@ launcher-rust/target/
 !launcher-rust/assets/*.png
 !launcher-rust/assets/pads/**/*.png
 !docs/specs/assets/**/*.png
-# Release stamp: the workflows' Stamp step writes it here; a stale local copy would be packaged.
-/release.json
 # Brainstorming companion sessions
 .superpowers/
 # Local agent plans and specs (superpowers skills), not shared for now

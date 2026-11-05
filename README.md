@@ -23,11 +23,18 @@ and Linux (experimental AppImage).
 > This project is not affiliated with or endorsed by Sony Interactive Entertainment or Santa Monica Studio.
 > God of War is a trademark of Sony Interactive Entertainment.
 
-> **Formerly gow3_pc.** Updating from 2.5.0 through the launcher keeps your saves and settings:
-> on the first start, the game settings (`gow3.ini`), the launcher settings and, on Linux, the data
-> folder (`~/.local/share/gow3`) are copied to their new names. The old files stay where they were,
-> and existing shortcuts keep working. On Linux, the AppImage is now `spartanport-x86_64.AppImage`:
-> update Steam launch options that use the old file name.
+> **Formerly gow3_pc.** Versions before 2.8.0 do not carry over: download 2.8.0 from the
+> [releases page](https://github.com/FelipePrado0/SpartanPort/releases) and install it fresh. To
+> keep your saves and settings on Windows, copy these from the old folder to the new one, when you
+> have them: `user/`, `mods/`, `spartanport.ini`, `settings.json`, `mods.json`,
+> `mods_presets.json`, `patches.json` and `gamecontrollerdb.txt`. From 2.5.0 or older, copy
+> `gow3.ini` as `spartanport.ini`, and take `settings.json` from `%APPDATA%\gow3-launcher`. On
+> Linux, replace the AppImage (now `spartanport-x86_64.AppImage`: update Steam launch options that
+> use the old file name). From 2.5.0 or older, also copy `~/.local/share/gow3` into
+> `~/.local/share/spartanport` (without `user/cache` and `out/`), rename `gow3.ini` there to
+> `spartanport.ini`, and copy `~/.config/gow3-launcher/settings.json` next to it. If you updated
+> 2.6.0 or 2.7.0 from inside the launcher, delete `God of War III.exe` and `_internal/` from its
+> folder, and the old `God of War III` desktop shortcut: they still start the old launcher.
 
 ## Contents
 
@@ -174,6 +181,12 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   quick settings on the home page, graphics,
   performance, game folder and save backups, patches, mods (order, presets and conflicts),
   controls with PlayStation or Xbox button icons, updates and diagnostics.
+- **Save restore:** Game → Save backups lists automatic snapshots, older snapshots in the
+  port folder and permanent before-restore snapshots, with their source, time, game IDs,
+  file count, size and full path. Restoring verifies copies and keeps the previous saves in
+  `<user>/save-restore-safety/<time>/savedata`, outside the ten automatic backups' retention.
+  These safety copies are not automatically deleted. The launcher warns about a different
+  game ID without rewriting it and refuses a restore while a native game process is detected.
 - **In-game menu** (Insert on the keyboard, R3+L2 on the controller), with four tabs:
   - **Game:** cheats (infinite health, magic, item meter, Rage of Sparta, max red orbs,
     automatic QTE: button and stick-rotation prompts answer themselves);
@@ -333,6 +346,15 @@ right stick, for the Head of Helios or the Bow of Apollo: *Relative* follows the
 how much mouse it takes. Without the launcher the game keeps its own keys: E and Q for Square and
 Triangle, 1 and 3 for L1 and R1, F for R2, C for R3, I, K, J, L for the d-pad, Enter for Options,
 Tab and Backspace for the touchpad.
+
+**Alternative keys.** Every button can have a second key or mouse input, in the second box of its
+row on the Controls page (the x button next to it clears it). Both press the button, so you can keep
+Square on the left click for combat and also press it with J in the minigames. On the Muses' lyre,
+for example, keep Space, Left Ctrl and the two mouse buttons and add K, L, J and I, laid out like the
+four buttons (I up, J left, L right, K down). A key already used by another button swaps with it, as
+for the main keys. The in-game keyboard icons show the main key; *Keys on the icons* (Controls page,
+with the Keyboard style) can show the alternative instead. Without the launcher, join the names with
+`|` in `SPARTAN_KEY_MAP`, for example `cross=Space|K,square=Mouse Left|J`.
 
 On a controller without a touchpad (Xbox and others), View opens the pause menu (the right
 touchpad click) and L1 + View opens photo mode (the left click). On a DualSense the touchpad

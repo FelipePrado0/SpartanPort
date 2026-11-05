@@ -340,30 +340,66 @@ pub fn sdl_key_name(key: &str) -> Option<String> {
     None
 }
 
-/// Gives `name` to `button`; a button that had it takes the old key of `button`, so no key
-/// presses two buttons. "None" (no input) is never taken from another button. Returns the button
-/// that swapped.
+/// Which of a keyboard row's two inputs: the main one, or the alternative that presses the same
+/// button as well (`controls.key_alt`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Slot {
+    Main,
+    Alternative,
+}
+
+/// Gives `name` to the `slot` input of `button`; the input that had it (of another button, or the
+/// other one of this button) takes what `button` had in that slot, so no key presses two buttons.
+/// "None" (no input) is never taken from another input. A main input left without a key reads
+/// "None"; an alternative left without one is dropped from `alternatives`. Returns the input that
+/// swapped.
 pub fn bind_key(
-    bindings: &mut IndexMap<String, String>,
+    main: &mut IndexMap<String, String>,
+    alternatives: &mut IndexMap<String, String>,
     button: &str,
+    slot: Slot,
     name: &str,
-) -> Option<String> {
-    let old = bindings.get(button).cloned().unwrap_or_default();
-    let wanted = name.to_lowercase();
-    let other = bindings
-        .iter()
-        .find(|(b, k)| {
-            b.as_str() != button && wanted != "none" && k.trim().to_lowercase() == wanted
-        })
-        .map(|(b, _)| b.clone());
-    bindings.insert(button.to_string(), name.to_string());
-    match other {
-        Some(other) if !other.is_empty() => {
-            bindings.insert(other.clone(), old);
-            Some(other)
-        }
-        _ => None,
+) -> Option<(String, Slot)> {
+    let old = match slot {
+        Slot::Main => main.get(button),
+        Slot::Alternative => alternatives.get(button),
     }
+    .cloned()
+    .unwrap_or_default();
+    let wanted = name.trim().to_lowercase();
+    let holds = |table: &IndexMap<String, String>, table_slot: Slot| {
+        table
+            .iter()
+            .find(|(other, key)| {
+                (other.as_str() != button || table_slot != slot)
+                    && !wanted.is_empty()
+                    && wanted != "none"
+                    && key.trim().to_lowercase() == wanted
+            })
+            .map(|(other, _)| (other.clone(), table_slot))
+    };
+    let other = holds(main, Slot::Main).or_else(|| holds(alternatives, Slot::Alternative));
+    let mut set = |button: &str, slot: Slot, value: &str| match slot {
+        Slot::Main => {
+            let value = if value.trim().is_empty() {
+                "None"
+            } else {
+                value
+            };
+            main.insert(button.to_string(), value.to_string());
+        }
+        Slot::Alternative => {
+            if value.trim().is_empty() || value.trim().eq_ignore_ascii_case("none") {
+                alternatives.shift_remove(button);
+            } else {
+                alternatives.insert(button.to_string(), value.to_string());
+            }
+        }
+    };
+    set(button, slot, name);
+    let (other, other_slot) = other.filter(|(other, _)| !other.is_empty())?;
+    set(&other, other_slot, &old);
+    Some((other, other_slot))
 }
 
 /// Gives gamepad input `name` to `button`, as `bind_key` does. A button with no input of its own
@@ -372,15 +408,15 @@ pub fn bind_pad(values: &mut IndexMap<String, String>, button: &str, name: &str)
     if values.get(button).is_some_and(|old| old.is_empty()) {
         values.insert(button.to_string(), name.to_string());
     } else {
-        bind_key(values, button, name);
+        bind_key(values, &mut IndexMap::new(), button, Slot::Main, name);
     }
 }
 
 /// The inputs that press more than one game button, in table order. "None" presses nothing.
-pub fn conflicts(values: &IndexMap<String, String>) -> Vec<String> {
+pub fn conflicts<'a>(values: impl Iterator<Item = &'a String>) -> Vec<String> {
     let mut seen: Vec<String> = Vec::new();
     let mut twice = Vec::new();
-    for value in values.values() {
+    for value in values {
         let value = value.trim().to_lowercase();
         if value.is_empty() || value == "none" {
             continue;
@@ -397,6 +433,25 @@ pub fn conflicts(values: &IndexMap<String, String>) -> Vec<String> {
 /// `touchpad`, saved before the sides were split, is the left click.
 pub fn control_values(controls: &Value, kind: Kind) -> IndexMap<String, String> {
     table_values(controls.get(kind.name()), kind)
+}
+
+/// The saved alternative inputs by game button (`controls.key_alt`), for the rows of the keyboard
+/// table. A row without one, an empty or "None" value and a button the table lacks are left out.
+pub fn alternative_values(controls: &Value) -> IndexMap<String, String> {
+    let Some(Value::Object(saved)) = controls.get("key_alt") else {
+        return IndexMap::new();
+    };
+    table_rows(Kind::Key)
+        .into_iter()
+        .filter_map(|row| {
+            let Some(Value::String(text)) = saved.get(row.button) else {
+                return None;
+            };
+            let text = text.trim();
+            (!text.is_empty() && !text.eq_ignore_ascii_case("none"))
+                .then(|| (row.button.to_string(), text.to_string()))
+        })
+        .collect()
 }
 
 /// `control_values` of one saved table (`controls.key` or `controls.pad`).
@@ -468,10 +523,12 @@ pub fn control_map(controls: &Value, kind: Kind) -> String {
 }
 
 /// SPARTAN_KEY_MAP of the keyboard & mouse table: each button on its chosen input, written where
-/// that differs from the game's own key. With `rage` (one input for Rage of Sparta) L3 and R3 get
+/// that differs from the game's own key, or whenever it has an alternative (`cross=Space|K`: the
+/// runtime reads every name of an entry as a key of the button). With `rage` (one input for Rage of Sparta) L3 and R3 get
 /// none and the Rage row is used; otherwise the Rage row is left out.
 pub fn keyboard_map(controls: &Value, rage: bool) -> String {
     let chosen = control_values(controls, Kind::Key);
+    let alternatives = alternative_values(controls);
     let mut entries = Vec::new();
     for row in table_rows(Kind::Key) {
         if row.key.is_empty() || (row.button == "rage" && !rage) {
@@ -488,13 +545,30 @@ pub fn keyboard_map(controls: &Value, rage: bool) -> String {
             .or_else(|| default_input(row, Kind::Key))
             .unwrap_or("")
             .trim();
+        if value.contains([',', '=', '|']) {
+            continue;
+        }
+        let alternative = alternatives
+            .get(row.button)
+            .map(String::as_str)
+            .filter(|alt| !alt.contains([',', '=', '|']) && !alt.eq_ignore_ascii_case(value));
+        if let Some(alternative) = alternative {
+            // The entry replaces every key of the button: the main one is named even when it is the
+            // game's own, and a button without a main key is left with the alternative alone.
+            entries.push(if value.eq_ignore_ascii_case("none") {
+                format!("{}={alternative}", row.button)
+            } else {
+                format!("{}={value}|{alternative}", row.button)
+            });
+            continue;
+        }
         // the game has no key of its own for an action, but has the stick directions'
         let game_default = if CONTROLS.contains(row) || STICK_ROWS.contains(row) {
             row.key
         } else {
             ""
         };
-        if value.to_lowercase() != game_default.to_lowercase() && !value.contains([',', '=']) {
+        if value.to_lowercase() != game_default.to_lowercase() {
             entries.push(format!("{}={}", row.button, value));
         }
     }
@@ -695,6 +769,15 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    /// The main input of `button`, as the page binds it when no alternative is involved.
+    fn bind_main(
+        bindings: &mut IndexMap<String, String>,
+        button: &str,
+        name: &str,
+    ) -> Option<String> {
+        bind_key(bindings, &mut IndexMap::new(), button, Slot::Main, name).map(|(other, _)| other)
     }
 
     fn object(value: Value) -> Map<String, Value> {
@@ -1056,8 +1139,8 @@ mod tests {
             ("move_left", "None"),
             ("look_right", "Right"),
         ]);
-        assert_eq!(bind_key(&mut bindings, "move_up", "None"), None);
-        assert_eq!(bind_key(&mut bindings, "look_right", "None"), None);
+        assert_eq!(bind_main(&mut bindings, "move_up", "None"), None);
+        assert_eq!(bind_main(&mut bindings, "look_right", "None"), None);
         assert!(
             bindings.values().all(|value| value == "None"),
             "{bindings:?}"
@@ -1068,7 +1151,7 @@ mod tests {
     fn direction_conflicts_swap_and_invalid_entries_are_not_forwarded() {
         let mut bindings = defaults_of(Kind::Key);
         assert_eq!(
-            bind_key(&mut bindings, "cross", "W"),
+            bind_main(&mut bindings, "cross", "W"),
             Some("move_up".to_string())
         );
         assert_eq!(bindings["move_up"], "Space");
@@ -1148,7 +1231,7 @@ mod tests {
             ("square", "E"),
         ]);
         assert_eq!(
-            bind_key(&mut bindings, "cross", "e"),
+            bind_main(&mut bindings, "cross", "e"),
             Some("square".to_string())
         );
         assert_eq!(
@@ -1159,8 +1242,190 @@ mod tests {
                 ("square", "Space")
             ])
         );
-        assert_eq!(bind_key(&mut bindings, "circle", "Q"), None);
+        assert_eq!(bind_main(&mut bindings, "circle", "Q"), None);
         assert_eq!(bindings["circle"], "Q");
+    }
+
+    #[test]
+    fn an_alternative_key_is_written_after_the_main_key() {
+        let controls = json!({
+            "key": {"circle": "Left Ctrl"},
+            "key_alt": {"cross": "K", "circle": "L", "square": "J", "triangle": "I"}
+        });
+        assert!(keyboard_map(&controls, true).contains(
+            "cross=Space|K,circle=Left Ctrl|L,square=Mouse Left|J,triangle=Mouse Right|I,"
+        ));
+    }
+
+    #[test]
+    fn an_alternative_alone_keeps_the_main_default() {
+        // Space is the game's own key, which a plain entry leaves out; the entry names it because
+        // it replaces every key of the button.
+        let controls = json!({"key_alt": {"cross": "K", "l1": "G"}});
+        let spec = keyboard_map(&controls, true);
+        assert!(spec.contains("cross=Space|K,"), "{spec}");
+        assert!(spec.contains("l1=Q|G,"), "{spec}");
+        assert!(!spec.contains("circle="), "{spec}");
+    }
+
+    #[test]
+    fn a_button_without_a_main_key_keeps_only_its_alternative() {
+        let controls = json!({"key": {"cross": "None"}, "key_alt": {"cross": "K"}});
+        let spec = keyboard_map(&controls, true);
+        assert!(spec.contains("cross=K,"), "{spec}");
+        assert!(!spec.contains("None|") && !spec.contains("|None"), "{spec}");
+    }
+
+    #[test]
+    fn unusable_alternatives_are_not_sent() {
+        // Separators, an empty or "None" value, a repeat of the main key, a wrong type and a
+        // button the table lacks.
+        let controls = json!({"key_alt": {
+            "cross": "a,b", "circle": "x=y", "square": "A|B", "triangle": "  ", "l1": 5,
+            "l2": "R", "r2": "None", "jump": "K"
+        }});
+        assert_eq!(
+            keyboard_map(&controls, true),
+            keyboard_map(&json!({}), true)
+        );
+        assert!(!alternative_values(&controls).contains_key("jump"));
+        assert!(!alternative_values(&controls).contains_key("r2"));
+    }
+
+    #[test]
+    fn rage_on_one_input_leaves_l3_and_r3_without_alternatives() {
+        let controls = json!({"key_alt": {"l3": "G", "r3": "H", "rage": "V"}});
+        let combined = keyboard_map(&controls, true);
+        assert!(combined.contains("l3=None,r3=None,rage=F|V"), "{combined}");
+        let separate = keyboard_map(&controls, false);
+        assert!(separate.contains("l3=Z|G"), "{separate}");
+        assert!(separate.contains("r3=X|H"), "{separate}");
+        assert!(!separate.contains("rage="), "{separate}");
+    }
+
+    #[test]
+    fn settings_without_alternatives_write_the_same_map() {
+        let controls = json!({"key": {"cross": "Q", "square": "Wheel Up"}});
+        let with_empty = json!({"key": {"cross": "Q", "square": "Wheel Up"}, "key_alt": {}});
+        let wrong_shape = json!({"key": {"cross": "Q", "square": "Wheel Up"}, "key_alt": ["K"]});
+        let expected = keyboard_map(&controls, true);
+        assert_eq!(keyboard_map(&with_empty, true), expected);
+        assert_eq!(keyboard_map(&wrong_shape, true), expected);
+        assert!(alternative_values(&controls).is_empty());
+        assert!(!expected.contains('|'));
+    }
+
+    #[test]
+    fn the_pad_map_has_no_alternatives() {
+        let controls = json!({"key_alt": {"cross": "K"}, "pad": {"cross": "b"}});
+        assert_eq!(control_map(&controls, Kind::Pad), "cross=b");
+    }
+
+    #[test]
+    fn migrating_keeps_the_alternatives() {
+        let saved = object(json!({"controls_layout": 3,
+                                  "controls": {"key": {"cross": "W"}, "key_alt": {"square": "J"}}}));
+        let migrated = migrate_controls(saved);
+        assert_eq!(migrated["controls"]["key_alt"], json!({"square": "J"}));
+        let current = object(json!({"controls_layout": CONTROLS_LAYOUT,
+                                    "controls": {"key_alt": {"square": "J"}}}));
+        assert_eq!(migrate_controls(current.clone()), current);
+    }
+
+    #[test]
+    fn an_alternative_used_by_another_button_swaps_with_it() {
+        let mut main = map(&[("cross", "Space"), ("square", "Mouse Left"), ("l1", "Q")]);
+        let mut alternatives = map(&[("l1", "J")]);
+        // J is the alternative of L1: Square takes it, and L1 gets what Square had there (none).
+        assert_eq!(
+            bind_key(
+                &mut main,
+                &mut alternatives,
+                "square",
+                Slot::Alternative,
+                "j"
+            ),
+            Some(("l1".to_string(), Slot::Alternative))
+        );
+        assert_eq!(alternatives, map(&[("square", "j")]));
+        // Q is the main key of L1: Cross's alternative takes it, and L1 is left without a key.
+        assert_eq!(
+            bind_key(
+                &mut main,
+                &mut alternatives,
+                "cross",
+                Slot::Alternative,
+                "Q"
+            ),
+            Some(("l1".to_string(), Slot::Main))
+        );
+        assert_eq!(main["l1"], "None");
+        assert_eq!(alternatives, map(&[("square", "j"), ("cross", "Q")]));
+    }
+
+    #[test]
+    fn a_main_key_used_as_an_alternative_swaps_with_it() {
+        let mut main = map(&[("cross", "Space"), ("square", "Mouse Left")]);
+        let mut alternatives = map(&[("square", "J")]);
+        assert_eq!(
+            bind_key(&mut main, &mut alternatives, "cross", Slot::Main, "J"),
+            Some(("square".to_string(), Slot::Alternative))
+        );
+        assert_eq!(main["cross"], "J");
+        assert_eq!(alternatives["square"], "Space");
+    }
+
+    #[test]
+    fn the_two_inputs_of_a_button_swap_when_one_takes_the_other_key() {
+        let mut main = map(&[("cross", "Space")]);
+        let mut alternatives = map(&[("cross", "K")]);
+        assert_eq!(
+            bind_key(&mut main, &mut alternatives, "cross", Slot::Main, "K"),
+            Some(("cross".to_string(), Slot::Alternative))
+        );
+        assert_eq!(
+            (main["cross"].as_str(), alternatives["cross"].as_str()),
+            ("K", "Space")
+        );
+        // Rebinding a slot to its own key changes nothing.
+        assert_eq!(
+            bind_key(&mut main, &mut alternatives, "cross", Slot::Main, "K"),
+            None
+        );
+        assert_eq!(
+            (main["cross"].as_str(), alternatives["cross"].as_str()),
+            ("K", "Space")
+        );
+    }
+
+    #[test]
+    fn clearing_an_alternative_drops_it_and_takes_nothing() {
+        let mut main = map(&[("cross", "Space"), ("square", "Mouse Left")]);
+        let mut alternatives = map(&[("cross", "K")]);
+        assert_eq!(
+            bind_key(
+                &mut main,
+                &mut alternatives,
+                "cross",
+                Slot::Alternative,
+                "None"
+            ),
+            None
+        );
+        assert!(alternatives.is_empty());
+        assert_eq!(main, map(&[("cross", "Space"), ("square", "Mouse Left")]));
+        // A free key becomes the alternative; nothing else moves.
+        assert_eq!(
+            bind_key(
+                &mut main,
+                &mut alternatives,
+                "square",
+                Slot::Alternative,
+                "J"
+            ),
+            None
+        );
+        assert_eq!(alternatives, map(&[("square", "J")]));
     }
 
     #[test]

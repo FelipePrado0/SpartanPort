@@ -9,11 +9,12 @@ use spartanport_launcher::core::i18n::{launcher_language, system_language};
 use spartanport_launcher::core::installation::Installation;
 use spartanport_launcher::core::paths::Paths;
 use spartanport_launcher::core::platform;
+use spartanport_launcher::core::release::ReleaseId;
 use spartanport_launcher::core::settings::load_app_settings;
 use spartanport_launcher::core::voice_swap;
 use spartanport_launcher::runner::{self, RunContext};
 use spartanport_launcher::startup::{self, Route};
-use spartanport_launcher::{ui, APP_NAME, VERSION};
+use spartanport_launcher::{ui, APP_NAME};
 
 fn main() {
     // First, so `--version`, the update installer and start-up errors print in a terminal (and
@@ -24,11 +25,11 @@ fn main() {
         .ok()
         .and_then(|exe| exe.parent().map(Path::to_path_buf))
         .unwrap_or_else(|| PathBuf::from("."));
-    // The environment forwarded and the folders derived once, for every route; a packaged port,
-    // or the checkout a cargo build sits in (`launcher-rust/target/...`).
+    // The environment and the folders derived once, for every route; a packaged port, or the
+    // checkout a cargo build sits in (`launcher-rust/target/...`).
     let (route, context) = startup::start(&args, &exe_dir, std::env::vars_os(), cfg!(windows));
     match route {
-        Route::Version => println!("{APP_NAME} {VERSION}"),
+        Route::Version => println!("{APP_NAME} {}", ReleaseId::this().plain()),
         Route::Run { args } => {
             let run = RunContext {
                 context: &context,
@@ -37,11 +38,11 @@ fn main() {
             };
             std::process::exit(runner::run(run))
         }
-        Route::Play { migrate } => {
-            // As the Python `main`: the old name's files and the settings first.
+        Route::Play => {
+            // As the Python `main`: the start-up steps and the settings first.
             startup::apply_to_process(&context);
             let paths = &context.paths;
-            startup::prepare(paths, migrate);
+            startup::prepare(paths);
             let settings = load_app_settings(paths);
             // Without a usable game folder there is nothing to play yet: the window opens instead.
             if Installation::read(
@@ -79,10 +80,10 @@ fn main() {
             );
             std::process::exit(code)
         }
-        Route::Launcher { migrate } => {
+        Route::Launcher => {
             // Before the folders below are read from the environment.
             startup::apply_to_process(&context);
-            startup::prepare(&context.paths, migrate);
+            startup::prepare(&context.paths);
             open_window(context.paths);
         }
     }

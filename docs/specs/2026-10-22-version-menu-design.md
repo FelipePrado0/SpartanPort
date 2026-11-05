@@ -76,6 +76,8 @@ funções puras sobre a lista.
 
 ### 3.3 Release instalada
 
+Substituído em 2026-10-25 por `docs/specs/2026-10-25-launcher-identity-design.md`: a identidade é compilada da tag, sem carimbo; a lista usa o piso 2.8.0; a próxima build da série também é "nova".
+
 `installed_release(port_dir, appdir) -> ReleaseId`: lê `release.json` em `port_dir` no Windows e em
 `$APPDIR` no Linux (AppImage). Arquivo ausente ou inválido vira `Release · VERSION` sem aviso.
 
@@ -88,6 +90,8 @@ Formato do carimbo:
 `channel` é `release` ou `pre-release`; `build` é omitido numa estável.
 
 ### 3.4 Novidade
+
+Substituído em 2026-10-25 por `docs/specs/2026-10-25-launcher-identity-design.md`: a identidade é compilada da tag, sem carimbo; a lista usa o piso 2.8.0; a próxima build da série também é "nova".
 
 `newer_stable(list, installed) -> Option<&Release>`: a primeira estável cuja `version_tuple` é maior
 que a de `installed.version`. Uma build de teste nunca é "nova": só aparece no menu. Quem roda
@@ -182,6 +186,8 @@ the versions", "No test builds", "No test builds for Linux", "This version is ol
 installed one.". "Version {} is available." e "Update" saem com o pill.
 
 ## 5. Carimbo e workflows
+
+Substituído em 2026-10-25 por `docs/specs/2026-10-25-launcher-identity-design.md`: a identidade é compilada da tag, sem carimbo; a lista usa o piso 2.8.0; a próxima build da série também é "nova".
 
 - `packaging/windows/package.sh` e `packaging/linux/build.sh`: quando `release.json` existe na raiz
   do repositório, copiam para a raiz do pacote (`spartanport-windows/release.json`; raiz do AppDir

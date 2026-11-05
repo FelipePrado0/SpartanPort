@@ -432,8 +432,27 @@ pub fn pad_buttons(pad_map: &str) -> IndexMap<String, String> {
     buttons
 }
 
+/// A `SPARTAN_KEY_MAP` value with one key per entry, the one the icons draw: of `cross=Space|K` the
+/// main key (`Space`), or with `alternative` the alternative (`K`) where the button has one.
+pub fn shown_keys(key_map: &str, alternative: bool) -> String {
+    let shown = |entry: &str| match entry.split_once('=') {
+        Some((game, keys)) => {
+            let mut keys = keys.split('|').map(str::trim);
+            let main = keys.next().unwrap_or_default();
+            let key = if alternative {
+                keys.next().unwrap_or(main)
+            } else {
+                main
+            };
+            format!("{game}={key}")
+        }
+        None => entry.to_string(),
+    };
+    key_map.split(',').map(shown).collect::<Vec<_>>().join(",")
+}
+
 /// Game button -> keyboard key, with a `SPARTAN_KEY_MAP` value (`cross=Q,circle=Left Shift`)
-/// applied. Unlike the gamepad, L2/R2 are keys too. `None` (a button left without a key) keeps the
+/// applied. A button with an alternative (`cross=Space|K`) shows its main key. Unlike the gamepad, L2/R2 are keys too. `None` (a button left without a key) keeps the
 /// default, except L3/R3 with Rage of Sparta on one input: they show the rage key, which presses
 /// both. A moved stick direction relabels `lstick`/`rstick` with the four keys (`T/F/G/H`).
 pub fn key_buttons(key_map: &str) -> IndexMap<String, String> {
@@ -448,7 +467,7 @@ pub fn key_buttons(key_map: &str) -> IndexMap<String, String> {
         .collect();
     let mut unbound = Vec::new();
     let mut rage = String::new();
-    for entry in key_map.split(',') {
+    for entry in shown_keys(key_map, false).split(',') {
         let (game, host) = partition(entry);
         let game = game.to_lowercase();
         let none = host.to_lowercase() == "none";
@@ -2246,6 +2265,44 @@ pub(crate) mod tests {
         for (button, _) in LYRE_DISCS {
             assert!(defaults.contains_key(button), "{button}");
         }
+    }
+
+    #[test]
+    fn a_button_with_an_alternative_shows_its_main_key() {
+        let keys = key_buttons("cross=Space|K,square=Mouse Left|J,l1=Q | G");
+        assert_eq!(keys["cross"], "Space");
+        assert_eq!(keys["square"], "Mouse Left");
+        assert_eq!(keys["l1"], "Q");
+        // Without a main key the alternative is the only one there is.
+        assert_eq!(key_buttons("cross=K")["cross"], "K");
+        // The stick directions and Rage of Sparta take the main key too.
+        assert_eq!(key_buttons("move_up=W|T")["lstick"], "WASD");
+        assert_eq!(
+            key_buttons("move_up=T|W,move_left=F|A")["lstick"],
+            "T/F/S/D"
+        );
+        let rage = key_buttons("l3=None,r3=None,rage=F|V");
+        assert_eq!((rage["l3"].as_str(), rage["r3"].as_str()), ("F", "F"));
+    }
+
+    #[test]
+    fn the_shown_keys_are_the_main_ones_or_the_alternatives_where_there_are_any() {
+        let map = "cross=Space|K,circle=Left Ctrl,square=Mouse Left | J,l3=None,nonsense";
+        assert_eq!(
+            shown_keys(map, false),
+            "cross=Space,circle=Left Ctrl,square=Mouse Left,l3=None,nonsense"
+        );
+        assert_eq!(
+            shown_keys(map, true),
+            "cross=K,circle=Left Ctrl,square=J,l3=None,nonsense"
+        );
+        assert_eq!(shown_keys("", true), "");
+        // The keys an alternative map draws are the alternatives, the others stay on the main key.
+        let keys = key_buttons(&shown_keys(map, true));
+        assert_eq!(keys["cross"], "K");
+        assert_eq!(keys["circle"], "Left Ctrl");
+        assert_eq!(keys["square"], "J");
+        assert_eq!(keys["triangle"], "Q");
     }
 
     #[test]

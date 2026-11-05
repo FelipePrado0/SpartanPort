@@ -137,7 +137,8 @@ static SDL_Gamepad *current_gamepad(void) {
  * changed per PS4 button with SPARTAN_PAD_MAP (gamepad) and SPARTAN_KEY_MAP (keyboard), e.g.
  * SPARTAN_KEY_MAP="cross=Q,square=Left Shift" or SPARTAN_PAD_MAP="cross=b,circle=a": comma-separated
  * <ps4 button>=<SDL key or gamepad button name>. A mapped PS4 button loses its default sources;
- * <ps4 button>=None leaves it without any.
+ * <ps4 button>=None leaves it without any. Several names joined by | are all sources of the button
+ * (SPARTAN_KEY_MAP="cross=Space|K": Space or K), up to MAX_SOURCES_PER_BUTTON.
  * touchpad_left (alias touchpad) and touchpad_right are the two sides of the touchpad click:
  * photo mode and the pause menu. Back/View (Share on a DualSense) is the right click, and with
  * L1 held the left one. Keyboard stick directions are mapped too; gamepad axes, the real touchpad
@@ -152,7 +153,9 @@ static const struct { const char *name; uint32_t ps; } ps_names[]={
     {"look_up",LOOK_UP}, {"look_down",LOOK_DOWN}, {"look_left",LOOK_LEFT}, {"look_right",LOOK_RIGHT},
 };
 typedef struct { int source; uint32_t ps; } ButtonSource;
-typedef struct { ButtonSource entries[48]; size_t count; } ButtonMap;
+/* Room for every button of the map with its sources: 31 buttons (see ps_names) at most. */
+enum { MAX_SOURCES_PER_BUTTON=4, MAP_CAPACITY=128 };
+typedef struct { ButtonSource entries[MAP_CAPACITY]; size_t count; } ButtonMap;
 static ButtonMap pad_map={{
     {SDL_GAMEPAD_BUTTON_SOUTH,BTN_CROSS}, {SDL_GAMEPAD_BUTTON_EAST,BTN_CIRCLE},
     {SDL_GAMEPAD_BUTTON_WEST,BTN_SQUARE}, {SDL_GAMEPAD_BUTTON_NORTH,BTN_TRIANGLE},
@@ -294,11 +297,29 @@ static int key_source(const char *name) {
     return (int)SDL_GetScancodeFromName(name);
 }
 
-/* Applies a SPARTAN_PAD_MAP/SPARTAN_KEY_MAP value; returns how many entries were used. Bad entries are
- * logged and skipped, so their PS4 button keeps its default. */
+/* One source of an entry, by name; -1 when the name is not one (a gamepad button can be 0). */
+static int named_source(const char *name, bool keyboard) {
+    if (!*name) return -1;
+    const int mouse=keyboard ? mouse_source(name) : 0;
+    const int source=mouse ? mouse : keyboard ? key_source(name) : pad_source(name);
+    return source>(keyboard ? (int)SDL_SCANCODE_UNKNOWN : (int)SDL_GAMEPAD_BUTTON_INVALID) ? source : -1;
+}
+
+static void drop_sources(ButtonMap *map, uint32_t ps, bool keyboard) {
+    size_t kept=0;
+    for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
+    map->count=kept;
+    if (!keyboard && ps==BTN_L2) trigger_mapped[0]=true;
+    if (!keyboard && ps==BTN_R2) trigger_mapped[1]=true;
+}
+
+/* Applies a SPARTAN_PAD_MAP/SPARTAN_KEY_MAP value; returns how many entries were used. An entry is
+ * <button>=<name>[|<name>...]: every listed source replaces the button's own. A name that is not
+ * valid is logged and skipped by itself; an entry with no valid name is skipped as a whole, so its
+ * PS4 button keeps its default. */
 static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
     if (!spec || !*spec) return 0;
-    char copy[1024];
+    char copy[2048];
     snprintf(copy,sizeof(copy),"%s",spec);
     int used=0;
     char *entry=copy;
@@ -312,31 +333,35 @@ static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
             continue;
         }
         *eq=0;
-        const char *button=trim(entry), *name=trim(eq+1);
+        const char *button=trim(entry);
+        char *names=trim(eq+1);
         entry=next;
         uint32_t ps=0;
         for (size_t i=0;i<sizeof(ps_names)/sizeof(*ps_names);++i) if (!SDL_strcasecmp(button,ps_names[i].name)) ps=ps_names[i].ps;
         if (!keyboard && (ps & STICK_DIRECTIONS)) ps=0;
-        if (!keyboard && ps==BTN_L2) trigger_mapped[0]=true;
-        if (!keyboard && ps==BTN_R2) trigger_mapped[1]=true;
-        if (ps && !SDL_strcasecmp(name,"None")) { /* the button gets no source at all */
-            size_t kept=0;
-            for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
-            map->count=kept;
+        if (ps && !SDL_strcasecmp(names,"None")) { /* the button gets no source at all */
+            drop_sources(map,ps,keyboard);
             ++used;
             continue;
         }
-        const int mouse=keyboard && *name ? mouse_source(name) : 0;
-        const int source=!*name ? -1 : mouse ? mouse : keyboard ? key_source(name)
-                                                         : pad_source(name);
-        if (!ps || source<=(keyboard ? (int)SDL_SCANCODE_UNKNOWN : (int)SDL_GAMEPAD_BUTTON_INVALID)) {
-            printf("Runtime: pad map: ignored '%s=%s'\n",button,name);
-            continue;
+        int sources[MAX_SOURCES_PER_BUTTON];
+        size_t source_count=0;
+        char *name=names;
+        while (name) {
+            char *more=strchr(name,'|');
+            if (more) *more++=0;
+            const char *trimmed=trim(name);
+            name=more;
+            const int source=named_source(trimmed,keyboard);
+            bool repeated=false;
+            for (size_t i=0;i<source_count;++i) repeated|=sources[i]==source;
+            if (!ps || source<0) printf("Runtime: pad map: ignored '%s=%s'\n",button,trimmed);
+            else if (!repeated && source_count<MAX_SOURCES_PER_BUTTON) sources[source_count++]=source;
         }
-        size_t kept=0;
-        for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
-        map->count=kept;
-        if (map->count<sizeof(map->entries)/sizeof(*map->entries)) map->entries[map->count++]=(ButtonSource){source,ps};
+        if (!source_count) continue;
+        drop_sources(map,ps,keyboard);
+        for (size_t i=0;i<source_count && map->count<sizeof(map->entries)/sizeof(*map->entries);++i)
+            map->entries[map->count++]=(ButtonSource){sources[i],ps};
         ++used;
     }
     return used;

@@ -104,6 +104,55 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
             ("es", "L1 + una dirección de la cruceta cambia a esa arma con su ataque de cambio (el arma que Kratos ya tiene en la mano repite su ataque). L1 + X hace el ataque de cambio del arma en la mano en lugar de pasar a la siguiente arma. La cruceta sola cambia como antes. Se aplica al iniciar el juego."),
         ],
     ),
+    // Alternative keys of the Controls page.
+    (
+        "(alternative)",
+        &[
+            ("zh", "（备用）"),
+            ("pt", "(alternativa)"),
+            ("es", "(alternativa)"),
+        ],
+    ),
+    (
+        "The second box of a row is an alternative input for the same button: keep Square on the left mouse button for combat and add J for the minigames, for example. \"Clear input\" empties the main box, the × button empties the alternative, and the arrow puts the row back on its default with no alternative.",
+        &[
+            ("zh", "每行的第二个输入框是同一按键的备用输入：例如，战斗时将方块保留在鼠标左键，并为小游戏添加 J。“清除绑定”会清空主输入框，× 按钮会清空备用输入，箭头会将该行恢复为默认绑定并移除备用输入。"),
+            ("pt", "A segunda caixa de uma linha é uma entrada alternativa para o mesmo botão: por exemplo, deixe o Quadrado no botão esquerdo do mouse para o combate e acrescente o J para os minigames. \"Limpar entrada\" esvazia a caixa principal, o botão × esvazia a alternativa e a seta devolve a linha ao padrão, sem alternativa."),
+            ("es", "La segunda casilla de una fila es una entrada alternativa para el mismo botón: por ejemplo, deja el Cuadrado en el botón izquierdo del ratón para el combate y añade la J para los minijuegos. \"Borrar entrada\" vacía la casilla principal, el botón × vacía la alternativa y la flecha devuelve la fila a su valor por defecto, sin alternativa."),
+        ],
+    ),
+    (
+        "Keys on the icons",
+        &[
+            ("zh", "图标显示的按键"),
+            ("pt", "Teclas nos ícones"),
+            ("es", "Teclas en los iconos"),
+        ],
+    ),
+    (
+        "Main key (default)",
+        &[
+            ("zh", "主按键（默认）"),
+            ("pt", "Tecla principal (padrão)"),
+            ("es", "Tecla principal (por defecto)"),
+        ],
+    ),
+    (
+        "Alternative key",
+        &[
+            ("zh", "备用按键"),
+            ("pt", "Tecla alternativa"),
+            ("es", "Tecla alternativa"),
+        ],
+    ),
+    (
+        "Which input the keyboard icons in the game show for a button that has an alternative. A button without an alternative always shows its main input. Applied when the game starts.",
+        &[
+            ("zh", "当按键设置了备用输入时，游戏内键盘图标显示哪一个输入。没有备用输入的按键始终显示主输入。下次启动游戏生效。"),
+            ("pt", "Qual entrada os ícones de teclado no jogo mostram para um botão que tem alternativa. Um botão sem alternativa sempre mostra a entrada principal. Aplicado ao iniciar o jogo."),
+            ("es", "Qué entrada muestran los iconos de teclado en el juego para un botón que tiene alternativa. Un botón sin alternativa siempre muestra su entrada principal. Se aplica al iniciar el juego."),
+        ],
+    ),
     (
         "Graphics card not checked: the game picks one.",
         &[

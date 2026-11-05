@@ -11,7 +11,7 @@ use iced::keyboard::{Key, Location, Modifiers};
 use joysticks::{pad, FakeJoysticks};
 use serde_json::{json, Value};
 use spartanport_launcher::core::control_profiles::{self, MOUSE_SIDE_BUTTONS};
-use spartanport_launcher::core::controls::{control_map, Kind};
+use spartanport_launcher::core::controls::{control_map, Kind, Slot};
 use spartanport_launcher::core::joysticks::{Device, JoystickThread, Joysticks, PREVIEW_BUTTONS};
 use spartanport_launcher::core::pad_model::{sdl_button, PadModel};
 use spartanport_launcher::ui::app::{self, Message, State};
@@ -417,6 +417,31 @@ fn profiles_save_load_and_a_bad_file_changes_nothing() {
 }
 
 #[test]
+fn alternative_keys_stay_with_the_profile_and_the_picture() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state(dir.path());
+    state.lang = "en".into();
+    open(&mut state, Page::Controls);
+    state.controls.key_alt.insert("cross".into(), "K".into());
+
+    send(&mut state, ControlsMessage::PartPressed("K".into()));
+    assert_eq!(state.controls.capturing.as_deref(), Some("cross"));
+    assert_eq!(state.controls.capturing_slot, Slot::Alternative);
+    send(&mut state, ControlsMessage::CaptureTimeout);
+
+    send(&mut state, ControlsMessage::ProfileName("Mine".into()));
+    send(&mut state, ControlsMessage::ProfileSave);
+    let file = state.paths.data_dir.join(control_profiles::FILENAME);
+    let saved = control_profiles::load(&file).unwrap();
+    assert_eq!(saved["Mine"].key_alt["cross"], "K");
+
+    send(&mut state, ControlsMessage::ProfilePick("Default".into()));
+    assert!(state.controls.key_alt.is_empty());
+    send(&mut state, ControlsMessage::ProfilePick("Mine".into()));
+    assert_eq!(state.controls.key_alt["cross"], "K");
+}
+
+#[test]
 fn a_damaged_profile_file_is_not_replaced() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state(dir.path());
@@ -439,7 +464,7 @@ fn two_game_buttons_on_one_input_are_flagged() {
         ControlsMessage::PadPick("cross".into(), "b".into()),
     );
     assert_eq!(
-        spartanport_launcher::core::controls::conflicts(&state.controls.pad),
+        spartanport_launcher::core::controls::conflicts(state.controls.pad.values()),
         vec!["b"]
     );
 }

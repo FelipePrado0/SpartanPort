@@ -10,6 +10,7 @@ use iced::time::Instant;
 use iced_test::simulator::{simulator, Simulator};
 use serde_json::{json, Value};
 use spartanport_launcher::core::catalog;
+use spartanport_launcher::core::controls::Slot;
 use spartanport_launcher::core::gpu::parse_display_list;
 use spartanport_launcher::core::i18n::tr;
 use spartanport_launcher::core::ini::{load_ini, INI_FLAGS};
@@ -670,12 +671,34 @@ fn every_setting_lights_save_persists_and_comes_back() {
     );
     send(
         &mut state,
-        Message::Controls(ControlsMessage::Capture("cross".into())),
+        Message::Controls(ControlsMessage::Capture("cross".into(), Slot::Main)),
     );
     change_and_save(
         &mut state,
         "key cross",
-        Message::Controls(ControlsMessage::Captured("cross".into(), "Q".into())),
+        Message::Controls(ControlsMessage::Captured(
+            "cross".into(),
+            Slot::Main,
+            "Q".into(),
+        )),
+    );
+    send(
+        &mut state,
+        Message::Controls(ControlsMessage::Capture("square".into(), Slot::Alternative)),
+    );
+    change_and_save(
+        &mut state,
+        "alternative square",
+        Message::Controls(ControlsMessage::Captured(
+            "square".into(),
+            Slot::Alternative,
+            "J".into(),
+        )),
+    );
+    change_and_save(
+        &mut state,
+        "glyph_keys",
+        Message::Set("glyph_keys".into(), json!("alternative")),
     );
     change_and_save(
         &mut state,
@@ -692,6 +715,8 @@ fn every_setting_lights_save_persists_and_comes_back() {
     }
     assert_eq!(reopened.controls.pad_style, "xbox");
     assert_eq!(reopened.controls.key["cross"], "Q");
+    assert_eq!(reopened.controls.key_alt["square"], "J");
+    assert_eq!(reopened.store.text("glyph_keys"), "alternative");
     assert_eq!(reopened.controls.pad["cross"], "b");
     assert!(!dirty(&reopened));
 }

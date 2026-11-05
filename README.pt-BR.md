@@ -22,11 +22,19 @@ e Linux (AppImage experimental).
 > CUSA01623 e CUSA01715, versões 01.00 e 01.02). Este projeto não tem relação com a Sony Interactive Entertainment nem com o
 > Santa Monica Studio, nem é endossado por elas. God of War é marca registrada da Sony Interactive Entertainment.
 
-> **Antes gow3_pc.** Atualizar a partir da 2.5.0 pelo launcher mantém seus saves e configurações:
-> na primeira abertura, as configurações do jogo (`gow3.ini`), as do launcher e, no Linux, a pasta de
-> dados (`~/.local/share/gow3`) são copiadas para os nomes novos. Os arquivos antigos continuam onde
-> estavam, e os atalhos existentes continuam funcionando. No Linux, a AppImage agora é
-> `spartanport-x86_64.AppImage`: atualize as opções de inicialização do Steam que usam o nome antigo.
+> **Antes gow3_pc.** As versões anteriores à 2.8.0 não são migradas: baixe a 2.8.0 na
+> [página de releases](https://github.com/FelipePrado0/SpartanPort/releases) e instale do zero. Para
+> manter seus saves e configurações no Windows, copie estes itens da pasta antiga para a nova, se
+> existirem: `user/`, `mods/`, `spartanport.ini`, `settings.json`, `mods.json`,
+> `mods_presets.json`, `patches.json` e `gamecontrollerdb.txt`. Da 2.5.0 ou anterior, copie
+> `gow3.ini` como `spartanport.ini` e pegue o `settings.json` em `%APPDATA%\gow3-launcher`. No
+> Linux, troque a AppImage (agora `spartanport-x86_64.AppImage`: atualize as opções de inicialização
+> da Steam que usam o nome antigo do arquivo). Da 2.5.0 ou anterior, copie também
+> `~/.local/share/gow3` para `~/.local/share/spartanport` (sem `user/cache` e `out/`), renomeie
+> lá o `gow3.ini` para `spartanport.ini` e copie `~/.config/gow3-launcher/settings.json` para o
+> lado dele. Se você atualizou a 2.6.0 ou a 2.7.0 por dentro do launcher, apague
+> `God of War III.exe` e `_internal/` da pasta dele, e o atalho antigo `God of War III` da área de
+> trabalho: eles ainda abrem o launcher antigo.
 
 ## Sumário
 
@@ -300,6 +308,16 @@ pressionado (R), o mouse mira com o analógico direito, para a Cabeça de Hélio
 *Right stick sensitivity* define quanto mouse é preciso. Sem o launcher, o jogo usa as próprias
 teclas: E e Q para Quadrado e Triângulo, 1 e 3 para L1 e R1, F para R2, C para R3, I, K, J, L para o
 direcional, Enter para Options, Tab e Backspace para o touchpad.
+
+**Teclas alternativas.** Todo botão pode ter uma segunda tecla ou entrada do mouse, na segunda caixa
+da linha dele na tela Controls (o botão x ao lado a limpa). As duas apertam o botão, então você pode
+manter o Quadrado no clique esquerdo para o combate e também apertá-lo com o J nos minigames. Na lira
+das Musas, por exemplo, mantenha Espaço, Ctrl esquerdo e os dois botões do mouse e acrescente K, L, J
+e I, dispostas como os quatro botões (I em cima, J à esquerda, L à direita, K embaixo). Uma tecla que
+já é de outro botão troca com ele, como nas teclas principais. Os ícones de teclado no jogo mostram a
+tecla principal; *Teclas nos ícones* (tela Controls, com o estilo Teclado) pode mostrar a alternativa
+no lugar. Sem o launcher, junte os nomes com `|` no `SPARTAN_KEY_MAP`, por exemplo
+`cross=Space|K,square=Mouse Left|J`.
 
 Em um controle sem touchpad (Xbox e outros), View abre o menu de pausa (o clique direito do
 touchpad) e L1 + View abre o modo foto (o clique esquerdo). No DualSense o touchpad funciona

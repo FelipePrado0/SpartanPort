@@ -44,6 +44,8 @@ pub enum ProfileError {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Profile {
     pub key: IndexMap<String, String>,
+    /// Alternative keyboard inputs by game button (`controls.key_alt`).
+    pub key_alt: IndexMap<String, String>,
     pub pad: IndexMap<String, String>,
     pub deadzone_left: u32,
     pub deadzone_right: u32,
@@ -73,6 +75,9 @@ pub fn built_in(name: &str) -> Option<Profile> {
 fn to_json(profile: &Profile) -> Map<String, Value> {
     let mut out = Map::new();
     out.insert("key".to_string(), json!(profile.key));
+    if !profile.key_alt.is_empty() {
+        out.insert("key_alt".to_string(), json!(profile.key_alt));
+    }
     out.insert("pad".to_string(), json!(profile.pad));
     out.insert("deadzone_left".to_string(), json!(profile.deadzone_left));
     out.insert("deadzone_right".to_string(), json!(profile.deadzone_right));
@@ -87,7 +92,7 @@ fn table(value: &Value, kind: Kind) -> Option<IndexMap<String, String>> {
         let known = rows.iter().any(|row| row.button == button);
         let clean = !input.trim().is_empty()
             && input.chars().count() <= MAX_INPUT
-            && !input.contains([',', '='])
+            && !input.contains([',', '=', '|'])
             && !input.chars().any(char::is_control);
         let usable = kind == Kind::Key
             || input.eq_ignore_ascii_case("None")
@@ -111,6 +116,10 @@ fn deadzone(value: &Value) -> Option<u32> {
 fn from_json(value: &Value) -> Option<Profile> {
     Some(Profile {
         key: table(value.get("key")?, Kind::Key)?,
+        key_alt: match value.get("key_alt") {
+            Some(alternatives) => table(alternatives, Kind::Key)?,
+            None => IndexMap::new(),
+        },
         pad: table(value.get("pad")?, Kind::Pad)?,
         deadzone_left: deadzone(value.get("deadzone_left")?)?,
         deadzone_right: deadzone(value.get("deadzone_right")?)?,
@@ -205,7 +214,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::core::controls::{bind_key, control_changes, default_input, table_rows, Kind};
+    use crate::core::controls::{bind_key, control_changes, default_input, table_rows, Kind, Slot};
 
     fn sample() -> Profile {
         let mut profile = built_in(MOUSE_SIDE_BUTTONS).unwrap();
@@ -305,7 +314,11 @@ mod tests {
         assert_eq!(seen.len(), total, "{values:?}");
         assert_eq!(control_changes(&values, Kind::Key), preset.key);
         // Still editable row by row.
-        assert_eq!(bind_key(&mut values, "l1", "G"), None);
+        let mut alternatives = IndexMap::new();
+        assert_eq!(
+            bind_key(&mut values, &mut alternatives, "l1", Slot::Main, "G"),
+            None
+        );
     }
 
     #[test]

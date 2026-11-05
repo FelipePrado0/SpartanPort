@@ -3,9 +3,9 @@
 
 use crate::core::options::{
     Choice, AIM_STYLES, ANISOTROPY, AUDIO_CHANNELS, DISPLAY_MODES, DRAW_PIPE, ENGINE_FPS_CHOICES,
-    FPS_LIMITS, FRAMES_QUEUED, FRAME_GENERATION, GLYPH_STYLES, LANGUAGES, LIVE_RESOLUTION,
-    MENU_CONFIRM_STYLES, NO_MSAA, OUTPUTS, PRESETS, READBACKS, STICK_PROMPTS, STREAM_MEMORY,
-    UI_LANGUAGES, UI_SCALES, UPSCALERS, VIDEO_BACKENDS,
+    FPS_LIMITS, FRAMES_QUEUED, FRAME_GENERATION, GLYPH_KEYS, GLYPH_STYLES, LANGUAGES,
+    LIVE_RESOLUTION, MENU_CONFIRM_STYLES, NO_MSAA, OUTPUTS, PRESETS, READBACKS, STICK_PROMPTS,
+    STREAM_MEMORY, UI_LANGUAGES, UI_SCALES, UPSCALERS, VIDEO_BACKENDS,
 };
 
 /// The file a setting lives in.
@@ -317,6 +317,11 @@ pub static SETTINGS: &[Setting] = &[
         env("SPARTAN_GLYPH_STYLE", "off"),
     ),
     app_unwritten("launcher_effects", Flag, Bool(true)),
+    // Rust only: which key of a button the keyboard icons draw; a new settings.json does not get it.
+    Setting {
+        env: env("SPARTAN_GLYPH_KEYS", "main"),
+        ..app_unwritten("glyph_keys", Pick(GLYPH_KEYS), Text("main"))
+    },
     app_unwritten("controls_device", Kind::Text, Text("")),
     // The page follows the connected controller's family until the player picks one.
     app_unwritten("pad_style_auto", Flag, Bool(true)),
@@ -556,7 +561,7 @@ mod tests {
 
     #[test]
     fn the_unwritten_rows_stay_out_of_a_new_settings_file() {
-        for key in ["launcher_effects", "controls_device"] {
+        for key in ["launcher_effects", "controls_device", "glyph_keys"] {
             let row = setting(key).unwrap();
             assert!(!row.written, "{key}");
             assert!(!app_defaults(&|_| None).contains_key(key), "{key}");

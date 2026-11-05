@@ -29,14 +29,6 @@ ldd --version | sed -n 1p  # head would end ldd with SIGPIPE (pipefail)
 work=$(mktemp -d)
 cd "$work"
 "$appimage" --appimage-extract >/dev/null
-if [[ -n ${SPARTAN_RELEASE_TAG:-} ]]; then
-    if ! grep -q '"version"' squashfs-root/release.json 2>/dev/null; then
-        echo "FAIL: release.json is missing or invalid in the AppImage (tag $SPARTAN_RELEASE_TAG)" >&2
-        exit 1
-    fi
-    echo "release.json present (tag $SPARTAN_RELEASE_TAG)"
-fi
-
 # Prove that startup uses the bundled loaders, rather than copies on the host.
 ldconfig -p > host-libraries.log
 for loader in libOpenCL.so.1 libva.so.2 libvdpau.so.1 libvpl.so.2; do
@@ -91,7 +83,12 @@ if ! version=$(squashfs-root/AppRun --version 2>"$version_err"); then
     exit 1
 fi
 echo "$version"
-grep -qE '^SpartanPort [0-9]+\.[0-9]+\.[0-9]+$' <<<"$version" || { echo 'FAIL: --version printed no version line' >&2; exit 1; }
+if [[ -n ${SPARTAN_RELEASE_TAG:-} ]]; then
+    expected="SpartanPort ${SPARTAN_RELEASE_TAG#*-v}"
+    [[ $version == "$expected" ]] || { echo "FAIL: --version printed '$version', not '$expected'" >&2; exit 1; }
+else
+    grep -qE '^SpartanPort [0-9]+\.[0-9]+\.[0-9]+$' <<<"$version" || { echo 'FAIL: --version printed no version line' >&2; exit 1; }
+fi
 status=0
 timeout 15 squashfs-root/AppRun > launcher.log 2>&1 || status=$?
 cat launcher.log
