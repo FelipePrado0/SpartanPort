@@ -381,7 +381,8 @@ Crie uma struct (por exemplo em `shader_recompiler/replay.h`) com:
 
 ### 8.5 Validação
 
-- [ ] Build Windows e Linux. Windows passou; Linux pendente de registro aqui.
+- [x] Build Windows e Linux. Linux em 2026-11-05: WSL Ubuntu 24.04 com GCC, código já com a main;
+      `replay-inputs`, `shader-manifest`, `precompile-state` e `dump-index` passaram. O jogo não rodou no Linux.
 - [ ] Sessão curta com o mantenedor: cache novo (pasta antiga renomeada), jogo até o primeiro
       combate. Confira no log que os `.meta` foram gravados e que nada mudou visualmente.
 
