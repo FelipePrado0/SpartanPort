@@ -206,6 +206,20 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.master_volume = value.empty() ? MasterVolumeDefault : std::clamp(i, MasterVolumeMin, MasterVolumeMax);
     } else if (key == "audio_channels") {
         v.audio_channels = ParseAudioChannels(value);
+    } else if (key == "dualsense_triggers") {
+        v.dualsense_triggers = value.empty() || i != 0;
+    } else if (key == "dualsense_hitflash") {
+        v.dualsense_hitflash = value.empty() || i != 0;
+    } else if (key == "dualsense_qte") {
+        v.dualsense_qte = value.empty() || i != 0;
+    } else if (key == "dualsense_speaker") {
+        v.dualsense_speaker = value.empty() || i != 0;
+    } else if (key == "dualsense_motion") {
+        v.dualsense_motion = value.empty() || i != 0;
+    } else if (key == "dualsense_gyroaim") {
+        v.dualsense_gyroaim = value.empty() || i != 0;
+    } else if (key == "dualsense_speaker_gain") {
+        v.dualsense_speaker_gain = value.empty() ? 4 : std::clamp(i, 0, 7);
     } else if (key == "mouse_prompt_distance") {
         v.mouse_prompt_distance = value.empty() ? 48 : std::clamp(i, 16, 200);
     } else if (key == "mouse_lock") {
@@ -536,6 +550,11 @@ void Save() {
                  SpartanGraphics::AntiAliasingKeys[std::clamp(v.anti_aliasing.load(), 0, int(SpartanGraphics::AaSmaa))].data());
     std::fprintf(file, "master_volume=%d\naudio_channels=%s\n", v.master_volume.load(),
                  AudioChannelKeys[std::clamp(v.audio_channels.load(), 0, AudioChannelsCount - 1)].data());
+    std::fprintf(file, "dualsense_triggers=%d\ndualsense_hitflash=%d\ndualsense_qte=%d\ndualsense_speaker=%d\n"
+                       "dualsense_speaker_gain=%d\ndualsense_motion=%d\ndualsense_gyroaim=%d\n",
+                 int(v.dualsense_triggers.load()), int(v.dualsense_hitflash.load()), int(v.dualsense_qte.load()),
+                 int(v.dualsense_speaker.load()), v.dualsense_speaker_gain.load(), int(v.dualsense_motion.load()),
+                 int(v.dualsense_gyroaim.load()));
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");

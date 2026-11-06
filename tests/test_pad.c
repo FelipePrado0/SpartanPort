@@ -11,6 +11,7 @@ static int vibration_percent=100;
 static uint16_t rumble_low, rumble_high;
 int spartanportgpu_overlay_captures_input(void) { return capture; }
 int spartanportgpu_vibration_percent(void) { return vibration_percent; }
+unsigned spartanportgpu_dualsense_features(int *speaker_gain) { *speaker_gain=4; return 0; }
 static int engine_fps_cycles;
 void spartanportgpu_engine_fps_cycle(void) { ++engine_fps_cycles; }
 static int engine_fps_cap=-1, engine_fps_cap_calls, engine_fps_cap_type=-2, engine_fps_held_calls;
@@ -19,6 +20,8 @@ void spartanportgpu_engine_fps_cap(int fps) { engine_fps_cap=fps; ++engine_fps_c
 void spartanportgpu_engine_fps_cap_qte(unsigned kinds, int type) { engine_fps_cap_kinds=kinds; engine_fps_cap_type=type; }
 void spartanportgpu_engine_fps_cap_held(unsigned kinds) { engine_fps_held_kinds=kinds; ++engine_fps_held_calls; }
 int runtime_file_cronos(void) { return 0; }
+static SpartanActorSlot test_actor_slots[2];
+uintptr_t spartanport_actor_slots_address(void) { return (uintptr_t)test_actor_slots; }
 int spartanportgpu_mouse_prompt_distance(void) { return 48; }
 void spartanportgpu_mouse_pause_key(void) {}
 int spartanportgpu_mouse_aim_style(void) { return 0; }
@@ -28,6 +31,14 @@ static bool SDLCALL record_rumble(void *userdata, uint16_t low, uint16_t high) {
     (void)userdata;
     rumble_low=low;
     rumble_high=high;
+    return true;
+}
+static int led_writes;
+static uint8_t led_rgb[3];
+static bool SDLCALL record_led(void *userdata, uint8_t red, uint8_t green, uint8_t blue) {
+    (void)userdata;
+    ++led_writes;
+    led_rgb[0]=red; led_rgb[1]=green; led_rgb[2]=blue;
     return true;
 }
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *name) {
@@ -294,6 +305,8 @@ static void test_qte_fps_cap_kinds(void) {
     spartanport_qte.block=0;
 }
 
+/* Runs the switch attack test, then the pad ABI against a virtual SDL gamepad: rumble, the light
+ * bar, touchpad clicks, the L1 chord, the engine frame rate and menu combos, and overlay capture. */
 int main(void) {
     test_qte_fps_cap();
     test_qte_fps_cap_kinds();
@@ -444,6 +457,7 @@ int main(void) {
     desc.ntouchpads=1;
     desc.touchpads=&touch;
     desc.Rumble=record_rumble;
+    desc.SetLED=record_led;
     SDL_JoystickID id=SDL_AttachVirtualJoystick(&desc);
     assert(id!=0);
     SDL_Joystick *joystick=SDL_OpenJoystick(id);
@@ -465,6 +479,15 @@ int main(void) {
     assert(pad_vibration(1,motors)==0);
     assert(rumble_low==0 && rumble_high==0);
     vibration_percent=100;
+    /* The light bar colour the game sets reaches the pad, a null colour is refused, and a reset
+     * goes back to the PS4's player 1 blue. */
+    const uint8_t red[]={255,16,0,0};
+    assert(pad_light_bar(1,red)==0);
+    assert(led_writes==1 && led_rgb[0]==255 && led_rgb[1]==16 && led_rgb[2]==0);
+    assert(pad_light_bar(1,NULL)==ERR_INVALID_ARG && led_writes==1);
+    assert(pad_reset_light_bar(1)==0);
+    assert(led_writes==2 && led_rgb[0]==0 && led_rgb[1]==0 && led_rgb[2]==255);
+    assert(pad_light_bar(2,red)==ERR_INVALID_HANDLE);
     assert(data.touches[0].x==1439 && data.touches[0].y==471 && data.touches[0].id==0);
     assert(data.touches[1].x==480 && data.touches[1].y==942 && data.touches[1].id==1);
     capture=1;

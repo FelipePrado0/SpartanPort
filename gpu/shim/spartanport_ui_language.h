@@ -278,6 +278,21 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"Sharper textures (a negative mip bias, in percent of one level) on top of FSR's own: the accumulation turns the extra detail into a clean picture. Higher: more detail, more shimmer. Default 0%.", "在 FSR 自带偏置之外的更锐利纹理（负 mip 偏置，以一级的百分比表示）：累积会把额外细节变成干净的画面。数值越高：细节越多，闪烁越多。默认 0%。"},
     {"How much FSR distrusts its history on characters and objects. Higher: less ghosting behind them, rougher edges. Lower: smoother but more trails. Default 100%.", "FSR 对角色和物体历史信息的不信任程度。数值越高：其身后的鬼影越少，边缘越粗糙。数值越低：越平滑，但拖影更多。默认 100%。"},
     {"FSR 3.1 (native HUD) keeps the game at 1920x1080 so the HUD, text and loading screens are not stretched, and has the port's own sharpening. FSR 4.1 needs an AMD Radeon with Adrenalin 26.10.1 or newer.", "FSR 3.1（原生 HUD）让游戏保持 1920x1080，因此 HUD、文字和加载画面不会被拉伸，并带有本移植版自带的锐化。FSR 4.1 需要 AMD Radeon 与 Adrenalin 26.10.1 或更新版本。"},
+    {"DualSense", "DualSense"},
+    {"Speaker", "扬声器"},
+    {"The sounds the game makes for the controller's speaker play on the DualSense's own speaker (USB only; a headset in the controller's jack gets them instead). Takes effect at the next start.", "游戏为手柄扬声器发出的声音改由 DualSense 自身的扬声器播放（仅限 USB；手柄耳机孔插入耳机时改由耳机播放）。下次启动时生效。"},
+    {"Speaker gain", "扬声器增益"},
+    {"The DualSense speaker's own level, which the Windows volume does not reach. The controller beeps at the new level when it changes.", "DualSense 扬声器自身的音量，Windows 音量无法调节。更改时手柄会以新音量发出提示音。"},
+    {"Trigger click", "扳机段落感"},
+    {"R2 gets a wall that gives way near the end of its travel.", "R2 在行程末端附近有一道会被按破的阻力。"},
+    {"Hit flash", "受伤闪光"},
+    {"The light bar flashes red when Kratos loses health.", "奎托斯失去生命值时，灯条闪烁红色。"},
+    {"QTE light bar", "QTE 灯条"},
+    {"While a QTE prompt is up, the light bar blinks in the colour of its button, with a short rumble at each new prompt.", "QTE 提示出现时，灯条以对应按键的颜色闪烁，每次出现新提示时短暂震动。"},
+    {"Motion sensors", "体感传感器"},
+    {"The controller's gyro and accelerometer are passed to the game.", "将手柄的陀螺仪和加速度计数据传给游戏。"},
+    {"Gyro aim", "陀螺仪瞄准"},
+    {"While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.", "按住 L2 时，转动和倾斜手柄可移动视角。包含“体感传感器”。"},
 };
 using TextTable = std::pair<std::string_view, const char*>;
 

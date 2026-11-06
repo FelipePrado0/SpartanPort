@@ -47,6 +47,8 @@ void spartanportgpu_wait_while_paused(void);
 int spartanportgpu_vibration_percent(void);
 /* Menu confirm button: 0 Cross confirms, Circle cancels; 1 Circle confirms, Cross cancels. */
 int spartanportgpu_menu_confirm_swap(void);
+/* DualSense extras set in the menu (DS_TRIGGERS... of src/dualsense.h) and the speaker gain (0..7). */
+unsigned spartanportgpu_dualsense_features(int *speaker_gain);
 /* Native Display menu: query (0) or toggle (1); returns 0 off, 1 on, 2 unsupported. */
 int spartanportgpu_enemy_health_bar(int toggle);
 /* Native Cheats: f00+i query/f10+i toggle (8 cheats); f20+i text/f30+i decrease/f40+i increase/

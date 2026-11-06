@@ -177,6 +177,12 @@ struct Values {
     /// Menu confirmation button: 0 Cross confirms, Circle cancels (default); 1 Circle confirms, Cross cancels. Live.
     std::atomic<int> menu_confirm_swap{0};
     bool menu_confirm_swap_explicit{false};
+    /// DualSense extras (src/dualsense.h), shown in the menu while a DualSense is connected.
+    /// Live, except the speaker, which is taken when the game opens its audio ports at start.
+    std::atomic<bool> dualsense_triggers{true}, dualsense_hitflash{true}, dualsense_qte{true};
+    std::atomic<bool> dualsense_speaker{true}, dualsense_motion{true}, dualsense_gyroaim{true};
+    /// The pad speaker's preamp gain, 0 to 7.
+    std::atomic<int> dualsense_speaker_gain{4};
     std::atomic<int> glyph_style{0}; ///< PlayStation, Xbox, Nintendo, keyboard, legacy automatic
     int startup_glyph_style = 0;
     /// Master volume of the game's audio in percent, 0 to 200: above 100 boosts the mix behind a
