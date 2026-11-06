@@ -104,6 +104,13 @@ int main() {
     assert(!ResolutionNeedsRestart()); // provider change at the same patched size is live
     s.upscaler = UpscalerTaa;          // TAA needs native guest targets
     assert(ResolutionNeedsRestart());
+    s.upscaler = UpscalerFsr3Ui;       // so does FSR 3.1 with native HUD and text
+    assert(ResolutionNeedsRestart());
+    assert(IsFsr3(UpscalerFsr3) && IsFsr3(UpscalerFsr3Ui) && !IsFsr3(UpscalerTaa));
+    // The port's own sharpening: the TAA and the native-HUD FSR 3.1, not the upstream ones.
+    assert(OwnSharpening(UpscalerTaa) && OwnSharpening(UpscalerFsr3Ui));
+    assert(!OwnSharpening(UpscalerFsr3) && !OwnSharpening(UpscalerFsr4) && !OwnSharpening(UpscalerOff));
+    assert(std::string_view(UpscalerName(UpscalerFsr3Ui)) == "fsr3ui");
     s.upscaler = UpscalerFsr4;
     const int output = s.startup_output_res;
     s.output_res = (output + 1) % OutputCount;
@@ -150,8 +157,10 @@ int main() {
     label = reinterpret_cast<const char*>(spartanportgpu_native_setting(0xf68));
     assert(std::strstr(label, "[ArrowSelectionL]"));
     s.preset = s.startup_preset;
-    // The open FSR 4 follows FSR 3.1 on every system.
+    // FSR 3.1 with native HUD and text follows FSR 3.1; the open FSR 4 follows it on every system.
     s.upscaler = UpscalerFsr3;
+    spartanportgpu_native_setting(0xf65);
+    assert(s.upscaler == UpscalerFsr3Ui);
     spartanportgpu_native_setting(0xf65);
     assert(s.upscaler == UpscalerFsr4);
 #ifdef _WIN32

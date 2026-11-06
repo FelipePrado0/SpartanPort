@@ -428,6 +428,46 @@ int main() {
     }
 
     {
+        // Anti-aliasing of the finished frame (aa_pass.cpp): off unless asked, text keys in the ini.
+        assert(G::ParseAntiAliasing("off") == G::AaOff && G::ParseAntiAliasing("fxaa") == G::AaFxaa &&
+               G::ParseAntiAliasing("smaa") == G::AaSmaa);
+        assert(G::ParseAntiAliasing("bogus") == G::AaOff && G::ParseAntiAliasing("2") == G::AaSmaa);
+        assert(G::ParseAntiAliasing("") == G::AaOff && G::ParseAntiAliasing("none") == G::AaOff);
+        // Too small an image is left alone, and so is "off".
+        assert(G::AaPassRuns(G::AaFxaa, 1920, 1080) && G::AaPassRuns(G::AaSmaa, 1280, 720));
+        assert(!G::AaPassRuns(G::AaOff, 1920, 1080) && !G::AaPassRuns(G::AaSmaa, 8, 8));
+        // Colour spaces: an sRGB view is sampled as linear light, the 10-bit and HDR buffers are not.
+        assert(G::AaInputIsLinear(false, false) && !G::AaInputIsLinear(true, false) &&
+               !G::AaInputIsLinear(false, true));
+        {
+            std::ofstream out(path);
+            out << "anti_aliasing=smaa\n";
+        }
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaSmaa);
+        SpartanSettings::Save();
+        assert(Read(path).find("anti_aliasing=smaa\n") != std::string::npos);
+        SetEnvironment("SPARTAN_ANTI_ALIASING", "fxaa");
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaFxaa);
+        SetEnvironment("SPARTAN_ANTI_ALIASING", "");
+        {
+            std::ofstream out(path);
+            out << "anti_aliasing=garbage\n";
+        }
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaOff);
+        SpartanSettings::Save();
+        assert(Read(path).find("anti_aliasing=off\n") != std::string::npos);
+        {
+            std::ofstream out(path);
+            out << "vsync=1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaOff);  // not in the file: off
+    }
+
+    {
         std::ofstream out(path);
         out << "cheat_double_jumps=1\ncheat_very_hard=1\n";
     }

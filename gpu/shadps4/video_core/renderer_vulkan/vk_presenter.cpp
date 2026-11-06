@@ -319,6 +319,8 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
         free_queue.push(&frame);
     }
 
+    // Two filtered frames per presented one with frame generation: twice the outputs in turn.
+    aa_pass.Create(device, instance.GetAllocator(), num_images * 2);
     fsr_pass.Create(device, instance.GetAllocator(), num_images);
     pp_pass.Create(device, swapchain.GetSurfaceFormat().format);
     SpartanOverlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images);
@@ -663,6 +665,32 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         fsr_settings.use_rcas &&
         SpartanGraphics::FsrPassRuns(fsr_settings.enable, true, int(image_size.width), int(image_size.height),
                                   int(frame->width), int(frame->height));
+    // spartanport: anti-aliasing (FXAA, SMAA) of the game's image, before the sharpening so that the
+    // sharpening does not bring the edges back. Colour values: linear light for an sRGB view, perceptual
+    // for 10-bit sRGB values and HDR (the post pass below decodes them the same way).
+    // The same filter runs over the generated frame below, so real and generated frames match.
+    using VideoFormat = Libraries::VideoOut::PixelFormat;
+    const bool aa_encoded = attribute.attrib.pixel_format == VideoFormat::A2R10G10B10Srgb ||
+                            attribute.attrib.pixel_format == VideoFormat::A2R10G10B10Bt2020Pq;
+    const int aa_mode = graphics.anti_aliasing;
+    const auto apply_aa = [&](vk::ImageView input, bool is_hdr) {
+        return aa_pass.Render(cmdbuf, input, image_size, aa_mode,
+                              SpartanGraphics::AaInputIsLinear(aa_encoded, is_hdr));
+    };
+    {
+        const bool aa_runs = SpartanGraphics::AaPassRuns(aa_mode, int(image_size.width), int(image_size.height)) &&
+                             !aa_pass.Failed(aa_mode);
+        image_view = apply_aa(image_view, frame->is_hdr);
+        SpartanSettings::Get().aa_applied = aa_runs && !aa_pass.Failed(aa_mode);
+        // One line when the filter starts, stops or changes, so a log shows what ran.
+        static int logged_aa = -1;
+        const int running = aa_runs ? aa_mode : 0;
+        if (running != logged_aa) {
+            logged_aa = running;
+            std::printf("Anti-aliasing: %s%s (%ux%u)\n", SpartanGraphics::AntiAliasingNames[aa_mode],
+                        aa_runs ? " running" : " not running", image_size.width, image_size.height);
+        }
+    }
     image_view = fsr_pass.Render(cmdbuf, image_view, image_size, {frame->width, frame->height},
                                  fsr_settings, frame->is_hdr);
 
@@ -691,7 +719,8 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
                                  .pImageMemoryBarriers = &generated_barrier});
         const vk::ImageView generated_view = fsr_pass.Render(
             cmdbuf,
-            rasterizer->GetUpscaler().GetFrameGeneration().GeneratedView(view_info.format),
+            apply_aa(rasterizer->GetUpscaler().GetFrameGeneration().GeneratedView(view_info.format),
+                     generated->is_hdr),
             image_size, {generated->width, generated->height}, fsr_settings, generated->is_hdr);
         pp_pass.Render(cmdbuf, generated_view, image_size, *generated, pp_settings);
         generated->is_generated = true;

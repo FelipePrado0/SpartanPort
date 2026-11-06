@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <set>
 #include <string>
 
 #include <vk_mem_alloc.h>
@@ -19,6 +20,7 @@
 #include "ffx_vk_portable.h"
 #include "video_core/host_shaders/upscale_merge_comp.h"
 #include "video_core/host_shaders/upscale_reactive_comp.h"
+#include "video_core/host_shaders/ldr_alpha_comp.h"
 #include "video_core/host_shaders/stencil_reactive_comp.h"
 #include "video_core/host_shaders/taa_comp.h"
 #include "video_core/host_shaders/taa_sharpen_comp.h"
@@ -178,6 +180,9 @@ TemporalUpscaler::TemporalUpscaler(const Instance& instance_, Scheduler& schedul
     if (const char* hash = std::getenv("SPARTAN_UPSCALE_BEFORE_CS")) {
         trigger_hash = std::strtoull(hash, nullptr, 16);
     }
+    if (const char* hash = std::getenv("SPARTAN_UPSCALER_COMPOSITE_PS")) {
+        composite_ps = std::strtoull(hash, nullptr, 16);
+    }
     if (const char* hash = std::getenv("SPARTAN_UPSCALER_LDR_TRIGGER")) {
         ldr_trigger_ps = std::strtoull(hash, nullptr, 16);
     }
@@ -215,9 +220,10 @@ TemporalUpscaler::TemporalUpscaler(const Instance& instance_, Scheduler& schedul
     }
     if (enabled) {
         std::printf("Upscaler: FSR 3.1 available (%s) on scene color before compute shader "
-                    "%016llx\n",
+                    "%016llx, or after the composite pixel shader %016llx\n",
                     SpartanSettings::Get().upscaler != SpartanSettings::UpscalerOff ? "on" : "off",
-                    static_cast<unsigned long long>(trigger_hash));
+                    static_cast<unsigned long long>(trigger_hash),
+                    static_cast<unsigned long long>(composite_ps));
     }
 }
 
@@ -232,7 +238,7 @@ TemporalUpscaler::~TemporalUpscaler() {
 bool TemporalUpscaler::Active() const {
     // Toggle 1 << 24 switches it off at run time (A/B); history restarts after.
     return enabled && !failed &&
-           (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerFsr3 ||
+           (SpartanSettings::IsFsr3(SpartanSettings::Get().upscaler) ||
             SpartanSettings::IsFsr4(SpartanSettings::Get().upscaler) ||
             SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) &&
            !SpartanToggle::Disabled(1u << 24);
@@ -246,6 +252,20 @@ bool TemporalUpscaler::ReactiveOn() const {
 
 void TemporalUpscaler::OnSceneColor(VideoCore::ImageId color) {
     scene_color = color;
+    const auto* image = color ? texture_cache.TryGetImage(color, 0) : nullptr;
+    scene_color_uid = image ? image->image_uid : 0;
+}
+
+bool TemporalUpscaler::SceneColorLive() const {
+    if (!scene_color) {
+        return false;
+    }
+    const auto* image = texture_cache.TryGetImage(scene_color, scene_color_uid);
+    return image != nullptr && True(image->flags & VideoCore::ImageFlagBits::Registered);
+}
+
+bool TemporalUpscaler::SceneImagesLive() const {
+    return SceneColorLive() && camera_motion.DepthLive();
 }
 
 namespace {
@@ -299,6 +319,7 @@ bool TemporalUpscaler::OnFrameStart() {
     if (applied_preset != preset || settings.upscaler == SpartanSettings::UpscalerOff) failed = false;
     const bool active = Active();
     const bool jitter_on = active && settings.jitter && !SpartanToggle::Disabled(1u << 25);
+    jitter_enabled = jitter_on;
     const int upscaler = settings.upscaler.load();
     const int output = settings.output_res.load();
     const bool output_changed = !scaled_session && applied_output != output;
@@ -328,14 +349,30 @@ bool TemporalUpscaler::OnFrameStart() {
     }
     SpartanSettings::Get().active_render_width = Scaled() ? render_width : scene_targets.Size().width;
     SpartanSettings::Get().active_render_height = Scaled() ? render_height : scene_targets.Size().height;
-    if (changed || !dispatched_last_frame) reset = true;
+    // God of War III (view-projection camera): the frame is the scene, from its first depth
+    // pre-pass draw to its composite (OnSceneStart); the display passes do not delimit it (the
+    // game repeats frames and may start the next scene before the display pass of the last).
+    const bool scene_frames = SceneTaa() && camera_motion.ViewProjectionCamera();
+    if (changed || (!dispatched_last_frame && !scene_frames)) reset = true;
     if (changed) jitter_index = 0;
     applied_preset = preset;
     applied_output = output;
     applied_upscaler = upscaler;
     last_active = active;
     last_jitter = jitter_on;
-    dispatched_last_frame = false;
+    // Scenes, not display passes, delimit frames in God of War III: "running" means a scene was
+    // upscaled within the last display passes.
+    if (frames_since_run < 1000) ++frames_since_run;
+    SpartanSettings::Get().temporal_applied = frames_since_run <= 30;
+    if (!scene_frames && SpartanSettings::Get().upscaler != SpartanSettings::UpscalerOff &&
+        ++status_frames >= 300) {
+        PrintStatus();
+    }
+    if (!scene_frames) {
+        dispatched_last_frame = false;
+        composite_pending = false;
+        composite_passed = false;
+    }
 
     // The display pass of an upscaled frame reads the upscaled UI image.
     display_redirect = ui_phase;
@@ -343,6 +380,9 @@ bool TemporalUpscaler::OnFrameStart() {
     display_seeded = false;
     ui_phase = false;
     ui_read_barrier = false;
+    if (scene_frames) {
+        return changed; // the scene owns the rest of the frame state and the jitter
+    }
     done_this_frame = false;
     ldr_pending = false;
     ldr_target = {};
@@ -363,8 +403,70 @@ bool TemporalUpscaler::OnFrameStart() {
     return changed;
 }
 
+void TemporalUpscaler::PrintStatus() {
+    // One line every few seconds: why a selected TAA or FSR does (not) run (last_run.log).
+    const auto scan = camera_motion.TakeScanCounts();
+    const auto sources = camera_motion.TakeScanSources();
+    std::printf("Temporal AA status: mode=%s ran_last_frame=%d active=%d failed=%d camera_ready=%d "
+                "camera_frames=%u prepass_draws=%u camera_buffers=%u trigger_seen=%u composite_seen=%u ldr_runs=%u skip=%s scaled_session=%d scanned_ring=%u scanned_guest=%u scanned_flat=%u jitter_on=%d jitter=%.3f,%.3f jit_shifted=%u jit_small=%u jit_clipoff=%u jit_zero=%u scenes=%u done_skips=%u\n",
+                SpartanSettings::UpscalerName(SpartanSettings::Get().upscaler), int(frames_since_run <= 30),
+                int(Active()), int(failed), int(camera_motion.CameraHistory()),
+                camera_motion.TakeCameraFrames(), scan[0], scan[1], trigger_seen, composite_seen, ldr_runs,
+                skip_reason, int(Scaled()), sources[0], sources[1], sources[2], int(jitter_enabled), jitter[0], jitter[1],
+                jitter_draws[0], jitter_draws[1], jitter_draws[2], jitter_draws[3], scene_counter, done_skips);
+    jitter_draws = {};
+    done_skips = 0;
+    scene_counter = 0;
+    trigger_seen = 0;
+    composite_seen = 0;
+    ldr_runs = 0;
+    status_frames = 0;
+    composite_status = 0;
+}
+
+void TemporalUpscaler::NoteSkip() {
+    if (std::strcmp(skip_reason, "done") == 0) {
+        ++done_skips;
+        return; // a second composite of a scene that already ran
+    }
+    // One line per change of the reason a scene was not upscaled (and when it runs again).
+    if (std::strcmp(skip_reason, logged_skip) != 0) {
+        logged_skip = skip_reason;
+        std::printf("TAA scene: skipped (%s), camera_ready=%d scene=%u\n", skip_reason,
+                    int(camera_motion.CameraHistory()), scene_counter);
+    }
+    SpartanSettings::Get().temporal_applied = false;
+}
+
+void TemporalUpscaler::OnSceneStart() {
+    ++scene_counter;
+    if (!SceneTaa() || !camera_motion.ViewProjectionCamera()) {
+        return; // OnFrameStart delimits the frame
+    }
+    if (!dispatched_last_frame) {
+        reset = true; // the last scene was not upscaled: no usable history
+    }
+    dispatched_last_frame = false;
+    composite_pending = false;
+    composite_passed = false;
+    done_this_frame = false;
+    ldr_target = {};
+    scene_color = {};
+    if (!jitter_enabled) {
+        jitter = {};
+        return;
+    }
+    const u32 phases = Scaled() ? Motion::JitterPhases(render_width, target_width)
+        : Motion::JitterPhases(scene_targets.Size().width, 1920);
+    jitter_index = jitter_index % phases + 1;
+    jitter = {Halton(jitter_index, 2) - 0.5f, Halton(jitter_index, 3) - 0.5f};
+}
+
 void TemporalUpscaler::OnGraphicsDraw(u64 ps_hash, VideoCore::ImageId color) {
     sampled_ui = false;
+    if (SceneTaa()) {
+        return; // the scene TAA has its own trigger (OnPixelShader / RunPending)
+    }
     if (ldr_pending) {
         ldr_pending = false;
         if (!done_this_frame && !failed && Scaled()) {
@@ -390,7 +492,7 @@ void TemporalUpscaler::OnGraphicsDraw(u64 ps_hash, VideoCore::ImageId color) {
     if (ps_hash == ldr_trigger_ps && color && !done_this_frame) {
         // All HDR effects are complete; capture them before scene_color becomes the LDR target.
         OnSceneComposite();
-        scene_color = color;
+        OnSceneColor(color); // keeps the image uid in step
         ldr_pending = true;
     }
 }
@@ -401,10 +503,14 @@ bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore
     // motion vectors: a reactive mask keeps FSR from ghosting them. SPARTAN_STENCIL_REACTIVE
     // sets the reactivity (0 turns the mask off), toggle 1 << 28 switches it off at run time.
     // The depth is in General layout (both callers transit it for the motion pass).
-    static const float stencil_value = [] {
+    static const float env_value = [] {
         const char* env = std::getenv("SPARTAN_STENCIL_REACTIVE");
         return env && env[0] ? std::clamp(float(std::atof(env)), 0.0f, 1.0f) : 1.0f;
     }();
+    // FSR 3.1 with native HUD and text: the menu's "Moving objects" sets it live.
+    const float stencil_value = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerFsr3Ui
+        ? std::clamp(float(SpartanSettings::Get().fsr_objects.load()) / 100.0f, 0.0f, 1.0f)
+        : env_value;
     if (stencil_value <= 0.0f || SpartanToggle::Disabled(1u << 28) ||
         !(depth.info.props.has_stencil || depth_format == vk::Format::eD32SfloatS8Uint)) {
         return false;
@@ -455,6 +561,9 @@ void TemporalUpscaler::RunLdr() {
     if ((UseFsr4() && (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerFsr411 ||
                        !fsr4->DriverAvailable())) ||
         SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+        return;
+    }
+    if (!SceneImagesLive()) {
         return;
     }
     auto& color = texture_cache.GetImage(scene_color);
@@ -578,8 +687,8 @@ void TemporalUpscaler::RunLdr() {
         info.cameraFar = 3000.0f;
         info.cameraVerticalFovRadians = camera_motion.VerticalFov();
         info.viewSpaceToMeters = 1.0f;
-        info.sharpness = std::min(SpartanSettings::Get().sharpness.load(), 1.0f);
-        info.enableSharpening = SpartanSettings::Get().sharpen ? VK_TRUE : VK_FALSE;
+        info.sharpness = UpscalerSharpness();
+        info.enableSharpening = SharpenOn() ? VK_TRUE : VK_FALSE;
         info.reset = reset ? VK_TRUE : VK_FALSE;
         info.frameId = frame_id++;
         FfxVkPortableUpscaleCreateInfo create_info{};
@@ -609,7 +718,7 @@ void TemporalUpscaler::RunLdr() {
         }
     }
     reset = false;
-    dispatched_last_frame = true;
+    dispatched_last_frame = true; frames_since_run = 0;
     ExtraSharpen(cmdbuf, vk::Image(output_image), false, w, h);
     if (dump >= 0) {
         DumpImages(instance, scheduler, cmdbuf, dump,
@@ -632,6 +741,9 @@ void TemporalUpscaler::RunLdr() {
 }
 
 void TemporalUpscaler::OnDispatch(u64 cs_hash) {
+    if (cs_hash == trigger_hash) {
+        ++trigger_seen;
+    }
     if (cs_hash != trigger_hash || done_this_frame || failed || Scaled()) {
         return;
     }
@@ -641,6 +753,91 @@ void TemporalUpscaler::OnDispatch(u64 cs_hash) {
         return;
     }
     Run();
+}
+
+float TemporalUpscaler::UpscalerSharpness() const {
+    if (!SpartanSettings::OwnSharpening(SpartanSettings::Get().upscaler)) {
+        return std::min(SpartanSettings::Get().sharpness.load(), 1.0f); // upstream
+    }
+    // FSR's own sharpening (0..1) from the menu's strength slider: 75% (its default) is FSR's usual
+    // 0.3, 100% the strongest; below 75% it fades to 0. SPARTAN_FSR_SHARPNESS no longer sets it.
+    const float strength = std::clamp(SpartanSettings::Get().rcas_strength.load() / 100.0f, 0.0f, 1.0f);
+    return strength <= 0.75f ? strength / 0.75f * 0.3f : 0.3f + (strength - 0.75f) / 0.25f * 0.7f;
+}
+
+bool TemporalUpscaler::SharpenOn() const {
+    // The launcher's sharpen and the menu's "Sharpening (RCAS)" switch: the upscaler's own sharpening
+    // (FSR's RCAS, the TAA's) follows the switch, so it can be turned off in game.
+    const auto& settings = SpartanSettings::Get();
+    if (!SpartanSettings::OwnSharpening(settings.upscaler)) {
+        return settings.sharpen; // upstream: the switch belongs to the host pass only
+    }
+    return settings.sharpen && settings.rcas;
+}
+
+bool TemporalUpscaler::SceneTaa() const {
+    return enabled && SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa;
+}
+
+void TemporalUpscaler::OnPixelShader(u64 ps_hash, VideoCore::ImageId color) {
+    if (!SceneTaa() || ps_hash != composite_ps || !color) {
+        return;
+    }
+    ++composite_seen;
+    composite_passed = true;
+    // God of War III: the scenes, not the display passes, are the frames; the status line comes from here.
+    if (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerOff && ++composite_status >= 300) {
+        PrintStatus();
+    }
+    camera_motion.ResolveViewProjection(); // closes the scene: its pre-pass is complete
+    if (done_this_frame || failed || Scaled() || !Active()) {
+        skip_reason = done_this_frame ? "done" : failed ? "failed" : Scaled() ? "scaled" : "inactive";
+        NoteSkip();
+        return;
+    }
+    OnSceneColor(color); // keeps the image uid in step
+    composite_pending = true;
+}
+
+void TemporalUpscaler::RunPending() {
+    if (!composite_pending) {
+        return;
+    }
+    composite_pending = false;
+    done_this_frame = true;
+    if (!camera_motion.ResolveViewProjection() || !camera_motion.Ready()) {
+        // No pre-pass camera this frame (a menu, a cut scene), or the first frame: no history.
+        skip_reason = camera_motion.Depth() ? "no_previous_camera" : "no_depth";
+        NoteSkip();
+        reset = true;
+        return;
+    }
+    RunSceneTaa();
+}
+
+bool TemporalUpscaler::JitterDepth(VideoCore::ImageId depth) const {
+    if (!depth || !camera_motion.Depth()) {
+        return false;
+    }
+    // Only while the last frame had a camera: a frame the upscaler skips must not be jittered
+    // (the HUD and menus draw with depth buffers too).
+    if (!camera_motion.ViewProjectionCamera() || !camera_motion.SceneOpen()) {
+        return false;
+    }
+    if (depth == camera_motion.Depth()) {
+        return true;
+    }
+    // The transparent pass draws with a copy of the scene depth (a pass of the game over the
+    // same pixels): jittered like the original so both agree. The stored scene depth may have been
+    // freed or reused since it was recorded.
+    if (!camera_motion.DepthLive()) {
+        return false;
+    }
+    const auto& scene = texture_cache.GetImage(camera_motion.Depth());
+    const auto& image = texture_cache.GetImage(depth);
+    return image.info.pixel_format == scene.info.pixel_format &&
+           image.info.size.width == scene.info.size.width &&
+           image.info.size.height == scene.info.size.height;
 }
 
 bool TemporalUpscaler::EnsureResources(u32 w, u32 h, u32 ow, u32 oh, bool hdr) {
@@ -917,7 +1114,7 @@ void TemporalUpscaler::CreatePipelines() {
         taa_desc_layout = Check(device.createDescriptorSetLayoutUnique({
             .flags = vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR,
             .bindingCount = u32(bindings.size()), .pBindings = bindings.data()}));
-        const vk::PushConstantRange push{vk::ShaderStageFlagBits::eCompute, 0, 64};
+        const vk::PushConstantRange push{vk::ShaderStageFlagBits::eCompute, 0, 128};
         taa_pipeline_layout = Check(device.createPipelineLayoutUnique({
             .setLayoutCount = 1, .pSetLayouts = &*taa_desc_layout,
             .pushConstantRangeCount = 1, .pPushConstantRanges = &push}));
@@ -928,6 +1125,20 @@ void TemporalUpscaler::CreatePipelines() {
             .addressModeV = vk::SamplerAddressMode::eClampToEdge,
             .addressModeW = vk::SamplerAddressMode::eClampToEdge}));
         taa_pipeline = compute(TAA_COMP, *taa_pipeline_layout);
+    }
+    {
+        // The game's alpha into the RGBA16F result: a sampled scene colour and a storage image.
+        const std::array<vk::DescriptorSetLayoutBinding, 2> bindings{{
+            {.binding = 0, .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+             .descriptorCount = 1, .stageFlags = vk::ShaderStageFlagBits::eCompute},
+            {.binding = 1, .descriptorType = vk::DescriptorType::eStorageImage,
+             .descriptorCount = 1, .stageFlags = vk::ShaderStageFlagBits::eCompute}}};
+        ldr_alpha_desc_layout = Check(device.createDescriptorSetLayoutUnique({
+            .flags = vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR,
+            .bindingCount = u32(bindings.size()), .pBindings = bindings.data()}));
+        ldr_alpha_pipeline_layout = Check(device.createPipelineLayoutUnique({
+            .setLayoutCount = 1, .pSetLayouts = &*ldr_alpha_desc_layout}));
+        ldr_alpha_pipeline = compute(LDR_ALPHA_COMP, *ldr_alpha_pipeline_layout);
     }
 }
 
@@ -977,9 +1188,44 @@ void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
         std::array<float, 2> jitter;
         u32 reset, pad;
         std::array<std::array<float, 4>, 3> depth;
+        std::array<float, 16> reproject;
     } params{jitter, reset ? 1u : 0u, std::getenv("SPARTAN_TAA_DIAGNOSTICS") ?
                  u32(std::clamp(std::atoi(std::getenv("SPARTAN_TAA_DIAGNOSTICS")),1,3)) : 0u,
-             camera_motion.TaaDepthParameters()};
+             camera_motion.TaaDepthParameters(), camera_motion.Reprojection()};
+    if (SpartanSettings::Get().taa_debug.load() && params.pad == 0) {
+        params.pad = 4; // menu: TAA debug view (taa.comp diag 4)
+    }
+    if (camera_motion.ViewProjectionCamera()) {
+        params.pad |= 1u << 24; // depth rejection through the reprojection matrix
+        params.pad |= 1u << 25; // 8-bit tonemapped colour: variance clipping, less history
+        // The look of the accumulation, live from the in-game menu (Image tab): share of the history
+        // on a still and a fast moving pixel, width of the colour box the history is clipped to, and
+        // how much history a changed 3x3 patch (a moving object without motion vectors) loses.
+        const auto& taa = SpartanSettings::Get();
+        const std::array<float, 4> look{std::clamp(taa.taa_static.load() / 100.0f, 0.0f, 0.99f),
+                                        std::clamp(taa.taa_moving.load() / 100.0f, 0.0f, 0.99f),
+                                        std::clamp(taa.taa_tolerance.load() / 100.0f, 0.3f, 3.0f), 6.0f};
+        const u32 objects = u32(std::clamp(taa.taa_objects.load(), 0, 100));
+        params.pad |= objects << 16;
+        params.pad |= u32(std::clamp(taa.taa_spatial.load(), 0, 100) * 63 / 100) << 26;
+        // One line when the look settles (the menu sliders change it every frame while dragged).
+        static std::array<float, 7> logged{-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
+        static std::array<float, 7> pending = logged;
+        static u32 stable_frames = 0;
+        const std::array<float, 7> now{look[0], look[1], look[2], float(objects),
+                                       float(taa.taa_sharpen.load()), float(taa.taa_spatial.load()),
+                                       float(taa.taa_lod.load())};
+        if (now != pending) {
+            pending = now;
+            stable_frames = 0;
+        } else if (stable_frames < 90 && ++stable_frames == 90 && pending != logged) {
+            logged = pending;
+            std::printf("TAA look: static %g moving %g tolerance %g objects %g sharpen %g edges %g "
+                        "texture detail %g\n", now[0], now[1], now[2], now[3], now[4], now[5], now[6]);
+        }
+        params.depth[1] = {look[0], look[1], 1.0f, look[2]};
+        params.depth[0][3] = look[3];
+    }
     // Optional techniques for A/B in one run (SPARTAN_TOGGLE_FILE bits 51-54): tonemapped blending,
     // YCoCg clipping, variance clipping, 3x3 reconstruction. Measured in game on 2026-10-02
     // (static and panning camera, interleaved captures): none improved stability beyond run
@@ -1001,8 +1247,21 @@ void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
                          sizeof(params), &params);
     cmdbuf.dispatch((out_width + 7) / 8, (out_height + 7) / 8, 1);
     const auto& settings = SpartanSettings::Get();
-    const float strength = std::clamp(settings.sharpness.load(), 0.0f, 2.0f);
-    if (settings.sharpen && strength > 0.0f && !(params.pad & 0xffu)) {
+    float strength = std::clamp(settings.sharpness.load(), 0.0f, 2.0f);
+    const bool sharpen = SharpenOn();
+    {
+        static int logged_sharpen = -1;
+        if (logged_sharpen != int(sharpen)) {
+            logged_sharpen = int(sharpen);
+            std::printf("Sharpening: %s (the TAA's own, strength %d%%)\n", sharpen ? "on" : "off",
+                        settings.taa_sharpen.load());
+        }
+    }
+    if (camera_motion.ViewProjectionCamera()) {
+        // the 8-bit scene is softened by the history resampling: its own, menu-set strength.
+        strength = std::clamp(settings.taa_sharpen.load() / 100.0f, 0.0f, 2.0f);
+    }
+    if (sharpen && strength > 0.0f && !(params.pad & 0xffu)) {
         const vk::MemoryBarrier2 resolved{
             .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
             .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
@@ -1030,8 +1289,39 @@ void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
 void TemporalUpscaler::ExtraSharpen(vk::CommandBuffer cmdbuf, vk::Image target, bool ldr, u32 w,
                                     u32 h) {
     const auto& settings = SpartanSettings::Get();
-    const float extra = std::clamp(settings.sharpness.load(), 0.0f, 2.0f) - 1.0f;
-    if (!settings.sharpen || extra <= 0.0f) {
+    // FSR's own RCAS ends at 1.0 and its effect is slight: above 75% the menu's strength adds a
+    // sharpening pass of ours after FSR (100% = strength 1.0), so the slider is visible.
+    const bool own = SpartanSettings::OwnSharpening(settings.upscaler);
+    const float menu = own ? std::clamp((settings.rcas_strength.load() / 100.0f - 0.75f) / 0.25f, 0.0f, 1.0f) : 0.0f;
+    const float extra = std::max(std::clamp(settings.sharpness.load(), 0.0f, 2.0f) - 1.0f, menu);
+    {
+        // One log line per change, so a log shows what the upscaler's sharpening did.
+        static bool last_on = false;
+        static float last_rcas = -1.0f, last_extra = -1.0f;
+        const bool on = SharpenOn();
+        const float rcas = UpscalerSharpness();
+        if (on != last_on || rcas != last_rcas || extra != last_extra) {
+            last_on = on;
+            last_rcas = rcas;
+            last_extra = extra;
+            std::printf("Sharpening (upscaler): %s, FSR RCAS %.2f, extra pass %.2f (menu strength %d%%)\n",
+                        on ? "on" : "off", rcas, on ? extra : 0.0f, settings.rcas_strength.load());
+        }
+    }
+    if (settings.upscaler == SpartanSettings::UpscalerFsr3Ui) {
+        // One line when the FSR 3.1 look settles (the sliders change it every frame while dragged).
+        static std::array<int, 2> logged{-1, -1}, pending{-1, -1};
+        static u32 stable_frames = 0;
+        const std::array<int, 2> now{settings.fsr_lod.load(), settings.fsr_objects.load()};
+        if (now != pending) {
+            pending = now;
+            stable_frames = 0;
+        } else if (stable_frames < 90 && ++stable_frames == 90 && pending != logged) {
+            logged = pending;
+            std::printf("FSR look: texture detail %d moving objects %d\n", now[0], now[1]);
+        }
+    }
+    if (!SharpenOn() || extra <= 0.0f) {
         return;
     }
     const auto device = instance.GetDevice();
@@ -1119,7 +1409,7 @@ void TemporalUpscaler::ExtraSharpen(vk::CommandBuffer cmdbuf, vk::Image target, 
 
 void TemporalUpscaler::OnBlendedSceneDraw() {
     // Water and particles need color changes beyond the scene stencil.
-    if (snapshot_taken || !scene_color || !Active() || !ReactiveOn()) {
+    if (snapshot_taken || !SceneColorLive() || !Active() || !ReactiveOn()) {
         return;
     }
     snapshot_taken = true;
@@ -1191,7 +1481,7 @@ void TemporalUpscaler::OnBlendedSceneDraw() {
 }
 
 void TemporalUpscaler::OnSceneComposite() {
-    if (!opaque_valid || mask_ready || failed || !ReactiveOn()) {
+    if (!opaque_valid || mask_ready || failed || !ReactiveOn() || !SceneColorLive()) {
         return;
     }
     auto& color = texture_cache.GetImage(scene_color);
@@ -1299,6 +1589,9 @@ void TemporalUpscaler::Run() {
         profiler->Mark(0xF5A0'0000ull ^ std::hash<std::string_view>{}(label),
                        [label] { return std::string{label}; });
     }
+    if (!SceneImagesLive()) {
+        return;
+    }
     auto& color = texture_cache.GetImage(scene_color);
     auto& depth = texture_cache.GetImage(camera_motion.Depth());
     const u32 ow = color.info.size.width, oh = color.info.size.height;
@@ -1373,7 +1666,7 @@ void TemporalUpscaler::Run() {
 
     mask_ready = mask_ready || RecordReactive(input_color_view);
     bool has_reactive = mask_ready;
-    if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerFsr3 &&
+    if (SpartanSettings::IsFsr3(SpartanSettings::Get().upscaler) &&
         input_depth == depth.GetImage()) {
         has_reactive = RecordStencilReactive(cmdbuf, depth, depth_format, w, h) || has_reactive;
     }
@@ -1436,8 +1729,8 @@ void TemporalUpscaler::Run() {
         info.viewSpaceToMeters = 1.0f;
         // RCAS strength 0..1 (menu, SPARTAN_FSR_SHARPNESS); jitter at 1:1 softens the image slightly.
         // AMD's RCAS ends at 1; ExtraSharpen adds the rest of the menu's 0..2.
-        info.sharpness = std::min(SpartanSettings::Get().sharpness.load(), 1.0f);
-        info.enableSharpening = SpartanSettings::Get().sharpen ? VK_TRUE : VK_FALSE;
+        info.sharpness = UpscalerSharpness();
+        info.enableSharpening = SharpenOn() ? VK_TRUE : VK_FALSE;
         info.reset = reset ? VK_TRUE : VK_FALSE;
         info.frameId = frame_id++;
     
@@ -1463,7 +1756,7 @@ void TemporalUpscaler::Run() {
     }
     if (dispatched) {
         reset = false;
-        dispatched_last_frame = true;
+        dispatched_last_frame = true; frames_since_run = 0;
         if (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa) {
             ExtraSharpen(cmdbuf, vk::Image(output_image), false, ow, oh);
         }
@@ -1526,6 +1819,143 @@ void TemporalUpscaler::Run() {
     }
 }
 
+void TemporalUpscaler::RunSceneTaa() {
+    if (auto* profiler = GpuProfiler::Get()) {
+        const char* label = "upscaler RunSceneTaa";
+        profiler->Mark(0xF5A0'0000ull ^ std::hash<std::string_view>{}(label),
+                       [label] { return std::string{label}; });
+    }
+    if (!SceneImagesLive()) {
+        return;
+    }
+    auto& color = texture_cache.GetImage(scene_color);
+    auto& depth = texture_cache.GetImage(camera_motion.Depth());
+    const u32 w = color.info.size.width, h = color.info.size.height;
+    const auto wanted = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
+    // The composite writes an sRGB target (decoded to linear on sampling), or, in some scenes, a
+    // plain 8-bit UNORM one that already holds display values: those are processed as they are.
+    const bool srgb_color = color.info.pixel_format == vk::Format::eR8G8B8A8Srgb;
+    const bool unorm_color = color.info.pixel_format == vk::Format::eR8G8B8A8Unorm;
+    if ((!srgb_color && !unorm_color) || depth.info.size.width != w ||
+        depth.info.size.height != h || (color.usage_flags & wanted) != wanted) {
+        static std::set<std::string> warned;
+        char text[512];
+        std::snprintf(text, sizeof(text), "%s %ux%u depth %ux%u usage %s",
+                      vk::to_string(color.info.pixel_format).c_str(), w, h, depth.info.size.width,
+                      depth.info.size.height, vk::to_string(color.usage_flags).c_str());
+        const std::string key = text;
+        if (warned.insert(key).second && warned.size() <= 8) {
+            std::printf("Upscaler: scene colour %s not usable\n", key.c_str());
+        }
+        skip_reason = "bad_images";
+        return;
+    }
+    if (!EnsureResources(w, h, w, h, false)) {
+        failed = true;
+        skip_reason = "resources";
+        return;
+    }
+    const auto depth_format = depth.info.pixel_format;
+    const auto depth_view = CachedView(depth, depth_format, vk::ImageAspectFlagBits::eDepth);
+    // The sRGB view decodes to linear on sampling, the blit back encodes again.
+    const auto color_view = CachedView(color, srgb_color ? vk::Format::eR8G8B8A8Srgb
+                                                         : vk::Format::eR8G8B8A8Unorm,
+                                       vk::ImageAspectFlagBits::eColor);
+
+    scheduler.EndRendering();
+    runtime.Transit(&depth, vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits2::eComputeShader,
+                    vk::AccessFlagBits2::eShaderRead);
+    runtime.Transit(&color, vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits2::eComputeShader,
+                    vk::AccessFlagBits2::eShaderRead);
+    runtime.FlushBarriers();
+    const auto cmdbuf = scheduler.CommandBuffer();
+    const auto all = vk::PipelineStageFlagBits2::eAllCommands;
+    const auto rw = vk::AccessFlagBits2::eShaderRead | vk::AccessFlagBits2::eShaderWrite;
+    const auto own_barrier = [&](vk::Image image, vk::ImageLayout old_layout,
+                                 vk::PipelineStageFlags2 src_stage, vk::AccessFlags2 src_access,
+                                 vk::ImageLayout new_layout, vk::PipelineStageFlags2 dst_stage,
+                                 vk::AccessFlags2 dst_access) {
+        const vk::ImageMemoryBarrier2 barrier{
+            .srcStageMask = src_stage,
+            .srcAccessMask = src_access,
+            .dstStageMask = dst_stage,
+            .dstAccessMask = dst_access,
+            .oldLayout = old_layout,
+            .newLayout = new_layout,
+            .image = image,
+            .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1},
+        };
+        cmdbuf.pipelineBarrier2({.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier});
+    };
+    own_barrier(vk::Image(motion_image), vk::ImageLayout::eUndefined, all,
+                vk::AccessFlagBits2::eNone, vk::ImageLayout::eGeneral,
+                vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderWrite);
+    own_barrier(vk::Image(output_image), vk::ImageLayout::eUndefined, all,
+                vk::AccessFlagBits2::eNone, vk::ImageLayout::eGeneral, all, rw);
+    camera_motion.RecordMotionVp(cmdbuf, depth_view, *motion_view, w, h);
+    own_barrier(vk::Image(motion_image), vk::ImageLayout::eGeneral,
+                vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderWrite,
+                vk::ImageLayout::eGeneral, all, vk::AccessFlagBits2::eShaderRead);
+
+    const auto now = std::chrono::steady_clock::now();
+    float frame_ms = std::chrono::duration<float, std::milli>(now - last_frame).count();
+    if (frame_ms <= 0.0f || frame_ms > 200.0f) {
+        frame_ms = 16.6f;
+    }
+    last_frame = now;
+
+    RecordTaa(cmdbuf, color_view, depth_view);
+    const bool dispatched = true;
+    if (!dispatched) {
+        return; // the scene colour stays as the game made it
+    }
+    reset = false;
+    dispatched_last_frame = true; frames_since_run = 0;
+    ++ldr_runs;
+    skip_reason = "none";
+    if (std::strcmp(logged_skip, "none") != 0) {
+        logged_skip = "none";
+        std::printf("TAA scene: running again (scene %u)\n", scene_counter);
+    }
+    SpartanSettings::Get().temporal_applied = true;
+
+    // Keep the game's alpha, then write the result back (the blit encodes sRGB).
+    own_barrier(vk::Image(output_image), vk::ImageLayout::eGeneral, all, rw,
+                vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits2::eComputeShader,
+                vk::AccessFlagBits2::eShaderRead | vk::AccessFlagBits2::eShaderWrite);
+    {
+        const vk::DescriptorImageInfo scene_info{.sampler = *taa_sampler, .imageView = color_view,
+                                                 .imageLayout = vk::ImageLayout::eGeneral};
+        const vk::DescriptorImageInfo result_info{.imageView = *output_view,
+                                                  .imageLayout = vk::ImageLayout::eGeneral};
+        const std::array<vk::WriteDescriptorSet, 2> writes{{
+            {.dstBinding = 0, .descriptorCount = 1,
+             .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+             .pImageInfo = &scene_info},
+            {.dstBinding = 1, .descriptorCount = 1,
+             .descriptorType = vk::DescriptorType::eStorageImage, .pImageInfo = &result_info}}};
+        cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, *ldr_alpha_pipeline);
+        cmdbuf.pushDescriptorSetKHR(vk::PipelineBindPoint::eCompute, *ldr_alpha_pipeline_layout,
+                                    0, writes);
+        cmdbuf.dispatch((w + 7) / 8, (h + 7) / 8, 1);
+    }
+    own_barrier(vk::Image(output_image), vk::ImageLayout::eGeneral,
+                vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderWrite,
+                vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits2::eBlit,
+                vk::AccessFlagBits2::eTransferRead);
+    runtime.Transit(&color, vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits2::eBlit,
+                    vk::AccessFlagBits2::eTransferWrite);
+    runtime.FlushBarriers();
+    const vk::ImageBlit region{
+        .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+        .srcOffsets = std::array{vk::Offset3D{0, 0, 0}, vk::Offset3D{s32(w), s32(h), 1}},
+        .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+        .dstOffsets = std::array{vk::Offset3D{0, 0, 0}, vk::Offset3D{s32(w), s32(h), 1}},
+    };
+    cmdbuf.blitImage(vk::Image(output_image), vk::ImageLayout::eGeneral, color.GetImage(),
+                     vk::ImageLayout::eGeneral, region, vk::Filter::eNearest);
+}
+
 vk::ImageView TemporalUpscaler::CachedView(const VideoCore::Image& image, vk::Format format,
                                            vk::ImageAspectFlags aspect) {
     const vk::Image handle = image.GetImage();
@@ -1578,7 +2008,16 @@ float TemporalUpscaler::SceneMipBias() const {
     if (!Active() || SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) return 0.0f;
     const float render = float(SpartanSettings::Get().active_render_width.load());
     const float output = float(Scaled() ? target_width : 1920u);
-    return render > 0.0f && render < output ? std::log2(render / output) : 0.0f;
+    float bias = render > 0.0f && render < output ? std::log2(render / output) : 0.0f;
+    if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerFsr3Ui) {
+        bias -= float(SpartanSettings::Get().fsr_lod.load()) / 100.0f; // the menu's texture detail
+    }
+    return bias;
+}
+
+bool TemporalUpscaler::FsrSceneTextures() const {
+    return Active() && SpartanSettings::Get().upscaler == SpartanSettings::UpscalerFsr3Ui &&
+           !done_this_frame;
 }
 
 bool TemporalUpscaler::Scaled() const {
@@ -1586,7 +2025,7 @@ bool TemporalUpscaler::Scaled() const {
 }
 
 void TemporalUpscaler::OnColorTarget(VideoCore::ImageId color) {
-    if (ui_phase || !camera_motion.Depth()) {
+    if (ui_phase || !camera_motion.DepthLive()) {
         return;
     }
     const auto& image = texture_cache.GetImage(color);
@@ -1995,7 +2434,7 @@ void TemporalUpscaler::RunScaled() {
                     vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eGeneral,
                     vk::PipelineStageFlagBits2::eColorAttachmentOutput, color_access);
             reset = false;
-            dispatched_last_frame = true;
+            dispatched_last_frame = true; frames_since_run = 0;
             if (const int dump = DumpFrame(); dump >= 0) {
                 DumpImages(instance, scheduler, cmdbuf, dump,
                            {{color_image, source_width, source_height, 4, "input", "rgba"},
@@ -2077,8 +2516,8 @@ void TemporalUpscaler::RunScaled() {
     info.cameraFar = 3000.0f;
     info.cameraVerticalFovRadians = camera_motion.VerticalFov();
     info.viewSpaceToMeters = 1.0f;
-    info.sharpness = std::min(settings.sharpness.load(), 1.0f);
-    info.enableSharpening = settings.sharpen ? VK_TRUE : VK_FALSE;
+    info.sharpness = UpscalerSharpness();
+    info.enableSharpening = SharpenOn() ? VK_TRUE : VK_FALSE;
     info.reset = reset ? VK_TRUE : VK_FALSE;
     info.frameId = frame_id++;
 
@@ -2096,7 +2535,7 @@ void TemporalUpscaler::RunScaled() {
     } else {
         ok = true;
         reset = false;
-        dispatched_last_frame = true;
+        dispatched_last_frame = true; frames_since_run = 0;
         ExtraSharpen(cmdbuf, vk::Image(ui_image), true, ow, oh);
     }
     barrier(vk::Image(ui_image), vk::ImageAspectFlagBits::eColor, vk::ImageLayout::eGeneral, all,
@@ -2380,8 +2819,8 @@ bool TemporalUpscaler::RecordFsr4(vk::CommandBuffer cmdbuf, Fsr4Upscaler::Image 
         .near_plane = camera_motion.Near(),
         .far_plane = 3000.0f,
         .vertical_fov = camera_motion.VerticalFov(),
-        .sharpness = std::min(settings.sharpness.load(), 1.0f),
-        .sharpen = settings.sharpen,
+        .sharpness = UpscalerSharpness(),
+        .sharpen = SharpenOn(),
         .reset = reset,
         .auto_exposure = settings.fsr4_auto_exposure,
         .color_format = context_hdr ? vk::Format::eR16G16B16A16Sfloat : ldr_format,

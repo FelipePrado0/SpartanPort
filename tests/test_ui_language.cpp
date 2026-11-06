@@ -67,6 +67,8 @@ int main() {
     assert(SetLanguage(1) == 1 && std::string(Tr("Close")) == "Fechar" && std::string(Tr("Trophy unlocked!")) == "Troféu conquistado!");
     assert(std::string(Tr("not a menu text")) == "not a menu text" && Tr(nullptr) == nullptr);
     assert(SetLanguage(9) == 9 && std::string(Tr("Close")) == "Закрыть");
+    assert(FindLanguage("cs") == 10 && FindLanguage("cs-CZ") == 10);
+    assert(SetLanguage(10) == 10 && std::string(Tr("Close")) == "Zavřít" && std::string(Tr("Trophy unlocked!")) == "Trofej odemčena!");
     assert(SetLanguage(LanguageCount - 1) == 0 && !chinese && std::string(Tr("Close")) == "Close");
     chinese_font = true;
     assert(SetLanguage(LanguageCount - 1) == LanguageCount - 1 && chinese && std::string(Tr("Close")) == "关闭");

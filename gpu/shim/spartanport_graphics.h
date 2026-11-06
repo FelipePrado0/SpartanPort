@@ -138,6 +138,33 @@ inline bool FsrPassRuns(bool fsr1, bool rcas, int in_w, int in_h, int out_w, int
     return (fsr1 && upscale) || (rcas && same);
 }
 
+/// Anti-aliasing of the finished frame (host_passes/aa_pass.cpp), applied before the sharpening. Live.
+/// FXAA is one cheap pass that softens edges a little; SMAA 1x takes three and keeps the picture
+/// sharper. Off by default: it changes the picture.
+enum AntiAliasing : int { AaOff = 0, AaFxaa = 1, AaSmaa = 2, AntiAliasingCount };
+inline constexpr std::array<std::string_view, AntiAliasingCount> AntiAliasingKeys = {"off", "fxaa", "smaa"};
+inline constexpr std::array<const char*, AntiAliasingCount> AntiAliasingNames = {"Off", "FXAA", "SMAA"};
+/// A key of spartanport.ini or SPARTAN_ANTI_ALIASING (also the menu's index and the old on/off
+/// spelling); anything else is off.
+inline int ParseAntiAliasing(std::string_view text) {
+    if (const int found = IndexOf(AntiAliasingKeys, text, -1); found >= 0) return found;
+    if (text == "none" || text == "0" || text == "false") return AaOff;
+    if (text == "1" || text == "true") return AaFxaa;
+    if (text == "2") return AaSmaa;
+    return AaOff;
+}
+/// Whether the anti-aliasing pass runs on an image of this size: a mode is chosen and the image
+/// is big enough for the filters to read their neighbourhood.
+inline bool AaPassRuns(int mode, int width, int height) {
+    return (mode == AaFxaa || mode == AaSmaa) && width >= 16 && height >= 16;
+}
+/// Whether the colour values the presenter reads are linear light (an sRGB view or a plain 10-bit
+/// buffer, which the post pass encodes) or already perceptual (10-bit sRGB values, HDR PQ): the edge
+/// tests work on perceptual luma either way.
+inline bool AaInputIsLinear(bool srgb_encoded_10bit, bool hdr) {
+    return !srgb_encoded_10bit && !hdr;
+}
+
 /// What the present limit really allows: the engine ceiling caps it.
 inline int EffectiveFps(int limit, int engine_fps) {
     return limit == 0 || limit > engine_fps ? engine_fps : limit;
