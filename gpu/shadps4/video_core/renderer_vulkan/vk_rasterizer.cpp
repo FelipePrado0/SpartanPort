@@ -31,6 +31,8 @@
 #include "video_core/texture_cache/image_view.h"
 #include "video_core/texture_cache/texture_cache.h"
 
+#include <vulkan/vulkan_format_traits.hpp>
+
 namespace Vulkan {
 
 static u32 UiColorMask(const GraphicsPipeline* pipeline, bool upscale) {
@@ -1923,6 +1925,14 @@ void Rasterizer::ResolveVertexBuffers(const GraphicsPipeline* pipeline,
                 !SpartanToggle::Disabled(SpartanToggle::PreparedResources)
             ? &prepared->vertex
             : nullptr;
+    // spartanport: TryPreparedPipeline compared the V#s when the pipeline was chosen, but a
+    // write queued before this draw (WriteData, DMA) can change the table after that. Stale
+    // addresses or strides stretch polygons across the screen: the V#s are read again then.
+    if (ready &&
+        !fetch->SharpsUnchanged(pipeline->GetStage(Shader::SwStage::Vertex), ready->buffers)) {
+        NoteStaleVertexInputs();
+        ready = nullptr;
+    }
     if (ready) {
         attributes.assign(ready->attributes, ready->attributes + ready->count);
         bindings.assign(ready->bindings, ready->bindings + ready->count);
@@ -2204,10 +2214,20 @@ bool Rasterizer::IsComputeImageClear(const Pipeline* pipeline) {
         return false;
     }
 
-    // Image clear must be valid
+    // Image clear must be valid and number of component must match
+    // spartanport: a cached image of another format with the same size (R32 where the game now
+    // writes RGBA8) must not take a clear made for the buffer's format.
     VideoCore::Image& image1 = texture_cache.GetImage(image1_id);
     if (image1.info.guest_size != buf1.GetSize() || image1.info.num_bits != buf1_bpp ||
-        image1.info.props.is_depth) {
+        image1.info.props.is_depth ||
+        AmdGpu::NumComponents(buf1.GetDataFmt()) != vk::componentCount(image1.info.pixel_format)) {
+        return false;
+    }
+    // spartanport: the component count alone lets RGBA8 over RGB10A2, or UNORM over sRGB, through.
+    // Take the shortcut only when the buffer's format is exactly the image's format (godlyfast).
+    const vk::Format buffer_format =
+        LiverpoolToVK::TrySurfaceFormat(buf1.GetDataFmt(), buf1.GetNumberFmt());
+    if (buffer_format == vk::Format::eUndefined || buffer_format != image1.info.pixel_format) {
         return false;
     }
 
@@ -2465,6 +2485,11 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
     // TextureSetMemo: what this call resolves, to remember when the set qualifies.
     std::array<TextureSetEntry, TextureSet::MaxImages> resolved{};
     bool set_ok = set_slot != nullptr;
+    // spartanport: the generation the first binding resolved under. A later binding's FindImage
+    // may (un)register images, which can change an earlier binding's answer; stamping the set
+    // with the generation after that kept replaying the earlier answer (the found_id memo already
+    // records only when the generation did not move).
+    const u64 set_generation = texture_cache.RegistryGeneration();
     // SampleSceneProxies: bindings that may read a reduced scene proxy instead of the native
     // image (normalized sampling only; see Shader::ImageResource::needs_native).
     boost::container::small_vector<bool, 16> binding_proxy_ok;
@@ -2686,9 +2711,10 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
             }
         }
     }
-    if (set_ok && image_bindings.size() == stage.images.size()) {
+    if (set_ok && image_bindings.size() == stage.images.size() &&
+        texture_cache.RegistryGeneration() == set_generation) {
         // Remember the set: the same T#s resolve the same way while no image is (un)registered.
-        set_slot->generation = texture_cache.RegistryGeneration();
+        set_slot->generation = set_generation;
         set_slot->scene_generation = scene_targets->Generation();
         set_slot->count = static_cast<u32>(stage.images.size());
         std::copy_n(resolved.begin(), set_slot->count, set_slot->entries.begin());

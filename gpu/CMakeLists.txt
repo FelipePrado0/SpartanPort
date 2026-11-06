@@ -295,10 +295,15 @@ target_link_libraries(irq-controller-test PRIVATE fmt::fmt magic_enum::magic_enu
 add_executable(shader-user-data-test EXCLUDE_FROM_ALL ../tests/test_shader_user_data.cpp
     shadps4/shader_recompiler/frontend/fetch_shader.cpp
     shadps4/shader_recompiler/frontend/decode.cpp
-    shadps4/shader_recompiler/frontend/format.cpp)
+    shadps4/shader_recompiler/frontend/format.cpp ../tests/test_gpu_runtime_stubs.cpp)
 target_compile_options(shader-user-data-test PRIVATE -UNDEBUG)
 target_include_directories(shader-user-data-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(shader-user-data-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
+if (WIN32)
+    # The guarded guest read calls spartanport_setjmp (src/compat_win.c), whose compat_random needs bcrypt.
+    target_sources(shader-user-data-test PRIVATE ../src/compat_win.c)
+    target_link_libraries(shader-user-data-test PRIVATE onecore bcrypt)
+endif()
 add_executable(cache-storage-test EXCLUDE_FROM_ALL ../tests/test_cache_storage.cpp
     ../tests/test_gpu_runtime_stubs.cpp)
 target_include_directories(cache-storage-test PRIVATE
@@ -424,10 +429,15 @@ target_link_libraries(async-pipeline-cache-test PRIVATE Vulkan::Vulkan)
 add_executable(async-fetch-snapshot-test EXCLUDE_FROM_ALL ../tests/test_async_fetch_snapshot.cpp
     shadps4/shader_recompiler/frontend/fetch_shader.cpp
     shadps4/shader_recompiler/frontend/decode.cpp
-    shadps4/shader_recompiler/frontend/format.cpp)
+    shadps4/shader_recompiler/frontend/format.cpp ../tests/test_gpu_runtime_stubs.cpp)
 target_compile_options(async-fetch-snapshot-test PRIVATE -UNDEBUG)
 target_include_directories(async-fetch-snapshot-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(async-fetch-snapshot-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
+if (WIN32)
+    # The guarded guest read calls spartanport_setjmp (src/compat_win.c), whose compat_random needs bcrypt.
+    target_sources(async-fetch-snapshot-test PRIVATE ../src/compat_win.c)
+    target_link_libraries(async-fetch-snapshot-test PRIVATE onecore bcrypt)
+endif()
 target_compile_options(depth-stencil-state-test PRIVATE -UNDEBUG)
 target_include_directories(depth-stencil-state-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(depth-stencil-state-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
@@ -483,6 +493,16 @@ add_executable(camera-motion-test EXCLUDE_FROM_ALL ../tests/test_camera_motion.c
 target_include_directories(camera-motion-test PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include)
 target_compile_options(camera-motion-test PRIVATE -UNDEBUG -fPIC)
 target_link_libraries(camera-motion-test PRIVATE spartanportgpu)
+# spartanport: these tests link the static Windows spartanportgpu with the runtime stubs; shader
+# code in it now reads guest descriptors through the guarded read, which calls spartanport_setjmp
+# (src/compat_win.c).
+if (WIN32)
+    foreach(test motion-shader-test frame-generation-runtime-test scene-resolution-test
+            taa-shader-test camera-motion-test)
+        target_sources(${test} PRIVATE ../src/compat_win.c)
+        target_link_libraries(${test} PRIVATE onecore)
+    endforeach()
+endif()
 add_dependencies(camera-motion-test host_shaders)
 
 # spartanport: FSR 4 benchmark outside the game (tools/fsr4_bench.cpp): ninja -C out/gpu fsr4-bench.

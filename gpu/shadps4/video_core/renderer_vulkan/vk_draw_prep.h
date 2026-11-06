@@ -98,6 +98,9 @@ public:
         return worker_count != 0;
     }
 
+    /// spartanport: true on a draw-preparation worker thread (read by the guest fault handler).
+    [[nodiscard]] static bool OnWorkerThread() noexcept;
+
     struct Submission;
     /// Game submit thread, outside the queue lock: copies and scans a top-level graphics
     /// command buffer. Null when disabled.
