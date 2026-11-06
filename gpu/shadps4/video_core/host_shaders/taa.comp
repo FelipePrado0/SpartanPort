@@ -350,6 +350,9 @@ void main() {
     }
     // Optional diagnostic alpha; normal output remains opaque.
     vec3 output_color = diag == 2 ? current : diag == 3 ? diagnostic_history : diag == 4 ? debug_view : shown;
+    // diag 4: a checkerboard of black 16 px squares over every pixel, whatever route it took. If it is not in
+    // the screenshot, something after this shader overwrites its result.
+    if (diag == 4 && (((p.x >> 4) ^ (p.y >> 4)) & 1) == 1) output_color = vec3(0.0);
     imageStore(result_img, p, vec4(output_color, diag != 0 ? history_weight : 1.0));
     imageStore(next_history, p, vec4(result, dyn_flag ? -depth : depth));
     if (diag != 0) imageStore(diagnostic_img,p,
