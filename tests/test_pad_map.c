@@ -16,7 +16,6 @@ int spartanportgpu_mouse_aim_sensitivity(void) { return aim_sensitivity; }
 void spartanportgpu_engine_fps_cycle(void) {}
 static SpartanActorSlot test_actor_slots[2];
 uintptr_t spartanport_actor_slots_address(void) { return (uintptr_t)test_actor_slots; }
-int runtime_memory_is_mapped(uintptr_t address, uint64_t size) { (void)address; (void)size; return 0; }
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *name) {
     (void)table; (void)count; (void)name;
     return 0;
@@ -127,7 +126,7 @@ int main(void) {
     char everything[2048]="";
     static const char *const all_buttons[]={"cross","circle","square","triangle","l1","r1","l2","r2","l3","r3","options",
         "touchpad_left","touchpad_right","up","down","left","right","dodge","rage","grab","weapon_next","weapon_prev",
-        "move_up","move_down","move_left","move_right","look_up","look_down","look_left","look_right"};
+        "move_up","move_down","move_left","move_right","look_up","look_down","look_left","look_right","camera"};
     for (size_t i=0;i<sizeof(all_buttons)/sizeof(*all_buttons);++i)
         snprintf(everything+strlen(everything),sizeof(everything)-strlen(everything),"%s%s=F1|F2|F3|F4",i ? "," : "",all_buttons[i]);
     ButtonMap full=key_map;

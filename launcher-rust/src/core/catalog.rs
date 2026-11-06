@@ -303,7 +303,7 @@ pub static SETTINGS: &[Setting] = &[
         Text("keyboard"),
         env("SPARTAN_STICK_PROMPTS", ""),
     ),
-    app("controls_layout", Kind::Int, Int(4), None),
+    app("controls_layout", Kind::Int, Int(5), None),
     // Off unless set: the runner patches the tutorials only for "1" (`run.py` `switch_text_mounts`).
     app(
         "switch_attacks",
@@ -405,6 +405,7 @@ pub static SETTINGS: &[Setting] = &[
     ini("auto_safe_fps", Flag, Bool(true), true, 33),
     // FXAA / SMAA of the finished frame, read by the game from spartanport.ini.
     ini("anti_aliasing", Pick(ANTI_ALIASING), Text("off"), true, 34),
+    ini("free_camera", Flag, Bool(false), true, 35),
     ini("object_motion", Flag, Bool(true), false, 2),
     ini("output_res", Pick(OUTPUTS), Text("1920x1080"), false, 4),
     ini(
@@ -547,14 +548,14 @@ mod tests {
                 "cheat_very_hard"
             ]
         );
-        assert_eq!(keys.last(), Some(&"anti_aliasing"));
+        assert_eq!(keys.last(), Some(&"free_camera"));
         let shown: Vec<_> = rows.iter().filter(|s| s.written).map(|s| s.key).collect();
         assert_eq!(shown, SHOWN_INI_KEYS.iter().copied().collect::<Vec<_>>());
     }
 
     #[test]
-    fn shown_ini_keys_are_the_30_controls_of_the_window() {
-        assert_eq!(SHOWN_INI_KEYS.len(), 31);
+    fn shown_ini_keys_are_the_32_controls_of_the_window() {
+        assert_eq!(SHOWN_INI_KEYS.len(), 32);
         for seeded in ["monitor", "hdr", "glyph_style"] {
             assert!(SHOWN_INI_KEYS.contains(&seeded), "{seeded}");
         }
@@ -627,7 +628,7 @@ mod tests {
     fn text_reads_the_default_of_an_absent_key() {
         let mut s = Settings(serde_json::Map::new());
         assert_eq!(s.text("stream_memory"), "cached");
-        assert_eq!(s.text("controls_layout"), "4");
+        assert_eq!(s.text("controls_layout"), "5");
         s.set("stream_memory", json!("host"));
         assert_eq!(s.text("stream_memory"), "host");
     }
