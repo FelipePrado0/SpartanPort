@@ -170,7 +170,7 @@ void main() {
     vec3 result = current;
     bool dyn_flag = false; // history alpha sign: this pixel looked like a mover this frame
     float history_weight = 0.0;
-    vec3 debug_view = vec3(-1.0); // diag 4: stays negative when no route below set it (drawn as red/yellow stripes)
+    vec3 debug_view = vec3(1.0, 0.0, 0.0); // diag 4: red = no history (or depth-rejected, see below)
     vec3 diagnostic_history = current;
     vec3 diagnostic_sample = current;
     vec3 diagnostic_direct = current;
@@ -288,41 +288,12 @@ void main() {
                 // diag 4: red = depth-rejected share, green = history lost to colour change / moving
                 // object detection, blue = history weight finally used.
                 debug_view = vec3(1.0 - coverage, 1.0 - confidence, weight);
-                if (diag == 4) {
-                    // Whole colours, so the game's colour grading cannot blur them. Even columns: how much of
-                    // the bilinear footprint matched (blue 0.99+, cyan 0.5+, yellow 0.1+, green less).
-                    // Odd columns: the history weight finally used (blue 0.5+, yellow 0.1+, green less).
-                    debug_view = (p.x & 1) == 0
-                        ? (coverage >= 0.99 ? vec3(1.0) : coverage >= 0.5 ? vec3(0.0, 1.0, 1.0)
-                           : coverage >= 0.1 ? vec3(1.0, 1.0, 0.0) : vec3(0.0, 1.0, 0.0))
-                        : (weight >= 0.5 ? vec3(1.0) : weight >= 0.1 ? vec3(1.0, 1.0, 0.0)
-                           : vec3(0.0, 1.0, 0.0));
-                }
                 // Tonemapped blending: a few very bright HDR samples otherwise dominate.
                 result = (variant & 1u) != 0u
                              ? untonemap(mix(tonemap(current), tonemap(clipped), weight))
                              : mix(current, clipped, weight);
-            } else if (diag == 4) {
-                // Why no history here (diag 4 only; the picture itself is unchanged).
-                if (expected_depth < 0.0) {
-                    debug_view = vec3(0.0); // black: the pixel did not reproject (w <= 0)
-                } else {
-                    // The previous depth did not match. Instead of colours the bits of four numbers, so they
-                    // can be read back exactly from a screenshot: the pixel column picks the bit (x mod 32,
-                    // the most significant on the left, white = 1, black = 0), the pixel row picks the number
-                    // (y mod 4): 0 the expected previous depth, 1 this frame's depth, 2 the depth stored at the
-                    // nearest history texel, 3 the depth tolerance.
-                    vec4 near_tap = texelFetch(history_tex, clamp(base + ivec2(round(fraction)), ivec2(0), size - 1), 0);
-                    int row = p.y & 3;
-                    float q = row == 0 ? expected_depth : row == 1 ? depth : row == 2 ? near_tap.a : threshold;
-                    debug_view = vec3(float((floatBitsToUint(q) >> uint(31 - (p.x & 31))) & 1u));
-                }
             }
-        } else if (diag == 4) {
-            debug_view = vec3(1.0, 0.0, 1.0); // magenta: the motion vector leaves the picture or is not a number
         }
-    } else if (diag == 4) {
-        debug_view = vec3(0.0); // black: the history was reset this frame
     }
     vec3 shown = result;
     const float spatial = float(pad >> 26) * (1.0 / 63.0);
@@ -350,16 +321,10 @@ void main() {
     }
     // Optional diagnostic alpha; normal output remains opaque.
     vec3 output_color = diag == 2 ? current : diag == 3 ? diagnostic_history : diag == 4 ? debug_view : shown;
-    // diag 4: a checkerboard of black 16 px squares over every pixel, whatever route it took. If it is not in
-    // the screenshot, something after this shader overwrites its result.
-    // Calibration swatch, top left: 32 px of pure blue, then 32 px of pure red, to see what the game's colour
-    // grading makes of them.
-    if (diag == 4 && p.y < 64 && p.x < 64) debug_view = p.x < 32 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
-    if (diag == 4 && p.y < 64 && p.x < 64) output_color = debug_view;
-    // A pixel no route set (debug_view still negative): 4 px stripes, red and yellow, so they cannot be taken for
-    // any route's colour.
-    if (diag == 4 && debug_view.r < 0.0) output_color = vec3(1.0, float((p.x >> 2) & 1), 0.0);
-    if (diag == 4 && !(p.y < 64 && p.x < 64) && (((p.x >> 4) ^ (p.y >> 4)) & 1) == 1) output_color = vec3(0.0);
+    // The diagnostic views reach the screen with red and blue exchanged (checked with a pure red/blue swatch:
+    // the swap is in how the scene image is written back; the normal picture is not affected, as it
+    // is read through the same exchange). Exchanged here, so a view shows the colours described.
+    if (diag != 0) output_color = output_color.bgr;
     imageStore(result_img, p, vec4(output_color, diag != 0 ? history_weight : 1.0));
     imageStore(next_history, p, vec4(result, dyn_flag ? -depth : depth));
     if (diag != 0) imageStore(diagnostic_img,p,

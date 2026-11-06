@@ -381,12 +381,7 @@ skipping screen-space passes (3 or 4 indices) so a shifted full-screen quad leav
 - Sharpening: RCAS-style pass `taa_sharpen.comp` after the accumulation (`taa_sharpen`, up to 200%);
   the menu's "Sharpening (RCAS)" switch turns it off (and FSR's own sharpening, `SharpenOn()`).
 - `pad` bits: 0-7 diagnostic view (4 = history debug view: red depth-rejected, green history lost,
-  blue weight used; the debug view uses whole colours only (the game's colour grading crushes small values). With history: even
-  columns = how much of the bilinear footprint matched (white 99%+, cyan 50%+, yellow 10%+, green less), odd columns =
-  the weight used (white 0.5+, yellow 0.1+, green less). Without history because the depth did not match: the bits
-  of four numbers as black/white, column x mod 32 = bit (most significant on the left), row y mod 4 = number (expected
-  previous depth, this frame's depth, depth stored at the nearest history texel, tolerance). Black = the pixel did
-  not reproject, magenta = the motion vector leaves the picture, black = history reset; the top left 64 px square is a calibration swatch (pure blue, pure red); a pixel no route set is drawn as 4 px red/yellow stripes; every other 16 px square of the whole picture is black, to show that the picture really is this shader's output), 8-15 A/B switches, 16-23 moving-object history loss in percent, 24 view-projection
+  blue weight used), 8-15 A/B switches, 16-23 moving-object history loss in percent, 24 view-projection
   depth, 25 8-bit scene, 26-31 spatial smoothing.
 - Defaults (tuned in game on a GTX 1070 Ti): history 99% still / 55% moving, tolerance 115%,
   moving objects 90%, edges 70%, texture detail 75%, sharpening 165%. They live in
