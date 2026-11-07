@@ -1,0 +1,20 @@
+From: KauaRios <kauarios49@gmail.com>
+Subject: [PATCH] Size the proc task path for the maximum dirent name
+
+Fedora GCC 16 with the distro hardening flags rejects the 64-byte buffer
+under -Werror=format-truncation. Keep the diagnostic enabled and reserve
+space for the complete directory entry plus the path prefix/suffix.
+This patch is applied by the RPM only; other builds retain upstream source.
+
+diff --git a/src/runtime_thread.c b/src/runtime_thread.c
+--- a/src/runtime_thread.c
++++ b/src/runtime_thread.c
+@@ -471,7 +471,7 @@ static size_t live_thread_cpu(ThreadCpu *out,size_t max) {
+     long hz=sysconf(_SC_CLK_TCK);
+     for (struct dirent *d;(d=readdir(dir)) && n<max;) {
+         if (d->d_name[0]=='.') continue;
+-        char path[64], line[1024];
++        char path[sizeof(d->d_name)+sizeof("/proc/self/task//stat")], line[1024];
+         snprintf(path,sizeof(path),"/proc/self/task/%s/stat",d->d_name);
+         FILE *f=fopen(path,"r");
+         if (!f) continue;
