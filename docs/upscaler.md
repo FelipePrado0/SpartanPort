@@ -49,7 +49,7 @@ Two FSR 3.1 choices. **FSR 3.1** is upstream's: with the Native AA preset the la
 game to 1918x1078, so the HUD, text and loading screens are drawn at that size and stretched to
 1920x1080. **FSR 3.1 (native HUD and text)** (`upscaler=fsr3ui`) does not patch the render size: the
 game keeps its own 1920x1080 targets (the live path, as the TAA does) and only the scene is upscaled.
-Only this variant and the TAA use the port's own sharpening (the Sharpening (RCAS) switch and
+Only this variant uses the port's own FSR sharpening (the Sharpening (RCAS) switch and
 strength, and the extra pass above FSR's maximum); FSR 3.1, FSR 4 and FSR 4.1 keep upstream's
 (`sharpen`, `sharpness`). Switching between a patched and a live-path upscaler needs a restart.
 The Insert menu (Image tab) has an "FSR 3.1 look" section for it: Texture detail (`fsr_lod`, a negative
@@ -378,8 +378,9 @@ skipping screen-space passes (3 or 4 indices) so a shifted full-screen quad leav
 - Texture detail: a negative LOD bias (`taa_lod / 100`) on the scene's material draws
   (`Rasterizer::BindResources`: scene depth address, no depth write, more than 4 indices, a colour
   target); the accumulation turns it into detail.
-- Sharpening: RCAS-style pass `taa_sharpen.comp` after the accumulation (`taa_sharpen`, up to 200%);
-  the menu's "Sharpening (RCAS)" switch turns it off (and FSR's own sharpening, `SharpenOn()`).
+- Sharpening: RCAS-style pass `taa_sharpen.comp` after the accumulation (`taa_sharpen`, up to 200%,
+  0 = off). It is independent of the menu's "Sharpening (RCAS)" switch, which only controls the host
+  pass (and FSR's own sharpening, `SharpenOn()`).
 - `pad` bits: 0-7 diagnostic view (4 = history debug view: red depth-rejected, green history lost,
   blue weight used), 8-15 A/B switches, 16-23 moving-object history loss in percent, 24 view-projection
   depth, 25 8-bit scene, 26-31 spatial smoothing.

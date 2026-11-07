@@ -107,8 +107,8 @@ int main() {
     s.upscaler = UpscalerFsr3Ui;       // so does FSR 3.1 with native HUD and text
     assert(ResolutionNeedsRestart());
     assert(IsFsr3(UpscalerFsr3) && IsFsr3(UpscalerFsr3Ui) && !IsFsr3(UpscalerTaa));
-    // The port's own sharpening: the TAA and the native-HUD FSR 3.1, not the upstream ones.
-    assert(OwnSharpening(UpscalerTaa) && OwnSharpening(UpscalerFsr3Ui));
+    // The port's own FSR sharpening: the native-HUD FSR 3.1 only (the TAA's has its own slider).
+    assert(OwnSharpening(UpscalerFsr3Ui) && !OwnSharpening(UpscalerTaa));
     assert(!OwnSharpening(UpscalerFsr3) && !OwnSharpening(UpscalerFsr4) && !OwnSharpening(UpscalerOff));
     assert(std::string_view(UpscalerName(UpscalerFsr3Ui)) == "fsr3ui");
     s.upscaler = UpscalerFsr4;

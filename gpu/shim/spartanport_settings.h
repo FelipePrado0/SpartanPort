@@ -44,10 +44,11 @@ inline bool IsFsr3(int upscaler) {
 inline bool NeedsLivePath(int upscaler) {
     return upscaler == UpscalerTaa || upscaler == UpscalerFsr3Ui;
 }
-/// The port's own sharpening (the RCAS switch and strength, the extra pass): the TAA and the
-/// native-HUD FSR 3.1. The other upscalers keep the upstream behaviour (`sharpen` and `sharpness`).
+/// The port's own FSR sharpening (the RCAS switch and strength, the extra pass): the native-HUD FSR 3.1.
+/// The other upscalers keep the upstream behaviour (`sharpen` and `sharpness`). The TAA's sharpening
+/// is separate from all of this: it has its own slider (`taa_sharpen`, 0 = off).
 inline bool OwnSharpening(int upscaler) {
-    return upscaler == UpscalerTaa || upscaler == UpscalerFsr3Ui;
+    return upscaler == UpscalerFsr3Ui;
 }
 /// FSR 4 v07 or FSR 4.1.1: the same inputs, settings and placement in the frame.
 inline bool IsFsr4(int upscaler) {
