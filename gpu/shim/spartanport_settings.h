@@ -169,7 +169,9 @@ struct Values {
     const char* xess_problem = nullptr;
     /// XeSS: how far its history is distrusted on characters and objects (the scene stencil as its
     /// responsive mask, as FSR 3.1's "moving objects"); 0 = off, saved. Live.
-    std::atomic<int> xess_objects{100};
+    std::atomic<int> xess_objects{95};
+    /// XeSS: sharpening after it (the same pass as taa_sharpen, which is the TAA's own), percent, live.
+    std::atomic<int> xess_sharpen{145};
     /// The game's depth of field (spartanport_depth_of_field.h); off keeps the whole picture sharp. Live.
     std::atomic<bool> depth_of_field{true};
     /// Anti-aliasing of the finished frame (SpartanGraphics::AntiAliasing: off, FXAA, SMAA). Live.

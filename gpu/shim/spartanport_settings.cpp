@@ -164,6 +164,8 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.taa_lod = std::clamp(i, 0, 150);
     } else if (key == "taa_spatial") {
         v.taa_spatial = std::clamp(i, 0, 100);
+    } else if (key == "xess_sharpen") {
+        v.xess_sharpen = std::clamp(i, 0, 200);
     } else if (key == "xess_objects") {
         v.xess_objects = std::clamp(i, 0, 100);
     } else if (key == "fsr_lod") {
@@ -557,7 +559,7 @@ void Save() {
                  v.taa_static.load(), v.taa_moving.load(), v.taa_tolerance.load(), v.taa_objects.load(),
                  v.taa_sharpen.load(), v.taa_lod.load(), v.taa_spatial.load());
     std::fprintf(file, "fsr_lod=%d\nfsr_objects=%d\n", v.fsr_lod.load(), v.fsr_objects.load());
-    std::fprintf(file, "xess_objects=%d\n", v.xess_objects.load());
+    std::fprintf(file, "xess_objects=%d\nxess_sharpen=%d\n", v.xess_objects.load(), v.xess_sharpen.load());
     std::fprintf(file, "anti_aliasing=%s\n",
                  SpartanGraphics::AntiAliasingKeys[std::clamp(v.anti_aliasing.load(), 0, int(SpartanGraphics::AaSmaa))].data());
     std::fprintf(file, "master_volume=%d\naudio_channels=%s\n", v.master_volume.load(),

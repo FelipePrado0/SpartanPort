@@ -597,14 +597,14 @@ void ImageTab() {
                 if (const char* problem = s.xess_problem) InfoRow("XeSS status", problem);
                 SliderRow("Texture detail", s.taa_lod, 0, 150, "%d%%",
                           "Sharper textures (a negative mip bias, in percent of one level): XeSS turns the "
-                          "extra detail into a clean picture. Higher: more detail, more shimmer. Default 75%.");
+                          "extra detail into a clean picture. Higher: more detail, more shimmer. Default 80%.");
                 SliderRow("Moving objects", s.xess_objects, 0, 100, "%d%%",
                           "How much XeSS distrusts its history on characters and objects (a mask from the "
                           "game's stencil). Higher: less ghosting behind them, rougher edges. 0% = off. "
-                          "Default 100%.");
-                SliderRow("Sharpening", s.taa_sharpen, 0, 200, "%d%%",
+                          "Default 95%.");
+                SliderRow("Sharpening", s.xess_sharpen, 0, 200, "%d%%",
                           "Sharpening after XeSS, separate from the Sharpening (RCAS) switch below. 0% = off. "
-                          "Default 165%.");
+                          "Default 145%.");
                 ImGui::EndTable();
             }
         }

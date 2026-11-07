@@ -1203,10 +1203,10 @@ void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
         // rasterizer's mip bias) and the sharpening do, and are logged like the TAA's look.
         const auto& xs = SpartanSettings::Get();
         const bool camera = camera_motion.ViewProjectionCamera();
-        const float strength = camera ? std::clamp(xs.taa_sharpen.load() / 100.0f, 0.0f, 2.0f) : 0.0f;
+        const float strength = camera ? std::clamp(xs.xess_sharpen.load() / 100.0f, 0.0f, 2.0f) : 0.0f;
         static std::array<int, 3> logged{-1, -1, -1}, pending{-1, -1, -1};
         static u32 stable_frames = 0;
-        const std::array<int, 3> now{xs.taa_lod.load(), xs.taa_sharpen.load(), xs.xess_objects.load()};
+        const std::array<int, 3> now{xs.taa_lod.load(), xs.xess_sharpen.load(), xs.xess_objects.load()};
         if (now != pending) {
             pending = now;
             stable_frames = 0;
