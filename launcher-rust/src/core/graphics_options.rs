@@ -436,6 +436,10 @@ pub fn upscale_render_size(preset: &str, output: (u32, u32)) -> Option<(u32, u32
     if size == output || size == (1920, 1080) {
         return Some((size.0 - 2, size.1 - 2));
     }
+    // At a height of 480 the game shows a third of the frame, zoomed in.
+    if size.1 == 480 {
+        return Some((size.0, 478));
+    }
     Some(size)
 }
 
@@ -1360,6 +1364,8 @@ render_resolution=3440x1440
         assert_eq!(upscale_render_size("4", (1920, 1080)), Some((640, 360)));
         assert_eq!(upscale_render_size("5", (1920, 1080)), Some((1476, 830)));
         assert_eq!(upscale_render_size("4", (1280, 720)), Some((640, 360)));
+        assert_eq!(upscale_render_size("4", (3440, 1440)), Some((1146, 478)));
+        assert_eq!(upscale_render_size("4", (2560, 1440)), Some((854, 478)));
         // Above the game's own 1080p.
         assert_eq!(upscale_render_size("5", (2560, 1440)), Some((1970, 1108)));
         assert_eq!(upscale_render_size("1", (3840, 2160)), Some((2560, 1440)));
