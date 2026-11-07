@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <boost/container/static_vector.hpp>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -12,6 +13,7 @@
 #include "common/types.h"
 #include "imgui/renderer/imgui_core.h"
 #include "sdl_window.h"
+#include "spartanport_settings.h"
 #include "video_core/amdgpu/spartanport_msaa.h"
 #include "video_core/amdgpu/spartanport_msaa_default.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
@@ -810,9 +812,20 @@ void Instance::CollectDeviceParameters() {
 
     // spartanport: see video_core/amdgpu/spartanport_msaa.h; the default per driver is spartanport_msaa_default.h.
     const char* no_msaa_env = std::getenv("SPARTAN_NO_MSAA");
+    // Temporal AA and FSR 3.1 read the scene depth as a texture: that needs it single-sampled, so
+    // a chosen temporal mode turns the game's own multisampling off unless it is forced on.
+    const char* temporal_env = std::getenv("SPARTAN_UPSCALER");
+    const char* temporal_on = std::getenv("SPARTAN_EXPERIMENTAL_UPSCALER");
+    // The port's TAA is also chosen by the launcher in spartanport.ini (upscaler=taa; settings are
+    // loaded before the device), without any environment variable.
+    const bool temporal_mode =
+        SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa ||
+        (temporal_env && temporal_on && *temporal_on == '1' &&
+         (std::strcmp(temporal_env, "taa") == 0 || std::strcmp(temporal_env, "fsr3") == 0));
     const bool no_msaa = no_msaa_env && *no_msaa_env
                              ? *no_msaa_env == '1'
-                             : spartanport_no_msaa_default(static_cast<VkDriverId>(driver_id)) != 0;
+                             : temporal_mode ||
+                                   spartanport_no_msaa_default(static_cast<VkDriverId>(driver_id)) != 0;
     AmdGpu::no_msaa.store(no_msaa, std::memory_order_relaxed);
     std::printf("GPU: guest multisampling %s\n",
                 no_msaa ? "off (single-sampled images; SPARTAN_NO_MSAA=0 keeps it)" : "on");

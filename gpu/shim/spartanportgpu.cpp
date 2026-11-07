@@ -386,6 +386,15 @@ extern "C" int spartanportgpu_audio_init(void) {
     return SDL_InitSubSystem(SDL_INIT_AUDIO);
 }
 
+extern "C" unsigned spartanportgpu_dualsense_features(int* speaker_gain) {
+    const auto& v = SpartanSettings::Get();
+    *speaker_gain = v.dualsense_speaker_gain.load(std::memory_order_relaxed);
+    // The bits of src/dualsense.h (DS_TRIGGERS...); gyro aim includes motion.
+    return (v.dualsense_triggers ? 1u : 0u) | (v.dualsense_hitflash ? 2u : 0u) |
+           (v.dualsense_motion || v.dualsense_gyroaim ? 4u : 0u) | (v.dualsense_gyroaim ? 8u : 0u) |
+           (v.dualsense_qte ? 16u : 0u) | (v.dualsense_speaker ? 32u : 0u);
+}
+
 extern "C" void spartanportgpu_movie_picture(void) {
     Vulkan::MovieBars::Cutscenes().NotePicture(Vulkan::MovieBars::NowMs());
 }
@@ -402,6 +411,14 @@ extern "C" int spartanportgpu_mouse_aim_sensitivity(void) {
     return SpartanSettings::Get().mouse_aim_sensitivity.load(std::memory_order_relaxed);
 }
 
+extern "C" int spartanportgpu_free_camera(void) {
+    return SpartanSettings::Get().free_camera.load(std::memory_order_relaxed);
+}
+
+extern "C" void spartanport_camera_status(int supported) {
+    SpartanSettings::Get().free_camera_supported = supported != 0;
+}
+
 // The menu's Automatic QTE switch, read by the game's code through the QTE stubs (src/qte_hook.h).
 extern "C" uintptr_t spartanport_auto_qte_flag(void) {
     static_assert(sizeof(std::atomic<bool>) == 1, "the stubs compare one byte");
@@ -414,6 +431,10 @@ extern "C" void spartanport_qte_status(int supported) {
 
 extern "C" void spartanportgpu_mouse_pause_key(void) {
     Frontend::ToggleMousePause();
+}
+
+extern "C" int spartanportgpu_mouse_locked(void) {
+    return Frontend::MouseLocked() ? 1 : 0;
 }
 
 extern "C" int spartanportgpu_overlay_captures_input(void) {

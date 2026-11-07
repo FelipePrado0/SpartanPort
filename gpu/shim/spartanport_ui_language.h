@@ -13,6 +13,7 @@
 #include "ui_language/spartanport_ui_fr.h"
 #include "ui_language/spartanport_ui_id.h"
 #include "ui_language/spartanport_ui_it.h"
+#include "ui_language/spartanport_ui_cs.h"
 #include "ui_language/spartanport_ui_pl.h"
 #include "ui_language/spartanport_ui_pt.h"
 #include "ui_language/spartanport_ui_ru.h"
@@ -76,6 +77,9 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"Damage taken", "受到伤害"},
     {"Deferred GPU readbacks", "延迟 GPU 回读"},
     {"Depth of field", "景深"},
+    {"Motion blur", "动态模糊"},
+    {"applied by the upscaler", "由升频器应用"},
+    {"The game's own motion blur on fast moving objects and the camera. Off removes it.", "游戏自带的动态模糊，作用于快速移动的物体和镜头。关闭后即可去除。"},
     {"Display", "显示"},
     {"Display mode", "显示模式"},
     {"Effective limit", "实际帧率上限"},
@@ -156,6 +160,11 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"Right stick sensitivity", "右摇杆灵敏度"},
     {"Right stick style", "右摇杆模式"},
     {"Shader cache", "着色器缓存"},
+    {"Anti-aliasing", "抗锯齿"},
+    {"Temporal anti-aliasing is running.", "时间性抗锯齿正在运行。"},
+    {"Temporal anti-aliasing is selected but not running (see last_run.log).", "已选择时间性抗锯齿，但未运行（见 last_run.log）。"},
+    {"Smooths jagged edges. FXAA is cheap and a little soft; SMAA keeps the picture sharper and costs a bit more. Both also touch the HUD slightly.", "平滑锯齿边缘。FXAA 开销小但画面略软；SMAA 画面更锐利，开销稍大。两者也会轻微影响 HUD。"},
+    {"Anti-aliasing is not active: this graphics card could not set it up.", "抗锯齿未生效：此显卡无法启用。"},
     {"Sharpening", "锐化"},
     {"Sharpening (RCAS)", "锐化 (RCAS)"},
     {"Sharpening strength", "锐化强度"},
@@ -246,6 +255,44 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"Damage", "伤害"},
     {"All grades", "全部等级"},
     {"Square/G: grade", "方块/G：等级"},
+    // TAA / FSR 3.1 look sliders (SpartanPort). Chinese.
+    {"TAA look (God of War III)", "TAA 画面效果（God of War III）"},
+    {"FSR 3.1 look (God of War III)", "FSR 3.1 画面效果（God of War III）"},
+    {"History on still picture", "静止画面的历史权重"},
+    {"History on moving picture", "运动画面的历史权重"},
+    {"Colour tolerance", "颜色容差"},
+    {"Moving objects", "运动物体"},
+    {"Texture detail", "纹理细节"},
+    {"Moving object edges", "运动物体边缘"},
+    {"Debug view (history)", "调试视图（历史）"},
+    {"TAA sharpening", "TAA 锐化"},
+    {"FSR 3.1 (native HUD)", "FSR 3.1（原生 HUD）"},
+    {"Higher: smoother edges on a still picture, a little more trail. Default 99%.", "数值越高：静止画面边缘越平滑，拖影略多。默认 99%。"},
+    {"Higher: smoother while the camera moves, more blur and trail. Default 55%.", "数值越高：镜头移动时更平滑，模糊和拖影更多。默认 55%。"},
+    {"Lower: less trail and ghosting, more flicker. Default 115%.", "数值越低：拖影和鬼影越少，闪烁越多。默认 115%。"},
+    {"How much history a moving character or object loses. Higher: less ghosting there, rougher edges. Default 90%.", "运动的角色或物体丢弃多少历史信息。数值越高：鬼影越少，边缘越粗糙。默认 90%。"},
+    {"Sharper textures (a negative mip bias, in percent of one level): the accumulation turns the extra detail into a clean picture. Higher: more detail, more shimmer. Default 75%.", "更锐利的纹理（负 mip 偏置，以一级的百分比表示）：累积会把额外细节变成干净的画面。数值越高：细节越多，闪烁越多。默认 75%。"},
+    {"Smooths the stair-stepped edges of moving characters, where the history is refused: a spatial filter on those pixels only. Higher: smoother, slightly softer. Default 70%.", "平滑运动角色上因历史被拒绝而出现的锯齿边缘：仅对这些像素使用空间滤波。数值越高：越平滑，略偏软。默认 70%。"},
+    {"Shows where the history is used: red = rejected by depth, green = lost to colour change, blue = history weight used. For bug reports; not saved.", "显示历史的使用位置：红色 = 因深度被拒绝，绿色 = 因颜色变化而丢失，蓝色 = 使用的历史权重。用于错误报告；不会保存。"},
+    {"Sharpening after the accumulation, separate from the Sharpening (RCAS) switch below. 0% = off. Default 165%.", "累积之后的锐化，独立于下方的“锐化 (RCAS)”开关。0% = 关闭。默认 165%。"},
+    {"Sharper textures (a negative mip bias, in percent of one level) on top of FSR's own: the accumulation turns the extra detail into a clean picture. Higher: more detail, more shimmer. Default 0%.", "在 FSR 自带偏置之外的更锐利纹理（负 mip 偏置，以一级的百分比表示）：累积会把额外细节变成干净的画面。数值越高：细节越多，闪烁越多。默认 0%。"},
+    {"How much FSR distrusts its history on characters and objects. Higher: less ghosting behind them, rougher edges. Lower: smoother but more trails. Default 100%.", "FSR 对角色和物体历史信息的不信任程度。数值越高：其身后的鬼影越少，边缘越粗糙。数值越低：越平滑，但拖影更多。默认 100%。"},
+    {"FSR 3.1 (native HUD) keeps the game at 1920x1080 so the HUD, text and loading screens are not stretched, and has the port's own sharpening. FSR 4.1 needs an AMD Radeon with Adrenalin 26.10.1 or newer.", "FSR 3.1（原生 HUD）让游戏保持 1920x1080，因此 HUD、文字和加载画面不会被拉伸，并带有本移植版自带的锐化。FSR 4.1 需要 AMD Radeon 与 Adrenalin 26.10.1 或更新版本。"},
+    {"DualSense", "DualSense"},
+    {"Speaker", "扬声器"},
+    {"The sounds the game makes for the controller's speaker play on the DualSense's own speaker (USB only; a headset in the controller's jack gets them instead). Takes effect at the next start.", "游戏为手柄扬声器发出的声音改由 DualSense 自身的扬声器播放（仅限 USB；手柄耳机孔插入耳机时改由耳机播放）。下次启动时生效。"},
+    {"Speaker gain", "扬声器增益"},
+    {"The DualSense speaker's own level, which the Windows volume does not reach. The controller beeps at the new level when it changes.", "DualSense 扬声器自身的音量，Windows 音量无法调节。更改时手柄会以新音量发出提示音。"},
+    {"Trigger click", "扳机段落感"},
+    {"R2 gets a wall that gives way near the end of its travel.", "R2 在行程末端附近有一道会被按破的阻力。"},
+    {"Hit flash", "受伤闪光"},
+    {"The light bar flashes red when Kratos loses health.", "奎托斯失去生命值时，灯条闪烁红色。"},
+    {"QTE light bar", "QTE 灯条"},
+    {"While a QTE prompt is up, the light bar blinks in the colour of its button, with a short rumble at each new prompt.", "QTE 提示出现时，灯条以对应按键的颜色闪烁，每次出现新提示时短暂震动。"},
+    {"Motion sensors", "体感传感器"},
+    {"The controller's gyro and accelerometer are passed to the game.", "将手柄的陀螺仪和加速度计数据传给游戏。"},
+    {"Gyro aim", "陀螺仪瞄准"},
+    {"While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.", "按住 L2 时，转动和倾斜手柄可移动视角。包含“体感传感器”。"},
 };
 using TextTable = std::pair<std::string_view, const char*>;
 
@@ -271,6 +318,7 @@ inline constexpr Language Languages[] = {
     Table("tr", "Türkçe", TurkishText),
     Table("id", "Bahasa Indonesia", IndonesianText),
     Table("ru", "Русский", RussianText),
+    Table("cs", "Čeština", CzechText),
     Table("zh", "中文", ChineseText),
 };
 inline constexpr int LanguageCount = int(sizeof(Languages) / sizeof(Languages[0]));

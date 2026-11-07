@@ -14,6 +14,7 @@
 #include "core/signals.h"
 #include "video_core/page_manager.h"
 #include "video_core/page_state.h"
+#include "video_core/renderer_vulkan/vk_draw_prep.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 
 #ifndef _WIN64
@@ -72,6 +73,13 @@ struct PageManager::Impl {
         const auto is_gpu_thread = rasterizer->IsGpuSideThread();
         if (is_gpu_thread) {
             SpartanStats::gpu_signal_faults.fetch_add(1, std::memory_order_relaxed);
+        } else if (runtime_fault_recover && Vulkan::DrawPreparation::OnWorkerThread()) {
+            // spartanport: a draw-preparation worker reads ahead of the GPU thread while holding
+            // the shader cache's lock, which the GPU thread takes to add a shader. Serving the
+            // fault would drain the draw pipe and download from the GPU: waiting for the GPU
+            // thread while blocking it (a freeze). The worker goes back to its recovery point
+            // (src/probe.c) and the GPU thread prepares that draw itself (Supermedo a39f457a5).
+            return false;
         }
         if (Common::IsWriteError(context)) {
             SpartanStats::Timer timer{SpartanStats::t_write_faults};

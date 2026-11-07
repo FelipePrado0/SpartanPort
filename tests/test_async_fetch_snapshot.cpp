@@ -6,7 +6,7 @@
 #include "shader_recompiler/frontend/fetch_shader.h"
 #include "common/logging/log.h"
 
-extern "C" { uint32_t runtime_disabled_optimizations = 0; }
+// runtime_disabled_optimizations and runtime_fault_recover come from test_gpu_runtime_stubs.cpp.
 void assert_fail_impl() { std::abort(); }
 [[noreturn]] void unreachable_impl() { std::abort(); }
 namespace Common::Log {

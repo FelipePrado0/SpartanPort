@@ -47,6 +47,8 @@ void spartanportgpu_wait_while_paused(void);
 int spartanportgpu_vibration_percent(void);
 /* Menu confirm button: 0 Cross confirms, Circle cancels; 1 Circle confirms, Cross cancels. */
 int spartanportgpu_menu_confirm_swap(void);
+/* DualSense extras set in the menu (DS_TRIGGERS... of src/dualsense.h) and the speaker gain (0..7). */
+unsigned spartanportgpu_dualsense_features(int *speaker_gain);
 /* Native Display menu: query (0) or toggle (1); returns 0 off, 1 on, 2 unsupported. */
 int spartanportgpu_enemy_health_bar(int toggle);
 /* Native Cheats: f00+i query/f10+i toggle (8 cheats); f20+i text/f30+i decrease/f40+i increase/
@@ -89,10 +91,14 @@ void spartanportgpu_movie_picture(void);
 int spartanportgpu_mouse_prompt_distance(void);
 /* The pause key (touchpad right) was pressed: it lets go of the mouse lock, or takes it back. */
 void spartanportgpu_mouse_pause_key(void);
+/* The game has the mouse (the window's lock, relative mode): its movement turns the free camera. */
+int spartanportgpu_mouse_locked(void);
 /* L2 aim with the mouse, set in the menu: 0 relative (follows movement), 1 absolute. */
 int spartanportgpu_mouse_aim_style(void);
 /* L2 aim sensitivity in percent (10 to 200), set in the menu. */
 int spartanportgpu_mouse_aim_sensitivity(void);
+/* Free camera (src/runtime_camera.c) on in the menu or the launcher; G and R3 switch it in play. */
+int spartanportgpu_free_camera(void);
 /* Number of symbols registered by the vendored libraries (diagnostics). */
 unsigned spartanportgpu_symbol_count(void);
 /* Yields of threads waiting for guest memory copies (CPU report, #209). */

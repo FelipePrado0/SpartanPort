@@ -70,4 +70,12 @@ inline std::array<float, 2> Scale(uint32_t guest_width, uint32_t guest_height,
             float(output_height) / float(native_coordinates ? 1080 : guest_height)};
 }
 
+// The push constant that turns FragCoord back into guest pixels in a pass scaled by `scale`
+// (PushData::scene_size, read as native / size). Guest clip rectangles compare against it: without
+// this, text past the guest width is cut on ultrawide outputs. Zero: already guest pixels.
+inline uint32_t FragCoordSize(std::array<float, 2> scale) {
+    if (scale[0] == 1.0f && scale[1] == 1.0f) return 0;
+    return uint32_t(1920.0f * scale[0] + 0.5f) | uint32_t(1080.0f * scale[1] + 0.5f) << 16;
+}
+
 } // namespace Vulkan::UiComposition

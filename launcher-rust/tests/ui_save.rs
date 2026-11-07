@@ -1036,6 +1036,23 @@ fn audio_and_effects_options_are_saved_and_read_back() {
     assert!(!dirty(&reopened));
 }
 
+#[test]
+fn anti_aliasing_is_saved_in_the_ini_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    open(&mut state, Page::Graphics);
+    set(&mut state, "anti_aliasing", json!("smaa"));
+    assert!(save_enabled(&state));
+    click_save(&mut state);
+    let ini = fs::read_to_string(state.paths.ini_path()).unwrap();
+    assert!(ini.lines().any(|l| l == "anti_aliasing=smaa"), "{ini}");
+    let settings = fs::read_to_string(state.paths.config_file()).unwrap();
+    assert!(!settings.contains("anti_aliasing"), "{settings}");
+    let reopened = state_in(dir.path());
+    assert_eq!(reopened.store.text("anti_aliasing"), "smaa");
+    assert!(!dirty(&reopened));
+}
+
 /// F2 (`docs/specs/2026-10-29-high-fps-f2-qte.md`): the engine at 60 FPS during QTEs, the
 /// `auto_safe_fps` key the game reads (`gpu/shim/spartanport_settings.cpp`), on by default.
 #[test]

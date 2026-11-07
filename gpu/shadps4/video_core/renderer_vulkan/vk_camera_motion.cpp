@@ -6,10 +6,12 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "spartanport_settings.h"
 #include "spartanport_toggles.h"
 
 #include "video_core/host_shaders/camera_motion_comp.h"
 #include "video_core/host_shaders/camera_motion_debug_comp.h"
+#include "video_core/host_shaders/camera_motion_vp_comp.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_object_motion.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
@@ -31,6 +33,21 @@ struct PushConstants {
     std::array<float, 2> previous_jitter;
     u32 mode;
 };
+
+// Mirrors the std430 push constant block of camera_motion_vp.comp: the vec4 viewport sits at offset
+// 96, so two floats of padding follow depth_range (without them the shader read the viewport from
+// the wrong place and every camera motion vector was off).
+struct VpPushConstants {
+    CameraVp::Matrix reproject;       // 0
+    std::array<float, 2> size;        // 64
+    std::array<float, 2> jitter;      // 72
+    std::array<float, 2> depth_range; // 80
+    std::array<float, 2> pad{};       // 88
+    std::array<float, 4> viewport;    // 96
+    u32 mode;                         // 112: 1 = object motion vectors are valid
+    std::array<u32, 3> pad_end{};     // 116
+};
+static_assert(sizeof(VpPushConstants) == 128);
 
 /// a * b for 3x4 affine matrices (rows [R | t]).
 std::array<float, 12> Multiply(const std::array<float, 12>& a, const std::array<float, 12>& b) {
@@ -97,6 +114,45 @@ CameraMotion::CameraMotion(const Instance& instance_, Scheduler& scheduler_,
                     .layout = *motion_pipeline_layout,
                 }));
         device.destroyShaderModule(motion_module);
+
+        // The view-projection camera (God of War III): depth in, motion vectors out.
+        const std::array<vk::DescriptorSetLayoutBinding, 2> vp_bindings = {{
+            {.binding = 0,
+             .descriptorType = vk::DescriptorType::eSampledImage,
+             .descriptorCount = 1,
+             .stageFlags = vk::ShaderStageFlagBits::eCompute},
+            {.binding = 1,
+             .descriptorType = vk::DescriptorType::eStorageImage,
+             .descriptorCount = 1,
+             .stageFlags = vk::ShaderStageFlagBits::eCompute},
+        }};
+        vp_desc_layout = Check(device.createDescriptorSetLayoutUnique({
+            .flags = vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR,
+            .bindingCount = static_cast<u32>(vp_bindings.size()),
+            .pBindings = vp_bindings.data(),
+        }));
+        const vk::PushConstantRange vp_range{.stageFlags = vk::ShaderStageFlagBits::eCompute,
+                                             .offset = 0,
+                                             .size = sizeof(VpPushConstants)};
+        vp_pipeline_layout = Check(device.createPipelineLayoutUnique({
+            .setLayoutCount = 1,
+            .pSetLayouts = &*vp_desc_layout,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &vp_range,
+        }));
+        const auto vp_module = CompileSPV(CAMERA_MOTION_VP_COMP, device);
+        vp_pipeline = Check(device.createComputePipelineUnique(
+            {}, vk::ComputePipelineCreateInfo{
+                    .stage = {.stage = vk::ShaderStageFlagBits::eCompute,
+                              .module = vp_module,
+                              .pName = "main"},
+                    .layout = *vp_pipeline_layout,
+                }));
+        device.destroyShaderModule(vp_module);
+        // Calibration of the screen axes against the game's viewport: x, y or xy.
+        if (const char* flip = std::getenv("SPARTAN_VP_FLIP")) {
+            vp_flip = (std::strchr(flip, 'x') ? 1u : 0u) | (std::strchr(flip, 'y') ? 2u : 0u);
+        }
     }
     if (!debug_overlay) {
         return;
@@ -154,15 +210,26 @@ CameraMotion::CameraMotion(const Instance& instance_, Scheduler& scheduler_,
 CameraMotion::~CameraMotion() = default;
 
 float CameraMotion::VerticalFov() const noexcept {
+    if (vp_current_valid) {
+        return CameraVp::VerticalFov(vp_current);
+    }
     return 2.0f * std::atan(1.0f / current.proj[1]);
 }
 
 float CameraMotion::Near() const noexcept {
+    if (vp_current_valid) {
+        return CameraVp::NearPlane(vp_current);
+    }
     // depth = zs + zo / z is 0 at the near plane.
     return -current.proj[3] / current.proj[2];
 }
 
 std::array<std::array<float, 4>, 3> CameraMotion::TaaDepthParameters() const noexcept {
+    if (vp_current_valid) {
+        // Depth 0 at the near plane and 1 at infinity: only the sky threshold (z scale 1) is
+        // read from the first two; the third is the viewport, the rest is in Reprojection().
+        return {{{vp_depth[0], vp_depth[1], 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 0.0f}, vp_viewport}};
+    }
     const auto transform = Multiply(previous.view, current.inv_view);
     return {current.proj, previous.proj,
             {transform[8], transform[9], transform[10], transform[11]}};
@@ -241,8 +308,200 @@ void CameraMotion::OnConstants(const float* data) {
     frame_has_camera = true;
 }
 
+bool CameraMotion::DepthLive() const {
+    if (!depth_id) {
+        return false;
+    }
+    // An unregistered image is on its way out of the cache (deleted later): not to be read.
+    const auto* image = texture_cache.TryGetImage(depth_id, depth_uid);
+    return image != nullptr && True(image->flags & VideoCore::ImageFlagBits::Registered);
+}
+
+void CameraMotion::SetDepth(VideoCore::ImageId id) {
+    depth_id = id;
+    const auto* image = id ? texture_cache.TryGetImage(id, 0) : nullptr;
+    depth_uid = image ? image->image_uid : 0;
+}
+
 void CameraMotion::OnGBufferPass(VideoCore::ImageId depth) {
-    depth_id = depth;
+    SetDepth(depth);
+}
+
+bool CameraMotion::OnScenePrepass(VideoCore::ImageId depth, std::array<float, 4> viewport,
+                                  std::array<float, 2> depth_range) {
+    if (!scene_open && main_depth && depth != main_depth) {
+        // A depth-only draw of another screen-sized depth after the composite (UI): not a scene.
+        // If it goes on for long (the game reallocated its depth), the scene depth is learnt again.
+        if (++foreign_draws >= 256) {
+            main_depth = {};
+            foreign_draws = 0;
+        }
+        return false;
+    }
+    ++scan_draws;
+    if (!scene_open) {
+        foreign_draws = 0;
+        // The first depth-only draw after the last composite: a new scene. (Display passes are not
+        // frame boundaries here: the game repeats frames at 30 fps and may issue the next
+        // pre-pass before the previous frame's display pass.)
+        scene_open = true;
+        scene_started = true;
+        open_displays = 0;
+        vp_resolved = false;
+        vp_tally.Clear();
+        tally_has_entries = false;
+        scene_depth_count = 0;
+        depth_id = {};
+    }
+    // Other screen-sized depth-only draws exist (after the composite, a UI pass): the scene depth
+    // is the one the most draws of the scene use, the pre-pass has hundreds.
+    SceneDepth* entry = nullptr;
+    for (u32 i = 0; i < scene_depth_count; ++i) {
+        if (scene_depths[i].depth == depth) {
+            entry = &scene_depths[i];
+            break;
+        }
+    }
+    if (!entry && scene_depth_count < scene_depths.size()) {
+        entry = &scene_depths[scene_depth_count++];
+        *entry = {depth, 0, viewport, depth_range};
+    }
+    if (entry) {
+        ++entry->draws;
+    }
+    const SceneDepth* best = nullptr;
+    for (u32 i = 0; i < scene_depth_count; ++i) {
+        if (!best || scene_depths[i].draws > best->draws) {
+            best = &scene_depths[i];
+        }
+    }
+    if (best && best->depth != depth_id) {
+        SetDepth(best->depth);
+        vp_viewport = best->viewport;
+        vp_depth = best->depth_range;
+        // SPARTAN_VP_FLIP=x|y|xy mirrors an axis, for calibration against the picture.
+        if (vp_flip & 1u) vp_viewport[0] = -vp_viewport[0];
+        if (vp_flip & 2u) vp_viewport[1] = -vp_viewport[1];
+        static std::array<float, 4> logged{};
+        if (best->viewport != logged) {
+            logged = best->viewport;
+            std::printf("Camera motion: viewport scale %g %g offset %g %g\n", best->viewport[0],
+                        best->viewport[1], best->viewport[2], best->viewport[3]);
+        }
+    }
+    return true;
+}
+
+void CameraMotion::OnCameraCandidate(const float* data, u32 size_bytes, u32 width, u32 height,
+                                     u32 source) {
+    ++scan_sources[std::min(source, 2u)];
+    if (size_bytes < 16 * sizeof(float)) {
+        return;
+    }
+    const u32 floats = size_bytes / sizeof(float);
+    // The camera is normally the first 16 floats; when the scene has none yet, also try the later
+    // 16 byte aligned windows of the buffer (another vertex shader variant, a cut scene).
+    const u32 last_window = tally_has_entries ? 0u : std::min(floats - 16u, 252u);
+    bool found = false;
+    for (u32 offset = 0; offset <= last_window; offset += 4) {
+        const float* m = data + offset;
+        if (!CameraVp::LooksLikeViewProjection(m, float(width), float(height))) {
+            continue;
+        }
+        found = true;
+        vp_tally.Add(m);
+        tally_has_entries = true;
+        ++scan_hits;
+        const std::array<u32, 2> size{width, height};
+        if (size != render_size) {
+            std::printf("Camera motion: scene render size %ux%u (view-projection camera, float offset %u)\n",
+                        width, height, offset);
+            render_size = size;
+        }
+        if (offset != 0) {
+            static u32 logged_offsets = 0;
+            if (logged_offsets++ < 8) {
+                std::printf("Camera motion: camera found at float offset %u of a %u byte buffer\n",
+                            offset, size_bytes);
+            }
+        }
+        break;
+    }
+    if (!found && miss_streak >= 2 && !tally_has_entries) {
+        // The camera was not found in the last scenes: log what the pre-pass binds.
+        static u32 dumped = 0;
+        if (dumped < 60) {
+            ++dumped;
+            std::printf("Camera motion: unrecognised buffer %u bytes, floats %g %g %g %g | %g %g %g %g | "
+                        "%g %g %g %g | %g %g %g %g\n",
+                        size_bytes, data[0], data[1], data[2], data[3], data[4], data[5], data[6],
+                        data[7], data[8], data[9], data[10], data[11], data[12], data[13], data[14],
+                        data[15]);
+        }
+    }
+}
+
+void CameraMotion::RecordMotionVp(vk::CommandBuffer cmdbuf, vk::ImageView depth_view,
+                                  vk::ImageView motion_view, u32 width, u32 height) {
+    const VpPushConstants push{
+        .reproject = vp_reprojection,
+        .size = {float(width), float(height)},
+        .jitter = jitter,
+        .depth_range = vp_depth,
+        .viewport = vp_viewport,
+    };
+    const vk::DescriptorImageInfo depth_info{.imageView = depth_view,
+                                             .imageLayout = vk::ImageLayout::eGeneral};
+    const vk::DescriptorImageInfo motion_info{.imageView = motion_view,
+                                              .imageLayout = vk::ImageLayout::eGeneral};
+    const std::array<vk::WriteDescriptorSet, 2> writes = {{
+        {.dstBinding = 0,
+         .descriptorCount = 1,
+         .descriptorType = vk::DescriptorType::eSampledImage,
+         .pImageInfo = &depth_info},
+        {.dstBinding = 1,
+         .descriptorCount = 1,
+         .descriptorType = vk::DescriptorType::eStorageImage,
+         .pImageInfo = &motion_info},
+    }};
+    cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, *vp_pipeline);
+    cmdbuf.pushDescriptorSetKHR(vk::PipelineBindPoint::eCompute, *vp_pipeline_layout, 0, writes);
+    cmdbuf.pushConstants(*vp_pipeline_layout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(push),
+                         &push);
+    cmdbuf.dispatch((width + 7) / 8, (height + 7) / 8, 1);
+}
+
+bool CameraMotion::ResolveViewProjection() {
+    if (vp_resolved) {
+        return vp_current_valid;
+    }
+    CameraVp::Matrix best;
+    if (!scene_open || !vp_tally.Best(best)) {
+        if (scene_open) {
+            ++miss_streak; // a scene without a camera (a menu, a movie, or an unknown layout)
+            main_depth = {};
+            scene_open = false;
+            vp_resolved = true;
+        }
+        return false;
+    }
+    miss_streak = 0;
+    open_displays = 0;
+    vp_resolved = true;
+    scene_open = false;
+    main_depth = depth_id;
+    main_depth_uid = depth_uid;
+    tally_has_entries = false;
+    vp_previous = vp_current;
+    vp_previous_valid = vp_current_valid;
+    vp_current = best;
+    vp_current_valid = true;
+    frame_has_camera = true;
+    ++vp_frames;
+    if (vp_previous_valid && !CameraVp::Reprojection(vp_previous, vp_current, vp_reprojection)) {
+        vp_previous_valid = false;
+    }
+    return true;
 }
 
 void CameraMotion::OnViewProjection(const float* matrix, VideoCore::ImageId depth) {
@@ -265,7 +524,7 @@ void CameraMotion::OnViewProjection(const float* matrix, VideoCore::ImageId dept
     current.inv_view = camera.inv_view;
     current.proj = camera.proj;
     current.valid = true;
-    depth_id = depth;
+    SetDepth(depth);
     prepass_camera = true;
     const auto& image = texture_cache.GetImage(depth);
     const std::array<u32, 2> size{image.info.size.width, image.info.size.height};
@@ -277,12 +536,41 @@ void CameraMotion::OnViewProjection(const float* matrix, VideoCore::ImageId dept
 }
 
 void CameraMotion::OnDisplayPass(VideoCore::ImageId frame) {
-    if (debug_overlay && frame && depth_id && current.valid && previous.valid) {
+    if (debug_overlay && frame && DepthLive() && current.valid && previous.valid) {
         Overlay(frame);
     }
-    if (!frame_has_camera) InvalidateHistory();
+    if (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa) {
+        // Upscaler path (FSR): the unchanged upstream behaviour, nothing of the scene TAA applies.
+        if (!frame_has_camera) InvalidateHistory();
+        frame_has_camera = false;
+        depth_id = {};
+        return;
+    }
+    // A depth image the texture cache freed or reused (a resize, a level change) is forgotten before
+    // anything reads it: the scene state outlives the display passes of the scene TAA.
+    if (depth_id && !DepthLive()) {
+        depth_id = {};
+        InvalidateHistory();
+    }
+    if (main_depth && !texture_cache.TryGetImage(main_depth, main_depth_uid)) {
+        main_depth = {};
+    }
+    // A scene (pre-pass) that no composite closed for a few frames is dropped.
+    // The game repeats display passes at 60 Hz while a heavy scene (an arena) takes several of them
+    // from its pre-pass to its composite: dropping it after 3 lost the camera for the whole level.
+    if (scene_open && ++open_displays >= 24) {
+        scene_open = false;
+        tally_has_entries = false;
+        vp_tally.Clear();
+    }
+    // A display pass without a scene is a repeated frame (30 fps): not a break of the history.
+    // Only many in a row (a menu, a loading screen, a slow scene) drop it.
+    if (frame_has_camera) {
+        scenes_missed = 0;
+    } else if (++scenes_missed >= 16) {
+        InvalidateHistory();
+    }
     frame_has_camera = false;
-    depth_id = {};
 }
 
 void CameraMotion::Overlay(VideoCore::ImageId frame) {

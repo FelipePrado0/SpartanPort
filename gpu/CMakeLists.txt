@@ -102,7 +102,7 @@ function(add_host_shader FILENAME SHADER_NAME)
         COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADER_DIR}
         COMMAND ${GLSLANG_COMPILER} --target-env vulkan1.3 -o ${OUT} --vn ${SYMBOL} ${DEFINES} ${SHADER_SRC}/${FILENAME}
         COMMAND ${CMAKE_COMMAND} "-DHEADER_FILE=${OUT}" -P ${SHADER_SRC}/AddShaderHeaderInclude.cmake
-        DEPENDS ${SHADER_SRC}/${FILENAME} VERBATIM)
+        DEPENDS ${SHADER_SRC}/${FILENAME} ${SHADER_SRC}/smaa/SMAA.h VERBATIM)
     set(SHADER_HEADERS ${SHADER_HEADERS} ${OUT} PARENT_SCOPE)
 endfunction()
 add_host_shader(color_to_ms_depth.frag color_to_ms_depth_frag)
@@ -114,7 +114,14 @@ add_host_shader(fs_tri.vert fs_tri_vert)
 add_host_shader(fsr.comp fsr_easu_comp SAMPLE_EASU=1)
 add_host_shader(fsr.comp fsr_rcas_comp SAMPLE_RCAS=1)
 add_host_shader(post_process.frag post_process_frag)
+# spartanport: anti-aliasing of the finished frame (host_passes/aa_pass.cpp): FXAA and the three SMAA passes.
+add_host_shader(fxaa.comp fxaa_comp)
+add_host_shader(smaa.comp smaa_edges_comp SMAA_EDGES=1)
+add_host_shader(smaa.comp smaa_weights_comp SMAA_WEIGHTS=1)
+add_host_shader(smaa.comp smaa_blend_comp SMAA_BLEND=1)
 add_host_shader(camera_motion.comp camera_motion_comp)
+add_host_shader(camera_motion_vp.comp camera_motion_vp_comp)
+add_host_shader(ldr_alpha.comp ldr_alpha_comp)
 add_host_shader(upscale_merge.comp upscale_merge_comp)
 add_host_shader(upscale_reactive.comp upscale_reactive_comp)
 add_host_shader(stencil_reactive.comp stencil_reactive_comp)
@@ -295,10 +302,15 @@ target_link_libraries(irq-controller-test PRIVATE fmt::fmt magic_enum::magic_enu
 add_executable(shader-user-data-test EXCLUDE_FROM_ALL ../tests/test_shader_user_data.cpp
     shadps4/shader_recompiler/frontend/fetch_shader.cpp
     shadps4/shader_recompiler/frontend/decode.cpp
-    shadps4/shader_recompiler/frontend/format.cpp)
+    shadps4/shader_recompiler/frontend/format.cpp ../tests/test_gpu_runtime_stubs.cpp)
 target_compile_options(shader-user-data-test PRIVATE -UNDEBUG)
 target_include_directories(shader-user-data-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(shader-user-data-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
+if (WIN32)
+    # The guarded guest read calls spartanport_setjmp (src/compat_win.c), whose compat_random needs bcrypt.
+    target_sources(shader-user-data-test PRIVATE ../src/compat_win.c)
+    target_link_libraries(shader-user-data-test PRIVATE onecore bcrypt)
+endif()
 add_executable(cache-storage-test EXCLUDE_FROM_ALL ../tests/test_cache_storage.cpp
     ../tests/test_gpu_runtime_stubs.cpp)
 target_include_directories(cache-storage-test PRIVATE
@@ -424,10 +436,15 @@ target_link_libraries(async-pipeline-cache-test PRIVATE Vulkan::Vulkan)
 add_executable(async-fetch-snapshot-test EXCLUDE_FROM_ALL ../tests/test_async_fetch_snapshot.cpp
     shadps4/shader_recompiler/frontend/fetch_shader.cpp
     shadps4/shader_recompiler/frontend/decode.cpp
-    shadps4/shader_recompiler/frontend/format.cpp)
+    shadps4/shader_recompiler/frontend/format.cpp ../tests/test_gpu_runtime_stubs.cpp)
 target_compile_options(async-fetch-snapshot-test PRIVATE -UNDEBUG)
 target_include_directories(async-fetch-snapshot-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(async-fetch-snapshot-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
+if (WIN32)
+    # The guarded guest read calls spartanport_setjmp (src/compat_win.c), whose compat_random needs bcrypt.
+    target_sources(async-fetch-snapshot-test PRIVATE ../src/compat_win.c)
+    target_link_libraries(async-fetch-snapshot-test PRIVATE onecore bcrypt)
+endif()
 target_compile_options(depth-stencil-state-test PRIVATE -UNDEBUG)
 target_include_directories(depth-stencil-state-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(depth-stencil-state-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
@@ -463,6 +480,16 @@ set_source_files_properties(../tests/test_taa_shader.cpp PROPERTIES
     COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
 target_link_libraries(taa-shader-test PRIVATE spartanportgpu)
 add_dependencies(taa-shader-test host_shaders)
+# The anti-aliasing pass itself (not the whole library): FXAA and SMAA on synthetic images, on any Vulkan
+# device (Lavapipe works), under the validation layer when it is installed.
+add_executable(aa-pass-test EXCLUDE_FROM_ALL ../tests/test_aa_pass.cpp
+    shadps4/video_core/renderer_vulkan/host_passes/aa_pass.cpp shim/common/logging/log.cpp)
+target_include_directories(aa-pass-test PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include third_party/half/include)
+target_compile_definitions(aa-pass-test PRIVATE BOOST_ASIO_STANDALONE)
+target_compile_options(aa-pass-test PRIVATE -UNDEBUG -fPIC -Wno-deprecated-declarations -Wno-missing-field-initializers)
+target_link_libraries(aa-pass-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
+    tsl::robin_map GPUOpen::VulkanMemoryAllocator miniz::miniz ${CMAKE_DL_LIBS})
+add_dependencies(aa-pass-test host_shaders)
 
 add_executable(reactive-shader-test EXCLUDE_FROM_ALL ../tests/test_reactive_shader.cpp)
 target_include_directories(reactive-shader-test PRIVATE ${SHADER_INCLUDE})
@@ -483,6 +510,16 @@ add_executable(camera-motion-test EXCLUDE_FROM_ALL ../tests/test_camera_motion.c
 target_include_directories(camera-motion-test PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include)
 target_compile_options(camera-motion-test PRIVATE -UNDEBUG -fPIC)
 target_link_libraries(camera-motion-test PRIVATE spartanportgpu)
+# spartanport: these tests link the static Windows spartanportgpu with the runtime stubs; shader
+# code in it now reads guest descriptors through the guarded read, which calls spartanport_setjmp
+# (src/compat_win.c).
+if (WIN32)
+    foreach(test motion-shader-test frame-generation-runtime-test scene-resolution-test
+            taa-shader-test camera-motion-test)
+        target_sources(${test} PRIVATE ../src/compat_win.c)
+        target_link_libraries(${test} PRIVATE onecore)
+    endforeach()
+endif()
 add_dependencies(camera-motion-test host_shaders)
 
 # spartanport: FSR 4 benchmark outside the game (tools/fsr4_bench.cpp): ninja -C out/gpu fsr4-bench.
@@ -550,6 +587,9 @@ target_include_directories(actor-hook-test PRIVATE shim)
 target_compile_options(actor-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 add_executable(qte-hook-test EXCLUDE_FROM_ALL ../tests/test_qte_hook.cpp)
 target_compile_options(qte-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+add_executable(camera-hook-test EXCLUDE_FROM_ALL ../tests/test_camera_hook.cpp ../src/runtime_camera.c)
+target_include_directories(camera-hook-test PRIVATE ../src ..)
+target_compile_options(camera-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 add_executable(player-hook-test EXCLUDE_FROM_ALL ../tests/test_player_hook.cpp)
 target_compile_options(player-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 add_executable(ledge-hook-test EXCLUDE_FROM_ALL ../tests/test_ledge_hook.cpp)

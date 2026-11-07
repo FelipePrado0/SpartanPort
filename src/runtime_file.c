@@ -199,6 +199,7 @@ static int game_path(const char *p) {
     return (!strncmp(p,"/app0",5) && (!p[5] || p[5]=='/')) ||
            (!strncmp(p,"/hostapp",8) && (!p[8] || p[8]=='/'));
 }
+void spartanport_camera_file_opened(const char *guest); /* runtime_camera.c */
 /* Temporary F4.2: whether the last area WAD the game opened is a Cronos one (Crn*.WAD). Resource
  * WADs (R_*) load in any area and leave it as it is. */
 static int area_cronos;
@@ -265,6 +266,7 @@ static int64_t do_open(const char *guest,int flags,int mode) {
     pthread_mutex_unlock(&lock);
     note_area(guest);
     if (audio_trace() && strstr(guest,"sound/")) printf("Audio trace: open(%s) -> fd %d, %lld bytes\n",guest,fd,(long long)s.st_size);
+    spartanport_camera_file_opened(guest); /* the title screen's level (runtime_camera.c) */
     const char *mod_trace=getenv("SPARTAN_MOD_TRACE"), *mod_root=getenv("SPARTAN_MODS_DIR");
     if (mod_trace && mod_trace[0]=='1' && mod_root) {
         char actual[PATH_MAX],root[PATH_MAX];

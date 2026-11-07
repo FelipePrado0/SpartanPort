@@ -436,6 +436,10 @@ pub fn upscale_render_size(preset: &str, output: (u32, u32)) -> Option<(u32, u32
     if size == output || size == (1920, 1080) {
         return Some((size.0 - 2, size.1 - 2));
     }
+    // At a height of 480 the game shows a third of the frame, zoomed in.
+    if size.1 == 480 {
+        return Some((size.0, 478));
+    }
     Some(size)
 }
 
@@ -448,6 +452,26 @@ const PATCH_TEMPLATES: [(&str, (u32, u32)); 4] = [
     ("4K", (3840, 2160)),
     ("8K", (7680, 4320)),
 ];
+
+/// The upscaler to run instead of the chosen one: "fsr3ui" needs the game's own 1920x1080 targets,
+/// so at any other render resolution (a wider one above all) it takes FSR 3.1's path, which keeps
+/// the game's aspect ratio.
+pub fn live_path_fallback(
+    config: &Path,
+    environment: &IndexMap<String, String>,
+) -> Option<&'static str> {
+    let ini = read_file_values(config);
+    let upscaler = environment
+        .get("SPARTAN_UPSCALER")
+        .filter(|value| !value.is_empty())
+        .or_else(|| ini.get("upscaler"));
+    let size = crate::core::options::resolution_size(
+        ini.get("render_resolution")
+            .map_or("native", String::as_str),
+    );
+    (upscaler.is_some_and(|name| name == "fsr3ui") && size.is_some_and(|s| s != (1920, 1080)))
+        .then_some("fsr3")
+}
 
 /// `(width, height, output)` when a temporal upscaler preset renders below the output size. The
 /// output is the chosen render resolution: the upscaler delivers it and the preset renders below
@@ -470,6 +494,7 @@ pub fn upscaler_render_size(
         pick("SPARTAN_UPSCALER", "upscaler", "none").as_str(),
         "fsr3" | "fsr4" | "fsr411"
     ) {
+        // "fsr3ui" and "taa" run on the game's own targets: no resolution patch.
         return None;
     }
     let output = crate::core::options::resolution_size(
@@ -1298,6 +1323,40 @@ mod tests {
     }
 
     #[test]
+    fn native_hud_fsr_takes_the_fsr3_path_at_any_other_render_resolution() {
+        let dir = tempfile::tempdir().unwrap();
+        let ini = dir.path().join("spartanport.ini");
+        let none = IndexMap::new();
+        for (resolution, fallback) in [
+            ("3440x1440", Some("fsr3")),
+            ("2560x1440", Some("fsr3")),
+            ("native", None),
+            ("1920x1080", None),
+        ] {
+            fs::write(
+                &ini,
+                format!(
+                    "upscaler=fsr3ui
+render_resolution={resolution}
+"
+                ),
+            )
+            .unwrap();
+            assert_eq!(live_path_fallback(&ini, &none), fallback, "{resolution}");
+        }
+        fs::write(
+            &ini,
+            "upscaler=fsr3
+render_resolution=3440x1440
+",
+        )
+        .unwrap();
+        assert_eq!(live_path_fallback(&ini, &none), None);
+        let chosen = IndexMap::from([("SPARTAN_UPSCALER".to_string(), "fsr3ui".to_string())]);
+        assert_eq!(live_path_fallback(&ini, &chosen), Some("fsr3"));
+    }
+
+    #[test]
     fn upscale_render_size_follows_the_preset_scale() {
         assert_eq!(upscale_render_size("1", (1920, 1080)), Some((1280, 720)));
         assert_eq!(upscale_render_size("2", (1920, 1080)), Some((1130, 636)));
@@ -1305,6 +1364,8 @@ mod tests {
         assert_eq!(upscale_render_size("4", (1920, 1080)), Some((640, 360)));
         assert_eq!(upscale_render_size("5", (1920, 1080)), Some((1476, 830)));
         assert_eq!(upscale_render_size("4", (1280, 720)), Some((640, 360)));
+        assert_eq!(upscale_render_size("4", (3440, 1440)), Some((1146, 478)));
+        assert_eq!(upscale_render_size("4", (2560, 1440)), Some((854, 478)));
         // Above the game's own 1080p.
         assert_eq!(upscale_render_size("5", (2560, 1440)), Some((1970, 1108)));
         assert_eq!(upscale_render_size("1", (3840, 2160)), Some((2560, 1440)));
@@ -1404,6 +1465,22 @@ output_res=1280x720
         let mut off = on.clone();
         off.insert("SPARTAN_UPSCALER".into(), "off".into());
         assert_eq!(upscaler_render_size(&ini, &off), None);
+        // FSR 3.1 with Native AA at 1080p: the 1918x1078 patch (the game's own 1920x1080 would
+        // composite straight into the display buffer in that session).
+        fs::write(&ini, "upscaler=fsr3\npreset=0\nrender_resolution=native\n").unwrap();
+        assert_eq!(
+            upscaler_render_size(&ini, &on),
+            Some((1918, 1078, (1920, 1080)))
+        );
+        // FSR 3.1 with native HUD and text: no patch at any preset, the game keeps its own targets.
+        for preset in ["0", "1", "3"] {
+            fs::write(
+                &ini,
+                format!("upscaler=fsr3ui\npreset={preset}\nrender_resolution=native\n"),
+            )
+            .unwrap();
+            assert_eq!(upscaler_render_size(&ini, &on), None, "preset {preset}");
+        }
         fs::write(
             &ini,
             "upscaler=fsr3

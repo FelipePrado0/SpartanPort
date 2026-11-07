@@ -294,6 +294,23 @@ int main() {
     }
 
     {
+        // The launcher's SPARTAN_UPSCALER for one run (native HUD FSR outside 1920x1080) is not saved:
+        // the choice in the file stays, unless the menu picks another one.
+        {
+            std::ofstream out(path);
+            out << "upscaler=fsr3ui\n";
+        }
+        SetEnvironment("SPARTAN_UPSCALER", "fsr3");
+        SpartanSettings::Load();
+        assert(v.upscaler == SpartanSettings::UpscalerFsr3);
+        SpartanSettings::Save();
+        assert(Read(path).find("upscaler=fsr3ui\n") != std::string::npos);
+        v.upscaler = SpartanSettings::UpscalerFsr4;
+        SpartanSettings::Save();
+        assert(Read(path).find("upscaler=fsr4\n") != std::string::npos);
+        SetEnvironment("SPARTAN_UPSCALER", "");
+    }
+    {
         std::ofstream out(path);
         out << "render_resolution=8K\n";
     }
@@ -428,6 +445,46 @@ int main() {
     }
 
     {
+        // Anti-aliasing of the finished frame (aa_pass.cpp): off unless asked, text keys in the ini.
+        assert(G::ParseAntiAliasing("off") == G::AaOff && G::ParseAntiAliasing("fxaa") == G::AaFxaa &&
+               G::ParseAntiAliasing("smaa") == G::AaSmaa);
+        assert(G::ParseAntiAliasing("bogus") == G::AaOff && G::ParseAntiAliasing("2") == G::AaSmaa);
+        assert(G::ParseAntiAliasing("") == G::AaOff && G::ParseAntiAliasing("none") == G::AaOff);
+        // Too small an image is left alone, and so is "off".
+        assert(G::AaPassRuns(G::AaFxaa, 1920, 1080) && G::AaPassRuns(G::AaSmaa, 1280, 720));
+        assert(!G::AaPassRuns(G::AaOff, 1920, 1080) && !G::AaPassRuns(G::AaSmaa, 8, 8));
+        // Colour spaces: an sRGB view is sampled as linear light, the 10-bit and HDR buffers are not.
+        assert(G::AaInputIsLinear(false, false) && !G::AaInputIsLinear(true, false) &&
+               !G::AaInputIsLinear(false, true));
+        {
+            std::ofstream out(path);
+            out << "anti_aliasing=smaa\n";
+        }
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaSmaa);
+        SpartanSettings::Save();
+        assert(Read(path).find("anti_aliasing=smaa\n") != std::string::npos);
+        SetEnvironment("SPARTAN_ANTI_ALIASING", "fxaa");
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaFxaa);
+        SetEnvironment("SPARTAN_ANTI_ALIASING", "");
+        {
+            std::ofstream out(path);
+            out << "anti_aliasing=garbage\n";
+        }
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaOff);
+        SpartanSettings::Save();
+        assert(Read(path).find("anti_aliasing=off\n") != std::string::npos);
+        {
+            std::ofstream out(path);
+            out << "vsync=1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaOff);  // not in the file: off
+    }
+
+    {
         std::ofstream out(path);
         out << "cheat_double_jumps=1\ncheat_very_hard=1\n";
     }
@@ -519,10 +576,19 @@ int main() {
     v.mouse_prompt_distance = 16;
     spartanportgpu_native_setting(0xfae);
     assert(v.mouse_prompt_distance == 16);
+    // Controls' free camera row: unavailable without the hook, else On/Off, toggled by 0xf6f.
+    v.free_camera_supported = false;
+    v.free_camera = false;
+    assert(std::string(text(0xf6f)).find("Unavailable") != std::string::npos && !v.free_camera);
+    v.free_camera_supported = true;
+    assert(std::string(text(0xf6d)) == "[ArrowSpacer]Off[ArrowSpacer]");
+    assert(std::string(text(0xf6f)) == "[ArrowSelectionL]On[ArrowSelectionR]" && v.free_camera);
+    assert(Read(path).find("free_camera=1\n") != std::string::npos);
+    assert(std::string(text(0xf6e)).find("On") != std::string::npos);
     v.anisotropy = 16;
     spartanportgpu_native_setting(0xfb7);
     assert(v.vibration == 100 && v.mouse_aim_sensitivity == 100 && v.mouse_prompt_distance == 48);
-    assert(v.mouse_lock && v.mouse_aim_style == 0 && v.anisotropy == 16);
+    assert(v.mouse_lock && v.mouse_aim_style == 0 && v.anisotropy == 16 && !v.free_camera);
     v.cheats_supported = 0;
     v.cheats[0] = false;
     assert(std::string(text(0xf10)) == "Unavailable" && !v.cheats[0]);
@@ -544,6 +610,15 @@ int main() {
     SpartanSettings::Load();
     assert(std::string(text(0xf07)) == "On");
     assert(std::string(text(0xf17)) == "Off" && !v.auto_qte);
+    // Free camera: off by default, kept in the ini (the launcher writes the same key).
+    v.free_camera = true;
+    SpartanSettings::Save();
+    assert(Read(path).find("free_camera=1\n") != std::string::npos);
+    v.free_camera = false;
+    SpartanSettings::Load();
+    assert(v.free_camera);
+    v.free_camera = false;
+    SpartanSettings::Save();
     v.red_orbs_supported = true;
     v.orb_pickup_supported = true;
     v.damage_supported = true;
