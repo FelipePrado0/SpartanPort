@@ -1015,6 +1015,18 @@ void *runtime_low_map(size_t size, int prot) {
     if (!p) allocation_failed("low memory map (guest image or stack)", size, NO_MEMORY);
     return p;
 }
+void runtime_low_unmap(void *pointer, size_t size) {
+    if (!pointer || !size) return;
+#ifdef _WIN32
+    /* low_map_from reserved+committed the whole region, so MEM_RELEASE with
+     * a zero size frees it. */
+    VirtualFree(pointer,0,MEM_RELEASE);
+#else
+    /* low_map_from mapped align_up(size, PAGE) bytes; the PAGE gap after it
+     * was never mapped and is left alone. */
+    munmap(pointer,align_up(size,PAGE));
+#endif
+}
 /* Host records the guest holds pointers to (ScePthread handles, the TLS block with the TCB,
  * mutex, cond, rwlock and attribute handles) come from 1 MiB slabs below the PS4 range. PS4
  * games keep lock owners in 40 bits: a spin lock that stores scePthreadSelf() & 0xffffffffff
