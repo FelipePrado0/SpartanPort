@@ -376,6 +376,7 @@ const char* UpscalerLabel(int upscaler) {
     case SpartanSettings::UpscalerFsr4: return "FSR 4";
     case SpartanSettings::UpscalerFsr411: return "FSR 4.1";
     case SpartanSettings::UpscalerTaa: return "TAA";
+    case SpartanSettings::UpscalerXess: return "XeSS";
     default: return "";
     }
 }
@@ -574,7 +575,7 @@ void ImageTab() {
     const bool own_sharpening = SpartanSettings::OwnSharpening(s.upscaler);
     const bool rcas_host_blocked = s.rcas && !s.rcas_applied;
     const bool rcas_blocked = rcas_host_blocked && !own_sharpening;
-    if (s.upscaler == SpartanSettings::UpscalerTaa) {
+    if (SpartanSettings::IsTaa(s.upscaler)) {
         DisabledText(s.temporal_applied ? "Temporal anti-aliasing is running."
                                         : "Temporal anti-aliasing is selected but not running (see last_run.log).");
     }
@@ -588,9 +589,22 @@ void ImageTab() {
     if (s.anti_aliasing != G::AaOff && !s.aa_applied) {
         DisabledText("Anti-aliasing is not active: this graphics card could not set it up.");
     }
-    if (s.upscaler == SpartanSettings::UpscalerTaa) {
-        Separator("TAA look (God of War III)");
-        if (BeginRows("##taa_look")) {
+    if (SpartanSettings::IsTaa(s.upscaler)) {
+        const bool xess = s.upscaler == SpartanSettings::UpscalerXess;
+        Separator(xess ? "XeSS (God of War III)" : "TAA look (God of War III)");
+        if (xess) {
+            if (BeginRows("##xess_look")) {
+                if (const char* problem = s.xess_problem) InfoRow("XeSS status", problem);
+                SliderRow("Texture detail", s.taa_lod, 0, 150, "%d%%",
+                          "Sharper textures (a negative mip bias, in percent of one level): XeSS turns the "
+                          "extra detail into a clean picture. Higher: more detail, more shimmer. Default 75%.");
+                SliderRow("Sharpening", s.taa_sharpen, 0, 200, "%d%%",
+                          "Sharpening after XeSS, separate from the Sharpening (RCAS) switch below. 0% = off. "
+                          "Default 165%.");
+                ImGui::EndTable();
+            }
+        }
+        if (!xess && BeginRows("##taa_look")) {
             SliderRow("History on still picture", s.taa_static, 0, 99, "%d%%",
                       "Higher: smoother edges on a still picture, a little more trail. Default 99%.");
             SliderRow("History on moving picture", s.taa_moving, 0, 99, "%d%%",
@@ -610,12 +624,6 @@ void ImageTab() {
             CheckRow("Debug view (history)", s.taa_debug,
                      "Shows where the history is used: red = rejected by depth, green = lost to colour "
                      "change, blue = history weight used. For bug reports; not saved.");
-            CheckRow("XeSS (experimental)", s.taa_xess,
-                     "Intel XeSS instead of the TAA's accumulation, at the game's resolution. Needs "
-                     "libxess.dll next to the game and a restart after the first time it is switched on "
-                     "(the game enables its Vulkan extensions at start). The look sliders and the TAA "
-                     "sharpening above do not apply to it.");
-            if (const char* problem = s.xess_problem) InfoRow("XeSS status", problem);
             SliderRow("TAA sharpening", s.taa_sharpen, 0, 200, "%d%%",
                       "Sharpening after the accumulation, separate from the Sharpening (RCAS) switch below. 0% = off. Default 130%.");
             ImGui::EndTable();
@@ -655,11 +663,11 @@ void ImageTab() {
         // The launcher's choices and order (options.rs UPSCALERS, PRESETS); the same values as the
         // Display menu's rows.
 #ifdef _WIN32
-        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 3.1 (native HUD)", "FSR 4", "FSR 4.1", "TAA"};
+        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 3.1 (native HUD)", "FSR 4", "FSR 4.1", "TAA", "XeSS"};
         static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3,
                                               SpartanSettings::UpscalerFsr3Ui, SpartanSettings::UpscalerFsr4,
                                               SpartanSettings::UpscalerFsr411,
-                                              SpartanSettings::UpscalerTaa};
+                                              SpartanSettings::UpscalerTaa, SpartanSettings::UpscalerXess};
 #else
         static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 3.1 (native HUD)", "FSR 4", "TAA"};
         static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3,

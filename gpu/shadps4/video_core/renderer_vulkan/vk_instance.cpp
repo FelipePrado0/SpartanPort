@@ -427,7 +427,7 @@ bool Instance::CreateDevice() {
     }
     // spartanport: XeSS (vk_xess.cpp) asks for device extensions of its own (mutable descriptors
     // among them); they are enabled only when it is selected, so the device is the same without it.
-    if (SpartanSettings::Get().taa_xess.load()) {
+    if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerXess) {
         const auto enable = [&](const char* name) {
             const bool already = std::any_of(
                 enabled_extensions.begin(), enabled_extensions.end(),
@@ -844,7 +844,7 @@ void Instance::CollectDeviceParameters() {
     // The port's TAA is also chosen by the launcher in spartanport.ini (upscaler=taa; settings are
     // loaded before the device), without any environment variable.
     const bool temporal_mode =
-        SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa ||
+        SpartanSettings::IsTaa(SpartanSettings::Get().upscaler) ||
         (temporal_env && temporal_on && *temporal_on == '1' &&
          (std::strcmp(temporal_env, "taa") == 0 || std::strcmp(temporal_env, "fsr3") == 0));
     const bool no_msaa = no_msaa_env && *no_msaa_env

@@ -236,12 +236,14 @@ private:
     };
     void RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color, vk::ImageView depth,
                    const XessInputs* xess_inputs = nullptr);
-    /// XeSS in place of the TAA's accumulation (menu: taa_xess); false: the TAA runs this frame.
+    /// XeSS in place of the TAA's accumulation (upscaler xess); false: the TAA runs this frame.
     bool RecordXess(vk::CommandBuffer cmdbuf, const XessInputs& inputs, vk::ImageView color,
                     vk::ImageView depth);
     /// Sharpness above 1 for FSR 3/4 (their RCAS stops at 1): one more RCAS pass over the target
     /// (output_image, or the 8-bit UI image with ldr) in General layout after the upscaler.
     void ExtraSharpen(vk::CommandBuffer cmdbuf, vk::Image target, bool ldr, u32 w, u32 h);
+    /// RCAS pass of ours over `target` (the output image, or the 8-bit UI image when `ldr`), strength 0..2.
+    void SharpenImage(vk::CommandBuffer cmdbuf, vk::Image target, bool ldr, u32 w, u32 h, float strength);
 
     const Instance& instance;
     Scheduler& scheduler;

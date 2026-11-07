@@ -160,6 +160,9 @@ pub static UPSCALERS: &[Choice] = &[
         "TAA (native resolution anti-aliasing)",
         "TAA (нативное сглаживание)",
     ),
+    // Intel's library (libxess.dll) ships for Windows only.
+    #[cfg(windows)]
+    c("xess", "XeSS (Intel)"),
 ];
 
 /// Spatial anti-aliasing of the finished frame (`anti_aliasing` in spartanport.ini): FXAA or SMAA.

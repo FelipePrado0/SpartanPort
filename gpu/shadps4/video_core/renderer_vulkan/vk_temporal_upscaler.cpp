@@ -241,14 +241,14 @@ bool TemporalUpscaler::Active() const {
     return enabled && !failed &&
            (SpartanSettings::IsFsr3(SpartanSettings::Get().upscaler) ||
             SpartanSettings::IsFsr4(SpartanSettings::Get().upscaler) ||
-            SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) &&
+            SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) &&
            !SpartanToggle::Disabled(1u << 24);
 }
 
 bool TemporalUpscaler::ReactiveOn() const {
     // FSR 4 takes no reactive mask: the opaque snapshot and the mask pass would be wasted.
     return !SpartanToggle::Disabled(1u << 27) && !UseFsr4() &&
-           SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa;
+           !SpartanSettings::IsTaa(SpartanSettings::Get().upscaler);
 }
 
 void TemporalUpscaler::OnSceneColor(VideoCore::ImageId color) {
@@ -561,7 +561,7 @@ bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore
 void TemporalUpscaler::RunLdr() {
     if ((UseFsr4() && (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerFsr411 ||
                        !fsr4->DriverAvailable())) ||
-        SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+        SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
         return;
     }
     if (!SceneImagesLive()) {
@@ -777,7 +777,7 @@ bool TemporalUpscaler::SharpenOn() const {
 }
 
 bool TemporalUpscaler::SceneTaa() const {
-    return enabled && SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa;
+    return enabled && SpartanSettings::IsTaa(SpartanSettings::Get().upscaler);
 }
 
 void TemporalUpscaler::OnPixelShader(u64 ps_hash, VideoCore::ImageId color) {
@@ -844,7 +844,7 @@ bool TemporalUpscaler::JitterDepth(VideoCore::ImageId depth) const {
 bool TemporalUpscaler::EnsureResources(u32 w, u32 h, u32 ow, u32 oh, bool hdr) {
     // FSR 4 has its own context: no portable FSR 3 context is made.
     const bool use_fsr4 = UseFsr4();
-    const bool use_taa = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa;
+    const bool use_taa = SpartanSettings::IsTaa(SpartanSettings::Get().upscaler);
     if (use_taa && (w != ow || h != oh)) {
         std::printf("TAA: remove SPARTAN_RENDER_RES to use native-resolution TAA\n");
         return false;
@@ -1146,7 +1146,7 @@ void TemporalUpscaler::CreatePipelines() {
 bool TemporalUpscaler::RecordXess(vk::CommandBuffer cmdbuf, const XessInputs& inputs,
                                   vk::ImageView color, vk::ImageView depth) {
     const auto& settings = SpartanSettings::Get();
-    if (!settings.taa_xess.load() || !xess || inputs.width != out_width || inputs.height != out_height) {
+    if (settings.upscaler != SpartanSettings::UpscalerXess || !xess || inputs.width != out_width || inputs.height != out_height) {
         return false;
     }
     const bool ok = xess->Record({
@@ -1191,6 +1191,24 @@ void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
     // history, so the TAA's pass and its sharpening (which reads the TAA's history) are skipped.
     if (xess_inputs && RecordXess(cmdbuf, *xess_inputs, color, depth)) {
         xess_active = true;
+        // The look sliders of the accumulation do not apply to XeSS; the texture detail (the
+        // rasterizer's mip bias) and the sharpening do, and are logged like the TAA's look.
+        const auto& xs = SpartanSettings::Get();
+        const bool camera = camera_motion.ViewProjectionCamera();
+        const float strength = camera ? std::clamp(xs.taa_sharpen.load() / 100.0f, 0.0f, 2.0f) : 0.0f;
+        static std::array<int, 2> logged{-1, -1}, pending{-1, -1};
+        static u32 stable_frames = 0;
+        const std::array<int, 2> now{xs.taa_lod.load(), xs.taa_sharpen.load()};
+        if (now != pending) {
+            pending = now;
+            stable_frames = 0;
+        } else if (stable_frames < 12 && ++stable_frames == 12 && pending != logged) {
+            logged = pending;
+            std::printf("XeSS look: texture detail %d sharpen %d\n", now[0], now[1]);
+        }
+        if (strength > 0.0f) {
+            SharpenImage(cmdbuf, vk::Image(output_image), false, out_width, out_height, strength);
+        }
         return;
     }
     if (xess_active) {
@@ -1374,6 +1392,11 @@ void TemporalUpscaler::ExtraSharpen(vk::CommandBuffer cmdbuf, vk::Image target, 
     if (!SharpenOn() || extra <= 0.0f) {
         return;
     }
+    SharpenImage(cmdbuf, target, ldr, w, h, extra);
+}
+
+void TemporalUpscaler::SharpenImage(vk::CommandBuffer cmdbuf, vk::Image target, bool ldr, u32 w,
+                                    u32 h, float extra) {
     const auto device = instance.GetDevice();
     if (extra_sharpen_width != w || extra_sharpen_height != h) {
         // Retired command buffers may still read the old copy. `cmdbuf` stays open.
@@ -1634,7 +1657,7 @@ bool TemporalUpscaler::RecordReactive(vk::ImageView color_view) {
 
 void TemporalUpscaler::Run() {
     if (auto* profiler = GpuProfiler::Get()) {
-        const char* label = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa
+        const char* label = SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)
             ? "upscaler Run (TAA)" : "upscaler Run (FSR)";
         profiler->Mark(0xF5A0'0000ull ^ std::hash<std::string_view>{}(label),
                        [label] { return std::string{label}; });
@@ -1729,7 +1752,7 @@ void TemporalUpscaler::Run() {
     last_frame = now;
 
     bool dispatched = false;
-    if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+    if (SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
         RecordTaa(cmdbuf, input_color_view, input_depth_view);
         dispatched = true;
     } else if (UseFsr4()) {
@@ -1807,7 +1830,7 @@ void TemporalUpscaler::Run() {
     if (dispatched) {
         reset = false;
         dispatched_last_frame = true; frames_since_run = 0;
-        if (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa) {
+        if (!SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
             ExtraSharpen(cmdbuf, vk::Image(output_image), false, ow, oh);
         }
         // The result replaces the scene color's RGB (its alpha carries data for the post).
@@ -2058,7 +2081,7 @@ std::array<u32, 2> TemporalUpscaler::SceneSize(u32 w, u32 h) const {
 }
 
 float TemporalUpscaler::SceneMipBias() const {
-    if (!Active() || SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) return 0.0f;
+    if (!Active() || SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) return 0.0f;
     const float render = float(SpartanSettings::Get().active_render_width.load());
     const float output = float(Scaled() ? target_width : 1920u);
     float bias = render > 0.0f && render < output ? std::log2(render / output) : 0.0f;
@@ -2316,7 +2339,7 @@ void TemporalUpscaler::RunUiOnly(VideoCore::ImageId color_id, VideoCore::ImageId
 
 void TemporalUpscaler::RunScaled() {
     if (auto* profiler = GpuProfiler::Get()) {
-        const char* label = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa
+        const char* label = SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)
             ? "upscaler RunScaled (TAA)" : "upscaler RunScaled (FSR)";
         profiler->Mark(0xF5A0'0000ull ^ std::hash<std::string_view>{}(label),
                        [label] { return std::string{label}; });
@@ -2448,13 +2471,13 @@ void TemporalUpscaler::RunScaled() {
     last_frame = now;
 
     // spartanport: FSR 4 writes its HDR-format output, copied into the output-size UI image.
-    if (UseFsr4() || SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+    if (UseFsr4() || SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
         const auto [fw, fh] = std::array{ow, oh};
         barrier(vk::Image(output_image), vk::ImageAspectFlagBits::eColor,
                 vk::ImageLayout::eUndefined, all, vk::AccessFlagBits2::eNone,
                 vk::ImageLayout::eGeneral, all, rw);
         bool ok4 = true;
-        if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+        if (SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
             RecordTaa(cmdbuf, color_view, depth_view);
         } else {
             ok4 = RecordFsr4(cmdbuf, {color_image, color_view, source_width, source_height},
@@ -2462,7 +2485,7 @@ void TemporalUpscaler::RunScaled() {
                             oh, frame_ms, color.info.pixel_format);
         }
         if (ok4) {
-            if (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa) {
+            if (!SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
                 ExtraSharpen(cmdbuf, vk::Image(output_image), false, fw, fh);
             }
             barrier(vk::Image(output_image), vk::ImageAspectFlagBits::eColor,
@@ -2496,7 +2519,7 @@ void TemporalUpscaler::RunScaled() {
                 DumpImages(instance, scheduler, cmdbuf, dump,
                            {{depth_image, source_width, source_height, 4, "depth", "f32",
                              vk::ImageAspectFlagBits::eDepth}});
-                if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa &&
+                if (SpartanSettings::IsTaa(SpartanSettings::Get().upscaler) &&
                     std::getenv("SPARTAN_TAA_DIAGNOSTICS")) {
                     DumpImages(instance, scheduler, cmdbuf, dump,
                                {{vk::Image(taa_history[taa_next]),ow,oh,16,

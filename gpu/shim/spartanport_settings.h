@@ -33,8 +33,14 @@ inline constexpr int MasterVolumeMin = 0, MasterVolumeMax = 200, MasterVolumeDef
 
 // UpscalerFsr3Ui (appended: saved numbers keep their meaning) is FSR 3.1 with the game at its own
 // 1920x1080 targets, so the HUD, text and loading screens are not drawn small and stretched.
+// UpscalerXess (Windows only) is Intel XeSS anti-aliasing in place of the TAA's accumulation, at the
+// game's own resolution: everything the TAA gets (jitter, motion vectors, live path) with XeSS inside.
 enum Upscaler : int { UpscalerOff = 0, UpscalerFsr3 = 1, UpscalerFsr4 = 2, UpscalerFsr411 = 3,
-                      UpscalerTaa = 4, UpscalerFsr3Ui = 5, UpscalerCount };
+                      UpscalerTaa = 4, UpscalerFsr3Ui = 5, UpscalerXess = 6, UpscalerCount };
+/// The scene TAA path: our TAA, or XeSS in place of its accumulation.
+inline bool IsTaa(int upscaler) {
+    return upscaler == UpscalerTaa || upscaler == UpscalerXess;
+}
 /// FSR 3.1, either variant.
 inline bool IsFsr3(int upscaler) {
     return upscaler == UpscalerFsr3 || upscaler == UpscalerFsr3Ui;
@@ -42,7 +48,7 @@ inline bool IsFsr3(int upscaler) {
 /// The upscalers that need the game's own 1920x1080 targets (no resolution patch): a switch between
 /// them and the patched ones needs a restart.
 inline bool NeedsLivePath(int upscaler) {
-    return upscaler == UpscalerTaa || upscaler == UpscalerFsr3Ui;
+    return IsTaa(upscaler) || upscaler == UpscalerFsr3Ui;
 }
 /// The port's own FSR sharpening (the RCAS switch and strength, the extra pass): the native-HUD FSR 3.1.
 /// The other upscalers keep the upstream behaviour (`sharpen` and `sharpness`). The TAA's sharpening
@@ -158,10 +164,8 @@ struct Values {
     /// TAA debug view (not saved): red = history rejected by depth, green = lost to colour change /
     /// moving-object detection, blue = history weight used.
     std::atomic<bool> taa_debug{false};
-    /// XeSS (Intel, libxess.dll) in place of the TAA's accumulation, at the game's resolution (taa_xess,
-    /// saved; read when the GPU device is created, which has to enable XeSS's extensions, and live
-    /// after that); xess_problem is why it is not running, or null.
-    std::atomic<bool> taa_xess{false};
+    /// Why XeSS (upscaler=xess; libxess.dll) is not running, or null. The device is created with XeSS's
+    /// extensions only when it is the saved upscaler at start.
     const char* xess_problem = nullptr;
     /// The game's depth of field (spartanport_depth_of_field.h); off keeps the whole picture sharp. Live.
     std::atomic<bool> depth_of_field{true};

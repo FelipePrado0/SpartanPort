@@ -111,6 +111,9 @@ int main() {
     assert(OwnSharpening(UpscalerFsr3Ui) && !OwnSharpening(UpscalerTaa));
     assert(!OwnSharpening(UpscalerFsr3) && !OwnSharpening(UpscalerFsr4) && !OwnSharpening(UpscalerOff));
     assert(std::string_view(UpscalerName(UpscalerFsr3Ui)) == "fsr3ui");
+    assert(std::string_view(UpscalerName(UpscalerXess)) == "xess");
+    assert(IsTaa(UpscalerTaa) && IsTaa(UpscalerXess) && !IsTaa(UpscalerFsr3Ui) && !IsTaa(UpscalerOff));
+    assert(NeedsLivePath(UpscalerXess) && !OwnSharpening(UpscalerXess));
     s.upscaler = UpscalerFsr4;
     const int output = s.startup_output_res;
     s.output_res = (output + 1) % OutputCount;

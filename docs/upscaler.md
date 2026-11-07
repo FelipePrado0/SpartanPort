@@ -388,7 +388,7 @@ skipping screen-space passes (3 or 4 indices) so a shifted full-screen quad leav
   moving objects 55%, edges 55%, texture detail 80%, sharpening 130%. They live in
   `shim/spartanport_settings.h` and in the menu hints.
 
-### XeSS in place of the accumulation (menu: "XeSS (experimental)", ini `taa_xess`)
+### XeSS in place of the accumulation (upscaler "XeSS", ini `upscaler=xess`, Windows only)
 
 Intel XeSS-SR at its native anti-aliasing setting (`XESS_QUALITY_SETTING_AA`, the game's own
 resolution) can take the place of `taa.comp`. It gets the same inputs: the jittered scene colour (the
@@ -402,10 +402,13 @@ Windows only), the hook is `TemporalUpscaler::RecordXess`.
   commit and checks its hash; the Intel Simplified Software License allows redistributing it unmodified
   with its license, which the package keeps in `LICENSES/`). The headers in `gpu/third_party/xess` are MIT.
 - XeSS needs `VK_EXT_mutable_descriptor_type` and the extensions its library lists
-  (`xessVKGetRequiredDeviceExtensions`); `Instance::CreateDevice` enables them only when `taa_xess=1` is in
-  the ini at start, so the first time the option is switched on needs a restart.
-- The TAA look sliders and the TAA sharpening do not apply to XeSS (the sharpening pass reads the TAA's
-  history, which XeSS does not write). If XeSS cannot run, the TAA does, and the menu shows why.
+  (`xessVKGetRequiredDeviceExtensions`); `Instance::CreateDevice` enables them only when `upscaler=xess` is in
+  the ini at start, which fits the upscaler choice being applied on restart. It is a choice of its own in the
+  launcher and the menu, next to the TAA (`IsTaa()` covers both: same live path, jitter and motion vectors).
+- The TAA look sliders (history, tolerance, moving objects, edges) do not apply to XeSS, which has its own
+  history. Texture detail (`taa_lod`, the rasterizer's mip bias) and the sharpening (`taa_sharpen`, the
+  `taa_sharpen.comp` pass run over the output image through `SharpenImage`) do, and are logged as
+  `XeSS look:`. If XeSS cannot run, the TAA does, and the menu shows why.
 - Jitter sign: the same as FSR's; `SPARTAN_XESS_INVERT_JITTER=1` flips it for a test.
 - XeSS is meant to run before tonemapping; here it gets the tonemapped scene, because that is where the
   game's TAA sits. Treat the quality as unproven.
