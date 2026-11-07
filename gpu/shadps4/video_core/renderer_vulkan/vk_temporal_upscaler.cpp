@@ -1208,7 +1208,8 @@ void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
         const u32 objects = u32(std::clamp(taa.taa_objects.load(), 0, 100));
         params.pad |= objects << 16;
         params.pad |= u32(std::clamp(taa.taa_spatial.load(), 0, 100) * 63 / 100) << 26;
-        // One line when the look settles (the menu sliders change it every frame while dragged).
+        // One line when the look settles for 12 frames (the menu sliders change it every frame while
+        // dragged): every pause on a new value is logged, so a log shows what each slider did.
         static std::array<float, 7> logged{-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
         static std::array<float, 7> pending = logged;
         static u32 stable_frames = 0;
@@ -1218,7 +1219,7 @@ void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
         if (now != pending) {
             pending = now;
             stable_frames = 0;
-        } else if (stable_frames < 90 && ++stable_frames == 90 && pending != logged) {
+        } else if (stable_frames < 12 && ++stable_frames == 12 && pending != logged) {
             logged = pending;
             std::printf("TAA look: static %g moving %g tolerance %g objects %g sharpen %g edges %g "
                         "texture detail %g\n", now[0], now[1], now[2], now[3], now[4], now[5], now[6]);
@@ -1316,7 +1317,7 @@ void TemporalUpscaler::ExtraSharpen(vk::CommandBuffer cmdbuf, vk::Image target, 
         if (now != pending) {
             pending = now;
             stable_frames = 0;
-        } else if (stable_frames < 90 && ++stable_frames == 90 && pending != logged) {
+        } else if (stable_frames < 12 && ++stable_frames == 12 && pending != logged) {
             logged = pending;
             std::printf("FSR look: texture detail %d moving objects %d\n", now[0], now[1]);
         }
