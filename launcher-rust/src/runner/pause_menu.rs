@@ -45,7 +45,7 @@ use crate::core::python::python_json;
 use crate::runner::glyphs::{entries, Entry};
 
 /// Of the patch: a change rebuilds the cached copy.
-pub const VERSION: u32 = 25;
+pub const VERSION: u32 = 26;
 pub const WAD: &str = "EXEC/WAD/PS4_LE/R_UI.WAD";
 
 /// The Exit to Desktop row's text in one language.
@@ -784,6 +784,10 @@ impl<'a> Script<'a> {
                 return Err(script(format!("no state record at {at:#x}")));
             }
             let size = be24(d, b + at + 1);
+            // A state holds at least its 12-byte head: a smaller one is the header table's count.
+            if size < 12 {
+                return Err(script(format!("no state record at {at:#x}")));
+            }
             let (parent, id) = (be32(d, b + at + 4)?, be32(d, b + at + 8)?);
             let (mut j, mut items) = (at + 12, Vec::new());
             while j < self.code && byte(d, b + j)? != 4 {
@@ -3595,25 +3599,41 @@ mod tests {
 
     /// [`tiny_script`] with `parent` as Root's parent word (0x14 is Root's own state ref).
     fn tiny_script_with_root_parent(parent: u32) -> Vec<u8> {
+        tiny_script_after(parent, &[])
+    }
+
+    /// [`tiny_script_with_root_parent`] with `table` between the header and the states.
+    fn tiny_script_after(parent: u32, table: &[u8]) -> Vec<u8> {
+        let shift = table.len() as u8;
         let mut smi = vec![0u8; 0x18];
-        let (code, symtab) = (0x44u32, 0x48u32 + 23);
+        smi.extend(table);
+        let (code, symtab) = (0x44u32 + u32::from(shift), 0x48u32 + 23 + u32::from(shift));
         smi[0x0c..0x10].copy_from_slice(&code.to_le_bytes());
         smi[0x10..0x14].copy_from_slice(&symtab.to_le_bytes());
         // Root at 0x18 (subtree 44 bytes), Child at 0x28 (28 bytes, parent ref 0x14).
         smi.extend([4, 0, 0, 44]);
         smi.extend(parent.to_be_bytes());
         smi.extend([0, 0, 0, 4, 1, 0, 0, 0]);
-        smi.extend([4, 0, 0, 28, 0, 0, 0, 0x14, 0, 0, 0, 12]);
+        smi.extend([4, 0, 0, 28, 0, 0, 0, 0x14 + shift, 0, 0, 0, 12]);
         smi.extend([1, 0, 0, 8, 3, 0, 0, 13, 0x80, 0, 0, 0xe0, 0, 0, 0, 0xec]);
         smi.extend([0; 4]); // code start .. code refs' base
         smi.extend([0x16, 0x00, 0x13, 0x09, 0xe0, 0x06, 0x43, 0x49]); // 0: line5 = ""
         smi.extend([0x16, 0x00, 0x14, 0x43, 0x49]); // 8
-        smi.extend([0x47, 0, 0, 0, 0x14, 0x49]); // 13: go to Root
+        smi.extend([0x47, 0, 0, 0, 0x14 + shift, 0x49]); // 13: go to Root
         smi.extend(b"\0Hi\0"); // 19, 20
         smi.extend([0; 8]);
         smi.extend([0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 25]);
         smi.extend(b"Root\0Child\0");
         wad("SMI_R_UI", &smi)
+    }
+
+    #[test]
+    fn a_header_table_entry_of_4_is_not_a_state() {
+        // The real script's table has (count, code) pairs: a count of 4 reads as `04 000000`.
+        let data = tiny_script_after(0xffff_ffff, &[4, 0, 0, 0, 0x44, 1, 0, 0]);
+        let s = Script::parse(&data).unwrap();
+        assert_eq!(s.records.len(), 2);
+        assert_eq!(s.one("Root").unwrap().at, 0x20);
     }
 
     #[test]
