@@ -258,5 +258,21 @@ inline constexpr std::pair<std::string_view, const char*> CzechText[] = {
     {"Sharper textures (a negative mip bias, in percent of one level) on top of FSR's own: the accumulation turns the extra detail into a clean picture. Higher: more detail, more shimmer. Default 0%.", "Ostřejší textury (záporný mip bias v procentech jedné úrovně) navíc k vlastnímu biasu FSR: akumulace promění přidaný detail v čistý obraz. Vyšší: víc detailu, víc mihotání. Výchozí 0 %."},
     {"How much FSR distrusts its history on characters and objects. Higher: less ghosting behind them, rougher edges. Lower: smoother but more trails. Default 100%.", "Jak moc FSR nedůvěřuje své historii u postav a objektů. Vyšší: méně duchů za nimi, drsnější hrany. Nižší: hladší, ale víc šmouh. Výchozí 100 %."},
     {"FSR 3.1 (native HUD) keeps the game at 1920x1080 so the HUD, text and loading screens are not stretched, and has the port's own sharpening. FSR 4.1 needs an AMD Radeon with Adrenalin 26.10.1 or newer.", "FSR 3.1 (nativní HUD) nechá hru v 1920x1080, takže HUD, text a loadingy se neroztahují, a má vlastní doostření portu. FSR 4.1 vyžaduje AMD Radeon s Adrenalin 26.10.1 nebo novější."},
+    // DualSense (SpartanPort). English until translated.
+    {"DualSense", "DualSense"},
+    {"Speaker", "Speaker"},
+    {"The sounds the game makes for the controller's speaker play on the DualSense's own speaker (USB only; a headset in the controller's jack gets them instead). Takes effect at the next start.", "The sounds the game makes for the controller's speaker play on the DualSense's own speaker (USB only; a headset in the controller's jack gets them instead). Takes effect at the next start."},
+    {"Speaker gain", "Speaker gain"},
+    {"The DualSense speaker's own level, which the Windows volume does not reach. The controller beeps at the new level when it changes.", "The DualSense speaker's own level, which the Windows volume does not reach. The controller beeps at the new level when it changes."},
+    {"Trigger click", "Trigger click"},
+    {"R2 gets a wall that gives way near the end of its travel.", "R2 gets a wall that gives way near the end of its travel."},
+    {"Hit flash", "Hit flash"},
+    {"The light bar flashes red when Kratos loses health.", "The light bar flashes red when Kratos loses health."},
+    {"QTE light bar", "QTE light bar"},
+    {"While a QTE prompt is up, the light bar blinks in the colour of its button, with a short rumble at each new prompt.", "While a QTE prompt is up, the light bar blinks in the colour of its button, with a short rumble at each new prompt."},
+    {"Motion sensors", "Motion sensors"},
+    {"The controller's gyro and accelerometer are passed to the game.", "The controller's gyro and accelerometer are passed to the game."},
+    {"Gyro aim", "Gyro aim"},
+    {"While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.", "While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors."},
 };
 } // namespace SpartanUi
