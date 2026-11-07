@@ -38,6 +38,10 @@ public:
         vk::CommandBuffer cmdbuf;
         Image color, depth, motion;
         Image output; ///< in layout General, usage storage
+        /// Optional responsive pixel mask (R8, 1 = distrust the history there; view null = none),
+        /// clipped to `responsive_max`. Whether there is one is fixed when XeSS is (re)initialised.
+        Image responsive;
+        float responsive_max;
         std::array<float, 2> jitter; ///< pixels, as the game's projection was shifted
         bool reset;
     };

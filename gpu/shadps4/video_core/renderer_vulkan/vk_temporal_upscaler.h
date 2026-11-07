@@ -233,6 +233,7 @@ private:
         vk::Image color, depth;
         vk::Format color_format, depth_format;
         u32 width, height;
+        bool has_mask; ///< the stencil mask is in reactive_image (XeSS's responsive mask)
     };
     void RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color, vk::ImageView depth,
                    const XessInputs* xess_inputs = nullptr);

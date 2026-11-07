@@ -409,6 +409,10 @@ Windows only), the hook is `TemporalUpscaler::RecordXess`.
   history. Texture detail (`taa_lod`, the rasterizer's mip bias) and the sharpening (`taa_sharpen`, the
   `taa_sharpen.comp` pass run over the output image through `SharpenImage`) do, and are logged as
   `XeSS look:`. If XeSS cannot run, the TAA does, and the menu shows why.
+- Ghosting: the scene TAA's motion vectors are the camera's only (characters have none), so XeSS gets a
+  responsive pixel mask (`XESS_INIT_FLAG_RESPONSIVE_PIXEL_MASK`, R8): the scene stencil's characters and
+  objects, the mask `RecordStencilReactive` makes for FSR, clipped by `xessSetMaxResponsiveMaskValue` to
+  the menu's "Moving objects" (`xess_objects`, default 100%, 0 = off). Without a stencil XeSS runs without it.
 - Jitter sign: the same as FSR's; `SPARTAN_XESS_INVERT_JITTER=1` flips it for a test.
 - XeSS is meant to run before tonemapping; here it gets the tonemapped scene, because that is where the
   game's TAA sits. Treat the quality as unproven.

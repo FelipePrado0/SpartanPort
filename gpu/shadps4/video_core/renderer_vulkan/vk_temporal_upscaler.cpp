@@ -509,7 +509,10 @@ bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore
         return env && env[0] ? std::clamp(float(std::atof(env)), 0.0f, 1.0f) : 1.0f;
     }();
     // FSR 3.1 with native HUD and text: the menu's "Moving objects" sets it live.
-    const float stencil_value = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerFsr3Ui
+    // XeSS: a full mask, its "Moving objects" slider clips it (the responsive mask's maximum).
+    const float stencil_value = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerXess
+        ? 1.0f
+        : SpartanSettings::Get().upscaler == SpartanSettings::UpscalerFsr3Ui
         ? std::clamp(float(SpartanSettings::Get().fsr_objects.load()) / 100.0f, 0.0f, 1.0f)
         : env_value;
     if (stencil_value <= 0.0f || SpartanToggle::Disabled(1u << 28) ||
@@ -1159,6 +1162,11 @@ bool TemporalUpscaler::RecordXess(vk::CommandBuffer cmdbuf, const XessInputs& in
                    vk::ImageAspectFlagBits::eColor, inputs.width, inputs.height},
         .output = {vk::Image(output_image), *output_view, vk::Format::eR16G16B16A16Sfloat,
                    vk::ImageAspectFlagBits::eColor, out_width, out_height},
+        .responsive = inputs.has_mask
+            ? XessAa::Image{vk::Image(reactive_image), *reactive_view, vk::Format::eR8Unorm,
+                            vk::ImageAspectFlagBits::eColor, inputs.width, inputs.height}
+            : XessAa::Image{},
+        .responsive_max = float(settings.xess_objects.load()) / 100.0f,
         .jitter = jitter,
         .reset = reset || !xess_active, // XeSS has not been drawing: its history is old
     });
@@ -1196,15 +1204,16 @@ void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
         const auto& xs = SpartanSettings::Get();
         const bool camera = camera_motion.ViewProjectionCamera();
         const float strength = camera ? std::clamp(xs.taa_sharpen.load() / 100.0f, 0.0f, 2.0f) : 0.0f;
-        static std::array<int, 2> logged{-1, -1}, pending{-1, -1};
+        static std::array<int, 3> logged{-1, -1, -1}, pending{-1, -1, -1};
         static u32 stable_frames = 0;
-        const std::array<int, 2> now{xs.taa_lod.load(), xs.taa_sharpen.load()};
+        const std::array<int, 3> now{xs.taa_lod.load(), xs.taa_sharpen.load(), xs.xess_objects.load()};
         if (now != pending) {
             pending = now;
             stable_frames = 0;
         } else if (stable_frames < 12 && ++stable_frames == 12 && pending != logged) {
             logged = pending;
-            std::printf("XeSS look: texture detail %d sharpen %d\n", now[0], now[1]);
+            std::printf("XeSS look: texture detail %d sharpen %d moving objects %d\n", now[0], now[1],
+                        now[2]);
         }
         if (strength > 0.0f) {
             SharpenImage(cmdbuf, vk::Image(output_image), false, out_width, out_height, strength);
@@ -1977,9 +1986,13 @@ void TemporalUpscaler::RunSceneTaa() {
     }
     last_frame = now;
 
+    // XeSS's responsive mask: the characters and objects of the scene stencil (they move without
+    // motion vectors, so their history would ghost). The mask pass needs the depth in General.
+    const bool has_mask = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerXess &&
+                          RecordStencilReactive(cmdbuf, depth, depth_format, w, h);
     const XessInputs xess_inputs{color.GetImage(), depth.GetImage(),
                                  srgb_color ? vk::Format::eR8G8B8A8Srgb : vk::Format::eR8G8B8A8Unorm,
-                                 depth_format, w, h};
+                                 depth_format, w, h, has_mask};
     RecordTaa(cmdbuf, color_view, depth_view, &xess_inputs);
     const bool dispatched = true;
     if (!dispatched) {

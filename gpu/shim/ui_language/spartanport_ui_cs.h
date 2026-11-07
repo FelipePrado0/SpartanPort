@@ -249,6 +249,7 @@ inline constexpr std::pair<std::string_view, const char*> CzechText[] = {
     {"XeSS (God of War III)", "XeSS (God of War III)"},
     {"XeSS status", "Stav XeSS"},
     {"Sharper textures (a negative mip bias, in percent of one level): XeSS turns the extra detail into a clean picture. Higher: more detail, more shimmer. Default 75%.", "Ostřejší textury (záporný mip bias v procentech jedné úrovně): XeSS promění přidaný detail v čistý obraz. Vyšší: víc detailu, víc mihotání. Výchozí 75 %."},
+    {"How much XeSS distrusts its history on characters and objects (a mask from the game's stencil). Higher: less ghosting behind them, rougher edges. 0% = off. Default 100%.", "Jak moc XeSS nedůvěřuje své historii u postav a objektů (maska ze stencilu hry). Vyšší: méně duchů za nimi, drsnější hrany. 0 % = vypnuto. Výchozí 100 %."},
     {"Sharpening after XeSS, separate from the Sharpening (RCAS) switch below. 0% = off. Default 165%.", "Doostření po XeSS, nezávislé na přepínači Doostření (RCAS) níže. 0 % = vypnuto. Výchozí 165 %."},
     {"FSR 3.1 (native HUD)", "FSR 3.1 (nativní HUD)"},
     {"Higher: smoother edges on a still picture, a little more trail. Default 99%.", "Vyšší: hladší hrany na stojícím obraze, o něco víc šmouh. Výchozí 99 %."},

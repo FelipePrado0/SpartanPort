@@ -43,6 +43,7 @@ struct Library {
     xess_result_t (*set_logging)(xess_context_handle_t, xess_logging_level_t,
                                  xess_app_log_callback_t){};
     xess_result_t (*is_optimal_driver)(xess_context_handle_t){};
+    xess_result_t (*set_max_responsive)(xess_context_handle_t, float){};
 
     bool Ok() const {
         return module && create && init && execute && destroy;
@@ -105,6 +106,7 @@ Library& GetLibrary() {
         Resolve(lib.module, "xessVKGetRequiredDeviceExtensions", lib.required_extensions);
         Resolve(lib.module, "xessSetLoggingCallback", lib.set_logging);
         Resolve(lib.module, "xessIsOptimalDriver", lib.is_optimal_driver);
+        Resolve(lib.module, "xessSetMaxResponsiveMaskValue", lib.set_max_responsive);
         if (!lib.Ok()) {
             lib.error = "libxess.dll has no Vulkan entry points (not the XeSS SDK library?)";
         }
@@ -163,6 +165,8 @@ struct XessAa::Impl {
     const Instance& instance;
     xess_context_handle_t context{};
     u32 initialised_width = 0, initialised_height = 0;
+    bool initialised_mask = false;
+    float mask_max = -1.0f; ///< the clip value last set on the context
     bool fresh = true; ///< the history of the context is empty: the next frame resets it
     bool fatal = false;
     u32 failures = 0;
@@ -243,7 +247,9 @@ struct XessAa::Impl {
                             "slower or look worse)\n");
             }
         }
-        if (initialised_width != frame.output.width || initialised_height != frame.output.height) {
+        const bool has_mask = frame.responsive.view && lib.set_max_responsive;
+        if (initialised_width != frame.output.width || initialised_height != frame.output.height ||
+            initialised_mask != has_mask) {
             // A (re)initialisation needs the GPU idle; it happens at the start and when the
             // game's picture changes size.
             instance.GetDevice().waitIdle();
@@ -251,7 +257,8 @@ struct XessAa::Impl {
             init.outputResolution = {frame.output.width, frame.output.height};
             init.qualitySetting = XESS_QUALITY_SETTING_AA;
             // The scene colour is tonemapped (display range), not HDR.
-            init.initFlags = XESS_INIT_FLAG_LDR_INPUT_COLOR;
+            init.initFlags = XESS_INIT_FLAG_LDR_INPUT_COLOR |
+                             (has_mask ? XESS_INIT_FLAG_RESPONSIVE_PIXEL_MASK : 0);
             init.creationNodeMask = 1;
             init.visibleNodeMask = 1;
             const xess_result_t result = lib.init(context, &init);
@@ -261,6 +268,8 @@ struct XessAa::Impl {
             }
             initialised_width = frame.output.width;
             initialised_height = frame.output.height;
+            initialised_mask = has_mask;
+            mask_max = -1.0f;
             fresh = true;
             logged_running = false;
         }
@@ -270,6 +279,15 @@ struct XessAa::Impl {
         params.velocityTexture = ViewInfo(frame.motion);
         params.depthTexture = ViewInfo(frame.depth);
         params.outputTexture = ViewInfo(frame.output);
+        if (has_mask) {
+            params.responsivePixelMaskTexture = ViewInfo(frame.responsive);
+            const float clip = frame.responsive_max < 0.0f ? 0.0f
+                               : frame.responsive_max > 1.0f ? 1.0f : frame.responsive_max;
+            if (clip != mask_max) {
+                mask_max = clip;
+                lib.set_max_responsive(context, clip);
+            }
+        }
         // XeSS takes the jitter in pixels as the projection was shifted; SPARTAN_XESS_INVERT_JITTER=1
         // flips it (one switch for a test, in case a sign differs from FSR's).
         static const bool invert = [] {
@@ -298,11 +316,17 @@ struct XessAa::Impl {
         Barrier(frame.cmdbuf, frame.color, true);
         Barrier(frame.cmdbuf, frame.depth, true);
         Barrier(frame.cmdbuf, frame.motion, true);
+        if (has_mask) {
+            Barrier(frame.cmdbuf, frame.responsive, true);
+        }
         const xess_result_t result =
             lib.execute(context, static_cast<VkCommandBuffer>(frame.cmdbuf), &params);
         Barrier(frame.cmdbuf, frame.color, false);
         Barrier(frame.cmdbuf, frame.depth, false);
         Barrier(frame.cmdbuf, frame.motion, false);
+        if (has_mask) {
+            Barrier(frame.cmdbuf, frame.responsive, false);
+        }
         if (result < 0) {
             Fail("execute", result, ++failures >= 3);
             return false;

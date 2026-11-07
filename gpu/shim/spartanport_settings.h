@@ -167,6 +167,9 @@ struct Values {
     /// Why XeSS (upscaler=xess; libxess.dll) is not running, or null. The device is created with XeSS's
     /// extensions only when it is the saved upscaler at start.
     const char* xess_problem = nullptr;
+    /// XeSS: how far its history is distrusted on characters and objects (the scene stencil as its
+    /// responsive mask, as FSR 3.1's "moving objects"); 0 = off, saved. Live.
+    std::atomic<int> xess_objects{100};
     /// The game's depth of field (spartanport_depth_of_field.h); off keeps the whole picture sharp. Live.
     std::atomic<bool> depth_of_field{true};
     /// Anti-aliasing of the finished frame (SpartanGraphics::AntiAliasing: off, FXAA, SMAA). Live.
