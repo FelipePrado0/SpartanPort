@@ -611,7 +611,7 @@ void ImageTab() {
                      "Shows where the history is used: red = rejected by depth, green = lost to colour "
                      "change, blue = history weight used. For bug reports; not saved.");
             SliderRow("TAA sharpening", s.taa_sharpen, 0, 200, "%d%%",
-                      "Sharpening after the accumulation; the Sharpening (RCAS) switch below turns it off. Default 165%.");
+                      "Sharpening after the accumulation, separate from the Sharpening (RCAS) switch below. 0% = off. Default 165%.");
             ImGui::EndTable();
         }
     }

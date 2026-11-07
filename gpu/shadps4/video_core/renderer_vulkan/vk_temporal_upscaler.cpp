@@ -1249,17 +1249,12 @@ void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
     cmdbuf.dispatch((out_width + 7) / 8, (out_height + 7) / 8, 1);
     const auto& settings = SpartanSettings::Get();
     float strength = std::clamp(settings.sharpness.load(), 0.0f, 2.0f);
-    const bool sharpen = SharpenOn();
-    {
-        static int logged_sharpen = -1;
-        if (logged_sharpen != int(sharpen)) {
-            logged_sharpen = int(sharpen);
-            std::printf("Sharpening: %s (the TAA's own, strength %d%%)\n", sharpen ? "on" : "off",
-                        settings.taa_sharpen.load());
-        }
-    }
+    // The 8-bit scene is softened by the history resampling: the TAA's sharpening has its own,
+    // menu-set strength (0 = off) and does not depend on the Sharpening (RCAS) switch. Without the
+    // camera the old launcher sharpness and its switch apply.
+    bool sharpen = SharpenOn();
     if (camera_motion.ViewProjectionCamera()) {
-        // the 8-bit scene is softened by the history resampling: its own, menu-set strength.
+        sharpen = true;
         strength = std::clamp(settings.taa_sharpen.load() / 100.0f, 0.0f, 2.0f);
     }
     if (sharpen && strength > 0.0f && !(params.pad & 0xffu)) {
