@@ -280,6 +280,9 @@ Values& Get() {
     return values;
 }
 
+// The upscaler of spartanport.ini, before SPARTAN_UPSCALER replaced it for this run.
+static int file_upscaler = UpscalerOff;
+
 void Load() {
     auto& v = Get();
     v.menu_confirm_swap = 0;
@@ -298,8 +301,10 @@ void Load() {
         std::fclose(file);
         std::printf("Settings: %s\n", Path());
     }
-    // Environment overrides (scripts, A/B tests).
-    if (const char* env = std::getenv("SPARTAN_UPSCALER")) {
+    // Environment overrides (scripts, A/B tests). The upscaler's is for this run only: Save keeps
+    // the file's choice unless the menu changes it (the launcher's FSR 3.1 fallback for fsr3ui).
+    file_upscaler = v.upscaler;
+    if (const char* env = std::getenv("SPARTAN_UPSCALER"); env && env[0]) {
         v.upscaler = UpscalerOff;
         for (int u = 0; u < UpscalerCount; ++u) {
             if (std::strcmp(env, UpscalerName(u)) == 0) v.upscaler = u;
@@ -487,7 +492,8 @@ void Save() {
                  "upscaler=%s\npreset=%d\nsharpen=%d\nsharpness=%.2f\njitter=%d\n"
                  "reactive=%d\nobject_motion=%d\nreactive_scale=%.2f\nreactive_threshold=%.2f\nreactive_max=%.2f\n"
                  "debug_view=%d\nshow_fps=%d\nfsr4_auto_exposure=%d\nfsr4_invert_jitter=%d\n",
-                 UpscalerName(v.upscaler), v.preset.load(), int(v.sharpen.load()),
+                 UpscalerName(v.upscaler == v.startup_upscaler ? file_upscaler : v.upscaler.load()),
+                 v.preset.load(), int(v.sharpen.load()),
                  v.sharpness.load(), int(v.jitter.load()), int(v.reactive.load()),
                  int(v.object_motion.load()),
                  v.reactive_scale.load(), v.reactive_threshold.load(), v.reactive_max.load(),

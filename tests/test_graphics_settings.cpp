@@ -294,6 +294,23 @@ int main() {
     }
 
     {
+        // The launcher's SPARTAN_UPSCALER for one run (native HUD FSR outside 1920x1080) is not saved:
+        // the choice in the file stays, unless the menu picks another one.
+        {
+            std::ofstream out(path);
+            out << "upscaler=fsr3ui\n";
+        }
+        SetEnvironment("SPARTAN_UPSCALER", "fsr3");
+        SpartanSettings::Load();
+        assert(v.upscaler == SpartanSettings::UpscalerFsr3);
+        SpartanSettings::Save();
+        assert(Read(path).find("upscaler=fsr3ui\n") != std::string::npos);
+        v.upscaler = SpartanSettings::UpscalerFsr4;
+        SpartanSettings::Save();
+        assert(Read(path).find("upscaler=fsr4\n") != std::string::npos);
+        SetEnvironment("SPARTAN_UPSCALER", "");
+    }
+    {
         std::ofstream out(path);
         out << "render_resolution=8K\n";
     }
