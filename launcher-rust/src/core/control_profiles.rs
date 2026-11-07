@@ -335,7 +335,7 @@ mod tests {
                 Slot::Main,
                 "G"
             ),
-            None
+            Some(("camera".to_string(), Slot::Main))
         );
     }
 

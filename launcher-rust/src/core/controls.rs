@@ -659,15 +659,24 @@ fn inputs_in_use(
 }
 
 /// Leaves the `actions` that a saved keyboard table predates without an input ("None") when their
-/// default one is already used by another row; the rest follow their defaults. A table with
-/// nothing saved follows the defaults, which never collide.
+/// default one is already used by another row, in any slot; the rest follow their defaults. A
+/// table with nothing saved follows the defaults, which never collide.
 fn claim_new_actions(controls: &mut Map<String, Value>, rage: bool, actions: &[ControlRow]) {
     let chosen = table_values(controls.get("key"), Kind::Key);
     if chosen.is_empty() {
         return;
     }
     let skipped: Vec<&str> = actions.iter().map(|row| row.button).collect();
-    let taken = inputs_in_use(&chosen, rage, &skipped);
+    let mut taken = inputs_in_use(&chosen, rage, &skipped);
+    let saved = Value::Object(controls.clone());
+    for slot in [Slot::Alternative, Slot::SecondAlternative] {
+        taken.extend(
+            alternative_values(&saved, slot)
+                .iter()
+                .filter(|(button, _)| !skipped.contains(&button.as_str()))
+                .map(|(_, input)| input.to_lowercase()),
+        );
+    }
     // a saved table is an object: `chosen` came from it
     if let Some(Value::Object(key)) = controls.get_mut("key") {
         for action in actions {
@@ -1086,6 +1095,20 @@ mod tests {
         );
         assert!(moved.contains("weapon_next=Mouse Back,weapon_prev=None"));
         assert_eq!(app["controls_layout"], json!(CONTROLS_LAYOUT));
+    }
+
+    #[test]
+    fn free_camera_leaves_a_key_saved_as_an_alternative() {
+        for field in ["key_alt", "key_alt2"] {
+            let migrated = migrate_controls(object(
+                json!({"controls_layout": 4, "controls": {"key": {"cross": "Q"}, field: {"cross": "G"}}}),
+            ));
+            assert_eq!(
+                migrated["controls"]["key"]["camera"],
+                json!("None"),
+                "{field}"
+            );
+        }
     }
 
     #[test]
