@@ -732,6 +732,7 @@ static void update_qte_flash(SDL_Gamepad *g, uint64_t now) {
  * action starts at the click instead of at the first touch.
  * This is where a trigger effect for something in the game (a chest, a bow) would be chosen. */
 enum { R2_CLICK_START=4, R2_CLICK_END=6, R2_CLICK_STRENGTH=6, R2_PRESS_AT=150 };
+static bool r2_under_click; /* R2 is held but hidden from the game, short of the click */
 /* atexit hook: frees both triggers, since the pad keeps an effect until the next one. */
 static void restore_triggers(void) {
     const DsTrigger off=ds_trigger_off();
@@ -817,9 +818,13 @@ static void update_dualsense(SDL_Gamepad *g, PadData *d) {
     else if (hit.flashing) { hit.flashing=false; restore_light(g); }
     if (features & DS_QTE) update_qte_flash(g,d->timestamp);
     else if (qte_led.shown>=0) { qte_led.shown=-1; restore_light(g); }
+    r2_under_click=false;
     if (features & DS_TRIGGERS) {
         /* Without the wall on the trigger, R2 keeps its usual threshold. */
-        if (update_triggers(g) && d->r2<R2_PRESS_AT) { d->r2=0; d->buttons&=~(uint32_t)BTN_R2; }
+        if (update_triggers(g) && d->r2<R2_PRESS_AT) {
+            r2_under_click=d->r2>0;
+            d->r2=0; d->buttons&=~(uint32_t)BTN_R2;
+        }
     } else if (ds_sent.sent_to==g) { const DsTrigger off=ds_trigger_off(); ds_set_triggers(g,&off,&off); }
     if (features & DS_MOTION) update_motion(g,d);
 }
@@ -1144,7 +1149,7 @@ static void apply_free_camera(PadData *d) {
     camera_toggle.key_held=key;
     const bool r3=(pad_held & BTN_R3)!=0;
     if (r3 && !camera_toggle.r3_held) { camera_toggle.r3_since=d->timestamp; camera_toggle.r3_alone=true; }
-    if (r3 && ((d->buttons|overlay_chord_hidden) & (BTN_L1|BTN_R1|BTN_L2|BTN_R2|BTN_L3))) camera_toggle.r3_alone=false;
+    if (r3 && (r2_under_click || ((d->buttons|overlay_chord_hidden) & (BTN_L1|BTN_R1|BTN_L2|BTN_R2|BTN_L3)))) camera_toggle.r3_alone=false;
     if (!r3 && camera_toggle.r3_held && camera_toggle.r3_alone && d->timestamp-camera_toggle.r3_since<CAMERA_TAP_US)
         spartanport_camera_toggle();
     camera_toggle.r3_held=r3;

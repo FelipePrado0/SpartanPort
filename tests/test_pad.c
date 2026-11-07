@@ -688,6 +688,16 @@ int main(void) {
         data=read_pad();
         assert(camera_toggles==toggles+1);
     }
+    /* R2 held short of a DualSense's click is hidden from the game but still makes a chord. */
+    r2_under_click=true;
+    assert(SDL_SetJoystickVirtualButton(joystick,SDL_GAMEPAD_BUTTON_RIGHT_STICK,true));
+    pump();
+    data=read_pad();
+    r2_under_click=false;
+    assert(SDL_SetJoystickVirtualButton(joystick,SDL_GAMEPAD_BUTTON_RIGHT_STICK,false));
+    pump();
+    data=read_pad();
+    assert(camera_toggles==toggles+1);
     camera_stick=0;
     SDL_CloseJoystick(joystick);
     if (gamepad) SDL_CloseGamepad(gamepad);
