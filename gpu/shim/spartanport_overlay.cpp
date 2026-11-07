@@ -596,22 +596,22 @@ void ImageTab() {
             SliderRow("History on moving picture", s.taa_moving, 0, 99, "%d%%",
                       "Higher: smoother while the camera moves, more blur and trail. Default 55%.");
             SliderRow("Colour tolerance", s.taa_tolerance, 30, 300, "%d%%",
-                      "Lower: less trail and ghosting, more flicker. Default 115%.");
+                      "Lower: less trail and ghosting, more flicker. Default 175%.");
             SliderRow("Moving objects", s.taa_objects, 0, 100, "%d%%",
                       "How much history a moving character or object loses. Higher: less ghosting there, "
-                      "rougher edges. Default 90%.");
+                      "rougher edges. Default 55%.");
             SliderRow("Texture detail", s.taa_lod, 0, 150, "%d%%",
                       "Sharper textures (a negative mip bias, in percent of one level): the accumulation "
                       "turns the extra detail into a clean picture. Higher: more detail, more shimmer. "
-                      "Default 75%.");
+                      "Default 80%.");
             SliderRow("Moving object edges", s.taa_spatial, 0, 100, "%d%%",
                       "Smooths the stair-stepped edges of moving characters, where the history is refused: "
-                      "a spatial filter on those pixels only. Higher: smoother, slightly softer. Default 70%.");
+                      "a spatial filter on those pixels only. Higher: smoother, slightly softer. Default 55%.");
             CheckRow("Debug view (history)", s.taa_debug,
                      "Shows where the history is used: red = rejected by depth, green = lost to colour "
                      "change, blue = history weight used. For bug reports; not saved.");
             SliderRow("TAA sharpening", s.taa_sharpen, 0, 200, "%d%%",
-                      "Sharpening after the accumulation, separate from the Sharpening (RCAS) switch below. 0% = off. Default 165%.");
+                      "Sharpening after the accumulation, separate from the Sharpening (RCAS) switch below. 0% = off. Default 130%.");
             ImGui::EndTable();
         }
     }

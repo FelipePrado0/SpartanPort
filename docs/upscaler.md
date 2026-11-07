@@ -384,8 +384,8 @@ skipping screen-space passes (3 or 4 indices) so a shifted full-screen quad leav
 - `pad` bits: 0-7 diagnostic view (4 = history debug view: red depth-rejected, green history lost,
   blue weight used), 8-15 A/B switches, 16-23 moving-object history loss in percent, 24 view-projection
   depth, 25 8-bit scene, 26-31 spatial smoothing.
-- Defaults (tuned in game on a GTX 1070 Ti): history 99% still / 55% moving, tolerance 115%,
-  moving objects 90%, edges 70%, texture detail 75%, sharpening 165%. They live in
+- Defaults (tuned in game on a GTX 1070 Ti): history 99% still / 55% moving, tolerance 175%,
+  moving objects 55%, edges 55%, texture detail 80%, sharpening 130%. They live in
   `shim/spartanport_settings.h` and in the menu hints.
 
 ### Simulator

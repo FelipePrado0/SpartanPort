@@ -144,12 +144,12 @@ struct Values {
     /// taa_tolerance: width of the colour range the history is clipped to; taa_objects: how much
     /// history a changed patch (a moving object without motion vectors) loses; taa_sharpen: sharpening
     /// after the accumulation.
-    std::atomic<int> taa_static{99}, taa_moving{55}, taa_tolerance{115}, taa_objects{90}, taa_sharpen{165};
+    std::atomic<int> taa_static{99}, taa_moving{55}, taa_tolerance{175}, taa_objects{55}, taa_sharpen{130};
     /// Texture detail of the scene's materials: a negative mip bias of taa_lod / 100 levels, which the
     /// accumulation (jitter) turns into detail instead of shimmer (the usual TAA texture bias).
-    std::atomic<int> taa_lod{75};
+    std::atomic<int> taa_lod{80};
     /// Edge smoothing of the pixels whose history was refused (moving characters): percent.
-    std::atomic<int> taa_spatial{70};
+    std::atomic<int> taa_spatial{55};
     /// FSR 3.1 with native HUD and text (UpscalerFsr3Ui), percent, live: fsr_lod is the texture detail
     /// (a negative mip bias of fsr_lod / 100 levels on top of FSR's own); fsr_objects the reactive
     /// strength of characters and objects (the stencil mask: 100 is upstream's, lower is sharper but
