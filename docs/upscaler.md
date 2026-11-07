@@ -388,6 +388,28 @@ skipping screen-space passes (3 or 4 indices) so a shifted full-screen quad leav
   moving objects 55%, edges 55%, texture detail 80%, sharpening 130%. They live in
   `shim/spartanport_settings.h` and in the menu hints.
 
+### XeSS in place of the accumulation (menu: "XeSS (experimental)", ini `taa_xess`)
+
+Intel XeSS-SR at its native anti-aliasing setting (`XESS_QUALITY_SETTING_AA`, the game's own
+resolution) can take the place of `taa.comp`. It gets the same inputs: the jittered scene colour (the
+sRGB view, so linear values, with `XESS_INIT_FLAG_LDR_INPUT_COLOR` since the colour is already tonemapped),
+the scene depth (not inverted: 0 at the near plane) and the motion vectors of `camera_motion_vp.comp` in render pixels
+(previous minus current, without jitter), and it writes into the TAA's output image, so the alpha
+pass, the write back and the HUD stay as they are. Code: `vk_xess.cpp` (loads `libxess.dll` at run time,
+Windows only), the hook is `TemporalUpscaler::RecordXess`.
+
+- The library is Intel's binary (`packaging/fetch_xess.sh` takes it from github.com/intel/xess at a pinned
+  commit and checks its hash; the Intel Simplified Software License allows redistributing it unmodified
+  with its license, which the package keeps in `LICENSES/`). The headers in `gpu/third_party/xess` are MIT.
+- XeSS needs `VK_EXT_mutable_descriptor_type` and the extensions its library lists
+  (`xessVKGetRequiredDeviceExtensions`); `Instance::CreateDevice` enables them only when `taa_xess=1` is in
+  the ini at start, so the first time the option is switched on needs a restart.
+- The TAA look sliders and the TAA sharpening do not apply to XeSS (the sharpening pass reads the TAA's
+  history, which XeSS does not write). If XeSS cannot run, the TAA does, and the menu shows why.
+- Jitter sign: the same as FSR's; `SPARTAN_XESS_INVERT_JITTER=1` flips it for a test.
+- XeSS is meant to run before tonemapping; here it gets the tonemapped scene, because that is where the
+  game's TAA sits. Treat the quality as unproven.
+
 ### Simulator
 
 The tuning used a software renderer of a procedural scene (static, slow and fast camera, moving box)

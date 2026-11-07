@@ -177,7 +177,7 @@ target_compile_definitions(spartanportgpu PRIVATE IMGUI_IMPL_VULKAN_NO_PROTOTYPE
     SPARTAN_TITLE_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../launcher/Cinzel-Black.ttf")
 set_source_files_properties(shim/spartanport_overlay.cpp PROPERTIES
     OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf;${CMAKE_CURRENT_SOURCE_DIR}/../launcher/Cinzel-Black.ttf")
-target_include_directories(spartanportgpu PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include third_party/half/include)
+target_include_directories(spartanportgpu PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include third_party/half/include third_party/xess)
 target_compile_definitions(spartanportgpu PRIVATE BOOST_ASIO_STANDALONE NDEBUG)
 target_compile_options(spartanportgpu PRIVATE -Wno-deprecated-declarations -Wno-missing-field-initializers)
 # Runtime symbols (runtime_memory_*, runtime_process_*) resolve against spartanport-probe.

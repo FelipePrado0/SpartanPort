@@ -158,6 +158,11 @@ struct Values {
     /// TAA debug view (not saved): red = history rejected by depth, green = lost to colour change /
     /// moving-object detection, blue = history weight used.
     std::atomic<bool> taa_debug{false};
+    /// XeSS (Intel, libxess.dll) in place of the TAA's accumulation, at the game's resolution (taa_xess,
+    /// saved; read when the GPU device is created, which has to enable XeSS's extensions, and live
+    /// after that); xess_problem is why it is not running, or null.
+    std::atomic<bool> taa_xess{false};
+    const char* xess_problem = nullptr;
     /// The game's depth of field (spartanport_depth_of_field.h); off keeps the whole picture sharp. Live.
     std::atomic<bool> depth_of_field{true};
     /// Anti-aliasing of the finished frame (SpartanGraphics::AntiAliasing: off, FXAA, SMAA). Live.

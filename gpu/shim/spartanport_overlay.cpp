@@ -610,6 +610,12 @@ void ImageTab() {
             CheckRow("Debug view (history)", s.taa_debug,
                      "Shows where the history is used: red = rejected by depth, green = lost to colour "
                      "change, blue = history weight used. For bug reports; not saved.");
+            CheckRow("XeSS (experimental)", s.taa_xess,
+                     "Intel XeSS instead of the TAA's accumulation, at the game's resolution. Needs "
+                     "libxess.dll next to the game and a restart after the first time it is switched on "
+                     "(the game enables its Vulkan extensions at start). The look sliders and the TAA "
+                     "sharpening above do not apply to it.");
+            if (const char* problem = s.xess_problem) InfoRow("XeSS status", problem);
             SliderRow("TAA sharpening", s.taa_sharpen, 0, 200, "%d%%",
                       "Sharpening after the accumulation, separate from the Sharpening (RCAS) switch below. 0% = off. Default 130%.");
             ImGui::EndTable();

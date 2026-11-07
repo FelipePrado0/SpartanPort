@@ -167,6 +167,7 @@ TemporalUpscaler::TemporalUpscaler(const Instance& instance_, Scheduler& schedul
     // Reject unsupported shaders before allocating resources or recording a frame.
     fsr4 = std::make_unique<Fsr4Upscaler>(instance, scheduler);
     frame_generation = std::make_unique<FrameGeneration>(instance, scheduler);
+    xess = std::make_unique<XessAa>(instance);
 #ifdef _WIN32
     SpartanSettings::ConfigureUpscalerSupport(instance.IsFsr4Int8Supported(),
                                             fsr4->DriverAvailable(), fsr4->DriverProblem());
@@ -1142,8 +1143,61 @@ void TemporalUpscaler::CreatePipelines() {
     }
 }
 
+bool TemporalUpscaler::RecordXess(vk::CommandBuffer cmdbuf, const XessInputs& inputs,
+                                  vk::ImageView color, vk::ImageView depth) {
+    const auto& settings = SpartanSettings::Get();
+    if (!settings.taa_xess.load() || !xess || inputs.width != out_width || inputs.height != out_height) {
+        return false;
+    }
+    const bool ok = xess->Record({
+        .cmdbuf = cmdbuf,
+        .color = {inputs.color, color, inputs.color_format, vk::ImageAspectFlagBits::eColor,
+                  inputs.width, inputs.height},
+        .depth = {inputs.depth, depth, inputs.depth_format, vk::ImageAspectFlagBits::eDepth,
+                  inputs.width, inputs.height},
+        .motion = {vk::Image(motion_image), *motion_view, vk::Format::eR16G16Sfloat,
+                   vk::ImageAspectFlagBits::eColor, inputs.width, inputs.height},
+        .output = {vk::Image(output_image), *output_view, vk::Format::eR16G16B16A16Sfloat,
+                   vk::ImageAspectFlagBits::eColor, out_width, out_height},
+        .jitter = jitter,
+        .reset = reset || !xess_active, // XeSS has not been drawing: its history is old
+    });
+    // The menu shows why XeSS is not running; the text outlives this frame.
+    static std::string shown;
+    const char* problem = xess->Problem();
+    if (!problem) {
+        SpartanSettings::Get().xess_problem = nullptr;
+    } else if (shown != problem) {
+        shown = problem;
+        static std::array<std::string, 4> kept;
+        static u32 next = 0;
+        kept[next] = shown;
+        SpartanSettings::Get().xess_problem = kept[next].c_str();
+        next = (next + 1) % kept.size();
+    }
+    if (!ok && xess->Fatal()) {
+        static bool said = false;
+        if (!said) {
+            said = true;
+            std::printf("XeSS: not available, the TAA accumulates instead\n");
+        }
+    }
+    return ok;
+}
+
 void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
-                                vk::ImageView depth) {
+                                vk::ImageView depth, const XessInputs* xess_inputs) {
+    // XeSS in place of the accumulation: it writes the result into output_view and has its own
+    // history, so the TAA's pass and its sharpening (which reads the TAA's history) are skipped.
+    if (xess_inputs && RecordXess(cmdbuf, *xess_inputs, color, depth)) {
+        xess_active = true;
+        return;
+    }
+    if (xess_active) {
+        // Back to the TAA: its history is from before XeSS ran.
+        xess_active = false;
+        reset = true;
+    }
     // Make scene writes and the last storage-image history writes visible to sampled reads.
     const vk::MemoryBarrier2 inputs{
         .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
@@ -1900,7 +1954,10 @@ void TemporalUpscaler::RunSceneTaa() {
     }
     last_frame = now;
 
-    RecordTaa(cmdbuf, color_view, depth_view);
+    const XessInputs xess_inputs{color.GetImage(), depth.GetImage(),
+                                 srgb_color ? vk::Format::eR8G8B8A8Srgb : vk::Format::eR8G8B8A8Unorm,
+                                 depth_format, w, h};
+    RecordTaa(cmdbuf, color_view, depth_view, &xess_inputs);
     const bool dispatched = true;
     if (!dispatched) {
         return; // the scene colour stays as the game made it

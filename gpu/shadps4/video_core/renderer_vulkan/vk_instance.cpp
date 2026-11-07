@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -20,6 +21,7 @@
 #include "video_core/renderer_vulkan/vk_amd_paths.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
+#include "video_core/renderer_vulkan/vk_xess.h"
 
 #include <vk_mem_alloc.h>
 
@@ -276,7 +278,8 @@ bool Instance::CreateDevice() {
         vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE,
         vk::PhysicalDevicePipelineBinaryFeaturesKHR,
         vk::PhysicalDeviceMaintenance5FeaturesKHR,
-        vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR>();
+        vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR,
+        vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>();
     features = feature_chain.get().features;
 
     const vk::StructureChain properties_chain = physical_device.getProperties2<
@@ -421,6 +424,22 @@ bool Instance::CreateDevice() {
                  image_2d_view_of_3d_features.image2DViewOf3D);
         LOG_INFO(Render_Vulkan, "- sampler2DViewOf3D: {}",
                  image_2d_view_of_3d_features.sampler2DViewOf3D);
+    }
+    // spartanport: XeSS (vk_xess.cpp) asks for device extensions of its own (mutable descriptors
+    // among them); they are enabled only when it is selected, so the device is the same without it.
+    if (SpartanSettings::Get().taa_xess.load()) {
+        const auto enable = [&](const char* name) {
+            const bool already = std::any_of(
+                enabled_extensions.begin(), enabled_extensions.end(),
+                [&](const char* have) { return std::strcmp(have, name) == 0; });
+            return already || add_extension(name);
+        };
+        for (const char* name : XessAa::DeviceExtensions(*instance, physical_device)) {
+            enable(name);
+        }
+        mutable_descriptor_type = enable(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME) &&
+            feature_chain.get<vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>()
+                .mutableDescriptorType;
     }
     image_view_min_lod = add_extension(VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME);
     supports_memory_budget = add_extension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
@@ -646,6 +665,9 @@ bool Instance::CreateDevice() {
             .image2DViewOf3D = image_2d_view_of_3d_features.image2DViewOf3D,
             .sampler2DViewOf3D = image_2d_view_of_3d_features.sampler2DViewOf3D,
         },
+        vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT{
+            .mutableDescriptorType = mutable_descriptor_type,
+        },
         vk::PhysicalDeviceImageViewMinLodFeaturesEXT{
             .minLod = true,
         },
@@ -714,6 +736,9 @@ bool Instance::CreateDevice() {
     }
     if (!image_2d_view_of_3d) {
         device_chain.unlink<vk::PhysicalDeviceImage2DViewOf3DFeaturesEXT>();
+    }
+    if (!mutable_descriptor_type) {
+        device_chain.unlink<vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>();
     }
     if (!image_view_min_lod) {
         device_chain.unlink<vk::PhysicalDeviceImageViewMinLodFeaturesEXT>();
