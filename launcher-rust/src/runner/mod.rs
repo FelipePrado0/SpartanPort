@@ -388,6 +388,10 @@ impl<'a> Runner<'a> {
         for (key, value) in graphics_options::environment(&graphics.options) {
             self.set(&key, value);
         }
+        if let Some(upscaler) = graphics_options::live_path_fallback(&plan.config, &self.env) {
+            self.say("Upscaler: FSR 3.1 (native HUD and text) needs 1920x1080, using FSR 3.1");
+            self.derive("SPARTAN_UPSCALER", upscaler);
+        }
         // A temporal upscaler preset: the game renders at the preset's size (a resolution patch of
         // that size, never the display's) and the upscaler outputs the chosen resolution. Its
         // full-size passes are the HUD's.
