@@ -3410,6 +3410,8 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
         state.width = proxy.width;
         state.height = proxy.height;
         target_scale = {float(size.width) / 1920.0f, float(size.height) / 1080.0f};
+    } else {
+        push_data.scene_size = UiComposition::FragCoordSize(target_scale);
     }
     if (census_on) {
         std::array<const VideoCore::ImageInfo*, AmdGpu::NUM_COLOR_BUFFERS> colors{};
