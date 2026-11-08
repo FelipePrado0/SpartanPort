@@ -852,6 +852,9 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
         &[
             ("pt", "XeSS (Intel): anti-aliasing na resolução própria do jogo, no lugar da acumulação do TAA. Precisa do libxess.dll ao lado do jogo (o pacote do Windows já o inclui). O detalhe das texturas e o aumento de nitidez ficam no menu do jogo. Experimental."),
             ("cs", "XeSS (Intel): vyhlazování hran ve vlastním rozlišení hry místo akumulace TAA. Potřebuje libxess.dll vedle hry (balíček pro Windows ho obsahuje). Detail textur a doostření jsou v herním menu. Experimentální."),
+            ("zh", "XeSS（Intel）：在游戏自身分辨率下进行抗锯齿，取代 TAA 的累积。需要游戏旁边有 libxess.dll（Windows 安装包已包含）。纹理细节和锐化在游戏内菜单中设置。实验性功能。"),
+            ("es", "XeSS (Intel): antialiasing a la resolución propia del juego, en lugar de la acumulación del TAA. Necesita libxess.dll junto al juego (el paquete de Windows lo incluye). El detalle de texturas y la nitidez están en el menú del juego. Experimental."),
+            ("id", "XeSS (Intel): anti-aliasing pada resolusi asli gim, menggantikan akumulasi TAA. Membutuhkan libxess.dll di samping gim (paket Windows sudah menyertakannya). Detail tekstur dan penajaman ada di menu dalam gim. Eksperimental."),
         ],
     ),
 ];
