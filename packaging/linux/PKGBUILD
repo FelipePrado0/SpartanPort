@@ -130,6 +130,7 @@ package() {
 
   install -m755 out/spartanport-probe out/spartanport-gpu-capabilities "${libdir}/"
   install -m755 out/gpu/libspartanportgpu.so "${libdir}/gpu/"
+  install -Dm644 -t "${libdir}/shaders" shaders/*.spm
   ln -s ../../lib/spartanport "${sharedir}/bin"
 
   # The same layout as the AppImage: the Rust launcher runs from the share directory.

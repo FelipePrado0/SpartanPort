@@ -23,6 +23,11 @@ $found = Get-ChildItem -LiteralPath $tree -Recurse -Force |
     Where-Object { $name = $_.Name; $forbidden | Where-Object { $name -like $_ } }
 if ($found) { $failed += "files that must not ship: $($found.FullName -join ', ')" }
 
+# The shader preparation reads its list beside the game executable.
+if (-not (Get-ChildItem -LiteralPath (Join-Path $tree 'bin\shaders') -Filter '*.spm' -ErrorAction SilentlyContinue)) {
+    $failed += 'no shader list in bin\shaders'
+}
+
 # A missing DLL stops the probe before main (0xC0000135).
 $probe = Start-Process -FilePath (Join-Path $tree 'bin\spartanport-probe.exe') -ArgumentList '--cpu-features' `
     -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $work 'probe.log')

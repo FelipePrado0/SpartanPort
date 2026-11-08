@@ -32,6 +32,9 @@ ldd "$dest/bin/spartanport-probe.exe" "$dest/bin/spartanport-gpu-capabilities.ex
     awk '/\/clang64\/bin\// {print $3}' | sort -u | while read -r dll; do
         cp -u "$dll" "$dest/bin/"
     done
+# The shader list (no game code), beside the game executable where the preparation looks for it.
+mkdir -p "$dest/bin/shaders"
+cp shaders/*.spm "$dest/bin/shaders/"
 mkdir -p "$dest/scripts" "$dest/docs"
 cp -r scripts/controller_diagrams "$dest/scripts/"
 cp -r patches "$dest/"
