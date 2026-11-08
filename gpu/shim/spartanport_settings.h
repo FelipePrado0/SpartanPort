@@ -285,6 +285,9 @@ void SyncEngineFps();
 /// R3 + R1 / L1, F9 + Right / Left: the next stop from EngineFpsChosen() toward `direction` (saved);
 /// 0 when this launch cannot change it.
 int StepEngineFps(int direction);
+/// F10 + 1 to 8 (#320): cheat `number` switched and saved, 1 to 7 the cheats and 8 Automatic QTE;
+/// 1 now on, 0 now off, -1 when this game build lacks it or the number is out of range.
+int ToggleCheat(int number);
 /// Writes the file (menu changes).
 void Save();
 

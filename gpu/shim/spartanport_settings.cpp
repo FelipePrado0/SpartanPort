@@ -428,6 +428,24 @@ int StepEngineFps(int direction) {
     return v.engine_fps;
 }
 
+int ToggleCheat(int number) {
+    auto& v = Get();
+    int on = -1;
+    if (number == int(SPARTAN_CHEAT_COUNT) + 1) {
+        if (!v.qte_supported.load()) return -1;
+        on = !v.auto_qte.load();
+        v.auto_qte = on;
+    } else if (number >= 1 && number <= int(SPARTAN_CHEAT_COUNT)) {
+        if (!(v.cheats_supported.load() & (1u << (number - 1)))) return -1;
+        on = !v.cheats[number - 1].load();
+        v.cheats[number - 1] = on;
+    } else {
+        return -1;
+    }
+    Save();
+    return on;
+}
+
 bool GraphicsNeedRestart() {
     const auto& v = Get();
     return v.render_resolution != v.startup_render_resolution ||

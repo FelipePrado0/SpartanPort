@@ -3417,3 +3417,48 @@ fn performance_offers_60_fps_during_qtes_under_the_engine_rate() {
     click_tall(&mut state, "High Frame Rate Physics Fix");
     assert_eq!(state.store.text("auto_safe_fps"), "0");
 }
+
+use spartanport_launcher::core::trophy_sound::{self, TrophySound};
+use spartanport_launcher::ui::persist;
+
+#[test]
+fn turning_off_all_cheats_and_the_trophy_sound_are_saved() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state(dir.path());
+    let user = state.paths.user_dir(&state.store.text("user_dir"));
+    // Saving without touching the sound writes no custom_trophy file.
+    persist::collect(&mut state).unwrap();
+    assert!(!trophy_sound::file(&user).exists());
+    for key in ["cheat_health", "auto_qte", "cheat_double_jumps"] {
+        let _ = app::update(&mut state, Message::Set(key.into(), true.into()));
+    }
+    let _ = app::update(
+        &mut state,
+        Message::Set("damage_dealt".into(), "2.500".into()),
+    );
+    let _ = app::update(&mut state, Message::CheatsOff);
+    for key in [
+        "cheat_health",
+        "cheat_magic",
+        "cheat_item",
+        "cheat_rage",
+        "cheat_orbs",
+        "cheat_very_hard",
+        "cheat_double_jumps",
+        "auto_qte",
+    ] {
+        assert!(!state.store.flag(key), "{key}");
+    }
+    assert_eq!(state.store.text("damage_dealt"), "1.000");
+    let sound = TrophySound {
+        volume: 30,
+        muted: true,
+    };
+    let _ = app::update(&mut state, Message::TrophySound(sound));
+    assert!(persist::dirty(&state));
+    persist::collect(&mut state).unwrap();
+    assert_eq!(trophy_sound::read(&user), sound);
+    let ini = std::fs::read_to_string(state.paths.ini_path()).unwrap();
+    assert!(ini.contains("damage_dealt=1.000\n"), "{ini}");
+    assert!(ini.contains("cheat_health=0\n"), "{ini}");
+}

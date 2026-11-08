@@ -34,5 +34,6 @@ pub mod steam;
 pub mod steam_art;
 pub mod store;
 pub mod trophies;
+pub mod trophy_sound;
 pub mod update;
 pub mod voice_swap;

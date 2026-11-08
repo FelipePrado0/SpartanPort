@@ -120,6 +120,7 @@ ImFont* title_font = nullptr; // Cinzel with DejaVu Sans for what it lacks; null
 constexpr float kTitleSize = 32.0f, kTabSize = 22.0f, kSectionSize = 19.0f; // px at 1080p
 std::atomic<bool> menu_open{false};
 bool r3_down = false, l2_down = false, r2_down = false;
+bool f10_held = false;
 std::atomic<bool> loading{false};
 std::atomic<u32> loading_done{0}, loading_total{0};
 std::atomic<u32> background_done{0}, background_total{0};
@@ -430,6 +431,12 @@ bool DualSenseConnected() {
     return found;
 }
 
+// The cheats in the order of SpartanSettings' cheats[] and F10 + 1 to 8 (8 is Automatic QTE).
+constexpr const char* kCheatNames[] = {"Infinite health", "Infinite magic", "Infinite item meter",
+                                       "Infinite Rage of Sparta", "Max red orbs", "Unlock Very Hard",
+                                       "Infinite Double Jumps", "Automatic QTE"};
+static_assert(std::size(kCheatNames) == SPARTAN_CHEAT_COUNT + 1);
+
 void GameTab() {
     auto& s = SpartanSettings::Get();
     if (BeginRows("##language")) {
@@ -439,9 +446,6 @@ void GameTab() {
     }
     Separator("Cheats");
     if (BeginRows("##cheats")) {
-        static const char* const names[] = {"Infinite health", "Infinite magic", "Infinite item meter",
-                                            "Infinite Rage of Sparta", "Max red orbs",
-                                            "Unlock Very Hard", "Infinite Double Jumps"};
         static const char* const helps[] = {
             "Health stays full. Only Kratos is protected. Turning it off does not undo past refills.",
             "Magic stays full.", "The item meter (bow, Helios' head, boots) stays full.",
@@ -451,11 +455,11 @@ void GameTab() {
         for (unsigned cheat = 0; cheat < SPARTAN_CHEAT_COUNT; ++cheat) {
             const bool available = (s.cheats_supported.load() & (1u << cheat)) != 0;
             ImGui::BeginDisabled(!available);
-            CheckRow(names[cheat], s.cheats[cheat], available ? helps[cheat] : Unsupported);
+            CheckRow(kCheatNames[cheat], s.cheats[cheat], available ? helps[cheat] : Unsupported);
             ImGui::EndDisabled();
         }
         ImGui::BeginDisabled(!s.qte_supported.load());
-        CheckRow("Automatic QTE", s.auto_qte,
+        CheckRow(kCheatNames[SPARTAN_CHEAT_COUNT], s.auto_qte,
                  s.qte_supported.load() ? "Quick-time prompts answer themselves: single presses, repeated "
                                           "presses, holds and stick rotations."
                                         : Unsupported);
@@ -2713,6 +2717,11 @@ bool HandleChoiceEvent(const SDL_Event& event) {
 
 bool HandleEvent(const SDL_Event& event) {
     std::scoped_lock lock{imgui_mutex};
+    // F10 for the cheat hotkeys, followed from the events (SDL_GetKeyboardState is already past an
+    // F10 release queued behind the number) and before the trophy views, which take their own keys.
+    if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && event.key.key == SDLK_F10) {
+        f10_held = event.type == SDL_EVENT_KEY_DOWN;
+    }
     if (!initialized) {
         return false;
     }
@@ -2746,6 +2755,20 @@ bool HandleEvent(const SDL_Event& event) {
             SDL_GetKeyboardState(nullptr)[SDL_SCANCODE_F9]) {
             if (down) {
                 StepEngineFps(event.key.key == SDLK_RIGHT ? 1 : -1);
+            }
+            return true;
+        }
+        // Hold F10 and press 1 to 8: switches that cheat (#320). F10 and those keys never reach the game.
+        if (event.key.key == SDLK_F10) {
+            return true;
+        }
+        if (event.key.key >= SDLK_1 && event.key.key <= SDLK_8 && f10_held) {
+            if (down && !event.key.repeat) {
+                const int number = int(event.key.key - SDLK_1) + 1;
+                const int on = SpartanSettings::ToggleCheat(number);
+                ShowNotice(std::string(Tr(kCheatNames[number - 1])) + ": " +
+                               Tr(on < 0 ? "Unavailable" : on ? "On" : "Off"),
+                           2000);
             }
             return true;
         }
