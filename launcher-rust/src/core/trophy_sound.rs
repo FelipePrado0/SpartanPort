@@ -69,9 +69,12 @@ pub fn write(user_dir: &Path, sound: TrophySound) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let lines: Vec<String> = std::fs::read_to_string(&path)
-        .map(|text| text.lines().map(str::to_string).collect())
-        .unwrap_or_default();
+    // Only a missing file starts empty: an unreadable one fails rather than lose its other lines.
+    let lines: Vec<String> = match std::fs::read_to_string(&path) {
+        Ok(text) => text.lines().map(str::to_string).collect(),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(error),
+    };
     let mut edited = IndexMap::new();
     edited.insert("volume".to_string(), sound.volume.min(100).to_string());
     edited.insert("muted".to_string(), u8::from(sound.muted).to_string());
@@ -110,6 +113,14 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(file(dir.path())).unwrap(),
             "theme=card\n# volume: 0-100\nvolume=25\nmuted=0\nhold_seconds=3\n"
+        );
+        let latin1 = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(latin1.path().join("custom_trophy")).unwrap();
+        std::fs::write(file(latin1.path()), b"title=Tr\xf3feu\nvolume=10\n").unwrap();
+        assert!(write(latin1.path(), TrophySound::default()).is_err());
+        assert_eq!(
+            std::fs::read(file(latin1.path())).unwrap(),
+            b"title=Tr\xf3feu\nvolume=10\n"
         );
         let fresh = tempfile::tempdir().unwrap();
         write(
