@@ -1,4 +1,4 @@
-//! The Game page: cheats, folders, save backups, the game language, audio and the game patches.
+//! The Game page: folders, save backups, the game language, audio, cheats and the game patches.
 //!
 //! Every read of the disk happens in `refresh_backups` and `refresh_game_patches`, which
 //! `follow` calls; `view` only draws what they stored in the state.
@@ -16,6 +16,7 @@ use crate::core::patches::{builtin_xml, game_patch_metas, selectable, PatchMeta}
 use crate::core::save_backup::{list_backups, restore, KEEP};
 use crate::core::save_restore;
 use crate::core::settings::mark_default_patches_offered;
+use crate::core::trophy_sound::{self, TrophySound};
 use crate::ui::app::{Message, State};
 use crate::ui::follow::{follow, Cause};
 use crate::ui::pages::controls::ini_number;
@@ -32,6 +33,104 @@ pub const SPEAKERS_NOTE: &str = "Layout the game's 7.1 mix is sent in. Automatic
 
 /// The note under the Game language row; the translation tables key on this text.
 pub const LANGUAGE_NOTE: &str = "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.";
+
+/// The in-game menu's cheats in its order, which F10 + 1 to 8 follows: (ini key, label, note).
+const CHEATS: [(&str, &str, &str); 8] = [
+    ("cheat_health", "Infinite health", "Health stays full. Only Kratos is protected. Turning it off does not undo past refills."),
+    ("cheat_magic", "Infinite magic", "Magic stays full."),
+    ("cheat_item", "Infinite item meter", "The item meter (bow, Helios' head, boots) stays full."),
+    ("cheat_rage", "Infinite Rage of Sparta", "Rage of Sparta stays full."),
+    ("cheat_orbs", "Max red orbs", "Red orbs stay at the maximum."),
+    ("cheat_very_hard", "Unlock Very Hard", "Select Very Hard without completing the game. Does not change existing save difficulty. In-game: enable before opening New Game."),
+    ("cheat_double_jumps", "Infinite Double Jumps", "Repeat air jumps without landing. Also available in the in-game Cheats menu."),
+    ("auto_qte", "Automatic QTE", "Quick-time prompts answer themselves: single presses, repeated presses, holds and stick rotations."),
+];
+
+/// The in-game menu's multipliers, 0.1x to 100x: (ini key, label, note).
+const MULTIPLIERS: [(&str, &str, &str); 6] = [
+    (
+        "red_orb_multiplier",
+        "Red orbs",
+        "Red orbs gained. Orbs you have and prices stay the same.",
+    ),
+    (
+        "green_orb_multiplier",
+        "Green orbs (health)",
+        "Health from each green orb. The bar stays within its maximum.",
+    ),
+    (
+        "blue_orb_multiplier",
+        "Blue orbs (magic)",
+        "Magic from each blue orb. The bar stays within its maximum.",
+    ),
+    (
+        "gold_orb_multiplier",
+        "Gold orbs (Rage of Sparta)",
+        "Rage of Sparta from each gold orb. The bar stays within its maximum.",
+    ),
+    (
+        "damage_dealt",
+        "Damage dealt",
+        "Damage Kratos does to enemies.",
+    ),
+    ("damage_taken", "Damage taken", "Damage Kratos takes."),
+];
+
+const MULTIPLIER_MIN: f32 = 0.1;
+const MULTIPLIER_MAX: f32 = 100.0;
+/// Slider positions: the multiplier follows them on a logarithmic scale, as the in-game slider.
+const MULTIPLIER_STEPS: f32 = 1000.0;
+
+fn multiplier_text(value: f32) -> String {
+    format!("{:.3}", value.clamp(MULTIPLIER_MIN, MULTIPLIER_MAX))
+}
+
+/// A multiplier as the in-game menu shows it: a logarithmic 0.1x to 100x slider and a 1x button.
+fn multiplier<'a>(key: &'static str, value: f32) -> Element<'a, Message> {
+    let value = if value.is_finite() {
+        value.clamp(MULTIPLIER_MIN, MULTIPLIER_MAX)
+    } else {
+        1.0
+    };
+    let span = (MULTIPLIER_MAX / MULTIPLIER_MIN).ln();
+    let position = (value / MULTIPLIER_MIN).ln() / span * MULTIPLIER_STEPS;
+    let track = iced::widget::slider(0.0..=MULTIPLIER_STEPS, position, move |at: f32| {
+        let chosen = MULTIPLIER_MIN * (at / MULTIPLIER_STEPS * span).exp();
+        Message::Set(key.to_string(), Value::String(multiplier_text(chosen)))
+    })
+    .width(220.0);
+    let one = button(text("1x"))
+        .style(theme::button_flat)
+        .on_press(Message::Set(
+            key.to_string(),
+            Value::String(multiplier_text(1.0)),
+        ));
+    layout![track, text(format!("{value:.2}x")), one]
+        .spacing(10)
+        .align_y(Center)
+        .into()
+}
+
+/// Turn off all cheats: the original game, every cheat off and every multiplier 1x (#1135).
+pub(crate) fn cheats_off(state: &mut State) -> Task<Message> {
+    let mut changed = Vec::new();
+    for (key, _, _) in CHEATS {
+        if state.store.set(key, Value::Bool(false)) {
+            changed.push(key);
+        }
+    }
+    for (key, _, _) in MULTIPLIERS {
+        if state.store.set(key, Value::String(multiplier_text(1.0))) {
+            changed.push(key);
+        }
+    }
+    follow(state, Cause::Keys(&changed))
+}
+
+/// The trophy sound of the saves folder (`follow`, when the folder changes).
+pub(crate) fn refresh_trophy_sound(state: &mut State) {
+    state.trophy_sound = trophy_sound::read(&user_dir(state));
+}
 
 /// Game patches of the current dump.
 #[derive(Debug, Clone, Default)]
@@ -399,6 +498,72 @@ fn patches_section(state: &State) -> Element<'_, Message> {
     body.into()
 }
 
+/// Cheats, multipliers, the button that turns them all off and the trophy sound.
+fn cheats_section<'a>(state: &State) -> Element<'a, Message> {
+    let lang = state.lang.as_str();
+    let mut body = column![section(state.rtl, &tr(lang, "Cheats"))].spacing(2);
+    for (key, label, note) in CHEATS {
+        body = body.push(checkbox(
+            state.rtl,
+            key,
+            &tr(lang, label),
+            state.store.flag(key),
+            Some(&tr(lang, note)),
+        ));
+    }
+    body = body.push(section(state.rtl, &tr(lang, "Multipliers")));
+    for (key, label, note) in MULTIPLIERS {
+        body = body.push(row(
+            state.rtl,
+            &tr(lang, label),
+            multiplier(key, ini_number(state, key)),
+            Some(&tr(lang, note)),
+        ));
+    }
+    body = body.push(row(
+        state.rtl,
+        "",
+        button(text(tr(lang, "Turn off all cheats")))
+            .style(theme::button_flat)
+            .on_press(Message::CheatsOff)
+            .into(),
+        Some(&tr(
+            lang,
+            "Turns off every cheat and sets every multiplier back to 1x: the game as it was made. In game, hold F10 and press 1 to 8 to switch the cheats above, in their order.",
+        )),
+    ));
+    let sound = state.trophy_sound;
+    body = body.push(section(state.rtl, &tr(lang, "Trophy notifications")));
+    body = body.push(toggle_row(
+        state.rtl,
+        &tr(lang, "Mute the trophy sound"),
+        sound.muted,
+        Some(move |muted| Message::TrophySound(TrophySound { muted, ..sound })),
+        Some(&tr(
+            lang,
+            "The chime of an unlocked trophy. Also in the in-game menu (Insert): Trophies > Notifications.",
+        )),
+    ));
+    let volume = iced::widget::slider(0.0..=100.0, sound.volume as f32, move |v: f32| {
+        Message::TrophySound(TrophySound {
+            volume: v.round() as u32,
+            ..sound
+        })
+    })
+    .step(1.0_f32)
+    .width(220.0);
+    body = body.push(row(
+        state.rtl,
+        &tr(lang, "Trophy sound volume"),
+        layout![volume, text(format!("{} %", sound.volume))]
+            .spacing(10)
+            .align_y(Center)
+            .into(),
+        None,
+    ));
+    body.into()
+}
+
 pub fn view(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
     let hint = |english: &str| tr(lang, english);
@@ -408,25 +573,6 @@ pub fn view(state: &State) -> Element<'_, Message> {
     let speakers_label = format!("{}  ·  {}", tr(lang, "Speakers"), tr(lang, "restart"));
 
     column![
-        section(state.rtl, &tr(lang, "Cheats")),
-        checkbox(
-            state.rtl,
-            "cheat_double_jumps",
-            &tr(lang, "Infinite Double Jumps"),
-            state.store.flag("cheat_double_jumps"),
-            Some(&hint(
-                "Repeat air jumps without landing. Also available in the in-game Cheats menu."
-            )),
-        ),
-        checkbox(
-            state.rtl,
-            "cheat_very_hard",
-            &tr(lang, "Unlock Very Hard"),
-            state.store.flag("cheat_very_hard"),
-            Some(&hint(
-                "Select Very Hard without completing the game. Does not change existing save difficulty. In-game: enable before opening New Game."
-            )),
-        ),
         section(state.rtl, &tr(lang, "Folders")),
         folder_row(
             state,
@@ -487,6 +633,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
             ),
             Some(&hint(SPEAKERS_NOTE)),
         ),
+        cheats_section(state),
         patches_section(state),
     ]
     .spacing(2)

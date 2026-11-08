@@ -406,6 +406,19 @@ pub static SETTINGS: &[Setting] = &[
     // FXAA / SMAA of the finished frame, read by the game from spartanport.ini.
     ini("anti_aliasing", Pick(ANTI_ALIASING), Text("off"), true, 34),
     ini("free_camera", Flag, Bool(false), true, 35),
+    // The in-game menu's cheats and multipliers (#1135), read by the game from spartanport.ini.
+    ini("cheat_health", Flag, Bool(false), true, 36),
+    ini("cheat_magic", Flag, Bool(false), true, 37),
+    ini("cheat_item", Flag, Bool(false), true, 38),
+    ini("cheat_rage", Flag, Bool(false), true, 39),
+    ini("cheat_orbs", Flag, Bool(false), true, 40),
+    ini("auto_qte", Flag, Bool(false), true, 41),
+    ini("red_orb_multiplier", Kind::Text, Text("1.000"), true, 42),
+    ini("green_orb_multiplier", Kind::Text, Text("1.000"), true, 43),
+    ini("blue_orb_multiplier", Kind::Text, Text("1.000"), true, 44),
+    ini("gold_orb_multiplier", Kind::Text, Text("1.000"), true, 45),
+    ini("damage_dealt", Kind::Text, Text("1.000"), true, 46),
+    ini("damage_taken", Kind::Text, Text("1.000"), true, 47),
     ini("object_motion", Flag, Bool(true), false, 2),
     ini("output_res", Pick(OUTPUTS), Text("1920x1080"), false, 4),
     ini(
@@ -548,14 +561,14 @@ mod tests {
                 "cheat_very_hard"
             ]
         );
-        assert_eq!(keys.last(), Some(&"free_camera"));
+        assert_eq!(keys.last(), Some(&"damage_taken"));
         let shown: Vec<_> = rows.iter().filter(|s| s.written).map(|s| s.key).collect();
         assert_eq!(shown, SHOWN_INI_KEYS.iter().copied().collect::<Vec<_>>());
     }
 
     #[test]
-    fn shown_ini_keys_are_the_32_controls_of_the_window() {
-        assert_eq!(SHOWN_INI_KEYS.len(), 32);
+    fn shown_ini_keys_are_the_44_controls_of_the_window() {
+        assert_eq!(SHOWN_INI_KEYS.len(), 44);
         for seeded in ["monitor", "hdr", "glyph_style"] {
             assert!(SHOWN_INI_KEYS.contains(&seeded), "{seeded}");
         }
