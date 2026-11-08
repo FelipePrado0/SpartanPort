@@ -446,14 +446,25 @@ pub fn export_shaders(user_dir: &Path, out: &Path) -> Result<usize, String> {
             && name[4..].bytes().all(|b| b.is_ascii_digit())
     };
     let mut files = Vec::new();
-    for game in std::fs::read_dir(cache_dir(user_dir)).into_iter().flatten().flatten() {
+    for game in std::fs::read_dir(cache_dir(user_dir))
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
         let serial = game.file_name().to_string_lossy().into_owned();
         if !is_serial(&serial) || !game.path().is_dir() {
             continue;
         }
-        for file in std::fs::read_dir(game.path()).into_iter().flatten().flatten() {
+        for file in std::fs::read_dir(game.path())
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
             let path = file.path();
-            if matches!(path.extension().and_then(|e| e.to_str()), Some("meta" | "key")) {
+            if matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("meta" | "key")
+            ) {
                 let name = format!("{serial}/{}", file.file_name().to_string_lossy());
                 files.push((name, path));
             }

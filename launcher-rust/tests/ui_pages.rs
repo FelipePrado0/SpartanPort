@@ -3428,7 +3428,13 @@ fn exporting_recorded_shaders_takes_only_metas_and_keys() {
     assert!(!out.exists());
     let game = user.join("cache").join("CUSA01623");
     std::fs::create_dir_all(game.join("pipeline-binaries")).unwrap();
-    for file in ["0x01.meta", "0x01_0.spv", "g_0x02.key", "profile.bin", "precompile.bin"] {
+    for file in [
+        "0x01.meta",
+        "0x01_0.spv",
+        "g_0x02.key",
+        "profile.bin",
+        "precompile.bin",
+    ] {
         std::fs::write(game.join(file), file.as_bytes()).unwrap();
     }
     std::fs::write(game.join("pipeline-binaries").join("a.key"), b"driver").unwrap();
@@ -3446,8 +3452,11 @@ fn exporting_recorded_shaders_takes_only_metas_and_keys() {
     names.sort();
     assert_eq!(names, ["CUSA01623/0x01.meta", "CUSA01623/g_0x02.key"]);
     let mut meta = String::new();
-    std::io::Read::read_to_string(&mut archive.by_name("CUSA01623/0x01.meta").unwrap(), &mut meta)
-        .unwrap();
+    std::io::Read::read_to_string(
+        &mut archive.by_name("CUSA01623/0x01.meta").unwrap(),
+        &mut meta,
+    )
+    .unwrap();
     assert_eq!(meta, "0x01.meta");
 }
 
@@ -3464,8 +3473,15 @@ fn exporting_recorded_shaders_tells_where_the_file_went() {
     let _ = app::update(&mut state, Message::ShadersExported(out.clone(), Ok(7)));
     let shown = state.modal.take().unwrap();
     assert!(matches!(shown.kind, ModalKind::Info));
-    assert!(shown.text.contains(&out.display().to_string()), "{}", shown.text);
-    let _ = app::update(&mut state, Message::ShadersExported(out, Err("disk full".into())));
+    assert!(
+        shown.text.contains(&out.display().to_string()),
+        "{}",
+        shown.text
+    );
+    let _ = app::update(
+        &mut state,
+        Message::ShadersExported(out, Err("disk full".into())),
+    );
     let shown = state.modal.take().unwrap();
     assert!(matches!(shown.kind, ModalKind::Error));
     assert!(shown.text.ends_with("disk full"), "{}", shown.text);
