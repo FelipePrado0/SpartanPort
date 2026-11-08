@@ -10,11 +10,11 @@
 
 | Fase | Assunto | Estado | Branch / PR |
 |:--|:--|:--|:--|
-| F0 | Preparação, linha de base e decisões | em andamento (falta medir o driver) | `feat/shader-precompile` |
-| F1 | Captura das entradas no momento da tradução | código e testes prontos; falta sessão de jogo | `feat/shader-precompile` |
-| F2 | API de tradução offline e verificador 100% | API e verificador prontos; falta provar 100% em cache novo | `feat/shader-precompile` |
+| F0 | Preparação, linha de base e decisões | pronta (driver medido em 2026-11-08) | `feat/shader-precompile` |
+| F1 | Captura das entradas no momento da tradução | pronta (sessão de 32 saves em 2026-11-08) | `feat/shader-precompile` |
+| F2 | API de tradução offline e verificador 100% | 100% no Windows (3.440 de 3.440); falta o Linux | `feat/shader-precompile` |
 | F3 | Leitura do código dos shaders nos WADs | leitor e testes prontos; falta `app0` (F5) | `feat/shader-precompile` |
-| F4 | Manifesto: formato e ferramenta que o gera | formato, ferramenta e testes prontos; falta gerar de cache real | `feat/shader-precompile` |
+| F4 | Manifesto: formato e ferramenta que o gera | pronta: manifesto real de 451 KB | `feat/shader-precompile` |
 | F5 | Materialização na primeira abertura (shaders) | não iniciada | `feat/shader-precompile` |
 | F6 | Pré-compilação dos pipelines no driver | só o diário de crash pronto (`CrashJournal`) | `feat/shader-precompile` |
 | F7 | Invalidação: GPU, driver e versão | decisão, marcador e testes prontos; falta ligar no jogo (F5) | `feat/shader-precompile` |
@@ -317,10 +317,14 @@ Caminhos do mantenedor: dump em `settings.json` (`game_dir`), cache em `user/cac
       1 falha que já existia: `core::patches::compile_tests::built_in_file_is_not_external`.
 - [ ] Rode a POC (seção 5) e confirme os números de 3.3 na sua máquina. Para o índice, use o
       verificador da F2 quando existir; até lá, refaça o índice com a regra de 3.1.
-- [ ] Meça o tempo de compilação no driver, que ainda é desconhecido: abra o jogo com cache vazio
+- [x] Meça o tempo de compilação no driver, que ainda é desconhecido: abra o jogo com cache vazio
       (pasta do cache renomeada, **nunca apagada**, para poder voltar) e leia no log os contadores
       de pipeline (`g_spartanport_pipeline_driver_ns`, linhas `Disk shaders`). Isso dá a estimativa da
       tela de preparo da F6.
+      Resultado em 2026-11-08 (RX 6700 XT, driver 26.10.1, saída 11520x2160, sessão da seção 9.3):
+      cache vazio, 1.766 pipelines gráficos a **203,6 ms cada (192,1 ms no driver)**, 359,6 s somando
+      as threads. Reaberto com o mesmo cache: 428 pipelines a **6,3 ms cada (0,9 ms no driver)**.
+      Só o driver soma 339 s de thread para essa lista; com 8 threads, perto de 45 s de tela de preparo.
 - [x] Escreva a spec da F0 com as decisões de 4.1 e o plano das fases. **PARE.** Aprovada em 2026-11-05.
 - [x] POC commitada como base da F2 (`tests/test_shader_replay.cpp`, alvo no CMake e o gancho
       provisório `replay_skip_srt_walk` em `info.h`, que não faz nada no jogo). Na F2 o gancho é
@@ -383,8 +387,10 @@ Crie uma struct (por exemplo em `shader_recompiler/replay.h`) com:
 
 - [x] Build Windows e Linux. Linux em 2026-11-05: WSL Ubuntu 24.04 com GCC, código já com a main;
       `replay-inputs`, `shader-manifest`, `precompile-state` e `dump-index` passaram. O jogo não rodou no Linux.
-- [ ] Sessão curta com o mantenedor: cache novo (pasta antiga renomeada), jogo até o primeiro
+- [x] Sessão curta com o mantenedor: cache novo (pasta antiga renomeada), jogo até o primeiro
       combate. Confira no log que os `.meta` foram gravados e que nada mudou visualmente.
+      Feita em 2026-11-08 sem o mantenedor jogar, pela sessão automática da seção 9.3: 3.439 `.meta`
+      versão 8 gravados. Visual conferido só por capturas da janela, sem combate.
 
 **Pronto quando:** testes passando e sessão sem regressão. Commit.
 
@@ -442,10 +448,23 @@ Resultado em 2026-11-05 no cache antigo (`.meta` versão 7, sem entradas gravada
 F1): 5.049 traduzidos, 0 travamentos, 4.131 idênticos (81,8%), 1,13 ms cada. As 918 diferenças são
 todas fragment, o defeito de 3.3. Isso não prova a F1: a prova é a sessão abaixo.
 
-- [ ] Sessão de gravação com o mantenedor num cache novo (pasta antiga renomeada). Pelo menos 30
+- [x] Sessão de gravação com o mantenedor num cache novo (pasta antiga renomeada). Pelo menos 30
       minutos, com várias áreas.
-- [ ] Verificador nessa pasta: **100% idênticos** em todos os estágios. Qualquer diferença bloqueia
+      Feita em 2026-11-08 de forma automática, cerca de 65 minutos: o jogo abriu os 32 saves da lista
+      Load, um por vez, e ficou em cada um até parar de compilar por 20 s. Comandos pelo arquivo
+      `SPARTAN_PAD_FILE`, Enter por PostMessage e cada menu conferido por captura antes de confirmar.
+      O save escolhido foi conferido no log (`SaveDataDialog list: chose`). Cache antigo guardado em
+      `user/cache/CUSA01623.v7-20261108`. Só cobre o que aparece parado no ponto de cada save: sem
+      combate, magia, cutscene nem QTE.
+- [x] Verificador nessa pasta: **100% idênticos** em todos os estágios. Qualquer diferença bloqueia
       a fase: ache a entrada que faltou (tabela 3.4), grave na F1 e repita.
+      Resultado: **3.440 de 3.440 idênticos** (1.692 fragment, 1.744 vertex com fetch, 1 vertex,
+      3 compute), 0 diferentes, 0 sem entradas gravadas, 1,04 ms cada. Antes foi preciso ler o
+      `profile.bin` novo da main, que tem um byte a mais com o modo de MSAA do jogo (`NoMsaa`). As
+      ferramentas agora usam `Shader::LoadReplayProfile`, que aceita os dois tamanhos e liga o mesmo
+      modo de MSAA da gravação. Sem isso, a tradução sai como se o MSAA estivesse ligado.
+      Para não varrer o dump a cada execução, grave o índice uma vez (`dump-index-test <jogo> <arquivo>`,
+      110 s) e passe o arquivo ao verificador: a pasta inteira leva 5 s.
 - [ ] Rode o verificador no Linux contra uma cópia da mesma pasta (o mesmo SPIR-V deve sair,
       porque o perfil é o mesmo; se a GPU do Linux for outra, grave uma sessão lá).
 
@@ -556,6 +575,10 @@ shader-manifest info shaders/CUSA01623.spm
 
 **Pronto quando:** testes passando; manifesto gerado do cache da F2 com tamanho anotado (meta: menos
 de 20 MB comprimido; se passar muito disso, discuta na spec). Commit.
+
+Resultado em 2026-11-08 com o cache da seção 9.3: **451 KB** sem comprimir, 3.296 programas,
+3.432 permutações (447 da tela de título), 1.763 pipelines. 8 permutações juntadas, 0 sem código,
+0 acima do limite, 0 chaves velhas. Leva 322 s, quase tudo na varredura do dump.
 
 ---
 
