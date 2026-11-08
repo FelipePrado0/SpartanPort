@@ -50,6 +50,11 @@ inline bool IsFsr3(int upscaler) {
 inline bool NeedsLivePath(int upscaler) {
     return IsTaa(upscaler) || upscaler == UpscalerFsr3Ui;
 }
+/// XeSS needs its Vulkan extensions and features when the GPU device is created: choosing it when the
+/// game did not start with it needs a restart (leaving it does not).
+inline bool NeedsXessRestart(int upscaler, int startup_upscaler) {
+    return upscaler == UpscalerXess && startup_upscaler != UpscalerXess;
+}
 /// The port's own FSR sharpening (the RCAS switch and strength, the extra pass): the native-HUD FSR 3.1.
 /// The other upscalers keep the upstream behaviour (`sharpen` and `sharpness`). The TAA's sharpening
 /// is separate from all of this: it has its own slider (`taa_sharpen`, 0 = off).

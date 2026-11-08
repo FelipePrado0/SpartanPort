@@ -1175,6 +1175,7 @@ bool TemporalUpscaler::RecordXess(vk::CommandBuffer cmdbuf, const XessInputs& in
     const char* problem = xess->Problem();
     if (!problem) {
         SpartanSettings::Get().xess_problem = nullptr;
+        shown.clear(); // the same problem coming back is shown again
     } else if (shown != problem) {
         shown = problem;
         static std::array<std::string, 4> kept;

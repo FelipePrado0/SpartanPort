@@ -427,15 +427,19 @@ bool Instance::CreateDevice() {
     }
     // spartanport: XeSS (vk_xess.cpp) asks for device extensions of its own (mutable descriptors
     // among them); they are enabled only when it is selected, so the device is the same without it.
-    if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerXess) {
+    const bool xess_selected = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerXess;
+    bool xess_extensions = false; ///< XeSS's own extensions are all enabled
+    if (xess_selected) {
         const auto enable = [&](const char* name) {
             const bool already = std::any_of(
                 enabled_extensions.begin(), enabled_extensions.end(),
                 [&](const char* have) { return std::strcmp(have, name) == 0; });
             return already || add_extension(name);
         };
-        for (const char* name : XessAa::DeviceExtensions(*instance, physical_device)) {
-            enable(name);
+        const auto xess_names = XessAa::DeviceExtensions(*instance, physical_device);
+        xess_extensions = !xess_names.empty();
+        for (const char* name : xess_names) {
+            xess_extensions = enable(name) && xess_extensions;
         }
         mutable_descriptor_type = enable(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME) &&
             feature_chain.get<vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>()
@@ -753,7 +757,36 @@ bool Instance::CreateDevice() {
         device_chain.unlink<vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE>();
     }
 
-    auto [device_result, dev] = physical_device.createDeviceUnique(device_chain.get());
+    // spartanport: XeSS's device features (xessVKGetRequiredDeviceFeatures) are patched into the
+    // chain only when its extensions are there too. A copy of the chain without them is the way
+    // back if the card cannot give them: the game starts, XeSS says why it does not run and the
+    // TAA runs.
+    auto plain_chain = device_chain;
+    bool xess_patched = false;
+    if (xess_selected) {
+        void* head = &device_chain.get<vk::PhysicalDeviceFeatures2>();
+        if (xess_extensions && XessAa::PatchDeviceFeatures(*instance, physical_device, head)) {
+            if (head != static_cast<void*>(&device_chain.get<vk::PhysicalDeviceFeatures2>())) {
+                device_chain.get<vk::DeviceCreateInfo>().pNext = head;
+            }
+            xess_patched = true;
+        }
+        XessAa::SetDeviceReady(xess_patched,
+                               xess_extensions ? "the graphics card or driver does not offer the "
+                                                 "features XeSS needs"
+                                               : "the graphics driver does not offer the "
+                                                 "extensions XeSS needs");
+    }
+    auto created = physical_device.createDeviceUnique(device_chain.get());
+    if (xess_patched && created.result != vk::Result::eSuccess) {
+        LOG_WARNING(Render_Vulkan, "Device with XeSS's features failed ({}), creating it without",
+                    vk::to_string(created.result));
+        XessAa::SetDeviceReady(false, "the graphics card or driver does not offer the features "
+                                      "XeSS needs");
+        created = physical_device.createDeviceUnique(plain_chain.get());
+    }
+    const vk::Result device_result = created.result;
+    auto dev = std::move(created.value);
     if (device_result != vk::Result::eSuccess) {
         LOG_CRITICAL(Render_Vulkan, "Failed to create device: {}", vk::to_string(device_result));
         return false;

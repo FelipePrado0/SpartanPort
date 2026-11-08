@@ -405,6 +405,17 @@ Windows only), the hook is `TemporalUpscaler::RecordXess`.
   (`xessVKGetRequiredDeviceExtensions`); `Instance::CreateDevice` enables them only when `upscaler=xess` is in
   the ini at start, which fits the upscaler choice being applied on restart. It is a choice of its own in the
   launcher and the menu, next to the TAA (`IsTaa()` covers both: same live path, jitter and motion vectors).
+- The device is created with XeSS's extensions and its required features (`xessVKGetRequiredDeviceFeatures`,
+  patched into the device's feature chain) only when XeSS is the upscaler at start. If the card cannot give
+  them, the device is created from a copy of the chain without them. The result goes to
+  `XessAa::SetDeviceReady`: `Record` refuses to create a context on a device that was not made for XeSS and
+  fails for good with a message in the menu, so the TAA runs. Choosing XeSS in the menu when the game did not
+  start with it therefore needs a restart (`NeedsXessRestart`, in the three restart predicates and the menu's
+  count of changes).
+- `libxess.dll` is loaded only by full path, from the executable's folder or its `bin` folder, with the
+  search limited to that folder and the system folder (never the current directory or `PATH`). The waits
+  for an idle GPU (at the start and when the picture changes size) hold `Scheduler::submit_mutex`, the lock
+  the scheduler and the presenter take around `vkQueueSubmit` and `vkQueuePresent`.
 - The TAA look sliders (history, tolerance, moving objects, edges) do not apply to XeSS, which has its own
   history. Texture detail (`taa_lod`, the rasterizer's mip bias) and the sharpening (`xess_sharpen`, default 145%; the
   `taa_sharpen.comp` pass run over the output image through `SharpenImage`) do, and are logged as

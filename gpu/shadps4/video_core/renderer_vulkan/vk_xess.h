@@ -60,6 +60,18 @@ public:
     static std::vector<const char*> DeviceExtensions(vk::Instance instance,
                                                      vk::PhysicalDevice physical_device);
 
+    /// Asks XeSS for the device features it needs and patches them into the feature chain of the
+    /// device being created: `chain` is the head of that chain (a VkPhysicalDeviceFeatures2) and
+    /// comes back as the head to create the device with. False when the library is missing or has
+    /// no features to give; the chain is then left as it was.
+    static bool PatchDeviceFeatures(vk::Instance instance, vk::PhysicalDevice physical_device,
+                                    void*& chain);
+
+    /// The device creation says whether the device has the extensions and features XeSS needs;
+    /// without them Record fails for good instead of creating a context on a device that lacks them.
+    /// `why` (kept, may be null) is shown in the menu then.
+    static void SetDeviceReady(bool ready, const char* why = nullptr);
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl;

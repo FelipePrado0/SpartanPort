@@ -908,7 +908,8 @@ int RestartChanges() {
            (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
            (s.anisotropy != s.startup_anisotropy) + (s.preset != s.startup_preset) +
            ((s.upscaler == SpartanSettings::UpscalerOff) != (s.startup_upscaler == SpartanSettings::UpscalerOff) ||
-            SpartanSettings::NeedsLivePath(s.upscaler) != SpartanSettings::NeedsLivePath(s.startup_upscaler));
+            SpartanSettings::NeedsLivePath(s.upscaler) != SpartanSettings::NeedsLivePath(s.startup_upscaler) ||
+            SpartanSettings::NeedsXessRestart(s.upscaler, s.startup_upscaler));
 }
 
 // The menu's tabs: words in the title face, the open one in full colour with a red line under it,

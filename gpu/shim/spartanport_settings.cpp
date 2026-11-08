@@ -442,7 +442,8 @@ bool GraphicsNeedRestart() {
            // The launcher patches the render size of the preset (or none without an upscaler).
            v.preset != v.startup_preset ||
            (v.upscaler == UpscalerOff) != (v.startup_upscaler == UpscalerOff) ||
-           NeedsLivePath(v.upscaler) != NeedsLivePath(v.startup_upscaler);
+           NeedsLivePath(v.upscaler) != NeedsLivePath(v.startup_upscaler) ||
+           NeedsXessRestart(v.upscaler, v.startup_upscaler);
 }
 
 void ConfigureUpscalerSupport(bool fsr4, bool fsr411, const char* fsr411_problem) {
@@ -479,7 +480,8 @@ bool ResolutionNeedsRestart() {
     return FixedRenderSession() &&
         (v.preset != v.startup_preset || v.output_res != v.startup_output_res ||
          (v.upscaler == UpscalerOff) != (v.startup_upscaler == UpscalerOff) ||
-         NeedsLivePath(v.upscaler) != NeedsLivePath(v.startup_upscaler));
+         NeedsLivePath(v.upscaler) != NeedsLivePath(v.startup_upscaler)) ||
+        NeedsXessRestart(v.upscaler, v.startup_upscaler);
 }
 
 void Save() {

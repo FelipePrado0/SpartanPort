@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Puts Intel's XeSS runtime (libxess.dll, the Intel Simplified Software License lets it be
 # redistributed unmodified with its license) in out/xess, where package.sh takes it from. The
-# headers the code is built with are in gpu/third_party/xess (MIT). A folder already there is kept.
+# headers the code is built with are in gpu/third_party/xess (MIT).
 set -euo pipefail
 cd -- "$(dirname -- "$0")/.."
 commit=de0fb9c1c510661c571164e1418ceca8101dab69
 sha256=251659dd84a3e84de67c886a4186e01f3eca49b00641906fe38bb6b807e5d5b7
 target=out/xess
-if [[ -f $target/libxess.dll && -f $target/LICENSE.txt ]]; then
+# A folder already there is kept only when it is complete and the library is the pinned one.
+if [[ -f $target/libxess.dll && -f $target/LICENSE.txt && -f $target/third-party-programs.txt ]] &&
+   [[ $(sha256sum "$target/libxess.dll" | cut -d' ' -f1) == "$sha256" ]]; then
     echo "XeSS: $target is ready"
     exit 0
 fi

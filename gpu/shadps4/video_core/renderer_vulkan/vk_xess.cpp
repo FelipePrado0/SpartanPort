@@ -3,9 +3,12 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <atomic>
 #include <iterator>
+#include <mutex>
 #include <string>
 #include "video_core/renderer_vulkan/vk_instance.h"
+#include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_xess.h"
 
 #if defined(_WIN32) && __has_include(<xess_vk.h>)
@@ -44,13 +47,15 @@ struct Library {
                                  xess_app_log_callback_t){};
     xess_result_t (*is_optimal_driver)(xess_context_handle_t){};
     xess_result_t (*set_max_responsive)(xess_context_handle_t, float){};
+    xess_result_t (*required_features)(VkInstance, VkPhysicalDevice, void**){};
 
     bool Ok() const {
         return module && create && init && execute && destroy;
     }
 };
 
-std::string ExecutableDirectory() {
+/// The folder of the executable (empty when it cannot be told).
+std::wstring ExecutableDirectory() {
     wchar_t path[MAX_PATH * 2];
     const DWORD length = GetModuleFileNameW(nullptr, path, DWORD(std::size(path)));
     if (length == 0 || length >= std::size(path)) {
@@ -62,15 +67,18 @@ std::string ExecutableDirectory() {
         return {};
     }
     wide.resize(slash);
-    std::string narrow(wide.size(), '\0');
-    for (size_t i = 0; i < wide.size(); ++i) {
-        if (wide[i] > 0x7f) {
-            return {}; // a non-ASCII folder: the default search below still finds it
-        }
-        narrow[i] = char(wide[i]);
-    }
-    return narrow;
+    return wide;
 }
+
+/// The device is idle and nothing else is submitting or presenting: the waits below hold the
+/// submit lock the presenter and the scheduler take around vkQueueSubmit / vkQueuePresent.
+void WaitIdle(const Instance& instance) {
+    std::scoped_lock lock{Scheduler::submit_mutex};
+    (void)instance.GetDevice().waitIdle();
+}
+
+std::atomic<bool> g_device_ready{false}; ///< the device was created for XeSS (SetDeviceReady)
+std::string g_device_note;
 
 template <typename T>
 void Resolve(HMODULE module, const char* name, T& out) {
@@ -80,19 +88,16 @@ void Resolve(HMODULE module, const char* name, T& out) {
 Library& GetLibrary() {
     static Library library = [] {
         Library lib;
-        const std::string directory = ExecutableDirectory();
-        // Next to the executable, in its bin folder, then wherever Windows looks.
+        const std::wstring directory = ExecutableDirectory();
+        // Only the game's own folders, by full path: never the current directory or PATH, where
+        // another libxess.dll could be planted. The library's dependencies are looked for beside it,
+        // then in the system folder.
+        constexpr DWORD flags = LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32;
         if (!directory.empty()) {
-            // Altered search path: the library's own dependencies are looked for beside it.
-            lib.module = LoadLibraryExA((directory + "\\libxess.dll").c_str(), nullptr,
-                                        LOAD_WITH_ALTERED_SEARCH_PATH);
+            lib.module = LoadLibraryExW((directory + L"\\libxess.dll").c_str(), nullptr, flags);
             if (!lib.module) {
-                lib.module = LoadLibraryExA((directory + "\\bin\\libxess.dll").c_str(), nullptr,
-                                            LOAD_WITH_ALTERED_SEARCH_PATH);
+                lib.module = LoadLibraryExW((directory + L"\\bin\\libxess.dll").c_str(), nullptr, flags);
             }
-        }
-        if (!lib.module) {
-            lib.module = LoadLibraryA("libxess.dll");
         }
         if (!lib.module) {
             lib.error = "libxess.dll was not found next to the game (Intel's XeSS library)";
@@ -107,6 +112,7 @@ Library& GetLibrary() {
         Resolve(lib.module, "xessSetLoggingCallback", lib.set_logging);
         Resolve(lib.module, "xessIsOptimalDriver", lib.is_optimal_driver);
         Resolve(lib.module, "xessSetMaxResponsiveMaskValue", lib.set_max_responsive);
+        Resolve(lib.module, "xessVKGetRequiredDeviceFeatures", lib.required_features);
         if (!lib.Ok()) {
             lib.error = "libxess.dll has no Vulkan entry points (not the XeSS SDK library?)";
         }
@@ -157,7 +163,7 @@ struct XessAa::Impl {
     explicit Impl(const Instance& instance_) : instance(instance_) {}
     ~Impl() {
         if (context && GetLibrary().destroy) {
-            instance.GetDevice().waitIdle();
+            WaitIdle(instance);
             GetLibrary().destroy(context);
         }
     }
@@ -221,6 +227,16 @@ struct XessAa::Impl {
             std::printf("XeSS: %s\n", problem.c_str());
             return false;
         }
+        if (!context && !g_device_ready) {
+            // The extensions and features are enabled when the device is created, at the start,
+            // and only when XeSS is chosen then: a context on any other device is undefined.
+            problem = g_device_note.empty()
+                ? "XeSS was not chosen when the game started: restart it to use XeSS"
+                : g_device_note;
+            fatal = true;
+            std::printf("XeSS: %s\n", problem.c_str());
+            return false;
+        }
         if (!context) {
             const xess_result_t result =
                 lib.create(static_cast<VkInstance>(instance.GetInstance()),
@@ -252,7 +268,7 @@ struct XessAa::Impl {
             initialised_mask != has_mask) {
             // A (re)initialisation needs the GPU idle; it happens at the start and when the
             // game's picture changes size.
-            instance.GetDevice().waitIdle();
+            WaitIdle(instance);
             xess_vk_init_params_t init{};
             init.outputResolution = {frame.output.width, frame.output.height};
             init.qualitySetting = XESS_QUALITY_SETTING_AA;
@@ -362,6 +378,27 @@ std::vector<const char*> XessAa::DeviceExtensions(vk::Instance instance,
     return names;
 }
 
+bool XessAa::PatchDeviceFeatures(vk::Instance instance, vk::PhysicalDevice physical_device,
+                                 void*& chain) {
+    const Library& lib = GetLibrary();
+    if (!lib.Ok() || !lib.required_features) {
+        return false;
+    }
+    void* head = chain;
+    if (lib.required_features(static_cast<VkInstance>(instance),
+                              static_cast<VkPhysicalDevice>(physical_device), &head) < 0 ||
+        !head) {
+        return false;
+    }
+    chain = head;
+    return true;
+}
+
+void XessAa::SetDeviceReady(bool ready, const char* why) {
+    g_device_note = why ? why : "";
+    g_device_ready = ready;
+}
+
 #else // no XeSS headers or not Windows
 
 struct XessAa::Impl {
@@ -374,6 +411,12 @@ struct XessAa::Impl {
 std::vector<const char*> XessAa::DeviceExtensions(vk::Instance, vk::PhysicalDevice) {
     return {};
 }
+
+bool XessAa::PatchDeviceFeatures(vk::Instance, vk::PhysicalDevice, void*&) {
+    return false;
+}
+
+void XessAa::SetDeviceReady(bool, const char*) {}
 
 #endif
 
