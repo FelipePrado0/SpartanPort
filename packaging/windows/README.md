@@ -65,8 +65,8 @@ FSR 3.1, FSR 4, FSR 4.1 and TAA are selected under Graphics > Upscaling.
 AMD FSR frame generation adds one generated frame per game frame (2x). The open FSR 4
 model and its license are included in the package. See the root README for hardware requirements.
 
-See the [feature availability table](https://github.com/FelipePrado0/SpartanPort#feature-availability)
-for differences between published packages and current source builds, including Discord Rich Presence.
+See the [release notes](https://github.com/FelipePrado0/SpartanPort/releases/latest) for
+differences between published packages and current source builds.
 
 The launcher texts are written in English with the Russian beside them; the other languages
 are in `launcher-rust/assets/i18n.json` (a missing or empty text falls back to English). The icon (`launcher/spartanport.ico`/`.png`) is made from the

@@ -22,6 +22,8 @@ struct WindowSystemInfo {
 /// The pause key lets go of the mouse lock while the game's pause menu is up; pressing it again or
 /// clicking in the window takes it back (any thread).
 void ToggleMousePause();
+/// Whether the game has the mouse (relative mode, the window's lock): its movement is the game's (any thread).
+bool MouseLocked();
 
 class WindowSDL {
 public:

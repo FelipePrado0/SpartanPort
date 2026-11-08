@@ -27,12 +27,12 @@ inline constexpr std::array<int, 8> FpsLimits = {30, 60, 100, 120, 144, 180, 240
 /// Game patch suffixes ("Resolution Patch - <name>"); "native" is no resolution patch.
 /// The ones after 900p are the Ultrawide mod's sizes (#202) and the 16:10 and 4:3 ones, built in as beta
 /// (scripts/graphics_options.py).
-inline constexpr std::array<std::string_view, 23> Resolutions = {
+inline constexpr std::array<std::string_view, 26> Resolutions = {
     "native", "480p", "720p", "900p", "1440p", "1800p", "4K",
     "2560x1080", "3440x1440", "3840x1600", "5120x1440", "1920x1200", "2560x1600", "1280x800",
     "1440x900", "1360x768",
     "1280x960", "1440x1080", "1920x1440", "2048x1536", "2560x1920",
-    "5120x2160", "8K"};
+    "5120x2160", "2880x1800", "5120x2880", "11520x2160", "8K"};
 /// The resolutions to choose from: the built-in ones, then those of the enabled mods' patch files
 /// (SPARTAN_EXTRA_RESOLUTIONS, ";"-separated sizes such as "3440x1440"; run.py sets it at every start).
 inline std::vector<std::string> ResolutionNames() {
@@ -64,9 +64,9 @@ inline std::pair<int, int> ResolutionSize(std::string_view name) {
     }
     return ResolutionSizes[0].second;
 }
-/// Engine frame rates: 60 is the game's own (59.94). The launch takes the 240 FPS patch and the
-/// rate is written live (SpartanSettings::SyncEngineFps); 100, 144 and 180 fit common high-refresh displays.
-inline constexpr std::array<int, 6> EngineFps = {60, 100, 120, 144, 180, 240};
+/// Engine frame rates: any whole rate from 30 to 240 (#831); 60 is the game's own (59.94). The
+/// launch takes the 240 FPS patch and the rate is written live (SpartanSettings::SyncEngineFps).
+inline constexpr int MinEngineFps = 30, MaxEngineFps = 240, EngineFpsStep = 5;
 
 template <typename T, std::size_t N>
 constexpr int IndexOf(const std::array<T, N>& values, const T& value, int fallback) {
@@ -105,9 +105,9 @@ inline int ParseResolution(std::string_view text) {
     const auto found = std::find(names.begin(), names.end(), text);
     return found == names.end() ? 0 : int(found - names.begin());
 }
-/// A listed ceiling, else 120 (the default patch).
+/// A rate from 30 to 240, else 120 (the default).
 inline int ParseEngineFps(int value) {
-    return IndexOf(EngineFps, value, -1) >= 0 ? value : 120;
+    return value >= MinEngineFps && value <= MaxEngineFps ? value : 120;
 }
 
 /// Anisotropic filtering forced on the game's mipmapped textures; 0 = the game's own. Samplers
@@ -138,6 +138,33 @@ inline bool FsrPassRuns(bool fsr1, bool rcas, int in_w, int in_h, int out_w, int
     return (fsr1 && upscale) || (rcas && same);
 }
 
+/// Anti-aliasing of the finished frame (host_passes/aa_pass.cpp), applied before the sharpening. Live.
+/// FXAA is one cheap pass that softens edges a little; SMAA 1x takes three and keeps the picture
+/// sharper. Off by default: it changes the picture.
+enum AntiAliasing : int { AaOff = 0, AaFxaa = 1, AaSmaa = 2, AntiAliasingCount };
+inline constexpr std::array<std::string_view, AntiAliasingCount> AntiAliasingKeys = {"off", "fxaa", "smaa"};
+inline constexpr std::array<const char*, AntiAliasingCount> AntiAliasingNames = {"Off", "FXAA", "SMAA"};
+/// A key of spartanport.ini or SPARTAN_ANTI_ALIASING (also the menu's index and the old on/off
+/// spelling); anything else is off.
+inline int ParseAntiAliasing(std::string_view text) {
+    if (const int found = IndexOf(AntiAliasingKeys, text, -1); found >= 0) return found;
+    if (text == "none" || text == "0" || text == "false") return AaOff;
+    if (text == "1" || text == "true") return AaFxaa;
+    if (text == "2") return AaSmaa;
+    return AaOff;
+}
+/// Whether the anti-aliasing pass runs on an image of this size: a mode is chosen and the image
+/// is big enough for the filters to read their neighbourhood.
+inline bool AaPassRuns(int mode, int width, int height) {
+    return (mode == AaFxaa || mode == AaSmaa) && width >= 16 && height >= 16;
+}
+/// Whether the colour values the presenter reads are linear light (an sRGB view or a plain 10-bit
+/// buffer, which the post pass encodes) or already perceptual (10-bit sRGB values, HDR PQ): the edge
+/// tests work on perceptual luma either way.
+inline bool AaInputIsLinear(bool srgb_encoded_10bit, bool hdr) {
+    return !srgb_encoded_10bit && !hdr;
+}
+
 /// What the present limit really allows: the engine ceiling caps it.
 inline int EffectiveFps(int limit, int engine_fps) {
     return limit == 0 || limit > engine_fps ? engine_fps : limit;
@@ -150,15 +177,16 @@ inline int PresentLimit(int limit, int engine_fps, int vblank_hz) {
     return limit == 0 && vblank_hz <= engine_fps ? 0 : EffectiveFps(limit, engine_fps);
 }
 
-/// R3 + L1 + R1 / F9: the engine rate after `current`, up to `highest` (this launch's patch);
-/// back to the first after the last.
-inline int NextEngineFps(int current, int highest) {
-    for (const int fps : EngineFps) {
-        if (fps > current && fps <= highest) {
-            return fps;
-        }
-    }
-    return EngineFps[0];
+/// In-game arrows, R3 + R1 / L1 and F9 + arrows: the next stop from `current` toward `direction`
+/// (1 up, -1 down), stops every EngineFpsStep plus 144 (common displays). Both ends stop, and
+/// never above `highest` (this launch's patch).
+inline int StepEngineFps(int current, int direction, int highest) {
+    const int top = std::clamp(highest, MinEngineFps, MaxEngineFps);
+    current = std::clamp(current, MinEngineFps, top);
+    int next = direction > 0 ? (current / EngineFpsStep + 1) * EngineFpsStep
+                             : (current - 1) / EngineFpsStep * EngineFpsStep;
+    if (direction > 0 ? current < 144 && next > 144 : current > 144 && next < 144) next = 144;
+    return std::clamp(next, MinEngineFps, top);
 }
 
 } // namespace SpartanGraphics

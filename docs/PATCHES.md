@@ -25,7 +25,7 @@ each site), so they also work on other builds whose code matches.
 | **Bug Fix - Texture Corruption Fix** | Fixes corrupted textures by giving the game a larger video arena (more video memory) | Applied whenever the render resolution is **Native**; a resolution patch replaces it | cuesta4 |
 | **Skip Any Video With X Button** | Lets you skip any cinematic with Cross | **Game** page, on by default | cuesta4 |
 | **Skip Intro** | Skips the logos at start | **Game** page, off by default | cuesta4 |
-| **Resolution Patch - &lt;size&gt;** (21 sizes, from 480p to 5120 × 2160) | Sets the render resolution and the video arena; the ultrawide sizes also widen the field of view (Hor+) | **Render resolution** (launcher **Performance** page, or the in-game menu); one at a time | kvicken + cuesta4 (480p, 720p, 1440p, 1800p, 4K); SpartanPort (900p and the ultrawide, 16:10 and 4:3 sizes) |
+| **Resolution Patch - &lt;size&gt;** (25 sizes, from 480p to 8K, with 11520 × 2160 for three screens side by side) | Sets the render resolution and the video arena; the ultrawide sizes also widen the field of view (Hor+) | **Render resolution** (launcher **Performance** page, or the in-game menu); one at a time | kvicken + cuesta4 (480p, 720p, 1440p, 1800p, 4K); SpartanPort (900p and the ultrawide, 48:9, 16:10 and 4:3 sizes) |
 | **Frame Rate Patch - 240 FPS** | Raises the engine's frame rate limit and corrects the swing energy so it matches the original 60 Hz simulation | Applied on every start; the chosen **Engine frame rate** (60, 100, 120, 144, 180 or 240) is then written live | kvicken, SpartanPort |
 | Frame Rate Patch - 120 FPS / 144 FPS / 100 FPS | The same patch with a limit of 120, 144 or 100 | Not used by the launcher any more; kept for other uses of the file | kvicken / kvicken, SpartanPort |
 
@@ -36,8 +36,10 @@ Notes:
   the **Game** page is cleared.
 - **Memory.** A patch note such as "Requires setting DMEM to 3072 MB" makes the port reserve that
   much more direct memory, on top of the 5056 MB the retail game has. Nothing has to be set by hand.
-- **Frame rate.** The engine rate changes while the game runs (in-game menu, **R3 + L1 + R1** or
-  **F9**): every start takes the 240 FPS patch and the port writes the chosen rate into the game.
+- **Frame rate.** The engine rate is any whole rate from 30 to 240 and changes while the game runs
+  (in-game menu; hold **R3** and press **R1** or **L1**, or hold **F9** and press **Right** or
+  **Left**, for 5 FPS up or down): every start takes the 240 FPS patch and the port writes the
+  chosen rate into the game.
   144 FPS is intended for 144 Hz displays; with VSync, it keeps presentation aligned with that refresh rate.
   If the 240 FPS patch is not found in your `eboot.bin`, the highest frame rate patch that is found
   is used; if none is found, the engine stays at the original 60 FPS.

@@ -353,6 +353,25 @@ void MultiplierRow(const char* label, std::atomic<float>& value, const char* hel
     ImGui::PopID();
 }
 
+// 30 to 240 FPS with a 60 button (the game's own rate).
+void EngineFpsRow(std::atomic<int>& value, const char* help) {
+    Row("Engine frame rate");
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::SetNextItemWidth(-(ImGui::CalcTextSize("60").x + style.FramePadding.x * 2 + style.ItemSpacing.x));
+    int v = value;
+    if (ImGui::SliderInt("##value", &v, SpartanGraphics::MinEngineFps, SpartanGraphics::MaxEngineFps, "%d FPS",
+                         ImGuiSliderFlags_AlwaysClamp)) {
+        Store(value, SpartanGraphics::ParseEngineFps(v), true);
+    }
+    Help(help);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("60")) {
+        Store(value, 60, true);
+    }
+    Help(help);
+    ImGui::PopID();
+}
+
 void InfoRow(const char* label, const char* text) {
     Row(label);
     DisabledText(text);
@@ -372,6 +391,7 @@ void SliderRow(const char* label, std::atomic<int>& value, int lo, int hi, const
 const char* UpscalerLabel(int upscaler) {
     switch (upscaler) {
     case SpartanSettings::UpscalerFsr3: return "FSR 3.1";
+    case SpartanSettings::UpscalerFsr3Ui: return "FSR 3.1 (native HUD and text)";
     case SpartanSettings::UpscalerFsr4: return "FSR 4";
     case SpartanSettings::UpscalerFsr411: return "FSR 4.1";
     case SpartanSettings::UpscalerTaa: return "TAA";
@@ -400,6 +420,15 @@ std::string OverlayText() {
 constexpr const char* Unsupported = "Unavailable: game version or code signature mismatch.";
 
 void LanguageRow(); // with the trophy texts, below
+// A DualSense among the connected gamepads (its rows in Controller are shown only then).
+bool DualSenseConnected() {
+    int count = 0;
+    SDL_JoystickID* pads = SDL_GetGamepads(&count);
+    bool found = false;
+    for (int i = 0; i < count && !found; ++i) found = SDL_GetGamepadTypeForID(pads[i]) == SDL_GAMEPAD_TYPE_PS5;
+    SDL_free(pads);
+    return found;
+}
 
 void GameTab() {
     auto& s = SpartanSettings::Get();
@@ -452,7 +481,41 @@ void GameTab() {
                   "L2 aim with the mouse: lower needs more mouse movement for the same stick, higher less.");
         CheckRow("Keep mouse in window", s.mouse_lock,
                  "While you play, the mouse stays in the game window; this menu and other windows get it back.");
+        ImGui::BeginDisabled(!s.free_camera_supported.load());
+        CheckRow("Free camera (experimental)", s.free_camera,
+                 s.free_camera_supported.load()
+                     ? "The right stick or the mouse turns the camera around Kratos (L1 + right stick evades). In "
+                       "play, G on the keyboard or a tap of R3 switches it off and on (the game's camera, for "
+                       "boss fights); QTEs and cuts go back to the game's camera."
+                     : Unsupported);
+        ImGui::EndDisabled();
         ImGui::EndTable();
+    }
+
+    if (DualSenseConnected()) {
+        Separator("DualSense");
+        if (BeginRows("##dualsense")) {
+            CheckRow("Speaker", s.dualsense_speaker,
+                     "The sounds the game makes for the controller's speaker play on the DualSense's own speaker "
+                     "(USB only; a headset in the controller's jack gets them instead). Takes effect at the next start.");
+            ImGui::BeginDisabled(!s.dualsense_speaker.load());
+            SliderRow("Speaker gain", s.dualsense_speaker_gain, 0, 7, "%d",
+                      "The DualSense speaker's own level, which the Windows volume does not reach. The controller beeps "
+                      "at the new level when it changes.");
+            ImGui::EndDisabled();
+            CheckRow("Trigger click", s.dualsense_triggers,
+                     "R2 gets a wall that gives way near the end of its travel.");
+            CheckRow("Hit flash", s.dualsense_hitflash,
+                     "The light bar flashes red when Kratos loses health.");
+            CheckRow("QTE light bar", s.dualsense_qte,
+                     "While a QTE prompt is up, the light bar blinks in the colour of its button, with a short "
+                     "rumble at each new prompt.");
+            CheckRow("Motion sensors", s.dualsense_motion,
+                     "The controller's gyro and accelerometer are passed to the game.");
+            CheckRow("Gyro aim", s.dualsense_gyroaim,
+                     "While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.");
+            ImGui::EndTable();
+        }
     }
 
     Separator("Audio");
@@ -523,7 +586,67 @@ void ImageTab() {
     }
     const int iw = s.image_width, ih = s.image_height, ww = s.window_width, wh = s.window_height;
     const bool downscaling = iw > ww || ih > wh;
-    const bool rcas_blocked = s.rcas && !s.rcas_applied;
+    // With an upscaler the switch also controls the upscaler's own sharpening, so it stays usable; the
+    // strength slider belongs to the host RCAS pass, which needs the image and the window to match.
+    // The port's own sharpening (TAA, FSR 3.1 with native HUD) follows the switch; the other upscalers
+    // keep the upstream behaviour: the switch and the slider belong to the host pass only.
+    const bool own_sharpening = SpartanSettings::OwnSharpening(s.upscaler);
+    const bool rcas_host_blocked = s.rcas && !s.rcas_applied;
+    const bool rcas_blocked = rcas_host_blocked && !own_sharpening;
+    if (s.upscaler == SpartanSettings::UpscalerTaa) {
+        DisabledText(s.temporal_applied ? "Temporal anti-aliasing is running."
+                                        : "Temporal anti-aliasing is selected but not running (see last_run.log).");
+    }
+    Separator("Anti-aliasing");
+    if (BeginRows("##anti_aliasing")) {
+        ChoiceRow("Anti-aliasing", s.anti_aliasing, G::AntiAliasingNames.data(), nullptr, G::AntiAliasingCount,
+                  "Smooths jagged edges. FXAA is cheap and a little soft; SMAA keeps the picture sharper and "
+                  "costs a bit more. Both also touch the HUD slightly.");
+        ImGui::EndTable();
+    }
+    if (s.anti_aliasing != G::AaOff && !s.aa_applied) {
+        DisabledText("Anti-aliasing is not active: this graphics card could not set it up.");
+    }
+    if (s.upscaler == SpartanSettings::UpscalerTaa) {
+        Separator("TAA look (God of War III)");
+        if (BeginRows("##taa_look")) {
+            SliderRow("History on still picture", s.taa_static, 0, 99, "%d%%",
+                      "Higher: smoother edges on a still picture, a little more trail. Default 99%.");
+            SliderRow("History on moving picture", s.taa_moving, 0, 99, "%d%%",
+                      "Higher: smoother while the camera moves, more blur and trail. Default 55%.");
+            SliderRow("Colour tolerance", s.taa_tolerance, 30, 300, "%d%%",
+                      "Lower: less trail and ghosting, more flicker. Default 115%.");
+            SliderRow("Moving objects", s.taa_objects, 0, 100, "%d%%",
+                      "How much history a moving character or object loses. Higher: less ghosting there, "
+                      "rougher edges. Default 90%.");
+            SliderRow("Texture detail", s.taa_lod, 0, 150, "%d%%",
+                      "Sharper textures (a negative mip bias, in percent of one level): the accumulation "
+                      "turns the extra detail into a clean picture. Higher: more detail, more shimmer. "
+                      "Default 75%.");
+            SliderRow("Moving object edges", s.taa_spatial, 0, 100, "%d%%",
+                      "Smooths the stair-stepped edges of moving characters, where the history is refused: "
+                      "a spatial filter on those pixels only. Higher: smoother, slightly softer. Default 70%.");
+            CheckRow("Debug view (history)", s.taa_debug,
+                     "Shows where the history is used: red = rejected by depth, green = lost to colour "
+                     "change, blue = history weight used. For bug reports; not saved.");
+            SliderRow("TAA sharpening", s.taa_sharpen, 0, 200, "%d%%",
+                      "Sharpening after the accumulation, separate from the Sharpening (RCAS) switch below. 0% = off. Default 165%.");
+            ImGui::EndTable();
+        }
+    }
+    if (s.upscaler == SpartanSettings::UpscalerFsr3Ui) {
+        Separator("FSR 3.1 look (God of War III)");
+        if (BeginRows("##fsr_look")) {
+            SliderRow("Texture detail", s.fsr_lod, 0, 150, "%d%%",
+                      "Sharper textures (a negative mip bias, in percent of one level) on top of FSR's own: "
+                      "the accumulation turns the extra detail into a clean picture. Higher: more detail, "
+                      "more shimmer. Default 0%.");
+            SliderRow("Moving objects", s.fsr_objects, 0, 100, "%d%%",
+                      "How much FSR distrusts its history on characters and objects. Higher: less ghosting "
+                      "behind them, rougher edges. Lower: smoother but more trails. Default 100%.");
+            ImGui::EndTable();
+        }
+    }
     Separator("Sharpening");
     if (BeginRows("##scaling")) {
         ImGui::BeginDisabled(rcas_blocked);
@@ -532,8 +655,11 @@ void ImageTab() {
                  : rcas_blocked              ? "No effect: the game's image is smaller than the window."
                                              : "Sharpens the final image.");
         ImGui::EndDisabled();
-        ImGui::BeginDisabled(!s.rcas || rcas_blocked);
-        SliderRow("Sharpening strength", s.rcas_strength, 0, 100, "%d%%", "How strong the sharpening is.");
+        // The strength also sets FSR's own sharpening (not the TAA's: it has its own slider above).
+        const bool strength_usable = s.rcas && (!rcas_host_blocked || s.upscaler == SpartanSettings::UpscalerFsr3Ui);
+        ImGui::BeginDisabled(!strength_usable);
+        SliderRow("Sharpening strength", s.rcas_strength, 0, 100, "%d%%",
+                  "How strong the sharpening is.");
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
@@ -542,17 +668,21 @@ void ImageTab() {
         // The launcher's choices and order (options.rs UPSCALERS, PRESETS); the same values as the
         // Display menu's rows.
 #ifdef _WIN32
-        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 4", "FSR 4.1", "TAA"};
-        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3, SpartanSettings::UpscalerFsr4,
+        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 3.1 (native HUD)", "FSR 4", "FSR 4.1", "TAA"};
+        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3,
+                                              SpartanSettings::UpscalerFsr3Ui, SpartanSettings::UpscalerFsr4,
                                               SpartanSettings::UpscalerFsr411,
                                               SpartanSettings::UpscalerTaa};
 #else
-        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 4", "TAA"};
-        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3, SpartanSettings::UpscalerFsr4,
+        static const char* const upscaler_labels[] = {"Off", "FSR 3.1", "FSR 3.1 (native HUD)", "FSR 4", "TAA"};
+        static const int upscaler_values[] = {SpartanSettings::UpscalerOff, SpartanSettings::UpscalerFsr3,
+                                              SpartanSettings::UpscalerFsr3Ui, SpartanSettings::UpscalerFsr4,
                                               SpartanSettings::UpscalerTaa};
 #endif
         ChoiceRow("Upscaler", s.upscaler, upscaler_labels, upscaler_values, int(std::size(upscaler_values)),
-                  "FSR 4.1 needs an AMD Radeon with Adrenalin 26.10.1 or newer.");
+                  "FSR 3.1 (native HUD) keeps the game at 1920x1080 so the HUD, text and loading screens are "
+                  "not stretched, and has the port's own sharpening. FSR 4.1 needs an AMD Radeon with "
+                  "Adrenalin 26.10.1 or newer.");
         // Each preset's render size at the chosen Render resolution, before the restart too.
         static const int preset_values[] = {SpartanSettings::NativeAA, SpartanSettings::UltraQuality,
                                             SpartanSettings::Quality, SpartanSettings::Balanced,
@@ -583,6 +713,8 @@ void ImageTab() {
     }
     Separator("Effects");
     if (BeginRows("##effects")) {
+        CheckRow("Motion blur", s.motion_blur,
+                 "The game's own motion blur on fast moving objects and the camera. Off removes it.");
         CheckRow("Depth of field", s.depth_of_field,
                  "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.");
         ImGui::EndTable();
@@ -617,7 +749,9 @@ void ImageTab() {
         InfoRow("Game image", text);
         std::snprintf(text, sizeof(text), "%d x %d", ww, wh);
         InfoRow("Window", text);
-        InfoRow("Sharpening", s.rcas_applied ? "applied" : "not applied");
+        const bool upscaler_sharpens = s.rcas && own_sharpening;
+        InfoRow("Sharpening", s.rcas_applied ? "applied"
+                              : upscaler_sharpens ? "applied by the upscaler" : "not applied");
         ImGui::EndTable();
     }
 }
@@ -630,11 +764,10 @@ void PerformanceTab() {
         static const char* const fps_labels[] = {"30", "60", "100", "120", "144", "180", "240", "Unlimited"};
         ChoiceRow("Frame rate limit", s.fps_limit, fps_labels, G::FpsLimits.data(), int(G::FpsLimits.size()),
                   "Caps the frame rate. The engine frame rate (below) is the highest it can go.");
-        static const char* const engine_labels[] = {"60 (original)", "100", "120", "144", "180", "240"};
-        static_assert(std::size(engine_labels) == G::EngineFps.size());
-        ChoiceRow("Engine frame rate", s.engine_fps, engine_labels, G::EngineFps.data(), int(G::EngineFps.size()),
-                  "The highest frame rate the game itself runs at. 60 for spots that break above it (a ledge "
-                  "Kratos cannot cross, a button-mash prompt). R3 + L1 + R1 or F9 go through the list.");
+        EngineFpsRow(s.engine_fps,
+                     "The highest frame rate the game itself runs at, from 30 to 240. 60 for spots that break above "
+                     "it (a ledge Kratos cannot cross, a button-mash prompt). Hold R3 and press R1 or L1, or hold F9 "
+                     "and press Right or Left: 5 FPS up or down.");
         CheckRow("High Frame Rate Physics Fix", s.auto_safe_fps,
                  "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during "
                  "the Cronos blade pull, then goes back to the engine frame rate. The saved rate does not change.");
@@ -670,6 +803,7 @@ void PerformanceTab() {
             "1360 × 768 · 16:9",
             "1280 × 960 · 4:3", "1440 × 1080 · 4:3 (beta)", "1920 × 1440 · 4:3",
             "2048 × 1536 · 4:3 (beta)", "2560 × 1920 · 4:3 (beta)", "5120 × 2160 · 21:9",
+            "2880 × 1800 · 16:10 (beta)", "5120 × 2880 · 16:9 (beta)", "11520 × 2160 · 48:9 (beta)",
             "8K · 7680 × 4320 · 16:9 (beta)"};
         static_assert(std::size(builtin_labels) == G::Resolutions.size());
         const std::vector<std::string> resolution_names = G::ResolutionNames();
@@ -775,7 +909,7 @@ int RestartChanges() {
            (s.deferred_readback != s.startup_deferred_readback) + (s.stale_readback != s.startup_stale_readback) +
            (s.anisotropy != s.startup_anisotropy) + (s.preset != s.startup_preset) +
            ((s.upscaler == SpartanSettings::UpscalerOff) != (s.startup_upscaler == SpartanSettings::UpscalerOff) ||
-            (s.upscaler == SpartanSettings::UpscalerTaa) != (s.startup_upscaler == SpartanSettings::UpscalerTaa));
+            SpartanSettings::NeedsLivePath(s.upscaler) != SpartanSettings::NeedsLivePath(s.startup_upscaler));
 }
 
 // The menu's tabs: words in the title face, the open one in full colour with a red line under it,
@@ -2336,8 +2470,8 @@ void ShowNotice(const std::string& text, int milliseconds) {
     notice_until.store(NowMs() + milliseconds, std::memory_order_relaxed);
 }
 
-void CycleEngineFps() {
-    const int fps = SpartanSettings::CycleEngineFps();
+void StepEngineFps(int direction) {
+    const int fps = SpartanSettings::StepEngineFps(direction);
     ShowNotice(fps ? std::string(Tr("Engine frame rate: ")) + std::to_string(fps) + Tr(" FPS")
                    : std::string(Tr("Engine frame rate: 60 FPS only (no frame rate patch for this game build)")));
 }
@@ -2603,9 +2737,15 @@ bool HandleEvent(const SDL_Event& event) {
             const char* env = std::getenv("SPARTAN_FRAME_CAPTURE_KEY");
             return env && *env == '1';
         }();
+        // Hold F9: Right raises the engine frame rate 5 FPS, Left lowers it (held arrows repeat).
+        // F9 and the arrows pressed with it never reach the game.
         if (event.key.key == SDLK_F9) {
-            if (down && !event.key.repeat) {
-                CycleEngineFps();
+            return true;
+        }
+        if ((event.key.key == SDLK_RIGHT || event.key.key == SDLK_LEFT) &&
+            SDL_GetKeyboardState(nullptr)[SDL_SCANCODE_F9]) {
+            if (down) {
+                StepEngineFps(event.key.key == SDLK_RIGHT ? 1 : -1);
             }
             return true;
         }

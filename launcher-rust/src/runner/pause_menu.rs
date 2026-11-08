@@ -45,7 +45,7 @@ use crate::core::python::python_json;
 use crate::runner::glyphs::{entries, Entry};
 
 /// Of the patch: a change rebuilds the cached copy.
-pub const VERSION: u32 = 23;
+pub const VERSION: u32 = 26;
 pub const WAD: &str = "EXEC/WAD/PS4_LE/R_UI.WAD";
 
 /// The Exit to Desktop row's text in one language.
@@ -255,6 +255,27 @@ const MULTIPLIER_NAMES: [&str; 7] = [
     "Reset All to 1x",
 ];
 
+/// The builtin that reads Controls' control `index` (`selected`: with arrows): 0xfa4 + i (0xfb8 + i)
+/// for the first six, 0xf6d (0xf6e) for the free camera, the seventh.
+fn control_read(index: usize, selected: bool) -> usize {
+    match (index, selected) {
+        (6, false) => 0xf6d,
+        (6, true) => 0xf6e,
+        (_, false) => 0xfa4 + index,
+        (_, true) => 0xfb8 + index,
+    }
+}
+
+/// The builtin that moves Controls' control `index` left (-1) or right: 0xfaa + i and 0xfb1 + i
+/// for the first six; 0xf6f toggles the free camera either way.
+fn control_change(index: usize, direction: i32) -> usize {
+    match index {
+        6 => 0xf6f,
+        _ if direction < 0 => 0xfaa + index,
+        _ => 0xfb1 + index,
+    }
+}
+
 /// The texts of the native pages that follow the game's language.
 struct Texts {
     /// The Graphics Settings page: its title, its nine controls, Restore Defaults and Apply.
@@ -266,8 +287,8 @@ struct Texts {
     /// The question Apply and Restart asks, and its answers.
     restart: &'static str,
     restart_answers: [&'static str; 2],
-    /// The rows Controls adds after the game's three: six controls, Restore Defaults and Apply.
-    controls_names: [&'static str; 8],
+    /// The rows Controls adds after the game's three: seven controls, Restore Defaults and Apply.
+    controls_names: [&'static str; 9],
     /// The question Controls' Restore Defaults asks (its answers are `yes_no`).
     restore_controls: &'static str,
     /// The rows Display adds after the game's four: eleven settings and Apply.
@@ -301,6 +322,7 @@ static ENGLISH: Texts = Texts {
         "Mouse Aim Style",
         "Mouse QTE Distance",
         "Keep Mouse in Window",
+        "Free Camera (Experimental)",
         "Restore Controls Defaults",
         "Apply and Restart",
     ],
@@ -347,6 +369,7 @@ static PORTUGUESE: Texts = Texts {
         "Estilo da mira",
         "Distância do mouse nos QTEs",
         "Prender cursor à janela",
+        "Câmera livre (experimental)",
         "Restaurar padrões dos controles",
         "Aplicar e reiniciar",
     ],
@@ -761,6 +784,10 @@ impl<'a> Script<'a> {
                 return Err(script(format!("no state record at {at:#x}")));
             }
             let size = be24(d, b + at + 1);
+            // A state holds at least its 12-byte head: a smaller one is the header table's count.
+            if size < 12 {
+                return Err(script(format!("no state record at {at:#x}")));
+            }
             let (parent, id) = (be32(d, b + at + 4)?, be32(d, b + at + 8)?);
             let (mut j, mut items) = (at + 12, Vec::new());
             while j < self.code && byte(d, b + j)? != 4 {
@@ -1842,8 +1869,8 @@ impl Emitter<'_, '_> {
     }
 
     /// Controls' title and game rows (`kept`; the values of the two last are the page's), then
-    /// its six controls (builtins 0xfa4 + i read them, 0xfb8 + i with arrows), Restore Defaults
-    /// and Apply; scrollbar 12 follows the 8 rows of 11.
+    /// its seven controls (builtins [`control_read`] read them), Restore Defaults and Apply;
+    /// scrollbar 12 follows the 8 rows of 12.
     fn controls_window(
         &mut self,
         kept: &[String],
@@ -1868,9 +1895,8 @@ impl Emitter<'_, '_> {
                     .as_bytes(),
             )?;
             self.assign(1 + slot)?;
-            if (3..9).contains(&row) {
-                let read = if selected == Some(row) { 0xfb8 } else { 0xfa4 };
-                self.builtin(read + row - 3, false)?;
+            if (3..10).contains(&row) {
+                self.builtin(control_read(row - 3, selected == Some(row)), false)?;
             } else if matches!(row, 1 | 2) {
                 self.string(&arrows(row, selected == Some(row)))?;
             } else {
@@ -1881,7 +1907,7 @@ impl Emitter<'_, '_> {
         self.string(b"PauseText")?;
         self.integer(1)?;
         self.builtin(0x58, true)?;
-        self.scrollbar(12, first, 11, 8)
+        self.scrollbar(12, first, 12, 8)
     }
 
     /// The code block at `code`, with the texts of the locals in `replacements` replaced: states
@@ -1996,7 +2022,7 @@ pub fn native_cheats(
         Spec::new("HLNativeGraphics", "options", link()),
         Spec::new("HLNativeCheats", "options", link()),
     ];
-    let mut controls_specs: Vec<Spec> = (0..6)
+    let mut controls_specs: Vec<Spec> = (0..7)
         .map(|i| Spec::new(&format!("NativeControl{i}"), "controls", slide()))
         .collect();
     for name in ["NativeControlsReset", "NativeControlsApply"] {
@@ -2410,15 +2436,15 @@ pub fn native_cheats(
         }
     }
 
-    // Controls: the game's three rows, then six controls (builtins 0xfaa + i and 0xfb1 + i change
-    // them), Restore Defaults and Apply and Restart; eight rows show at a time.
+    // Controls: the game's three rows, then seven controls ([`control_change`] changes them),
+    // Restore Defaults and Apply and Restart; eight rows show at a time.
     let controls_originals = ["HLContDis", "HLFreeCamera", "HLFlightControl"]
         .map(|name| s.one(name))
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
     let controls_kept = kept_labels(&s, &controls, 0..=3, "Controls labels not recognized")?;
     let controls_window = Window::Controls(&controls_kept);
-    let control_rows: Vec<String> = (0..6)
+    let control_rows: Vec<String> = (0..7)
         .map(|i| format!("NativeControl{i}"))
         .chain(["NativeControlsReset", "NativeControlsApply"].map(String::from))
         .collect();
@@ -2438,8 +2464,11 @@ pub fn native_cheats(
         e.animation(row - first, 9)?;
         e.end();
         e.navigation(name, row, &targets)?;
-        if index < 6 {
-            for (kind, function) in [("left", 0xfaa + index), ("right", 0xfb1 + index)] {
+        if index < 7 {
+            for (kind, function) in [
+                ("left", control_change(index, -1)),
+                ("right", control_change(index, 1)),
+            ] {
                 e.begin(name, kind);
                 e.call(repeat);
                 e.builtin(function, true)?;
@@ -2818,7 +2847,7 @@ pub fn native_cheats(
     // Display's rows, Cheats' unpinned rows, Controls' rows and Graphics Settings' rows.
     native_scrollbar(data, 10, DISPLAY_ROWS, 8)?;
     native_scrollbar(data, 11, 8, 7)?;
-    native_scrollbar(data, 12, 11, 8)?;
+    native_scrollbar(data, 12, 12, 8)?;
     native_scrollbar(data, 13, 11, 8)
 }
 
@@ -3570,25 +3599,41 @@ mod tests {
 
     /// [`tiny_script`] with `parent` as Root's parent word (0x14 is Root's own state ref).
     fn tiny_script_with_root_parent(parent: u32) -> Vec<u8> {
+        tiny_script_after(parent, &[])
+    }
+
+    /// [`tiny_script_with_root_parent`] with `table` between the header and the states.
+    fn tiny_script_after(parent: u32, table: &[u8]) -> Vec<u8> {
+        let shift = table.len() as u8;
         let mut smi = vec![0u8; 0x18];
-        let (code, symtab) = (0x44u32, 0x48u32 + 23);
+        smi.extend(table);
+        let (code, symtab) = (0x44u32 + u32::from(shift), 0x48u32 + 23 + u32::from(shift));
         smi[0x0c..0x10].copy_from_slice(&code.to_le_bytes());
         smi[0x10..0x14].copy_from_slice(&symtab.to_le_bytes());
         // Root at 0x18 (subtree 44 bytes), Child at 0x28 (28 bytes, parent ref 0x14).
         smi.extend([4, 0, 0, 44]);
         smi.extend(parent.to_be_bytes());
         smi.extend([0, 0, 0, 4, 1, 0, 0, 0]);
-        smi.extend([4, 0, 0, 28, 0, 0, 0, 0x14, 0, 0, 0, 12]);
+        smi.extend([4, 0, 0, 28, 0, 0, 0, 0x14 + shift, 0, 0, 0, 12]);
         smi.extend([1, 0, 0, 8, 3, 0, 0, 13, 0x80, 0, 0, 0xe0, 0, 0, 0, 0xec]);
         smi.extend([0; 4]); // code start .. code refs' base
         smi.extend([0x16, 0x00, 0x13, 0x09, 0xe0, 0x06, 0x43, 0x49]); // 0: line5 = ""
         smi.extend([0x16, 0x00, 0x14, 0x43, 0x49]); // 8
-        smi.extend([0x47, 0, 0, 0, 0x14, 0x49]); // 13: go to Root
+        smi.extend([0x47, 0, 0, 0, 0x14 + shift, 0x49]); // 13: go to Root
         smi.extend(b"\0Hi\0"); // 19, 20
         smi.extend([0; 8]);
         smi.extend([0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 25]);
         smi.extend(b"Root\0Child\0");
         wad("SMI_R_UI", &smi)
+    }
+
+    #[test]
+    fn a_header_table_entry_of_4_is_not_a_state() {
+        // The real script's table has (count, code) pairs: a count of 4 reads as `04 000000`.
+        let data = tiny_script_after(0xffff_ffff, &[4, 0, 0, 0, 0x44, 1, 0, 0]);
+        let s = Script::parse(&data).unwrap();
+        assert_eq!(s.records.len(), 2);
+        assert_eq!(s.one("Root").unwrap().at, 0x20);
     }
 
     #[test]
@@ -4686,7 +4731,7 @@ mod tests {
                 }
             }
         }
-        // Controls: Apply and Restart and Restore Defaults, each with its question, and six
+        // Controls: Apply and Restart and Restore Defaults, each with its question, and seven
         // controls after the game's three rows.
         s.one("NativeControlsApply").unwrap();
         s.one("NativeControlsReset").unwrap();
@@ -4697,14 +4742,17 @@ mod tests {
             state_ref(&s, "NativeControlsRestartNo")
         );
         let controls = s.one("PauseControls").unwrap();
-        for index in 0..6 {
+        for index in 0..7 {
             let row = s.one(&format!("NativeControl{index}")).unwrap();
             assert_eq!(row.parent, controls.at - 4, "{index}");
             for (trigger, function) in [(&[0xe6, 0xf2], 0xfaa), (&[0xe2, 0xee], 0xfb1)] {
                 let code = block(&s, row, 3, Some(trigger));
-                assert!(calls(&code).contains(&(function + index)), "{index}");
+                let function = if index == 6 { 0xf6f } else { function + index };
+                assert!(calls(&code).contains(&function), "{index}");
             }
         }
+        let free_camera = block(&s, s.one("NativeControl6").unwrap(), 1, None);
+        assert!(calls(&free_camera).contains(&0xf6e));
         for name in ["HLContDis", "HLFreeCamera", "HLFlightControl"] {
             s.one(name).unwrap();
         }
@@ -4830,8 +4878,8 @@ mod tests {
                 name.starts_with("NativeControl") || name.starts_with("NativeGraphicsRestart")
             })
             .collect();
-        // Six controls, Reset and Apply, two questions with their answers, and Graphics' restart.
-        assert_eq!(names.len(), 17, "{names:?}");
+        // Seven controls, Reset and Apply, two questions with their answers, and Graphics' restart.
+        assert_eq!(names.len(), 18, "{names:?}");
         for name in names {
             let record = s.one(name).unwrap();
             for b in Script::blocks(record) {

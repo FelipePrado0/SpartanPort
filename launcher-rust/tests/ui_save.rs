@@ -310,14 +310,14 @@ fn saving_a_new_launcher_language_rebuilds_the_window_in_it() {
 
 #[test]
 fn rebuilding_keeps_the_status_of_a_running_game() {
-    // The game state, the log and the release list stay.
+    // The game state, the log and the release list stay (a version far above this launcher's).
     let dir = tempfile::tempdir().unwrap();
     let mut state = state_in(dir.path());
     state.log.push_text("The game is running.\n");
     let listed = vec![Release {
         id: ReleaseId {
             channel: Channel::Release,
-            version: "3.1.0".to_string(),
+            version: "99.0.0".to_string(),
             build: None,
         },
         published: String::new(),
@@ -336,7 +336,7 @@ fn rebuilding_keeps_the_status_of_a_running_game() {
     assert!(state.log.text().contains("The game is running."));
     assert_eq!(
         state.updater.newer().map(|r| r.id.version.as_str()),
-        Some("3.1.0")
+        Some("99.0.0")
     );
 }
 
@@ -1033,6 +1033,23 @@ fn audio_and_effects_options_are_saved_and_read_back() {
     assert_eq!(reopened.store.text("audio_channels"), "5.1");
     assert!(!reopened.store.flag("motion_blur"));
     assert!(!reopened.store.flag("depth_of_field"));
+    assert!(!dirty(&reopened));
+}
+
+#[test]
+fn anti_aliasing_is_saved_in_the_ini_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    open(&mut state, Page::Graphics);
+    set(&mut state, "anti_aliasing", json!("smaa"));
+    assert!(save_enabled(&state));
+    click_save(&mut state);
+    let ini = fs::read_to_string(state.paths.ini_path()).unwrap();
+    assert!(ini.lines().any(|l| l == "anti_aliasing=smaa"), "{ini}");
+    let settings = fs::read_to_string(state.paths.config_file()).unwrap();
+    assert!(!settings.contains("anti_aliasing"), "{settings}");
+    let reopened = state_in(dir.path());
+    assert_eq!(reopened.store.text("anti_aliasing"), "smaa");
     assert!(!dirty(&reopened));
 }
 

@@ -59,7 +59,7 @@ class GraphicsOptionsTest(unittest.TestCase):
 
     def test_defaults_and_invalid_values(self):
         self.ini.write_text(
-            'render_resolution=invalid\nengine_fps=90\nstale_readback=yes\n',
+            'render_resolution=invalid\nengine_fps=300\nstale_readback=yes\n',
             encoding='utf-8',
         )
         options, reverted = g.prepare(self.ini, self.state)
@@ -267,7 +267,10 @@ class GraphicsOptionsTest(unittest.TestCase):
         # 100 is written live over the 240 FPS patch (spartanport_settings.cpp SyncEngineFps).
         self.assertEqual(g.patch_names(['Bug Fix - Texture Corruption Fix'], options),
                          ['Bug Fix - Texture Corruption Fix', 'Frame Rate Patch - 240 FPS'])
-        self.assertEqual(g.startup_options({'engine_fps': '90'})['engine_fps'], '120')  # not a choice: the default
+        for saved in ('90', '75', '30', '240'):  # the in-game slider's rates
+            self.assertEqual(g.startup_options({'engine_fps': saved})['engine_fps'], saved)
+        for saved in ('29', '241', '-60', 'ninety', '75.5'):
+            self.assertEqual(g.startup_options({'engine_fps': saved})['engine_fps'], '120')
 
     def test_engine_rate_180_for_high_refresh_displays(self):
         self.assertEqual(g.ENGINE_FPS, (60, 100, 120, 144, 180, 240))
@@ -341,13 +344,14 @@ class AspectRatioTest(unittest.TestCase):
         self.assertEqual(g.aspect_of('1280x1024'), '5:4')  # a mod's size outside the named ones
 
     def test_aspects_in_a_fixed_order_with_the_others_last(self):
-        self.assertEqual(g.aspects(g.RESOLUTIONS), ['16:9', '16:10', '21:9', '32:9', '4:3'])
-        self.assertEqual(g.aspects(g.resolutions(('1280x1024',))), ['16:9', '16:10', '21:9', '32:9', '4:3', '5:4'])
+        self.assertEqual(g.aspects(g.RESOLUTIONS), ['16:9', '16:10', '21:9', '32:9', '48:9', '4:3'])
+        self.assertEqual(g.resolutions_for('48:9', g.RESOLUTIONS), ['11520x2160'])  # #719
+        self.assertEqual(g.aspects(g.resolutions(('1280x1024',))), ['16:9', '16:10', '21:9', '32:9', '48:9', '4:3', '5:4'])
 
     def test_resolutions_of_an_aspect_smallest_first_native_on_top(self):
         self.assertEqual(g.resolutions_for('16:9', g.RESOLUTIONS),
-                         ['native', '480p', '720p', '1360x768', '900p', '1440p', '1800p', '4K', '8K'])
-        self.assertEqual(g.resolutions_for('16:10', g.RESOLUTIONS), ['1280x800', '1440x900', '1920x1200', '2560x1600'])
+                         ['native', '480p', '720p', '1360x768', '900p', '1440p', '1800p', '4K', '5120x2880', '8K'])
+        self.assertEqual(g.resolutions_for('16:10', g.RESOLUTIONS), ['1280x800', '1440x900', '1920x1200', '2560x1600', '2880x1800'])
         self.assertEqual(g.resolutions_for('4:3', g.RESOLUTIONS),
                          ['1280x960', '1440x1080', '1920x1440', '2048x1536', '2560x1920'])
 

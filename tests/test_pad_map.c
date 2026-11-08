@@ -5,6 +5,7 @@
 
 int spartanportgpu_overlay_captures_input(void) { return 0; }
 int spartanportgpu_vibration_percent(void) { return 100; }
+unsigned spartanportgpu_dualsense_features(int *speaker_gain) { *speaker_gain=4; return 0; }
 int spartanportgpu_mouse_prompt_distance(void) { return 48; }
 static int pause_keys;
 void spartanportgpu_mouse_pause_key(void) { ++pause_keys; }
@@ -12,7 +13,17 @@ static int aim_style;
 int spartanportgpu_mouse_aim_style(void) { return aim_style; }
 static int aim_sensitivity=100;
 int spartanportgpu_mouse_aim_sensitivity(void) { return aim_sensitivity; }
-void spartanportgpu_engine_fps_cycle(void) {}
+void spartanportgpu_engine_fps_step(int direction) { (void)direction; }
+static SpartanActorSlot test_actor_slots[2];
+uintptr_t spartanport_actor_slots_address(void) { return (uintptr_t)test_actor_slots; }
+int spartanport_camera_stick_enabled(void) { return 0; }
+float spartanport_camera_yaw(void) { return 0; }
+void spartanport_camera_toggle(void) {}
+void spartanport_camera_steer(float x, float y, float seconds, int recenter) { (void)x; (void)y; (void)seconds; (void)recenter; }
+void spartanport_camera_look(float right_degrees, float down_degrees) { (void)right_degrees; (void)down_degrees; }
+unsigned spartanport_camera_writes(void) { return 0; }
+int spartanport_camera_live(void) { return 0; }
+int spartanportgpu_mouse_locked(void) { return 0; }
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *name) {
     (void)table; (void)count; (void)name;
     return 0;
@@ -122,7 +133,7 @@ int main(void) {
     /* Every button with the limit of sources still fits the map. */
     char everything[2048]="";
     static const char *const all_buttons[]={"cross","circle","square","triangle","l1","r1","l2","r2","l3","r3","options",
-        "touchpad_left","touchpad_right","up","down","left","right","dodge","rage","grab","weapon_next","weapon_prev",
+        "touchpad_left","touchpad_right","up","down","left","right","dodge","rage","grab","weapon_next","weapon_prev","camera",
         "move_up","move_down","move_left","move_right","look_up","look_down","look_left","look_right"};
     for (size_t i=0;i<sizeof(all_buttons)/sizeof(*all_buttons);++i)
         snprintf(everything+strlen(everything),sizeof(everything)-strlen(everything),"%s%s=F1|F2|F3|F4",i ? "," : "",all_buttons[i]);

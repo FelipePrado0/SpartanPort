@@ -44,8 +44,9 @@ bool Visible();
 /// Any thread: a short message in the lower right corner (a saved screenshot).
 void ShowNotice(const std::string& text, int milliseconds = 3000);
 
-/// Any thread (R3 + L1 + R1, F9): the next engine frame rate (60, 100, 120, 144, 180, 240), said on screen.
-void CycleEngineFps();
+/// Any thread (R3 + R1 / L1, F9 + Right / Left): the engine frame rate 5 FPS up (1) or down (-1),
+/// said on screen.
+void StepEngineFps(int direction);
 
 /// Present thread: draws into `view` (layout ColorAttachmentOptimal).
 void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent);

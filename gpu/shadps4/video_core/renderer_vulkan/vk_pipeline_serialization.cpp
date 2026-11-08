@@ -32,6 +32,7 @@
 #include "core/emulator_settings.h"
 #include "shader_recompiler/frontend/fetch_shader.h"
 #include "shader_recompiler/info.h"
+#include "video_core/amdgpu/spartanport_msaa.h"
 #include "video_core/cache_storage.h"
 #include "video_core/renderer_vulkan/vk_amd_paths.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -1038,6 +1039,15 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
     return true;
 }
 
+// spartanport: the stored profile: the shader profile plus one byte, whether the guest's multisampling
+// is off. One builder for every writer, so the size CheckCacheProfile compares never differs.
+std::vector<u8> PipelineCache::ProfileBlob() const {
+    std::vector<u8> blob(sizeof(profile) + 1);
+    std::memcpy(blob.data(), &profile, sizeof(profile));
+    blob[sizeof(profile)] = AmdGpu::NoMsaa() ? 1 : 0;
+    return blob;
+}
+
 bool PipelineCache::CheckCacheProfile() {
     if (!EmulatorSettings.IsPipelineCacheEnabled()) {
         return false;
@@ -1045,37 +1055,36 @@ bool PipelineCache::CheckCacheProfile() {
 
     Storage::DataBase::Instance().Open();
 
+    // spartanport: the profile blob is the shader profile plus one byte: whether the guest's
+    // multisampling is off (TAA turns it off). The shaders and pipelines saved with it differ (a
+    // multisampled depth fetch against a single-sampled one), so a cache written in the other mode
+    // is rebuilt instead of replayed (it showed as a wrong brightness after switching TAA <-> FSR).
+    std::vector<u8> current = ProfileBlob();
+
     // Check if cache is compatible
     std::vector<u8> profile_data{};
     Storage::DataBase::Instance().Load(Storage::BlobType::ShaderProfile, "profile", profile_data);
     if (profile_data.empty()) {
         Storage::DataBase::Instance().FinishPreload();
-
-        profile_data.resize(sizeof(profile));
-        std::memcpy(profile_data.data(), &profile, sizeof(profile));
         Storage::DataBase::Instance().Save(Storage::BlobType::ShaderProfile, "profile",
-                                           std::move(profile_data));
+                                           std::move(current));
         return false;
     }
-    if (profile_data.size() != sizeof(Shader::Profile)) {
-        LOG_WARNING(Render, "Pipeline cache profile has unexpected size ({} != {})",
-                    profile_data.size(), sizeof(Shader::Profile));
-    }
     Shader::Profile cached_profile{};
-    if (profile_data.size() == sizeof(Shader::Profile)) {
+    const bool same_size = profile_data.size() == current.size();
+    if (same_size) {
         std::memcpy(&cached_profile, profile_data.data(), sizeof(cached_profile));
     }
-    if (profile_data.size() != sizeof(Shader::Profile) || cached_profile != profile) {
+    // The profile is compared member by member (padding bytes are not stable), the mode byte directly.
+    if (!same_size || cached_profile != profile || profile_data.back() != current.back()) {
         // spartanport: upstream closed the cache for the session here, so it was never rewritten
         // and every later session compiled every shader again (stutters on each new area).
-        // Start a fresh cache for this build and GPU instead.
+        // Start a fresh cache for this build, GPU and multisampling mode instead.
         LOG_WARNING(Render, "Pipeline cache isn't compatible with current system: rebuilding it");
         Storage::DataBase::Instance().Clear();
         Storage::DataBase::Instance().FinishPreload();
-        profile_data.resize(sizeof(profile));
-        std::memcpy(profile_data.data(), &profile, sizeof(profile));
         Storage::DataBase::Instance().Save(Storage::BlobType::ShaderProfile, "profile",
-                                           std::move(profile_data));
+                                           std::move(current));
         return false;
     }
     return true;
@@ -1196,9 +1205,7 @@ void PipelineCache::StartOnDemand() {
             // Earlier on-demand sessions numbered permutations by first use and overwrote the
             // files by name, so a name may hold another session's shader: rebuilt once.
             db.Clear();
-            std::vector<u8> profile_data(sizeof(profile));
-            std::memcpy(profile_data.data(), &profile, sizeof(profile));
-            db.Save(Storage::BlobType::ShaderProfile, "profile", std::move(profile_data));
+            db.Save(Storage::BlobType::ShaderProfile, "profile", ProfileBlob());
             db.Save(Storage::BlobType::ShaderProfile, "disk_shaders", std::vector<u8>{1});
             std::printf("Pipeline startup: shader store rebuilt for on-demand reads\n");
         } else {

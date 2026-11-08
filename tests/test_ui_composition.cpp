@@ -58,5 +58,9 @@ int main() {
     assert(ui[0] == 1 && ui[1] == 1); // don't double an already native UI viewport
     const auto larger = Scale(960, 540, 3840, 2160, true);
     assert(larger[0] == 2 && larger[1] == 2);
+    // Guest shaders read FragCoord in guest pixels: a pass scaled to the output reports its factor.
+    assert(FragCoordSize({1.0f, 1.0f}) == 0);
+    assert(FragCoordSize({3.0f, 3.0f}) == (5760u | 3240u << 16));
+    assert(FragCoordSize({0.5f, 0.5f}) == (960u | 540u << 16));
     std::puts("UI composition: PASS (menu without camera, HUD, FSR off, viewport scaling)");
 }

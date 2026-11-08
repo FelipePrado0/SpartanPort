@@ -383,7 +383,13 @@ fn aspect_follows_and_filters_the_render_resolution() {
     assert_eq!(state.store.text("render_resolution"), "1920x1200");
     assert_eq!(
         values(&performance::aspect_resolution_options(&state)),
-        ["1280x800", "1440x900", "1920x1200", "2560x1600"]
+        [
+            "1280x800",
+            "1440x900",
+            "1920x1200",
+            "2560x1600",
+            "2880x1800"
+        ]
     );
     set(&mut state, "render_resolution", "3440x1440");
     assert_eq!(state.aspect, "21:9");
@@ -2632,7 +2638,7 @@ fn the_files_buttons_share_one_row_at_its_end() {
     // R93: "Port folder", "spartanport.ini" and "Clear shader cache" on one line, ending where
     // every row's control ends (starting there right to left), each label on one line.
     for lang in [
-        "en", "pt", "es", "fr", "de", "it", "pl", "ru", "tr", "ar", "zh", "ja", "ko", "id",
+        "en", "pt", "es", "fr", "de", "it", "pl", "cs", "ru", "tr", "ar", "zh", "ja", "ko", "id",
     ] {
         let dir = tempfile::tempdir().unwrap();
         let mut state = state(dir.path());
@@ -3379,6 +3385,22 @@ fn game_audio_offers_volume_and_speakers() {
     // Portuguese reuses the legacy launcher's translations.
     state.lang = "pt".into();
     page_has(&state, &["ÁUDIO", "Alto-falantes  ·  reiniciar"]);
+}
+
+#[test]
+fn graphics_page_offers_spatial_anti_aliasing() {
+    use spartanport_launcher::core::options::ANTI_ALIASING;
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state(dir.path());
+    open(&mut state, Page::Graphics);
+    page_has(&state, &["Anti-aliasing"]);
+    // Off until chosen, as in the game; FXAA and SMAA are values of one ini key.
+    assert_eq!(state.store.text("anti_aliasing"), "off");
+    for (label, value) in [("FXAA", "fxaa"), ("SMAA", "smaa"), ("Off", "off")] {
+        let pick = select_message("anti_aliasing", ANTI_ALIASING, "en", label).unwrap();
+        let _ = app::update(&mut state, pick);
+        assert_eq!(state.store.text("anti_aliasing"), value);
+    }
 }
 
 #[test]

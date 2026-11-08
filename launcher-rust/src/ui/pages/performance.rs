@@ -14,13 +14,14 @@ use crate::core::i18n::{tr, tr_fmt};
 use crate::core::mods::{patch_files, selected};
 use crate::core::options::{
     aspect_of, aspects, closest_resolution, resolution_label, resolutions_for, DRAW_PIPE,
-    ENGINE_FPS_CHOICES, FPS_LIMITS, FRAMES_QUEUED, NO_MSAA, READBACKS, RESOLUTIONS, STREAM_MEMORY,
+    FPS_LIMITS, FRAMES_QUEUED, NO_MSAA, READBACKS, RESOLUTIONS, STREAM_MEMORY,
 };
+use crate::core::options::{MAX_ENGINE_FPS, MIN_ENGINE_FPS};
 use crate::core::patches::resolution_names;
 use crate::ui::app::{Message, State};
 use crate::ui::theme;
 use crate::ui::widgets::{
-    checkbox, choice_pairs, min_width, row, section, select_pairs, SELECT_MIN, SELECT_TEXT,
+    checkbox, choice_pairs, min_width, row, section, select_pairs, slider, SELECT_MIN, SELECT_TEXT,
 };
 
 /// Suffix of the labels of the sizes a mod adds.
@@ -214,11 +215,6 @@ pub fn rows(state: &State, lang: &str) -> Vec<SelectRow> {
             stored("frames_queued"),
         ),
         row(
-            "engine_fps",
-            choice_pairs(ENGINE_FPS_CHOICES, lang),
-            stored("engine_fps"),
-        ),
-        row(
             "render_resolution",
             aspect_resolution_options(state),
             stored("render_resolution"),
@@ -241,6 +237,32 @@ pub fn rows(state: &State, lang: &str) -> Vec<SelectRow> {
         ),
         row("no_msaa", no_msaa_label(state, lang), stored("no_msaa")),
     ]
+}
+
+/// Engine frame rate: any whole rate from 30 to 240, as the Insert menu, plus a 60 button.
+fn engine_fps_slider<'a>(state: &State) -> Element<'a, Message> {
+    let fps = state
+        .store
+        .text("engine_fps")
+        .parse::<u32>()
+        .unwrap_or(120)
+        .clamp(MIN_ENGINE_FPS, MAX_ENGINE_FPS);
+    let sixty = button(text("60"))
+        .style(theme::button_flat)
+        .on_press(Message::Set("engine_fps".into(), Value::from(60)));
+    iced::widget::row![
+        slider(
+            "engine_fps",
+            MIN_ENGINE_FPS as f32,
+            MAX_ENGINE_FPS as f32,
+            "FPS",
+            fps as f32
+        ),
+        sixty
+    ]
+    .spacing(10)
+    .align_y(iced::Center)
+    .into()
 }
 
 /// Delete shader cache: the Advanced page's Clear shader cache under the Python's other name,
@@ -306,7 +328,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
         row(
             state.rtl,
             &tr(lang, "Engine frame rate"),
-            pick("engine_fps"),
+            engine_fps_slider(state),
             Some(&hint(
                 "The highest frame rate the game itself runs at (a game patch)."
             )),

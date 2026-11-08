@@ -125,6 +125,9 @@ struct PrepWorker {
 
 struct PreparedDraw;
 
+/// spartanport: counts prepared draws whose V#s were stale; logs the total every 5 s at most.
+void NoteStaleVertexInputs();
+
 class PipelineCache {
 public:
     explicit PipelineCache(const Instance& instance, Scheduler& scheduler,
@@ -188,6 +191,7 @@ private:
     void FinishCompilations();
     void SeedWorkerCaches();
     bool CheckCacheProfile();
+    std::vector<u8> ProfileBlob() const;
     struct BackgroundWarmup;
     struct WarmStage;
     void ReadWarmEntry(BackgroundWarmup& warm, std::vector<u8>&& data);

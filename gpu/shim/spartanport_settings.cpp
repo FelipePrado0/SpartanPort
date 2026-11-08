@@ -146,10 +146,30 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.fsr1 = false;
     } else if (key == "rcas") {
         v.rcas = i != 0;
+    } else if (key == "anti_aliasing") {
+        v.anti_aliasing = SpartanGraphics::ParseAntiAliasing(value);
     } else if (key == "depth_of_field") {
         v.depth_of_field = i != 0;
     } else if (key == "rcas_strength") {
         v.rcas_strength = SpartanGraphics::ParseRcasStrength(value.empty() ? -1 : i);
+    } else if (key == "taa_static") {
+        v.taa_static = std::clamp(i, 0, 99);
+    } else if (key == "taa_moving") {
+        v.taa_moving = std::clamp(i, 0, 99);
+    } else if (key == "taa_tolerance") {
+        v.taa_tolerance = std::clamp(i, 30, 300);
+    } else if (key == "taa_objects") {
+        v.taa_objects = std::clamp(i, 0, 100);
+    } else if (key == "taa_lod") {
+        v.taa_lod = std::clamp(i, 0, 150);
+    } else if (key == "taa_spatial") {
+        v.taa_spatial = std::clamp(i, 0, 100);
+    } else if (key == "fsr_lod") {
+        v.fsr_lod = std::clamp(i, 0, 150);
+    } else if (key == "fsr_objects") {
+        v.fsr_objects = std::clamp(i, 0, 100);
+    } else if (key == "taa_sharpen") {
+        v.taa_sharpen = std::clamp(i, 0, 200);
     } else if (key == "frames_queued") {
         v.frames_queued = SpartanGraphics::ParseFramesQueued(value.empty() ? -1 : i);
     } else if (key == "render_resolution") {
@@ -186,6 +206,20 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.master_volume = value.empty() ? MasterVolumeDefault : std::clamp(i, MasterVolumeMin, MasterVolumeMax);
     } else if (key == "audio_channels") {
         v.audio_channels = ParseAudioChannels(value);
+    } else if (key == "dualsense_triggers") {
+        v.dualsense_triggers = value.empty() || i != 0;
+    } else if (key == "dualsense_hitflash") {
+        v.dualsense_hitflash = value.empty() || i != 0;
+    } else if (key == "dualsense_qte") {
+        v.dualsense_qte = value.empty() || i != 0;
+    } else if (key == "dualsense_speaker") {
+        v.dualsense_speaker = value.empty() || i != 0;
+    } else if (key == "dualsense_motion") {
+        v.dualsense_motion = value.empty() || i != 0;
+    } else if (key == "dualsense_gyroaim") {
+        v.dualsense_gyroaim = value.empty() || i != 0;
+    } else if (key == "dualsense_speaker_gain") {
+        v.dualsense_speaker_gain = value.empty() ? 4 : std::clamp(i, 0, 7);
     } else if (key == "mouse_prompt_distance") {
         v.mouse_prompt_distance = value.empty() ? 48 : std::clamp(i, 16, 200);
     } else if (key == "mouse_lock") {
@@ -194,6 +228,8 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.mouse_aim_style = std::clamp(i, 0, 1);
     } else if (key == "mouse_aim_sensitivity") {
         v.mouse_aim_sensitivity = value.empty() ? 100 : std::clamp(i, 10, 200);
+    } else if (key == "free_camera") {
+        v.free_camera = i != 0;
     } else if (key == "restart_unconfirmed") {
         v.restart_unconfirmed = i != 0;
     } else if (key == "enemy_health_bar") {
@@ -244,6 +280,9 @@ Values& Get() {
     return values;
 }
 
+// The upscaler of spartanport.ini, before SPARTAN_UPSCALER replaced it for this run.
+static int file_upscaler = UpscalerOff;
+
 void Load() {
     auto& v = Get();
     v.menu_confirm_swap = 0;
@@ -262,8 +301,10 @@ void Load() {
         std::fclose(file);
         std::printf("Settings: %s\n", Path());
     }
-    // Environment overrides (scripts, A/B tests).
-    if (const char* env = std::getenv("SPARTAN_UPSCALER")) {
+    // Environment overrides (scripts, A/B tests). The upscaler's is for this run only: Save keeps
+    // the file's choice unless the menu changes it (the launcher's FSR 3.1 fallback for fsr3ui).
+    file_upscaler = v.upscaler;
+    if (const char* env = std::getenv("SPARTAN_UPSCALER"); env && env[0]) {
         v.upscaler = UpscalerOff;
         for (int u = 0; u < UpscalerCount; ++u) {
             if (std::strcmp(env, UpscalerName(u)) == 0) v.upscaler = u;
@@ -282,7 +323,8 @@ void Load() {
         {"SPARTAN_MOUSE_PROMPT_DISTANCE", "mouse_prompt_distance"}, {"SPARTAN_MOUSE_LOCK", "mouse_lock"},
         {"SPARTAN_MOUSE_AIM_STYLE", "mouse_aim_style"}, {"SPARTAN_MOUSE_AIM_SENSITIVITY", "mouse_aim_sensitivity"},
         {"SPARTAN_AUTO_QTE", "auto_qte"},                {"SPARTAN_MOTION_BLUR", "motion_blur"},
-        {"SPARTAN_DEPTH_OF_FIELD", "depth_of_field"},
+        {"SPARTAN_DEPTH_OF_FIELD", "depth_of_field"},    {"SPARTAN_ANTI_ALIASING", "anti_aliasing"},
+        {"SPARTAN_FREE_CAMERA", "free_camera"},
         {"SPARTAN_MONITOR", "monitor"}, {"SPARTAN_HDR", "hdr"},
         {"SPARTAN_GLYPH_STYLE", "glyph_style"},     {"SPARTAN_AUTO_SAFE_FPS", "auto_safe_fps"},
     };
@@ -375,13 +417,13 @@ void SyncEngineFps() {
     capped = capping;
 }
 
-int CycleEngineFps() {
+int StepEngineFps(int direction) {
     auto& v = Get();
     if (!v.engine_fps_global || v.applied_engine_fps <= 60) {
         return 0;
     }
     // From the player's rate, not the QTE cap: the cap never reaches engine_fps.
-    v.engine_fps = SpartanGraphics::NextEngineFps(EngineFpsChosen(), v.applied_engine_fps);
+    v.engine_fps = SpartanGraphics::StepEngineFps(EngineFpsChosen(), direction, v.applied_engine_fps);
     Save();
     return v.engine_fps;
 }
@@ -396,7 +438,7 @@ bool GraphicsNeedRestart() {
            // The launcher patches the render size of the preset (or none without an upscaler).
            v.preset != v.startup_preset ||
            (v.upscaler == UpscalerOff) != (v.startup_upscaler == UpscalerOff) ||
-           (v.upscaler == UpscalerTaa) != (v.startup_upscaler == UpscalerTaa);
+           NeedsLivePath(v.upscaler) != NeedsLivePath(v.startup_upscaler);
 }
 
 void ConfigureUpscalerSupport(bool fsr4, bool fsr411, const char* fsr411_problem) {
@@ -433,11 +475,11 @@ bool ResolutionNeedsRestart() {
     return FixedRenderSession() &&
         (v.preset != v.startup_preset || v.output_res != v.startup_output_res ||
          (v.upscaler == UpscalerOff) != (v.startup_upscaler == UpscalerOff) ||
-         (v.upscaler == UpscalerTaa) != (v.startup_upscaler == UpscalerTaa));
+         NeedsLivePath(v.upscaler) != NeedsLivePath(v.startup_upscaler));
 }
 
 void Save() {
-    static std::mutex mutex; // the menu and the pad thread (CycleEngineFps)
+    static std::mutex mutex; // the menu and the pad thread (StepEngineFps)
     std::scoped_lock lock{mutex};
     const auto& v = Get();
     FILE* file = std::fopen(Path(), "w");
@@ -450,7 +492,8 @@ void Save() {
                  "upscaler=%s\npreset=%d\nsharpen=%d\nsharpness=%.2f\njitter=%d\n"
                  "reactive=%d\nobject_motion=%d\nreactive_scale=%.2f\nreactive_threshold=%.2f\nreactive_max=%.2f\n"
                  "debug_view=%d\nshow_fps=%d\nfsr4_auto_exposure=%d\nfsr4_invert_jitter=%d\n",
-                 UpscalerName(v.upscaler), v.preset.load(), int(v.sharpen.load()),
+                 UpscalerName(v.upscaler == v.startup_upscaler ? file_upscaler : v.upscaler.load()),
+                 v.preset.load(), int(v.sharpen.load()),
                  v.sharpness.load(), int(v.jitter.load()), int(v.reactive.load()),
                  int(v.object_motion.load()),
                  v.reactive_scale.load(), v.reactive_threshold.load(), v.reactive_max.load(),
@@ -507,8 +550,21 @@ void Save() {
                  v.anisotropy.load(), v.vibration.load(), v.menu_confirm_swap.load(), v.mouse_prompt_distance.load(), int(v.mouse_lock.load()),
                  v.mouse_aim_style.load(), v.mouse_aim_sensitivity.load());
     std::fprintf(file, "depth_of_field=%d\n", int(v.depth_of_field.load()));
+    std::fprintf(file, "taa_static=%d\ntaa_moving=%d\ntaa_tolerance=%d\ntaa_objects=%d\ntaa_sharpen=%d\n"
+                 "taa_lod=%d\ntaa_spatial=%d\n",
+                 v.taa_static.load(), v.taa_moving.load(), v.taa_tolerance.load(), v.taa_objects.load(),
+                 v.taa_sharpen.load(), v.taa_lod.load(), v.taa_spatial.load());
+    std::fprintf(file, "fsr_lod=%d\nfsr_objects=%d\n", v.fsr_lod.load(), v.fsr_objects.load());
+    std::fprintf(file, "anti_aliasing=%s\n",
+                 SpartanGraphics::AntiAliasingKeys[std::clamp(v.anti_aliasing.load(), 0, int(SpartanGraphics::AaSmaa))].data());
     std::fprintf(file, "master_volume=%d\naudio_channels=%s\n", v.master_volume.load(),
                  AudioChannelKeys[std::clamp(v.audio_channels.load(), 0, AudioChannelsCount - 1)].data());
+    std::fprintf(file, "dualsense_triggers=%d\ndualsense_hitflash=%d\ndualsense_qte=%d\ndualsense_speaker=%d\n"
+                       "dualsense_speaker_gain=%d\ndualsense_motion=%d\ndualsense_gyroaim=%d\n",
+                 int(v.dualsense_triggers.load()), int(v.dualsense_hitflash.load()), int(v.dualsense_qte.load()),
+                 int(v.dualsense_speaker.load()), v.dualsense_speaker_gain.load(), int(v.dualsense_motion.load()),
+                 int(v.dualsense_gyroaim.load()));
+    std::fprintf(file, "free_camera=%d\n", int(v.free_camera.load()));
     // Read by run.sh at start.
     std::fprintf(file, "live_resolution=%s\n", v.live_resolution < 0 ? "auto"
                                                   : v.live_resolution ? "1" : "0");
@@ -528,6 +584,7 @@ std::pair<int, int> UpscaleRenderSize(int preset, int width, int height) {
     const auto even = [](double value) { return int(std::round(value / 2.0) * 2.0); };
     const int w = std::clamp(even(width / scale), 640, 7680), h = std::clamp(even(height / scale), 360, 4320);
     if ((w == width && h == height) || (w == 1920 && h == 1080)) return {w - 2, h - 2};
+    if (h == 480) return {w, 478}; // at this height the game shows a third of the frame, zoomed in
     return {w, h};
 }
 
@@ -539,7 +596,7 @@ const char* PresetName(int preset) {
 }
 
 const char* UpscalerName(int upscaler) {
-    static constexpr const char* names[UpscalerCount] = {"off", "fsr3", "fsr4", "fsr411", "taa"};
+    static constexpr const char* names[UpscalerCount] = {"off", "fsr3", "fsr4", "fsr411", "taa", "fsr3ui"};
     return names[std::clamp(upscaler, 0, UpscalerCount - 1)];
 }
 
@@ -602,6 +659,7 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
             v.mouse_aim_style = 0;
             v.mouse_prompt_distance = 48;
             v.mouse_lock = true;
+            v.free_camera = false;
             SpartanSettings::Save();
             return 0;
         }
@@ -635,6 +693,24 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
                     + (selected ? "[ArrowSelectionR]" : "[ArrowSpacer]");
         return text(labels[row].c_str());
     }
+    // Controls' seventh row, the free camera: 0xf6d reads it, 0xf6e with arrows, 0xf6f toggles it.
+    if (function >= 0xf6d && function <= 0xf6f) {
+        const bool supported = v.free_camera_supported.load();
+        if (function == 0xf6f && supported) {
+            v.free_camera = !v.free_camera;
+            SpartanSettings::Save();
+        }
+        const char* language = std::getenv("SPARTAN_LANGUAGE");
+        const bool pt = language && (std::strcmp(language, "7") == 0 || std::strcmp(language, "17") == 0
+                                    || std::strncmp(language, "pt", 2) == 0 || std::strcmp(language, "br") == 0);
+        const char* value = !supported ? (pt ? "Indisponível" : "Unavailable")
+                          : v.free_camera ? (pt ? "Ligado" : "On") : (pt ? "Desligado" : "Off");
+        static thread_local std::string label;
+        const bool selected = function != 0xf6d;
+        label = std::string(selected ? "[ArrowSelectionL]" : "[ArrowSpacer]") + value
+              + (selected ? "[ArrowSelectionR]" : "[ArrowSpacer]");
+        return text(label.c_str());
+    }
     // Display menu, Upscaler (row 0) and Quality preset (row 1): value 0xf61/0xf62, left 0xf63/0xf64,
     // right 0xf65/0xf66, selected 0xf67/0xf68. Applied by Apply and Restart (GraphicsNeedRestart).
     if (function >= 0xf61 && function <= 0xf68) {
@@ -651,9 +727,9 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         };
         // The launcher's order (options.rs UPSCALERS, PRESETS).
 #ifdef _WIN32
-        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerFsr4, UpscalerFsr411, UpscalerTaa};
+        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerFsr3Ui, UpscalerFsr4, UpscalerFsr411, UpscalerTaa};
 #else
-        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerFsr4, UpscalerTaa};
+        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerFsr3Ui, UpscalerFsr4, UpscalerTaa};
 #endif
         const std::vector<int> presets{NativeAA, UltraQuality, Quality, Balanced, Performance, UltraPerformance};
         if (direction) {
@@ -665,6 +741,7 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         if (row == 0) {
             const int u = v.upscaler;
             value = u == UpscalerOff ? (pt ? "Desligado" : "Off") : u == UpscalerFsr3 ? "FSR 3.1"
+                  : u == UpscalerFsr3Ui ? "FSR 3.1 UI"
                   : u == UpscalerFsr4 ? "FSR 4" : u == UpscalerFsr411 ? "FSR 4.1" : u == UpscalerTaa ? "TAA" : UpscalerName(u);
             if ((u == UpscalerFsr4 && !v.fsr4_supported) || (u == UpscalerFsr411 && !v.fsr411_supported)) value += pt ? " (indisponível)" : " (unavailable)";
         } else {
@@ -729,9 +806,9 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         const auto names = SpartanGraphics::ResolutionNames();
         const auto aspect = [](const std::string& name) {
             const auto [w, h] = SpartanGraphics::ResolutionSize(name);
-            const char* labels[] = {"16:9", "16:10", "21:9", "32:9", "4:3"};
-            const double ratios[] = {16.0/9, 1.6, 2.37, 32.0/9, 4.0/3};
-            for (unsigned i = 0; i < 5; ++i) if (std::abs(double(w)/h - ratios[i]) < 0.05)
+            const char* labels[] = {"16:9", "16:10", "21:9", "32:9", "48:9", "4:3"};
+            const double ratios[] = {16.0/9, 1.6, 2.37, 32.0/9, 48.0/9, 4.0/3};
+            for (unsigned i = 0; i < 6; ++i) if (std::abs(double(w)/h - ratios[i]) < 0.05)
                 return std::string(labels[i]);
             const int divisor = std::gcd(w, h);
             return std::to_string(w/divisor) + ":" + std::to_string(h/divisor);
@@ -750,7 +827,7 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
             };
             if (index <= 1) {
                 std::vector<std::string> aspects;
-                for (const char* a : {"16:9", "16:10", "21:9", "32:9", "4:3"}) aspects.emplace_back(a);
+                for (const char* a : {"16:9", "16:10", "21:9", "32:9", "48:9", "4:3"}) aspects.emplace_back(a);
                 for (const auto& name : names) {
                     const auto a = aspect(name);
                     if (std::find(aspects.begin(), aspects.end(), a) == aspects.end()) aspects.push_back(a);
@@ -772,9 +849,8 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
                 v.render_resolution = resolution;
             } else if (index == 2) v.fps_limit = cycle(SpartanGraphics::FpsLimits, v.fps_limit);
             else if (index == 3) {
-                std::vector<int> rates;
-                for (int rate : SpartanGraphics::EngineFps) if (rate <= v.applied_engine_fps) rates.push_back(rate);
-                v.engine_fps = cycle(rates, v.engine_fps);
+                v.engine_fps = SpartanGraphics::StepEngineFps(SpartanSettings::EngineFpsChosen(), direction,
+                                                              v.applied_engine_fps);
             } else if (index == 4) {
                 std::vector<int> monitors{-1};
                 monitors.insert(monitors.end(), v.monitors.begin(), v.monitors.end());

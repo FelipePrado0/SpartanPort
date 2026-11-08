@@ -88,8 +88,10 @@ static void TestEngineFpsCap(const char* path) {
     assert(saved.find("engine_fps_cap") == std::string::npos);
     assert(v.engine_fps == 144);
 
-    // cycle_during_cap_keeps_choice: R3 + L1 + R1 goes on from 144, the cap stays until the QTE ends.
-    assert(SpartanSettings::CycleEngineFps() == 180);
+    // step_during_cap_keeps_choice: R3 + R1 steps from 144 (saved), the cap stays until the QTE ends.
+    assert(SpartanSettings::StepEngineFps(1) == 145 && SpartanSettings::StepEngineFps(-1) == 144);
+    v.engine_fps = 180;
+    assert(SpartanSettings::StepEngineFps(1) == 185 && SpartanSettings::StepEngineFps(-1) == 180);
     assert(v.engine_fps == 180 && SpartanSettings::EngineFpsNow() == 60);
     assert(Read(path).find("engine_fps=180\n") != std::string::npos);
     log = CaptureLog([] { SpartanSettings::SyncEngineFps(); });
@@ -187,6 +189,15 @@ static void TestEngineFpsCap(const char* path) {
     }
     SpartanSettings::Load();
     assert(v.auto_safe_fps);
+    // The slider's rates load back as saved; out of range or text is the default.
+    for (const auto& [text, rate] : {std::pair{"75", 75}, {"30", 30}, {"241", 120}, {"ninety", 120}}) {
+        {
+            std::ofstream out(path);
+            out << "engine_fps=" << text << "\n";
+        }
+        SpartanSettings::Load();
+        assert(v.engine_fps == rate);
+    }
     {
         std::ofstream out(path);
         out << "engine_fps=240\nauto_safe_fps=0\nengine_fps_cap=60\n";
@@ -219,7 +230,12 @@ int main() {
     assert(G::ParseMonitor(std::to_string(std::numeric_limits<int>::max() + 1LL)) == G::PrimaryMonitor);
     assert(G::ParseMonitor("99999999999999999999") == G::PrimaryMonitor);
     assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(144) == 144 && G::ParseFpsLimit(180) == 180 && G::ParseFpsLimit(100) == 100 && G::ParseFpsLimit(75) == 0);
-    assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 22);
+    assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 25);
+    // #964, #1038: 2880x1800 (16:10) and 5120x2880 (5K, 16:9).
+    assert(G::ParseResolution("2880x1800") == 22 && G::ParseResolution("5120x2880") == 23);
+    assert(G::ResolutionSize("5120x2880") == std::make_pair(5120, 2880));
+    // #719: 11520x2160 (48:9, three 4K screens).
+    assert(G::ParseResolution("11520x2160") == 24 && G::ResolutionSize("11520x2160") == std::make_pair(11520, 2160));
     // #238: 900p (1600x900) sits between 720p and 1440p in the built-in list.
     assert(G::Resolutions[3] == "900p" && G::Resolutions[2] == "720p" && G::Resolutions[4] == "1440p");
     // The window's starting size (window.cpp): built-in names, a mod's size, native otherwise.
@@ -231,11 +247,19 @@ int main() {
     assert(G::ResolutionSize("8K") == std::make_pair(7680, 4320));
     assert(G::ParseResolution("invalid") == 0);
     for (const auto name : G::Resolutions) assert(G::ResolutionSize(name).first > 0);
-    assert(G::ParseEngineFps(240) == 240 && G::ParseEngineFps(144) == 144 && G::ParseEngineFps(180) == 180 && G::ParseEngineFps(100) == 100 && G::ParseEngineFps(90) == 120);
-    // R3 + L1 + R1 / F9: the next rate this launch supports, back to 60 after the last.
-    assert(G::NextEngineFps(60, 240) == 100 && G::NextEngineFps(100, 240) == 120);
-    assert(G::NextEngineFps(120, 240) == 144 && G::NextEngineFps(144, 240) == 180 && G::NextEngineFps(180, 240) == 240 && G::NextEngineFps(240, 240) == 60);
-    assert(G::NextEngineFps(100, 120) == 120 && G::NextEngineFps(120, 120) == 60 && G::NextEngineFps(60, 60) == 60);
+    // Any whole rate from 30 to 240 (#831); anything else is the default 120.
+    assert(G::ParseEngineFps(240) == 240 && G::ParseEngineFps(144) == 144 && G::ParseEngineFps(75) == 75);
+    assert(G::ParseEngineFps(30) == 30 && G::ParseEngineFps(29) == 120 && G::ParseEngineFps(241) == 120);
+    assert(G::ParseEngineFps(0) == 120 && G::ParseEngineFps(-60) == 120);
+    // In-game arrows, R3 + R1 / L1 and F9 + arrows: steps of 5 with a stop at 144, a rate off the
+    // grid moves to the next stop that way, both ends stop (no wrap), never above the patch.
+    assert(G::StepEngineFps(60, 1, 240) == 65 && G::StepEngineFps(60, -1, 240) == 55);
+    assert(G::StepEngineFps(140, 1, 240) == 144 && G::StepEngineFps(144, 1, 240) == 145);
+    assert(G::StepEngineFps(145, -1, 240) == 144 && G::StepEngineFps(144, -1, 240) == 140);
+    assert(G::StepEngineFps(77, 1, 240) == 80 && G::StepEngineFps(77, -1, 240) == 75);
+    assert(G::StepEngineFps(240, 1, 240) == 240 && G::StepEngineFps(30, -1, 240) == 30);
+    assert(G::StepEngineFps(120, 1, 120) == 120 && G::StepEngineFps(118, 1, 120) == 120);
+    assert(G::StepEngineFps(200, -1, 120) == 115);  // a saved rate above this launch's patch
     assert(G::ParseFramesQueued(2) == 2 && G::ParseFramesQueued(0) == 0 && G::ParseFramesQueued(5) == 1);
     assert(G::ParseRcasStrength(100) == 100 && G::ParseRcasStrength(101) == 75 && G::ParseRcasStrength(-1) == 75);
     assert(G::RcasAttenuation(100) == 0.0f && G::RcasAttenuation(0) == 2.0f && G::RcasAttenuation(75) == 0.5f);
@@ -294,6 +318,23 @@ int main() {
     }
 
     {
+        // The launcher's SPARTAN_UPSCALER for one run (native HUD FSR outside 1920x1080) is not saved:
+        // the choice in the file stays, unless the menu picks another one.
+        {
+            std::ofstream out(path);
+            out << "upscaler=fsr3ui\n";
+        }
+        SetEnvironment("SPARTAN_UPSCALER", "fsr3");
+        SpartanSettings::Load();
+        assert(v.upscaler == SpartanSettings::UpscalerFsr3);
+        SpartanSettings::Save();
+        assert(Read(path).find("upscaler=fsr3ui\n") != std::string::npos);
+        v.upscaler = SpartanSettings::UpscalerFsr4;
+        SpartanSettings::Save();
+        assert(Read(path).find("upscaler=fsr4\n") != std::string::npos);
+        SetEnvironment("SPARTAN_UPSCALER", "");
+    }
+    {
         std::ofstream out(path);
         out << "render_resolution=8K\n";
     }
@@ -307,13 +348,13 @@ int main() {
         // ones and keep their names through a load and a save; repeated or built-in names are not added twice.
         SetEnvironment("SPARTAN_EXTRA_RESOLUTIONS", "3840x1080;2880x1200;;2880x1200;4K;3440x1440");
         const auto names = G::ResolutionNames();
-        assert(names.size() == 25 && names[22] == "8K" && names[23] == "3840x1080" && names[24] == "2880x1200");
+        assert(names.size() == 28 && names[25] == "8K" && names[26] == "3840x1080" && names[27] == "2880x1200");
         {
             std::ofstream out(path);
             out << "render_resolution=2880x1200\n";
         }
         SpartanSettings::Load();
-        assert(v.render_resolution == 24);
+        assert(v.render_resolution == 27);
         SpartanSettings::Save();
         assert(Read(path).find("render_resolution=2880x1200\n") != std::string::npos);
         SetEnvironment("SPARTAN_EXTRA_RESOLUTIONS", "");  // the mod is off: its resolution is unknown, so native
@@ -428,6 +469,46 @@ int main() {
     }
 
     {
+        // Anti-aliasing of the finished frame (aa_pass.cpp): off unless asked, text keys in the ini.
+        assert(G::ParseAntiAliasing("off") == G::AaOff && G::ParseAntiAliasing("fxaa") == G::AaFxaa &&
+               G::ParseAntiAliasing("smaa") == G::AaSmaa);
+        assert(G::ParseAntiAliasing("bogus") == G::AaOff && G::ParseAntiAliasing("2") == G::AaSmaa);
+        assert(G::ParseAntiAliasing("") == G::AaOff && G::ParseAntiAliasing("none") == G::AaOff);
+        // Too small an image is left alone, and so is "off".
+        assert(G::AaPassRuns(G::AaFxaa, 1920, 1080) && G::AaPassRuns(G::AaSmaa, 1280, 720));
+        assert(!G::AaPassRuns(G::AaOff, 1920, 1080) && !G::AaPassRuns(G::AaSmaa, 8, 8));
+        // Colour spaces: an sRGB view is sampled as linear light, the 10-bit and HDR buffers are not.
+        assert(G::AaInputIsLinear(false, false) && !G::AaInputIsLinear(true, false) &&
+               !G::AaInputIsLinear(false, true));
+        {
+            std::ofstream out(path);
+            out << "anti_aliasing=smaa\n";
+        }
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaSmaa);
+        SpartanSettings::Save();
+        assert(Read(path).find("anti_aliasing=smaa\n") != std::string::npos);
+        SetEnvironment("SPARTAN_ANTI_ALIASING", "fxaa");
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaFxaa);
+        SetEnvironment("SPARTAN_ANTI_ALIASING", "");
+        {
+            std::ofstream out(path);
+            out << "anti_aliasing=garbage\n";
+        }
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaOff);
+        SpartanSettings::Save();
+        assert(Read(path).find("anti_aliasing=off\n") != std::string::npos);
+        {
+            std::ofstream out(path);
+            out << "vsync=1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.anti_aliasing == G::AaOff);  // not in the file: off
+    }
+
+    {
         std::ofstream out(path);
         out << "cheat_double_jumps=1\ncheat_very_hard=1\n";
     }
@@ -519,10 +600,19 @@ int main() {
     v.mouse_prompt_distance = 16;
     spartanportgpu_native_setting(0xfae);
     assert(v.mouse_prompt_distance == 16);
+    // Controls' free camera row: unavailable without the hook, else On/Off, toggled by 0xf6f.
+    v.free_camera_supported = false;
+    v.free_camera = false;
+    assert(std::string(text(0xf6f)).find("Unavailable") != std::string::npos && !v.free_camera);
+    v.free_camera_supported = true;
+    assert(std::string(text(0xf6d)) == "[ArrowSpacer]Off[ArrowSpacer]");
+    assert(std::string(text(0xf6f)) == "[ArrowSelectionL]On[ArrowSelectionR]" && v.free_camera);
+    assert(Read(path).find("free_camera=1\n") != std::string::npos);
+    assert(std::string(text(0xf6e)).find("On") != std::string::npos);
     v.anisotropy = 16;
     spartanportgpu_native_setting(0xfb7);
     assert(v.vibration == 100 && v.mouse_aim_sensitivity == 100 && v.mouse_prompt_distance == 48);
-    assert(v.mouse_lock && v.mouse_aim_style == 0 && v.anisotropy == 16);
+    assert(v.mouse_lock && v.mouse_aim_style == 0 && v.anisotropy == 16 && !v.free_camera);
     v.cheats_supported = 0;
     v.cheats[0] = false;
     assert(std::string(text(0xf10)) == "Unavailable" && !v.cheats[0]);
@@ -544,6 +634,15 @@ int main() {
     SpartanSettings::Load();
     assert(std::string(text(0xf07)) == "On");
     assert(std::string(text(0xf17)) == "Off" && !v.auto_qte);
+    // Free camera: off by default, kept in the ini (the launcher writes the same key).
+    v.free_camera = true;
+    SpartanSettings::Save();
+    assert(Read(path).find("free_camera=1\n") != std::string::npos);
+    v.free_camera = false;
+    SpartanSettings::Load();
+    assert(v.free_camera);
+    v.free_camera = false;
+    SpartanSettings::Save();
     v.red_orbs_supported = true;
     v.orb_pickup_supported = true;
     v.damage_supported = true;
@@ -691,9 +790,21 @@ int main() {
     v.engine_fps_int_global = &live_fps_integer;
     v.applied_engine_fps = 240;
     spartanportgpu_native_setting(0xfd3);
-    assert(v.engine_fps == 180);
+    assert(v.engine_fps == 235);
     SpartanSettings::SyncEngineFps();
-    assert(live_fps == 180 && live_fps_integer == 180);
+    assert(live_fps == 235 && live_fps_integer == 235);
+    spartanportgpu_native_setting(0xfe3);  // the top stops: no wrap to the lowest
+    spartanportgpu_native_setting(0xfe3);
+    assert(v.engine_fps == 240 && std::string(text(0xfc3)) == "[ArrowSpacer]240[ArrowSpacer]");
+    v.engine_fps = 142;  // a slider value off the grid: the next stop each way
+    spartanportgpu_native_setting(0xfe3);
+    assert(v.engine_fps == 144);
+    v.engine_fps = 31;
+    spartanportgpu_native_setting(0xfd3);
+    spartanportgpu_native_setting(0xfd3);
+    assert(v.engine_fps == 30 && Read(path).find("engine_fps=30\n") != std::string::npos);
+    SpartanSettings::SyncEngineFps();
+    assert(live_fps == 30 && live_fps_integer == 30);
     assert(!SpartanSettings::GraphicsNeedRestart());
     v.engine_fps_global = nullptr;
     v.engine_fps_int_global = nullptr;

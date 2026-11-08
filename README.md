@@ -11,6 +11,15 @@
 
 <p align="center">
   <a href="https://discord.gg/WYvr634563"><img src="https://img.shields.io/badge/OFFICIAL_DISCORD-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Join the official SpartanPort Discord" height="40"></a>
+  <a href="https://spartanport.com/en"><img src="https://img.shields.io/badge/WEBSITE-8B0000?style=for-the-badge&amp;logoColor=white" alt="SpartanPort website" height="40"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/FelipePrado0/SpartanPort/releases"><img src="https://img.shields.io/github/downloads/FelipePrado0/SpartanPort/total?style=flat-square&amp;label=downloads&amp;color=8B0000" alt="downloads"></a>
+  <a href="https://github.com/FelipePrado0/SpartanPort/releases/latest"><img src="https://img.shields.io/github/v/release/FelipePrado0/SpartanPort?display_name=release&amp;label=version&amp;style=flat-square&amp;color=8B0000" alt="version"></a>
+  <a href="https://github.com/FelipePrado0/SpartanPort/stargazers"><img src="https://img.shields.io/github/stars/FelipePrado0/SpartanPort?label=stars&amp;style=flat-square&amp;color=8B0000" alt="stars"></a>
+  <a href="https://github.com/FelipePrado0/SpartanPort/issues?q=is%3Aissue+is%3Aclosed"><img src="https://img.shields.io/github/issues-closed-raw/FelipePrado0/SpartanPort?label=closed%20issues&amp;style=flat-square&amp;color=8B0000" alt="closed issues"></a>
+  <a href="#contributors"><img src="https://img.shields.io/github/contributors/FelipePrado0/SpartanPort?style=flat-square&amp;label=contributors&amp;color=8B0000" alt="contributors"></a>
 </p>
 
 **English** | [Português (Brasil)](https://github.com/FelipePrado0/SpartanPort/blob/main/README.pt-BR.md) | [Español](https://github.com/FelipePrado0/SpartanPort/blob/main/README.es.md)
@@ -23,56 +32,109 @@ and Linux (experimental AppImage).
 > This project is not affiliated with or endorsed by Sony Interactive Entertainment or Santa Monica Studio.
 > God of War is a trademark of Sony Interactive Entertainment.
 
-> **Formerly gow3_pc.** Versions before 2.8.0 do not carry over: download 2.8.0 from the
-> [releases page](https://github.com/FelipePrado0/SpartanPort/releases) and install it fresh. To
-> keep your saves and settings on Windows, copy these from the old folder to the new one, when you
-> have them: `user/`, `mods/`, `spartanport.ini`, `settings.json`, `mods.json`,
-> `mods_presets.json`, `patches.json` and `gamecontrollerdb.txt`. From 2.5.0 or older, copy
-> `gow3.ini` as `spartanport.ini`, and take `settings.json` from `%APPDATA%\gow3-launcher`. On
-> Linux, replace the AppImage (now `spartanport-x86_64.AppImage`: update Steam launch options that
-> use the old file name). From 2.5.0 or older, also copy `~/.local/share/gow3` into
-> `~/.local/share/spartanport` (without `user/cache` and `out/`), rename `gow3.ini` there to
-> `spartanport.ini`, and copy `~/.config/gow3-launcher/settings.json` next to it. If you updated
-> 2.6.0 or 2.7.0 from inside the launcher, delete `God of War III.exe` and `_internal/` from its
-> folder, and the old `God of War III` desktop shortcut: they still start the old launcher.
+<p align="center">
+  <img src="docs/images/releases/3.0.0/launcher-home.jpg" alt="SpartanPort launcher home page" width="720">
+</p>
+
+<details>
+<summary><b>Updating from gow3_pc (versions before 2.8.0)</b></summary>
+
+Versions before 2.8.0 do not carry over: download 2.8.0 from the
+[releases page](https://github.com/FelipePrado0/SpartanPort/releases) and install it fresh. To
+keep your saves and settings on Windows, copy these from the old folder to the new one, when you
+have them: `user/`, `mods/`, `spartanport.ini`, `settings.json`, `mods.json`,
+`mods_presets.json`, `patches.json` and `gamecontrollerdb.txt`. From 2.5.0 or older, copy
+`gow3.ini` as `spartanport.ini`, and take `settings.json` from `%APPDATA%\gow3-launcher`.
+
+On Linux, replace the AppImage (now `spartanport-x86_64.AppImage`: update Steam launch options that
+use the old file name). From 2.5.0 or older, also copy `~/.local/share/gow3` into
+`~/.local/share/spartanport` (without `user/cache` and `out/`), rename `gow3.ini` there to
+`spartanport.ini`, and copy `~/.config/gow3-launcher/settings.json` next to it.
+
+If you updated 2.6.0 or 2.7.0 from inside the launcher, delete `God of War III.exe` and `_internal/`
+from its folder, and the old `God of War III` desktop shortcut: they still start the old launcher.
+
+</details>
 
 ## Contents
 
 - [SpartanPort](#spartanport)
   - [Contents](#contents)
+  - [System requirements](#system-requirements)
   - [Download and play](#download-and-play)
   - [Linux (AppImage, experimental)](#linux-appimage-experimental)
   - [What works](#what-works)
-  - [Feature availability](#feature-availability)
   - [Settings](#settings)
-  - [Keyboard controls](#keyboard-controls)
+    - [Upscaling](#upscaling)
+    - [Menu language](#menu-language)
+    - [Without the launcher](#without-the-launcher)
+  - [Controls](#controls)
   - [Importing shadPS4 saves](#importing-shadps4-saves)
   - [Third-party overlays (Windows)](#third-party-overlays-windows)
   - [Troubleshooting](#troubleshooting)
-  - [Performance and compatibility](#performance-and-compatibility)
+  - [Reporting a bug](#reporting-a-bug)
   - [Building from source](#building-from-source)
     - [Windows](#windows)
     - [Linux (Ubuntu 24.04)](#linux-ubuntu-2404)
+    - [Rust launcher](#rust-launcher)
     - [Linux (Arch Linux)](#linux-arch-linux)
   - [Tests](#tests)
-    - [Python](#python)
-    - [Windows C++ tests (MSYS2 CLANG64)](#windows-c-tests-msys2-clang64)
-    - [Linux C/C++ tests](#linux-cc-tests)
-    - [Checks using a prepared game](#checks-using-a-prepared-game)
+  - [Contributing](#contributing)
   - [How it works](#how-it-works)
   - [Credits](#credits)
+  - [Contributors](#contributors)
   - [License](#license)
+
+## System requirements
+
+<p align="center"><img src="docs/images/system-requirements.jpg" alt="SpartanPort system requirements for 720p 60, 1080p 60 and 4K 60" width="900"></p>
+
+| | Minimum (720p 60) | Recommended (1080p 60) | 4K 60 |
+|---|---|---|---|
+| CPU | 4 cores with AVX, Haswell or newer (i5-4570, Ryzen 3 1200) | 6 cores / 12 threads: Ryzen 5 3600, i5-10400 or Xeon E5 v3/v4 | Ryzen 5 5600X, i5-12400 |
+| GPU | GTX 1050 Ti 4 GB / RX 570 4 GB | GTX 1660 Super / RX 580 8 GB | RTX 3070 / RX 6700 XT (FSR); native: RTX 3080 / RX 6800 XT |
+| VRAM | 4 GB | 6 GB or 8 GB | 10 GB or more |
+| RAM | 8 GB + 16 GB page file | 16 GB | 16 to 32 GB |
+| Settings | Shadows off, 60 FPS engine | Default | FSR Quality or native |
+
+These tiers are estimates from community reports and the test system. They are not measured on
+every card and do not guarantee performance.
+
+**Reference result:** an AMD Radeon RX 6700 XT, Ryzen 5 5600X and 32 GB averaged 144 FPS (55 to
+240) at native 1080p with the 240 FPS engine frame rate. The game was played from start to finish
+on that system.
+
+**Also needed**
+
+- Windows 10 (1903 or newer) or Windows 11, 64-bit. On Linux, glibc 2.39 or newer (see
+  [Linux](#linux-appimage-experimental)).
+- A graphics driver with Vulkan 1.3, kept up to date.
+- A CPU with AVX. CPUs without MOVBE, BMI1 or LZCNT (Ivy Bridge and older, including Xeon E5 v2,
+  and AMD FX) run through emulated instructions whose performance has not been measured. Prefer
+  Haswell (Xeon E5 v3) or newer.
+- A page file on C: of 16384 MB initial and 24576 MB maximum if the game closes with
+  `error 1450` (see [Troubleshooting](#troubleshooting)).
+- An SSD for the game and the shader cache. Shaders compile while you play and load from disk
+  on later runs.
+- Your copy of the game: CUSA01623 or CUSA01715, version 01.00 or 01.02.
+
+**Feature requirements**
+
+- FSR 4: AMD Radeon RX 6000 or newer and Intel Arc (see [Upscaling](#upscaling)).
+- Frame generation: an upscaler must be selected.
+
+**Limited support**
+
+- AMD Polaris (RX 400 and RX 500, including RX 580): an intermittent `SurfaceFormat` crash is
+  under investigation ([#1181](https://github.com/FelipePrado0/SpartanPort/issues/1181)).
+- Intel integrated graphics: crashes and rendering errors are under investigation.
+- Cards with less than 4 GB of VRAM can close with `ErrorOutOfDeviceMemory`. Lower the render
+  resolution.
 
 ## Download and play
 
-- Windows 10 (1903 or newer) or Windows 11, 64-bit.
-- A 64-bit processor with AVX: Intel Sandy Bridge (2011) or newer, AMD FX or newer. On CPUs without
-  MOVBE, BMI1 or LZCNT (Sandy/Ivy Bridge, AMD FX) the loader rewrites the game's instructions that
-  use them to emulated stubs and logs an `ISA:` line; performance on those CPUs has not been
-  measured yet. Older CPUs stop at start with a `STOP: this CPU lacks` line in the log.
-- A graphics card with Vulkan 1.3 and a current driver.
-- Your copy of the game (the folder with `eboot.bin`, `sce_module` and `sce_sys`). Tested:
-  CUSA01623 and CUSA01715, versions 01.00 and 01.02.
+You need a PC that meets the [system requirements](#system-requirements) and your copy of the game
+(the folder with `eboot.bin`, `sce_module` and `sce_sys`).
 
 **Steps**
 
@@ -131,12 +193,11 @@ Arch and openSUSE Tumbleweed; this does not establish gameplay compatibility on 
    ```
 3. Choose your game folder, save the settings and press **PLAY**.
 
-If an older download reports `GLIBC_2.44 not found`, download the rebuilt AppImage again.
-The AppImage updates itself: **Advanced → Check for updates** (or the notice when the launcher opens) downloads the newer AppImage from the release, checks its SHA-256 and replaces the file. It needs a writable folder; otherwise it opens the releases page.
-Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 AppImage.
+The AppImage updates itself: **Advanced → Check for updates** (or the notice when the launcher
+opens) downloads the newer AppImage from the release, checks its SHA-256 and replaces the file. It
+needs a writable folder; otherwise it opens the releases page.
 
-- **Files:** saves, settings, shader cache and the log are in `~/.local/share/spartanport`; the launcher's
-  own settings in `~/.config/spartanport-launcher`.
+- **Files:** see [where the files are](#settings).
 - **Update folder:** if the update was dumped apart from the game, choose it under **Game → Update
   folder**. It is laid over the game folder without changing either.
 - **Advanced → Linux:** window system (automatic, Wayland or X11), GameMode and MangoHud. Only the
@@ -147,7 +208,8 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
   the Windows launcher (not tested there yet).
 - **Steam Deck / SteamOS (Gaming Mode):** if Steam tries to launch the AppImage with Proton, open
   the shortcut's **Properties → Compatibility** and select **Steam Linux Runtime** instead of Proton.
-  The AppImage is a native Linux application. If it fails to launch using **Steam Linux Runtime**, open the shortcut’s **Properties → Compatibility** and select **Default** to use the host libraries instead.
+  The AppImage is a native Linux application. If it fails to launch using **Steam Linux Runtime**,
+  select **Default** there to use the host libraries instead.
 - **Menu entry:** the AppImage writes `~/.local/share/applications/spartanport.desktop` when it starts, so
   the launcher and the game window show their icon in the dock; **Advanced → Linux** turns it off and
   removes the entry. When another tool (Gear Lever, AppImageLauncher…) already made an entry that
@@ -155,134 +217,91 @@ Steam Deck/RADV rendering corruption is a known issue in the published 2.2.0 App
 
 ## What works
 
-- Opening, menus, video cutscenes (H.264) and gameplay.
-- Audio: music, voices and effects (ATRAC9 and MP3).
-- Controller (DualSense, Xbox and others, through SDL3) and keyboard at the same time, both
-  remappable.
-- **In-game button icons** (opt-in, off by default): the PlayStation button icons in the game can
-  show your controller's, Xbox or Nintendo ones, or the keyboard keys you play with (Game page, Controls).
-- Saving and loading: the save list is shown on screen, as on the PS4. Autosave works too. The
-  launcher backs the saves up before every start.
-- Patches: render resolution of 480p, 720p, 900p, 1440p, 1800p or 4K, corrupted texture fix and skip
-  videos with the X button (community); engine frame rate of 120 FPS (kvicken), 100 FPS (for 100 Hz displays),
-  144 FPS (for 144 Hz displays) or 240 FPS (adapted by Felipe Prado).
-- **Ultrawide (beta):** 21:9, 32:9 and 16:10 render resolutions (3440x1440 tested) with a wider field of view
-  instead of a zoomed-in picture, built in: choose one in **Render resolution**, where every size shows its exact
-  resolution and aspect ratio. Cutscenes keep their 16:9 borders (see [docs/ultrawide.md](docs/ultrawide.md)).
-  Mods can also carry game patches; the [Ultrawide mod](extras/mods/Ultrawide) is the same sizes for older versions.
-  **How to install a mod:** put its `.zip` (do not unzip it) in the `mods` folder next to `SpartanPort.exe`;
-  the game unpacks it by itself. The Ultrawide mod and a one-click installer for 2.2.0 are explained in
-  [extras/mods/Ultrawide](extras/mods/Ultrawide/README.md).
-- **Background shader compilation:** saved pipelines load and compile in the background while
-  you play. Stutters, missing effects during compilation and temporary FPS drops can still occur;
-  startup time depends on the cache, graphics driver and CPU.
-- **Launcher** in the game's colors, with selectable languages and English fallback: five pages
-  (**Home, Graphics, Performance, Game, Advanced**) and a **Save** button for pending changes;
-  quick settings on the home page, graphics,
-  performance, game folder and save backups, patches, mods (order, presets and conflicts),
-  controls with PlayStation or Xbox button icons, updates and diagnostics.
-- **Save restore:** Game → Save backups lists automatic snapshots, older snapshots in the
-  port folder and permanent before-restore snapshots, with their source, time, game IDs,
-  file count, size and full path. Restoring verifies copies and keeps the previous saves in
-  `<user>/save-restore-safety/<time>/savedata`, outside the ten automatic backups' retention.
-  These safety copies are not automatically deleted. The launcher warns about a different
-  game ID without rewriting it and refuses a restore while a native game process is detected.
-- **In-game menu** (Insert on the keyboard, R3+L2 on the controller), with four tabs:
-  - **Game:** cheats (infinite health, magic, item meter, Rage of Sparta, max red orbs,
-    automatic QTE: button and stick-rotation prompts answer themselves);
-    multipliers from 0.1x to 100x for red, green (health), blue (magic) and gold (Rage of
-    Sparta) orbs and for damage dealt and taken; an enemy health bar.
-  - **Image:** display mode (windowed, borderless, fullscreen), VSync and RCAS sharpening.
-  - **Performance:** frame rate limit (30 to unlimited), frames queued, background shader
-    compiling; render resolution, engine frame rate and GPU readback options apply with one
-    "Apply and restart" button.
-  - **Overlay:** a performance overlay with FPS, frametime, upscaler, GPU (name and use), CPU,
-    RAM and VRAM, each optional, with font size, corner, background opacity and layout. The
-    numbers are the game's own use, not the whole system's.
+| Feature | Status | Where / how to turn it on | Details |
+|---|---|---|---|
+| Gameplay, menus, cutscenes | Works | Always | H.264 videos |
+| Audio | Works | Always | Music, voices and effects (ATRAC9, MP3) |
+| Controller and keyboard | Works | Game → Controls | SDL3, both at the same time, remappable |
+| Saves and autosave | Works | Always | Save list on screen, as on the PS4 |
+| Save backups and restore | Works | Game → Save backups | A backup before every start |
+| Resolution and frame rate patches | Works | Home / Performance | 480p to 4K; 100, 120, 144 or 240 FPS engine |
+| Ultrawide | Beta | Render resolution | 21:9, 32:9 and 16:10; [docs/ultrawide.md](docs/ultrawide.md) |
+| Upscaling (FSR 3.1, FSR 4, TAA) | Works | Graphics → Upscaling (off) | FSR 4: RX 6000 or newer and Arc; [Upscaling](#upscaling) |
+| Frame generation (FSR 2x) | Experimental | Graphics → Upscaling (off) | Needs an upscaler |
+| Background shader compilation | Works | Performance → Shaders (on) | Stutters can still happen the first time |
+| In-game menu | Works | Insert / R3+L2 | Tabs below |
+| Performance overlay | Works | Graphics → Overlay or Insert → Overlay (off) | FPS, frametime, GPU, CPU, RAM, VRAM |
+| Trophies | Works | F8 / R3+R2 | Four notification themes; [docs/TROPHIES.md](docs/TROPHIES.md) |
+| In-game button icons | Works | Controls (off) | Xbox, Nintendo or keyboard; [docs/CONTROLS.md](docs/CONTROLS.md) |
+| Free camera | Experimental | Controls (off), G / R3 in play | [docs/CONTROLS.md](docs/CONTROLS.md#free-camera-experimental) |
+| Mods | Works | `.zip` in the `mods` folder | [docs/MODS.md](docs/MODS.md) |
+| Linux | Experimental | `spartanport-x86_64.AppImage` | glibc 2.39 or newer; [Linux](#linux-appimage-experimental) |
 
-  The menu follows the launcher's language (English, Portuguese, Spanish, French, German,
-  Italian, Polish, Turkish, Indonesian, Russian or Chinese), or the one chosen at the top of its
-  **Game** tab, at once (see [Menu language](#menu-language)).
-- **Trophies** (F8, or R3+R2 on the controller): every trophy with its official name and what it
-  asks, its grade, how many players earned it, and filters by state and grade; unlock
-  notifications in four themes, with your own sounds and pictures if you want. See
-  [docs/TROPHIES.md](docs/TROPHIES.md).
+**In-game menu tabs**
 
-## Feature availability
+- **Game:** cheats (infinite health, magic, item meter and Rage of Sparta, max red orbs, automatic
+  QTE), multipliers from 0.1x to 100x for orbs and damage, and an enemy health bar.
+- **Image:** display mode, VSync and RCAS sharpening.
+- **Performance:** frame rate limit, frames queued and background shader compiling; render
+  resolution, engine frame rate and GPU readback options apply with "Apply and restart".
+- **Overlay:** the items shown, font size, corner, background opacity and layout. The numbers are
+  the game's own use, not the whole system's.
 
-Availability checked against [release 2.2.0](https://github.com/FelipePrado0/SpartanPort/releases/tag/windows-v2.2.0) and the source on October 14, 2026.
-
-| Feature | Published 2.2.0 packages | Current source |
-|---|---|---|
-| Windows ZIP / experimental Linux AppImage | Available | Build scripts available |
-| Startup black-screen patch / controller button icons | Included | Included |
-| Discord Rich Presence | Not included | Optional under Advanced, off by default; game name and elapsed time |
-| RADV sparse-queue fix | Not included | Merged into `main` |
-| FSR 3.1, FSR 4, FSR 4.1, TAA | Disabled | Graphics → Upscaling and the in-game menus ([details](#upscaling)) |
-| FSR 1 | Disabled | Disabled in the launcher/game settings path |
-| RCAS sharpening | Available | Available |
-
-The Linux AppImage was rebuilt on October 14 for glibc 2.39 or newer. The Windows and Linux
-packages can use different source revisions. Check the release notes for changes to later downloads.
+The menu follows the launcher's language (see [Menu language](#menu-language)).
 
 ## Settings
 
-Settings are kept in `spartanport.ini` (the game and the in-game menu) and in
-`settings.json` (the launcher), in the port folder. Saves, the shader cache and
-`last_run.log` go to the project's `user` folder.
+**Where the files are**
+
+| What | Windows | Linux |
+|---|---|---|
+| Game and in-game menu settings (`spartanport.ini`) | Port folder | `~/.local/share/spartanport` |
+| Launcher settings (`settings.json`) | Port folder | `~/.config/spartanport-launcher` |
+| Saves | `user\savedata\1\<game ID>\` | `~/.local/share/spartanport/user/savedata/1/<game ID>/` |
+| Shader cache | `user\cache\` | `~/.local/share/spartanport/user/cache/` |
+| Log | `user\last_run.log` and `user\last_run.jsonl` | `~/.local/share/spartanport/user/` |
+
+The port folder is the one with `SpartanPort.exe`; `user\` is next to it. With a custom **Saves
+folder**, the saves and the log go there.
 
 **GUI Scale:** choose **Auto (fits the screen)** (the default), **1x** or **1.5x** under
 **Advanced → Launcher**, then click **Save**. Text, controls and layout resize together, without
-changing game resolution. Auto follows the desktop scale the window system reports (Windows display
-scaling, Retina on macOS, the Wayland or X11 scale on Linux), lowered when needed so the
-1280 × 800 window fits in 90 % of the monitor, and never below 1x. It is worked out again when
-the window moves to a monitor with another scale. 1x and 1.5x are fixed sizes in screen pixels,
-whatever the desktop scale. The choice is saved in `settings.json`.
+changing game resolution. Auto follows the desktop scale the window system reports, lowered when
+needed so the 1280 × 800 window fits in 90 % of the monitor, and never below 1x. 1x and 1.5x are
+fixed sizes in screen pixels.
 
-On **Performance → GPU data → Stream buffer memory**, choose **System RAM (cached, default)**,
-**System RAM (uncached)** or **GPU memory (previous behavior)**. System RAM can improve frame
-rates on NVIDIA laptops. The choice is saved and applies on the next game launch, including
-when using `Play SpartanPort.exe` or `--play`. Choose GPU memory to restore the previous
-allocation behavior. For direct launches without the launcher, `SPARTAN_STREAM_MEMORY` accepts
-`cached`, `host` or `device`; the launcher's saved choice takes precedence when using it.
+**Performance → GPU data** (each applies on the next game launch)
 
-On **Performance → GPU data → Game multisampling**, **Automatic** lets the game decide by the
-graphics card it runs on: it creates the game's multisampled images with a single sample on
-AMD's and Intel's Windows drivers, where reading the 2-sample depth buffer as a texture
-produced black lines in the lighting (Radeon RX 6600 family, Arc), and keeps them multisampled
-elsewhere (NVIDIA). The label names the card and the decision, for example "Automatic (Intel(R)
-Arc(TM) A750 Graphics: off)", and follows the **Graphics card** choice. The rule covers every
-GPU on those two drivers, integrated ones included; the game's log line `GPU: guest
-multisampling off` or `on` is what was applied. Choose **Off** if the lines appear on another
-card and **On** to keep multisampling anyway. Off and On set `SPARTAN_NO_MSAA=1` or `0`; Automatic
-passes an inherited `SPARTAN_NO_MSAA` through. Applies on the next game launch.
+| Option | Values | Default | When to change it |
+|---|---|---|---|
+| Graphics card | Automatic, or one of your cards | Automatic | The game runs on the integrated card: choose the dedicated one |
+| Stream buffer memory | System RAM (cached), System RAM (uncached), GPU memory | System RAM (cached) | GPU memory restores the behavior before this option; System RAM can raise FPS on NVIDIA laptops |
+| Game multisampling | Automatic, Off, On | Automatic | Black lines in the lighting: Off. To keep multisampling anyway: On |
+| Deferred GPU readbacks | On, Off | On | Textures or shadows look wrong: Off (can cause stutters) |
+| GPU readbacks | Relaxed, Off, Precise | Relaxed | Only when a fix asks for it |
+
+**Automatic** multisampling uses a single sample on AMD's and Intel's Windows drivers, integrated
+cards included, where the 2-sample depth buffer drew black lines in the lighting (Radeon RX 6600
+family, Arc), and keeps multisampling elsewhere (NVIDIA). Its label names the card and the
+decision, and the log line `GPU: guest multisampling off` or `on` shows what was applied.
 
 ### Upscaling
 
 Choose the upscaler and the quality preset under **Graphics → Upscaling**, in the in-game
-**Display** menu or in the **Insert** menu (**Image**). The three show the same values. Off is
-the default. A preset renders a share of the Render resolution and the upscaler rebuilds the
-full resolution; each preset shows the size it renders at. Changes apply on restart (**Apply
-and Restart** in the game).
+**Display** menu or in the **Insert** menu (**Image**). Off is the default. A preset renders a
+share of the render resolution and the upscaler rebuilds the full resolution; each preset shows
+the size it renders at. Changes apply on restart (**Apply and Restart** in the game).
 
-- **FSR 3.1:** every graphics card.
-- **FSR 4:** the open FSR 4 model, included. For AMD Radeon RX 6000 or newer and Intel Arc;
-  Windows and Linux.
-- **TAA:** anti-aliasing at the full resolution, no upscaling.
+| Upscaler | Graphics cards | Systems | Notes |
+|---|---|---|---|
+| FSR 3.1 | Every card | Windows, Linux | Used instead of FSR 4.1 where that is not available |
+| FSR 4 | AMD Radeon RX 6000 or newer, Intel Arc | Windows, Linux | The open FSR 4 model, included |
+| FSR 4.1 | AMD Radeon RX 7000 and RX 9000 (not yet confirmed) | Windows | Needs the AMD driver's Vulkan runtime (`amdvkffx64.dll`, Adrenalin 26.10.1 or newer). RX 6000 has it for DirectX 12 only and uses FSR 3.1; the menu says why (**Insert → Image**) |
+| TAA | Every card | Windows, Linux | Anti-aliasing at the full resolution, no upscaling |
 
-AMD FSR frame generation (2x) adds one generated frame between game frames. Enable it
-under **Graphics > Frame generation** or in the in-game menus, with an upscaler selected.
-It applies live; disabling it returns to the game frames without changing the upscaler.
-
-#### FSR 4.1 (AMD, Windows)
-
-FSR 4.1 runs through AMD's Vulkan runtime (`amdvkffx64.dll`), which comes with the AMD driver
-(Adrenalin 26.10.1 or newer).
-
-- RX 7000 and RX 9000: the driver should include it. Not yet confirmed; reports are welcome.
-- RX 6000: the current driver ships FSR 4.1 for DirectX 12 only, without the Vulkan runtime.
-  SpartanPort uses FSR 3.1 instead and says why in the in-game menu (**Insert → Image**).
-- NVIDIA and Intel: FSR 3.1.
+AMD FSR frame generation (2x) adds one generated frame between game frames. Enable it under
+**Graphics → Upscaling** or in the in-game menus, with an upscaler selected. It applies live;
+disabling it returns to the game frames without changing the upscaler.
 
 ### Menu language
 
@@ -293,25 +312,37 @@ tab (and of the trophy window's **Notifications** page), switches them at once a
 `spartanport.ini` (`ui_language`); **Same as the launcher** follows the launcher again. The trophy
 names change with it (the launcher writes them in every language in `user/trophy_texts/`). This
 does not change the game's own text or voice language. Arabic, Japanese and Korean keep the menu
-in English: its font does not draw them. The `ui-language-test` CMake target checks that every
-language has every text and keeps each printf format's arguments.
+in English: its font does not draw them.
 
-#### Chinese
+**Chinese:** select **简体中文** under **Advanced → Launcher language**. Direct launches without
+the launcher can set `SPARTAN_UI_LANGUAGE=zh`. The launcher prefers an installed CJK font (Microsoft
+YaHei UI on Windows, Noto Sans CJK SC or another available CJK family elsewhere). The in-game menu
+merges an installed Chinese font with its embedded font: Windows YaHei/SimHei, common Linux
+Noto/WenQuanYi locations, or macOS PingFang. No additional font is distributed. If no usable CJK
+font is found, the in-game menu keeps English and logs the reason instead of displaying
+missing-glyph boxes.
 
-Select **简体中文** under **Advanced → Launcher language** for the launcher and the
-Insert / R3+L2 menu. Direct launches without the launcher can set `SPARTAN_UI_LANGUAGE=zh`.
+### Without the launcher
 
-The launcher prefers an installed CJK font (Microsoft YaHei UI on Windows, Noto Sans CJK SC
-or another available CJK family elsewhere). The in-game menu merges an installed Chinese
-font with its embedded font: Windows YaHei/SimHei, common Linux Noto/WenQuanYi locations,
-or macOS PingFang. No additional font is distributed. If no usable CJK font is found, the
-in-game menu keeps English and logs the reason instead of displaying missing-glyph boxes.
+`run.sh` and direct starts read these variables. When you start through the launcher, its saved
+settings win.
 
-The headless `chinese-ui-test` CMake target checks translation fallback, printf arguments,
-font merging and Chinese glyphs without a game dump or Vulkan device. Its real glyph checks
-are skipped, with a message, on systems without an installed CJK font.
+| Variable | Values | What it sets |
+|---|---|---|
+| `SPARTAN_GAME_DIR` | Folder path | The game folder for `run.sh` |
+| `SPARTAN_PORT_DIR` | Folder path | A packaged port (its `bin/`) for a launcher started from a checkout |
+| `SPARTAN_GPU_ID` | Card number | Graphics card |
+| `SPARTAN_STREAM_MEMORY` | `cached`, `host`, `device` | Stream buffer memory |
+| `SPARTAN_NO_MSAA` | `1` (off), `0` (on) | Game multisampling |
+| `SPARTAN_DEFERRED_READBACK` | `1`, `0` | Deferred GPU readbacks |
+| `SPARTAN_UI_LANGUAGE` | Language code, for example `zh` | Menu language |
+| `SPARTAN_KEY_MAP` | `cross=Space\|K,square=Mouse Left` | Keyboard mapping, with alternative keys after `\|` |
+| `SPARTAN_SWITCH_ATTACKS` | `1` | Switch attacks on L1 |
+| `SPARTAN_FREE_CAMERA` | `1` | Free camera |
+| `SPARTAN_FREE_CAMERA_LIMITS` | `yaw,pitch` in degrees | How far the free camera turns |
+| `SPARTAN_GLYPH_STYLE` | `auto`, `xbox`, `nintendo`, `keyboard` | In-game button icons |
 
-## Keyboard controls
+## Controls
 
 Defaults; change them on the launcher's **Controls** page, under **Keyboard & Mouse Mapping**.
 
@@ -335,56 +366,11 @@ Defaults; change them on the launcher's **Controls** page, under **Keyboard & Mo
 | P | left touchpad click (photo mode) |
 | Esc | right touchpad click (pause menu) |
 | Insert | the port's menu (R3+L2 on the controller) |
+| G | free camera off and on (a tap of R3 on the controller), when the free camera is on |
 
-**Rage of Sparta on one input** (on by default) leaves Z and X unused. **Joystick prompts** answer
-the stick-rotation quick-time events without a stick: type the turn (half turns D S A, A S D, A W D
-or D W A; full turns D S A W or A S D W) or, with *Adaptive mouse*, draw it. While you play, the
-mouse stays in the game window; the in-game menu, the pause key (Esc) and other windows get it back,
-and Esc again or a click in the window takes it back. With L2 held (R), the mouse aims with the
-right stick, for the Head of Helios or the Bow of Apollo: *Relative* follows the movement,
-*Absolute* points from where the mouse was when L2 was pressed, and *Right stick sensitivity* sets
-how much mouse it takes. Without the launcher the game keeps its own keys: E and Q for Square and
-Triangle, 1 and 3 for L1 and R1, F for R2, C for R3, I, K, J, L for the d-pad, Enter for Options,
-Tab and Backspace for the touchpad.
-
-**Alternative keys.** Every button can have a second and a third key or mouse input, in the second
-and third boxes of its row on the Controls page (the x button next to a box clears it). All of them
-press the button, so you can keep Square on the left click for combat and also press it with J, or
-with Keypad 4, in the minigames. On the Muses' lyre,
-for example, keep Space, Left Shift and the two mouse buttons and add K, L, J and I, laid out like the
-four buttons (I up, J left, L right, K down). A key already used by another button swaps with it, as
-for the main keys. The in-game keyboard icons show the main key; *Keys on the icons* (Controls page,
-with the Keyboard or Match my controller style) can show the alternative instead, or the alternative on the lyre only (the
-other icons keep the main key). The icons draw the first alternative that is set: the second box, or the third when the second is empty. Without the launcher, join the names with
-`|` in `SPARTAN_KEY_MAP`, for example `cross=Space|K|Keypad 2,square=Mouse Left|J`.
-
-On a controller without a touchpad (Xbox and others), View opens the pause menu (the right
-touchpad click) and L1 + View opens photo mode (the left click). On a DualSense the touchpad
-works as on the PS4, and Share/Create works like View.
-
-**Switch attacks on L1 + d-pad and L1 + Cross** (off by default, Controls page): L1 + a d-pad
-direction switches to that weapon with its switch attack, and the weapon in Kratos' hands does its
-attack again; L1 + Cross does the switch attack of the weapon in his hands instead of cycling to the
-next weapon. The same weapon's switch attack again waits 0.8 seconds after the last one (another
-weapon's does not). The d-pad alone switches as before. The Weapon Switching tutorials say so in every language
-(on copies of the language files in the port's data folder). Without the launcher, set `SPARTAN_SWITCH_ATTACKS=1`.
-How the game picks Kratos' moves, for further changes: [docs/moves.md](docs/moves.md).
-
-**In-game button icons** (off by default) are chosen on the launcher's Controls page, under
-*In-game button icons*: *Match my controller*, *Xbox*, *Nintendo* or *Keyboard*. They replace the PlayStation icons in the
-tutorial, move-list and quick-time prompts and on the Muses' lyre in the
-Chamber of the Flame; the pause-menu controller drawing stays a DualShock 4.
-*Keyboard* shows the key that presses each button, on the lyre too, following your keyboard mapping (a changed key shows
-on the next start); *Match my controller* shows the keys too when no gamepad is connected.
-*Key colors* (same place) paints the key labels of Cross, Circle, Square and Triangle, on the lyre
-and on the other keyboard icons: *PlayStation colors*, or *Custom* with one color of a short palette
-for each button; the other icons and the default *Gray* are unchanged.
-The launcher writes a patched copy of up to three game files (about 410 MB) into the port's data folder and never changes
-your game folder. A new controller is picked up after a restart. Without the launcher, set
-`SPARTAN_GLYPH_STYLE` to `auto`, `xbox`, `nintendo` or `keyboard` before starting `run.sh`.
-
-In the menu: L1/R1 or Q/E switch tabs. In the save list: arrows or the d-pad choose, Enter or
-Cross confirm, Esc or Circle cancel.
+More in [docs/CONTROLS.md](docs/CONTROLS.md): joystick prompts and mouse aiming, alternative keys,
+controllers without a touchpad, generic USB controllers, switch attacks, the free camera and the
+in-game button icons.
 
 ## Importing shadPS4 saves
 
@@ -418,60 +404,106 @@ use `out\spartanport-probe.exe`). Add that executable to RTSS and enable Afterbu
 display. In the ReShade installer, select that same executable and the **Vulkan** API.
 
 If the overlay still does not appear, report the port and overlay versions, the last
-working port version, and attach `user\last_run.log`. These checks do not confirm a fix
-for every overlay configuration.
-
-### Generic USB controllers
-
-**Generic USB controllers:** in **Controls → Set up a controller**, select the joystick,
-then choose **Configure** next to any button, D-pad direction or stick axis. Joysticks without
-an existing SDL gamepad mapping are listed too. Each detected input is saved immediately;
-you can start with any row and correct just one control later. Existing bindings are shown
-when reopening the editor. **Clear** removes only that row, and **Cancel capture** leaves
-the pending edit unchanged while keeping previous saves. The live preview lets you check the
-result at any time. Close the window when finished.
-
-Profiles are saved per SDL device GUID and operating system in `gamecontrollerdb.txt` in the
-port's data folder. They load on the next game start, including `--play`, shortcuts and direct
-`run.py` launches. Explicit `SDL_GAMECONTROLLERCONFIG` and `SDL_GAMECONTROLLERCONFIG_FILE`
-mappings retain priority. The existing game button remapping still applies; use
-**Reset to defaults** if you want the buttons to match the guided setup. SDL must be able to
-read the joystick; the mapper does not install device drivers.
+working port version, and attach `user\last_run.log`.
 
 ## Troubleshooting
 
-- Executable format errors: source builds accept plaintext PS4 SELF containers and unpacked
-  little-endian x86-64 ELF executables and modules. A valid unpacked ELF was previously rejected
-  with `prepare failed: expected PS4 SELF`. Files in another format and encrypted/compressed
-  SELF segments still need a correctly prepared game dump.
-- Black screen at start: use the latest release, which includes the startup deadlock patch.
-  If it persists, report your GPU, driver, game build and **Advanced → Log** output. Clearing
-  the shader cache is not a general fix and requires rebuilding it on the next launch.
-- The game closes with "cannot create ... guest memory (error 1450)", or later with "cannot commit ... guest memory": Windows ran out of virtual memory to allocate the guest pool. Increase the page file: press **Win + R**, type `SystemPropertiesAdvanced`, go to **Performance** Settings → **Advanced** → **Virtual memory** Change, uncheck automatic management, select drive **C:**, set a custom size (e.g. 16384 MB initial, 24576 MB maximum), click **Set**, **OK**, and restart your PC.
-- **Game language** in the launcher has no effect: it is only used on the game's first start. After
+Update to the [latest release](https://github.com/FelipePrado0/SpartanPort/releases/latest) first: many problems are
+already fixed there. If yours is not listed, see [Reporting a bug](#reporting-a-bug).
+
+### Error messages
+
+Open **Advanced → Log**, or `user\last_run.log`, and look for the message near the end.
+
+| Message in the log | Cause | Fix |
+|---|---|---|
+| `STOP: this CPU lacks` | The CPU has no AVX | None: the game needs a CPU with AVX |
+| `prepare failed: expected PS4 SELF` | The game folder is not a correctly prepared dump | Choose the folder with `eboot.bin`. If it still fails, extract the PKG again or make a new dump |
+| `cannot create ... guest memory (error 1450)` or `cannot commit ... guest memory` | Windows ran out of virtual memory | Increase the page file (steps below) |
+| `ErrorOutOfDeviceMemory` (exit code 23) | The graphics card ran out of video memory, usually while loading an area | Lower the render resolution and **Texture Quality** (game's **Options → Graphics**); close other programs that use the GPU |
+| `SurfaceFormat: Unknown data_format` | Known crash on AMD Polaris (RX 400, RX 500) | Update the AMD driver and add your log to [#1181](https://github.com/FelipePrado0/SpartanPort/issues/1181) |
+| `Device lost` | Driver crash, mostly on Intel integrated graphics | Update the graphics driver and report it with your log |
+
+**Page file:** press **Win + R**, type `SystemPropertiesAdvanced`, go to **Performance** Settings →
+**Advanced** → **Virtual memory** Change, uncheck automatic management, select drive **C:**, set a
+custom size (16384 MB initial, 24576 MB maximum), click **Set**, **OK**, and restart your PC.
+
+`prepare failed` also accepts plaintext PS4 SELF files and unpacked little-endian x86-64 ELF files;
+encrypted or compressed SELF segments need a correctly prepared dump.
+
+### The game does not start
+
+- **"Windows protected your PC":** click **More info**, then **Run anyway**. The program is not
+  digitally signed.
+- **Black screen at start:** on a laptop with two graphics cards, choose the dedicated one under
+  **Performance → Graphics card**. If the log stops early, extract the game again: a broken
+  extraction also causes it. Clearing the shader cache is not a general fix and makes the next
+  start slower.
+- **The window closes with no message:** read the last lines of **Advanced → Log** and report them
+  with `user/last_run.log`.
+
+### Graphics
+
+- **Textures turn colorful or corrupted after playing for a while:** the texture cache frees
+  memory too early ([#1059](https://github.com/FelipePrado0/SpartanPort/issues/1059)). Restarting the game clears it. Lower **Texture Quality**
+  or the render resolution. Since 3.1.0 the cache waits longer on cards with less than 8 GB.
+- **Yellow, orange or white textures, or wrong lighting:** turn off **Performance → GPU data →
+  Deferred GPU readbacks**, then restart. This can cause stutters.
+- **Black lines in the lighting:** set **Performance → GPU data → Game multisampling** to **Off**.
+- **Missing floor, Kratos falls through, or a loading screen that never ends:** tracked in
+  [#1133](https://github.com/FelipePrado0/SpartanPort/issues/1133) and [#1131](https://github.com/FelipePrado0/SpartanPort/issues/1131). Load the last checkpoint and add your log to the issue.
+- **Stutters and missing effects the first time you see an area:** the shaders compile the first
+  time and load from the cache on later runs. Do not clear the shader cache unless a fix asks for it.
+- **The overlay (RTSS, Afterburner, ReShade) does not show:** see
+  [Third-party overlays](#third-party-overlays-windows).
+- **Crash always at the same scene:** report it with a save from before that point.
+
+### Performance
+
+- **Low FPS with the CPU near 100%:** lower the render resolution. If the FPS does not change, the
+  CPU is the limit: set the engine frame rate to 60, close background programs and, on a laptop,
+  plug it in and use the best performance power mode. CPUs with 4 threads or fewer are the most
+  affected.
+- **Low GPU use, or the game runs on integrated graphics:** choose the dedicated card under
+  **Performance → Graphics card**. In Windows **Settings → System → Display → Graphics**, set
+  `bin\spartanport-probe.exe` to **High performance**.
+- **Low FPS on an NVIDIA laptop:** keep **Performance → GPU data → Stream buffer memory** on
+  **System RAM (cached, default)**.
+- **Weak GPU:** shadows cost the most. Turn them off in the game's **Options → Graphics**.
+- **Frame generation lowers the FPS:** under investigation ([#1193](https://github.com/FelipePrado0/SpartanPort/issues/1193)). Turn it off and
+  report it with one log with it on and one with it off.
+
+### Language and controls
+
+- **Game language in the launcher has no effect:** it is only used on the game's first start. After
   that the game restores its own text and speech languages from its settings save, so change them in
-  the game: **Options → Game Settings → Game Text** and **Options → Audio → Speech** (for example,
-  Polish text with English voices).
-- The game does not open: check **Advanced → Log**, or send `user\last_run.log` with your report.
-  With a custom **Saves folder**, `last_run.log` is in that folder instead.
-  Next to it, `last_run.jsonl` has the same lines with the time, level and area of each one, for
-  tools and for telling which event came first; attach both files when you report a bug.
-- Yellow/orange/white textures or wrong lighting: try disabling **Performance → GPU data →
-  Deferred GPU readbacks**, then restart. This workaround can cause stutters.
-- GPU-specific rendering failures, crashes, audio problems and progress blockers remain under
-  investigation. Check the [release notes](https://github.com/FelipePrado0/SpartanPort/releases/latest)
-  and [issues](https://github.com/FelipePrado0/SpartanPort/issues) before reporting; include a save
-  from before the problem when relevant.
+  the game: **Options → Game Settings → Game Text** and **Options → Audio → Speech**.
+- **A generic USB controller is not detected:** set it up in **Controls → Set up a controller**
+  (see [docs/CONTROLS.md](docs/CONTROLS.md#generic-usb-controllers)).
+- **Keys do not do what you expect:** use **Reset keyboard & mouse to defaults** on the Controls
+  page.
 
-## Performance and compatibility
+### Linux
 
-Previous testing on an AMD Radeon RX 6700 XT, Ryzen 5 5600X and 32 GB recorded 144 FPS on
-average (55 to 240) at 1080p with the 240 FPS engine frame rate. These are reference results,
-not a benchmark of every release or a guarantee for other systems.
+- **`GLIBC_2.xx not found`:** the AppImage needs glibc 2.39 or newer. Update the distribution or
+  [build from source](#linux-ubuntu-2404).
+- **Steam starts the AppImage with Proton:** select **Steam Linux Runtime** in the shortcut's
+  compatibility settings (see [Linux](#linux-appimage-experimental)).
 
-**Tested and playable from start to finish** at native 1080p with the 240 FPS engine frame
-rate on the test system. Texture corruption, crashes and progress blockers have also been
-reported on other setups, including at 1080p. See the known issues in the release notes.
+## Reporting a bug
+
+1. Update to the [latest release](https://github.com/FelipePrado0/SpartanPort/releases/latest) and
+   try again.
+2. Search the [issues](https://github.com/FelipePrado0/SpartanPort/issues?q=is%3Aissue), open and
+   closed, for your error message, scene and graphics card.
+3. Open a [new issue](https://github.com/FelipePrado0/SpartanPort/issues/new/choose) with the form
+   and attach, right after closing the game:
+   - `user/last_run.log` and `user/last_run.jsonl` (also under **Advanced → Log**). With a custom
+     **Saves folder**, they are in that folder.
+   - The port version, graphics card and driver, CPU, and game ID and version.
+   - A save from before the problem, when it happens at one place.
+
+For quick help, ask on the [Discord](https://discord.gg/WYvr634563).
 
 ## Building from source
 
@@ -481,8 +513,6 @@ Install [rustup](https://rustup.rs) (stable) and the Visual Studio Build Tools w
 development with C++" workload; the launcher is built with cargo and needs no Python. The build
 commands below use MSYS2 CLANG64; launcher commands marked PowerShell run on Windows.
 
-Development happens on the `spartanport` branch; `main` receives tested merges.
-
 1. Install MSYS2 (`winget install MSYS2.MSYS2`) and, in the **MSYS2 CLANG64** shell, the
    packages listed in [packaging/windows/README.md](https://github.com/FelipePrado0/SpartanPort/blob/main/packaging/windows/README.md).
 2. Clone the repository with its submodules and build:
@@ -490,7 +520,6 @@ Development happens on the `spartanport` branch; `main` receives tested merges.
    ```bash
    git clone --recursive https://github.com/FelipePrado0/SpartanPort
    cd SpartanPort
-   git checkout spartanport   # development branch; omit to build main
    bash build.sh
    ```
 
@@ -579,78 +608,49 @@ mkdir -p ~/spartanport-build && cd ~/spartanport-build
 curl -fLO https://raw.githubusercontent.com/FelipePrado0/SpartanPort/main/packaging/linux/PKGBUILD
 makepkg -si
 ```
-Run the launcher under **Games** in your [application menu](https://wiki.archlinux.org/title/Desktop_entries) or with `spartanport` from terminal.
 
-Optional packages (use an [AUR helper](https://wiki.archlinux.org/title/AUR_helpers)
-such as [`yay`](https://github.com/jguer/yay) for `python-iced-x86`):
-
-```bash
-sudo pacman -S --needed gamemode mangohud
-yay -S --needed python-iced-x86
-```
+Run the launcher under **Games** in your [application menu](https://wiki.archlinux.org/title/Desktop_entries)
+or with `spartanport` from a terminal. Optional: `sudo pacman -S --needed gamemode mangohud`.
 
 ## Tests
 
-Run these from the repository root after the build. The first C++ checks below do not need a game dump.
+Run these from the repository root after the build. On Windows, run the C++ tests in the MSYS2
+CLANG64 shell after `source ./msys2-env.sh`, and add `.exe` to the programs in `out/`.
 
-### Python
+| Test | Command | Systems | Needs a dump |
+|---|---|---|---|
+| Rust launcher | `cd launcher-rust && cargo test` | Windows, Linux | No |
+| Python reference | `python -m unittest discover -s tests -p "test_*.py"` | Windows, Linux | No |
+| GPU and menu | `ninja -C out/gpu perf-overlay-test warmup-inbox-test graphics-settings-test`, then run each from `out/gpu/` | Windows, Linux | No |
+| C runtime | `bash build.sh --test` | Linux | No |
+| Menu languages | `ninja -C out/gpu ui-language-test`, then `out/gpu/ui-language-test` | Windows, Linux | No |
+| Chinese menu | `ninja -C out/gpu chinese-ui-test`, then `out/gpu/chinese-ui-test` | Windows, Linux | No |
+| Cheats multipliers | `ninja -C out/gpu stat-multipliers-test`, then `out/gpu/stat-multipliers-test out/eboot.elf` | Windows, Linux | Yes |
+| System imports | `out/spartanport-probe out/boot-linked.bin --app0 "<game folder>" --check-imports` | Windows, Linux | Yes |
 
-The launcher and runner Python code is frozen: it is not packaged and not run by the port. It stays
-in the repository as the parity reference for the Rust launcher. Its tests still run, with Python
-3.10 or newer (on Windows, in PowerShell):
+- The page snapshots under `launcher-rust/snapshots/` are compared pixel by pixel on Windows only.
+- The Python code is the frozen reference the Rust launcher was ported from; it is not packaged.
+  `python -m unittest discover -s tests -p "test_launcher_parity_doc.py"` checks that every Python
+  launcher test has its row in `docs/specs/2026-10-21-rust-launcher-parity.md`, and
+  `tools/runner_fixtures.py` generates the fixtures for the Rust runner's parity tests.
+- `ui-language-test` checks that every menu language has every text and keeps each printf
+  format's arguments. `chinese-ui-test` skips its glyph checks, with a message, without an
+  installed CJK font.
+- The checks that need a dump use `out/eboot.elf` and `out/boot-linked.bin` from your prepared
+  game. `--check-imports` exits without starting gameplay.
+- More targets are listed in [gpu/CMakeLists.txt](gpu/CMakeLists.txt).
 
-```powershell
-python -m unittest discover -s tests -p "test_*.py"
-```
+## Contributing
 
-### Rust launcher
+SpartanPort is maintained by two people in their spare time, so help is welcome.
 
-```bash
-cd launcher-rust
-cargo test
-```
-
-The page snapshots under `launcher-rust/snapshots/` are compared pixel by pixel on Windows only.
-`python -m unittest discover -s tests -p "test_launcher_parity_doc.py"` checks that every Python
-launcher test has its row in `docs/specs/2026-10-21-rust-launcher-parity.md`.
-`tools/runner_fixtures.py` generates `launcher-rust/fixtures/runner/`, the inputs and the files the Python runner's modules write over them, for the Rust runner's parity tests.
-
-### Windows C++ tests (MSYS2 CLANG64)
-
-```bash
-source ./msys2-env.sh
-ninja -C out/gpu perf-overlay-test warmup-inbox-test graphics-settings-test
-out/gpu/perf-overlay-test.exe
-out/gpu/warmup-inbox-test.exe
-out/gpu/graphics-settings-test.exe
-```
-
-### Linux C/C++ tests
-
-```bash
-bash build.sh --test
-ninja -C out/gpu perf-overlay-test warmup-inbox-test graphics-settings-test
-out/gpu/perf-overlay-test
-out/gpu/warmup-inbox-test
-out/gpu/graphics-settings-test
-```
-
-`bash build.sh --test` runs the additional C runtime tests on Linux only. On Windows the build exits before that block; use the Ninja targets above.
-
-### Checks using a prepared game
-
-After preparing your own dump, `out/eboot.elf` and `out/boot-linked.bin` are needed for the
-following checks. In MSYS2 CLANG64 on Windows, replace the example game path with yours:
-
-```bash
-ninja -C out/gpu stat-multipliers-test
-out/gpu/stat-multipliers-test.exe out/eboot.elf
-out/spartanport-probe.exe out/boot-linked.bin --app0 "D:/Games/CUSA01623" --check-imports
-```
-
-On Linux, use `out/gpu/stat-multipliers-test` and `out/spartanport-probe` without `.exe`, and a Linux
-game path. `--check-imports` checks system imports and exits without starting gameplay.
-More test targets are listed in [gpu/CMakeLists.txt](https://github.com/FelipePrado0/SpartanPort/blob/main/gpu/CMakeLists.txt).
+- **Pull requests** go to `main`. Keep each one to a single change, say how you tested it and run
+  the [tests](#tests) that cover it.
+- **Issue triage and PR review:** comment on open issues with logs, duplicates and test results,
+  or review open pull requests.
+- **Translations:** the launcher texts are in
+  [launcher-rust/assets/i18n.json](launcher-rust/assets/i18n.json).
+- Never add game files, dumps or other copyrighted assets.
 
 ## How it works
 
@@ -683,8 +683,9 @@ It is a fork of [Supermedo's Windows port](https://github.com/Supermedo/bloodbor
 
 The Python in `scripts/` and `launcher/` is kept as the frozen reference the Rust code was ported from; it no longer ships.
 
-More documentation: [mods](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/MODS.md), [patches](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/PATCHES.md), [frame map and historical upscaler research](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/upscaler.md)
-and [parallel GPU work](https://github.com/FelipePrado0/SpartanPort/blob/main/docs/parallel_gpu.md).
+More documentation: [mods](docs/MODS.md), [patches](docs/PATCHES.md), [controls](docs/CONTROLS.md),
+[frame map and historical upscaler research](docs/upscaler.md) and
+[parallel GPU work](docs/parallel_gpu.md).
 
 ## Credits
 
@@ -720,6 +721,16 @@ Also used: [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9), [FFmpeg](htt
 [FSR-Vulkan](https://github.com/FireBurn/FSR-Vulkan) and the AMD FidelityFX SDK, [Q2RTX](https://github.com/FireBurn/Q2RTX) (the open FSR 4
 model files),
 [MSYS2](https://www.msys2.org), [LLVM](https://llvm.org) and [Pillow](https://python-pillow.org).
+
+## Contributors
+
+<p><img src="https://img.shields.io/github/contributors/FelipePrado0/SpartanPort?style=flat-square&amp;label=contributors" alt="Number of contributors"></p>
+
+<a href="https://github.com/FelipePrado0/SpartanPort/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=FelipePrado0/SpartanPort&amp;max=200" alt="SpartanPort contributors">
+</a>
+
+The list updates by itself. Made with [contrib.rocks](https://contrib.rocks).
 
 ## License
 

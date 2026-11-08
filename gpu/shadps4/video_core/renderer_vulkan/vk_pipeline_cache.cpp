@@ -699,6 +699,23 @@ bool PipelineCache::PrepareGraphicsPipeline(PipelineSelection& worker_sel) {
     return RefreshGraphicsKey(worker_sel) && !worker_sel.worker->failed;
 }
 
+void NoteStaleVertexInputs() {
+    static std::atomic<u64> stale{0};
+    static std::atomic<s64> last_report{0};
+    const u64 count = stale.fetch_add(1, std::memory_order_relaxed) + 1;
+    const s64 now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count();
+    s64 last = last_report.load(std::memory_order_relaxed);
+    if ((last != 0 && now - last < 5000) ||
+        !last_report.compare_exchange_strong(last, now, std::memory_order_relaxed)) {
+        return;
+    }
+    std::printf("Vertex inputs: %llu prepared draws in all had stale V#s and read them "
+                "again\n",
+                static_cast<unsigned long long>(count));
+}
+
 const GraphicsPipeline* PipelineCache::TryPreparedPipeline(const PreparedDraw& prepared) {
     if (prepared.state.load(std::memory_order_acquire) != PreparedDraw::Ready ||
         prepared.reg_checksum != liverpool->gfx_reg_checksum) {
@@ -730,8 +747,22 @@ const GraphicsPipeline* PipelineCache::TryPreparedPipeline(const PreparedDraw& p
     }
     const auto it = graphics_pipelines.find(prepared.key);
     // spartanport: prepared draws must skip refused pipelines on every lookup.
-    return it != graphics_pipelines.end() && it->second && it->second->IsValid() ? it->second.get()
-                                                                                 : nullptr;
+    if (it == graphics_pipelines.end() || !it->second || !it->second->IsValid()) {
+        return nullptr;
+    }
+    const GraphicsPipeline* pipeline = it->second.get();
+    // spartanport: the V# table is guest memory behind a user-data pointer, so the checks above
+    // do not cover it. A worker that read the V#s before the game rewrote the table chose the
+    // vertex shader's specialization (number class, component selection) from stale V#s: such
+    // a draw takes the regular path, as without a worker. ResolveVertexBuffers checks the V#s
+    // once more when the draw is recorded, after the writes queued before it.
+    const auto& fetch = pipeline->GetFetchShader();
+    if (prepared.vertex.valid && fetch && fetch->attributes.size() == prepared.vertex.count &&
+        !fetch->SharpsUnchanged(pipeline->GetStage(SwStage::Vertex), prepared.vertex.buffers)) {
+        NoteStaleVertexInputs();
+        return nullptr;
+    }
+    return pipeline;
 }
 
 const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectParams params,
