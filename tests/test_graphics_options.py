@@ -344,8 +344,9 @@ class AspectRatioTest(unittest.TestCase):
         self.assertEqual(g.aspect_of('1280x1024'), '5:4')  # a mod's size outside the named ones
 
     def test_aspects_in_a_fixed_order_with_the_others_last(self):
-        self.assertEqual(g.aspects(g.RESOLUTIONS), ['16:9', '16:10', '21:9', '32:9', '4:3'])
-        self.assertEqual(g.aspects(g.resolutions(('1280x1024',))), ['16:9', '16:10', '21:9', '32:9', '4:3', '5:4'])
+        self.assertEqual(g.aspects(g.RESOLUTIONS), ['16:9', '16:10', '21:9', '32:9', '48:9', '4:3'])
+        self.assertEqual(g.resolutions_for('48:9', g.RESOLUTIONS), ['11520x2160'])  # #719
+        self.assertEqual(g.aspects(g.resolutions(('1280x1024',))), ['16:9', '16:10', '21:9', '32:9', '48:9', '4:3', '5:4'])
 
     def test_resolutions_of_an_aspect_smallest_first_native_on_top(self):
         self.assertEqual(g.resolutions_for('16:9', g.RESOLUTIONS),
