@@ -3417,3 +3417,56 @@ fn performance_offers_60_fps_during_qtes_under_the_engine_rate() {
     click_tall(&mut state, "High Frame Rate Physics Fix");
     assert_eq!(state.store.text("auto_safe_fps"), "0");
 }
+
+#[test]
+fn exporting_recorded_shaders_takes_only_metas_and_keys() {
+    let dir = tempfile::tempdir().unwrap();
+    let user = dir.path().join("user");
+    let out = dir.path().join("shaders.zip");
+    // Nothing recorded yet: no file is written.
+    assert_eq!(advanced::export_shaders(&user, &out), Ok(0));
+    assert!(!out.exists());
+    let game = user.join("cache").join("CUSA01623");
+    std::fs::create_dir_all(game.join("pipeline-binaries")).unwrap();
+    for file in ["0x01.meta", "0x01_0.spv", "g_0x02.key", "profile.bin", "precompile.bin"] {
+        std::fs::write(game.join(file), file.as_bytes()).unwrap();
+    }
+    std::fs::write(game.join("pipeline-binaries").join("a.key"), b"driver").unwrap();
+    // A cache set aside by the shader preparation is not exported again.
+    let aside = user.join("cache").join("CUSA01623.pre-precompile");
+    std::fs::create_dir_all(&aside).unwrap();
+    std::fs::write(aside.join("0x03.meta"), b"old").unwrap();
+
+    assert_eq!(advanced::export_shaders(&user, &out), Ok(2));
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
+    let mut names: Vec<String> = archive
+        .file_names()
+        .map(|name| name.unwrap().to_string())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["CUSA01623/0x01.meta", "CUSA01623/g_0x02.key"]);
+    let mut meta = String::new();
+    std::io::Read::read_to_string(&mut archive.by_name("CUSA01623/0x01.meta").unwrap(), &mut meta)
+        .unwrap();
+    assert_eq!(meta, "0x01.meta");
+}
+
+#[test]
+fn exporting_recorded_shaders_tells_where_the_file_went() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state(dir.path());
+    state.lang = "en".into();
+    let out = dir.path().join("shaders.zip");
+    let _ = app::update(&mut state, Message::ShadersExported(out.clone(), Ok(0)));
+    let shown = state.modal.take().unwrap();
+    assert!(matches!(shown.kind, ModalKind::Info));
+    assert_eq!(shown.text, "No recorded shaders yet: play the game first.");
+    let _ = app::update(&mut state, Message::ShadersExported(out.clone(), Ok(7)));
+    let shown = state.modal.take().unwrap();
+    assert!(matches!(shown.kind, ModalKind::Info));
+    assert!(shown.text.contains(&out.display().to_string()), "{}", shown.text);
+    let _ = app::update(&mut state, Message::ShadersExported(out, Err("disk full".into())));
+    let shown = state.modal.take().unwrap();
+    assert!(matches!(shown.kind, ModalKind::Error));
+    assert!(shown.text.ends_with("disk full"), "{}", shown.text);
+}

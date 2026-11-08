@@ -35,6 +35,7 @@ use crate::{APP_NAME, VERSION};
 
 /// What names the box of the Files row's buttons (`row::control_id`).
 pub const FILES_ROW: &str = "files";
+pub const SHADERS_ROW: &str = "recorded shaders";
 
 /// One check box of the page.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -342,6 +343,12 @@ pub fn view(state: &State) -> Element<'_, Message> {
     } else {
         clear.on_press(Message::ClearShaderCache)
     };
+    let export = button(text(tr(lang, "Export recorded shaders"))).style(theme::button_flat);
+    let export = if state.game.is_live() {
+        export
+    } else {
+        export.on_press(Message::ExportShaders)
+    };
     // One row (R93): the three buttons where every row's control ends, the note under them.
     let files = layout![
         flat(
@@ -361,6 +368,14 @@ pub fn view(state: &State) -> Element<'_, Message> {
             files.into(),
             Some(&hint(
                 "If the game only shows a black screen, this usually helps.",
+            )),
+        ))
+        .push(actions(
+            state.rtl,
+            SHADERS_ROW,
+            export.into(),
+            Some(&hint(
+                "The shaders this PC recorded while playing, for the shader list the team ships. No game files go in.",
             )),
         ));
 
@@ -418,6 +433,51 @@ pub fn clear_cache(user_dir: &Path) -> Result<(), String> {
     } else {
         Ok(())
     }
+}
+
+/// The recorded shaders of each game in the cache (`<serial>/*.meta` and `*.key`): what the team
+/// builds the shipped shader list from. No compiled shader, driver binary or game code goes in.
+/// The number of files written; 0 writes no file.
+pub fn export_shaders(user_dir: &Path, out: &Path) -> Result<usize, String> {
+    // A game's folder is its serial; the preparation's `CUSA01623.pre-precompile` is not.
+    let is_serial = |name: &str| {
+        name.len() == 9
+            && name[..4].bytes().all(|b| b.is_ascii_uppercase())
+            && name[4..].bytes().all(|b| b.is_ascii_digit())
+    };
+    let mut files = Vec::new();
+    for game in std::fs::read_dir(cache_dir(user_dir)).into_iter().flatten().flatten() {
+        let serial = game.file_name().to_string_lossy().into_owned();
+        if !is_serial(&serial) || !game.path().is_dir() {
+            continue;
+        }
+        for file in std::fs::read_dir(game.path()).into_iter().flatten().flatten() {
+            let path = file.path();
+            if matches!(path.extension().and_then(|e| e.to_str()), Some("meta" | "key")) {
+                let name = format!("{serial}/{}", file.file_name().to_string_lossy());
+                files.push((name, path));
+            }
+        }
+    }
+    if files.is_empty() {
+        return Ok(0);
+    }
+    files.sort();
+    let write = || -> zip::result::ZipResult<()> {
+        let mut archive = zip::ZipWriter::new(std::fs::File::create(out)?);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for (name, path) in &files {
+            archive.start_file(name.as_str(), options)?;
+            std::io::copy(&mut std::fs::File::open(path)?, &mut archive)?;
+        }
+        archive.finish()?;
+        Ok(())
+    };
+    write().map(|()| files.len()).map_err(|error| {
+        let _ = std::fs::remove_file(out);
+        error.to_string()
+    })
 }
 
 fn env_var(key: &str) -> Option<String> {
@@ -565,6 +625,48 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
                 &[&cache],
             );
             state.modal = Some(Modal::error(body));
+        }
+        Message::ExportShaders => {
+            let name = format!(
+                "spartanport-shaders-{}.zip",
+                chrono::Local::now().format("%Y-%m-%d")
+            );
+            let dialog = rfd::AsyncFileDialog::new()
+                .add_filter("Zip", &["zip"])
+                .set_file_name(name)
+                .save_file();
+            return Task::perform(dialog, |handle| {
+                Message::ShaderExportPicked(handle.map(|h| h.path().to_path_buf()))
+            });
+        }
+        Message::ShaderExportPicked(None) => {}
+        Message::ShaderExportPicked(Some(out)) => {
+            let user = state.paths.user_dir(&state.store.text("user_dir"));
+            return blocking(move || {
+                let result = export_shaders(&user, &out);
+                (out, result)
+            })
+            .map(|(out, result)| Message::ShadersExported(out, result));
+        }
+        Message::ShadersExported(_, Ok(0)) => {
+            state.modal = Some(Modal::info(tr(
+                &lang,
+                "No recorded shaders yet: play the game first.",
+            )));
+        }
+        Message::ShadersExported(out, Ok(_)) => {
+            state.modal = Some(Modal::info(tr_fmt(
+                &lang,
+                "Saved to {}. Send this file to the SpartanPort team: it helps make the first start smooth for everyone.",
+                &[&out.display().to_string()],
+            )));
+        }
+        Message::ShadersExported(_, Err(error)) => {
+            state.modal = Some(Modal::error(tr_fmt(
+                &lang,
+                "Could not export the recorded shaders: {}",
+                &[&error],
+            )));
         }
         Message::DesktopShortcut => {
             let paths = state.paths.clone();
