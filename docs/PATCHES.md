@@ -36,8 +36,10 @@ Notes:
   the **Game** page is cleared.
 - **Memory.** A patch note such as "Requires setting DMEM to 3072 MB" makes the port reserve that
   much more direct memory, on top of the 5056 MB the retail game has. Nothing has to be set by hand.
-- **Frame rate.** The engine rate changes while the game runs (in-game menu, **R3 + L1 + R1** or
-  **F9**): every start takes the 240 FPS patch and the port writes the chosen rate into the game.
+- **Frame rate.** The engine rate is any whole rate from 30 to 240 and changes while the game runs
+  (in-game menu; hold **R3** and press **R1** or **L1**, or hold **F9** and press **Right** or
+  **Left**, for 5 FPS up or down): every start takes the 240 FPS patch and the port writes the
+  chosen rate into the game.
   144 FPS is intended for 144 Hz displays; with VSync, it keeps presentation aligned with that refresh rate.
   If the 240 FPS patch is not found in your `eboot.bin`, the highest frame rate patch that is found
   is used; if none is found, the engine stays at the original 60 FPS.

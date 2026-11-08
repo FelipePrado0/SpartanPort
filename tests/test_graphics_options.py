@@ -59,7 +59,7 @@ class GraphicsOptionsTest(unittest.TestCase):
 
     def test_defaults_and_invalid_values(self):
         self.ini.write_text(
-            'render_resolution=invalid\nengine_fps=90\nstale_readback=yes\n',
+            'render_resolution=invalid\nengine_fps=300\nstale_readback=yes\n',
             encoding='utf-8',
         )
         options, reverted = g.prepare(self.ini, self.state)
@@ -267,7 +267,10 @@ class GraphicsOptionsTest(unittest.TestCase):
         # 100 is written live over the 240 FPS patch (spartanport_settings.cpp SyncEngineFps).
         self.assertEqual(g.patch_names(['Bug Fix - Texture Corruption Fix'], options),
                          ['Bug Fix - Texture Corruption Fix', 'Frame Rate Patch - 240 FPS'])
-        self.assertEqual(g.startup_options({'engine_fps': '90'})['engine_fps'], '120')  # not a choice: the default
+        for saved in ('90', '75', '30', '240'):  # the in-game slider's rates
+            self.assertEqual(g.startup_options({'engine_fps': saved})['engine_fps'], saved)
+        for saved in ('29', '241', '-60', 'ninety', '75.5'):
+            self.assertEqual(g.startup_options({'engine_fps': saved})['engine_fps'], '120')
 
     def test_engine_rate_180_for_high_refresh_displays(self):
         self.assertEqual(g.ENGINE_FPS, (60, 100, 120, 144, 180, 240))

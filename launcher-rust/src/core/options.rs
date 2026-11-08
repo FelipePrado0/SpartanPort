@@ -268,6 +268,10 @@ pub static VIDEO_BACKENDS: &[Choice] = &[
     c("x11", "X11 (XWayland)"),
 ];
 
+/// The engine frame rates the in-game menu can save (spartanport_graphics.h MinEngineFps..MaxEngineFps).
+pub const MIN_ENGINE_FPS: u32 = 30;
+pub const MAX_ENGINE_FPS: u32 = 240;
+
 pub static ENGINE_FPS_CHOICES: &[Choice] = &[
     c("60", "60 (original)"),
     c("100", "100"),

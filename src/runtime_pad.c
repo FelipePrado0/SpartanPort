@@ -1376,18 +1376,19 @@ static void apply_switch_attack(const PadData *d) {
     }
 }
 
-/* R3 + L1 + R1 goes through the engine frame rates live (60 for spots that break at a higher
- * rate). The three stay hidden from the game until each one is released: a stray R1 grabs. */
+/* Hold R3: each R1 press raises the engine frame rate 5 FPS live, each L1 press lowers it (60 for
+ * spots that break at a higher rate). Once used, R3, R1 and L1 stay hidden from the game until
+ * each one is released: a stray R1 grabs. */
 enum { ENGINE_FPS_COMBO=BTN_R3|BTN_L1|BTN_R1 };
-static uint32_t engine_fps_hidden;
-static bool engine_fps_held;
+static uint32_t engine_fps_hidden, engine_fps_previous;
 static void engine_fps_combo(PadData *d) {
-    const bool held=(d->buttons & ENGINE_FPS_COMBO)==ENGINE_FPS_COMBO;
-    if (held && !engine_fps_held) {
-        spartanportgpu_engine_fps_cycle();
-        engine_fps_hidden=ENGINE_FPS_COMBO;
+    const uint32_t pressed=d->buttons & ~engine_fps_previous;
+    engine_fps_previous=d->buttons;
+    if ((d->buttons & BTN_R3) && (pressed & (BTN_R1|BTN_L1))) {
+        if (pressed & BTN_R1) spartanportgpu_engine_fps_step(1);
+        if (pressed & BTN_L1) spartanportgpu_engine_fps_step(-1);
+        engine_fps_hidden|=d->buttons & ENGINE_FPS_COMBO;
     }
-    engine_fps_held=held;
     engine_fps_hidden&=d->buttons;
     d->buttons&=~engine_fps_hidden;
 }

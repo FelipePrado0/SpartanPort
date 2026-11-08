@@ -445,8 +445,8 @@ extern "C" void spartanportgpu_wait_while_paused(void) {
     SpartanOverlay::WaitWhilePaused();
 }
 
-extern "C" void spartanportgpu_engine_fps_cycle(void) {
-    SpartanOverlay::CycleEngineFps();
+extern "C" void spartanportgpu_engine_fps_step(int direction) {
+    SpartanOverlay::StepEngineFps(direction);
 }
 
 // src/probe.c: the game's maximum frame rate globals (SpartanSettings::SyncEngineFps writes them).

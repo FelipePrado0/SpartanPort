@@ -218,7 +218,8 @@ def startup_options(ini, extra=()):
     options = {key: ini.get(key, value) for key, value in DEFAULTS.items()}
     if options['render_resolution'] not in resolutions(extra):
         options['render_resolution'] = 'native'
-    if options['engine_fps'] not in {str(f) for f in ENGINE_FPS}:
+    # Any whole rate from 30 to 240 (the in-game slider, #831).
+    if not (options['engine_fps'].isdigit() and 30 <= int(options['engine_fps']) <= 240):
         options['engine_fps'] = '120'
     for key in ('deferred_readback', 'stale_readback', 'async_shaders'):
         options[key] = '0' if options[key] == '0' else '1'
