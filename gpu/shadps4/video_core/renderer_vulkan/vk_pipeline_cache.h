@@ -197,6 +197,9 @@ private:
     void FinishCompilations();
     void SeedWorkerCaches();
     bool CheckCacheProfile();
+    /// False when progress stopped it.
+    bool PreparePipelines(const std::filesystem::path& cache_dir, u64 driver_hash, u32 threads,
+                          const std::function<bool(u32, u32)>& progress);
     std::vector<u8> ProfileBlob() const;
     struct BackgroundWarmup;
     struct WarmStage;

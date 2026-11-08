@@ -1299,48 +1299,200 @@ void PipelineCache::PrepareShaders(const std::filesystem::path& manifest_path,
     };
     const auto stored = DecodeMarker(stored_bytes);
     const auto work = DecideWork(stored, now);
-    if (!work.shaders) {
+    if (!work.Any()) {
         std::printf("Shader preparation: done at an earlier start\n");
         return;
     }
-    const auto start_over = [&] {
-        db.Clear();
-        db.Save(Storage::BlobType::ShaderProfile, "profile", std::vector<u8>{profile_blob});
-        db.Save(Storage::BlobType::ShaderProfile, "disk_shaders", std::vector<u8>{1});
-        db.Save(Storage::BlobType::ShaderProfile, "precompile", EncodeMarker(now));
-    };
-    // A new list may number a program's shaders differently: written again from nothing.
-    const bool resume = stored && !work.restart_cache && !work.new_only;
-    if (resume) {
-        db.Save(Storage::BlobType::ShaderProfile, "precompile", EncodeMarker(now));
-    } else {
-        start_over();
-    }
-
     // Nothing else runs yet: every core but the one showing the progress.
     const u32 threads = std::max(1u, std::thread::hardware_concurrency()) - 1;
-    const auto started = std::chrono::steady_clock::now();
-    const auto replay = Manifest::DefaultReplay(profile);
-    auto stats = Manifest::Materialize(*manifest, game_dir, replay, threads, resume, progress);
-    if (stats.conflict) {
-        std::printf("Shader preparation: a played session saved other shaders under the list's "
-                    "numbers, starting over\n");
-        start_over();
-        stats = Manifest::Materialize(*manifest, game_dir, replay, threads, false, progress);
-    }
-    if (!stats.stopped) {
-        now.shaders_done = true;
+    const auto save_marker = [&] {
         db.Save(Storage::BlobType::ShaderProfile, "precompile", EncodeMarker(now));
+    };
+
+    if (work.shaders || work.keys) {
+        const auto start_over = [&] {
+            db.Clear();
+            db.Save(Storage::BlobType::ShaderProfile, "profile", std::vector<u8>{profile_blob});
+            db.Save(Storage::BlobType::ShaderProfile, "disk_shaders", std::vector<u8>{1});
+            save_marker();
+        };
+        // A new list may number a program's shaders differently, and new keys need their
+        // shaders: written again from nothing.
+        const bool resume = stored && !work.restart_cache && !work.new_only && work.shaders;
+        if (resume) {
+            save_marker();
+        } else {
+            start_over();
+        }
+        const auto started = std::chrono::steady_clock::now();
+        const auto replay = Manifest::DefaultReplay(profile);
+        auto stats = Manifest::Materialize(*manifest, game_dir, replay, threads, resume, progress);
+        if (stats.conflict) {
+            std::printf("Shader preparation: a played session saved other shaders under the "
+                        "list's numbers, starting over\n");
+            start_over();
+            stats = Manifest::Materialize(*manifest, game_dir, replay, threads, false, progress);
+        }
+        if (!stats.stopped) {
+            now.shaders_done = true;
+            save_marker();
+        }
+        // StartOnDemand lists the files next: they must be on disk.
+        if (!db.Flush(std::chrono::minutes(2))) {
+            LOG_WARNING(Render_Vulkan, "Shader preparation: cache writes still queued");
+        }
+        std::printf("Shader preparation: %u written, %u kept, %u without code, %u refused, %u "
+                    "pipeline keys in %.1f s (%u threads)%s\n",
+                    stats.written, stats.kept, stats.no_code, stats.failed, stats.keys,
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
+                        .count(),
+                    threads, stats.stopped ? ", skipped" : "");
+        if (stats.stopped) {
+            return;
+        }
+    } else {
+        now.shaders_done = true; // DecideWork asks for shaders while they are not done
     }
-    // StartOnDemand lists the files next: they must be on disk.
-    if (!db.Flush(std::chrono::minutes(2))) {
-        LOG_WARNING(Render_Vulkan, "Shader preparation: cache writes still queued");
+
+    // Without pipeline binaries the driver keeps nothing to prepare; a driver that gains them
+    // changes driver_hash, so its pipelines are prepared then.
+    if (!driver.keySize || PreparePipelines(cache_dir, now.driver_hash, threads, progress)) {
+        now.pipelines_done = true;
+        save_marker();
+        db.Flush(std::chrono::seconds(10));
     }
-    std::printf("Shader preparation: %u written, %u kept, %u without code, %u refused, %u pipeline "
-                "keys in %.1f s (%u threads)%s\n",
-                stats.written, stats.kept, stats.no_code, stats.failed, stats.keys,
+}
+
+// spartanport: the driver builds every graphics pipeline of the saved keys once and keeps its binary
+// (pipeline-binaries/); each pipeline is destroyed right away, the game loads them on first use.
+// Compute pipelines keep no binary and stay on demand. A worker names the key it hands to the
+// driver in a journal, so a driver that ends the process skips that key at the next start.
+bool PipelineCache::PreparePipelines(const std::filesystem::path& cache_dir, u64 driver_hash,
+                                     u32 threads,
+                                     const std::function<bool(u32, u32)>& progress) {
+    auto& db = Storage::DataBase::Instance();
+    std::vector<std::vector<u8>> keys;
+    db.ForEachBlob(Storage::BlobType::PipelineKey,
+                   [&](std::vector<u8>&& data) { keys.push_back(std::move(data)); });
+    // Beside the cache folder: a cleared cache keeps them.
+    auto journal_path = cache_dir, skip_path = cache_dir;
+    journal_path += ".precompile-journal";
+    skip_path += ".precompile-skip";
+    const auto skip_keys = LoadSkipList(journal_path, skip_path, fmt::format("{:016x}", driver_hash));
+    const std::unordered_set<u64> skip(skip_keys.begin(), skip_keys.end());
+    threads = std::max(1u, threads);
+    CrashJournal journal;
+    journal.Open(journal_path, threads);
+
+    static const std::array<Shader::RuntimeInfo, MaxShaderStages> no_runtime_infos{};
+    const vk::Device device = instance.GetDevice();
+    const u32 total = u32(keys.size());
+    std::atomic<u32> next{}, done{}, built{}, failed{}, skipped{}, compute{}, running{threads};
+    std::atomic<bool> stop{};
+    const auto build = [&](u32 slot, std::vector<u8>& data) {
+        Serialization::Archive ar{std::move(data)};
+        Serialization::Reader reader{ar};
+        u32 version{}, is_compute{};
+        reader.Read(version);
+        reader.Read(is_compute);
+        if (version != Serialization::PipelineKeyVersion || is_compute) {
+            ++compute;
+            return;
+        }
+        GraphicsPipelineKey key;
+        GraphicsPipeline::SerializationSupport sdata{};
+        key.Deserialize(ar);
+        sdata.Deserialize(ar);
+        const u64 name = std::hash<GraphicsPipelineKey>{}(key);
+        if (skip.contains(name)) {
+            ++skipped;
+            return;
+        }
+        std::array<Shader::Info, MaxShaderStages> stage_infos{};
+        std::array<const Shader::Info*, MaxShaderStages> infos{};
+        std::array<vk::ShaderModule, MaxShaderStages> modules{};
+        std::optional<Shader::Gcn::FetchShaderData> fetch;
+        SCOPE_EXIT {
+            for (const auto module : modules) {
+                if (module) {
+                    device.destroyShaderModule(module);
+                }
+            }
+        };
+        for (u32 stage = 0; stage < MaxShaderStages; ++stage) {
+            const u64 hash = key.stage_hashes[stage];
+            if (!hash) {
+                continue;
+            }
+            std::vector<u8> meta;
+            db.Load(Storage::BlobType::ShaderMeta, fmt::format("{:#018x}", hash), meta);
+            if (meta.empty()) {
+                ++skipped;
+                return;
+            }
+            Serialization::Archive meta_ar{std::move(meta)};
+            Shader::StageSpecialization spec;
+            std::optional<Shader::Gcn::FetchShaderData> stage_fetch;
+            size_t perm_idx{};
+            // Motion vertex shaders are refused here too: the game builds those itself.
+            if (!LoadShaderMeta(meta_ar, stage_infos[stage], stage_fetch, spec, perm_idx)) {
+                ++skipped;
+                return;
+            }
+            std::vector<u32> spv;
+            db.Load(Storage::BlobType::ShaderBinary,
+                    fmt::format("{:#018x}_{}", stage_infos[stage].pgm_hash, perm_idx), spv);
+            modules[stage] = spv.empty() ? vk::ShaderModule{} : CompileSPV(spv, device);
+            if (!modules[stage]) {
+                ++skipped;
+                return;
+            }
+            infos[stage] = &stage_infos[stage];
+            if (stage_fetch) {
+                fetch = stage_fetch;
+            }
+        }
+        journal.Mark(slot, name);
+        const bool valid =
+            GraphicsPipeline(instance, scheduler, desc_heap, profile, key, *pipeline_cache, infos,
+                             no_runtime_infos, fetch, modules, sdata, true)
+                .IsValid();
+        journal.Clear(slot);
+        ++(valid ? built : failed);
+    };
+
+    const auto started = std::chrono::steady_clock::now();
+    std::vector<std::jthread> workers;
+    for (u32 slot = 0; slot < threads; ++slot) {
+        workers.emplace_back([&, slot] {
+            for (u32 n; !stop && (n = next++) < total; ++done) {
+                try {
+                    build(slot, keys[n]);
+                } catch (const std::exception& e) {
+                    ++failed;
+                    LOG_ERROR(Render_Vulkan, "Pipeline preparation failed: {}", e.what());
+                }
+            }
+            --running;
+        });
+    }
+    while (running) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        if (!stop && !progress(done, total)) {
+            stop = true;
+        }
+    }
+    workers.clear();
+    if (!stop) {
+        journal.Finish();
+    }
+    std::printf("Pipeline preparation: %u built, %u refused, %u skipped, %u compute left for the "
+                "game, of %u keys in %.1f s (%u threads)%s\n",
+                built.load(), failed.load(), skipped.load(), compute.load(), total,
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count(),
-                threads, stats.stopped ? ", skipped" : "");
+                threads, stop ? ", skipped" : "");
+    ReportPipelineBinaryCache();
+    return !stop;
 }
 
 bool PipelineCache::DiskShadersActive() const {
