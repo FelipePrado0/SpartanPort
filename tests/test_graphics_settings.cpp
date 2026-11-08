@@ -230,7 +230,10 @@ int main() {
     assert(G::ParseMonitor(std::to_string(std::numeric_limits<int>::max() + 1LL)) == G::PrimaryMonitor);
     assert(G::ParseMonitor("99999999999999999999") == G::PrimaryMonitor);
     assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(144) == 144 && G::ParseFpsLimit(180) == 180 && G::ParseFpsLimit(100) == 100 && G::ParseFpsLimit(75) == 0);
-    assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 22);
+    assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 24);
+    // #964, #1038: 2880x1800 (16:10) and 5120x2880 (5K, 16:9).
+    assert(G::ParseResolution("2880x1800") == 22 && G::ParseResolution("5120x2880") == 23);
+    assert(G::ResolutionSize("5120x2880") == std::make_pair(5120, 2880));
     // #238: 900p (1600x900) sits between 720p and 1440p in the built-in list.
     assert(G::Resolutions[3] == "900p" && G::Resolutions[2] == "720p" && G::Resolutions[4] == "1440p");
     // The window's starting size (window.cpp): built-in names, a mod's size, native otherwise.
@@ -343,13 +346,13 @@ int main() {
         // ones and keep their names through a load and a save; repeated or built-in names are not added twice.
         SetEnvironment("SPARTAN_EXTRA_RESOLUTIONS", "3840x1080;2880x1200;;2880x1200;4K;3440x1440");
         const auto names = G::ResolutionNames();
-        assert(names.size() == 25 && names[22] == "8K" && names[23] == "3840x1080" && names[24] == "2880x1200");
+        assert(names.size() == 27 && names[24] == "8K" && names[25] == "3840x1080" && names[26] == "2880x1200");
         {
             std::ofstream out(path);
             out << "render_resolution=2880x1200\n";
         }
         SpartanSettings::Load();
-        assert(v.render_resolution == 24);
+        assert(v.render_resolution == 26);
         SpartanSettings::Save();
         assert(Read(path).find("render_resolution=2880x1200\n") != std::string::npos);
         SetEnvironment("SPARTAN_EXTRA_RESOLUTIONS", "");  // the mod is off: its resolution is unknown, so native

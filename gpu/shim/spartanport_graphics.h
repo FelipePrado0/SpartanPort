@@ -27,12 +27,12 @@ inline constexpr std::array<int, 8> FpsLimits = {30, 60, 100, 120, 144, 180, 240
 /// Game patch suffixes ("Resolution Patch - <name>"); "native" is no resolution patch.
 /// The ones after 900p are the Ultrawide mod's sizes (#202) and the 16:10 and 4:3 ones, built in as beta
 /// (scripts/graphics_options.py).
-inline constexpr std::array<std::string_view, 23> Resolutions = {
+inline constexpr std::array<std::string_view, 25> Resolutions = {
     "native", "480p", "720p", "900p", "1440p", "1800p", "4K",
     "2560x1080", "3440x1440", "3840x1600", "5120x1440", "1920x1200", "2560x1600", "1280x800",
     "1440x900", "1360x768",
     "1280x960", "1440x1080", "1920x1440", "2048x1536", "2560x1920",
-    "5120x2160", "8K"};
+    "5120x2160", "2880x1800", "5120x2880", "8K"};
 /// The resolutions to choose from: the built-in ones, then those of the enabled mods' patch files
 /// (SPARTAN_EXTRA_RESOLUTIONS, ";"-separated sizes such as "3440x1440"; run.py sets it at every start).
 inline std::vector<std::string> ResolutionNames() {

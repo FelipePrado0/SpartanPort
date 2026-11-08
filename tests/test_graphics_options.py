@@ -349,8 +349,8 @@ class AspectRatioTest(unittest.TestCase):
 
     def test_resolutions_of_an_aspect_smallest_first_native_on_top(self):
         self.assertEqual(g.resolutions_for('16:9', g.RESOLUTIONS),
-                         ['native', '480p', '720p', '1360x768', '900p', '1440p', '1800p', '4K', '8K'])
-        self.assertEqual(g.resolutions_for('16:10', g.RESOLUTIONS), ['1280x800', '1440x900', '1920x1200', '2560x1600'])
+                         ['native', '480p', '720p', '1360x768', '900p', '1440p', '1800p', '4K', '5120x2880', '8K'])
+        self.assertEqual(g.resolutions_for('16:10', g.RESOLUTIONS), ['1280x800', '1440x900', '1920x1200', '2560x1600', '2880x1800'])
         self.assertEqual(g.resolutions_for('4:3', g.RESOLUTIONS),
                          ['1280x960', '1440x1080', '1920x1440', '2048x1536', '2560x1920'])
 
