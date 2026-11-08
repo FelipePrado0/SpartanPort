@@ -13,11 +13,11 @@
 | F0 | Preparação, linha de base e decisões | pronta (driver medido em 2026-11-08) | `feat/shader-precompile` |
 | F1 | Captura das entradas no momento da tradução | pronta (sessão de 32 saves em 2026-11-08) | `feat/shader-precompile` |
 | F2 | API de tradução offline e verificador 100% | 100% no Windows (3.440 de 3.440); falta o Linux | `feat/shader-precompile` |
-| F3 | Leitura do código dos shaders nos WADs | leitor e testes prontos; falta `app0` (F5) | `feat/shader-precompile` |
+| F3 | Leitura do código dos shaders nos WADs | pronta: pasta do jogo chega à GPU (`game_dir`) | `feat/shader-precompile` |
 | F4 | Manifesto: formato e ferramenta que o gera | pronta: manifesto real de 451 KB | `feat/shader-precompile` |
-| F5 | Materialização na primeira abertura (shaders) | não iniciada | `feat/shader-precompile` |
+| F5 | Materialização na primeira abertura (shaders) | pronta no Windows: 3.432 shaders em 14,2 s; falta ver Esc/B e a tela com a mão do usuário | `feat/shader-precompile` |
 | F6 | Pré-compilação dos pipelines no driver | só o diário de crash pronto (`CrashJournal`) | `feat/shader-precompile` |
-| F7 | Invalidação: GPU, driver e versão | decisão, marcador e testes prontos; falta ligar no jogo (F5) | `feat/shader-precompile` |
+| F7 | Invalidação: GPU, driver e versão | marcador ligado no jogo (F5); falta a matriz de 14.4 | `feat/shader-precompile` |
 | F8 | Interface: tela de preparo, launcher e textos | não iniciada | `feat/shader-precompile` |
 | F9 | Campanha de gravação e empacotamento | não iniciada | `feat/shader-precompile` |
 | F10 | Validação final e release | não iniciada | `feat/shader-precompile` |
@@ -626,19 +626,35 @@ Em `vk_presenter.cpp`, antes da decisão `UseOnDemandPipelines` (perto da linha 
 
 ### 12.4 Testes
 
-- [ ] Materializar de um manifesto pequeno (gerado no teste a partir de shaders sintéticos traduzíveis,
+- [x] Materializar de um manifesto pequeno (gerado no teste a partir de shaders sintéticos traduzíveis,
       ou do fixture do verificador) numa pasta vazia gera os arquivos esperados com nomes e
-      `perm_hash` corretos.
-- [ ] Retomada: interromper no meio e rodar de novo termina sem refazer o que já estava pronto.
-- [ ] Código ausente: contado e pulado.
+      `perm_hash` corretos. `materialize-test`, com tradução substituta.
+- [x] Retomada: interromper no meio e rodar de novo termina sem refazer o que já estava pronto.
+- [x] Código ausente: contado e pulado.
+- [x] Cache com outro shader num número do manifesto: recusado sem gravar nada; o jogo recomeça o
+      cache e prepara de novo (uma sessão jogada depois de pular numera nos buracos).
+
+### 12.4.1 Decisões da spec (2026-11-08)
+
+- O cache de sessões jogadas sem o marcador `precompile` é **renomeado** para
+  `<serial>.pre-precompile` (aprovado pelo mantenedor), nunca apagado.
+- O manifesto precisa ter as mesmas versões de `.meta`, `.spv` e chave do build; senão o jogo segue
+  sob demanda com aviso no log. O manifesto do release sai do mesmo build.
+- Manifesto novo (outro `manifest_id`) recomeça o cache: os números de um programa podem mudar.
+- Sem checkbox nem texto novo nesta fase (F8): o preparo roda só quando existe
+  `shaders/<serial>.spm` ao lado do executável.
+- Threads: todos os núcleos menos um (o jogo ainda não roda).
 
 ### 12.5 Validação
 
-- [ ] Pasta de cache nova (a antiga renomeada), manifesto da F4, jogo aberto pelo launcher. A tela de
-      preparo aparece, o progresso anda, o jogo começa.
-- [ ] Verificador da F2 rodado na pasta materializada contra a pasta gravada original: os `.spv` de
-      cada permutação são idênticos (mesma GPU).
-- [ ] Tempo do preparo anotado.
+- [x] Pasta de cache renomeada pelo próprio jogo, manifesto da F4, jogo aberto pelo launcher: o jogo
+      começa e a tela-título usa 162 permutações do cache com **0 compiladas**. A tela de progresso
+      não foi capturada (o preparo durou 14 s).
+- [x] Os 3.432 `.spv` gerados são idênticos byte a byte aos da gravação original (RX 6700 XT).
+- [x] Tempo: **14,2 s** com 11 threads (3.432 shaders, 1.763 chaves). Segunda abertura: "done at an
+      earlier start".
+- [ ] Esc/B no meio do preparo: Esc enviado em segundo plano não chega ao estado do teclado do SDL
+      (precisa da janela em foco). Falta o usuário apertar numa sessão.
 
 **Pronto quando:** tudo acima. Commit.
 
