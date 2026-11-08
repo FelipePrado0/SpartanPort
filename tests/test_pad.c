@@ -12,8 +12,8 @@ static uint16_t rumble_low, rumble_high;
 int spartanportgpu_overlay_captures_input(void) { return capture; }
 int spartanportgpu_vibration_percent(void) { return vibration_percent; }
 unsigned spartanportgpu_dualsense_features(int *speaker_gain) { *speaker_gain=4; return 0; }
-static int engine_fps_cycles;
-void spartanportgpu_engine_fps_cycle(void) { ++engine_fps_cycles; }
+static int engine_fps_steps, engine_fps_presses;
+void spartanportgpu_engine_fps_step(int direction) { engine_fps_steps+=direction; ++engine_fps_presses; }
 static int engine_fps_cap=-1, engine_fps_cap_calls, engine_fps_cap_type=-2, engine_fps_held_calls;
 static unsigned engine_fps_cap_kinds, engine_fps_held_kinds;
 void spartanportgpu_engine_fps_cap(int fps) { engine_fps_cap=fps; ++engine_fps_cap_calls; }
@@ -521,27 +521,37 @@ int main(void) {
     inject(path,"");
     data=read_pad();
 
-    /* R3 + L1 + R1 cycles the engine frame rate once per press; the three stay hidden from
-     * the game until each one is released (a stray R1 would grab in the middle of a ledge). */
+    /* Hold R3: each R1 press raises the engine frame rate a step, each L1 press lowers it. Once
+     * used, R3, R1 and L1 stay hidden from the game until each one is released (a stray R1
+     * would grab in the middle of a ledge). R1 or L1 alone, or R3 alone, reach the game. */
+    inject(path,"r3");
+    data=read_pad();
+    assert(data.buttons==BTN_R3 && engine_fps_presses==0);
+    inject(path,"r3 r1 cross");
+    data=read_pad();
+    assert(engine_fps_steps==1 && engine_fps_presses==1);
+    assert(!(data.buttons & (BTN_R3|BTN_R1)) && (data.buttons & BTN_CROSS));
+    data=read_pad();  /* held: no repeat */
+    assert(engine_fps_presses==1 && !(data.buttons & (BTN_R3|BTN_R1)));
+    inject(path,"r3");
+    data=read_pad();
+    inject(path,"r3 r1");
+    data=read_pad();
+    assert(engine_fps_steps==2 && engine_fps_presses==2 && data.buttons==0);
     inject(path,"r3 l1");
     data=read_pad();
-    assert((data.buttons & (BTN_R3|BTN_L1))==(BTN_R3|BTN_L1) && engine_fps_cycles==0);
-    inject(path,"r3 l1 r1 cross");
+    assert(engine_fps_steps==1 && engine_fps_presses==3 && data.buttons==0);
+    inject(path,"l1");  /* R3 let go first: L1 stays hidden until released */
     data=read_pad();
-    assert(engine_fps_cycles==1 && !(data.buttons & (BTN_R3|BTN_L1|BTN_R1)) && (data.buttons & BTN_CROSS));
-    data=read_pad();
-    assert(engine_fps_cycles==1 && !(data.buttons & (BTN_R3|BTN_L1|BTN_R1)));
-    inject(path,"l1 r1");
-    data=read_pad();
-    assert(engine_fps_cycles==1 && data.buttons==0);
+    assert(data.buttons==0 && engine_fps_presses==3);
     inject(path,"");
     data=read_pad();
     inject(path,"l1");
     data=read_pad();
-    assert(data.buttons==BTN_L1 && engine_fps_cycles==1);
-    inject(path,"r3 l1 r1");
+    assert(data.buttons==BTN_L1 && engine_fps_presses==3);
+    inject(path,"r1");
     data=read_pad();
-    assert(engine_fps_cycles==2 && data.buttons==0);
+    assert(data.buttons==BTN_R1 && engine_fps_presses==3);
     inject(path,"");
     data=read_pad();
     assert(data.buttons==0);

@@ -282,8 +282,9 @@ int EngineFpsNow();
 /// Present thread, every vblank: writes EngineFpsNow() into the game once the game has set its
 /// own rate (a frame rate patch applied), when they differ.
 void SyncEngineFps();
-/// R3 + L1 + R1 / F9: the rate after EngineFpsChosen() (saved); 0 when this launch cannot change it.
-int CycleEngineFps();
+/// R3 + R1 / L1, F9 + Right / Left: the next stop from EngineFpsChosen() toward `direction` (saved);
+/// 0 when this launch cannot change it.
+int StepEngineFps(int direction);
 /// Writes the file (menu changes).
 void Save();
 

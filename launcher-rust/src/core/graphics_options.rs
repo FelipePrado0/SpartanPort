@@ -14,8 +14,8 @@ use crate::core::catalog::setting;
 use crate::core::fs::atomic_write;
 use crate::core::ini::{read_ini, write_lines, HEADER};
 use crate::core::options::{
-    Choice, ANISOTROPY, ENGINE_FPS_CHOICES, FRAME_RATE_PATCH_PREFIX, GLYPH_STYLES, RESOLUTIONS,
-    RESOLUTION_PATCH_PREFIX, TEXTURE_FIX_PATCH,
+    Choice, ANISOTROPY, ENGINE_FPS_CHOICES, FRAME_RATE_PATCH_PREFIX, GLYPH_STYLES, MAX_ENGINE_FPS,
+    MIN_ENGINE_FPS, RESOLUTIONS, RESOLUTION_PATCH_PREFIX, TEXTURE_FIX_PATCH,
 };
 use crate::core::python::ensure_ascii;
 
@@ -163,7 +163,11 @@ pub fn startup_options(ini: &IndexMap<String, String>, extra: &[String]) -> Opti
     }
     let default_fps = setting("engine_fps").map_or_else(String::new, |row| row.default.as_text());
     let mut engine_fps = get("engine_fps", &default_fps);
-    if !ENGINE_FPS_CHOICES.iter().any(|c| c.value == engine_fps) {
+    // Any whole rate from 30 to 240 (the in-game menu's slider, #831), not only the listed ones.
+    if !engine_fps
+        .parse::<u32>()
+        .is_ok_and(|fps| (MIN_ENGINE_FPS..=MAX_ENGINE_FPS).contains(&fps))
+    {
         engine_fps = default_fps;
     }
     Options {
@@ -836,7 +840,7 @@ mod tests {
         let f = folder();
         fs::write(
             &f.ini,
-            "render_resolution=invalid\nengine_fps=90\nstale_readback=yes\n",
+            "render_resolution=invalid\nengine_fps=300\nstale_readback=yes\n",
         )
         .unwrap();
         let prepared = prepare(&f.ini, &f.state, &[], &no_env());
@@ -977,7 +981,7 @@ mod tests {
             ]
         );
 
-        // The engine rate changes live (in-game menu, R3 + L1 + R1): every launch takes the
+        // The engine rate changes live (in-game menu, R3 + R1 / L1): every launch takes the
         // highest frame rate patch, even for 60 or 100 FPS.
         let native = startup(&[("engine_fps", "60")]);
         assert_eq!(
@@ -1091,8 +1095,17 @@ mod tests {
                 "Frame Rate Patch - 240 FPS"
             ]
         );
-        // Not a choice: the default.
-        assert_eq!(startup(&[("engine_fps", "90")]).engine_fps, "120");
+        // Any whole rate from 30 to 240 (the in-game slider); anything else is the default.
+        for (saved, rate) in [("90", "90"), ("75", "75"), ("30", "30"), ("240", "240")] {
+            assert_eq!(startup(&[("engine_fps", saved)]).engine_fps, rate);
+        }
+        for saved in ["29", "241", "0", "-60", "ninety", "75.5"] {
+            assert_eq!(
+                startup(&[("engine_fps", saved)]).engine_fps,
+                "120",
+                "{saved}"
+            );
+        }
     }
 
     #[test]

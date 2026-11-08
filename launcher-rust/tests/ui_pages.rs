@@ -383,7 +383,13 @@ fn aspect_follows_and_filters_the_render_resolution() {
     assert_eq!(state.store.text("render_resolution"), "1920x1200");
     assert_eq!(
         values(&performance::aspect_resolution_options(&state)),
-        ["1280x800", "1440x900", "1920x1200", "2560x1600"]
+        [
+            "1280x800",
+            "1440x900",
+            "1920x1200",
+            "2560x1600",
+            "2880x1800"
+        ]
     );
     set(&mut state, "render_resolution", "3440x1440");
     assert_eq!(state.aspect, "21:9");

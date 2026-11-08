@@ -15,7 +15,7 @@ RESOLUTIONS = ('native', '480p', '720p', '900p', '1440p', '1800p', '4K',
                '2560x1080', '3440x1440', '3840x1600', '5120x1440', '1920x1200', '2560x1600', '1280x800',
                '1440x900', '1360x768',
                '1280x960', '1440x1080', '1920x1440', '2048x1536', '2560x1920',
-               '5120x2160', '8K')
+               '5120x2160', '2880x1800', '5120x2880', '8K')
 # The ultrawide, 16:10 and 4:3 sizes of the Ultrawide mod (#202), built in: beta until more screens confirm
 # them, except the ones tested in game (the maintainer's own tests and players' reports in issues #180, #505
 # and #519): 2560x1080, 1440x1080, 2048x1536, 2560x1920 and 8K are still beta.
@@ -218,7 +218,8 @@ def startup_options(ini, extra=()):
     options = {key: ini.get(key, value) for key, value in DEFAULTS.items()}
     if options['render_resolution'] not in resolutions(extra):
         options['render_resolution'] = 'native'
-    if options['engine_fps'] not in {str(f) for f in ENGINE_FPS}:
+    # Any whole rate from 30 to 240 (the in-game slider, #831).
+    if not (options['engine_fps'].isdigit() and 30 <= int(options['engine_fps']) <= 240):
         options['engine_fps'] = '120'
     for key in ('deferred_readback', 'stale_readback', 'async_shaders'):
         options[key] = '0' if options[key] == '0' else '1'

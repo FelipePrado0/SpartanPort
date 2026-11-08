@@ -509,7 +509,7 @@ static void find_engine_fps(Segment *segments, uint64_t count, uint64_t size) {
 static void publish_engine_fps(void) {
     if (!engine_fps_at) return;
     spartanport_engine_fps_globals((uintptr_t)(image+engine_fps_at),(uintptr_t)(image+engine_rounded_at));
-    puts("Engine FPS: live frame rate ready (menu, R3 + L1 + R1 or F9)");
+    puts("Engine FPS: live frame rate ready (menu, R3 + R1 / L1 or F9 + Right / Left)");
 }
 
 /* The upgrade menu's open flag (src/graphics_hook.h): Texture Quality skips its LOD bias while it

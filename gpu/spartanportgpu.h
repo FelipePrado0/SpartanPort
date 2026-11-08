@@ -72,8 +72,8 @@ int spartanportgpu_audio_channels(void);
  * one at a time: SDL's subsystem count is not thread-safe, and a second caller during the first's
  * driver setup gets true with no driver yet, so its streams fail and the game runs silent. */
 int spartanportgpu_audio_init(void);
-/* R3 + L1 + R1 (pad) or F9: the next engine frame rate (60, 100, 120, 144, 180, 240), applied live. */
-void spartanportgpu_engine_fps_cycle(void);
+/* Pad, R3 held: R1 (direction 1) or L1 (-1) steps the engine frame rate 5 FPS, applied live. */
+void spartanportgpu_engine_fps_step(int direction);
 /* The pad thread during a QTE (src/runtime_pad.c): caps the engine frame rate at fps, 0 for no cap.
  * Only stores it (no lock): the present thread applies it within a vblank, unless the menu's
  * auto_safe_fps is off, and engine_fps (saved) never changes. */

@@ -417,13 +417,13 @@ void SyncEngineFps() {
     capped = capping;
 }
 
-int CycleEngineFps() {
+int StepEngineFps(int direction) {
     auto& v = Get();
     if (!v.engine_fps_global || v.applied_engine_fps <= 60) {
         return 0;
     }
     // From the player's rate, not the QTE cap: the cap never reaches engine_fps.
-    v.engine_fps = SpartanGraphics::NextEngineFps(EngineFpsChosen(), v.applied_engine_fps);
+    v.engine_fps = SpartanGraphics::StepEngineFps(EngineFpsChosen(), direction, v.applied_engine_fps);
     Save();
     return v.engine_fps;
 }
@@ -479,7 +479,7 @@ bool ResolutionNeedsRestart() {
 }
 
 void Save() {
-    static std::mutex mutex; // the menu and the pad thread (CycleEngineFps)
+    static std::mutex mutex; // the menu and the pad thread (StepEngineFps)
     std::scoped_lock lock{mutex};
     const auto& v = Get();
     FILE* file = std::fopen(Path(), "w");
@@ -849,9 +849,8 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
                 v.render_resolution = resolution;
             } else if (index == 2) v.fps_limit = cycle(SpartanGraphics::FpsLimits, v.fps_limit);
             else if (index == 3) {
-                std::vector<int> rates;
-                for (int rate : SpartanGraphics::EngineFps) if (rate <= v.applied_engine_fps) rates.push_back(rate);
-                v.engine_fps = cycle(rates, v.engine_fps);
+                v.engine_fps = SpartanGraphics::StepEngineFps(SpartanSettings::EngineFpsChosen(), direction,
+                                                              v.applied_engine_fps);
             } else if (index == 4) {
                 std::vector<int> monitors{-1};
                 monitors.insert(monitors.end(), v.monitors.begin(), v.monitors.end());

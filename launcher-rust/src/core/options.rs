@@ -268,6 +268,10 @@ pub static VIDEO_BACKENDS: &[Choice] = &[
     c("x11", "X11 (XWayland)"),
 ];
 
+/// The engine frame rates the in-game menu can save (spartanport_graphics.h MinEngineFps..MaxEngineFps).
+pub const MIN_ENGINE_FPS: u32 = 30;
+pub const MAX_ENGINE_FPS: u32 = 240;
+
 pub static ENGINE_FPS_CHOICES: &[Choice] = &[
     c("60", "60 (original)"),
     c("100", "100"),
@@ -300,6 +304,8 @@ pub static RESOLUTIONS: &[&str] = &[
     "2048x1536",
     "2560x1920",
     "5120x2160",
+    "2880x1800",
+    "5120x2880",
     "8K",
 ];
 
@@ -571,7 +577,7 @@ mod tests {
         }
         let names: HashSet<_> = RESOLUTIONS.iter().collect();
         assert_eq!(names.len(), RESOLUTIONS.len());
-        assert_eq!(RESOLUTIONS.len(), 23);
+        assert_eq!(RESOLUTIONS.len(), 25);
     }
 
     #[test]
@@ -596,7 +602,15 @@ mod tests {
     fn beta_resolutions_are_the_untested_custom_ones() {
         assert_eq!(
             beta_resolutions(),
-            ["2560x1080", "1440x1080", "2048x1536", "2560x1920", "8K"]
+            [
+                "2560x1080",
+                "1440x1080",
+                "2048x1536",
+                "2560x1920",
+                "2880x1800",
+                "5120x2880",
+                "8K"
+            ]
         );
     }
 }
