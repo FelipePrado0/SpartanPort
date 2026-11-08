@@ -2753,10 +2753,14 @@ bool HandleEvent(const SDL_Event& event) {
             return true;
         }
         // Hold F10 and press 1 to 8: switches that cheat (#320). F10 and those keys never reach the game.
+        // Tracked from the events, not SDL_GetKeyboardState: that state is already past an F10
+        // release queued behind the number.
+        static bool f10_held = false;
         if (event.key.key == SDLK_F10) {
+            f10_held = down;
             return true;
         }
-        if (event.key.key >= SDLK_1 && event.key.key <= SDLK_8 && SDL_GetKeyboardState(nullptr)[SDL_SCANCODE_F10]) {
+        if (event.key.key >= SDLK_1 && event.key.key <= SDLK_8 && f10_held) {
             if (down && !event.key.repeat) {
                 const int number = int(event.key.key - SDLK_1) + 1;
                 const int on = SpartanSettings::ToggleCheat(number);
