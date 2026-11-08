@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <fstream>
 #include <map>
+#include <xxhash.h>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -25,7 +26,9 @@
 #include "common/serdes.h"
 #include "common/scope_exit.h"
 #include "video_core/renderer_vulkan/vk_pipeline_serialization.h"
+#include "video_core/renderer_vulkan/vk_precompile_state.h"
 #include "video_core/renderer_vulkan/vk_shader_manifest.h"
+#include "video_core/renderer_vulkan/vk_shader_materialize.h"
 #include "common/thread.h"
 #include "spartanport_overlay.h"
 #include "spartanport_toggles.h"
@@ -1221,6 +1224,123 @@ void PipelineCache::StartOnDemand() {
     StartBinaryConversion();
     std::printf("Pipeline startup: on demand, no bulk warm-up (%zu saved programs)\n",
                 disk_permutations.size());
+}
+
+// spartanport: the shipped shader list, written into the cache before the first frame (the store
+// StartOnDemand reads by name). The marker "precompile" says what was done, for which build, GPU,
+// driver and list (DecideWork).
+void PipelineCache::PrepareShaders(const std::filesystem::path& manifest_path,
+                                   const std::function<bool(u32, u32)>& progress) {
+    namespace fs = std::filesystem;
+    auto& db = Storage::DataBase::Instance();
+    const bool disk_on = EmulatorSettingsImpl::Flag("SPARTAN_DISK_SHADERS", true) &&
+                         !SpartanToggle::Disabled(SpartanToggle::DiskShaders);
+    std::error_code error;
+    if (!EmulatorSettings.IsPipelineCacheEnabled() || EmulatorSettings.IsPipelineCacheArchived() ||
+        !disk_on || !fs::is_regular_file(manifest_path, error)) {
+        return;
+    }
+    std::vector<u8> bytes(size_t(fs::file_size(manifest_path, error)));
+    std::ifstream(manifest_path, std::ios::binary)
+        .read(reinterpret_cast<char*>(bytes.data()), std::streamsize(bytes.size()));
+    u64 manifest_id{};
+    const auto manifest = Manifest::Decode(bytes, &manifest_id);
+    const auto& elf = Common::ElfInfo::Instance();
+    const auto versions = Manifest::CurrentVersions();
+    if (!manifest || manifest->serial != elf.GameSerial() || manifest->versions != versions) {
+        LOG_WARNING(Render_Vulkan, "Shader list {} is damaged or for another build or game: shaders "
+                                   "compile while playing", manifest_path.string());
+        return;
+    }
+    const auto& game_dir = elf.GetGameFolder();
+    if (game_dir.empty() || db.IsOpened()) {
+        LOG_WARNING(Render_Vulkan, "Shader preparation skipped: no game folder or cache opened");
+        return;
+    }
+
+    // A cache of played sessions numbers its shaders its own way: it is set aside, never deleted.
+    const auto cache_dir = Common::FS::GetUserPath(Common::FS::PathType::CacheDir) /
+                           std::string(elf.GameSerial());
+    const auto marker_file = cache_dir / "precompile.bin";
+    if (fs::is_directory(cache_dir, error) && !fs::exists(marker_file, error) &&
+        !fs::is_empty(cache_dir, error)) {
+        auto aside = cache_dir;
+        aside += ".pre-precompile";
+        for (u32 n = 2; fs::exists(aside, error); ++n) {
+            aside = cache_dir;
+            aside += fmt::format(".pre-precompile-{}", n);
+        }
+        fs::rename(cache_dir, aside, error);
+        if (error) {
+            LOG_WARNING(Render_Vulkan, "Shader preparation skipped: cannot move {}: {}",
+                        cache_dir.string(), error.message());
+            return;
+        }
+        std::printf("Shader preparation: earlier cache kept at %s\n", aside.string().c_str());
+    }
+
+    const bool compatible = CheckCacheProfile(); // opens the cache
+    if (!db.IsOpened()) {
+        return;
+    }
+    std::vector<u8> stored_bytes;
+    if (compatible && fs::exists(marker_file, error)) {
+        db.Load(Storage::BlobType::ShaderProfile, "precompile", stored_bytes);
+    }
+    const auto profile_blob = ProfileBlob();
+    const auto& driver = instance.GetPipelineBinaryGlobalKey();
+    PrecompileMarker now{
+        .manifest_id = manifest_id,
+        .meta_version = versions.meta,
+        .binary_version = versions.binary,
+        .pipeline_version = versions.pipeline,
+        .profile_hash = XXH3_64bits(profile_blob.data(), profile_blob.size()),
+        .driver_hash = driver.keySize ? XXH3_64bits(driver.key.data(), driver.keySize) : 0,
+    };
+    const auto stored = DecodeMarker(stored_bytes);
+    const auto work = DecideWork(stored, now);
+    if (!work.shaders) {
+        std::printf("Shader preparation: done at an earlier start\n");
+        return;
+    }
+    const auto start_over = [&] {
+        db.Clear();
+        db.Save(Storage::BlobType::ShaderProfile, "profile", std::vector<u8>{profile_blob});
+        db.Save(Storage::BlobType::ShaderProfile, "disk_shaders", std::vector<u8>{1});
+        db.Save(Storage::BlobType::ShaderProfile, "precompile", EncodeMarker(now));
+    };
+    // A new list may number a program's shaders differently: written again from nothing.
+    const bool resume = stored && !work.restart_cache && !work.new_only;
+    if (resume) {
+        db.Save(Storage::BlobType::ShaderProfile, "precompile", EncodeMarker(now));
+    } else {
+        start_over();
+    }
+
+    // Nothing else runs yet: every core but the one showing the progress.
+    const u32 threads = std::max(1u, std::thread::hardware_concurrency()) - 1;
+    const auto started = std::chrono::steady_clock::now();
+    const auto replay = Manifest::DefaultReplay(profile);
+    auto stats = Manifest::Materialize(*manifest, game_dir, replay, threads, resume, progress);
+    if (stats.conflict) {
+        std::printf("Shader preparation: a played session saved other shaders under the list's "
+                    "numbers, starting over\n");
+        start_over();
+        stats = Manifest::Materialize(*manifest, game_dir, replay, threads, false, progress);
+    }
+    if (!stats.stopped) {
+        now.shaders_done = true;
+        db.Save(Storage::BlobType::ShaderProfile, "precompile", EncodeMarker(now));
+    }
+    // StartOnDemand lists the files next: they must be on disk.
+    if (!db.Flush(std::chrono::minutes(2))) {
+        LOG_WARNING(Render_Vulkan, "Shader preparation: cache writes still queued");
+    }
+    std::printf("Shader preparation: %u written, %u kept, %u without code, %u refused, %u pipeline "
+                "keys in %.1f s (%u threads)%s\n",
+                stats.written, stats.kept, stats.no_code, stats.failed, stats.keys,
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count(),
+                threads, stats.stopped ? ", skipped" : "");
 }
 
 bool PipelineCache::DiskShadersActive() const {

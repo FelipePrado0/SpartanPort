@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <functional>
 #include <chrono>
 #include <string>
@@ -141,6 +142,11 @@ public:
     /// the results a few at a time (PumpWarmUp). False when it cannot (zip archive store).
     bool StartBackgroundWarmUp();
     void StartOnDemand();
+    /// spartanport: on the first start, writes every shader of the shipped shader list into the
+    /// cache before the game runs. progress(done, total) false stops; what is written stays and the
+    /// next start goes on from there. Nothing happens without the list or once it is done.
+    void PrepareShaders(const std::filesystem::path& manifest_path,
+                        const std::function<bool(u32 done, u32 total)>& progress);
     void Sync();
     void ReportCompilerStats();
 

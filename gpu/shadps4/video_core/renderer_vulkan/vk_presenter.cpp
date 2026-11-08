@@ -22,6 +22,8 @@
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/texture_cache/image.h"
 
+#include <SDL3/SDL.h>
+#include <fmt/format.h>
 #include <miniz.h>
 #include <thread>
 
@@ -329,6 +331,44 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
                               EmulatorSettings.IsPipelineCacheEnabled();
     const bool capture_only = EmulatorSettingsImpl::Flag("SPARTAN_PIPELINE_BINARY_ISOLATED", false) &&
                               EmulatorSettingsImpl::Flag("SPARTAN_PIPELINE_CAPTURE_ONLY", false);
+    // spartanport: on the first start, the shipped shader list (shaders/<serial>.spm beside the
+    // executable) fills the shader cache before the game runs. Esc or Circle (B) skips; the window
+    // thread keeps the keyboard and gamepad state current.
+    {
+        const char* base = SDL_GetBasePath();
+        const auto list = std::filesystem::path(base ? base : "") / "shaders" /
+                          fmt::format("{}.spm", Common::ElfInfo::Instance().GameSerial());
+        SDL_Gamepad* pad = nullptr;
+        int pads = 0;
+        if (SDL_JoystickID* ids = SDL_GetGamepads(&pads)) {
+            pad = pads > 0 ? SDL_OpenGamepad(ids[0]) : nullptr;
+            SDL_free(ids);
+        }
+        auto last = std::chrono::steady_clock::time_point{};
+        bool shown = false;
+        rasterizer->GetPipelineCache().PrepareShaders(list, [&](u32 done, u32 total) {
+            const bool* keys = SDL_GetKeyboardState(nullptr);
+            if ((keys && keys[SDL_SCANCODE_ESCAPE]) ||
+                (pad && SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST))) {
+                return false;
+            }
+            const auto now = std::chrono::steady_clock::now();
+            if (now - last >= std::chrono::milliseconds(250)) {
+                last = now;
+                shown = true;
+                SpartanOverlay::SetLoading(true, done, total);
+                PresentLoadingFrame();
+            }
+            return true;
+        });
+        if (pad) {
+            SDL_CloseGamepad(pad);
+        }
+        if (shown) {
+            SpartanOverlay::SetLoading(false, 0, 0);
+        }
+    }
+
     if (UseOnDemandPipelines(binary_cache, instance.GetPipelineBinaryGlobalKey().keySize != 0,
                             capture_only)) {
         rasterizer->GetPipelineCache().StartOnDemand();
