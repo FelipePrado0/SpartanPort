@@ -634,6 +634,23 @@ int main() {
     SpartanSettings::Load();
     assert(std::string(text(0xf07)) == "On");
     assert(std::string(text(0xf17)) == "Off" && !v.auto_qte);
+    // #320, F10 + 1 to 8: cheat N switched and saved (8 is Automatic QTE); -1 when unavailable.
+    v.cheats[0] = false;
+    assert(SpartanSettings::ToggleCheat(1) == 1 && v.cheats[0]);
+    assert(Read(path).find("cheat_health=1\n") != std::string::npos);
+    assert(SpartanSettings::ToggleCheat(1) == 0 && !v.cheats[0]);
+    v.cheats[6] = false;
+    assert(SpartanSettings::ToggleCheat(7) == 1 && v.cheats[6]);
+    v.cheats[6] = false;
+    assert(SpartanSettings::ToggleCheat(8) == 1 && v.auto_qte);
+    assert(SpartanSettings::ToggleCheat(8) == 0 && !v.auto_qte);
+    assert(SpartanSettings::ToggleCheat(0) == -1 && SpartanSettings::ToggleCheat(9) == -1);
+    v.cheats_supported = (1u << SPARTAN_CHEAT_COUNT) - 1 - 1u;
+    assert(SpartanSettings::ToggleCheat(1) == -1 && !v.cheats[0]);
+    v.cheats_supported = (1u << SPARTAN_CHEAT_COUNT) - 1;
+    v.qte_supported = false;
+    assert(SpartanSettings::ToggleCheat(8) == -1 && !v.auto_qte);
+    v.qte_supported = true;
     // Free camera: off by default, kept in the ini (the launcher writes the same key).
     v.free_camera = true;
     SpartanSettings::Save();
