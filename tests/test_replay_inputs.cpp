@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include <cstdio>
+#include <cstring>
 #include "shader_recompiler/frontend/fetch_shader.h"
 #include "shader_recompiler/info.h"
+#include "shader_recompiler/profile.h"
 #include "shader_recompiler/replay.h"
 #include "shader_recompiler/specialization.h"
+#include "video_core/amdgpu/spartanport_msaa.h"
 #include "video_core/renderer_vulkan/vk_pipeline_serialization.h"
 
 #undef NDEBUG
@@ -76,11 +79,35 @@ static void CaptureUsesTranslationBuffer() {
     assert(inputs.code_xxh3 != 0);
 }
 
+// profile.bin is the shader profile plus the game's multisampling byte; the tools replay that mode.
+static void ProfileWithMsaaByte() {
+    Shader::Profile written{};
+    written.supported_spirv = 0x10600;
+    std::vector<u8> blob(sizeof(written) + 1);
+    std::memcpy(blob.data(), &written, sizeof(written));
+
+    Shader::Profile read{};
+    blob.back() = 1;
+    assert(Shader::LoadReplayProfile(blob, read));
+    assert(read.supported_spirv == 0x10600 && AmdGpu::NoMsaa());
+
+    blob.back() = 0;
+    assert(Shader::LoadReplayProfile(blob, read) && !AmdGpu::NoMsaa());
+
+    blob.pop_back(); // older caches: no byte, multisampling on
+    AmdGpu::no_msaa = true;
+    assert(Shader::LoadReplayProfile(blob, read) && !AmdGpu::NoMsaa());
+
+    blob.pop_back();
+    assert(!Shader::LoadReplayProfile(blob, read));
+}
+
 int main() {
     RoundTrip();
     RoundTripEmpty();
     OldMetaRefused();
     CaptureUsesTranslationBuffer();
+    ProfileWithMsaaByte();
     std::printf("PASS: replay inputs\n");
     return 0;
 }

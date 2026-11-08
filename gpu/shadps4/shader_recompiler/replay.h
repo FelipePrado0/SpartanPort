@@ -41,6 +41,10 @@ ReplayInputs CaptureReplayInputs(const Info& info, std::span<const u32> user_dat
                                  std::span<const u32> code,
                                  const Gcn::FetchShaderSnapshot& fetch);
 
+/// Reads a cache's profile.bin (the shader profile, then the game's multisampling byte, absent in
+/// older caches) and puts AmdGpu::NoMsaa in the mode it was recorded in: translation depends on it.
+bool LoadReplayProfile(std::span<const u8> blob, Profile& profile);
+
 /// Translates a recorded permutation without guest memory. info receives the result of the
 /// translation. Empty when the recorded inputs do not fit the specialization. Thread safe.
 std::vector<u32> ReplayTranslate(std::span<const u32> code, HwStage hw_stage, SwStage sw_stage,

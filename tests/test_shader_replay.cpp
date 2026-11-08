@@ -89,13 +89,12 @@ int main(int argc, char** argv) {
 
     const auto index = LoadIndex(source);
     const auto profile_bytes = ReadFile(cache / "profile.bin");
-    if (profile_bytes.size() != sizeof(Shader::Profile)) {
-        std::fprintf(stderr, "profile.bin size %zu != %zu\n", profile_bytes.size(),
-                     sizeof(Shader::Profile));
+    Shader::Profile profile;
+    if (!Shader::LoadReplayProfile(profile_bytes, profile)) {
+        std::fprintf(stderr, "profile.bin size %zu is not %zu or %zu\n", profile_bytes.size(),
+                     sizeof(Shader::Profile), sizeof(Shader::Profile) + 1);
         return 1;
     }
-    Shader::Profile profile;
-    std::memcpy(&profile, profile_bytes.data(), sizeof(profile));
 
     std::vector<fs::path> metas;
     for (const auto& entry : fs::directory_iterator(cache)) {

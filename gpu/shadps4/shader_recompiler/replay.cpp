@@ -10,6 +10,7 @@
 #include "shader_recompiler/recompiler.h"
 #include "shader_recompiler/replay.h"
 #include "shader_recompiler/specialization.h"
+#include "video_core/amdgpu/spartanport_msaa.h"
 
 namespace Shader {
 
@@ -75,6 +76,15 @@ ReplayInputs CaptureReplayInputs(const Info& info, std::span<const u32> user_dat
     inputs.code_size = u32(code.size_bytes());
     inputs.code_xxh3 = XXH3_64bits(code.data(), code.size_bytes());
     return inputs;
+}
+
+bool LoadReplayProfile(std::span<const u8> blob, Profile& profile) {
+    if (blob.size() != sizeof(profile) && blob.size() != sizeof(profile) + 1) {
+        return false;
+    }
+    std::memcpy(&profile, blob.data(), sizeof(profile));
+    AmdGpu::no_msaa = blob.size() > sizeof(profile) && blob[sizeof(profile)] != 0;
+    return true;
 }
 
 std::vector<u32> ReplayTranslate(std::span<const u32> code, HwStage hw_stage, SwStage sw_stage,

@@ -11,6 +11,7 @@
 #include "shader_recompiler/dump_index.h"
 #include "shader_recompiler/profile.h"
 #include "shader_recompiler/recompiler.h"
+#include "shader_recompiler/replay.h"
 #include "video_core/renderer_vulkan/vk_shader_manifest.h"
 
 namespace fs = std::filesystem;
@@ -42,12 +43,11 @@ static int Build(int argc, char** argv) {
         return 2;
     }
     const auto profile_bytes = ReadAll(caches[0] / "profile.bin");
-    if (profile_bytes.size() != sizeof(Shader::Profile)) {
+    Shader::Profile profile;
+    if (!Shader::LoadReplayProfile(profile_bytes, profile)) {
         std::fprintf(stderr, "%s: no usable profile.bin\n", caches[0].string().c_str());
         return 1;
     }
-    Shader::Profile profile;
-    std::memcpy(&profile, profile_bytes.data(), sizeof(profile));
 
     const auto index = Shader::IndexDump(game);
     Shader::Pools pools;
