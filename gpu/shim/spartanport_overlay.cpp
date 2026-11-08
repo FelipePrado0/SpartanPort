@@ -120,6 +120,7 @@ ImFont* title_font = nullptr; // Cinzel with DejaVu Sans for what it lacks; null
 constexpr float kTitleSize = 32.0f, kTabSize = 22.0f, kSectionSize = 19.0f; // px at 1080p
 std::atomic<bool> menu_open{false};
 bool r3_down = false, l2_down = false, r2_down = false;
+bool f10_held = false;
 std::atomic<bool> loading{false};
 std::atomic<u32> loading_done{0}, loading_total{0};
 std::atomic<u32> background_done{0}, background_total{0};
@@ -2716,6 +2717,11 @@ bool HandleChoiceEvent(const SDL_Event& event) {
 
 bool HandleEvent(const SDL_Event& event) {
     std::scoped_lock lock{imgui_mutex};
+    // F10 for the cheat hotkeys, followed from the events (SDL_GetKeyboardState is already past an
+    // F10 release queued behind the number) and before the trophy views, which take their own keys.
+    if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && event.key.key == SDLK_F10) {
+        f10_held = event.type == SDL_EVENT_KEY_DOWN;
+    }
     if (!initialized) {
         return false;
     }
@@ -2753,11 +2759,7 @@ bool HandleEvent(const SDL_Event& event) {
             return true;
         }
         // Hold F10 and press 1 to 8: switches that cheat (#320). F10 and those keys never reach the game.
-        // Tracked from the events, not SDL_GetKeyboardState: that state is already past an F10
-        // release queued behind the number.
-        static bool f10_held = false;
         if (event.key.key == SDLK_F10) {
-            f10_held = down;
             return true;
         }
         if (event.key.key >= SDLK_1 && event.key.key <= SDLK_8 && f10_held) {
