@@ -104,4 +104,8 @@ jobs:
             gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Windows test build $TAG" \
               --notes "Windows test build from \`${GITHUB_SHA::7}\`. Download \`spartanport-windows.zip\`, extract it and run \`SpartanPort.exe\`. Not a final release: please report in the linked issue whether it opens and runs."
           fi
-          gh release upload "$TAG" dist/spartanport-windows.zip dist/spartanport-windows.zip.sha256 --clobber
+          # Launchers up to 3.0.0 list only releases carrying this file (#1284). Drop it 3 releases after 3.1.0.
+          pre=$(gh release view "$TAG" --json isPrerelease -q .isPrerelease)
+          printf '{"channel": "%s", "version": "%s"}\n' "$([[ $pre == true ]] && echo prerelease || echo release)" \
+            "$(sed -E 's/.*-v([0-9.]+).*/\1/' <<<"$TAG")" > dist/release-windows.json
+          gh release upload "$TAG" dist/spartanport-windows.zip dist/spartanport-windows.zip.sha256 dist/release-windows.json --clobber
