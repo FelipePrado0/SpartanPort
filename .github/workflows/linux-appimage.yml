@@ -93,4 +93,8 @@ jobs:
             gh release create "$TAG" --prerelease --target "$GITHUB_SHA" --title "Linux test build $TAG" \
               --notes "Linux test build from \`${GITHUB_SHA::7}\`. Download \`spartanport-x86_64.AppImage\`, then \`chmod +x spartanport-x86_64.AppImage\` and run it. Not a final release: please report in the linked issue whether it opens and runs."
           fi
-          gh release upload "$TAG" dist/spartanport-x86_64.AppImage dist/spartanport-x86_64.AppImage.sha256 --clobber
+          # Launchers up to 3.0.0 list only releases carrying this file (#1284). Drop it 3 releases after 3.1.0.
+          pre=$(gh release view "$TAG" --json isPrerelease -q .isPrerelease)
+          printf '{"channel": "%s", "version": "%s"}\n' "$([[ $pre == true ]] && echo prerelease || echo release)" \
+            "$(sed -E 's/.*-v([0-9.]+).*/\1/' <<<"$TAG")" > dist/release-linux.json
+          gh release upload "$TAG" dist/spartanport-x86_64.AppImage dist/spartanport-x86_64.AppImage.sha256 dist/release-linux.json --clobber
