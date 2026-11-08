@@ -806,9 +806,9 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         const auto names = SpartanGraphics::ResolutionNames();
         const auto aspect = [](const std::string& name) {
             const auto [w, h] = SpartanGraphics::ResolutionSize(name);
-            const char* labels[] = {"16:9", "16:10", "21:9", "32:9", "4:3"};
-            const double ratios[] = {16.0/9, 1.6, 2.37, 32.0/9, 4.0/3};
-            for (unsigned i = 0; i < 5; ++i) if (std::abs(double(w)/h - ratios[i]) < 0.05)
+            const char* labels[] = {"16:9", "16:10", "21:9", "32:9", "48:9", "4:3"};
+            const double ratios[] = {16.0/9, 1.6, 2.37, 32.0/9, 48.0/9, 4.0/3};
+            for (unsigned i = 0; i < 6; ++i) if (std::abs(double(w)/h - ratios[i]) < 0.05)
                 return std::string(labels[i]);
             const int divisor = std::gcd(w, h);
             return std::to_string(w/divisor) + ":" + std::to_string(h/divisor);
@@ -827,7 +827,7 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
             };
             if (index <= 1) {
                 std::vector<std::string> aspects;
-                for (const char* a : {"16:9", "16:10", "21:9", "32:9", "4:3"}) aspects.emplace_back(a);
+                for (const char* a : {"16:9", "16:10", "21:9", "32:9", "48:9", "4:3"}) aspects.emplace_back(a);
                 for (const auto& name : names) {
                     const auto a = aspect(name);
                     if (std::find(aspects.begin(), aspects.end(), a) == aspects.end()) aspects.push_back(a);
