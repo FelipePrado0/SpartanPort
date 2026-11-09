@@ -82,6 +82,19 @@ fn run_carries_everything_after_it() {
 }
 
 #[test]
+fn prepare_carries_everything_after_it() {
+    let args = |list: &[&str]| list.iter().map(OsString::from).collect::<Vec<_>>();
+    assert_eq!(
+        route(&["--prepare", "--game", "C:/dump"]),
+        Route::Prepare {
+            args: args(&["--game", "C:/dump"])
+        }
+    );
+    // Only as the first argument, like `--run`: elsewhere it is ignored.
+    assert_eq!(route(&["--game", "x", "--prepare"]), Route::Launcher);
+}
+
+#[test]
 fn run_and_play_are_their_own_routes() {
     // `--play` counts anywhere, as in the Python `main`.
     assert_eq!(route(&["--play"]), Route::Play);

@@ -81,6 +81,19 @@ pub fn run(context: RunContext<'_>) -> i32 {
     run_with(context, &SystemHost)
 }
 
+/// `--prepare --game <folder>` (RecompLauncher's setup step): the image preparation and the content
+/// profile of that folder into the data folder's `out/`, as a start does them, then stop: no probe,
+/// no window and no game. Prints `progress <0 to 1> <text>` lines, and returns 0 when it worked, 1
+/// with the reason printed when it did not.
+pub fn prepare(context: RunContext<'_>) -> i32 {
+    let RunContext {
+        context: program,
+        args,
+        out,
+    } = context;
+    Runner::new(out, program.env.clone(), &SystemHost).prepare_only(&program.paths, &args)
+}
+
 /// `SPARTAN_RESTART_COMMAND`, what the in-game "Apply and restart" starts (`run.py`, from
 /// `sys.executable`): on Windows `<exe> --run --after <pid> <args>` quoted as
 /// `subprocess.list2cmdline` does (the probe starts it and ends, so the new launch waits for this
@@ -634,6 +647,35 @@ impl<'a> Runner<'a> {
         let code = self.play_game(&command);
         drop(views);
         code
+    }
+
+    /// [`prepare`]: steps 3, 8 and 9 of a start for `--game <folder>`, without the update and mods.
+    fn prepare_only(&mut self, paths: &Paths, args: &[OsString]) -> i32 {
+        let [flag, game] = args else {
+            return self.fail("--prepare needs --game <folder>");
+        };
+        if flag != "--game" {
+            return self.fail("--prepare needs --game <folder>");
+        }
+        let game = PathBuf::from(game);
+        let plan = RunPlan::read(paths, &self.env);
+        self.port.clone_from(&plan.port);
+        if let Err(error) = fs::create_dir_all(&plan.out) {
+            return self.fail(&format!("{}: {error}", python_path(&plan.out)));
+        }
+        if !game.join("eboot.bin").is_file() {
+            return self.fail(&format!("No eboot.bin in {}.", python_path(&game)));
+        }
+        self.say("progress 0.1 Reading the game");
+        if let Err(code) = self.prepare_image(&game, &plan.out) {
+            return code;
+        }
+        self.say("progress 0.8 Reading the game's content");
+        if let Err(code) = self.content_profile(&plan, &game) {
+            return code;
+        }
+        self.say("progress 1 Ready");
+        0
     }
 
     /// `--after <pid>` at the front of `args`: waits for that process (at most 30 s) and returns

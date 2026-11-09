@@ -27,6 +27,9 @@ pub enum Route {
     Run { args: Vec<OsString> },
     /// `--play`: the Rust runner's play role.
     Play,
+    /// `--prepare`: the game image of a folder, without the window or the game, for RecompLauncher's
+    /// setup step; everything after it is the runner's (`--game <folder>`).
+    Prepare { args: Vec<OsString> },
     /// `--install-update TARGET PID`: the downloaded version installs itself over the old one.
     /// A `pid` that is not a number is 0.
     InstallUpdate { target: PathBuf, pid: u32 },
@@ -54,6 +57,7 @@ pub fn route_on<S: AsRef<OsStr>>(args: &[S], windows: bool) -> Route {
     };
     match args.first() {
         Some(first) if is(first, "--run") => return Route::Run { args: rest() },
+        Some(first) if is(first, "--prepare") => return Route::Prepare { args: rest() },
         Some(first) if is(first, "--voice-swap") => return Route::VoiceSwap { args: rest() },
         Some(first) if is(first, "--install-update") && windows && args.len() == 3 => {
             return Route::InstallUpdate {
@@ -139,7 +143,7 @@ pub fn start(
         })
     };
     let mut paths = read(&env, None);
-    if matches!(route, Route::Run { .. }) {
+    if matches!(route, Route::Run { .. } | Route::Prepare { .. }) {
         if let Ok(resolved) = mods::resolve(&paths.port_dir) {
             if resolved != paths.port_dir {
                 paths = read(&env, Some(&resolved));

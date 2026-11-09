@@ -38,6 +38,14 @@ fn main() {
             };
             std::process::exit(runner::run(run))
         }
+        Route::Prepare { args } => {
+            let run = RunContext {
+                context: &context,
+                args,
+                out: &mut std::io::stdout(),
+            };
+            std::process::exit(runner::prepare(run))
+        }
         Route::Play => {
             // As the Python `main`: the start-up steps and the settings first.
             startup::apply_to_process(&context);
