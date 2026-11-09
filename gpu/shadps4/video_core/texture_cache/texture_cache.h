@@ -437,6 +437,9 @@ private:
     void UntrackImageHead(ImageId image_id);
     void UntrackImageTail(ImageId image_id);
 
+    // spartanport: use the same mapped guest range when marking and checking a small image.
+    static std::optional<u64> MaybeDirtyHash(const Image& image);
+
     void MarkAsMaybeDirty(ImageId image_id, Image& image);
 
     /// Removes the image and any views/surface metas that reference it.
