@@ -21,3 +21,4 @@ Backported from upstream after b4e7ae7 (2026-10-02), correctness and performance
   12c5978f6 nested indirect-buffer coroutine frames freed (#5258), by the SCOPE_EXIT guards of f9d07487d (#5446).
   e6c79a5fe constant-engine counter waits: no unsigned wrap, no null task resumed (#5406).
   145932bf5 exact-address image lookup scans only the first page (#5240), with unkeyed entries.
+  699009c94 stale source contents no longer overwrite an expanded image upload (#5444).

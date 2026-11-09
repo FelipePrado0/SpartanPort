@@ -1073,19 +1073,39 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
 ImageId TextureCache::ExpandImage(const ImageInfo& info, ImageId image_id) {
     const auto new_image_id = slot_images.insert(instance, runtime, slot_image_views, info);
     RegisterImage(new_image_id);
+    // spartanport: protect guest bytes before validating the untracked maybe-dirty source.
+    TrackImage(new_image_id);
 
     auto& src_image = slot_images[image_id];
     auto& new_image = slot_images[new_image_id];
 
+    // spartanport: a neighboring CPU write may leave the source's GPU-only texels valid.
+    if (True(src_image.flags & ImageFlagBits::MaybeCpuDirty)) {
+        const auto hash = MaybeDirtyHash(src_image);
+        if (hash && src_image.hash == *hash) {
+            src_image.flags &= ~ImageFlagBits::MaybeCpuDirty;
+        }
+    }
+    // spartanport: a CPU write to one mip marks the whole image dirty. Refreshing a GPU-written
+    // source uploads only the mips whose guest bytes changed and keeps the other GPU-written
+    // mips, so the source becomes clean and its full copy below loses none of them.
+    if (True(src_image.flags & ImageFlagBits::GpuModified)) {
+        RefreshImage(src_image);
+    }
+    // spartanport: copy only GPU-written data absent from guest memory; a dirty source would
+    // overwrite the replacement's fresh upload with stale texels. RefreshImage never uploads a
+    // multisampled image (it stays Dirty), so its only contents are the GPU copy.
+    const bool src_has_gpu_data = src_image.SafeToDownload() || src_image.info.guest_samples > 1;
     RefreshImage(new_image);
-    runtime.CopyImage(&src_image, &new_image);
+    if (src_has_gpu_data) {
+        runtime.CopyImage(&src_image, &new_image);
+    }
 
     if (src_image.binding.is_bound || src_image.binding.is_target) {
         src_image.binding.needs_rebind = 1u;
     }
 
     FreeImage(image_id);
-    TrackImage(new_image_id);
     return new_image_id;
 }
 
