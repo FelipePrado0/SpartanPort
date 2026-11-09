@@ -754,6 +754,12 @@ const GraphicsPipeline* PipelineCache::TryPreparedPipeline(const PreparedDraw& p
     // a draw takes the regular path, as without a worker. ResolveVertexBuffers checks the V#s
     // once more when the draw is recorded, after the writes queued before it.
     const auto& fetch = pipeline->GetFetchShader();
+    // spartanport: PrepareVertexInputs leaves the inputs invalid only for a V# format with no
+    // Vulkan format. Only the regular path checks the formats and skips such a draw;
+    // recording it could stop the game in SurfaceFormat.
+    if (fetch && !prepared.vertex.valid) {
+        return nullptr;
+    }
     if (prepared.vertex.valid && fetch && fetch->attributes.size() == prepared.vertex.count &&
         !fetch->SharpsUnchanged(pipeline->GetStage(SwStage::Vertex), prepared.vertex.buffers)) {
         NoteStaleVertexInputs();
