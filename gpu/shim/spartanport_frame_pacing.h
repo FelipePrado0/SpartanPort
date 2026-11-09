@@ -38,7 +38,10 @@ inline void SleepFor(std::chrono::nanoseconds remaining) {
 #endif
 }
 
+// A timer can wake early (the Windows fallback to Sleep may), so wait out what remains.
 inline void SleepUntil(Clock::time_point deadline) {
-    SleepFor(std::chrono::duration_cast<std::chrono::nanoseconds>(deadline - Clock::now()));
+    for (auto now = Clock::now(); now < deadline; now = Clock::now()) {
+        SleepFor(std::chrono::duration_cast<std::chrono::nanoseconds>(deadline - now));
+    }
 }
 } // namespace SpartanFramePacing
