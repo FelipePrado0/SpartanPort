@@ -82,6 +82,27 @@ fn run_carries_everything_after_it() {
 }
 
 #[test]
+fn update_dir_is_used_only_when_it_holds_an_eboot() {
+    use spartanport_launcher::startup::update_dir_arg;
+    let args = |list: &[&std::ffi::OsStr]| list.iter().map(OsString::from).collect::<Vec<_>>();
+    let dir = tempfile::tempdir().unwrap();
+    let given = args(&[
+        "--play".as_ref(),
+        "--update-dir".as_ref(),
+        dir.path().as_os_str(),
+    ]);
+    assert_eq!(
+        update_dir_arg(&given),
+        None,
+        "a skipped pick has no eboot.bin"
+    );
+    std::fs::write(dir.path().join("eboot.bin"), b"x").unwrap();
+    assert_eq!(update_dir_arg(&given), Some(dir.path().to_path_buf()));
+    assert_eq!(update_dir_arg(&args(&["--play".as_ref()])), None);
+    assert_eq!(update_dir_arg(&args(&["--update-dir".as_ref()])), None);
+}
+
+#[test]
 fn prepare_carries_everything_after_it() {
     let args = |list: &[&str]| list.iter().map(OsString::from).collect::<Vec<_>>();
     assert_eq!(

@@ -80,6 +80,15 @@ pub fn route_on<S: AsRef<OsStr>>(args: &[S], windows: bool) -> Route {
     Route::Launcher
 }
 
+/// `--update-dir <folder>` of a `--play` start (RecompLauncher puts the update the player picked in
+/// one): the folder, when it holds an `eboot.bin`. A folder without one (the pick was skipped) or no
+/// such argument is `None`, and the saved update folder stays.
+pub fn update_dir_arg(args: &[OsString]) -> Option<PathBuf> {
+    let at = args.iter().position(|arg| arg == "--update-dir")?;
+    let dir = PathBuf::from(args.get(at + 1)?);
+    dir.join("eboot.bin").is_file().then_some(dir)
+}
+
 /// Python `install_update`: waits for the old launcher (`pid`) to close, copies this version
 /// (`source`) over `target` and starts it. Returns the exit code.
 pub fn install_update(source: &Path, target: &Path, pid: u32, lang: &str) -> i32 {
