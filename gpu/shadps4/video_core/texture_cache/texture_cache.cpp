@@ -1081,12 +1081,43 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
                     return {merged_image_id, -1, -1};
                 }
 
-                // We need to have a larger, already allocated image to copy this one into
-                if (merged_image_id) {
-                    auto& merged_image = slot_images[merged_image_id];
-                    runtime.CopyMip(&cache_image, &merged_image, mip, slice);
-                    FreeImage(cache_image_id);
+                // spartanport: create the parent now so GPU-written child texels survive;
+                // creating it later from guest memory would lose those texels.
+                if (!merged_image_id) {
+                    merged_image_id =
+                        slot_images.insert(instance, runtime, slot_image_views, image_info);
+                    RegisterImage(merged_image_id);
+                    // Track before the upload reads guest memory, as UpdateImage does, so a
+                    // CPU write during the upload marks the parent dirty.
+                    TrackImage(merged_image_id);
+                    RefreshImage(slot_images[merged_image_id]);
                 }
+                auto& merged_image = slot_images[merged_image_id];
+                // spartanport: preserve a maybe-dirty child only if its guest bytes are unchanged.
+                if (True(cache_image.flags & ImageFlagBits::MaybeCpuDirty)) {
+                    const auto hash = MaybeDirtyHash(cache_image);
+                    if (hash && cache_image.hash == *hash) {
+                        cache_image.flags &= ~ImageFlagBits::MaybeCpuDirty;
+                    }
+                }
+                // spartanport: copy only GPU-written child texels the parent's fresh upload
+                // lacks; a dirty or CPU-only child would overwrite it with stale data. A
+                // multisampled child is never uploaded (it stays Dirty); its texels are GPU-only.
+                if (cache_image.SafeToDownload() || cache_image.info.guest_samples > 1) {
+                    // spartanport: large parents may not have upload hashes yet. Record the
+                    // copied mip's mapped guest baseline before preserving GPU-only child data.
+                    if (merged_image.mip_hashes[mip] == 0) {
+                        const auto& layout = merged_image.info.mips_layout[mip];
+                        const VAddr address = merged_image.info.guest_address + layout.offset;
+                        if (Core::Memory::Instance()->ClampRangeSize(address, layout.size) ==
+                            layout.size) {
+                            merged_image.mip_hashes[mip] =
+                                XXH3_64bits(std::bit_cast<const u8*>(address), layout.size);
+                        }
+                    }
+                    runtime.CopyMip(&cache_image, &merged_image, mip, slice);
+                }
+                FreeImage(cache_image_id);
             }
         }
     }
