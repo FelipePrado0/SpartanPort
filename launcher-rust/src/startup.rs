@@ -85,7 +85,7 @@ pub fn route_on<S: AsRef<OsStr>>(args: &[S], windows: bool) -> Route {
 /// such argument is `None`, and the saved update folder stays.
 pub fn update_dir_arg(args: &[OsString]) -> Option<PathBuf> {
     let at = args.iter().position(|arg| arg == "--update-dir")?;
-    let dir = PathBuf::from(args.get(at + 1)?);
+    let dir = std::path::absolute(args.get(at + 1)?).ok()?;
     dir.join("eboot.bin").is_file().then_some(dir)
 }
 
