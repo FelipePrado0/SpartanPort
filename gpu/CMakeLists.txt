@@ -538,10 +538,11 @@ target_compile_definitions(upscaler-support-test PRIVATE
 
 add_executable(fsr-driver-test EXCLUDE_FROM_ALL ../tests/test_fsr_driver.cpp
     shadps4/video_core/renderer_vulkan/fsr_driver.cpp)
-target_include_directories(fsr-driver-test PRIVATE shadps4)
+target_include_directories(fsr-driver-test PRIVATE shim shadps4)
 target_compile_definitions(fsr-driver-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_compile_options(fsr-driver-test PRIVATE -UNDEBUG)
-target_link_libraries(fsr-driver-test PRIVATE Vulkan::Headers)
+target_link_libraries(fsr-driver-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers
+    tsl::robin_map Threads::Threads)
 add_executable(orb-multiplier-test EXCLUDE_FROM_ALL ../tests/test_orb_multiplier.cpp
     shim/spartanport_orbs.cpp shim/spartanport_settings.cpp)
 target_include_directories(orb-multiplier-test PRIVATE shim)
@@ -617,9 +618,10 @@ target_compile_options(page-state-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 add_executable(fsr4-bench EXCLUDE_FROM_ALL tools/fsr4_bench.cpp
     shadps4/video_core/renderer_vulkan/fsr_driver.cpp
     shadps4/video_core/renderer_vulkan/fsr411/fsr411.cpp)
-target_include_directories(fsr4-bench PRIVATE shadps4 shadps4/video_core/renderer_vulkan/fsr411)
+target_include_directories(fsr4-bench PRIVATE shim shadps4 shadps4/video_core/renderer_vulkan/fsr411)
 target_compile_definitions(fsr4-bench PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(fsr4-bench PRIVATE ffx-vulkan::fsr4-v07-vulkan ffx-vulkan::fsr4-v07-assets Vulkan::Vulkan)
+target_link_libraries(fsr4-bench PRIVATE ffx-vulkan::fsr4-v07-vulkan ffx-vulkan::fsr4-v07-assets Vulkan::Vulkan
+    fmt::fmt Boost::headers tsl::robin_map Threads::Threads)
 
 add_executable(cheat-hook-test ../tests/test_cheat_hook.cpp)
 target_compile_options(cheat-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
