@@ -637,3 +637,8 @@ if (WIN32)
     target_sources(frame-pacing-test PRIVATE ../src/compat_win.c)
     target_link_libraries(frame-pacing-test PRIVATE onecore bcrypt)
 endif()
+
+add_executable(reg-dirty-test EXCLUDE_FROM_ALL ../tests/test_reg_dirty.cpp)
+target_compile_options(reg-dirty-test PRIVATE -UNDEBUG)
+target_include_directories(reg-dirty-test PRIVATE shim shadps4 third_party/gcn/include)
+target_link_libraries(reg-dirty-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
