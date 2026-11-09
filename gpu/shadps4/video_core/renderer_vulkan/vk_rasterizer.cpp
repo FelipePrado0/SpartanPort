@@ -126,7 +126,11 @@ bool IsKnownFormat(AmdGpu::DataFormat data_fmt, AmdGpu::NumberFormat num_fmt) {
         return t;
     }();
     const u32 d = static_cast<u32>(data_fmt), n = static_cast<u32>(num_fmt);
-    return d < 256 && n < 256 && tables.first[d] && tables.second[n];
+    // spartanport: the pair must have a texture format too. A stale T# (Polaris reports: 9/7,
+    // 10/7, 6/5) has two known values that no real texture combines; it reads as a null texture
+    // here instead of stopping the game in SurfaceFormat when its image is created.
+    return d < 256 && n < 256 && tables.first[d] && tables.second[n] &&
+           LiverpoolToVK::TrySurfaceFormat(data_fmt, num_fmt) != vk::Format::eUndefined;
 }
 } // namespace
 
@@ -2657,11 +2661,30 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
 
         const auto data_fmt = tsharp.GetDataFmt();
         const auto num_fmt = tsharp.GetNumberFmt();
+        const Shader::MipStorageFallbackMode mip_fallback_mode = image_desc.mip_fallback_mode;
+        // Same as image_desc.NumBindings(stage), without fetching the T# again.
+        const u32 num_bindings = mip_fallback_mode == Shader::MipStorageFallbackMode::DynamicIndex
+                                     ? static_cast<u32>(tsharp.last_level - tsharp.base_level + 1)
+                                     : 1u;
+        // spartanport: a null binding keeps the shader's descriptor type (a default desc is
+        // sampled, and a sampled write to a storage binding is invalid). A rejected T# with an
+        // address fills every descriptor the pipeline reserves for it, one per mip with a dynamic
+        // mip index: specialization counted them. A null address was skipped there, so it keeps
+        // one descriptor, as before.
+        const auto bind_null = [&](u32 count) {
+            for (u32 i = 0; i < count; ++i) {
+                auto& null_desc = image_desc_storage.emplace_back();
+                null_desc.type = image_desc.is_written
+                                     ? VideoCore::TextureCache::BindingType::Storage
+                                     : VideoCore::TextureCache::BindingType::Texture;
+                image_bindings.emplace_back(VideoCore::ImageId{}, &null_desc);
+                image_binding_entries.push_back(nullptr);
+                binding_proxy_ok.push_back(false);
+            }
+            image_descriptor_array_sizes.push_back(count);
+        };
         if (tsharp.Address() == 0 || data_fmt == AmdGpu::DataFormat::FormatInvalid) {
-            image_bindings.emplace_back(VideoCore::ImageId{}, &image_desc_storage.emplace_back());
-            image_binding_entries.push_back(nullptr);
-            binding_proxy_ok.push_back(false);
-            image_descriptor_array_sizes.push_back(1);
+            bind_null(1u);
             continue;
         }
 
@@ -2672,19 +2695,10 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
                         "data_format={}, num_format={}",
                         tsharp.Address(), tsharp.pitch, tsharp.width, static_cast<u32>(data_fmt),
                         static_cast<u32>(num_fmt));
-            image_bindings.emplace_back(VideoCore::ImageId{}, &image_desc_storage.emplace_back());
-            image_binding_entries.push_back(nullptr);
-            binding_proxy_ok.push_back(false);
-            image_descriptor_array_sizes.push_back(1);
+            bind_null(num_bindings);
             continue;
         }
 
-        const Shader::MipStorageFallbackMode mip_fallback_mode = image_desc.mip_fallback_mode;
-        // Same as image_desc.NumBindings(stage), without fetching the T# again.
-        const u32 num_bindings =
-            mip_fallback_mode == Shader::MipStorageFallbackMode::DynamicIndex
-                ? static_cast<u32>(tsharp.last_level - tsharp.base_level + 1)
-                : 1u;
         const bool proxy_candidate = sample_proxies && num_bindings == 1 &&
                                      !image_desc.needs_native && !image_desc.is_written &&
                                      mip_fallback_mode == Shader::MipStorageFallbackMode::None;

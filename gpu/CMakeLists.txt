@@ -429,6 +429,12 @@ add_executable(no-msaa-test EXCLUDE_FROM_ALL ../tests/test_no_msaa.cpp
 target_compile_options(no-msaa-test PRIVATE -UNDEBUG)
 target_include_directories(no-msaa-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(no-msaa-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
+add_executable(surface-format-test EXCLUDE_FROM_ALL ../tests/test_surface_format.cpp
+    shadps4/video_core/renderer_vulkan/liverpool_to_vk.cpp shadps4/video_core/amdgpu/pixel_format.cpp
+    shadps4/common/number_utils.cpp)
+target_compile_options(surface-format-test PRIVATE -UNDEBUG)
+target_include_directories(surface-format-test PRIVATE shim shadps4 third_party/gcn/include third_party/half/include)
+target_link_libraries(surface-format-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
 add_executable(async-pipeline-cache-test EXCLUDE_FROM_ALL ../tests/test_async_pipeline_cache.cpp)
 target_compile_options(async-pipeline-cache-test PRIVATE -UNDEBUG)
 target_include_directories(async-pipeline-cache-test PRIVATE shadps4)

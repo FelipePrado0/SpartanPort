@@ -1203,6 +1203,21 @@ bool PipelineCache::RefreshGraphicsStages(PipelineSelection& sel) {
                 }
                 return false;
             }
+            // spartanport: a stale descriptor's data/number format pair has no vertex format
+            // whose numeric type matches the shader input; skip the draw.
+            const auto& buffer = attrib.GetSharp(*vs_info);
+            if (buffer.GetDataFmt() != AmdGpu::DataFormat::FormatInvalid &&
+                Vulkan::LiverpoolToVK::TrySurfaceFormat(
+                    buffer.GetDataFmt(), buffer.GetNumberFmt()) == vk::Format::eUndefined) {
+                static std::atomic<u32> reported{0};
+                if (!sel.worker && reported.fetch_add(1, std::memory_order_relaxed) < 5) {
+                    LOG_WARNING(Render_Vulkan,
+                                "Draw skipped: vertex data_format={} num_format={} has no format",
+                                static_cast<u32>(buffer.GetDataFmt()),
+                                static_cast<u32>(buffer.GetNumberFmt()));
+                }
+                return false;
+            }
         }
     }
     if (vs_info && sel.fetch_shader && !instance.IsVertexInputDynamicState()) {
