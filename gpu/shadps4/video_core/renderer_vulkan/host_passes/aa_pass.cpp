@@ -15,6 +15,8 @@
 #include "video_core/renderer_vulkan/host_passes/aa_pass.h"
 #include "video_core/renderer_vulkan/host_passes/smaa_tables.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
+// spartanport: device-idle waits share the scheduler's queue submission lock.
+#include "video_core/renderer_vulkan/vk_scheduler.h"
 
 #include <vk_mem_alloc.h>
 
@@ -40,6 +42,8 @@ constexpr vk::ImageSubresourceRange ColorRange = {vk::ImageAspectFlagBits::eColo
 
 AaPass::~AaPass() {
     if (device) {
+        // spartanport: serialize the teardown wait with submissions from every scheduler.
+        std::scoped_lock submit_lock{Scheduler::submit_mutex};
         (void)device.waitIdle();
     }
     if (staging_buffer) {
@@ -188,6 +192,8 @@ void AaPass::MakeTarget(Target& target, vk::Extent2D size, vk::Format format,
 
 void AaPass::RecreateTargets(vk::Extent2D size, bool smaa) {
     // The images being replaced may still be read by frames in flight.
+    // spartanport: exclude queue submissions through the wait and target replacement.
+    std::scoped_lock submit_lock{Scheduler::submit_mutex};
     (void)device.waitIdle();
     constexpr auto output_usage =
         vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage;

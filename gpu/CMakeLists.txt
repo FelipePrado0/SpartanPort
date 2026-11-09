@@ -494,7 +494,7 @@ target_include_directories(aa-pass-test PRIVATE shim shadps4 ${SHADER_INCLUDE} t
 target_compile_definitions(aa-pass-test PRIVATE BOOST_ASIO_STANDALONE)
 target_compile_options(aa-pass-test PRIVATE -UNDEBUG -fPIC -Wno-deprecated-declarations -Wno-missing-field-initializers)
 target_link_libraries(aa-pass-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
-    tsl::robin_map GPUOpen::VulkanMemoryAllocator miniz::miniz ${CMAKE_DL_LIBS})
+    tsl::robin_map GPUOpen::VulkanMemoryAllocator miniz::miniz Threads::Threads ${CMAKE_DL_LIBS})
 add_dependencies(aa-pass-test host_shaders)
 
 add_executable(reactive-shader-test EXCLUDE_FROM_ALL ../tests/test_reactive_shader.cpp)

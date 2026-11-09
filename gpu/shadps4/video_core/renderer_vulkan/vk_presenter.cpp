@@ -849,10 +849,14 @@ void Presenter::PresentLoadingFrame() {
     }
     swapchain.UpdateVsync();
     if (window.GetWidth() != swapchain.GetWidth() || window.GetHeight() != swapchain.GetHeight()) {
+        // spartanport: recreation waits for every queue; no submission may overlap it.
+        std::scoped_lock submit_lock{Scheduler::submit_mutex};
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
     }
     if (!swapchain.AcquireNextImage()) {
         if (!window.IsMinimized() && window.GetWidth() > 0 && window.GetHeight() > 0) {
+            // spartanport: acquire recovery also destroys the old swapchain and waits for idle.
+            std::scoped_lock submit_lock{Scheduler::submit_mutex};
             swapchain.Recreate(window.GetWidth(), window.GetHeight());
         }
         if (!swapchain.AcquireNextImage()) {
@@ -952,12 +956,16 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     // Recreate the swapchain if the window was resized.
     swapchain.UpdateVsync();
     if (window.GetWidth() != swapchain.GetWidth() || window.GetHeight() != swapchain.GetHeight()) {
+        // spartanport: recreation waits for every queue; no submission may overlap it.
+        std::scoped_lock submit_lock{Scheduler::submit_mutex};
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
     }
 
     const auto acquire_start = profile ? Clock::now() : Clock::time_point{};
     if (!swapchain.AcquireNextImage()) {
         if (!window.IsMinimized() && window.GetWidth() > 0 && window.GetHeight() > 0) {
+            // spartanport: acquire recovery also destroys the old swapchain and waits for idle.
+            std::scoped_lock submit_lock{Scheduler::submit_mutex};
             swapchain.Recreate(window.GetWidth(), window.GetHeight());
         }
         if (!swapchain.AcquireNextImage()) {
