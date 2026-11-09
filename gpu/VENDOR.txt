@@ -26,3 +26,4 @@ Backported from upstream after b4e7ae7 (2026-10-02), correctness and performance
   14ada48a1 pending fast clears applied before skipping FMASK decompression (#5283).
   92c7a8843 D32 and D32S8 copies use an intermediate buffer (#5261).
   c679ce609 added depth-overlap layers and mips initialized before copying (#5229).
+  fec7684d7 remapped compute queues start at ring offset zero (#5463).

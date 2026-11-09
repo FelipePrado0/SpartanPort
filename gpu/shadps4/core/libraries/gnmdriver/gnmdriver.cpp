@@ -1239,6 +1239,8 @@ int PS4_SYSV_ABI sceGnmMapComputeQueue(u32 pipe_id, u32 queue_id, VAddr ring_bas
 
     const auto& queue = liverpool->asc_queues[vqid];
     *queue.read_addr = 0u;
+    // spartanport: a reused queue slot must start at the new ring's beginning.
+    asc_next_offs_dw[vqid.index] = 0;
 
     return gnm_vqid;
 }
