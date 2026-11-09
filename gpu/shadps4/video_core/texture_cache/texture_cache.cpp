@@ -1113,7 +1113,10 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
                 if (cache_image.SafeToDownload() || cache_image.info.guest_samples > 1) {
                     // spartanport: large parents may not have upload hashes yet. Record the
                     // copied mip's mapped guest baseline before preserving GPU-only child data.
-                    if (merged_image.mip_hashes[mip] == 0) {
+                    // Skip a GPU-dirty parent, as MaybeDirtyHash does: its guest pages may be
+                    // read-protected, and reading them forces a synchronous download.
+                    if (merged_image.mip_hashes[mip] == 0 &&
+                        False(merged_image.flags & ImageFlagBits::GpuDirty)) {
                         const auto& layout = merged_image.info.mips_layout[mip];
                         const VAddr address = merged_image.info.guest_address + layout.offset;
                         if (Core::Memory::Instance()->ClampRangeSize(address, layout.size) ==
@@ -1123,6 +1126,10 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
                         }
                     }
                     runtime.CopyMip(&cache_image, &merged_image, mip, slice);
+                }
+                // spartanport: a descriptor bound to the retired child must move to the parent.
+                if (cache_image.binding.is_bound) {
+                    cache_image.binding.needs_rebind = 1u;
                 }
                 FreeImage(cache_image_id);
             }
