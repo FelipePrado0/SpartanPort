@@ -804,6 +804,13 @@ ImageId TextureCache::ResolveDepthOverlap(const ImageInfo& requested_info, Bindi
         // Inherit image usage
         auto& new_image = slot_images[new_image_id];
         new_image.usage = old_image.usage;
+        // spartanport: initialize added layers/mips before copying; track before uploading.
+        if (new_info.num_samples == 1 &&
+            (new_info.resources.layers > old_image.info.resources.layers ||
+             new_info.resources.levels > old_image.info.resources.levels)) {
+            TrackImage(new_image_id);
+            RefreshImage(new_image);
+        }
         new_image.flags &= ~ImageFlagBits::Dirty;
         // When creating a depth buffer through overlap resolution don't clear it on first use.
         new_image.info.meta_info.htile_clear_mask = 0;
