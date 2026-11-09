@@ -34,7 +34,8 @@ MINGW*|MSYS*)
         out/services-test.exe
         clang -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_savedata.c src/compat_win.c -lbcrypt -o out/savedata-test.exe
         out/savedata-test.exe
-        ninja -C out/gpu graphics-settings-test player-hook-test ledge-hook-test slot-vector-test subresource-extent-test irq-controller-test
+        ninja -C out/gpu frame-pacing-test graphics-settings-test player-hook-test ledge-hook-test slot-vector-test subresource-extent-test irq-controller-test
+        out/gpu/frame-pacing-test.exe
         out/gpu/graphics-settings-test.exe
         out/gpu/player-hook-test.exe
         out/gpu/ledge-hook-test.exe
@@ -138,7 +139,8 @@ if [[ ${1:-} == --test ]]; then
     "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -c src/isa_rewrite.c -I. -Isrc -o out/isa_rewrite.o
     "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -mbmi -mlzcnt -I. -Isrc tests/test_isa_stub.c out/isa_rewrite.o out/isa_emulate.o -o out/isa-stub-test
     out/isa-stub-test tests/data/isa_fixture.bin
-    ninja -C out/gpu graphics-settings-test slot-vector-test subresource-extent-test irq-controller-test
+    ninja -C out/gpu frame-pacing-test graphics-settings-test slot-vector-test subresource-extent-test irq-controller-test
+    out/gpu/frame-pacing-test
     out/gpu/graphics-settings-test
     out/gpu/slot-vector-test
     out/gpu/subresource-extent-test
