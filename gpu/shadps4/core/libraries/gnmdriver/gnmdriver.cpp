@@ -1232,6 +1232,14 @@ int PS4_SYSV_ABI sceGnmMapComputeQueue(u32 pipe_id, u32 queue_id, VAddr ring_bas
 
     const auto vqid =
         liverpool->asc_queues.insert(VAddr(ring_base_addr), read_ptr_addr, ring_size_dw, pipe_id);
+    // spartanport: the slot vector grows past the hardware's queue count when a game maps more
+    // queues than it unmaps; refuse a slot that the ring offset table has no entry for.
+    if (vqid.index >= Liverpool::NumComputeRings) {
+        liverpool->asc_queues.erase(vqid);
+        LOG_ERROR(Lib_GnmDriver, "ASC pipe {} queue {}: all {} compute queue slots are mapped",
+                  pipe_id, queue_id, Liverpool::NumComputeRings);
+        return ORBIS_GNM_ERROR_COMPUTEQUEUE_INTERNAL;
+    }
     // We need to offset index as `dingDong` assumes it to be from the range [1..64]
     const auto gnm_vqid = vqid.index + 1;
     LOG_INFO(Lib_GnmDriver, "ASC pipe {} queue {} mapped to vqueue {}", pipe_id, queue_id,
