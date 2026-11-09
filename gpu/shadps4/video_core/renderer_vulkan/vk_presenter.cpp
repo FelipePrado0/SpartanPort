@@ -645,8 +645,10 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         }
         image_view = *image.FindView(view_info).image_view;
         image_size = vk::Extent2D{image.info.size.width, image.info.size.height};
+        // spartanport: AA and FSR sample the display image from compute shaders.
         runtime.Transit(&image, vk::ImageLayout::eShaderReadOnlyOptimal,
-                        vk::PipelineStageFlagBits2::eFragmentShader,
+                        vk::PipelineStageFlagBits2::eFragmentShader |
+                            vk::PipelineStageFlagBits2::eComputeShader,
                         vk::AccessFlagBits2::eShaderRead);
         runtime.FlushBarriers();
     }
