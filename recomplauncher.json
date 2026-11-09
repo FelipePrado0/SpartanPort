@@ -6,11 +6,12 @@
   "game": {
     "kind": "folder",
     "label": "The folder of your own God of War III Remastered (PS4) dump, CUSA01623 or CUSA01715, with eboot.bin, sce_module and sce_sys inside.",
-    "check": { "file": "eboot.bin" }
+    "check": { "file": "eboot.bin" },
+    "update": { "into": "update", "label": "Your game's update folder (version 01.02), if you keep it apart from the game.", "accepts": "folder", "optional": true }
   },
   "start": {
     "program": ["SpartanPort.exe", "spartanport-x86_64.AppImage"],
-    "args": ["--play"]
+    "args": ["--play", "--update-dir", "{install}/update"]
   },
   "prepare": {
     "program": ["SpartanPort.exe", "spartanport-x86_64.AppImage"],
@@ -53,7 +54,7 @@
   ],
   "settings": [
     {
-      "id": "display_mode", "label": "Window", "in": "main",
+      "id": "display_mode", "label": "Window", "in": "main", "group": "Graphics",
       "help": "Windowed keeps the game in a window. Borderless fills the screen and switches apps quickly. Fullscreen gives the game the screen to itself.",
       "choices": [
         { "label": "Windowed", "set": { "display_mode": "windowed" } },
@@ -63,7 +64,7 @@
       "defaults": { "display_mode": "windowed" }
     },
     {
-      "id": "render_resolution", "label": "Resolution", "in": "main",
+      "id": "render_resolution", "label": "Resolution", "in": "main", "group": "Graphics",
       "help": "What the game draws at. Higher is sharper and needs a faster graphics card.",
       "choices": [
         { "label": "Native", "set": { "render_resolution": "native" } },
@@ -75,7 +76,7 @@
       "defaults": { "render_resolution": "native" }
     },
     {
-      "id": "engine_fps", "label": "Engine frame rate", "in": "main",
+      "id": "engine_fps", "label": "Engine frame rate", "in": "main", "group": "Graphics",
       "help": "How fast the game itself runs. 60 is the PS4's own; higher is smoother.",
       "choices": [
         { "label": "60 (original)", "set": { "engine_fps": "60" } },
@@ -87,7 +88,7 @@
       "defaults": { "engine_fps": "120" }
     },
     {
-      "id": "fps_limit", "label": "Frame rate limit", "in": "main",
+      "id": "fps_limit", "label": "Frame rate limit", "in": "main", "group": "Graphics",
       "help": "The most frames shown per second. Set it to your screen's refresh rate to save power.",
       "choices": [
         { "label": "30", "set": { "fps_limit": "30" } },
@@ -100,7 +101,7 @@
       "defaults": { "fps_limit": "0" }
     },
     {
-      "id": "vsync", "label": "V-Sync", "in": "main",
+      "id": "vsync", "label": "V-Sync", "in": "main", "group": "Graphics",
       "help": "Waits for your screen's refresh. Off can tear but answers faster.",
       "choices": [
         { "label": "On", "set": { "vsync": "1" } },
@@ -109,7 +110,7 @@
       "defaults": { "vsync": "1" }
     },
     {
-      "id": "upscaler", "label": "Upscaling", "in": "main",
+      "id": "upscaler", "label": "Upscaling", "in": "main", "group": "Graphics",
       "help": "Draws fewer pixels and rebuilds the full picture. FSR 4 needs an AMD Radeon RX 6000 or newer, or an Intel Arc. TAA smooths edges without upscaling.",
       "choices": [
         { "label": "Off", "set": { "upscaler": "off" } },
@@ -120,7 +121,7 @@
       "defaults": { "upscaler": "off" }
     },
     {
-      "id": "preset", "label": "Upscaling quality", "in": "main",
+      "id": "preset", "label": "Upscaling quality", "in": "main", "group": "Graphics",
       "help": "How much of the resolution is drawn before the upscaler rebuilds it. Only used when Upscaling is on.",
       "choices": [
         { "label": "Native AA", "set": { "preset": "0" } },
@@ -133,7 +134,7 @@
       "defaults": { "preset": "1" }
     },
     {
-      "id": "anti_aliasing", "label": "Anti-aliasing", "in": "main",
+      "id": "anti_aliasing", "label": "Anti-aliasing", "in": "main", "group": "Graphics",
       "help": "Smooths jagged edges on the finished picture.",
       "choices": [
         { "label": "Off", "set": { "anti_aliasing": "off" } },
@@ -143,7 +144,7 @@
       "defaults": { "anti_aliasing": "off" }
     },
     {
-      "id": "anisotropy", "label": "Texture filtering", "in": "main",
+      "id": "anisotropy", "label": "Texture filtering", "in": "main", "group": "Graphics",
       "help": "Keeps floors and walls sharp at shallow angles. Costs very little.",
       "choices": [
         { "label": "Game's own", "set": { "anisotropy": "0" } },
@@ -154,15 +155,53 @@
       "defaults": { "anisotropy": "0" }
     },
     {
-      "id": "show_fps", "label": "Show FPS", "in": "main",
+      "id": "show_fps", "label": "Show FPS", "in": "main", "group": "Graphics",
       "help": "The frame rate in a corner of the game.",
       "choices": [
         { "label": "On", "set": { "show_fps": "1" } },
         { "label": "Off", "set": { "show_fps": "0" } }
       ],
       "defaults": { "show_fps": "1" }
+    },
+    {
+      "id": "master_volume", "label": "Volume", "in": "main", "group": "Audio",
+      "help": "The game's overall volume. Above 100 is louder than the game's own.",
+      "slider": { "key": "master_volume", "min": 0, "max": 200, "step": 5, "format": "%g" },
+      "defaults": { "master_volume": "100" }
+    },
+    {
+      "id": "vibration", "label": "Vibration", "in": "main", "group": "Controls",
+      "help": "Controller rumble strength. 0 turns it off.",
+      "slider": { "key": "vibration", "min": 0, "max": 100, "step": 5, "format": "%g" },
+      "defaults": { "vibration": "100" }
+    },
+    {
+      "id": "mouse_aim_sensitivity", "label": "Right stick sensitivity", "in": "main", "group": "Controls",
+      "help": "How far the camera turns for the same stick movement.",
+      "slider": { "key": "mouse_aim_sensitivity", "min": 10, "max": 200, "step": 5, "format": "%g" },
+      "defaults": { "mouse_aim_sensitivity": "100" }
+    },
+    {
+      "id": "frames_queued", "label": "Frames queued", "in": "main", "group": "Advanced",
+      "help": "How many frames are prepared ahead. 1 has the lowest latency.",
+      "choices": [
+        { "label": "1", "set": { "frames_queued": "1" } },
+        { "label": "2", "set": { "frames_queued": "2" } },
+        { "label": "Unlimited", "set": { "frames_queued": "0" } }
+      ],
+      "defaults": { "frames_queued": "1" }
+    },
+    {
+      "id": "async_shaders", "label": "Background shader compiling", "in": "main", "group": "Advanced",
+      "help": "Builds shaders while you play instead of pausing for each one. Stutters can still happen the first time.",
+      "choices": [
+        { "label": "On", "set": { "async_shaders": "1" } },
+        { "label": "Off", "set": { "async_shaders": "0" } }
+      ],
+      "defaults": { "async_shaders": "1" }
     }
   ],
+  "groups": [ { "id": "Advanced", "advanced": true } ],
   "actions": [
     { "id": "saves", "label": "Saves and logs", "help": "Your saves, shader cache and the last log.", "open": "saves" },
     { "id": "cache", "label": "Shader cache", "help": "Shaders the game has built. Clearing it makes the next start compile them again.", "clear": "saves/cache" }
