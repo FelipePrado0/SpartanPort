@@ -12,6 +12,12 @@
     "program": ["SpartanPort.exe", "spartanport-x86_64.AppImage"],
     "args": ["--play"]
   },
+  "prepare": {
+    "program": ["SpartanPort.exe", "spartanport-x86_64.AppImage"],
+    "args": ["--prepare", "--game", "{game}"],
+    "label": "Reading your game's files",
+    "timeout": 300
+  },
   "config": [
     {
       "id": "launcher",
