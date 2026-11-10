@@ -37,6 +37,8 @@ cp -r scripts/controller_diagrams "$dest/scripts/"
 cp -r patches "$dest/"
 cp docs/VOICE_REPLACEMENT.md "$dest/docs/"
 cp LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
+# RecompLauncher reads this to set the game up and start it (no game files in it).
+cp recomplauncher.json "$dest/"
 # The upscalers' third-party files and their licenses (credits in README.md).
 mkdir -p "$dest/LICENSES"
 cp -r out/fsr4_shaders "$dest/fsr4_shaders"
