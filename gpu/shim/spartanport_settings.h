@@ -33,8 +33,14 @@ inline constexpr int MasterVolumeMin = 0, MasterVolumeMax = 200, MasterVolumeDef
 
 // UpscalerFsr3Ui (appended: saved numbers keep their meaning) is FSR 3.1 with the game at its own
 // 1920x1080 targets, so the HUD, text and loading screens are not drawn small and stretched.
+// UpscalerXess (Windows only) is Intel XeSS anti-aliasing in place of the TAA's accumulation, at the
+// game's own resolution: everything the TAA gets (jitter, motion vectors, live path) with XeSS inside.
 enum Upscaler : int { UpscalerOff = 0, UpscalerFsr3 = 1, UpscalerFsr4 = 2, UpscalerFsr411 = 3,
-                      UpscalerTaa = 4, UpscalerFsr3Ui = 5, UpscalerCount };
+                      UpscalerTaa = 4, UpscalerFsr3Ui = 5, UpscalerXess = 6, UpscalerCount };
+/// The scene TAA path: our TAA, or XeSS in place of its accumulation.
+inline bool IsTaa(int upscaler) {
+    return upscaler == UpscalerTaa || upscaler == UpscalerXess;
+}
 /// FSR 3.1, either variant.
 inline bool IsFsr3(int upscaler) {
     return upscaler == UpscalerFsr3 || upscaler == UpscalerFsr3Ui;
@@ -42,7 +48,12 @@ inline bool IsFsr3(int upscaler) {
 /// The upscalers that need the game's own 1920x1080 targets (no resolution patch): a switch between
 /// them and the patched ones needs a restart.
 inline bool NeedsLivePath(int upscaler) {
-    return upscaler == UpscalerTaa || upscaler == UpscalerFsr3Ui;
+    return IsTaa(upscaler) || upscaler == UpscalerFsr3Ui;
+}
+/// XeSS needs its Vulkan extensions and features when the GPU device is created: choosing it when the
+/// game did not start with it needs a restart (leaving it does not).
+inline bool NeedsXessRestart(int upscaler, int startup_upscaler) {
+    return upscaler == UpscalerXess && startup_upscaler != UpscalerXess;
 }
 /// The port's own FSR sharpening (the RCAS switch and strength, the extra pass): the native-HUD FSR 3.1.
 /// The other upscalers keep the upstream behaviour (`sharpen` and `sharpness`). The TAA's sharpening
@@ -144,12 +155,12 @@ struct Values {
     /// taa_tolerance: width of the colour range the history is clipped to; taa_objects: how much
     /// history a changed patch (a moving object without motion vectors) loses; taa_sharpen: sharpening
     /// after the accumulation.
-    std::atomic<int> taa_static{99}, taa_moving{55}, taa_tolerance{115}, taa_objects{90}, taa_sharpen{165};
+    std::atomic<int> taa_static{99}, taa_moving{55}, taa_tolerance{175}, taa_objects{55}, taa_sharpen{130};
     /// Texture detail of the scene's materials: a negative mip bias of taa_lod / 100 levels, which the
     /// accumulation (jitter) turns into detail instead of shimmer (the usual TAA texture bias).
-    std::atomic<int> taa_lod{75};
+    std::atomic<int> taa_lod{80};
     /// Edge smoothing of the pixels whose history was refused (moving characters): percent.
-    std::atomic<int> taa_spatial{70};
+    std::atomic<int> taa_spatial{55};
     /// FSR 3.1 with native HUD and text (UpscalerFsr3Ui), percent, live: fsr_lod is the texture detail
     /// (a negative mip bias of fsr_lod / 100 levels on top of FSR's own); fsr_objects the reactive
     /// strength of characters and objects (the stencil mask: 100 is upstream's, lower is sharper but
@@ -158,6 +169,14 @@ struct Values {
     /// TAA debug view (not saved): red = history rejected by depth, green = lost to colour change /
     /// moving-object detection, blue = history weight used.
     std::atomic<bool> taa_debug{false};
+    /// Why XeSS (upscaler=xess; libxess.dll) is not running, or null. The device is created with XeSS's
+    /// extensions only when it is the saved upscaler at start.
+    const char* xess_problem = nullptr;
+    /// XeSS: how far its history is distrusted on characters and objects (the scene stencil as its
+    /// responsive mask, as FSR 3.1's "moving objects"); 0 = off, saved. Live.
+    std::atomic<int> xess_objects{95};
+    /// XeSS: sharpening after it (the same pass as taa_sharpen, which is the TAA's own), percent, live.
+    std::atomic<int> xess_sharpen{145};
     /// The game's depth of field (spartanport_depth_of_field.h); off keeps the whole picture sharp. Live.
     std::atomic<bool> depth_of_field{true};
     /// Anti-aliasing of the finished frame (SpartanGraphics::AntiAliasing: off, FXAA, SMAA). Live.

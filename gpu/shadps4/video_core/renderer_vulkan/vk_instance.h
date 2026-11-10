@@ -593,6 +593,7 @@ private:
     bool maintenance_8{};
     bool attachment_feedback_loop{};
     bool image_2d_view_of_3d{};
+    bool mutable_descriptor_type{}; ///< enabled for XeSS only (vk_xess.cpp)
     bool image_view_min_lod{};
     bool shader_clock{};
     bool pipeline_executable_properties{}; // spartanport: SPARTAN_WAVE_STATS=1 (vk_wave_stats.h)

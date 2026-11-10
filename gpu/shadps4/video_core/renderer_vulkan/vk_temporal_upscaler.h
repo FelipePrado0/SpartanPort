@@ -23,6 +23,7 @@
 #include "video_core/renderer_vulkan/vk_common.h"
 #include "video_core/renderer_vulkan/vk_frame_generation.h"
 #include "video_core/renderer_vulkan/vk_fsr4.h"
+#include "video_core/renderer_vulkan/vk_xess.h"
 #include "video_core/texture_cache/image.h"
 
 struct FfxVkPortableUpscaleContext;
@@ -227,10 +228,23 @@ private:
     bool RecordFsr4(vk::CommandBuffer cmdbuf, Fsr4Upscaler::Image color, Fsr4Upscaler::Image depth,
                     u32 w, u32 h, u32 ow, u32 oh, float frame_ms,
                     vk::Format ldr_format = vk::Format::eR8G8B8A8Unorm);
-    void RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color, vk::ImageView depth);
+    /// The images behind the views RecordTaa is given, which XeSS wants as well.
+    struct XessInputs {
+        vk::Image color, depth;
+        vk::Format color_format, depth_format;
+        u32 width, height;
+        bool has_mask; ///< the stencil mask is in reactive_image (XeSS's responsive mask)
+    };
+    void RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color, vk::ImageView depth,
+                   const XessInputs* xess_inputs = nullptr);
+    /// XeSS in place of the TAA's accumulation (upscaler xess); false: the TAA runs this frame.
+    bool RecordXess(vk::CommandBuffer cmdbuf, const XessInputs& inputs, vk::ImageView color,
+                    vk::ImageView depth);
     /// Sharpness above 1 for FSR 3/4 (their RCAS stops at 1): one more RCAS pass over the target
     /// (output_image, or the 8-bit UI image with ldr) in General layout after the upscaler.
     void ExtraSharpen(vk::CommandBuffer cmdbuf, vk::Image target, bool ldr, u32 w, u32 h);
+    /// RCAS pass of ours over `target` (the output image, or the 8-bit UI image when `ldr`), strength 0..2.
+    void SharpenImage(vk::CommandBuffer cmdbuf, vk::Image target, bool ldr, u32 w, u32 h, float strength);
 
     const Instance& instance;
     Scheduler& scheduler;
@@ -334,6 +348,8 @@ private:
     bool resources_fsr4 = false;  ///< made for FSR 4 (no FSR 3 context)
     bool resources_taa = false;
     std::unique_ptr<Fsr4Upscaler> fsr4;
+    std::unique_ptr<XessAa> xess;
+    bool xess_active = false; ///< the last frame was made by XeSS (its history is not the TAA's)
     std::unique_ptr<FrameGeneration> frame_generation;
     bool fsr4_failed = false;
     VideoCore::UniqueImage motion_image;

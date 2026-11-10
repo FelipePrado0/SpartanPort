@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -20,6 +21,7 @@
 #include "video_core/renderer_vulkan/vk_amd_paths.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
+#include "video_core/renderer_vulkan/vk_xess.h"
 
 #include <vk_mem_alloc.h>
 
@@ -303,7 +305,8 @@ bool Instance::CreateDevice() {
         vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE,
         vk::PhysicalDevicePipelineBinaryFeaturesKHR,
         vk::PhysicalDeviceMaintenance5FeaturesKHR,
-        vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR>();
+        vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR,
+        vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>();
     features = feature_chain.get().features;
 
     const vk::StructureChain properties_chain = physical_device.getProperties2<
@@ -448,6 +451,26 @@ bool Instance::CreateDevice() {
                  image_2d_view_of_3d_features.image2DViewOf3D);
         LOG_INFO(Render_Vulkan, "- sampler2DViewOf3D: {}",
                  image_2d_view_of_3d_features.sampler2DViewOf3D);
+    }
+    // spartanport: XeSS (vk_xess.cpp) asks for device extensions of its own (mutable descriptors
+    // among them); they are enabled only when it is selected, so the device is the same without it.
+    const bool xess_selected = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerXess;
+    bool xess_extensions = false; ///< XeSS's own extensions are all enabled
+    if (xess_selected) {
+        const auto enable = [&](const char* name) {
+            const bool already = std::any_of(
+                enabled_extensions.begin(), enabled_extensions.end(),
+                [&](const char* have) { return std::strcmp(have, name) == 0; });
+            return already || add_extension(name);
+        };
+        const auto xess_names = XessAa::DeviceExtensions(*instance, physical_device);
+        xess_extensions = !xess_names.empty();
+        for (const char* name : xess_names) {
+            xess_extensions = enable(name) && xess_extensions;
+        }
+        mutable_descriptor_type = enable(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME) &&
+            feature_chain.get<vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>()
+                .mutableDescriptorType;
     }
     image_view_min_lod = add_extension(VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME);
     supports_memory_budget = add_extension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
@@ -673,6 +696,9 @@ bool Instance::CreateDevice() {
             .image2DViewOf3D = image_2d_view_of_3d_features.image2DViewOf3D,
             .sampler2DViewOf3D = image_2d_view_of_3d_features.sampler2DViewOf3D,
         },
+        vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT{
+            .mutableDescriptorType = mutable_descriptor_type,
+        },
         vk::PhysicalDeviceImageViewMinLodFeaturesEXT{
             .minLod = true,
         },
@@ -742,6 +768,9 @@ bool Instance::CreateDevice() {
     if (!image_2d_view_of_3d) {
         device_chain.unlink<vk::PhysicalDeviceImage2DViewOf3DFeaturesEXT>();
     }
+    if (!mutable_descriptor_type) {
+        device_chain.unlink<vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>();
+    }
     if (!image_view_min_lod) {
         device_chain.unlink<vk::PhysicalDeviceImageViewMinLodFeaturesEXT>();
     }
@@ -755,7 +784,36 @@ bool Instance::CreateDevice() {
         device_chain.unlink<vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE>();
     }
 
-    auto [device_result, dev] = physical_device.createDeviceUnique(device_chain.get());
+    // spartanport: XeSS's device features (xessVKGetRequiredDeviceFeatures) are patched into the
+    // chain only when its extensions are there too. A copy of the chain without them is the way
+    // back if the card cannot give them: the game starts, XeSS says why it does not run and the
+    // TAA runs.
+    auto plain_chain = device_chain;
+    bool xess_patched = false;
+    if (xess_selected) {
+        void* head = &device_chain.get<vk::PhysicalDeviceFeatures2>();
+        if (xess_extensions && XessAa::PatchDeviceFeatures(*instance, physical_device, head)) {
+            if (head != static_cast<void*>(&device_chain.get<vk::PhysicalDeviceFeatures2>())) {
+                device_chain.get<vk::DeviceCreateInfo>().pNext = head;
+            }
+            xess_patched = true;
+        }
+        XessAa::SetDeviceReady(xess_patched,
+                               xess_extensions ? "the graphics card or driver does not offer the "
+                                                 "features XeSS needs"
+                                               : "the graphics driver does not offer the "
+                                                 "extensions XeSS needs");
+    }
+    auto created = physical_device.createDeviceUnique(device_chain.get());
+    if (xess_patched && created.result != vk::Result::eSuccess) {
+        LOG_WARNING(Render_Vulkan, "Device with XeSS's features failed ({}), creating it without",
+                    vk::to_string(created.result));
+        XessAa::SetDeviceReady(false, "the graphics card or driver does not offer the features "
+                                      "XeSS needs");
+        created = physical_device.createDeviceUnique(plain_chain.get());
+    }
+    const vk::Result device_result = created.result;
+    auto dev = std::move(created.value);
     if (device_result != vk::Result::eSuccess) {
         LOG_CRITICAL(Render_Vulkan, "Failed to create device: {}", vk::to_string(device_result));
         return false;
@@ -846,7 +904,7 @@ void Instance::CollectDeviceParameters() {
     // The port's TAA is also chosen by the launcher in spartanport.ini (upscaler=taa; settings are
     // loaded before the device), without any environment variable.
     const bool temporal_mode =
-        SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa ||
+        SpartanSettings::IsTaa(SpartanSettings::Get().upscaler) ||
         (temporal_env && temporal_on && *temporal_on == '1' &&
          (std::strcmp(temporal_env, "taa") == 0 || std::strcmp(temporal_env, "fsr3") == 0));
     const bool no_msaa = no_msaa_env && *no_msaa_env

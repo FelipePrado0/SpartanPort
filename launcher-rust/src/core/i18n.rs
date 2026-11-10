@@ -973,6 +973,16 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
         "The chime of an unlocked trophy. Also in the in-game menu (Insert): Trophies > Notifications.",
         &[("zh", "解锁奖杯时的提示音。也可在游戏内菜单（Insert）：奖杯 > 通知 中设置。"), ("pt", "O som de um troféu desbloqueado. Também no menu do jogo (Insert): Troféus > Notificações."), ("es", "El sonido de un trofeo desbloqueado. También en el menú del juego (Insert): Trofeos > Notificaciones."), ("cs", "Zvuk odemčené trofeje. Také v herním menu (Insert): Trofeje > Oznámení."), ("ru", "Звук открытого трофея. Также в игровом меню (Insert): Трофеи > Уведомления."), ("fr", "Le son d'un trophée débloqué. Aussi dans le menu en jeu (Insert) : Trophées > Notifications."), ("de", "Der Ton einer freigeschalteten Trophäe. Auch im Spielmenü (Insert): Trophäen > Benachrichtigungen."), ("it", "Il suono di un trofeo sbloccato. Anche nel menu di gioco (Insert): Trofei > Notifiche."), ("pl", "Dźwięk odblokowanego trofeum. Także w menu gry (Insert): Trofea > Powiadomienia."), ("tr", "Açılan bir kupanın sesi. Oyun içi menüde de var (Insert): Kupalar > Bildirimler."), ("id", "Suara trofi yang terbuka. Juga ada di menu dalam game (Insert): Trofi > Notifikasi.")],
     ),
+    (
+        "XeSS (Intel): anti-aliasing at the game's own resolution, in place of the TAA's accumulation. Needs libxess.dll next to the game (the Windows package includes it). Texture detail and sharpening are in the in-game menu. Experimental.",
+        &[
+            ("pt", "XeSS (Intel): anti-aliasing na resolução própria do jogo, no lugar da acumulação do TAA. Precisa do libxess.dll ao lado do jogo (o pacote do Windows já o inclui). O detalhe das texturas e o aumento de nitidez ficam no menu do jogo. Experimental."),
+            ("cs", "XeSS (Intel): vyhlazování hran ve vlastním rozlišení hry místo akumulace TAA. Potřebuje libxess.dll vedle hry (balíček pro Windows ho obsahuje). Detail textur a doostření jsou v herním menu. Experimentální."),
+            ("zh", "XeSS（Intel）：在游戏自身分辨率下进行抗锯齿，取代 TAA 的累积。需要游戏旁边有 libxess.dll（Windows 安装包已包含）。纹理细节和锐化在游戏内菜单中设置。实验性功能。"),
+            ("es", "XeSS (Intel): antialiasing a la resolución propia del juego, en lugar de la acumulación del TAA. Necesita libxess.dll junto al juego (el paquete de Windows lo incluye). El detalle de texturas y la nitidez están en el menú del juego. Experimental."),
+            ("id", "XeSS (Intel): anti-aliasing pada resolusi asli gim, menggantikan akumulasi TAA. Membutuhkan libxess.dll di samping gim (paket Windows sudah menyertakannya). Detail tekstur dan penajaman ada di menu dalam gim. Eksperimental."),
+        ],
+    ),
 ];
 
 fn ui_extra(lang: &str, en: &str) -> Option<&'static str> {

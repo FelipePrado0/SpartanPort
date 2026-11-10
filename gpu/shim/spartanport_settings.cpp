@@ -164,6 +164,10 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.taa_lod = std::clamp(i, 0, 150);
     } else if (key == "taa_spatial") {
         v.taa_spatial = std::clamp(i, 0, 100);
+    } else if (key == "xess_sharpen") {
+        v.xess_sharpen = std::clamp(i, 0, 200);
+    } else if (key == "xess_objects") {
+        v.xess_objects = std::clamp(i, 0, 100);
     } else if (key == "fsr_lod") {
         v.fsr_lod = std::clamp(i, 0, 150);
     } else if (key == "fsr_objects") {
@@ -456,7 +460,8 @@ bool GraphicsNeedRestart() {
            // The launcher patches the render size of the preset (or none without an upscaler).
            v.preset != v.startup_preset ||
            (v.upscaler == UpscalerOff) != (v.startup_upscaler == UpscalerOff) ||
-           NeedsLivePath(v.upscaler) != NeedsLivePath(v.startup_upscaler);
+           NeedsLivePath(v.upscaler) != NeedsLivePath(v.startup_upscaler) ||
+           NeedsXessRestart(v.upscaler, v.startup_upscaler);
 }
 
 void ConfigureUpscalerSupport(bool fsr4, bool fsr411, const char* fsr411_problem) {
@@ -484,7 +489,7 @@ bool FixedRenderSession() {
 int RenderPreset() {
     const auto& v = Get();
     return FixedRenderSession() ? v.startup_preset :
-        v.upscaler == UpscalerTaa ? NativeAA : v.preset.load();
+        IsTaa(v.upscaler) ? NativeAA : v.preset.load();
 }
 
 bool ResolutionNeedsRestart() {
@@ -493,7 +498,8 @@ bool ResolutionNeedsRestart() {
     return FixedRenderSession() &&
         (v.preset != v.startup_preset || v.output_res != v.startup_output_res ||
          (v.upscaler == UpscalerOff) != (v.startup_upscaler == UpscalerOff) ||
-         NeedsLivePath(v.upscaler) != NeedsLivePath(v.startup_upscaler));
+         NeedsLivePath(v.upscaler) != NeedsLivePath(v.startup_upscaler)) ||
+        NeedsXessRestart(v.upscaler, v.startup_upscaler);
 }
 
 void Save() {
@@ -573,6 +579,7 @@ void Save() {
                  v.taa_static.load(), v.taa_moving.load(), v.taa_tolerance.load(), v.taa_objects.load(),
                  v.taa_sharpen.load(), v.taa_lod.load(), v.taa_spatial.load());
     std::fprintf(file, "fsr_lod=%d\nfsr_objects=%d\n", v.fsr_lod.load(), v.fsr_objects.load());
+    std::fprintf(file, "xess_objects=%d\nxess_sharpen=%d\n", v.xess_objects.load(), v.xess_sharpen.load());
     std::fprintf(file, "anti_aliasing=%s\n",
                  SpartanGraphics::AntiAliasingKeys[std::clamp(v.anti_aliasing.load(), 0, int(SpartanGraphics::AaSmaa))].data());
     std::fprintf(file, "master_volume=%d\naudio_channels=%s\n", v.master_volume.load(),
@@ -614,7 +621,7 @@ const char* PresetName(int preset) {
 }
 
 const char* UpscalerName(int upscaler) {
-    static constexpr const char* names[UpscalerCount] = {"off", "fsr3", "fsr4", "fsr411", "taa", "fsr3ui"};
+    static constexpr const char* names[UpscalerCount] = {"off", "fsr3", "fsr4", "fsr411", "taa", "fsr3ui", "xess"};
     return names[std::clamp(upscaler, 0, UpscalerCount - 1)];
 }
 
@@ -745,7 +752,7 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
         };
         // The launcher's order (options.rs UPSCALERS, PRESETS).
 #ifdef _WIN32
-        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerFsr3Ui, UpscalerFsr4, UpscalerFsr411, UpscalerTaa};
+        const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerFsr3Ui, UpscalerFsr4, UpscalerFsr411, UpscalerTaa, UpscalerXess};
 #else
         const std::vector<int> upscalers{UpscalerOff, UpscalerFsr3, UpscalerFsr3Ui, UpscalerFsr4, UpscalerTaa};
 #endif
@@ -760,7 +767,7 @@ extern "C" uint64_t spartanportgpu_native_setting(unsigned function) {
             const int u = v.upscaler;
             value = u == UpscalerOff ? (pt ? "Desligado" : "Off") : u == UpscalerFsr3 ? "FSR 3.1"
                   : u == UpscalerFsr3Ui ? "FSR 3.1 UI"
-                  : u == UpscalerFsr4 ? "FSR 4" : u == UpscalerFsr411 ? "FSR 4.1" : u == UpscalerTaa ? "TAA" : UpscalerName(u);
+                  : u == UpscalerFsr4 ? "FSR 4" : u == UpscalerFsr411 ? "FSR 4.1" : u == UpscalerTaa ? "TAA" : u == UpscalerXess ? "XeSS" : UpscalerName(u);
             if ((u == UpscalerFsr4 && !v.fsr4_supported) || (u == UpscalerFsr411 && !v.fsr411_supported)) value += pt ? " (indisponível)" : " (unavailable)";
         } else {
             // The name only: the row has no room for the render size (the Insert menu shows it).
