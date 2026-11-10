@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "video_core/renderer_vulkan/fsr_driver_api.h"
+#include "video_core/renderer_vulkan/vk_scheduler.h"
 #include <cassert>
 #include <cstdio>
+
+// The standalone driver test does not link the scheduler implementation.
+std::mutex Vulkan::Scheduler::submit_mutex;
 
 namespace {
 const char* reported_version = "3.1.5";

@@ -754,6 +754,12 @@ const GraphicsPipeline* PipelineCache::TryPreparedPipeline(const PreparedDraw& p
     // a draw takes the regular path, as without a worker. ResolveVertexBuffers checks the V#s
     // once more when the draw is recorded, after the writes queued before it.
     const auto& fetch = pipeline->GetFetchShader();
+    // spartanport: PrepareVertexInputs leaves the inputs invalid only for a V# format with no
+    // Vulkan format. Only the regular path checks the formats and skips such a draw;
+    // recording it could stop the game in SurfaceFormat.
+    if (fetch && !prepared.vertex.valid) {
+        return nullptr;
+    }
     if (prepared.vertex.valid && fetch && fetch->attributes.size() == prepared.vertex.count &&
         !fetch->SharpsUnchanged(pipeline->GetStage(SwStage::Vertex), prepared.vertex.buffers)) {
         NoteStaleVertexInputs();
@@ -1200,6 +1206,21 @@ bool PipelineCache::RefreshGraphicsStages(PipelineSelection& sel) {
                 if (!sel.worker && reported.fetch_add(1, std::memory_order_relaxed) < 5) {
                     LOG_WARNING(Render_Vulkan,
                                 "Draw skipped: its vertex buffer table pointer is null or short");
+                }
+                return false;
+            }
+            // spartanport: a stale descriptor's data/number format pair has no vertex format
+            // whose numeric type matches the shader input; skip the draw.
+            const auto& buffer = attrib.GetSharp(*vs_info);
+            if (buffer.GetDataFmt() != AmdGpu::DataFormat::FormatInvalid &&
+                Vulkan::LiverpoolToVK::TrySurfaceFormat(
+                    buffer.GetDataFmt(), buffer.GetNumberFmt()) == vk::Format::eUndefined) {
+                static std::atomic<u32> reported{0};
+                if (!sel.worker && reported.fetch_add(1, std::memory_order_relaxed) < 5) {
+                    LOG_WARNING(Render_Vulkan,
+                                "Draw skipped: vertex data_format={} num_format={} has no format",
+                                static_cast<u32>(buffer.GetDataFmt()),
+                                static_cast<u32>(buffer.GetNumberFmt()));
                 }
                 return false;
             }

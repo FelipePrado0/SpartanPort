@@ -13,15 +13,38 @@
 #include <cstdlib>
 #include <cstring>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "common/types.h"
 #include "video_core/renderer_vulkan/host_passes/aa_pass.h"
 #include "video_core/renderer_vulkan/vk_common.h"
+#include "video_core/renderer_vulkan/vk_scheduler.h"
 
 #include <vk_mem_alloc.h>
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
+
+// The standalone pass test does not link the scheduler implementation.
+std::mutex Vulkan::Scheduler::submit_mutex;
+
+static PFN_vkDeviceWaitIdle device_wait_idle = nullptr;
+static int aa_idle_waits = 0, unlocked_aa_idle_waits = 0;
+
+static VKAPI_ATTR VkResult VKAPI_CALL CheckAaIdleLock(VkDevice device) {
+    bool locked = false;
+    std::thread contender([&] {
+        if (Vulkan::Scheduler::submit_mutex.try_lock()) {
+            Vulkan::Scheduler::submit_mutex.unlock();
+        } else {
+            locked = true;
+        }
+    });
+    contender.join();
+    ++aa_idle_waits;
+    unlocked_aa_idle_waits += !locked;
+    return device_wait_idle(device);
+}
 
 // The pass asserts and logs through the port's own helpers; this test links neither.
 void assert_fail_impl() {
@@ -401,6 +424,8 @@ void CheckMode(Gpu& g, HostPasses::AaPass& pass, int mode, const char* name) {
 int main() {
     Gpu g;
     Init(g);
+    device_wait_idle = VULKAN_HPP_DEFAULT_DISPATCHER.vkDeviceWaitIdle;
+    VULKAN_HPP_DEFAULT_DISPATCHER.vkDeviceWaitIdle = CheckAaIdleLock;
     {
     HostPasses::AaPass pass;
     pass.Create(*g.device, g.allocator, 3);
@@ -443,8 +468,11 @@ int main() {
             }
         }
     }
-    (void)g.device->waitIdle();
+    (void)device_wait_idle(*g.device); // Fixture cleanup, outside the production pass.
     }
+    VULKAN_HPP_DEFAULT_DISPATCHER.vkDeviceWaitIdle = device_wait_idle;
+    Expect(aa_idle_waits > 1 && unlocked_aa_idle_waits == 0,
+           "AA target recreation and teardown hold the queue submission lock");
     vmaDestroyAllocator(g.allocator);
     Expect(validation_errors == 0, "no validation errors");
     std::printf(failures ? "aa-pass-test FAILED (%d)\n" : "aa-pass-test passed\n", failures);

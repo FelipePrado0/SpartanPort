@@ -197,6 +197,12 @@ static constexpr CompMapping IdentityMapping = {
     .a = CompSwizzle::Alpha,
 };
 
+/// spartanport: data format values the hardware leaves unused (15, 23-31, 42, 43). Only a stale
+/// descriptor, one the game is still rewriting, carries one.
+constexpr bool IsUnusedDataFormat(const u32 value) {
+    return value == 15 || (value >= 23 && value <= 31) || value == 42 || value == 43;
+}
+
 constexpr DataFormat RemapDataFormat(const DataFormat format) {
     switch (format) {
     case DataFormat::Format11_11_10:
