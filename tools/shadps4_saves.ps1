@@ -11,6 +11,7 @@
 # A slot with the same name on the other side is replaced; the other slots there stay. Both sides are
 # backed up first, the port's into the launcher's own backups (Game -> Save backups restores them).
 # A slot that is newer on the side being written stops everything before a file changes, unless -Force.
+# The new slots are built beside the saves and put in place together: if one fails, the old ones go back.
 param(
     [Parameter(Mandatory)][ValidateSet('ShadPS4', 'Port')][string]$To,
     [Parameter(Mandatory)][string]$Port,
@@ -242,15 +243,62 @@ function Copy-Icon([string]$from, [string]$dest) {
     if (Test-Path -LiteralPath $from -PathType Leaf) { Copy-Item -LiteralPath $from -Destination $dest -Force }
 }
 
-function Remove-Folder([string]$path) {
-    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+# Each of them writes saves while it runs (gow3-probe is the game's old name, which the launcher
+# checks too), and the launcher makes and restores backups.
+function Assert-Closed {
+    $running = @(Get-Process | Where-Object { $_.Name -match '^(SpartanPort|Play SpartanPort|spartanport-probe|gow3-probe|shadps4)$' })
+    if ($running.Count) { throw "close these first: $(($running.Name | Sort-Object -Unique) -join ', ')" }
+}
+
+# The lock the launcher takes to make or restore a save backup (save_restore.rs, where fs2 locks the
+# whole file). Held to the end, so the backup the launcher makes at start cannot copy half-done slots.
+function Lock-PortSaves([string]$user) {
+    $path = Join $user '.save-restore.lock'
+    $file = [IO.FileStream]::new($path, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::ReadWrite)
+    try { $file.Lock(0, [long]::MaxValue) } catch {
+        $file.Dispose()
+        throw "the launcher is making or restoring a save backup in ${user}: try again when it finishes"
+    }
+    $file
+}
+
+# Moves every folder of $new into $target, moving the one there of the same name to $old first. When a
+# move fails, the moves made are undone in reverse, so the slots end up all new or all as they were.
+function Publish-Slots([string]$new, [string]$target, [string]$old) {
+    [IO.Directory]::CreateDirectory($old) | Out-Null
+    [IO.Directory]::CreateDirectory($target) | Out-Null
+    $done = New-Object Collections.ArrayList
+    try {
+        foreach ($item in Get-ChildItem -LiteralPath $new -Directory) {
+            $dest = Join $target $item.Name
+            if (Test-Path -LiteralPath $dest) {
+                [IO.Directory]::Move($dest, (Join $old $item.Name))
+                [void]$done.Add(@($dest, (Join $old $item.Name)))
+            }
+            [IO.Directory]::Move($item.FullName, $dest)
+            [void]$done.Add(@($item.FullName, $dest))
+        }
+    } catch {
+        $why = $_.Exception.Message
+        $stuck = 0
+        for ($i = $done.Count - 1; $i -ge 0; $i--) {
+            try { [IO.Directory]::Move($done[$i][1], $done[$i][0]) } catch { $stuck++ }
+        }
+        if ($stuck) {
+            $script:keepStage = $true
+            throw "could not put the new slots in place ($why), nor every old one back: the old ones are in $old and in the backups"
+        }
+        throw "could not put the new slots in place ($why). The slots are as they were"
+    }
 }
 
 $backupsMade = @()
+$lock = $null
+$stage = $null
+$keepStage = $false
+$failed = $false
 try {
-    # Each of them writes saves while it runs, and the launcher makes and restores backups.
-    $running = @(Get-Process | Where-Object { $_.Name -match '^(SpartanPort|Play SpartanPort|spartanport-probe|shadps4)$' })
-    if ($running.Count) { throw "close these first: $(($running.Name | Sort-Object -Unique) -join ', ')" }
+    Assert-Closed
     foreach ($folder in $Port, $ShadPS4) {
         if (-not (Test-Path -LiteralPath $folder -PathType Container)) { throw "$folder is not a folder" }
     }
@@ -260,8 +308,10 @@ try {
     Write-Host "Port saves:    $portSaves"
     Write-Host "shadPS4 saves: $($shad.Saves)"
 
-    if ($To -eq 'ShadPS4') { $source = $portSaves; $target = $shad.Saves } else { $source = $shad.Saves; $target = $portSaves }
+    if ($To -eq 'ShadPS4') { $source = $portSaves; $target = $shad.Saves; $targetUser = $shad.User }
+    else { $source = $shad.Saves; $target = $portSaves; $targetUser = $portUser }
     if (-not (Test-Path -LiteralPath $source -PathType Container)) { throw "no saves of $TitleId in $source" }
+    $lock = Lock-PortSaves $portUser
 
     $slots = @()
     foreach ($dir in Get-ChildItem -LiteralPath $source -Directory | Where-Object { $_.Name -notlike '*.sce_sys' }) {
@@ -272,12 +322,12 @@ try {
             $sourceTime = Get-SlotTime $dir.FullName, (Join $source "$($dir.Name).sce_sys")
             $targetTime = Get-SlotTime (Join $target $dir.Name)
         } else {
-            $meta = Join $dir.FullName 'sce_sys' 'param.sfo'
-            if (-not (Test-Path -LiteralPath $meta -PathType Leaf)) { Write-Host "Skipped $($dir.Name): it has no sce_sys\param.sfo"; continue }
             # shadPS4 removes this file when it closes a save; left behind, the save was cut off mid-write.
             if (Test-Path -LiteralPath (Join $dir.FullName 'sce_sys' 'corrupted')) {
                 throw "shadPS4 did not finish writing $($dir.Name) (sce_sys\corrupted is there): load it in shadPS4 and save again"
             }
+            $meta = Join $dir.FullName 'sce_sys' 'param.sfo'
+            if (-not (Test-Path -LiteralPath $meta -PathType Leaf)) { Write-Host "Skipped $($dir.Name): it has no sce_sys\param.sfo"; continue }
             $info = Read-ParamSfo $meta
             $sourceTime = Get-SlotTime $dir.FullName
             $targetTime = Get-SlotTime (Join $target $dir.Name), (Join $target "$($dir.Name).sce_sys")
@@ -297,33 +347,43 @@ try {
 
     $backupsMade += @(Backup-Folder (Join $portUser 'savedata') (Join $portUser 'savedata_backups'))
     $backupsMade += @(Backup-Folder $shad.Saves (Join $shad.User 'savedata_backups') $TitleId)
-    [IO.Directory]::CreateDirectory($target) | Out-Null
 
+    # The new slots are built in a folder beside the saves, on the same disk, so that putting each one
+    # in place is a rename; the launcher restores its backups the same way.
+    $stage = Join $targetUser ".shadps4-saves-$([Guid]::NewGuid().ToString('N').Substring(0, 8))"
+    $new = Join $stage 'new'
     foreach ($slot in $slots) {
+        $dest = Join $new $slot.Name
         if ($To -eq 'ShadPS4') {
-            $dest = Join $target $slot.Name
-            Remove-Folder $dest
             $sys = Join $dest 'sce_sys'
             [IO.Directory]::CreateDirectory($sys) | Out-Null
             Copy-SlotFiles $slot.Path $dest
             Copy-Icon (Join $source "$($slot.Name).sce_sys" 'icon0.png') $sys
             Write-ParamSfo (Join $sys 'param.sfo') $slot.Meta $slot.Name
         } else {
-            $dest = Join $target $slot.Name
-            $sys = Join $target "$($slot.Name).sce_sys"
-            Remove-Folder $dest
-            Remove-Folder $sys
+            $sys = Join $new "$($slot.Name).sce_sys"
             [IO.Directory]::CreateDirectory($dest) | Out-Null
             [IO.Directory]::CreateDirectory($sys) | Out-Null
             Copy-SlotFiles $slot.Path $dest
             Copy-Icon (Join $slot.Path 'sce_sys' 'icon0.png') $sys
             Write-ParamBin (Join $sys 'param.bin') $slot.Meta
         }
+    }
+    Assert-Closed
+    Publish-Slots $new $target (Join $stage 'old')
+    foreach ($slot in $slots) {
         Write-Host ("  $($slot.Name): " + ((@($slot.Meta.Subtitle, ($slot.Meta.Detail -replace '\r?\n', ' / ')) | Where-Object { $_ }) -join ' | '))
     }
     Write-Host "Done: $($slots.Count) slot(s) copied to $(if ($To -eq 'ShadPS4') { 'shadPS4' } else { 'the port' })."
 } catch {
     Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
     if ($backupsMade.Count) { Write-Host "The saves from before are in: $($backupsMade -join ', ')" }
-    exit 1
+    $failed = $true
+} finally {
+    # The old slots are in the backups too; they stay here only when they could not go back.
+    if ($stage -and -not $keepStage -and (Test-Path -LiteralPath $stage)) {
+        Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($lock) { $lock.Dispose() }
 }
+if ($failed) { exit 1 }
