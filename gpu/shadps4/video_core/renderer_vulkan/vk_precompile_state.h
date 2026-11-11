@@ -74,4 +74,8 @@ private:
 std::vector<u64> LoadSkipList(const std::filesystem::path& journal,
                               const std::filesystem::path& skip_list, const std::string& stamp);
 
+/// The shipped shader list in dir for a game serial: its own, else the one of the same game in
+/// another region. Each shader's code is checked by hash, so one that differs is left to the game.
+std::filesystem::path ShaderListPath(const std::filesystem::path& dir, const std::string& serial);
+
 } // namespace Vulkan

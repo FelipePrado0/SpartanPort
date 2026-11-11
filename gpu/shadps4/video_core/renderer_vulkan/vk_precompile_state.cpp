@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -178,6 +179,20 @@ std::vector<u64> LoadSkipList(const fs::path& journal, const fs::path& skip_list
     std::ranges::sort(keys);
     keys.erase(std::ranges::unique(keys).begin(), keys.end());
     return keys;
+}
+
+std::filesystem::path ShaderListPath(const std::filesystem::path& dir, const std::string& serial) {
+    constexpr const char* Shipped = "CUSA01623";
+    constexpr std::array OtherRegions{"CUSA01715", "CUSA01720", "CUSA01740"};
+    const auto own = dir / (serial + ".spm");
+    const auto shipped = dir / (std::string(Shipped) + ".spm");
+    const bool other_region = std::ranges::find(OtherRegions, serial) != OtherRegions.end();
+    // Runs at startup: a folder that cannot be read must not throw.
+    std::error_code error;
+    const auto exists = [&](const std::filesystem::path& path) {
+        return std::filesystem::exists(path, error) && !error;
+    };
+    return other_region && !exists(own) && exists(shipped) ? shipped : own;
 }
 
 } // namespace Vulkan

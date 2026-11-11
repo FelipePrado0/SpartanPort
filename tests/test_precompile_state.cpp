@@ -138,10 +138,32 @@ static void Crashes() {
     fs::remove_all(dir);
 }
 
+static void ListByRegion() {
+    const auto dir = fs::temp_directory_path() / "spartanport-shader-lists";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    // No list at all: the game's own name, which the preparation then finds missing.
+    assert(ShaderListPath(dir, "CUSA01740") == dir / "CUSA01740.spm");
+
+    // Another region of the game uses the list it ships with.
+    std::ofstream(dir / "CUSA01623.spm") << "list";
+    for (const char* region : {"CUSA01715", "CUSA01720", "CUSA01740"}) {
+        assert(ShaderListPath(dir, region) == dir / "CUSA01623.spm");
+    }
+    assert(ShaderListPath(dir, "CUSA01623") == dir / "CUSA01623.spm");
+
+    // Another game never takes it; a region with its own list keeps it.
+    assert(ShaderListPath(dir, "CUSA99999") == dir / "CUSA99999.spm");
+    std::ofstream(dir / "CUSA01740.spm") << "own";
+    assert(ShaderListPath(dir, "CUSA01740") == dir / "CUSA01740.spm");
+    fs::remove_all(dir);
+}
+
 int main() {
     Table();
     MarkerFormat();
     Crashes();
+    ListByRegion();
     std::printf("PASS: precompile state\n");
     return 0;
 }

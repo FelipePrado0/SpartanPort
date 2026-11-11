@@ -13,6 +13,7 @@
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
+#include "video_core/renderer_vulkan/vk_precompile_state.h"
 #include "spartanport_overlay.h"
 #include "spartanport_settings.h"
 #include "spartanport_graphics.h"
@@ -336,8 +337,8 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
     // thread keeps the keyboard and gamepad state current.
     {
         const char* base = SDL_GetBasePath();
-        const auto list = std::filesystem::path(base ? base : "") / "shaders" /
-                          fmt::format("{}.spm", Common::ElfInfo::Instance().GameSerial());
+        const auto list = ShaderListPath(std::filesystem::path(base ? base : "") / "shaders",
+                                         std::string(Common::ElfInfo::Instance().GameSerial()));
         SDL_Gamepad* pad = nullptr;
         int pads = 0;
         if (SDL_JoystickID* ids = SDL_GetGamepads(&pads)) {
