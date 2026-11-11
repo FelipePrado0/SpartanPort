@@ -435,9 +435,10 @@ pub fn clear_cache(user_dir: &Path) -> Result<(), String> {
     }
 }
 
-/// The recorded shaders of each game in the cache (`<serial>/*.meta` and `*.key`): what the team
-/// builds the shipped shader list from. No compiled shader, driver binary or game code goes in.
-/// The number of files written; 0 writes no file.
+/// The recorded shaders of each game in the cache (`<serial>/*.meta`, `*.key` and the
+/// `profile.bin` they were translated with), with their times: what the team builds the shipped
+/// shader list from, ordered by when each shader was recorded. No compiled shader, driver binary or
+/// game code goes in. The number of files written; 0 writes no file.
 pub fn export_shaders(user_dir: &Path, out: &Path) -> Result<usize, String> {
     // A game's folder is its serial; the preparation's `CUSA01623.pre-precompile` is not.
     let is_serial = |name: &str| {
@@ -461,10 +462,12 @@ pub fn export_shaders(user_dir: &Path, out: &Path) -> Result<usize, String> {
             .flatten()
         {
             let path = file.path();
-            if matches!(
-                path.extension().and_then(|e| e.to_str()),
-                Some("meta" | "key")
-            ) {
+            if file.file_name() == "profile.bin"
+                || matches!(
+                    path.extension().and_then(|e| e.to_str()),
+                    Some("meta" | "key")
+                )
+            {
                 let name = format!("{serial}/{}", file.file_name().to_string_lossy());
                 files.push((name, path));
             }
@@ -479,8 +482,14 @@ pub fn export_shaders(user_dir: &Path, out: &Path) -> Result<usize, String> {
         let options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
         for (name, path) in &files {
+            let mut file = std::fs::File::open(path)?;
+            let modified = file.metadata().and_then(|m| m.modified()).ok();
+            let options = match modified.and_then(zip_time) {
+                Some(time) => options.last_modified_time(time),
+                None => options,
+            };
             archive.start_file(name.as_str(), options)?;
-            std::io::copy(&mut std::fs::File::open(path)?, &mut archive)?;
+            std::io::copy(&mut file, &mut archive)?;
         }
         archive.finish()?;
         Ok(())
@@ -489,6 +498,21 @@ pub fn export_shaders(user_dir: &Path, out: &Path) -> Result<usize, String> {
         let _ = std::fs::remove_file(out);
         error.to_string()
     })
+}
+
+/// A file time as a zip entry time (local, as zip tools read it back).
+fn zip_time(time: std::time::SystemTime) -> Option<zip::DateTime> {
+    use chrono::{Datelike, Timelike};
+    let local: chrono::DateTime<chrono::Local> = time.into();
+    zip::DateTime::from_date_and_time(
+        u16::try_from(local.year()).ok()?,
+        local.month() as u8,
+        local.day() as u8,
+        local.hour() as u8,
+        local.minute() as u8,
+        local.second() as u8,
+    )
+    .ok()
 }
 
 fn env_var(key: &str) -> Option<String> {
