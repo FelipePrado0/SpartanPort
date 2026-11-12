@@ -402,20 +402,9 @@ void Presenter::RecreateFrame(Frame* frame, u32 width, u32 height) {
                  vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eSampled,
     };
 
-    const VmaAllocationCreateInfo alloc_info = {
-        .flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT,
-        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        .requiredFlags = 0,
-        .preferredFlags = 0,
-        .pool = VK_NULL_HANDLE,
-        .pUserData = nullptr,
-    };
-
     VkImage unsafe_image{};
-    VkImageCreateInfo unsafe_image_info = static_cast<VkImageCreateInfo>(image_info);
-
-    VkResult result = vmaCreateImage(instance.GetAllocator(), &unsafe_image_info, &alloc_info,
-                                     &unsafe_image, &frame->allocation, nullptr);
+    const VkResult result = VideoCore::CreateImageWithFallback(
+        instance.GetAllocator(), image_info, &unsafe_image, &frame->allocation);
     if (result != VK_SUCCESS) [[unlikely]] {
         LOG_CRITICAL(Render_Vulkan, "Failed allocating texture with error {}",
                      vk::to_string(vk::Result{result}));
