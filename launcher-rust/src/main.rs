@@ -38,12 +38,26 @@ fn main() {
             };
             std::process::exit(runner::run(run))
         }
+        Route::Prepare { args } => {
+            let run = RunContext {
+                context: &context,
+                args,
+                out: &mut std::io::stdout(),
+            };
+            std::process::exit(runner::prepare(run))
+        }
         Route::Play => {
             // As the Python `main`: the start-up steps and the settings first.
             startup::apply_to_process(&context);
             let paths = &context.paths;
             startup::prepare(paths);
-            let settings = load_app_settings(paths);
+            let mut settings = load_app_settings(paths);
+            if let Some(update) = startup::update_dir_arg(&args) {
+                settings.set(
+                    "update_dir",
+                    serde_json::Value::String(update.to_string_lossy().into_owned()),
+                );
+            }
             // Without a usable game folder there is nothing to play yet: the window opens instead.
             if Installation::read(
                 &settings.get_str("game_dir"),

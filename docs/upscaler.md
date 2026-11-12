@@ -384,9 +384,49 @@ skipping screen-space passes (3 or 4 indices) so a shifted full-screen quad leav
 - `pad` bits: 0-7 diagnostic view (4 = history debug view: red depth-rejected, green history lost,
   blue weight used), 8-15 A/B switches, 16-23 moving-object history loss in percent, 24 view-projection
   depth, 25 8-bit scene, 26-31 spatial smoothing.
-- Defaults (tuned in game on a GTX 1070 Ti): history 99% still / 55% moving, tolerance 115%,
-  moving objects 90%, edges 70%, texture detail 75%, sharpening 165%. They live in
+- Defaults (tuned in game on a GTX 1070 Ti): history 99% still / 55% moving, tolerance 175%,
+  moving objects 55%, edges 55%, texture detail 80%, sharpening 130%. They live in
   `shim/spartanport_settings.h` and in the menu hints.
+
+### XeSS in place of the accumulation (upscaler "XeSS", ini `upscaler=xess`, Windows only)
+
+Intel XeSS-SR at its native anti-aliasing setting (`XESS_QUALITY_SETTING_AA`, the game's own
+resolution) can take the place of `taa.comp`. It gets the same inputs: the jittered scene colour (the
+sRGB view, so linear values, with `XESS_INIT_FLAG_LDR_INPUT_COLOR` since the colour is already tonemapped),
+the scene depth (not inverted: 0 at the near plane) and the motion vectors of `camera_motion_vp.comp` in render pixels
+(previous minus current, without jitter), and it writes into the TAA's output image, so the alpha
+pass, the write back and the HUD stay as they are. Code: `vk_xess.cpp` (loads `libxess.dll` at run time,
+Windows only), the hook is `TemporalUpscaler::RecordXess`.
+
+- The library is Intel's binary (`packaging/fetch_xess.sh` takes it from github.com/intel/xess at a pinned
+  commit and checks its hash; the Intel Simplified Software License allows redistributing it unmodified
+  with its license, which the package keeps in `LICENSES/`). The headers in `gpu/third_party/xess` are MIT.
+- XeSS needs `VK_EXT_mutable_descriptor_type` and the extensions its library lists
+  (`xessVKGetRequiredDeviceExtensions`); `Instance::CreateDevice` enables them only when `upscaler=xess` is in
+  the ini at start, which fits the upscaler choice being applied on restart. It is a choice of its own in the
+  launcher and the menu, next to the TAA (`IsTaa()` covers both: same live path, jitter and motion vectors).
+- The device is created with XeSS's extensions and its required features (`xessVKGetRequiredDeviceFeatures`,
+  patched into the device's feature chain) only when XeSS is the upscaler at start. If the card cannot give
+  them, the device is created from a copy of the chain without them. The result goes to
+  `XessAa::SetDeviceReady`: `Record` refuses to create a context on a device that was not made for XeSS and
+  fails for good with a message in the menu, so the TAA runs. Choosing XeSS in the menu when the game did not
+  start with it therefore needs a restart (`NeedsXessRestart`, in the three restart predicates and the menu's
+  count of changes).
+- `libxess.dll` is loaded only by full path, from the executable's folder or its `bin` folder, with the
+  search limited to that folder and the system folder (never the current directory or `PATH`). The waits
+  for an idle GPU (at the start and when the picture changes size) hold `Scheduler::submit_mutex`, the lock
+  the scheduler and the presenter take around `vkQueueSubmit` and `vkQueuePresent`.
+- The TAA look sliders (history, tolerance, moving objects, edges) do not apply to XeSS, which has its own
+  history. Texture detail (`taa_lod`, the rasterizer's mip bias) and the sharpening (`xess_sharpen`, default 145%; the
+  `taa_sharpen.comp` pass run over the output image through `SharpenImage`) do, and are logged as
+  `XeSS look:`. If XeSS cannot run, the TAA does, and the menu shows why.
+- Ghosting: the scene TAA's motion vectors are the camera's only (characters have none), so XeSS gets a
+  responsive pixel mask (`XESS_INIT_FLAG_RESPONSIVE_PIXEL_MASK`, R8): the scene stencil's characters and
+  objects, the mask `RecordStencilReactive` makes for FSR, clipped by `xessSetMaxResponsiveMaskValue` to
+  the menu's "Moving objects" (`xess_objects`, default 95%, 0 = off). Without a stencil XeSS runs without it.
+- Jitter sign: the same as FSR's; `SPARTAN_XESS_INVERT_JITTER=1` flips it for a test.
+- XeSS is meant to run before tonemapping; here it gets the tonemapped scene, because that is where the
+  game's TAA sits. Treat the quality as unproven.
 
 ### Simulator
 

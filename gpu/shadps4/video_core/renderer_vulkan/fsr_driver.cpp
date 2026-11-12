@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "video_core/renderer_vulkan/fsr_driver_api.h"
+// spartanport: device-idle teardown shares the scheduler queue submission lock.
+#include "video_core/renderer_vulkan/vk_scheduler.h"
 
 #include <algorithm>
 #include <array>
@@ -434,6 +436,8 @@ struct DriverFsrUpscaler::Impl {
     void Destroy() {
         if (!context)
             return;
+        // spartanport: exclude queue submissions through the idle wait and provider teardown.
+        std::scoped_lock submit_lock{Scheduler::submit_mutex};
         const auto wait = reinterpret_cast<PFN_vkDeviceWaitIdle>(
             backend.get_proc(backend.device, "vkDeviceWaitIdle"));
         if (wait)

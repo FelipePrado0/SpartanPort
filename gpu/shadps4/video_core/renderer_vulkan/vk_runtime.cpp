@@ -435,8 +435,7 @@ void Runtime::CopyImage(VideoCore::Image* src, VideoCore::Image* dst) {
     dst->flags &= ~VideoCore::ImageFlagBits::Dirty;
 }
 
-void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst,
-                                  const VideoCore::Buffer* buffer, u64 offset) {
+void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst) {
     const u32 num_mips = std::min(src->info.resources.levels, dst->info.resources.levels);
     const u32 num_layers = std::min(src->info.resources.layers, dst->info.resources.layers);
 
@@ -444,7 +443,7 @@ void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst,
     SetBackingSamples(src, src->info.num_samples);
 
     vk::BufferImageCopy buffer_copy = {
-        .bufferOffset = offset,
+        .bufferOffset = 0,
         .bufferRowLength = 0,
         .bufferImageHeight = 0,
         .imageSubresource{
@@ -458,19 +457,34 @@ void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst,
     };
     // spartanport: copy the shared mips and layers, so a depth/colour copy without
     // maintenance8 also handles images whose mip or layer counts differ.
-    u64 copy_size = BufferImageCopySize(buffer_copy, src->info.pixel_format);
+    // spartanport: the download and the upload share one layout, so each mip takes the larger of
+    // the source and destination texel sizes (a D16 source can upload into D32S8 depth).
+    const auto footprint = [&](const vk::BufferImageCopy& copy) {
+        return std::max(BufferImageCopySize(copy, src->info.pixel_format),
+                        BufferImageCopySize(copy, dst->info.pixel_format));
+    };
+    u64 copy_size = footprint(buffer_copy);
     boost::container::small_vector<vk::BufferImageCopy, 8> download_copies;
     download_copies.push_back(buffer_copy);
     for (u32 mip = 1; mip < num_mips; ++mip) {
         auto mip_copy = buffer_copy;
-        mip_copy.bufferOffset = Common::AlignUp(offset + copy_size, 16);
+        mip_copy.bufferOffset = Common::AlignUp(copy_size, 16);
         mip_copy.imageSubresource.mipLevel = mip;
         mip_copy.imageExtent = vk::Extent3D{std::max(src->info.size.width >> mip, 1u),
                                             std::max(src->info.size.height >> mip, 1u),
                                             std::max(src->info.size.depth >> mip, 1u)};
         copy_size =
-            mip_copy.bufferOffset - offset + BufferImageCopySize(mip_copy, src->info.pixel_format);
+            mip_copy.bufferOffset + footprint(mip_copy);
         download_copies.push_back(mip_copy);
+    }
+    // spartanport: the staging range is sized to every copied mip. A fixed 128 MiB range was
+    // written past by a depth image larger than that (the D32/D32S8 copies route here).
+    const auto staging =
+        staging_pool.Request(copy_size, VideoCore::MemoryType::DeviceLocal, 16);
+    const auto* buffer = staging.buffer;
+    const u64 offset = staging.offset;
+    for (auto& copy : download_copies) {
+        copy.bufferOffset += offset;
     }
 
     scheduler.EndRendering();
@@ -572,15 +586,14 @@ void Runtime::CopyColorAndDepth(VideoCore::Image* src, VideoCore::Image* dst) {
     // colour image aliasing it still holds the samples as channels, so sample 0 is channel 0.
     const bool guest_ms_depth = dst->info.props.is_depth && dst->info.guest_samples > 1;
     if (src->info.num_samples == 1 && dst->info.num_samples == 1 && !guest_ms_depth) {
-        if (instance.IsMaintenance8Supported() ||
-            src->info.props.is_depth == dst->info.props.is_depth) {
+        // spartanport: differing depth/stencil aspects require the intermediate buffer copy.
+        if ((instance.IsMaintenance8Supported() ||
+             src->info.props.is_depth == dst->info.props.is_depth) &&
+            src->aspect_mask == dst->aspect_mask) {
             CopyImage(src, dst);
         } else {
             // Perform depth from/to color copy using the intermediate copy buffer.
-            static constexpr size_t COPY_BUFFER_SIZE = 128_MB;
-            const auto copy_ref =
-                staging_pool.Request(COPY_BUFFER_SIZE, VideoCore::MemoryType::DeviceLocal);
-            CopyImageWithBuffer(src, dst, copy_ref.buffer, copy_ref.offset);
+            CopyImageWithBuffer(src, dst);
         }
     } else if (src->info.num_samples == 1 && (dst->info.num_samples > 1 || guest_ms_depth) &&
                dst->info.props.is_depth) {

@@ -167,6 +167,7 @@ TemporalUpscaler::TemporalUpscaler(const Instance& instance_, Scheduler& schedul
     // Reject unsupported shaders before allocating resources or recording a frame.
     fsr4 = std::make_unique<Fsr4Upscaler>(instance, scheduler);
     frame_generation = std::make_unique<FrameGeneration>(instance, scheduler);
+    xess = std::make_unique<XessAa>(instance);
 #ifdef _WIN32
     SpartanSettings::ConfigureUpscalerSupport(instance.IsFsr4Int8Supported(),
                                             fsr4->DriverAvailable(), fsr4->DriverProblem());
@@ -240,14 +241,14 @@ bool TemporalUpscaler::Active() const {
     return enabled && !failed &&
            (SpartanSettings::IsFsr3(SpartanSettings::Get().upscaler) ||
             SpartanSettings::IsFsr4(SpartanSettings::Get().upscaler) ||
-            SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) &&
+            SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) &&
            !SpartanToggle::Disabled(1u << 24);
 }
 
 bool TemporalUpscaler::ReactiveOn() const {
     // FSR 4 takes no reactive mask: the opaque snapshot and the mask pass would be wasted.
     return !SpartanToggle::Disabled(1u << 27) && !UseFsr4() &&
-           SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa;
+           !SpartanSettings::IsTaa(SpartanSettings::Get().upscaler);
 }
 
 void TemporalUpscaler::OnSceneColor(VideoCore::ImageId color) {
@@ -508,7 +509,10 @@ bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore
         return env && env[0] ? std::clamp(float(std::atof(env)), 0.0f, 1.0f) : 1.0f;
     }();
     // FSR 3.1 with native HUD and text: the menu's "Moving objects" sets it live.
-    const float stencil_value = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerFsr3Ui
+    // XeSS: a full mask, its "Moving objects" slider clips it (the responsive mask's maximum).
+    const float stencil_value = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerXess
+        ? 1.0f
+        : SpartanSettings::Get().upscaler == SpartanSettings::UpscalerFsr3Ui
         ? std::clamp(float(SpartanSettings::Get().fsr_objects.load()) / 100.0f, 0.0f, 1.0f)
         : env_value;
     if (stencil_value <= 0.0f || SpartanToggle::Disabled(1u << 28) ||
@@ -560,7 +564,7 @@ bool TemporalUpscaler::RecordStencilReactive(vk::CommandBuffer cmdbuf, VideoCore
 void TemporalUpscaler::RunLdr() {
     if ((UseFsr4() && (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerFsr411 ||
                        !fsr4->DriverAvailable())) ||
-        SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+        SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
         return;
     }
     if (!SceneImagesLive()) {
@@ -776,7 +780,7 @@ bool TemporalUpscaler::SharpenOn() const {
 }
 
 bool TemporalUpscaler::SceneTaa() const {
-    return enabled && SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa;
+    return enabled && SpartanSettings::IsTaa(SpartanSettings::Get().upscaler);
 }
 
 void TemporalUpscaler::OnPixelShader(u64 ps_hash, VideoCore::ImageId color) {
@@ -843,7 +847,7 @@ bool TemporalUpscaler::JitterDepth(VideoCore::ImageId depth) const {
 bool TemporalUpscaler::EnsureResources(u32 w, u32 h, u32 ow, u32 oh, bool hdr) {
     // FSR 4 has its own context: no portable FSR 3 context is made.
     const bool use_fsr4 = UseFsr4();
-    const bool use_taa = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa;
+    const bool use_taa = SpartanSettings::IsTaa(SpartanSettings::Get().upscaler);
     if (use_taa && (w != ow || h != oh)) {
         std::printf("TAA: remove SPARTAN_RENDER_RES to use native-resolution TAA\n");
         return false;
@@ -1142,8 +1146,86 @@ void TemporalUpscaler::CreatePipelines() {
     }
 }
 
+bool TemporalUpscaler::RecordXess(vk::CommandBuffer cmdbuf, const XessInputs& inputs,
+                                  vk::ImageView color, vk::ImageView depth) {
+    const auto& settings = SpartanSettings::Get();
+    if (settings.upscaler != SpartanSettings::UpscalerXess || !xess || inputs.width != out_width || inputs.height != out_height) {
+        return false;
+    }
+    const bool ok = xess->Record({
+        .cmdbuf = cmdbuf,
+        .color = {inputs.color, color, inputs.color_format, vk::ImageAspectFlagBits::eColor,
+                  inputs.width, inputs.height},
+        .depth = {inputs.depth, depth, inputs.depth_format, vk::ImageAspectFlagBits::eDepth,
+                  inputs.width, inputs.height},
+        .motion = {vk::Image(motion_image), *motion_view, vk::Format::eR16G16Sfloat,
+                   vk::ImageAspectFlagBits::eColor, inputs.width, inputs.height},
+        .output = {vk::Image(output_image), *output_view, vk::Format::eR16G16B16A16Sfloat,
+                   vk::ImageAspectFlagBits::eColor, out_width, out_height},
+        .responsive = inputs.has_mask
+            ? XessAa::Image{vk::Image(reactive_image), *reactive_view, vk::Format::eR8Unorm,
+                            vk::ImageAspectFlagBits::eColor, inputs.width, inputs.height}
+            : XessAa::Image{},
+        .responsive_max = float(settings.xess_objects.load()) / 100.0f,
+        .jitter = jitter,
+        .reset = reset || !xess_active, // XeSS has not been drawing: its history is old
+    });
+    // The menu shows why XeSS is not running; the text outlives this frame.
+    static std::string shown;
+    const char* problem = xess->Problem();
+    if (!problem) {
+        SpartanSettings::Get().xess_problem = nullptr;
+        shown.clear(); // the same problem coming back is shown again
+    } else if (shown != problem) {
+        shown = problem;
+        static std::array<std::string, 4> kept;
+        static u32 next = 0;
+        kept[next] = shown;
+        SpartanSettings::Get().xess_problem = kept[next].c_str();
+        next = (next + 1) % kept.size();
+    }
+    if (!ok && xess->Fatal()) {
+        static bool said = false;
+        if (!said) {
+            said = true;
+            std::printf("XeSS: not available, the TAA accumulates instead\n");
+        }
+    }
+    return ok;
+}
+
 void TemporalUpscaler::RecordTaa(vk::CommandBuffer cmdbuf, vk::ImageView color,
-                                vk::ImageView depth) {
+                                vk::ImageView depth, const XessInputs* xess_inputs) {
+    // XeSS in place of the accumulation: it writes the result into output_view and has its own
+    // history, so the TAA's pass and its sharpening (which reads the TAA's history) are skipped.
+    if (xess_inputs && RecordXess(cmdbuf, *xess_inputs, color, depth)) {
+        xess_active = true;
+        // The look sliders of the accumulation do not apply to XeSS; the texture detail (the
+        // rasterizer's mip bias) and the sharpening do, and are logged like the TAA's look.
+        const auto& xs = SpartanSettings::Get();
+        const bool camera = camera_motion.ViewProjectionCamera();
+        const float strength = camera ? std::clamp(xs.xess_sharpen.load() / 100.0f, 0.0f, 2.0f) : 0.0f;
+        static std::array<int, 3> logged{-1, -1, -1}, pending{-1, -1, -1};
+        static u32 stable_frames = 0;
+        const std::array<int, 3> now{xs.taa_lod.load(), xs.xess_sharpen.load(), xs.xess_objects.load()};
+        if (now != pending) {
+            pending = now;
+            stable_frames = 0;
+        } else if (stable_frames < 12 && ++stable_frames == 12 && pending != logged) {
+            logged = pending;
+            std::printf("XeSS look: texture detail %d sharpen %d moving objects %d\n", now[0], now[1],
+                        now[2]);
+        }
+        if (strength > 0.0f) {
+            SharpenImage(cmdbuf, vk::Image(output_image), false, out_width, out_height, strength);
+        }
+        return;
+    }
+    if (xess_active) {
+        // Back to the TAA: its history is from before XeSS ran.
+        xess_active = false;
+        reset = true;
+    }
     // Make scene writes and the last storage-image history writes visible to sampled reads.
     const vk::MemoryBarrier2 inputs{
         .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
@@ -1320,6 +1402,11 @@ void TemporalUpscaler::ExtraSharpen(vk::CommandBuffer cmdbuf, vk::Image target, 
     if (!SharpenOn() || extra <= 0.0f) {
         return;
     }
+    SharpenImage(cmdbuf, target, ldr, w, h, extra);
+}
+
+void TemporalUpscaler::SharpenImage(vk::CommandBuffer cmdbuf, vk::Image target, bool ldr, u32 w,
+                                    u32 h, float extra) {
     const auto device = instance.GetDevice();
     if (extra_sharpen_width != w || extra_sharpen_height != h) {
         // Retired command buffers may still read the old copy. `cmdbuf` stays open.
@@ -1580,7 +1667,7 @@ bool TemporalUpscaler::RecordReactive(vk::ImageView color_view) {
 
 void TemporalUpscaler::Run() {
     if (auto* profiler = GpuProfiler::Get()) {
-        const char* label = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa
+        const char* label = SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)
             ? "upscaler Run (TAA)" : "upscaler Run (FSR)";
         profiler->Mark(0xF5A0'0000ull ^ std::hash<std::string_view>{}(label),
                        [label] { return std::string{label}; });
@@ -1675,7 +1762,7 @@ void TemporalUpscaler::Run() {
     last_frame = now;
 
     bool dispatched = false;
-    if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+    if (SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
         RecordTaa(cmdbuf, input_color_view, input_depth_view);
         dispatched = true;
     } else if (UseFsr4()) {
@@ -1753,7 +1840,7 @@ void TemporalUpscaler::Run() {
     if (dispatched) {
         reset = false;
         dispatched_last_frame = true; frames_since_run = 0;
-        if (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa) {
+        if (!SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
             ExtraSharpen(cmdbuf, vk::Image(output_image), false, ow, oh);
         }
         // The result replaces the scene color's RGB (its alpha carries data for the post).
@@ -1900,7 +1987,14 @@ void TemporalUpscaler::RunSceneTaa() {
     }
     last_frame = now;
 
-    RecordTaa(cmdbuf, color_view, depth_view);
+    // XeSS's responsive mask: the characters and objects of the scene stencil (they move without
+    // motion vectors, so their history would ghost). The mask pass needs the depth in General.
+    const bool has_mask = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerXess &&
+                          RecordStencilReactive(cmdbuf, depth, depth_format, w, h);
+    const XessInputs xess_inputs{color.GetImage(), depth.GetImage(),
+                                 srgb_color ? vk::Format::eR8G8B8A8Srgb : vk::Format::eR8G8B8A8Unorm,
+                                 depth_format, w, h, has_mask};
+    RecordTaa(cmdbuf, color_view, depth_view, &xess_inputs);
     const bool dispatched = true;
     if (!dispatched) {
         return; // the scene colour stays as the game made it
@@ -2001,7 +2095,7 @@ std::array<u32, 2> TemporalUpscaler::SceneSize(u32 w, u32 h) const {
 }
 
 float TemporalUpscaler::SceneMipBias() const {
-    if (!Active() || SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) return 0.0f;
+    if (!Active() || SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) return 0.0f;
     const float render = float(SpartanSettings::Get().active_render_width.load());
     const float output = float(Scaled() ? target_width : 1920u);
     float bias = render > 0.0f && render < output ? std::log2(render / output) : 0.0f;
@@ -2259,7 +2353,7 @@ void TemporalUpscaler::RunUiOnly(VideoCore::ImageId color_id, VideoCore::ImageId
 
 void TemporalUpscaler::RunScaled() {
     if (auto* profiler = GpuProfiler::Get()) {
-        const char* label = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa
+        const char* label = SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)
             ? "upscaler RunScaled (TAA)" : "upscaler RunScaled (FSR)";
         profiler->Mark(0xF5A0'0000ull ^ std::hash<std::string_view>{}(label),
                        [label] { return std::string{label}; });
@@ -2391,13 +2485,13 @@ void TemporalUpscaler::RunScaled() {
     last_frame = now;
 
     // spartanport: FSR 4 writes its HDR-format output, copied into the output-size UI image.
-    if (UseFsr4() || SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+    if (UseFsr4() || SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
         const auto [fw, fh] = std::array{ow, oh};
         barrier(vk::Image(output_image), vk::ImageAspectFlagBits::eColor,
                 vk::ImageLayout::eUndefined, all, vk::AccessFlagBits2::eNone,
                 vk::ImageLayout::eGeneral, all, rw);
         bool ok4 = true;
-        if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa) {
+        if (SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
             RecordTaa(cmdbuf, color_view, depth_view);
         } else {
             ok4 = RecordFsr4(cmdbuf, {color_image, color_view, source_width, source_height},
@@ -2405,7 +2499,7 @@ void TemporalUpscaler::RunScaled() {
                             oh, frame_ms, color.info.pixel_format);
         }
         if (ok4) {
-            if (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa) {
+            if (!SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
                 ExtraSharpen(cmdbuf, vk::Image(output_image), false, fw, fh);
             }
             barrier(vk::Image(output_image), vk::ImageAspectFlagBits::eColor,
@@ -2439,7 +2533,7 @@ void TemporalUpscaler::RunScaled() {
                 DumpImages(instance, scheduler, cmdbuf, dump,
                            {{depth_image, source_width, source_height, 4, "depth", "f32",
                              vk::ImageAspectFlagBits::eDepth}});
-                if (SpartanSettings::Get().upscaler == SpartanSettings::UpscalerTaa &&
+                if (SpartanSettings::IsTaa(SpartanSettings::Get().upscaler) &&
                     std::getenv("SPARTAN_TAA_DIAGNOSTICS")) {
                     DumpImages(instance, scheduler, cmdbuf, dump,
                                {{vk::Image(taa_history[taa_next]),ow,oh,16,

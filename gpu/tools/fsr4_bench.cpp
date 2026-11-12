@@ -24,10 +24,14 @@
 #define VK_ENABLE_BETA_EXTENSIONS
 #include <vulkan/vulkan.h>
 #include "video_core/renderer_vulkan/fsr_driver.h"
+#include "video_core/renderer_vulkan/vk_scheduler.h"
 
 #include "ffx_vk_fsr4_v07.h"
 #include "ffx_vk_fsr4_v07_assets.h"
 #include "fsr411.h"
+
+// The standalone benchmark does not link the scheduler implementation.
+std::mutex Vulkan::Scheduler::submit_mutex;
 
 namespace {
 

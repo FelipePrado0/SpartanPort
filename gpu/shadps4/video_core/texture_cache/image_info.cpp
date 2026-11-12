@@ -299,7 +299,13 @@ s32 ImageInfo::SliceOf(const ImageInfo& info, s32 mip) const {
         return -1;
     }
 
-    return addr_diff / guest_size;
+    // spartanport: the result is a layer index; an image of several layers spans as many slices
+    // and must end inside the other image's layers.
+    const u32 slice = addr_diff / slice_size;
+    if (slice + std::max(resources.layers, 1u) > info.resources.layers) {
+        return -1;
+    }
+    return slice;
 }
 
 } // namespace VideoCore

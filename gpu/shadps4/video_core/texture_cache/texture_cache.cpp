@@ -615,11 +615,35 @@ void TextureCache::InvalidateAlias(Image& image) {
     }
 }
 
+// spartanport: every page of the image is still write-protected.
+static bool FullyTracked(const Image& image) {
+    return image.track_addr == image.info.guest_address &&
+           image.track_addr_end == image.info.guest_address + image.info.guest_size;
+}
+
+// spartanport: marking and refresh must hash identical bytes. Unmapped images still upload
+// through sparse memory; a missing hash must never turn that upload into a cache hit.
+// A GPU-dirty image's guest pages may be read-protected (SPARTAN_READBACKS=2): reading them
+// would force a synchronous download, and its contents come from the buffer anyway.
+std::optional<u64> TextureCache::MaybeDirtyHash(const Image& image) {
+    if (True(image.flags & ImageFlagBits::GpuDirty)) {
+        return std::nullopt;
+    }
+    const auto address = image.info.guest_address;
+    const auto size = image.info.guest_size;
+    if (Core::Memory::Instance()->ClampRangeSize(address, size) != size) {
+        return std::nullopt;
+    }
+    return XXH3_64bits(std::bit_cast<const u8*>(address), size);
+}
+
 void TextureCache::MarkAsMaybeDirty(ImageId image_id, Image& image) {
-    if (image.hash == 0) {
-        // Initialize hash
-        const u8* addr = std::bit_cast<u8*>(image.info.guest_address);
-        image.hash = XXH3_64bits(addr, image.info.guest_size);
+    // spartanport: a full upload changes the reference; refresh it before the next CPU write.
+    // Once a boundary page is unprotected, writes there no longer fault: keep the reference
+    // UntrackImageHead/Tail recorded while the whole image was watched.
+    const bool clean = False(image.flags & ImageFlagBits::Dirty);
+    if (FullyTracked(image) && (image.hash == 0 || clean)) {
+        image.hash = MaybeDirtyHash(image).value_or(0);
     }
     image.flags |= ImageFlagBits::MaybeCpuDirty;
     UntrackImage(image_id);
@@ -780,6 +804,13 @@ ImageId TextureCache::ResolveDepthOverlap(const ImageInfo& requested_info, Bindi
         // Inherit image usage
         auto& new_image = slot_images[new_image_id];
         new_image.usage = old_image.usage;
+        // spartanport: initialize added layers/mips before copying; track before uploading.
+        if (new_info.num_samples == 1 &&
+            (new_info.resources.layers > old_image.info.resources.layers ||
+             new_info.resources.levels > old_image.info.resources.levels)) {
+            TrackImage(new_image_id);
+            RefreshImage(new_image);
+        }
         new_image.flags &= ~ImageFlagBits::Dirty;
         // When creating a depth buffer through overlap resolution don't clear it on first use.
         new_image.info.meta_info.htile_clear_mask = 0;
@@ -1057,12 +1088,50 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
                     return {merged_image_id, -1, -1};
                 }
 
-                // We need to have a larger, already allocated image to copy this one into
-                if (merged_image_id) {
-                    auto& merged_image = slot_images[merged_image_id];
-                    runtime.CopyMip(&cache_image, &merged_image, mip, slice);
-                    FreeImage(cache_image_id);
+                // spartanport: create the parent now so GPU-written child texels survive;
+                // creating it later from guest memory would lose those texels.
+                if (!merged_image_id) {
+                    merged_image_id =
+                        slot_images.insert(instance, runtime, slot_image_views, image_info);
+                    RegisterImage(merged_image_id);
+                    // Track before the upload reads guest memory, as UpdateImage does, so a
+                    // CPU write during the upload marks the parent dirty.
+                    TrackImage(merged_image_id);
+                    RefreshImage(slot_images[merged_image_id]);
                 }
+                auto& merged_image = slot_images[merged_image_id];
+                // spartanport: preserve a maybe-dirty child only if its guest bytes are unchanged.
+                if (True(cache_image.flags & ImageFlagBits::MaybeCpuDirty)) {
+                    const auto hash = MaybeDirtyHash(cache_image);
+                    if (hash && cache_image.hash == *hash) {
+                        cache_image.flags &= ~ImageFlagBits::MaybeCpuDirty;
+                    }
+                }
+                // spartanport: copy only GPU-written child texels the parent's fresh upload
+                // lacks; a dirty or CPU-only child would overwrite it with stale data. A
+                // multisampled child is never uploaded (it stays Dirty); its texels are GPU-only.
+                if (cache_image.SafeToDownload() || cache_image.info.guest_samples > 1) {
+                    // spartanport: large parents may not have upload hashes yet. Record the
+                    // copied mip's mapped guest baseline before preserving GPU-only child data.
+                    // Skip a GPU-dirty parent, as MaybeDirtyHash does: its guest pages may be
+                    // read-protected, and reading them forces a synchronous download.
+                    if (merged_image.mip_hashes[mip] == 0 &&
+                        False(merged_image.flags & ImageFlagBits::GpuDirty)) {
+                        const auto& layout = merged_image.info.mips_layout[mip];
+                        const VAddr address = merged_image.info.guest_address + layout.offset;
+                        if (Core::Memory::Instance()->ClampRangeSize(address, layout.size) ==
+                            layout.size) {
+                            merged_image.mip_hashes[mip] =
+                                XXH3_64bits(std::bit_cast<const u8*>(address), layout.size);
+                        }
+                    }
+                    runtime.CopyMip(&cache_image, &merged_image, mip, slice);
+                }
+                // spartanport: a descriptor bound to the retired child must move to the parent.
+                if (cache_image.binding.is_bound) {
+                    cache_image.binding.needs_rebind = 1u;
+                }
+                FreeImage(cache_image_id);
             }
         }
     }
@@ -1073,19 +1142,39 @@ std::tuple<ImageId, int, int> TextureCache::ResolveOverlap(const ImageInfo& imag
 ImageId TextureCache::ExpandImage(const ImageInfo& info, ImageId image_id) {
     const auto new_image_id = slot_images.insert(instance, runtime, slot_image_views, info);
     RegisterImage(new_image_id);
+    // spartanport: protect guest bytes before validating the untracked maybe-dirty source.
+    TrackImage(new_image_id);
 
     auto& src_image = slot_images[image_id];
     auto& new_image = slot_images[new_image_id];
 
+    // spartanport: a neighboring CPU write may leave the source's GPU-only texels valid.
+    if (True(src_image.flags & ImageFlagBits::MaybeCpuDirty)) {
+        const auto hash = MaybeDirtyHash(src_image);
+        if (hash && src_image.hash == *hash) {
+            src_image.flags &= ~ImageFlagBits::MaybeCpuDirty;
+        }
+    }
+    // spartanport: a CPU write to one mip marks the whole image dirty. Refreshing a GPU-written
+    // source uploads only the mips whose guest bytes changed and keeps the other GPU-written
+    // mips, so the source becomes clean and its full copy below loses none of them.
+    if (True(src_image.flags & ImageFlagBits::GpuModified)) {
+        RefreshImage(src_image);
+    }
+    // spartanport: copy only GPU-written data absent from guest memory; a dirty source would
+    // overwrite the replacement's fresh upload with stale texels. RefreshImage never uploads a
+    // multisampled image (it stays Dirty), so its only contents are the GPU copy.
+    const bool src_has_gpu_data = src_image.SafeToDownload() || src_image.info.guest_samples > 1;
     RefreshImage(new_image);
-    runtime.CopyImage(&src_image, &new_image);
+    if (src_has_gpu_data) {
+        runtime.CopyImage(&src_image, &new_image);
+    }
 
     if (src_image.binding.is_bound || src_image.binding.is_target) {
         src_image.binding.needs_rebind = 1u;
     }
 
     FreeImage(image_id);
-    TrackImage(new_image_id);
     return new_image_id;
 }
 
@@ -1295,10 +1384,8 @@ ImageId TextureCache::FindImage(ImageDesc& desc, bool exact_fmt) {
 
 ImageId TextureCache::FindImageFromRange(VAddr address, size_t size, bool ensure_valid) {
     ImageIds image_ids;
-    ForEachImageInRegion(address, size, [&](ImageId image_id, Image& image) {
-        if (image.info.guest_address != address) {
-            return;
-        }
+    // spartanport: exact-address candidates all occur in the first page of the range.
+    ForEachImageWithAddress(address, [&](ImageId image_id, Image& image) {
         if (ensure_valid && !image.SafeToDownload()) {
             return;
         }
@@ -1437,22 +1524,14 @@ void TextureCache::RefreshImage(Image& image) {
 
     if (True(image.flags & ImageFlagBits::MaybeCpuDirty) &&
         False(image.flags & ImageFlagBits::CpuDirty)) {
-        // The image size should be less than page size to be considered MaybeCpuDirty
-        // So this calculation should be very uncommon and reasonably fast
-        // For now we'll just check up to 64 first pixels
-        const auto addr = std::bit_cast<u8*>(image.info.guest_address);
-        const u32 w = std::min(image.info.size.width, u32(8));
-        const u32 h = std::min(image.info.size.height, u32(8));
-
-        const u32 s_w = image.info.props.is_block ? Common::DivCeil(w, 4u) : w;
-        const u32 s_h = image.info.props.is_block ? Common::DivCeil(h, 4u) : h;
-        const u32 size = s_w * s_h * (image.info.num_bits / 8);
-        const u64 hash = XXH3_64bits(addr, size);
-        if (image.hash == hash) {
+        // spartanport: compare the whole small image, matching its pre-write reference.
+        const auto hash = MaybeDirtyHash(image);
+        // spartanport: unchanged guest bytes cannot rule out pending GPU buffer writes.
+        if (hash && image.hash == *hash && False(image.flags & ImageFlagBits::GpuDirty)) {
             image.flags &= ~ImageFlagBits::MaybeCpuDirty;
             return;
         }
-        image.hash = hash;
+        image.hash = hash.value_or(0);
     }
 
     const u32 num_layers = image.info.resources.layers;
@@ -1469,14 +1548,25 @@ void TextureCache::RefreshImage(Image& image) {
             image.info.props.is_volume ? std::max(image.info.size.depth >> m, 1u) : 1u;
         const auto [mip_size, mip_pitch, mip_height, mip_offset] = image.info.mips_layout[m];
 
-        // Protect GPU modified resources from accidental CPU reuploads.
-        if (is_gpu_modified && !is_gpu_dirty) {
-            const u8* addr = std::bit_cast<u8*>(image.info.guest_address);
-            const u64 hash = XXH3_64bits(addr + mip_offset, mip_size);
-            if (image.mip_hashes[m] == hash) {
+        // spartanport: record a reference on uploads that may later hold GPU-written texels.
+        // Hash only fully mapped mips, matching the sparse upload's treatment of missing pages.
+        // A GPU-dirty upload comes from the buffer and its guest pages may be read-protected
+        // (MaybeDirtyHash): drop the reference instead of reading them.
+        const u8* mip_addr = std::bit_cast<const u8*>(image.info.guest_address) + mip_offset;
+        if (is_gpu_dirty) {
+            image.mip_hashes[m] = 0;
+        }
+        const bool track =
+            !is_gpu_dirty &&
+            (is_gpu_modified || mip_size <= 64_KB || image.usage.storage ||
+             image.usage.render_target || image.usage.depth_target) &&
+            Core::Memory::Instance()->ClampRangeSize(VAddr(mip_addr), mip_size) == mip_size;
+        if (track) {
+            const u64 mip_hash = XXH3_64bits(mip_addr, mip_size);
+            if (is_gpu_modified && image.mip_hashes[m] == mip_hash) {
                 continue;
             }
-            image.mip_hashes[m] = hash;
+            image.mip_hashes[m] = mip_hash;
         }
 
         const u32 extent_width = mip_pitch ? std::min(mip_pitch, width) : width;
@@ -1681,6 +1771,14 @@ void TextureCache::UntrackImageHead(ImageId image_id) {
     if (!image.IsTracked() || image_begin < image.track_addr) {
         return;
     }
+    // spartanport: on a two-page image, unprotecting the first boundary page lets later CPU
+    // writes there in without a fault, and untracking the other page marks it maybe-dirty;
+    // record the reference while every byte of the clean image is watched.
+    if (FullyTracked(image) && False(image.flags & ImageFlagBits::Dirty) &&
+        tracker.GetNextPageAddr(image.info.guest_address) ==
+            tracker.GetPageAddr(image.info.guest_address + image.info.guest_size)) {
+        image.hash = MaybeDirtyHash(image).value_or(0);
+    }
     const auto addr = tracker.GetNextPageAddr(image_begin);
     const auto size = addr - image_begin;
     image.track_addr = addr;
@@ -1700,6 +1798,14 @@ void TextureCache::UntrackImageTail(ImageId image_id) {
         return;
     }
     ASSERT(image.track_addr_end != 0);
+    // spartanport: on a two-page image, unprotecting the first boundary page lets later CPU
+    // writes there in without a fault, and untracking the other page marks it maybe-dirty;
+    // record the reference while every byte of the clean image is watched.
+    if (FullyTracked(image) && False(image.flags & ImageFlagBits::Dirty) &&
+        tracker.GetNextPageAddr(image.info.guest_address) ==
+            tracker.GetPageAddr(image.info.guest_address + image.info.guest_size)) {
+        image.hash = MaybeDirtyHash(image).value_or(0);
+    }
     const auto addr = tracker.GetPageAddr(image_end);
     const auto size = image_end - addr;
     image.track_addr_end = addr;

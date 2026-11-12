@@ -498,7 +498,7 @@ pub fn upscaler_render_size(
         pick("SPARTAN_UPSCALER", "upscaler", "none").as_str(),
         "fsr3" | "fsr4" | "fsr411"
     ) {
-        // "fsr3ui" and "taa" run on the game's own targets: no resolution patch.
+        // "fsr3ui", "taa" and "xess" run on the game's own targets: no resolution patch.
         return None;
     }
     let output = crate::core::options::resolution_size(

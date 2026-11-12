@@ -177,7 +177,7 @@ target_compile_definitions(spartanportgpu PRIVATE IMGUI_IMPL_VULKAN_NO_PROTOTYPE
     SPARTAN_TITLE_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../launcher/Cinzel-Black.ttf")
 set_source_files_properties(shim/spartanport_overlay.cpp PROPERTIES
     OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/DejaVuSans.ttf;${CMAKE_CURRENT_SOURCE_DIR}/../launcher/Cinzel-Black.ttf")
-target_include_directories(spartanportgpu PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include third_party/half/include)
+target_include_directories(spartanportgpu PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include third_party/half/include third_party/xess)
 target_compile_definitions(spartanportgpu PRIVATE BOOST_ASIO_STANDALONE NDEBUG)
 target_compile_options(spartanportgpu PRIVATE -Wno-deprecated-declarations -Wno-missing-field-initializers)
 # Runtime symbols (runtime_memory_*, runtime_process_*) resolve against spartanport-probe.
@@ -429,6 +429,12 @@ add_executable(no-msaa-test EXCLUDE_FROM_ALL ../tests/test_no_msaa.cpp
 target_compile_options(no-msaa-test PRIVATE -UNDEBUG)
 target_include_directories(no-msaa-test PRIVATE shim shadps4 third_party/gcn/include)
 target_link_libraries(no-msaa-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
+add_executable(surface-format-test EXCLUDE_FROM_ALL ../tests/test_surface_format.cpp
+    shadps4/video_core/renderer_vulkan/liverpool_to_vk.cpp shadps4/video_core/amdgpu/pixel_format.cpp
+    shadps4/common/number_utils.cpp)
+target_compile_options(surface-format-test PRIVATE -UNDEBUG)
+target_include_directories(surface-format-test PRIVATE shim shadps4 third_party/gcn/include third_party/half/include)
+target_link_libraries(surface-format-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)
 add_executable(async-pipeline-cache-test EXCLUDE_FROM_ALL ../tests/test_async_pipeline_cache.cpp)
 target_compile_options(async-pipeline-cache-test PRIVATE -UNDEBUG)
 target_include_directories(async-pipeline-cache-test PRIVATE shadps4)
@@ -488,7 +494,7 @@ target_include_directories(aa-pass-test PRIVATE shim shadps4 ${SHADER_INCLUDE} t
 target_compile_definitions(aa-pass-test PRIVATE BOOST_ASIO_STANDALONE)
 target_compile_options(aa-pass-test PRIVATE -UNDEBUG -fPIC -Wno-deprecated-declarations -Wno-missing-field-initializers)
 target_link_libraries(aa-pass-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
-    tsl::robin_map GPUOpen::VulkanMemoryAllocator miniz::miniz ${CMAKE_DL_LIBS})
+    tsl::robin_map GPUOpen::VulkanMemoryAllocator miniz::miniz Threads::Threads ${CMAKE_DL_LIBS})
 add_dependencies(aa-pass-test host_shaders)
 
 add_executable(reactive-shader-test EXCLUDE_FROM_ALL ../tests/test_reactive_shader.cpp)
@@ -532,10 +538,11 @@ target_compile_definitions(upscaler-support-test PRIVATE
 
 add_executable(fsr-driver-test EXCLUDE_FROM_ALL ../tests/test_fsr_driver.cpp
     shadps4/video_core/renderer_vulkan/fsr_driver.cpp)
-target_include_directories(fsr-driver-test PRIVATE shadps4)
+target_include_directories(fsr-driver-test PRIVATE shim shadps4)
 target_compile_definitions(fsr-driver-test PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_compile_options(fsr-driver-test PRIVATE -UNDEBUG)
-target_link_libraries(fsr-driver-test PRIVATE Vulkan::Headers)
+target_link_libraries(fsr-driver-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers
+    tsl::robin_map Threads::Threads)
 add_executable(orb-multiplier-test EXCLUDE_FROM_ALL ../tests/test_orb_multiplier.cpp
     shim/spartanport_orbs.cpp shim/spartanport_settings.cpp)
 target_include_directories(orb-multiplier-test PRIVATE shim)
@@ -611,9 +618,10 @@ target_compile_options(page-state-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 add_executable(fsr4-bench EXCLUDE_FROM_ALL tools/fsr4_bench.cpp
     shadps4/video_core/renderer_vulkan/fsr_driver.cpp
     shadps4/video_core/renderer_vulkan/fsr411/fsr411.cpp)
-target_include_directories(fsr4-bench PRIVATE shadps4 shadps4/video_core/renderer_vulkan/fsr411)
+target_include_directories(fsr4-bench PRIVATE shim shadps4 shadps4/video_core/renderer_vulkan/fsr411)
 target_compile_definitions(fsr4-bench PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(fsr4-bench PRIVATE ffx-vulkan::fsr4-v07-vulkan ffx-vulkan::fsr4-v07-assets Vulkan::Vulkan)
+target_link_libraries(fsr4-bench PRIVATE ffx-vulkan::fsr4-v07-vulkan ffx-vulkan::fsr4-v07-assets Vulkan::Vulkan
+    fmt::fmt Boost::headers tsl::robin_map Threads::Threads)
 
 add_executable(cheat-hook-test ../tests/test_cheat_hook.cpp)
 target_compile_options(cheat-hook-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
@@ -623,3 +631,16 @@ add_executable(swapchain-focus-test EXCLUDE_FROM_ALL ../tests/test_swapchain_foc
 target_include_directories(swapchain-focus-test PRIVATE shim shadps4)
 target_link_libraries(swapchain-focus-test PRIVATE PkgConfig::SDL3 Vulkan::Vulkan fmt::fmt)
 target_compile_options(swapchain-focus-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+
+add_executable(frame-pacing-test EXCLUDE_FROM_ALL ../tests/test_frame_pacing.cpp)
+target_include_directories(frame-pacing-test PRIVATE shim)
+target_compile_options(frame-pacing-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+if (WIN32)
+    target_sources(frame-pacing-test PRIVATE ../src/compat_win.c)
+    target_link_libraries(frame-pacing-test PRIVATE onecore bcrypt)
+endif()
+
+add_executable(reg-dirty-test EXCLUDE_FROM_ALL ../tests/test_reg_dirty.cpp)
+target_compile_options(reg-dirty-test PRIVATE -UNDEBUG)
+target_include_directories(reg-dirty-test PRIVATE shim shadps4 third_party/gcn/include)
+target_link_libraries(reg-dirty-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum)

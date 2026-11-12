@@ -4,6 +4,9 @@
 #pragma once
 
 #include <algorithm>
+// spartanport: expose dirty words for a sparse scan on every standard library.
+#include <array>
+#include <bit>
 #include <bitset>
 #include <cstring>
 #include <vector>
@@ -199,7 +202,9 @@ union Regs {
 struct RegDirty {
     static constexpr u32 BlockWords = 32;
     static constexpr u32 NumBlocks = Regs::NumRegs / BlockWords;
-    std::bitset<NumBlocks> blocks;
+    // spartanport: scan 64 blocks at a time instead of testing every block per draw.
+    static constexpr u32 NumWords = (NumBlocks + 63) / 64;
+    std::array<u64, NumWords> bits{};
     bool reset = false; ///< ClearState: defaults, then only the blocks marked after it
 
     void Mark(u32 word, u32 count) {
@@ -208,7 +213,17 @@ struct RegDirty {
         }
         const u32 last = std::min(word + count, Regs::NumRegs) - 1;
         for (u32 block = word / BlockWords; block <= last / BlockWords; ++block) {
-            blocks.set(block);
+            // spartanport: mark the word used by the sparse iterator.
+            bits[block / 64] |= u64{1} << (block % 64);
+        }
+    }
+    // spartanport: visit only marked blocks, in register order.
+    template <typename Func>
+    void ForEach(Func&& func) const {
+        for (u32 index = 0; index < NumWords; ++index) {
+            for (u64 word = bits[index]; word; word &= word - 1) {
+                func(index * 64 + u32(std::countr_zero(word)));
+            }
         }
     }
     template <typename T>
@@ -218,7 +233,8 @@ struct RegDirty {
         Mark(u32(offset / sizeof(u32)), u32((sizeof(T) + sizeof(u32) - 1) / sizeof(u32)));
     }
     void Clear() {
-        blocks.reset();
+        // spartanport: clear the word-backed dirty set.
+        bits.fill(0);
         reset = false;
     }
 };
@@ -232,13 +248,12 @@ struct RegDelta {
         reset = dirty.reset;
         blocks.clear();
         words.clear();
-        for (u32 block = 0; block < RegDirty::NumBlocks; ++block) {
-            if (dirty.blocks.test(block)) {
-                blocks.push_back(u16(block));
-                const u32* src = regs.reg_array.data() + block * RegDirty::BlockWords;
-                words.insert(words.end(), src, src + RegDirty::BlockWords);
-            }
-        }
+        // spartanport: capture the same sparse dirty set used by PostDraw.
+        dirty.ForEach([&](u32 block) {
+            blocks.push_back(u16(block));
+            const u32* src = regs.reg_array.data() + block * RegDirty::BlockWords;
+            words.insert(words.end(), src, src + RegDirty::BlockWords);
+        });
     }
     void Apply(Regs& regs) const {
         if (reset) {
