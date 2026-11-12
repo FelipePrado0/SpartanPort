@@ -457,7 +457,13 @@ void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst) 
     };
     // spartanport: copy the shared mips and layers, so a depth/colour copy without
     // maintenance8 also handles images whose mip or layer counts differ.
-    u64 copy_size = BufferImageCopySize(buffer_copy, src->info.pixel_format);
+    // spartanport: the download and the upload share one layout, so each mip takes the larger of
+    // the source and destination texel sizes (a D16 source can upload into D32S8 depth).
+    const auto footprint = [&](const vk::BufferImageCopy& copy) {
+        return std::max(BufferImageCopySize(copy, src->info.pixel_format),
+                        BufferImageCopySize(copy, dst->info.pixel_format));
+    };
+    u64 copy_size = footprint(buffer_copy);
     boost::container::small_vector<vk::BufferImageCopy, 8> download_copies;
     download_copies.push_back(buffer_copy);
     for (u32 mip = 1; mip < num_mips; ++mip) {
@@ -468,7 +474,7 @@ void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst) 
                                             std::max(src->info.size.height >> mip, 1u),
                                             std::max(src->info.size.depth >> mip, 1u)};
         copy_size =
-            mip_copy.bufferOffset + BufferImageCopySize(mip_copy, src->info.pixel_format);
+            mip_copy.bufferOffset + footprint(mip_copy);
         download_copies.push_back(mip_copy);
     }
     // spartanport: the staging range is sized to every copied mip. A fixed 128 MiB range was
