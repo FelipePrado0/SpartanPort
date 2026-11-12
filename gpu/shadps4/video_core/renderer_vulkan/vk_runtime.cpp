@@ -435,8 +435,7 @@ void Runtime::CopyImage(VideoCore::Image* src, VideoCore::Image* dst) {
     dst->flags &= ~VideoCore::ImageFlagBits::Dirty;
 }
 
-void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst,
-                                  const VideoCore::Buffer* buffer, u64 offset) {
+void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst) {
     const u32 num_mips = std::min(src->info.resources.levels, dst->info.resources.levels);
     const u32 num_layers = std::min(src->info.resources.layers, dst->info.resources.layers);
 
@@ -444,7 +443,7 @@ void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst,
     SetBackingSamples(src, src->info.num_samples);
 
     vk::BufferImageCopy buffer_copy = {
-        .bufferOffset = offset,
+        .bufferOffset = 0,
         .bufferRowLength = 0,
         .bufferImageHeight = 0,
         .imageSubresource{
@@ -463,14 +462,23 @@ void Runtime::CopyImageWithBuffer(VideoCore::Image* src, VideoCore::Image* dst,
     download_copies.push_back(buffer_copy);
     for (u32 mip = 1; mip < num_mips; ++mip) {
         auto mip_copy = buffer_copy;
-        mip_copy.bufferOffset = Common::AlignUp(offset + copy_size, 16);
+        mip_copy.bufferOffset = Common::AlignUp(copy_size, 16);
         mip_copy.imageSubresource.mipLevel = mip;
         mip_copy.imageExtent = vk::Extent3D{std::max(src->info.size.width >> mip, 1u),
                                             std::max(src->info.size.height >> mip, 1u),
                                             std::max(src->info.size.depth >> mip, 1u)};
         copy_size =
-            mip_copy.bufferOffset - offset + BufferImageCopySize(mip_copy, src->info.pixel_format);
+            mip_copy.bufferOffset + BufferImageCopySize(mip_copy, src->info.pixel_format);
         download_copies.push_back(mip_copy);
+    }
+    // spartanport: the staging range is sized to every copied mip. A fixed 128 MiB range was
+    // written past by a depth image larger than that (the D32/D32S8 copies route here).
+    const auto staging =
+        staging_pool.Request(copy_size, VideoCore::MemoryType::DeviceLocal, 16);
+    const auto* buffer = staging.buffer;
+    const u64 offset = staging.offset;
+    for (auto& copy : download_copies) {
+        copy.bufferOffset += offset;
     }
 
     scheduler.EndRendering();
@@ -579,10 +587,7 @@ void Runtime::CopyColorAndDepth(VideoCore::Image* src, VideoCore::Image* dst) {
             CopyImage(src, dst);
         } else {
             // Perform depth from/to color copy using the intermediate copy buffer.
-            static constexpr size_t COPY_BUFFER_SIZE = 128_MB;
-            const auto copy_ref =
-                staging_pool.Request(COPY_BUFFER_SIZE, VideoCore::MemoryType::DeviceLocal);
-            CopyImageWithBuffer(src, dst, copy_ref.buffer, copy_ref.offset);
+            CopyImageWithBuffer(src, dst);
         }
     } else if (src->info.num_samples == 1 && (dst->info.num_samples > 1 || guest_ms_depth) &&
                dst->info.props.is_depth) {
