@@ -51,7 +51,7 @@ typedef struct GuestThread {
      * find the handle. */
     void *stack_memory;
     size_t stack_bytes;
-    int stack_low_mapped, resources_freed;
+    int stack_low_mapped, resources_freed, reaper_claimed;
     pthread_t host;
     GuestEntry entry;
     void *argument, *result;
@@ -383,6 +383,12 @@ static void *reaper_start(void *p) {
 }
 static void spawn_reaper(GuestThread *t) {
     pthread_t reaper;
+    /* One reaper per thread: the creator and a guest thread that detaches itself right after
+     * creation can both get here, and two reapers would join the same host thread. */
+    pthread_mutex_lock(&lock);
+    if (t->reaper_claimed) { pthread_mutex_unlock(&lock); return; }
+    t->reaper_claimed=1;
+    pthread_mutex_unlock(&lock);
     if (pthread_create(&reaper,NULL,reaper_start,t)) {
         fprintf(stderr,"Runtime: cannot spawn thread reaper for '%s'; its stack/TLS will be retained\n",t->name);
         return;
