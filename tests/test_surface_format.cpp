@@ -62,6 +62,19 @@ int main() {
     assert(FromDescriptor(10, 0) == vk::Format::eR8G8B8A8Unorm);
     assert(FromDescriptor(9, 0) == vk::Format::eA2B10G10R10UnormPack32);
 
+    // SnormNz on a data format with no SnormNz conversion (a stale descriptor: data format 15
+    // stopped the game in Oly400) converts nothing; the real SnormNz formats keep theirs.
+    using AmdGpu::MapNumberConversion;
+    using AmdGpu::NumberConversion;
+    assert(MapNumberConversion(NumberFormat::SnormNz, static_cast<DataFormat>(15)) ==
+           NumberConversion::None);
+    assert(MapNumberConversion(NumberFormat::SnormNz, DataFormat::Format32) ==
+           NumberConversion::None);
+    assert(MapNumberConversion(NumberFormat::SnormNz, DataFormat::Format8_8) ==
+           NumberConversion::Sint8ToSnormNz);
+    assert(MapNumberConversion(NumberFormat::SnormNz, DataFormat::Format16_16_16_16) ==
+           NumberConversion::Sint16ToSnormNz);
+
     // A colour buffer with an unused format is no target; a real one still is.
     AmdGpu::ColorBuffer color{};
     color.base_address = 0x1000;

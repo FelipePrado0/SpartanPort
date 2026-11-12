@@ -362,7 +362,10 @@ constexpr NumberConversion MapNumberConversion(const NumberFormat num_fmt,
         case DataFormat::Format16_16_16_16:
             return NumberConversion::Sint16ToSnormNz;
         default:
-            UNREACHABLE_MSG("data_fmt = {}", u32(data_fmt));
+            // spartanport: a descriptor the game is still rewriting can pair SnormNz with a
+            // data format that has no such conversion (15 stopped the game in Oly400). It
+            // converts nothing, as the other stale pairs read (IsUnusedDataFormat).
+            return NumberConversion::None;
         }
     }
     default:
