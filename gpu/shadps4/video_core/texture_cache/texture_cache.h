@@ -478,6 +478,7 @@ private:
     // spartanport: count old tiled images retained by the latest pass for pressure diagnostics.
     u64 gc_kept = 0, gc_kept_bytes = 0;
     std::chrono::steady_clock::time_point gc_report_time{};
+    std::chrono::steady_clock::time_point heap_report_time{};
     u64 trigger_gc_memory = 0;
     u64 pressure_gc_memory = 0;
     u64 critical_gc_memory = 0;
