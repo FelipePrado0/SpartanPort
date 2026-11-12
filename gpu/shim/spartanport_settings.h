@@ -6,6 +6,7 @@
 #pragma once
 
 #include "../../src/cheat_hook.h"
+#include "spartanport_graphics.h"
 
 #include <atomic>
 #include <cstdint>
@@ -179,6 +180,11 @@ struct Values {
     std::atomic<int> xess_sharpen{145};
     /// The game's depth of field (spartanport_depth_of_field.h); off keeps the whole picture sharp. Live.
     std::atomic<bool> depth_of_field{true};
+    /// Picture controls of the finished SDR frame (SpartanGraphics::Picture*; ini keys picture_brightness,
+    /// picture_contrast, picture_gamma). They act after the game's own Brightness. Live.
+    std::atomic<int> picture_brightness{SpartanGraphics::PictureBrightnessNeutral};
+    std::atomic<int> picture_contrast{SpartanGraphics::PictureContrastNeutral};
+    std::atomic<int> picture_gamma{SpartanGraphics::PictureGammaNeutral};
     /// Anti-aliasing of the finished frame (SpartanGraphics::AntiAliasing: off, FXAA, SMAA). Live.
     std::atomic<int> anti_aliasing{0};
     /// Set by the presenter: the anti-aliasing pass ran on the last frame (a mode that could not be

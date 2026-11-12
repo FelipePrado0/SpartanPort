@@ -263,6 +263,20 @@ int main() {
     assert(G::ParseFramesQueued(2) == 2 && G::ParseFramesQueued(0) == 0 && G::ParseFramesQueued(5) == 1);
     assert(G::ParseRcasStrength(100) == 100 && G::ParseRcasStrength(101) == 75 && G::ParseRcasStrength(-1) == 75);
     assert(G::RcasAttenuation(100) == 0.0f && G::RcasAttenuation(0) == 2.0f && G::RcasAttenuation(75) == 0.5f);
+    // Picture controls: only the neutral triple leaves the picture alone, and the mappings hold their ends.
+    assert(G::PictureNeutral(0, 100, 220) && !G::PictureNeutral(1, 100, 220) && !G::PictureNeutral(0, 99, 220) &&
+           !G::PictureNeutral(0, 100, 240));
+    assert(G::PicturePower(220) == 1.0f && G::PicturePower(180) == 180.0f / 220.0f && G::PicturePower(280) == 280.0f / 220.0f);
+    assert(G::PicturePower(100) == G::PicturePower(180) && G::PicturePower(999) == G::PicturePower(280));
+    assert(G::PictureContrast(100) == 1.0f && G::PictureContrast(50) == 0.5f && G::PictureContrast(150) == 1.5f);
+    assert(G::PictureContrast(0) == 0.5f && G::PictureContrast(400) == 1.5f);
+    assert(G::PictureBrightness(0) == 0.0f && G::PictureBrightness(-50) == -0.125f && G::PictureBrightness(50) == 0.125f);
+    assert(G::PictureBrightness(-90) == -0.125f && G::PictureBrightness(90) == 0.125f);
+    assert(G::ParsePictureGamma("2.4") == 240 && G::ParsePictureGamma("240") == 240 && G::ParsePictureGamma("2.2") == 220);
+    assert(G::ParsePictureGamma("") == 220 && G::ParsePictureGamma("9") == 280 && G::ParsePictureGamma("1") == 180);
+    assert(G::ParsePictureGamma("bogus") == 180 && G::ParsePictureGamma("-3") == 180 && G::ParsePictureGamma("2.45") == 245);
+    assert(G::ParsePictureGamma("nan") == 220 && G::ParsePictureGamma("inf") == 280 && G::ParsePictureGamma("-inf") == 180);
+    assert(G::ParsePictureGamma("1e100") == 280 && G::ParsePictureGamma("-1e100") == 180);
     assert(G::FsrPassRuns(true, false, 1280, 720, 2560, 1440) && !G::FsrPassRuns(false, false, 1280, 720, 2560, 1440));
     assert(G::FsrPassRuns(false, true, 1920, 1080, 1920, 1080) && !G::FsrPassRuns(true, false, 1920, 1080, 1920, 1080));
     assert(!G::FsrPassRuns(true, true, 2560, 1440, 1920, 1080));  // larger image: regular scaling
@@ -466,6 +480,57 @@ int main() {
         assert(v.depth_of_field);
         SpartanSettings::Save();
         assert(Read(path).find("depth_of_field=1\n") != std::string::npos);
+    }
+
+    {
+        // Picture controls: neutral by default, clamped, either gamma spelling, kept by Save().
+        const SpartanSettings::Values fresh{};
+        assert(G::PictureNeutral(fresh.picture_brightness, fresh.picture_contrast, fresh.picture_gamma));
+        {
+            std::ofstream out(path);
+            out << "picture_brightness=-20\npicture_contrast=120\npicture_gamma=2.4\n";
+        }
+        SpartanSettings::Load();
+        assert(v.picture_brightness == -20 && v.picture_contrast == 120 && v.picture_gamma == 240);
+        SpartanSettings::Save();
+        const std::string picture_ini = Read(path);
+        assert(picture_ini.find("picture_brightness=-20\n") != std::string::npos);
+        assert(picture_ini.find("picture_contrast=120\n") != std::string::npos);
+        assert(picture_ini.find("picture_gamma=240\n") != std::string::npos);
+        SpartanSettings::Load();  // what Save() wrote reads back the same
+        assert(v.picture_brightness == -20 && v.picture_contrast == 120 && v.picture_gamma == 240);
+        {
+            std::ofstream out(path);
+            out << "picture_brightness=900\npicture_contrast=900\npicture_gamma=900\n";
+        }
+        SpartanSettings::Load();
+        assert(v.picture_brightness == 50 && v.picture_contrast == 150 && v.picture_gamma == 280);
+        {
+            std::ofstream out(path);
+            out << "picture_brightness=-900\npicture_contrast=-900\npicture_gamma=0\n";
+        }
+        SpartanSettings::Load();
+        assert(v.picture_brightness == -50 && v.picture_contrast == 50 && v.picture_gamma == 180);
+        {
+            std::ofstream out(path);
+            out << "picture_brightness=\npicture_contrast=\npicture_gamma=\n";
+        }
+        SpartanSettings::Load();
+        assert(G::PictureNeutral(v.picture_brightness, v.picture_contrast, v.picture_gamma));
+        SetEnvironment("SPARTAN_PICTURE_BRIGHTNESS", "10");
+        SetEnvironment("SPARTAN_PICTURE_CONTRAST", "90");
+        SetEnvironment("SPARTAN_PICTURE_GAMMA", "2.6");
+        SpartanSettings::Load();
+        assert(v.picture_brightness == 10 && v.picture_contrast == 90 && v.picture_gamma == 260);
+        SetEnvironment("SPARTAN_PICTURE_BRIGHTNESS", "");
+        SetEnvironment("SPARTAN_PICTURE_CONTRAST", "");
+        SetEnvironment("SPARTAN_PICTURE_GAMMA", "");
+        {
+            std::ofstream out(path);
+            out << "picture_brightness=0\npicture_contrast=100\npicture_gamma=220\n";
+        }
+        SpartanSettings::Load();
+        assert(G::PictureNeutral(v.picture_brightness, v.picture_contrast, v.picture_gamma));
     }
 
     {

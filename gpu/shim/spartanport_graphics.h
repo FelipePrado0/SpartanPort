@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdlib>
 #include <limits>
 #include <string>
@@ -130,6 +131,41 @@ inline int ParseRcasStrength(int value) {
 inline float RcasAttenuation(int strength) {
     return 2.0f * (1.0f - float(ParseRcasStrength(strength)) / 100.0f);
 }
+/// Picture controls of the finished SDR frame (post_process.frag, picture_adjust()). Live.
+/// Gamma is the display gamma the picture is shaped for, in hundredths: 2.20 is a PC monitor and
+/// leaves the picture as the game made it, 2.40 is the TVs the game was made for. Contrast scales
+/// the encoded value around mid grey, in percent. Brightness sets the black level like a TV's
+/// Brightness, at 1/400 of the range per step: +50 lifts black to 12.5% of the range and -50 crushes
+/// the darkest 12.5% to black, while white stays white.
+inline constexpr int PictureBrightnessMin = -50, PictureBrightnessMax = 50, PictureBrightnessNeutral = 0;
+inline constexpr int PictureContrastMin = 50, PictureContrastMax = 150, PictureContrastNeutral = 100;
+inline constexpr int PictureGammaMin = 180, PictureGammaMax = 280, PictureGammaNeutral = 220;
+/// An ini or environment gamma: hundredths ("240") or the plain value ("2.4"); empty is neutral.
+inline int ParsePictureGamma(std::string_view text) {
+    if (text.empty()) return PictureGammaNeutral;
+    const double value = std::atof(std::string{text}.c_str());
+    if (std::isnan(value)) return PictureGammaNeutral;
+    const double hundredths = value < 10.0 ? value * 100.0 : value;
+    // Clamped while still a double, so an infinite or huge value never reaches the int conversion.
+    return int(std::lround(std::clamp(hundredths, double(PictureGammaMin), double(PictureGammaMax))));
+}
+/// The power applied to the encoded value: 1 at 2.20.
+inline float PicturePower(int gamma) {
+    return float(std::clamp(gamma, PictureGammaMin, PictureGammaMax)) / float(PictureGammaNeutral);
+}
+inline float PictureContrast(int contrast) {
+    return float(std::clamp(contrast, PictureContrastMin, PictureContrastMax)) / 100.0f;
+}
+inline float PictureBrightness(int brightness) {
+    return float(std::clamp(brightness, PictureBrightnessMin, PictureBrightnessMax)) / 400.0f;
+}
+/// Whether the three controls leave the picture as the game made it. The post pass then skips
+/// them, so the default picture is the same, bit for bit, as without the controls.
+inline bool PictureNeutral(int brightness, int contrast, int gamma) {
+    return PictureBrightness(brightness) == 0.0f && PictureContrast(contrast) == 1.0f &&
+           PicturePower(gamma) == 1.0f;
+}
+
 /// Whether the FSR pass runs: FSR 1 when the window is larger than the game's image, RCAS
 /// alone when they are the same size. A smaller window is left to the regular scaling.
 inline bool FsrPassRuns(bool fsr1, bool rcas, int in_w, int in_h, int out_w, int out_h) {
