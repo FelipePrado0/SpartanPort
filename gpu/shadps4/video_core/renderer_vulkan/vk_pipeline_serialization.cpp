@@ -901,6 +901,12 @@ bool GraphicsPipelineKey::Deserialize(Serialization::Archive& ar) {
     Serialization::Reader key{ar};
 
     key.Read(this, sizeof(*this));
+    // Saved and shipped keys can come from other machines: the pipeline build writes one entry
+    // per color target into fixed arrays.
+    if (num_color_attachments > AmdGpu::NUM_COLOR_BUFFERS) {
+        num_color_attachments = 0;
+        return false;
+    }
     return true;
 }
 
@@ -924,14 +930,33 @@ bool GraphicsPipeline::SerializationSupport::Deserialize(Serialization::Archive&
     sdata.Read(multisampling);
     sdata.Read(tcs);
     sdata.Read(tes);
-    return true;
+    // Raw bytes from another machine: its pointers would reach the driver as they are.
+    multisampling.sType = vk::StructureType::ePipelineMultisampleStateCreateInfo;
+    multisampling.pNext = nullptr;
+    multisampling.pSampleMask = nullptr;
+    const auto samples = static_cast<u32>(multisampling.rasterizationSamples);
+    const bool samples_ok = samples != 0 && samples <= 64 && (samples & (samples - 1)) == 0;
+    if (!samples_ok) {
+        multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
+    }
+    // The vectors were copied as raw bytes: a size past their capacity would be read past them.
+    const auto fits = [](const auto& vec) { return vec.size() <= vec.capacity(); };
+    if (samples_ok && fits(vertex_attributes) && fits(vertex_bindings) && fits(divisors)) {
+        return true;
+    }
+    std::memset(static_cast<void*>(&vertex_attributes), 0, sizeof(vertex_attributes));
+    std::memset(static_cast<void*>(&vertex_bindings), 0, sizeof(vertex_bindings));
+    std::memset(static_cast<void*>(&divisors), 0, sizeof(divisors));
+    return false;
 }
 
 bool PipelineCache::LoadGraphicsPipeline(Serialization::Archive& ar) {
-    sel.graphics_key.Deserialize(ar);
+    const bool key_ok = sel.graphics_key.Deserialize(ar);
 
     GraphicsPipeline::SerializationSupport sdata{};
-    sdata.Deserialize(ar);
+    if (!sdata.Deserialize(ar) || !key_ok) {
+        return false; // a key that does not fit the hardware is not built
+    }
 
     for (int stage_idx = 0; stage_idx < MaxShaderStages; ++stage_idx) {
         const auto& hash = sel.graphics_key.stage_hashes[stage_idx];
@@ -1401,8 +1426,11 @@ bool PipelineCache::PreparePipelines(const std::filesystem::path& cache_dir, u64
         }
         GraphicsPipelineKey key;
         GraphicsPipeline::SerializationSupport sdata{};
-        key.Deserialize(ar);
-        sdata.Deserialize(ar);
+        const bool key_ok = key.Deserialize(ar);
+        if (!sdata.Deserialize(ar) || !key_ok) {
+            ++skipped;
+            return;
+        }
         const u64 name = std::hash<GraphicsPipelineKey>{}(key);
         if (skip.contains(name)) {
             ++skipped;
@@ -1899,8 +1927,10 @@ void PipelineCache::ReadWarmEntry(BackgroundWarmup& warm, std::vector<u8>&& data
         sdata.Deserialize(ar);
         hashes[0] = entry.compute_key.value;
     } else {
-        entry.graphics_key.Deserialize(ar);
-        entry.sdata.Deserialize(ar);
+        const bool key_ok = entry.graphics_key.Deserialize(ar);
+        if (!entry.sdata.Deserialize(ar) || !key_ok) {
+            return skip();
+        }
         for (u32 i = 0; i < MaxShaderStages; ++i) {
             hashes[i] = entry.graphics_key.stage_hashes[i];
         }

@@ -9,6 +9,7 @@
 #include "common/serdes.h"
 #include "video_core/amdgpu/regs_shader.h"
 #include "video_core/renderer_vulkan/vk_compute_pipeline.h"
+#include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
 #include "video_core/renderer_vulkan/vk_shader_manifest.h"
 
 #undef NDEBUG
@@ -100,7 +101,47 @@ static std::optional<Manifest::Manifest> BuildFrom(const fs::path& game,
     return Manifest::Build("TEST00000", game, caches, translator, stats, error);
 }
 
+// A recorded key comes from players: one naming more color targets than the hardware has must
+// not reach the pipeline build, which writes one entry per target into fixed arrays.
+static void RefusesOversizedGraphicsKey() {
+    Vulkan::GraphicsPipelineKey key{};
+    key.num_color_attachments = AmdGpu::NUM_COLOR_BUFFERS;
+    Serialization::Archive good;
+    key.Serialize(good);
+    Vulkan::GraphicsPipelineKey read{};
+    Serialization::Archive good_in{good.TakeOff()};
+    assert(read.Deserialize(good_in));
+    assert(read.num_color_attachments == AmdGpu::NUM_COLOR_BUFFERS);
+
+    key.num_color_attachments = 0x40;
+    Serialization::Archive bad;
+    key.Serialize(bad);
+    Serialization::Archive bad_in{bad.TakeOff()};
+    assert(!read.Deserialize(bad_in));
+    assert(read.num_color_attachments <= AmdGpu::NUM_COLOR_BUFFERS);
+
+    // The multisample state reaches the driver as is: pointers from another machine never do.
+    Vulkan::GraphicsPipeline::SerializationSupport support{};
+    support.multisampling.pNext = reinterpret_cast<const void*>(uintptr_t{0x1234});
+    support.multisampling.pSampleMask = reinterpret_cast<const vk::SampleMask*>(uintptr_t{0x5678});
+    Serialization::Archive sup;
+    support.Serialize(sup);
+    Vulkan::GraphicsPipeline::SerializationSupport sup_read{};
+    Serialization::Archive sup_in{sup.TakeOff()};
+    assert(sup_read.Deserialize(sup_in)); // cleared, still a valid state
+    assert(sup_read.multisampling.pNext == nullptr);
+    assert(sup_read.multisampling.pSampleMask == nullptr);
+
+    support.multisampling.rasterizationSamples = static_cast<vk::SampleCountFlagBits>(3);
+    Serialization::Archive bad_sup;
+    support.Serialize(bad_sup);
+    Serialization::Archive bad_sup_in{bad_sup.TakeOff()};
+    assert(!sup_read.Deserialize(bad_sup_in));
+    assert(sup_read.multisampling.rasterizationSamples == vk::SampleCountFlagBits::e1);
+}
+
 int main() {
+    RefusesOversizedGraphicsKey();
     const auto dir = fs::temp_directory_path() / "spartanport-shader-manifest-test";
     fs::remove_all(dir);
     const auto game = dir / "game";

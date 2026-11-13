@@ -162,8 +162,10 @@ std::optional<Pipeline> ReadKey(const fs::path& path, const Versions& versions,
     } else {
         GraphicsPipelineKey key;
         GraphicsPipeline::SerializationSupport support;
-        key.Deserialize(ar);
-        support.Deserialize(ar);
+        // A recorded key that does not fit the hardware is refused, never shipped.
+        if (!key.Deserialize(ar) || !support.Deserialize(ar)) {
+            return std::nullopt;
+        }
         std::ranges::copy(key.stage_hashes, hashes.begin());
         key.stage_hashes.fill(0);
         key.Serialize(out);
