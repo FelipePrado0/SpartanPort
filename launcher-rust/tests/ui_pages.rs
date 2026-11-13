@@ -3486,6 +3486,28 @@ fn exporting_recorded_shaders_takes_metas_keys_and_profile() {
 }
 
 #[test]
+fn exporting_recorded_shaders_survives_odd_names_and_keeps_the_old_zip_on_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let user = dir.path().join("user");
+    let out = dir.path().join("shaders.zip");
+    let cache = user.join("cache");
+    let game = cache.join("CUSA01623");
+    std::fs::create_dir_all(&game).unwrap();
+    std::fs::write(game.join("0x01.meta"), b"meta").unwrap();
+    // Nine bytes, with a multi-byte letter where the serial's digits start: skipped, no panic.
+    std::fs::create_dir_all(cache.join("AAAé1234")).unwrap();
+    assert_eq!(advanced::export_shaders(&user, &out), Ok(1));
+
+    // A file that cannot be read fails the export: the zip saved before stays as it was.
+    std::fs::write(&out, b"old").unwrap();
+    std::fs::create_dir_all(game.join("bad.meta")).unwrap();
+    assert!(advanced::export_shaders(&user, &out).is_err());
+    assert_eq!(std::fs::read(&out).unwrap(), b"old");
+    let leftovers = std::fs::read_dir(dir.path()).unwrap().count();
+    assert_eq!(leftovers, 2, "only user/ and the old zip");
+}
+
+#[test]
 fn exporting_recorded_shaders_tells_where_the_file_went() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state(dir.path());

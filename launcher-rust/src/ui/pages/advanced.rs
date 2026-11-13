@@ -442,25 +442,30 @@ pub fn clear_cache(user_dir: &Path) -> Result<(), String> {
 pub fn export_shaders(user_dir: &Path, out: &Path) -> Result<usize, String> {
     // A game's folder is its serial; the preparation's `CUSA01623.pre-precompile` is not.
     let is_serial = |name: &str| {
-        name.len() == 9
-            && name[..4].bytes().all(|b| b.is_ascii_uppercase())
-            && name[4..].bytes().all(|b| b.is_ascii_digit())
+        let bytes = name.as_bytes();
+        bytes.len() == 9
+            && bytes[..4].iter().all(u8::is_ascii_uppercase)
+            && bytes[4..].iter().all(u8::is_ascii_digit)
+    };
+    let read_error = |path: &Path, error: std::io::Error| format!("{}: {error}", path.display());
+    let cache = cache_dir(user_dir);
+    let games = match std::fs::read_dir(&cache) {
+        Ok(games) => games,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => return Err(read_error(&cache, error)),
     };
     let mut files = Vec::new();
-    for game in std::fs::read_dir(cache_dir(user_dir))
-        .into_iter()
-        .flatten()
-        .flatten()
-    {
+    // A folder that cannot be read fails the export: a partial zip would look complete.
+    for game in games {
+        let game = game.map_err(|error| read_error(&cache, error))?;
         let serial = game.file_name().to_string_lossy().into_owned();
         if !is_serial(&serial) || !game.path().is_dir() {
             continue;
         }
-        for file in std::fs::read_dir(game.path())
-            .into_iter()
-            .flatten()
-            .flatten()
-        {
+        let entries =
+            std::fs::read_dir(game.path()).map_err(|error| read_error(&game.path(), error))?;
+        for file in entries {
+            let file = file.map_err(|error| read_error(&game.path(), error))?;
             let path = file.path();
             if file.file_name() == "profile.bin"
                 || matches!(
@@ -477,8 +482,13 @@ pub fn export_shaders(user_dir: &Path, out: &Path) -> Result<usize, String> {
         return Ok(0);
     }
     files.sort();
+    // Written beside the destination and moved over it at the end: a failed export keeps the
+    // zip saved there before.
+    let mut part = out.as_os_str().to_owned();
+    part.push(".part");
+    let part = PathBuf::from(part);
     let write = || -> zip::result::ZipResult<()> {
-        let mut archive = zip::ZipWriter::new(std::fs::File::create(out)?);
+        let mut archive = zip::ZipWriter::new(std::fs::File::create(&part)?);
         let options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
         for (name, path) in &files {
@@ -492,10 +502,11 @@ pub fn export_shaders(user_dir: &Path, out: &Path) -> Result<usize, String> {
             std::io::copy(&mut file, &mut archive)?;
         }
         archive.finish()?;
+        std::fs::rename(&part, out)?;
         Ok(())
     };
     write().map(|()| files.len()).map_err(|error| {
-        let _ = std::fs::remove_file(out);
+        let _ = std::fs::remove_file(&part);
         error.to_string()
     })
 }
