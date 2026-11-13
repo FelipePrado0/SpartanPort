@@ -285,6 +285,7 @@ pub fn environment(
         "partial_height_views",
         "disk_shaders",
         "shader_prefetch",
+        "shader_prefetch_wait",
         "shader_notes",
     ] {
         put_switch(&mut env, settings, key);
@@ -538,9 +539,10 @@ mod tests {
             (
                 env["SPARTAN_DISK_SHADERS"].as_str(),
                 env["SPARTAN_SHADER_PREFETCH"].as_str(),
+                env["SPARTAN_SHADER_PREFETCH_WAIT"].as_str(),
                 env["SPARTAN_SHADER_NOTES"].as_str()
             ),
-            ("1", "1", "0")
+            ("1", "1", "0", "0")
         );
         // In the Python's order: right after the screen effects switch.
         let keys: Vec<&str> = env.keys().map(String::as_str).collect();
@@ -549,24 +551,27 @@ mod tests {
             .position(|key| *key == "SPARTAN_PARTIAL_HEIGHT_VIEWS")
             .unwrap();
         assert_eq!(
-            &keys[at + 1..at + 4],
+            &keys[at + 1..at + 5],
             [
                 "SPARTAN_DISK_SHADERS",
                 "SPARTAN_SHADER_PREFETCH",
+                "SPARTAN_SHADER_PREFETCH_WAIT",
                 "SPARTAN_SHADER_NOTES"
             ]
         );
         let (off, paths, _dir) = setup(json!({
-            "disk_shaders": false, "shader_prefetch": false, "shader_notes": false
+            "disk_shaders": false, "shader_prefetch": false, "shader_notes": false,
+            "shader_prefetch_wait": true
         }));
         let env = game_environment(&off, &paths, "en", &IndexMap::new(), true);
         assert_eq!(
             (
                 env["SPARTAN_DISK_SHADERS"].as_str(),
                 env["SPARTAN_SHADER_PREFETCH"].as_str(),
+                env["SPARTAN_SHADER_PREFETCH_WAIT"].as_str(),
                 env["SPARTAN_SHADER_NOTES"].as_str()
             ),
-            ("0", "0", "0")
+            ("0", "0", "1", "0")
         );
     }
 

@@ -347,7 +347,7 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
         }
         auto last = std::chrono::steady_clock::time_point{};
         bool shown = false;
-        rasterizer->GetPipelineCache().PrepareShaders(list, [&](u32 done, u32 total) {
+        const auto progress = [&](u32 done, u32 total) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             if ((keys && keys[SDL_SCANCODE_ESCAPE]) ||
                 (pad && SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST))) {
@@ -361,19 +361,28 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
                 PresentLoadingFrame();
             }
             return true;
-        });
+        };
+        rasterizer->GetPipelineCache().PrepareShaders(list, progress);
+        const bool on_demand = UseOnDemandPipelines(
+            binary_cache, instance.GetPipelineBinaryGlobalKey().keySize != 0, capture_only);
+        if (on_demand) {
+            rasterizer->GetPipelineCache().StartOnDemand();
+            // Launcher: "Read the shader cache before the game starts". A hard disk cannot serve
+            // the startup read and the game at once (#1331). Off by default: a cold read of the
+            // shipped list's files took minutes even on an NVMe drive.
+            if (EmulatorSettingsImpl::Flag("SPARTAN_SHADER_PREFETCH_WAIT", false)) {
+                rasterizer->GetPipelineCache().WaitDiskPrefetch(progress);
+            }
+        }
         if (pad) {
             SDL_CloseGamepad(pad);
         }
         if (shown) {
             SpartanOverlay::SetLoading(false, 0, 0);
         }
-    }
-
-    if (UseOnDemandPipelines(binary_cache, instance.GetPipelineBinaryGlobalKey().keySize != 0,
-                            capture_only)) {
-        rasterizer->GetPipelineCache().StartOnDemand();
-        return;
+        if (on_demand) {
+            return;
+        }
     }
 
     // spartanport: by default the cached pipelines load while the game runs (a corner note shows the

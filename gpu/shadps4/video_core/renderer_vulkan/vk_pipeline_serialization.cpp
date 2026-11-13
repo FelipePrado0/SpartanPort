@@ -1578,13 +1578,15 @@ static std::vector<DiskBlob> ReadDiskProgram(u64 hash, const std::vector<u32>& i
     return blobs;
 }
 
-// spartanport: one low-priority thread reads every saved program into memory at startup (a few MB),
-// so the GPU thread only deserializes and creates the modules. A program the GPU thread needs
-// first is claimed and read there instead.
+// spartanport: one low-priority thread reads every saved program once at startup, so the GPU thread
+// finds the files in the system's file cache instead of waiting on the disk. The data is not kept:
+// with the shipped list that is about 1 GB, and the system frees its file cache when memory runs
+// short. A program the GPU thread needs first is claimed and read there instead.
 struct PipelineCache::DiskPrefetch {
     std::mutex mutex;
-    std::unordered_map<u64, std::vector<DiskBlob>> ready;
     std::unordered_set<u64> claimed;
+    std::atomic<u32> done{}, total{};
+    std::atomic<bool> finished{};
     std::jthread thread;
 };
 
@@ -1595,36 +1597,39 @@ void PipelineCache::StartDiskPrefetch() {
         return;
     }
     disk_prefetch = new DiskPrefetch;
+    disk_prefetch->total = u32(work.size());
     disk_prefetch->thread = std::jthread{[prefetch = disk_prefetch, work = std::move(work)](
                                              std::stop_token stop) {
         Common::SetCurrentThreadName("spartanport:ShaderPrefetch");
         Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+        // Whatever happens here, the loading screen waiting on it must not wait forever.
+        struct Finished {
+            DiskPrefetch* prefetch;
+            ~Finished() {
+                prefetch->finished = true;
+            }
+        } finished{prefetch};
         const auto started = std::chrono::steady_clock::now();
-        const u32 total = u32(work.size());
-        u32 done = 0;
+        const u32 total = prefetch->total;
         u64 programs = 0, bytes = 0;
         for (const auto& [hash, indices] : work) {
             if (stop.stop_requested()) {
                 SpartanOverlay::SetShaderPrefetch(0, 0);
                 return;
             }
-            SpartanOverlay::SetShaderPrefetch(done++, total);
+            SpartanOverlay::SetShaderPrefetch(prefetch->done++, total);
             {
                 std::scoped_lock lock{prefetch->mutex};
                 if (prefetch->claimed.contains(hash)) {
                     continue;
                 }
             }
-            auto blobs = ReadDiskProgram(hash, indices);
-            for (const auto& blob : blobs) {
+            for (const auto& blob : ReadDiskProgram(hash, indices)) {
                 bytes += blob.meta.size() + blob.spv.size() * sizeof(u32);
             }
-            std::scoped_lock lock{prefetch->mutex};
-            if (!prefetch->claimed.contains(hash)) {
-                prefetch->ready.emplace(hash, std::move(blobs));
-                ++programs;
-            }
+            ++programs;
         }
+        prefetch->done = total;
         SpartanOverlay::SetShaderPrefetch(total, total);
         std::printf("Disk shaders: prefetch read %llu programs (%.1f MB) in %.0f ms\n",
                     static_cast<unsigned long long>(programs), bytes / 1048576.0,
@@ -1670,6 +1675,15 @@ void PipelineCache::StopBinaryConversion() {
     binary_conversion = nullptr;
 }
 
+void PipelineCache::WaitDiskPrefetch(const std::function<bool(u32, u32)>& progress) {
+    while (disk_prefetch && !disk_prefetch->finished) {
+        if (!progress(disk_prefetch->done, disk_prefetch->total)) {
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+}
+
 void PipelineCache::StopDiskPrefetch() {
     delete disk_prefetch; // the jthread member asks the thread to stop and joins it
     disk_prefetch = nullptr;
@@ -1684,23 +1698,15 @@ bool PipelineCache::LoadDiskProgram(u64 hash) {
         return false;
     }
     const auto started = std::chrono::steady_clock::now();
-    std::optional<std::vector<DiskBlob>> blobs;
     if (disk_prefetch) {
         std::scoped_lock lock{disk_prefetch->mutex};
-        if (const auto it = disk_prefetch->ready.find(hash); it != disk_prefetch->ready.end()) {
-            blobs = std::move(it->second);
-            disk_prefetch->ready.erase(it);
-        } else {
-            disk_prefetch->claimed.insert(hash);
-        }
+        disk_prefetch->claimed.insert(hash);
     }
-    if (!blobs) {
-        blobs = ReadDiskProgram(hash, found->second);
-    }
+    auto blobs = ReadDiskProgram(hash, found->second);
     auto program = std::make_unique<Program>();
     bool have_info = false;
     size_t inserted = 0;
-    for (auto& blob : *blobs) {
+    for (auto& blob : blobs) {
         Shader::Info info{};
         Shader::StageSpecialization spec{};
         std::optional<Shader::Gcn::FetchShaderData> fetch;

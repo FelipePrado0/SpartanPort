@@ -239,6 +239,12 @@ pub static SETTINGS: &[Setting] = &[
         env("SPARTAN_SHADER_PREFETCH", ""),
     ),
     app(
+        "shader_prefetch_wait",
+        Flag,
+        Bool(false),
+        env("SPARTAN_SHADER_PREFETCH_WAIT", ""),
+    ),
+    app(
         "shader_notes",
         Flag,
         Bool(false),
