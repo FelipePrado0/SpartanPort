@@ -341,7 +341,9 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
         // spartanport: HDR output; the SDR picture is expanded until a flip says otherwise.
         pp_settings.hdr = 2;
     }
-    SpartanOverlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images);
+    // spartanport: on the HDR10 swapchain the menu's white is the picture's paper white.
+    SpartanOverlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images,
+                         swapchain.GetHDR() ? pp_settings.hdr_paper_white : 0.0f);
 
     const bool binary_cache = EmulatorSettingsImpl::Flag("SPARTAN_PIPELINE_BINARIES", true) &&
                               EmulatorSettings.IsPipelineCacheEnabled();

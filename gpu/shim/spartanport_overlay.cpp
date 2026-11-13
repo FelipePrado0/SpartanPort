@@ -40,6 +40,8 @@ extern "C" void runtime_restart(void); // src/probe.c: starts run.py again, ends
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
 #include "video_core/renderdoc.h"
+#include "video_core/host_shaders/overlay_hdr_frag.h"
+#include "video_core/renderer_vulkan/vk_shader_util.h"
 
 // DejaVu Sans (Cyrillic), embedded (third_party/fonts, Bitstream Vera license), and the launcher's
 // title face, Cinzel Black (launcher/Cinzel-Black.ttf, SIL OFL 1.1, launcher/OFL-Cinzel.txt), for the
@@ -2648,7 +2650,7 @@ void StartNotifications() {
     ApplyLanguage(SpartanUi::language);
 }
 
-void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) {
+void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count, float hdr10_white_nits) {
     std::scoped_lock lock{imgui_mutex};
     if (initialized) {
         return;
@@ -2686,6 +2688,21 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
         .colorAttachmentCount = 1,
         .pColorAttachmentFormats = &color_format,
     };
+    if (hdr10_white_nits > 0.0f) {
+        // ImGui draws SDR values; on the HDR10 swapchain they are encoded to PQ with white at the
+        // paper white in use now (host_shaders/overlay_hdr.frag). The pipeline is built once, so a
+        // later move of the HDR brightness slider leaves the menu at this value until a restart. The
+        // backend keeps the pointer: the code is static (Init runs once).
+        static std::vector<u32> code(std::begin(OVERLAY_HDR_FRAG), std::end(OVERLAY_HDR_FRAG));
+        if (!Vulkan::SetSpecConstantDefault(code, 0, hdr10_white_nits)) {
+            std::printf("Overlay: menu white not set, the menu stays at 200 nits\n");
+        }
+        info.CustomShaderFragCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = code.size() * sizeof(u32),
+            .pCode = code.data(),
+        };
+    }
     if (!ImGui_ImplVulkan_Init(&info)) {
         std::printf("Overlay: ImGui Vulkan backend init failed\n");
         ImGui::DestroyContext();

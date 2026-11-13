@@ -26,6 +26,9 @@
 #include "video_core/renderer_vulkan/host_passes/pp_pass.h"
 #include "video_core/renderer_vulkan/vk_common.h"
 #include "video_core/renderer_vulkan/vk_presenter.h"
+#include "video_core/renderer_vulkan/vk_shader_util.h"
+#include "video_core/host_shaders/overlay_hdr_frag.h"
+#include "video_core/host_shaders/post_process_frag.h"
 
 #include <vk_mem_alloc.h>
 
@@ -783,6 +786,31 @@ int main() {
         ramp.view.reset();
         vmaDestroyImage(g.allocator, target.image.image, target.image.allocation);
         vmaDestroyImage(g.allocator, ramp.image, ramp.allocation);
+    }
+    {
+        // j. The menu's white on the HDR10 swapchain (spartanport_overlay.cpp): the paper white is written
+        // into overlay_hdr.frag's menu_white_nits (constant_id 0), and the patched code still makes a
+        // module. Code without that constant is left alone.
+        const auto bits = [](float f) {
+            u32 w;
+            std::memcpy(&w, &f, sizeof w);
+            return w;
+        };
+        const auto count = [](const std::vector<u32>& code, u32 word) {
+            return int(std::count(code.begin(), code.end(), word));
+        };
+        std::vector<u32> overlay(std::begin(OVERLAY_HDR_FRAG), std::end(OVERLAY_HDR_FRAG));
+        const int at_200 = count(overlay, bits(200.0f)), at_340 = count(overlay, bits(340.0f));
+        const bool patched = Vulkan::SetSpecConstantDefault(overlay, 0, 340.0f);
+        Expect(patched && count(overlay, bits(200.0f)) == at_200 - 1 && count(overlay, bits(340.0f)) == at_340 + 1,
+               "overlay: the menu's white (constant_id 0) becomes 340 nits, one word changed");
+        const vk::ShaderModule module = Vulkan::CompileSPV(overlay, *g.device);
+        Expect(bool(module), "overlay: the patched shader makes a module");
+        g.device->destroyShaderModule(module);
+        std::vector<u32> post(std::begin(POST_PROCESS_FRAG), std::end(POST_PROCESS_FRAG));
+        const std::vector<u32> post_before = post;
+        Expect(!Vulkan::SetSpecConstantDefault(post, 0, 340.0f) && post == post_before,
+               "overlay: code without constant_id 0 is left alone");
     }
     vmaDestroyAllocator(g.allocator);
     Expect(validation_errors == 0, "no validation errors");
