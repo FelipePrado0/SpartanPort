@@ -229,6 +229,12 @@ int main() {
     assert(G::ParseMonitor(widest) == std::numeric_limits<int>::max());
     assert(G::ParseMonitor(std::to_string(std::numeric_limits<int>::max() + 1LL)) == G::PrimaryMonitor);
     assert(G::ParseMonitor("99999999999999999999") == G::PrimaryMonitor);
+    // HDR on for the window's display (window.cpp): SDL's flag, or an SDR white level above 1 (80 nits),
+    // which SDL reports only while Windows drives the display in HDR10. A 400-nit display with the SDR
+    // slider at 480 nits has a headroom under 1, so SDL's flag is off; the white level (6) still says on.
+    assert(G::HdrOnForDisplay(true, 1.0f) && G::HdrOnForDisplay(true, 2.5f));
+    assert(G::HdrOnForDisplay(false, 6.0f) && G::HdrOnForDisplay(false, 1.05f));
+    assert(!G::HdrOnForDisplay(false, 1.0f) && !G::HdrOnForDisplay(false, 0.0f));
     assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(144) == 144 && G::ParseFpsLimit(180) == 180 && G::ParseFpsLimit(100) == 100 && G::ParseFpsLimit(75) == 0);
     assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 25);
     // #964, #1038: 2880x1800 (16:10) and 5120x2880 (5K, 16:9).

@@ -145,7 +145,15 @@ float PqToNits(float encoded) {
     return 10000.0f * std::pow(std::max(vp - c1, 0.0f) / std::max(c2 - c3 * vp, 1e-6f), 1.0f / m1);
 }
 
-u8 HdrToSrgb8(float nits) {
+// sdr_white_nits: 0 for the game's own HDR10, whose 100 nits become white with the highlights
+// compressed. spartanport: for the SDR picture expanded to HDR10, its white in nits: that maps back
+// to white and the 2.2 power decode is undone, so the screenshot shows the SDR picture (the boosted
+// highlights clip at white).
+u8 HdrToSrgb8(float nits, float sdr_white_nits) {
+    if (sdr_white_nits > 0.0f) {
+        const float linear = std::clamp(nits / sdr_white_nits, 0.0f, 1.0f);
+        return u8(std::pow(linear, 1.0f / 2.2f) * 255.0f + 0.5f);
+    }
     const float x = std::max(nits, 0.0f) / 100.0f; // 100-nit SDR white
     const float linear = std::clamp(2.0f * x / (1.0f + x), 0.0f, 1.0f);
     const float srgb = linear <= 0.0031308f ? 12.92f * linear : 1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
@@ -153,7 +161,7 @@ u8 HdrToSrgb8(float nits) {
 }
 
 bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, bool hdr,
-                       std::vector<u8>& rgba) {
+                       float sdr_white_nits, std::vector<u8>& rgba) {
     const size_t pixels = size_t(width) * height;
     rgba.resize(pixels * 4);
     switch (format) {
@@ -188,9 +196,13 @@ bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, 
             if (hdr) {
                 // Rec.2020 PQ to SDR Rec.709.
                 const float r2020 = nits[r], g2020 = nits[g], b2020 = nits[b];
-                rgba[i * 4 + 0] = HdrToSrgb8(1.6605f * r2020 - 0.5876f * g2020 - 0.0728f * b2020);
-                rgba[i * 4 + 1] = HdrToSrgb8(-0.1246f * r2020 + 1.1329f * g2020 - 0.0083f * b2020);
-                rgba[i * 4 + 2] = HdrToSrgb8(-0.0182f * r2020 - 0.1006f * g2020 + 1.1187f * b2020);
+                const float w = sdr_white_nits;
+                rgba[i * 4 + 0] =
+                    HdrToSrgb8(1.6605f * r2020 - 0.5876f * g2020 - 0.0728f * b2020, w);
+                rgba[i * 4 + 1] =
+                    HdrToSrgb8(-0.1246f * r2020 + 1.1329f * g2020 - 0.0083f * b2020, w);
+                rgba[i * 4 + 2] =
+                    HdrToSrgb8(-0.0182f * r2020 - 0.1006f * g2020 + 1.1187f * b2020, w);
             } else {
                 rgba[i * 4 + 0] = u8((r * 255 + 511) / 1023);
                 rgba[i * 4 + 1] = u8((g * 255 + 511) / 1023);
@@ -257,12 +269,14 @@ void CaptureScreenshot(const Instance& instance, Scheduler& scheduler, vk::Comma
     cmdbuf.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eHost,
                            vk::DependencyFlags{}, to_host, {}, {});
     scheduler.DeferPriorityOperation([allocator = instance.GetAllocator(), buffer, allocation, info,
-                                      width = frame.width, height = frame.height, format = frame.format,
-                                      hdr = frame.is_hdr, path = ScreenshotPath(frame.is_generated)] {
+                                      width = frame.width, height = frame.height,
+                                      format = frame.format, hdr = frame.is_hdr,
+                                      sdr_white_nits = frame.sdr_white_nits,
+                                      path = ScreenshotPath(frame.is_generated)] {
         vmaInvalidateAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
         std::vector<u8> rgba;
-        const bool converted =
-            ScreenshotToRgba8(static_cast<const u8*>(info.pMappedData), width, height, format, hdr, rgba);
+        const bool converted = ScreenshotToRgba8(static_cast<const u8*>(info.pMappedData), width,
+                                                 height, format, hdr, sdr_white_nits, rgba);
         vmaDestroyBuffer(allocator, buffer, allocation);
         if (!converted) {
             LOG_ERROR(Render_Vulkan, "Screenshot: unsupported format {}", vk::to_string(format));
@@ -323,6 +337,10 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
     aa_pass.Create(device, instance.GetAllocator(), num_images * 2);
     fsr_pass.Create(device, instance.GetAllocator(), num_images);
     pp_pass.Create(device, swapchain.GetSurfaceFormat().format);
+    if (swapchain.GetHDR()) {
+        // spartanport: HDR output; the SDR picture is expanded until a flip says otherwise.
+        pp_settings.hdr = 2;
+    }
     SpartanOverlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images);
 
     const bool binary_cache = EmulatorSettingsImpl::Flag("SPARTAN_PIPELINE_BINARIES", true) &&
@@ -667,10 +685,13 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         fsr_settings.use_rcas &&
         SpartanGraphics::FsrPassRuns(fsr_settings.enable, true, int(image_size.width), int(image_size.height),
                                   int(frame->width), int(frame->height));
-    // spartanport: anti-aliasing (FXAA, SMAA) of the game's image, before the sharpening so that the
-    // sharpening does not bring the edges back. Colour values: linear light for an sRGB view, perceptual
-    // for 10-bit sRGB values and HDR (the post pass below decodes them the same way).
-    // The same filter runs over the generated frame below, so real and generated frames match.
+    // spartanport: anti-aliasing (FXAA, SMAA) of the game's image, before the sharpening so that
+    // the sharpening does not bring the edges back. Colour values: linear light for an sRGB view,
+    // perceptual for 10-bit sRGB values and HDR (the post pass below decodes them the same way).
+    // HDR here is the game's own PQ output; with HDR output on an SDR game the image is still SDR
+    // until the post pass. The same filter runs over the generated frame below, so real and
+    // generated frames match.
+    const bool game_pq = pp_settings.hdr == 1;
     using VideoFormat = Libraries::VideoOut::PixelFormat;
     const bool aa_encoded = attribute.attrib.pixel_format == VideoFormat::A2R10G10B10Srgb ||
                             attribute.attrib.pixel_format == VideoFormat::A2R10G10B10Bt2020Pq;
@@ -682,7 +703,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     {
         const bool aa_runs = SpartanGraphics::AaPassRuns(aa_mode, int(image_size.width), int(image_size.height)) &&
                              !aa_pass.Failed(aa_mode);
-        image_view = apply_aa(image_view, frame->is_hdr);
+        image_view = apply_aa(image_view, game_pq);
         SpartanSettings::Get().aa_applied = aa_runs && !aa_pass.Failed(aa_mode);
         // One line when the filter starts, stops or changes, so a log shows what ran.
         static int logged_aa = -1;
@@ -694,7 +715,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         }
     }
     image_view = fsr_pass.Render(cmdbuf, image_view, image_size, {frame->width, frame->height},
-                                 fsr_settings, frame->is_hdr);
+                                 fsr_settings, game_pq);
 
     // Vulkan has no sRGB variant of the 10-bit format, so an A2R10G10B10Srgb buffer reaches
     // the post process pass still sRGB encoded and has to be decoded there instead.
@@ -713,6 +734,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         pp_settings.picture_brightness = SpartanGraphics::PictureBrightness(brightness);
         pp_settings.picture_adjust = !SpartanGraphics::PictureNeutral(brightness, contrast, gamma);
     }
+    frame->sdr_white_nits = pp_settings.hdr == 2 ? pp_settings.hdr_paper_white : 0.0f;
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
     if (generated_image) {
         // The same passes over the generated frame, into a frame of its own.
@@ -732,8 +754,9 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         const vk::ImageView generated_view = fsr_pass.Render(
             cmdbuf,
             apply_aa(rasterizer->GetUpscaler().GetFrameGeneration().GeneratedView(view_info.format),
-                     generated->is_hdr),
-            image_size, {generated->width, generated->height}, fsr_settings, generated->is_hdr);
+                     game_pq),
+            image_size, {generated->width, generated->height}, fsr_settings, game_pq);
+        generated->sdr_white_nits = frame->sdr_white_nits;
         pp_pass.Render(cmdbuf, generated_view, image_size, *generated, pp_settings);
         generated->is_generated = true;
         frame->generated = generated;

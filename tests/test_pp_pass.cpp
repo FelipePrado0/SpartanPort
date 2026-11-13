@@ -8,6 +8,8 @@
 // that off) and fails on any validation error. The exact-code checks assume round-to-nearest UNORM
 // conversion, as Lavapipe does; Vulkan also allows a GPU to truncate, so on such a GPU white (encoded as
 // 0.99999994) and a few dithered codes can come out one lower and fail those checks.
+// A second run draws the HDR output (pp.hdr 2: the SDR picture expanded to HDR10) into an A2B10G10R10
+// target and checks it against a CPU model of the whole chain, in double.
 #define VMA_IMPLEMENTATION
 #include <algorithm>
 #include <array>
@@ -57,6 +59,8 @@ using Settings = HostPasses::PostProcessingPass::Settings;
 // at many positions for each code.
 constexpr u32 W = 256, H = 16;
 constexpr vk::Format OutputFormat = vk::Format::eR8G8B8A8Unorm;
+// The HDR10 swapchain's format (vk_swapchain.h, SURFACE_FORMAT_HDR).
+constexpr vk::Format HdrFormat = vk::Format::eA2B10G10R10UnormPack32;
 
 struct Gpu {
     vk::detail::DynamicLoader loader;
@@ -208,7 +212,10 @@ void Submit(Gpu& g, Record record) {
 // sampler decodes code x to linear light and the shader's gamma() encodes it again, so with the
 // controls neutral the output should be code x. The output is as wide as the input, so every fragment
 // samples one texel at its centre and the linear filter mixes in nothing from the neighbours.
-Image MakeRamp(Gpu& g) {
+// The HDR run's ramp (orange_half) holds orange, code x in red and x / 2 in green, in its lower half and
+// alpha 128 everywhere, so the colour matrix, the alpha the pass writes and whether one factor scales all
+// three channels of a pixel (the hue) are seen too.
+Image MakeRamp(Gpu& g, bool orange_half = false) {
     Image in = MakeImage(g, vk::Format::eR8G8B8A8Srgb,
                          vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst);
     Buffer staging = MakeBuffer(g, size_t(W) * H * 4, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
@@ -216,8 +223,11 @@ Image MakeRamp(Gpu& g) {
     for (u32 y = 0; y < H; ++y) {
         for (u32 x = 0; x < W; ++x) {
             u8* px = bytes + (size_t(y) * W + x) * 4;
-            px[0] = px[1] = px[2] = u8(x);
-            px[3] = 255;
+            const bool orange = orange_half && y >= H / 2;
+            px[0] = u8(x);
+            px[1] = orange ? u8(x / 2) : u8(x);
+            px[2] = orange ? 0 : u8(x);
+            px[3] = orange_half ? 128 : 255;
         }
     }
     vmaFlushAllocation(g.allocator, staging.allocation, 0, VK_WHOLE_SIZE);
@@ -252,15 +262,15 @@ struct Target {
     Image image;
     Frame frame{};
 };
-void MakeTarget(Gpu& g, Target& t) {
-    t.image = MakeImage(g, OutputFormat,
+void MakeTarget(Gpu& g, Target& t, vk::Format format = OutputFormat) {
+    t.image = MakeImage(g, format,
                         vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc);
     t.frame.width = W;
     t.frame.height = H;
     t.frame.allocation = t.image.allocation;
     t.frame.image = t.image.image;
     t.frame.image_view = *t.image.view;
-    t.frame.format = OutputFormat;
+    t.frame.format = format;
 }
 
 struct Output {
@@ -269,7 +279,9 @@ struct Output {
     bool alpha_one = true;
 };
 
-Output Run(Gpu& g, HostPasses::PostProcessingPass& pass, const Image& in, Target& target, const Settings& settings) {
+// Draws the pass into the target and returns its pixels, 32 bits each.
+std::vector<u32> DrawPass(Gpu& g, HostPasses::PostProcessingPass& pass, const Image& in, Target& target,
+                          const Settings& settings) {
     Buffer readback = MakeBuffer(g, size_t(W) * H * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
     Submit(g, [&](vk::CommandBuffer cmd) {
         // The presenter hands the pass a frame in the color attachment layout; the pass leaves it General.
@@ -302,15 +314,23 @@ Output Run(Gpu& g, HostPasses::PostProcessingPass& pass, const Image& in, Target
         cmd.pipelineBarrier2({.memoryBarrierCount = 1, .pMemoryBarriers = &host});
     });
     vmaInvalidateAllocation(g.allocator, readback.allocation, 0, VK_WHOLE_SIZE);
+    std::vector<u32> pixels(size_t(W) * H);
+    std::memcpy(pixels.data(), readback.mapped, pixels.size() * 4);
+    vmaDestroyBuffer(g.allocator, readback.buffer, readback.allocation);
+    return pixels;
+}
+
+Output Run(Gpu& g, HostPasses::PostProcessingPass& pass, const Image& in, Target& target, const Settings& settings) {
+    const std::vector<u32> pixels = DrawPass(g, pass, in, target, settings);
     Output out;
     out.code.resize(size_t(W) * H);
-    const auto* px = static_cast<const u8*>(readback.mapped);
-    for (size_t i = 0; i < out.code.size(); ++i, px += 4) {
+    for (size_t i = 0; i < out.code.size(); ++i) {
+        u8 px[4];
+        std::memcpy(px, &pixels[i], 4);
         out.code[i] = px[0];
         out.grey = out.grey && px[1] == px[0] && px[2] == px[0];
         out.alpha_one = out.alpha_one && px[3] == 255;
     }
-    vmaDestroyBuffer(g.allocator, readback.buffer, readback.allocation);
     return out;
 }
 
@@ -457,6 +477,98 @@ void ExpectWhite(const char* name, const Output& o) {
     Expect(off == 0, text);
 }
 
+// HDR output (pp.hdr 2): the SDR picture expanded to HDR10, in the units the presenter fills.
+struct Hdr {
+    float paper_white = 200.0f; // nits of the SDR picture's white
+};
+
+Settings FillHdr(const Picture& p, const Hdr& h) {
+    Settings s = Fill(p);
+    s.hdr = 2;
+    s.hdr_paper_white = h.paper_white;
+    return s;
+}
+
+// SMPTE ST 2084: nits to the PQ value in [0, 1].
+double Pq(double nits) {
+    const double m1 = 0.1593017578125, m2 = 78.84375, c1 = 0.8359375, c2 = 18.8515625, c3 = 18.6875;
+    const double y = std::pow(std::clamp(nits / 10000.0, 0.0, 1.0), m1);
+    return std::pow((c1 + c2 * y) / (1.0 + c3 * y), m2);
+}
+
+constexpr double HighlightGain = 1.5; // post_process.frag: SDR white is shown at 1.5 x paper white
+
+// The shader's mode-2 chain for an input pixel of 8-bit codes, in double: the encoded value (code / 255,
+// as the neutral SDR run shows), picture_adjust() when the controls are on (Model), the 2.2 power
+// decode, the highlight boost (one factor from the largest channel), paper white, the BT.2087
+// Rec.709-to-Rec.2020 matrix and PQ. Returns the three PQ values.
+std::array<double, 3> HdrModel(const Picture& p, const Hdr& h, const std::array<double, 3>& code) {
+    std::array<double, 3> lin{};
+    for (int c = 0; c < 3; ++c) lin[c] = std::pow(Model(p, code[c]), 2.2);
+    const double peak = std::max({lin[0], lin[1], lin[2]});
+    const double t = std::clamp((peak - 0.6) / 0.4, 0.0, 1.0), smooth = t * t * (3.0 - 2.0 * t);
+    const double scale = (1.0 + (HighlightGain - 1.0) * smooth * smooth) * h.paper_white;
+    const double r = lin[0] * scale, g = lin[1] * scale, b = lin[2] * scale;
+    return {Pq(0.6274 * r + 0.3293 * g + 0.0433 * b), Pq(0.0691 * r + 0.9195 * g + 0.0114 * b),
+            Pq(0.0164 * r + 0.0880 * g + 0.8956 * b)};
+}
+
+// One channel (0 red, 1 green, 2 blue) or alpha (3) of an A2B10G10R10 pixel.
+int Channel(u32 pixel, int c) {
+    return c == 3 ? int(pixel >> 30) : int((pixel >> (10 * c)) & 0x3FF);
+}
+u32 PixelAt(const std::vector<u32>& o, u32 x, u32 y) {
+    return o[size_t(y) * W + x];
+}
+// The ramp's input codes at (x, y): grey in the upper half, orange in the lower (MakeRamp(g, true)).
+std::array<double, 3> InputAt(u32 x, u32 y) {
+    return y >= H / 2 ? std::array<double, 3>{double(x), double(x / 2), 0.0}
+                      : std::array<double, 3>{double(x), double(x), double(x)};
+}
+// The 10-bit code the model gives for channel c of pixel (x, y), with the input moved by `shift` codes.
+int HdrModelCode(const Picture& p, const Hdr& h, u32 x, u32 y, int c, double shift) {
+    std::array<double, 3> in = InputAt(x, y);
+    for (double& v : in) v += shift;
+    return int(std::lround(HdrModel(p, h, in)[c] * 1023.0));
+}
+
+// Checks shared by every HDR run: alpha 1, no dither (each half's rows equal), and every channel of
+// every pixel where the model puts it. Tolerance: the model is taken with the input half a code either
+// side (the encoded value reaching the expansion is a fraction of a code off code / 255, see
+// CheckCommon) and one 10-bit code is allowed beyond that for the GPU's float maths.
+void CheckHdr(const char* name, const Picture& p, const Hdr& h, const std::vector<u32>& o) {
+    char text[240];
+    int not_opaque = 0, row_diff = 0, off = 0, worst = 0, worst_x = -1, worst_c = -1;
+    for (u32 y = 0; y < H; ++y) {
+        for (u32 x = 0; x < W; ++x) {
+            const u32 px = PixelAt(o, x, y);
+            not_opaque += Channel(px, 3) != 3;
+            row_diff += px != PixelAt(o, x, y < H / 2 ? 0 : H / 2);
+            for (int c = 0; c < 3; ++c) {
+                const int lo = HdrModelCode(p, h, x, y, c, -0.5) - 1, hi = HdrModelCode(p, h, x, y, c, 0.5) + 1;
+                const int out = Channel(px, c);
+                const int miss = out < lo ? lo - out : out > hi ? out - hi : 0;
+                off += miss > 0;
+                if (miss > worst) worst = miss, worst_x = int(x), worst_c = c;
+            }
+        }
+    }
+    std::snprintf(text, sizeof text, "%s: alpha is 1 (%d pixels not)", name, not_opaque);
+    Expect(not_opaque == 0, text);
+    std::snprintf(text, sizeof text, "%s: no dither, each column the same in every row of its half (%d pixels differ)",
+                  name, row_diff);
+    Expect(row_diff == 0, text);
+    std::snprintf(text, sizeof text,
+                  "%s: every channel within the model +-(half an input code + one 10-bit code) (%d off, worst by %d at code %d channel %d)",
+                  name, off, worst, worst_x, worst_c);
+    Expect(off == 0, text);
+}
+
+// The red channel of the grey half at input code x.
+int GreyCode(const std::vector<u32>& o, u32 x) {
+    return Channel(PixelAt(o, x, 0), 0);
+}
+
 } // namespace
 
 int main() {
@@ -596,6 +708,74 @@ int main() {
                           ColumnMean(o, 128), mid_off);
             Expect(mid_off == 0, text);
             CheckCommon("contrast 150%", p, o);
+        }
+
+        (void)g.device->waitIdle();
+        target.image.view.reset();
+        ramp.view.reset();
+        vmaDestroyImage(g.allocator, target.image.image, target.image.allocation);
+        vmaDestroyImage(g.allocator, ramp.image, ramp.allocation);
+    }
+    {
+        // HDR output: the same pass built for the HDR10 swapchain format, drawing the game's SDR picture
+        // expanded to HDR10 (pp.hdr 2).
+        HostPasses::PostProcessingPass pass;
+        pass.Create(*g.device, HdrFormat);
+        Image ramp = MakeRamp(g, true);
+        Target target;
+        MakeTarget(g, target, HdrFormat);
+        char text[240];
+
+        // g. Defaults: black is PQ 0, white is PQ(paper white x gain), mid grey where the model says.
+        const Picture neutral{};
+        const Hdr defaults{};
+        const std::vector<u32> base = DrawPass(g, pass, ramp, target, FillHdr(neutral, defaults));
+        {
+            bool black = true;
+            for (u32 y = 0; y < H; ++y) {
+                for (int c = 0; c < 3; ++c) black = black && Channel(PixelAt(base, 0, y), c) == 0;
+            }
+            Expect(black, "hdr: code 0 is PQ 0 in every channel");
+            const int white = int(std::lround(Pq(defaults.paper_white * HighlightGain) * 1023.0));
+            std::snprintf(text, sizeof text, "hdr: white is PQ(%.0f x %.1f nits) = %d +-1 (got %d)", defaults.paper_white,
+                          HighlightGain, white, GreyCode(base, 255));
+            Expect(std::abs(GreyCode(base, 255) - white) <= 1, text);
+            const int mid = HdrModelCode(neutral, defaults, 128, 0, 0, 0.0);
+            std::snprintf(text, sizeof text, "hdr: code 128 is %d +-2, the model's (got %d)", mid, GreyCode(base, 128));
+            Expect(std::abs(GreyCode(base, 128) - mid) <= 2, text);
+            CheckHdr("hdr", neutral, defaults, base);
+        }
+
+        // h. Paper white 80 and 500 nits: white follows, and the whole ramp with it.
+        for (const float paper : {80.0f, 500.0f}) {
+            const Hdr h{.paper_white = paper};
+            const std::vector<u32> o = DrawPass(g, pass, ramp, target, FillHdr(neutral, h));
+            char name[40];
+            std::snprintf(name, sizeof name, "hdr paper white %.0f", paper);
+            const int white = int(std::lround(Pq(paper * HighlightGain) * 1023.0));
+            std::snprintf(text, sizeof text, "%s: white is %d +-1 (got %d)", name, white, GreyCode(o, 255));
+            Expect(std::abs(GreyCode(o, 255) - white) <= 1, text);
+            CheckHdr(name, neutral, h, o);
+        }
+
+        // i. The picture controls still act, before the expansion: gamma 2.40 darkens mid grey, brightness
+        // +50 lifts black, white stays where it was.
+        {
+            const Picture p{.gamma = 240};
+            const std::vector<u32> o = DrawPass(g, pass, ramp, target, FillHdr(p, defaults));
+            std::snprintf(text, sizeof text, "hdr gamma 2.40: code 128 darker than at 2.20 (%d < %d), white the same",
+                          GreyCode(o, 128), GreyCode(base, 128));
+            Expect(GreyCode(o, 128) < GreyCode(base, 128) && GreyCode(o, 255) == GreyCode(base, 255), text);
+            CheckHdr("hdr gamma 2.40", p, defaults, o);
+        }
+        {
+            const Picture p{.brightness = 50};
+            const std::vector<u32> o = DrawPass(g, pass, ramp, target, FillHdr(p, defaults));
+            const int black = HdrModelCode(p, defaults, 0, 0, 0, 0.0);
+            std::snprintf(text, sizeof text, "hdr brightness +50: code 0 lifts to %d +-1 (got %d), white the same", black,
+                          GreyCode(o, 0));
+            Expect(black > 0 && std::abs(GreyCode(o, 0) - black) <= 1 && GreyCode(o, 255) == GreyCode(base, 255), text);
+            CheckHdr("hdr brightness +50", p, defaults, o);
         }
 
         (void)g.device->waitIdle();

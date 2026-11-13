@@ -96,6 +96,15 @@ inline int ParseMonitor(std::string_view text) {
     }
     return index;
 }
+/// Whether HDR is on for the window's display (Windows HDR), from SDL's window properties
+/// SDL_PROP_WINDOW_HDR_ENABLED_BOOLEAN and SDL_PROP_WINDOW_SDR_WHITE_LEVEL_FLOAT. SDL sets the first
+/// only when the display's maximum is above its SDR white, so a display whose SDR white is at or
+/// above its maximum (a 400-nit display with the Windows SDR slider at 400 nits or more) reports it
+/// off. SDL leaves the SDR white level at 1 (80 nits) unless Windows drives the display in HDR10, so a
+/// level above 1 says HDR is on too.
+inline bool HdrOnForDisplay(bool sdl_hdr_enabled, float sdr_white_level) {
+    return sdl_hdr_enabled || sdr_white_level > 1.0f;
+}
 /// A listed limit, else unlimited.
 inline int ParseFpsLimit(int value) {
     return IndexOf(FpsLimits, value, -1) >= 0 ? value : 0;

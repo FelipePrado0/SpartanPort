@@ -497,8 +497,9 @@ target_link_libraries(aa-pass-test PRIVATE Vulkan::Headers fmt::fmt Boost::heade
     tsl::robin_map GPUOpen::VulkanMemoryAllocator miniz::miniz Threads::Threads ${CMAKE_DL_LIBS})
 add_dependencies(aa-pass-test host_shaders)
 # The post-process pass's picture controls (brightness, contrast, gamma and the dither) on a ramp of every
-# 8-bit code, written for Lavapipe (its exact checks assume round-to-nearest UNORM conversion), under the
-# validation layer when it is installed.
+# 8-bit code, and its HDR output (the SDR picture expanded to HDR10) against a CPU model, written for
+# Lavapipe (its exact checks assume round-to-nearest UNORM conversion), under the validation layer when it
+# is installed.
 add_executable(pp-pass-test EXCLUDE_FROM_ALL ../tests/test_pp_pass.cpp
     shadps4/video_core/renderer_vulkan/host_passes/pp_pass.cpp
     shadps4/video_core/renderer_vulkan/vk_shader_util.cpp shim/common/logging/log.cpp)

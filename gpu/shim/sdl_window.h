@@ -17,6 +17,9 @@ struct WindowSystemInfo {
     void* render_surface = nullptr;
     float render_surface_scale = 1.0f;
     WindowSystemType type = WindowSystemType::Headless;
+    /// spartanport: HDR is on for the window's display (Windows HDR), sampled once at window
+    /// creation; HDR output needs a restart after a change or a move to another display.
+    bool hdr_enabled = false;
 };
 
 /// The pause key lets go of the mouse lock while the game's pause menu is up; pressing it again or
