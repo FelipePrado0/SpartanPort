@@ -539,7 +539,7 @@ void CameraMotion::OnDisplayPass(VideoCore::ImageId frame) {
     if (debug_overlay && frame && DepthLive() && current.valid && previous.valid) {
         Overlay(frame);
     }
-    if (SpartanSettings::Get().upscaler != SpartanSettings::UpscalerTaa) {
+    if (!SpartanSettings::IsTaa(SpartanSettings::Get().upscaler)) {
         // Upscaler path (FSR): the unchanged upstream behaviour, nothing of the scene TAA applies.
         if (!frame_has_camera) InvalidateHistory();
         frame_has_camera = false;

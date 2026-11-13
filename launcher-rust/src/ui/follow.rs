@@ -31,6 +31,8 @@ pub enum View {
     Mods,
     /// The list of the Trophies page.
     Trophies,
+    /// The trophy notification sound of the Game page (`custom_trophy/notifications.ini`).
+    TrophySound,
 }
 
 /// Why the views are read again.
@@ -63,7 +65,7 @@ const fn row(view: View, keys: &'static [&'static str], start: bool, rebuild: bo
 }
 
 /// The views in the order they are read: the installation first, since the views after it ask it.
-const TABLE: [Row; 8] = [
+const TABLE: [Row; 9] = [
     row(View::Installation, &["game_dir", "update_dir"], true, true),
     row(
         View::Home,
@@ -92,6 +94,7 @@ const TABLE: [Row; 8] = [
         false,
         false,
     ),
+    row(View::TrophySound, &["user_dir"], true, false),
 ];
 
 impl Row {
@@ -136,6 +139,7 @@ fn read(state: &mut State, view: View, cause: Cause<'_>) -> Task<Message> {
         View::Backups => game::refresh_backups(state),
         View::ModResolutions => performance::refresh_mod_resolutions(state),
         View::Aspect => performance::resolution_chosen(state),
+        View::TrophySound => game::refresh_trophy_sound(state),
         View::Mods => {
             return match cause {
                 Cause::Start | Cause::Rebuild => {

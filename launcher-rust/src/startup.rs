@@ -27,6 +27,9 @@ pub enum Route {
     Run { args: Vec<OsString> },
     /// `--play`: the Rust runner's play role.
     Play,
+    /// `--prepare`: the game image of a folder, without the window or the game, for RecompLauncher's
+    /// setup step; everything after it is the runner's (`--game <folder>`).
+    Prepare { args: Vec<OsString> },
     /// `--install-update TARGET PID`: the downloaded version installs itself over the old one.
     /// A `pid` that is not a number is 0.
     InstallUpdate { target: PathBuf, pid: u32 },
@@ -54,6 +57,7 @@ pub fn route_on<S: AsRef<OsStr>>(args: &[S], windows: bool) -> Route {
     };
     match args.first() {
         Some(first) if is(first, "--run") => return Route::Run { args: rest() },
+        Some(first) if is(first, "--prepare") => return Route::Prepare { args: rest() },
         Some(first) if is(first, "--voice-swap") => return Route::VoiceSwap { args: rest() },
         Some(first) if is(first, "--install-update") && windows && args.len() == 3 => {
             return Route::InstallUpdate {
@@ -74,6 +78,15 @@ pub fn route_on<S: AsRef<OsStr>>(args: &[S], windows: bool) -> Route {
         return Route::Play;
     }
     Route::Launcher
+}
+
+/// `--update-dir <folder>` of a `--play` start (RecompLauncher puts the update the player picked in
+/// one): the folder, when it holds an `eboot.bin`. A folder without one (the pick was skipped) or no
+/// such argument is `None`, and the saved update folder stays.
+pub fn update_dir_arg(args: &[OsString]) -> Option<PathBuf> {
+    let at = args.iter().position(|arg| arg == "--update-dir")?;
+    let dir = std::path::absolute(args.get(at + 1)?).ok()?;
+    dir.join("eboot.bin").is_file().then_some(dir)
 }
 
 /// Python `install_update`: waits for the old launcher (`pid`) to close, copies this version
@@ -139,7 +152,7 @@ pub fn start(
         })
     };
     let mut paths = read(&env, None);
-    if matches!(route, Route::Run { .. }) {
+    if matches!(route, Route::Run { .. } | Route::Prepare { .. }) {
         if let Ok(resolved) = mods::resolve(&paths.port_dir) {
             if resolved != paths.port_dir {
                 paths = read(&env, Some(&resolved));

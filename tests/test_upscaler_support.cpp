@@ -111,6 +111,13 @@ int main() {
     assert(OwnSharpening(UpscalerFsr3Ui) && !OwnSharpening(UpscalerTaa));
     assert(!OwnSharpening(UpscalerFsr3) && !OwnSharpening(UpscalerFsr4) && !OwnSharpening(UpscalerOff));
     assert(std::string_view(UpscalerName(UpscalerFsr3Ui)) == "fsr3ui");
+    assert(std::string_view(UpscalerName(UpscalerXess)) == "xess");
+    assert(IsTaa(UpscalerTaa) && IsTaa(UpscalerXess) && !IsTaa(UpscalerFsr3Ui) && !IsTaa(UpscalerOff));
+    assert(NeedsLivePath(UpscalerXess) && !OwnSharpening(UpscalerXess));
+    // XeSS needs the device made for it: a restart when it is chosen (not when it is left).
+    assert(NeedsXessRestart(UpscalerXess, UpscalerTaa) && NeedsXessRestart(UpscalerXess, UpscalerOff));
+    assert(!NeedsXessRestart(UpscalerXess, UpscalerXess) && !NeedsXessRestart(UpscalerTaa, UpscalerXess));
+    assert(!NeedsXessRestart(UpscalerFsr3, UpscalerOff));
     s.upscaler = UpscalerFsr4;
     const int output = s.startup_output_res;
     s.output_res = (output + 1) % OutputCount;

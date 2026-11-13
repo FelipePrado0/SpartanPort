@@ -370,6 +370,22 @@ public:
         }
     }
 
+    // spartanport: every image is registered in its first page; exact-address lookups need
+    // no other page. Entries here are unkeyed, so retain the full address comparison.
+    template <typename Func>
+    void ForEachImageWithAddress(VAddr cpu_addr, Func&& func) {
+        const auto it = page_table.find(cpu_addr >> Traits::PageBits);
+        if (it == nullptr) {
+            return;
+        }
+        for (const ImageId image_id : *it) {
+            Image& image = slot_images[image_id];
+            if (image.info.guest_address == cpu_addr) {
+                func(image_id, image);
+            }
+        }
+    }
+
 private:
     /// Iterate over all page indices in a range
     template <typename Func>
@@ -420,6 +436,9 @@ private:
     void UntrackImage(ImageId image_id);
     void UntrackImageHead(ImageId image_id);
     void UntrackImageTail(ImageId image_id);
+
+    // spartanport: use the same mapped guest range when marking and checking a small image.
+    static std::optional<u64> MaybeDirtyHash(const Image& image);
 
     void MarkAsMaybeDirty(ImageId image_id, Image& image);
 

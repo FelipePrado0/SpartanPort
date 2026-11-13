@@ -11,6 +11,8 @@
 #include "imgui/renderer/imgui_core.h"
 #include "sdl_window.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
+// spartanport: synchronize device-idle waits with queue submissions.
+#include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_swapchain.h"
 
 namespace Vulkan {
@@ -111,6 +113,8 @@ void Swapchain::SetHDR(bool hdr) {
         return;
     }
 
+    // spartanport: HDR recreation waits for every queue, so exclude concurrent submissions.
+    std::scoped_lock submit_lock{Scheduler::submit_mutex};
     auto result = instance.GetDevice().waitIdle();
     if (result != vk::Result::eSuccess) {
         LOG_WARNING(ImGui, "Failed to wait for Vulkan device idle on mode change: {}",
@@ -253,6 +257,8 @@ void Swapchain::UpdateVsync() {
     if (SpartanSettings::Get().vsync == vsync) {
         return;
     }
+    // spartanport: keep submissions out of both this wait and Destroy's wait during recreation.
+    std::scoped_lock submit_lock{Scheduler::submit_mutex};
     if (const auto result = instance.GetDevice().waitIdle(); result != vk::Result::eSuccess) {
         LOG_WARNING(Render_Vulkan, "Failed to wait for the device before a VSync change: {}",
                     vk::to_string(result));

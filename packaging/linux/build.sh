@@ -45,6 +45,8 @@ install -m644 launcher/OFL-BodoniModa.txt "$share/launcher/OFL-BodoniModa.txt"
 stray=$(find "$appdir" \( -name '*.py' -o -name _internal \) -print)
 [[ -z $stray ]] || { echo 'Python files in the AppDir:' >&2; echo "$stray" >&2; exit 1; }
 install -m755 packaging/linux/AppRun "$appdir/AppRun"
+# RecompLauncher reads this from the AppImage to set the game up and start it (no game files in it).
+install -m644 recomplauncher.json "$appdir/recomplauncher.json"
 install -m644 packaging/linux/spartanport.desktop "$appdir/spartanport.desktop"
 install -m644 "$icon" "$appdir/spartanport.png"
 

@@ -635,6 +635,63 @@ fn a_relative_controller_file_is_the_ports() {
     );
 }
 
+/// `LAUNCHER --prepare <args>` in `port`, with the probe left as the empty file it is.
+fn prepare_in(port: &Port, args: &[&std::ffi::OsStr]) -> Ran {
+    let output = Command::new(LAUNCHER)
+        .arg("--prepare")
+        .args(args)
+        .env_clear()
+        .envs(port.environment(&[]))
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    Ran {
+        code: output.status.code(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    }
+}
+
+#[test]
+fn prepare_makes_the_image_and_the_profile_and_starts_nothing() {
+    let port = Port::new();
+    let ran = prepare_in(&port, &["--game".as_ref(), port.game().as_os_str()]);
+    assert_eq!(ran.code, Some(0), "{ran}");
+    in_order(
+        &ran.stdout,
+        &[
+            "progress 0.1 ",
+            "imported symbols",
+            "progress 0.8 ",
+            "AppContent profile",
+            "progress 1 ",
+        ],
+    );
+    for file in ["boot-linked.bin", "content.bin"] {
+        assert!(port.out().join(file).is_file(), "{file}: {ran}");
+    }
+}
+
+#[test]
+fn prepare_names_a_folder_without_eboot_and_a_missing_game() {
+    let port = Port::new();
+    let empty = port.root.join("not a game");
+    fs::create_dir_all(&empty).unwrap();
+    let ran = prepare_in(&port, &["--game".as_ref(), empty.as_os_str()]);
+    assert_eq!(ran.code, Some(1), "{ran}");
+    assert!(
+        ran.stdout
+            .contains(&format!("No eboot.bin in {}.", empty.display())),
+        "{ran}"
+    );
+    let ran = prepare_in(&port, &[]);
+    assert_eq!(ran.code, Some(1), "{ran}");
+    assert!(
+        ran.stdout.contains("--prepare needs --game <folder>"),
+        "{ran}"
+    );
+}
+
 #[test]
 fn a_missing_eboot_fails_with_the_python_message() {
     let port = Port::new();

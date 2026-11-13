@@ -26,6 +26,7 @@ use crate::core::platform::tool::SystemTools;
 use crate::core::release::ReleaseId;
 use crate::core::settings::SettingsFile;
 use crate::core::store::Store;
+use crate::core::trophy_sound::TrophySound;
 use crate::core::update::{GitHubReleases, ReleaseHost};
 use crate::startup::confirm_window;
 use crate::ui::drawer::{self, DrawerState};
@@ -72,6 +73,8 @@ pub struct State {
     /// What the files held after the last save (or at the start): Save is active while the
     /// window differs from it (`persist::dirty`).
     pub saved: Option<Persisted>,
+    /// The trophy notification sound, read from the saves folder's `custom_trophy` (#1243).
+    pub trophy_sound: TrophySound,
     pub page: Page,
     pub drawer: DrawerState,
     pub drawer_progress: Animation<bool>,
@@ -232,6 +235,7 @@ impl State {
             displays_backend,
             monitor_pairs: Vec::new(),
             trophies: Default::default(),
+            trophy_sound: Default::default(),
             mods: Default::default(),
             controls,
             mapper: None,
@@ -293,6 +297,10 @@ pub enum Message {
     Browsed(String, Option<PathBuf>),
     /// A game patch check box of the Game page.
     PatchToggled(String, bool),
+    /// Turn off all cheats (Game page): every cheat off, every multiplier 1x (#1135).
+    CheatsOff,
+    /// The trophy notification sound of the Game page (#1243).
+    TrophySound(TrophySound),
     Backup(BackupMessage),
     /// The monitors the probe listed, in the background.
     MonitorsListed(Vec<Display>),
@@ -536,6 +544,8 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
         Message::Browsed(_, None) => {}
         Message::PatchToggled(name, on) => game::patch_toggled(state, &name, on),
         Message::Backup(message) => return game::backup_update(state, message),
+        Message::CheatsOff => return game::cheats_off(state),
+        Message::TrophySound(sound) => state.trophy_sound = sound,
         Message::WindowFocused(focused) => {
             state.focused = focused;
             // As the Python's <FocusOut>: a key box of the Controls page gives up.

@@ -21,6 +21,7 @@ use crate::core::i18n::{is_rtl, launcher_language, system_language, tr, tr_fmt};
 use crate::core::ini::{load_ini, save_ini};
 use crate::core::platform::tool::SystemTools;
 use crate::core::settings::{mark_default_patches_offered, save_settings, Settings};
+use crate::core::trophy_sound::{self, TrophySound};
 use crate::ui::app::{self, Message, State};
 use crate::ui::follow::{follow, Cause};
 use crate::ui::widgets::Modal;
@@ -64,6 +65,8 @@ pub struct Persisted {
     pub ini: IndexMap<String, String>,
     pub mods: Option<Value>,
     pub patches: Option<Value>,
+    /// `custom_trophy/notifications.ini`'s sound keys (#1243).
+    pub trophy_sound: TrophySound,
 }
 
 /// A file of the save could not be written.
@@ -170,6 +173,7 @@ pub fn gather(state: &State) -> Persisted {
         ini,
         mods,
         patches,
+        trophy_sound: state.trophy_sound,
     }
 }
 
@@ -281,6 +285,13 @@ fn write_files(
     let paths = &state.paths;
     save_ini(&paths.ini_path(), edited, lines)?;
     save_settings(&paths.config_file(), &Settings(pending.app.clone()))?;
+    // Only an edit: a folder nobody touched gets no custom_trophy file.
+    if state.saved.as_ref().map(|saved| saved.trophy_sound) != Some(pending.trophy_sound) {
+        trophy_sound::write(
+            &paths.user_dir(&state.store.text("user_dir")),
+            pending.trophy_sound,
+        )?;
+    }
     if let Some(mods) = &pending.mods {
         atomic_write(&paths.mods_json(), &python_json(mods)?)?;
     }

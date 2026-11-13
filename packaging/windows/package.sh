@@ -4,7 +4,7 @@
 # spartanport-probe.exe with the MSYS2 CLANG64 DLLs it needs and the controller diagrams the runner reads.
 # Run from an MSYS2 CLANG64 shell after `bash build.sh` and the cargo build (for a test build, set
 # SPARTAN_RELEASE_TAG for cargo too: launcher-rust/README.md). No Python is packaged.
-# The open FSR 4 model ships with its license in LICENSES/.
+# The open FSR 4 model and Intel's XeSS library ship with their licenses in LICENSES/.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/../.."
 source ./msys2-env.sh
@@ -13,6 +13,7 @@ source ./msys2-env.sh
 launcher=launcher-rust/target/release/spartanport-launcher.exe
 [[ -f $launcher ]] || { echo 'Build the launcher first, outside MSYS2: cd launcher-rust && cargo build --release --locked (SPARTAN_RELEASE_TAG for a test build: launcher-rust/README.md)' >&2; exit 1; }
 bash packaging/fetch_fsr4_model.sh
+bash packaging/fetch_xess.sh
 
 # The package is assembled in a fresh staging folder and zipped from there; dist/spartanport-windows
 # (a playable copy that may hold saves and settings) is only refreshed afterwards.
@@ -40,11 +41,17 @@ cp -r scripts/controller_diagrams "$dest/scripts/"
 cp -r patches "$dest/"
 cp docs/VOICE_REPLACEMENT.md "$dest/docs/"
 cp LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
+# RecompLauncher reads this to set the game up and start it (no game files in it).
+cp recomplauncher.json "$dest/"
 # The upscalers' third-party files and their licenses (credits in README.md).
 mkdir -p "$dest/LICENSES"
 cp -r out/fsr4_shaders "$dest/fsr4_shaders"
 cp out/fsr4_shaders/LICENSE-FSR4-v07.txt "$dest/LICENSES/FSR4-v07-model-MIT.txt"
 cp gpu/third_party/fsr-vulkan/LICENSE.txt "$dest/LICENSES/FSR-Vulkan.txt"
+# Intel XeSS (the menu's XeSS option): the library is loaded at run time, next to the game.
+cp out/xess/libxess.dll "$dest/bin/libxess.dll"
+cp out/xess/LICENSE.txt "$dest/LICENSES/XeSS-Intel-Simplified-Software-License.txt"
+cp out/xess/third-party-programs.txt "$dest/LICENSES/XeSS-third-party-programs.txt"
 # No game files and nothing a player made (saves, shader caches built from the game's shaders,
 # settings, logs) may ship: stop when one is found.
 forbidden=$(find "$dest" -path "$dest/fsr4_shaders" -prune -o \( -iname eboot.bin -o -iname sce_module -o -iname sce_sys -o -iname savedata \
