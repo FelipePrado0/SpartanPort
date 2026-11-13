@@ -18,6 +18,9 @@ install -m755 out/gpu/libspartanportgpu.so "$share/bin/gpu/"
 # The shader list (no game code), beside the game executable where the preparation looks for it.
 mkdir -p "$share/bin/shaders"
 install -m644 shaders/*.spm "$share/bin/shaders/"
+# A list this build would refuse makes every player compile while playing: stop here instead.
+ninja -C out/gpu shader-manifest >/dev/null
+for list in shaders/*.spm; do out/gpu/shader-manifest info "$list" >/dev/null; done
 (cd launcher-rust && "${CARGO:-cargo}" build --release --locked)
 install -m755 launcher-rust/target/release/spartanport-launcher "$share/spartanport-launcher"
 cp -r patches "$share/"

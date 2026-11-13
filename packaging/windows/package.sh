@@ -36,6 +36,9 @@ ldd "$dest/bin/spartanport-probe.exe" "$dest/bin/spartanport-gpu-capabilities.ex
 # The shader list (no game code), beside the game executable where the preparation looks for it.
 mkdir -p "$dest/bin/shaders"
 cp shaders/*.spm "$dest/bin/shaders/"
+# A list this build would refuse makes every player compile while playing: stop here instead.
+ninja -C out/gpu shader-manifest >/dev/null
+for list in shaders/*.spm; do out/gpu/shader-manifest.exe info "$list" >/dev/null; done
 mkdir -p "$dest/scripts" "$dest/docs"
 cp -r scripts/controller_diagrams "$dest/scripts/"
 cp -r patches "$dest/"

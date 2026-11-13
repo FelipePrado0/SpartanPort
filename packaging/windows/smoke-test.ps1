@@ -24,7 +24,7 @@ $found = Get-ChildItem -LiteralPath $tree -Recurse -Force |
 if ($found) { $failed += "files that must not ship: $($found.FullName -join ', ')" }
 
 # The shader preparation reads its list beside the game executable.
-if (-not (Get-ChildItem -LiteralPath (Join-Path $tree 'bin\shaders') -Filter '*.spm' -ErrorAction SilentlyContinue)) {
+if (-not (Test-Path -LiteralPath (Join-Path $tree 'bin\shaders\CUSA01623.spm') -PathType Leaf)) {
     $failed += 'no shader list in bin\shaders'
 }
 

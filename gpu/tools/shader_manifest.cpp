@@ -76,8 +76,13 @@ static int Build(int argc, char** argv) {
         return 1;
     }
     const auto bytes = Manifest::Encode(*manifest);
-    std::ofstream(out, std::ios::binary)
-        .write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
+    std::ofstream file(out, std::ios::binary);
+    file.write(reinterpret_cast<const char*>(bytes.data()), std::streamsize(bytes.size()));
+    file.close();
+    if (file.fail()) {
+        std::fprintf(stderr, "%s: cannot write the shader list\n", out.string().c_str());
+        return 1;
+    }
     std::printf("%zu programs, %zu permutations, %zu pipelines, %.1f MB; merged %u, no code %u, "
                 "over the limit %u, stale keys %u\n",
                 manifest->programs.size(), manifest->permutations.size(),
@@ -92,6 +97,12 @@ static int Info(const fs::path& path) {
     const auto manifest = Manifest::Decode(bytes, &id);
     if (!manifest) {
         std::fprintf(stderr, "%s: damaged or of another format\n", path.string().c_str());
+        return 1;
+    }
+    // The game refuses a list made for another shader format without a word: say it here.
+    if (manifest->versions != Manifest::CurrentVersions()) {
+        std::fprintf(stderr, "%s: made for another shader format, build it again\n",
+                     path.string().c_str());
         return 1;
     }
     std::array<u32, 8> stages{};
