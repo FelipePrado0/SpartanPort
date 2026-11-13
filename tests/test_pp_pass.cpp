@@ -9,7 +9,8 @@
 // conversion, as Lavapipe does; Vulkan also allows a GPU to truncate, so on such a GPU white (encoded as
 // 0.99999994) and a few dithered codes can come out one lower and fail those checks.
 // A second run draws the HDR output (pp.hdr 2: the SDR picture expanded to HDR10) into an A2B10G10R10
-// target and checks it against a CPU model of the whole chain, in double.
+// target and checks it against a CPU model of the whole chain, in double, and that F12 screenshots undo
+// its highlight roll-off.
 #define VMA_IMPLEMENTATION
 #include <algorithm>
 #include <array>
@@ -482,36 +483,62 @@ void ExpectWhite(const char* name, const Output& o) {
 
 // HDR output (pp.hdr 2): the SDR picture expanded to HDR10, in the units the presenter fills.
 struct Hdr {
-    float paper_white = 200.0f; // nits of the SDR picture's white
+    float paper_white = float(SpartanGraphics::HdrPaperWhiteDefault); // nits of the SDR picture's white
+    float peak = float(SpartanGraphics::HdrPeakDefault);               // nits the highlights are fitted under
 };
 
 Settings FillHdr(const Picture& p, const Hdr& h) {
     Settings s = Fill(p);
     s.hdr = 2;
     s.hdr_paper_white = h.paper_white;
+    s.hdr_peak = h.peak;
     return s;
 }
 
-// SMPTE ST 2084: nits to the PQ value in [0, 1].
+// SMPTE ST 2084: nits to the PQ value in [0, 1], and back.
 double Pq(double nits) {
     const double m1 = 0.1593017578125, m2 = 78.84375, c1 = 0.8359375, c2 = 18.8515625, c3 = 18.6875;
     const double y = std::pow(std::clamp(nits / 10000.0, 0.0, 1.0), m1);
     return std::pow((c1 + c2 * y) / (1.0 + c3 * y), m2);
 }
+double PqToNits(double pq) {
+    const double m1 = 0.1593017578125, m2 = 78.84375, c1 = 0.8359375, c2 = 18.8515625, c3 = 18.6875;
+    const double p = std::pow(std::clamp(pq, 0.0, 1.0), 1.0 / m2);
+    return 10000.0 * std::pow(std::max(p - c1, 0.0) / (c2 - c3 * p), 1.0 / m1);
+}
 
 constexpr double HighlightGain = 1.5; // post_process.frag: SDR white is shown at 1.5 x paper white
 
+// ITU-R BT.2390's EETF (BT.2408 Annex 5, steps 1 to 5) as the shader applies it to the brightest channel:
+// source range [0, LW] with LW = paper white x 1.5 and black 0, target maximum the peak, no black lift.
+// Returns the brightest channel's nits after the roll-off.
+double Eetf(const Hdr& h, double m) {
+    const double lw = Pq(h.paper_white * HighlightGain);
+    const double e1 = std::min(Pq(m) / lw, 1.0), max_lum = Pq(h.peak) / lw, ks = 1.5 * max_lum - 0.5;
+    if (max_lum >= 1.0 || e1 <= ks) return m;
+    const double t = (e1 - ks) / (1.0 - ks);
+    const double e2 = (2 * t * t * t - 3 * t * t + 1) * ks + (t * t * t - 2 * t * t + t) * (1 - ks) +
+                      (-2 * t * t * t + 3 * t * t) * max_lum;
+    return PqToNits(e2 * lw);
+}
+
 // The shader's mode-2 chain for an input pixel of 8-bit codes, in double: the encoded value (code / 255,
 // as the neutral SDR run shows), picture_adjust() when the controls are on (Model), the 2.2 power
-// decode, the highlight boost (one factor from the largest channel), paper white, the BT.2087
-// Rec.709-to-Rec.2020 matrix and PQ. Returns the three PQ values.
+// decode, the highlight boost (one factor from the largest channel), paper white, the BT.2390 roll-off
+// of the largest channel (Eetf) as one factor for the pixel, the BT.2087 Rec.709-to-Rec.2020 matrix and
+// PQ. Returns the three PQ values.
 std::array<double, 3> HdrModel(const Picture& p, const Hdr& h, const std::array<double, 3>& code) {
     std::array<double, 3> lin{};
     for (int c = 0; c < 3; ++c) lin[c] = std::pow(Model(p, code[c]), 2.2);
     const double peak = std::max({lin[0], lin[1], lin[2]});
     const double t = std::clamp((peak - 0.6) / 0.4, 0.0, 1.0), smooth = t * t * (3.0 - 2.0 * t);
     const double scale = (1.0 + (HighlightGain - 1.0) * smooth * smooth) * h.paper_white;
-    const double r = lin[0] * scale, g = lin[1] * scale, b = lin[2] * scale;
+    double r = lin[0] * scale, g = lin[1] * scale, b = lin[2] * scale;
+    const double m = std::max({r, g, b});
+    if (m > 0.0) {
+        const double rolled = Eetf(h, m) / m;
+        r *= rolled, g *= rolled, b *= rolled;
+    }
     return {Pq(0.6274 * r + 0.3293 * g + 0.0433 * b), Pq(0.0691 * r + 0.9195 * g + 0.0114 * b),
             Pq(0.0164 * r + 0.0880 * g + 0.8956 * b)};
 }
@@ -570,6 +597,132 @@ void CheckHdr(const char* name, const Picture& p, const Hdr& h, const std::vecto
 // The red channel of the grey half at input code x.
 int GreyCode(const std::vector<u32>& o, u32 x) {
     return Channel(PixelAt(o, x, 0), 0);
+}
+
+// F12 screenshot of an HDR output pixel, as vk_presenter.cpp's ScreenshotToRgba8 converts the grey half:
+// the PQ code to nits, the presenter's Rec.2020-to-Rec.709 matrix (whose rows sum to 1.0001, 1.0000 and
+// 0.9999 on grey), the roll-off undone on the brightest channel, then paper white back to white and the
+// 2.2 power undone (HdrToSrgb8). `undo` false skips the roll-off's inverse. Returns the 8-bit red value.
+int ScreenshotGrey(const Hdr& h, int code10, bool undo) {
+    const double nits = PqToNits(code10 / 1023.0);
+    double r = 1.6605 * nits - 0.5876 * nits - 0.0728 * nits;
+    const double g = -0.1246 * nits + 1.1329 * nits - 0.0083 * nits;
+    const double b = -0.0182 * nits - 0.1006 * nits + 1.1187 * nits;
+    const double m = std::max({r, g, b});
+    if (undo && m > 0.0) r *= SpartanGraphics::HdrRollOff(h.paper_white, h.peak).Undo(m) / m;
+    return int(std::pow(std::clamp(r / h.paper_white, 0.0, 1.0), 1.0 / 2.2) * 255.0 + 0.5);
+}
+
+// The screenshot of the HDR run `o` (paper white and peak h) gives back the SDR picture without the
+// roll-off. The inverse alone is checked first, on the model's continuous curve: every grey code's
+// brightest nits, rolled off by Eetf and undone by HdrRollOff, convert to the same 8-bit value as
+// without a roll-off. Then on the pass's 10-bit output, where the flat top of the curve makes one
+// 10-bit step span several 8-bit codes: each grey column's screenshot must lie within the 8-bit values
+// of every source brightness that the forward model (Eetf, no inverse) puts within 1.5 codes of the
+// column's 10-bit code (half a code of rounding, one for the GPU's float maths), one 8-bit code of
+// rounding either side.
+void CheckScreenshotUndo(const Hdr& h, const std::vector<u32>& o) {
+    char name[60], text[240];
+    std::snprintf(name, sizeof name, "screenshot paper white %.0f peak %.0f", h.paper_white, h.peak);
+    const SpartanGraphics::HdrRollOff roll_off(h.paper_white, h.peak);
+    const auto to8 = [&](double n) {
+        return int(std::pow(std::clamp(n / h.paper_white, 0.0, 1.0), 1.0 / 2.2) * 255.0 + 0.5);
+    };
+    // Source brightnesses from black to LW, evenly in PQ (about ten per 10-bit code), and the 10-bit
+    // code the forward model gives each (grey: the matrix keeps it).
+    constexpr int Steps = 8192;
+    std::vector<double> source(Steps + 1), forward(Steps + 1);
+    for (int i = 0; i <= Steps; ++i) {
+        source[i] = PqToNits(Pq(h.paper_white * HighlightGain) * i / Steps);
+        forward[i] = Pq(Eetf(h, source[i])) * 1023.0;
+    }
+    int curve_off = 0, out_off = 0, worst_curve = 0, worst_x = -1, identity_off = 0;
+    for (u32 x = 0; x < W; ++x) {
+        const double lin = std::pow(x / 255.0, 2.2);
+        const double t = std::clamp((lin - 0.6) / 0.4, 0.0, 1.0), smooth = t * t * (3.0 - 2.0 * t);
+        const double nits = lin * (1.0 + (HighlightGain - 1.0) * smooth * smooth) * h.paper_white;
+        const int miss = std::abs(to8(roll_off.Undo(Eetf(h, nits))) - to8(nits));
+        curve_off += miss > 1;
+        if (miss > worst_curve) worst_curve = miss, worst_x = int(x);
+        identity_off += Eetf(h, nits) == nits && roll_off.Undo(nits) != nits;
+        const int code = GreyCode(o, x), got = ScreenshotGrey(h, code, true);
+        int lo = 256, hi = -1;
+        for (int i = 0; i <= Steps; ++i) {
+            if (std::abs(forward[i] - code) <= 1.5) {
+                lo = std::min(lo, to8(source[i]));
+                hi = std::max(hi, to8(source[i]));
+            }
+        }
+        out_off += got < lo - 1 || got > hi + 1;
+    }
+    std::snprintf(text, sizeof text, "%s: the inverse undoes the curve to within one 8-bit code (%d off, worst %d at code %d)",
+                  name, curve_off, worst_curve, worst_x);
+    Expect(curve_off == 0, text);
+    std::snprintf(text, sizeof text, "%s: where the curve leaves a value alone, so does the inverse (%d differ)", name,
+                  identity_off);
+    Expect(identity_off == 0, text);
+    std::snprintf(text, sizeof text, "%s: every grey column within its 10-bit step's range (%d off)", name, out_off);
+    Expect(out_off == 0, text);
+    const int white = ScreenshotGrey(h, GreyCode(o, 255), true), plain = ScreenshotGrey(h, GreyCode(o, 255), false);
+    std::snprintf(text, sizeof text, "%s: white comes back 255 (got %d; %d without the inverse)", name, white, plain);
+    Expect(white == 255, text);
+}
+
+// The F12 screenshot of an HDR output pixel, as ScreenshotToRgba8 converts it: PQ to nits, the presenter's
+// Rec.2020-to-Rec.709 matrix, the roll-off undone on the brightest channel, paper white back to white and
+// the 2.2 power undone. Returns the 8-bit red, green and blue.
+std::array<int, 3> ScreenshotPixel(const Hdr& h, u32 pixel) {
+    const double r2020 = PqToNits(Channel(pixel, 0) / 1023.0), g2020 = PqToNits(Channel(pixel, 1) / 1023.0),
+                 b2020 = PqToNits(Channel(pixel, 2) / 1023.0);
+    std::array<double, 3> rgb = {1.6605 * r2020 - 0.5876 * g2020 - 0.0728 * b2020,
+                                 -0.1246 * r2020 + 1.1329 * g2020 - 0.0083 * b2020,
+                                 -0.0182 * r2020 - 0.1006 * g2020 + 1.1187 * b2020};
+    const double m = std::max({rgb[0], rgb[1], rgb[2]});
+    if (m > 0.0) {
+        const double scale = SpartanGraphics::HdrRollOff(h.paper_white, h.peak).Undo(m) / m;
+        for (double& c : rgb) c *= scale;
+    }
+    std::array<int, 3> out{};
+    for (int c = 0; c < 3; ++c) {
+        out[c] = int(std::pow(std::clamp(rgb[c] / h.paper_white, 0.0, 1.0), 1.0 / 2.2) * 255.0 + 0.5);
+    }
+    return out;
+}
+
+// The known limit of the screenshot inverse on colour: near the curve's flat top one 10-bit PQ step
+// spans many source brightnesses, so the factor recovered from the brightest channel is coarse and the
+// other channels of a bright coloured highlight can come back off (a model sweep of all colours at
+// paper white 500 and peak 400 finds up to 28 codes). The orange half of the run `rolled` (paper white
+// and peak h) against `plain`, the same paper white with no roll-off (peak 10000): a column the
+// roll-off leaves alone gives the same screenshot exactly, and no column is more than 32 codes off.
+void CheckScreenshotColour(const Hdr& h, const std::vector<u32>& rolled, const std::vector<u32>& plain) {
+    char text[240];
+    const Hdr none{.paper_white = h.paper_white, .peak = 10000.0f};
+    int untouched_off = 0, worst = 0, worst_x = -1;
+    for (u32 x = 0; x < W; ++x) {
+        const std::array<int, 3> a = ScreenshotPixel(h, PixelAt(rolled, x, H / 2));
+        const std::array<int, 3> b = ScreenshotPixel(none, PixelAt(plain, x, H / 2));
+        int diff = 0;
+        for (int c = 0; c < 3; ++c) diff = std::max(diff, std::abs(a[c] - b[c]));
+        const double lin = std::pow(x / 255.0, 2.2);
+        const double t = std::clamp((lin - 0.6) / 0.4, 0.0, 1.0), smooth = t * t * (3.0 - 2.0 * t);
+        const double nits = lin * (1.0 + (HighlightGain - 1.0) * smooth * smooth) * h.paper_white;
+        if (Eetf(h, nits) == nits) {
+            untouched_off += diff != 0;
+        } else if (diff > worst) {
+            worst = diff, worst_x = int(x);
+        }
+    }
+    std::snprintf(text, sizeof text,
+                  "screenshot colour, paper white %.0f peak %.0f: orange the roll-off leaves alone comes back the same as "
+                  "without a peak (%d columns differ)",
+                  h.paper_white, h.peak, untouched_off);
+    Expect(untouched_off == 0, text);
+    std::snprintf(text, sizeof text,
+                  "screenshot colour, paper white %.0f peak %.0f: rolled-off orange within 32 codes of no peak (worst %d "
+                  "at code %d)",
+                  h.paper_white, h.peak, worst, worst_x);
+    Expect(worst <= 32, text);
 }
 
 } // namespace
@@ -749,17 +902,75 @@ int main() {
             CheckHdr("hdr", neutral, defaults, base);
         }
 
-        // h. Paper white 80 and 500 nits: white follows, and the whole ramp with it.
+        // h. Paper white 80 and 500 nits: white follows, and the whole ramp with it. Both fit under the
+        // default peak (white at 120 and 750 nits, under 1000), so nothing is rolled off.
         for (const float paper : {80.0f, 500.0f}) {
             const Hdr h{.paper_white = paper};
             const std::vector<u32> o = DrawPass(g, pass, ramp, target, FillHdr(neutral, h));
             char name[40];
             std::snprintf(name, sizeof name, "hdr paper white %.0f", paper);
             const int white = int(std::lround(Pq(paper * HighlightGain) * 1023.0));
-            std::snprintf(text, sizeof text, "%s: white is %d +-1 (got %d)", name, white, GreyCode(o, 255));
+            std::snprintf(text, sizeof text, "%s: white is PQ(%.0f nits) = %d +-1 (got %d)", name, paper * HighlightGain,
+                          white, GreyCode(o, 255));
             Expect(std::abs(GreyCode(o, 255) - white) <= 1, text);
             CheckHdr(name, neutral, h, o);
         }
+
+        // h2. When the brightest the picture gets (paper white x 1.5) fits under the peak, the roll-off leaves
+        // the picture alone: the default peak (1000 nits), and paper white 200 with the lowest peak, 400 nits
+        // (white at 300 nits), give the same picture as no peak (10000 nits).
+        const Hdr fits{.paper_white = 200.0f, .peak = 400.0f};
+        const std::vector<u32> fitting = DrawPass(g, pass, ramp, target, FillHdr(neutral, fits));
+        {
+            const std::vector<u32> o = DrawPass(g, pass, ramp, target, FillHdr(neutral, {.peak = 10000.0f}));
+            int differ = 0, differ_fits = 0;
+            for (size_t i = 0; i < o.size(); ++i) differ += o[i] != base[i], differ_fits += o[i] != fitting[i];
+            std::snprintf(text, sizeof text, "hdr: peak 1000 and 10000 nits give the same default picture (%d pixels differ)",
+                          differ);
+            Expect(differ == 0, text);
+            std::snprintf(text, sizeof text,
+                          "hdr: paper white 200 with peak 400 and with peak 10000 give the same picture (%d pixels differ)",
+                          differ_fits);
+            Expect(differ_fits == 0, text);
+        }
+
+        // h3. Paper white 500 with the lowest peak, 400 nits: white (750 nits before the roll-off) comes down
+        // to the peak, nothing goes over PQ(peak), and the grey ramp stays non-decreasing. (On the orange
+        // half green may step down: its input repeats every two codes while red, which sets the pixel's
+        // one factor, keeps rising into the roll-off.)
+        const Hdr over_peak{.paper_white = 500.0f, .peak = 400.0f};
+        const std::vector<u32> rolled = DrawPass(g, pass, ramp, target, FillHdr(neutral, over_peak));
+        {
+            const Hdr& h = over_peak;
+            const std::vector<u32>& o = rolled;
+            const int ceiling = int(std::lround(Pq(h.peak) * 1023.0));
+            int over = 0, highest = 0, drops = 0;
+            for (u32 y = 0; y < H; ++y) {
+                for (u32 x = 0; x < W; ++x) {
+                    for (int c = 0; c < 3; ++c) {
+                        const int code = Channel(PixelAt(o, x, y), c);
+                        over += code > ceiling;
+                        highest = std::max(highest, code);
+                        drops += y < H / 2 && x > 0 && code < Channel(PixelAt(o, x - 1, y), c);
+                    }
+                }
+            }
+            std::snprintf(text, sizeof text, "hdr peak 400: no code over PQ(400 nits) = %d (highest %d, %d over)",
+                          ceiling, highest, over);
+            Expect(over == 0, text);
+            std::snprintf(text, sizeof text, "hdr peak 400: the grey ramp never gets darker (%d drops)", drops);
+            Expect(drops == 0, text);
+            std::snprintf(text, sizeof text, "hdr peak 400: white rolls off to the peak, %d +-1 (got %d; %d without the roll-off)",
+                          ceiling, GreyCode(o, 255), int(std::lround(Pq(h.paper_white * HighlightGain) * 1023.0)));
+            Expect(std::abs(GreyCode(o, 255) - ceiling) <= 1, text);
+            CheckHdr("hdr peak 400", neutral, h, o);
+        }
+
+        // h4. F12 screenshots undo the roll-off (SpartanGraphics::HdrRollOff, as ScreenshotToRgba8 uses it).
+        CheckScreenshotUndo(over_peak, rolled);
+        CheckScreenshotUndo(fits, fitting);
+        CheckScreenshotColour(over_peak, rolled,
+                              DrawPass(g, pass, ramp, target, FillHdr(neutral, {.paper_white = 500.0f, .peak = 10000.0f})));
 
         // i. The picture controls still act, before the expansion: gamma 2.40 darkens mid grey, brightness
         // +50 lifts black, white stays where it was.

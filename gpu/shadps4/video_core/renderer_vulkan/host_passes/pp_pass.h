@@ -28,10 +28,12 @@ public:
         float picture_contrast = 1.0f;
         float picture_brightness = 0.0f;
         u32 picture_adjust = 0; // 0: the shader skips all three
-        // spartanport: hdr 2 only: nits of the SDR picture's white (offset 48).
+        // spartanport: hdr 2 only: nits of the SDR picture's white (offset 48) and the peak the
+        // highlights roll off towards (offset 52).
         float hdr_paper_white = 200.0f;
+        float hdr_peak = 1000.0f;
     };
-    static_assert(sizeof(Settings) == 52);
+    static_assert(sizeof(Settings) == 56);
 
     void Create(vk::Device device, vk::Format surface_format);
 

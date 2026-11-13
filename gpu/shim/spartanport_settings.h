@@ -185,6 +185,19 @@ struct Values {
     std::atomic<int> picture_brightness{SpartanGraphics::PictureBrightnessNeutral};
     std::atomic<int> picture_contrast{SpartanGraphics::PictureContrastNeutral};
     std::atomic<int> picture_gamma{SpartanGraphics::PictureGammaNeutral};
+    /// HDR output's paper white and peak, in nits (SpartanGraphics::Hdr*; ini keys hdr_paper_white,
+    /// hdr_peak). Live.
+    std::atomic<int> hdr_paper_white{SpartanGraphics::HdrPaperWhiteDefault};
+    std::atomic<int> hdr_peak{SpartanGraphics::HdrPeakDefault};
+    /// Match Windows HDR settings (ini key hdr_auto): at start the presenter replaces the two values
+    /// above with the display's (SpartanGraphics::HdrFromDisplay), when Windows reports them.
+    std::atomic<bool> hdr_auto{true};
+    /// Set by the presenter at start: Windows reported the display's paper white and peak
+    /// (SpartanGraphics::HdrNits), so hdr_auto uses them and their sliders are greyed out.
+    std::atomic<bool> hdr_paper_white_known{false};
+    std::atomic<bool> hdr_peak_known{false};
+    /// Set by the presenter: the last frame was the SDR picture expanded to HDR10 (the HDR rows act).
+    std::atomic<bool> hdr_active{false};
     /// Anti-aliasing of the finished frame (SpartanGraphics::AntiAliasing: off, FXAA, SMAA). Live.
     std::atomic<int> anti_aliasing{0};
     /// Set by the presenter: the anti-aliasing pass ran on the last frame (a mode that could not be

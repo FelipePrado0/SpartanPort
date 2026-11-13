@@ -160,8 +160,23 @@ u8 HdrToSrgb8(float nits, float sdr_white_nits) {
     return u8(std::clamp(srgb, 0.0f, 1.0f) * 255.0f + 0.5f);
 }
 
+// spartanport: undoes post_process.frag's peak roll-off (sdr_to_hdr10()) on Rec.709 nits: the
+// shader scales a pixel by one factor taken from its brightest channel, so the factor that brings
+// that channel back (SpartanGraphics::HdrRollOff) restores all three. Exact when nothing was rolled
+// off, close for greys; near the curve's flat top the 10-bit PQ steps are too coarse to invert, so
+// with the peak far below paper white x 1.5 a bright coloured highlight can come back a few dozen
+// codes off (pp-pass-test, "screenshot colour").
+void UndoPeakRollOff(float& r, float& g, float& b, const SpartanGraphics::HdrRollOff& roll_off) {
+    const float out = std::max({r, g, b});
+    if (out <= 0.0f) {
+        return;
+    }
+    const float scale = float(roll_off.Undo(out) / out);
+    r *= scale, g *= scale, b *= scale;
+}
+
 bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, bool hdr,
-                       float sdr_white_nits, std::vector<u8>& rgba) {
+                       float sdr_white_nits, float sdr_peak_nits, std::vector<u8>& rgba) {
     const size_t pixels = size_t(width) * height;
     rgba.resize(pixels * 4);
     switch (format) {
@@ -182,6 +197,7 @@ bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, 
         }
         return true;
     case vk::Format::eA2B10G10R10UnormPack32: {
+        const SpartanGraphics::HdrRollOff roll_off(sdr_white_nits, sdr_peak_nits);
         static const auto nits = [] {
             std::array<float, 1024> lut{};
             for (size_t i = 0; i < lut.size(); ++i) {
@@ -197,12 +213,15 @@ bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, 
                 // Rec.2020 PQ to SDR Rec.709.
                 const float r2020 = nits[r], g2020 = nits[g], b2020 = nits[b];
                 const float w = sdr_white_nits;
-                rgba[i * 4 + 0] =
-                    HdrToSrgb8(1.6605f * r2020 - 0.5876f * g2020 - 0.0728f * b2020, w);
-                rgba[i * 4 + 1] =
-                    HdrToSrgb8(-0.1246f * r2020 + 1.1329f * g2020 - 0.0083f * b2020, w);
-                rgba[i * 4 + 2] =
-                    HdrToSrgb8(-0.0182f * r2020 - 0.1006f * g2020 + 1.1187f * b2020, w);
+                float r709 = 1.6605f * r2020 - 0.5876f * g2020 - 0.0728f * b2020;
+                float g709 = -0.1246f * r2020 + 1.1329f * g2020 - 0.0083f * b2020;
+                float b709 = -0.0182f * r2020 - 0.1006f * g2020 + 1.1187f * b2020;
+                if (w > 0.0f) {
+                    UndoPeakRollOff(r709, g709, b709, roll_off);
+                }
+                rgba[i * 4 + 0] = HdrToSrgb8(r709, w);
+                rgba[i * 4 + 1] = HdrToSrgb8(g709, w);
+                rgba[i * 4 + 2] = HdrToSrgb8(b709, w);
             } else {
                 rgba[i * 4 + 0] = u8((r * 255 + 511) / 1023);
                 rgba[i * 4 + 1] = u8((g * 255 + 511) / 1023);
@@ -272,11 +291,13 @@ void CaptureScreenshot(const Instance& instance, Scheduler& scheduler, vk::Comma
                                       width = frame.width, height = frame.height,
                                       format = frame.format, hdr = frame.is_hdr,
                                       sdr_white_nits = frame.sdr_white_nits,
+                                      sdr_peak_nits = frame.sdr_peak_nits,
                                       path = ScreenshotPath(frame.is_generated)] {
         vmaInvalidateAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
         std::vector<u8> rgba;
-        const bool converted = ScreenshotToRgba8(static_cast<const u8*>(info.pMappedData), width,
-                                                 height, format, hdr, sdr_white_nits, rgba);
+        const bool converted =
+            ScreenshotToRgba8(static_cast<const u8*>(info.pMappedData), width, height, format, hdr,
+                              sdr_white_nits, sdr_peak_nits, rgba);
         vmaDestroyBuffer(allocator, buffer, allocation);
         if (!converted) {
             LOG_ERROR(Render_Vulkan, "Screenshot: unsupported format {}", vk::to_string(format));
@@ -338,8 +359,31 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
     fsr_pass.Create(device, instance.GetAllocator(), num_images);
     pp_pass.Create(device, swapchain.GetSurfaceFormat().format);
     if (swapchain.GetHDR()) {
-        // spartanport: HDR output; the SDR picture is expanded until a flip says otherwise.
+        // spartanport: HDR output; the SDR picture is expanded until a flip says otherwise. With
+        // Match Windows HDR settings (hdr_auto) the paper white and peak are the display's, read
+        // once here like the HDR switch itself; each goes into its slider's setting, which the menu
+        // shows greyed out and which turning the option off starts from. A value Windows does not
+        // report (SpartanGraphics::HdrNits) keeps the slider's own.
         pp_settings.hdr = 2;
+        auto& s = SpartanSettings::Get();
+        const Frontend::WindowSystemInfo info = window.GetWindowInfo();
+        const SpartanGraphics::HdrNits display =
+            SpartanGraphics::HdrFromDisplay(info.sdr_white_level, info.hdr_headroom);
+        s.hdr_paper_white_known = display.paper_white_known;
+        s.hdr_peak_known = display.peak_known;
+        const bool paper_from_display = s.hdr_auto && display.paper_white_known;
+        const bool peak_from_display = s.hdr_auto && display.peak_known;
+        if (paper_from_display) {
+            s.hdr_paper_white = display.paper_white;
+        }
+        if (peak_from_display) {
+            s.hdr_peak = display.peak;
+        }
+        pp_settings.hdr_paper_white = float(s.hdr_paper_white.load());
+        pp_settings.hdr_peak = float(s.hdr_peak.load());
+        std::printf("HDR output: on (HDR10), paper white %d nits (%s), peak %d nits (%s)\n",
+                    s.hdr_paper_white.load(), paper_from_display ? "from Windows" : "the menu's",
+                    s.hdr_peak.load(), peak_from_display ? "from Windows" : "the menu's");
     }
     // spartanport: on the HDR10 swapchain the menu's white is the picture's paper white.
     SpartanOverlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images,
@@ -736,7 +780,12 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         pp_settings.picture_brightness = SpartanGraphics::PictureBrightness(brightness);
         pp_settings.picture_adjust = !SpartanGraphics::PictureNeutral(brightness, contrast, gamma);
     }
+    // spartanport: HDR output's paper white and peak (live), and whether the menu's HDR rows act.
+    pp_settings.hdr_paper_white = float(graphics.hdr_paper_white);
+    pp_settings.hdr_peak = float(graphics.hdr_peak);
+    SpartanSettings::Get().hdr_active = pp_settings.hdr == 2;
     frame->sdr_white_nits = pp_settings.hdr == 2 ? pp_settings.hdr_paper_white : 0.0f;
+    frame->sdr_peak_nits = pp_settings.hdr == 2 ? pp_settings.hdr_peak : 0.0f;
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
     if (generated_image) {
         // The same passes over the generated frame, into a frame of its own.
@@ -759,6 +808,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
                      game_pq),
             image_size, {generated->width, generated->height}, fsr_settings, game_pq);
         generated->sdr_white_nits = frame->sdr_white_nits;
+        generated->sdr_peak_nits = frame->sdr_peak_nits;
         pp_pass.Render(cmdbuf, generated_view, image_size, *generated, pp_settings);
         generated->is_generated = true;
         frame->generated = generated;

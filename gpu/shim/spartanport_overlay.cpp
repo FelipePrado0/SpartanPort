@@ -642,6 +642,33 @@ void ImageTab() {
         ImGui::EndTable();
     }
     PictureResetButton(s);
+    // HDR output's paper white and peak: greyed out unless the picture is being shown in HDR10. With
+    // Match Windows HDR settings the presenter put the display's values into the sliders at start;
+    // each slider is greyed out while it is on and Windows reported its value, and turning it off
+    // starts from them.
+    Separator("HDR");
+    const bool hdr = s.hdr_active;
+    if (!hdr) DisabledText("HDR output is off: turn on HDR in the launcher and in Windows, then restart.");
+    if (BeginRows("##hdr")) {
+        namespace G = SpartanGraphics;
+        ImGui::BeginDisabled(!hdr);
+        CheckRow("Match Windows HDR settings", s.hdr_auto,
+                 "HDR brightness follows Windows' SDR content brightness and HDR peak brightness the display's "
+                 "own peak, as Windows reports them; a value Windows does not report stays on its slider. "
+                 "Turned on, it applies on restart.");
+        ImGui::BeginDisabled(s.hdr_auto && s.hdr_paper_white_known);
+        SliderRow("HDR brightness", s.hdr_paper_white, G::HdrPaperWhiteMin, G::HdrPaperWhiteMax, "%d nits",
+                  "Where the game's white is shown, in nits: higher is brighter. 200 suits most rooms. "
+                  "Seen when this menu closes, or at once with Pause game off.");
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(s.hdr_auto && s.hdr_peak_known);
+        SliderRow("HDR peak brightness", s.hdr_peak, G::HdrPeakMin, G::HdrPeakMax, "%d nits",
+                  "Set it to your display's peak brightness, so the brightest parts keep their detail. "
+                  "Seen when this menu closes, or at once with Pause game off.");
+        ImGui::EndDisabled();
+        ImGui::EndDisabled();
+        ImGui::EndTable();
+    }
     const int iw = s.image_width, ih = s.image_height, ww = s.window_width, wh = s.window_height;
     const bool downscaling = iw > ww || ih > wh;
     // With an upscaler the switch also controls the upscaler's own sharpening, so it stays usable; the

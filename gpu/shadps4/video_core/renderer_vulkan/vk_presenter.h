@@ -47,6 +47,9 @@ struct Frame {
     /// spartanport: the SDR picture expanded to HDR10 (pp.hdr 2): the nits of its white, which
     /// screenshots map back to white; 0 for any other frame.
     float sdr_white_nits = 0.0f;
+    /// spartanport: with sdr_white_nits, the peak its highlights were rolled off towards, which
+    /// screenshots undo before mapping white back; 0 for any other frame.
+    float sdr_peak_nits = 0.0f;
 };
 
 enum SchedulerType {

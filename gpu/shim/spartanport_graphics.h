@@ -175,6 +175,90 @@ inline bool PictureNeutral(int brightness, int contrast, int gamma) {
            PicturePower(gamma) == 1.0f;
 }
 
+/// HDR output (post_process.frag, pp.hdr 2), in nits. Live. Paper white is where the SDR picture's
+/// white is shown; the highlights above it are boosted up to 1.5 times and fitted under the peak,
+/// which should be the display's own peak brightness.
+inline constexpr int HdrPaperWhiteMin = 80, HdrPaperWhiteMax = 500, HdrPaperWhiteDefault = 200;
+inline constexpr int HdrPeakMin = 400, HdrPeakMax = 10000, HdrPeakDefault = 1000;
+/// The highlight boost's maximum (post_process.frag highlight_gain): SDR white is shown at paper
+/// white x 1.5, the brightest the expanded picture gets.
+inline constexpr double HdrHighlightGain = 1.5;
+
+/// "Match Windows HDR settings" (hdr_auto): paper white and peak from what SDL reports for the window's
+/// display, read once at start. SDL's SDR white level (SDL_PROP_WINDOW_SDR_WHITE_LEVEL_FLOAT) is in
+/// units of 80 nits and is Windows' SDR content brightness; its HDR headroom
+/// (SDL_PROP_WINDOW_HDR_HEADROOM_FLOAT) is the display's maximum luminance as a multiple of SDR white.
+/// SDL raises both to at least 1 and gives 1 when it reports nothing, so:
+/// - paper white is known when either is above 1 (a white level of 1 with a headroom above 1 is the
+///   Windows slider at 80 nits);
+/// - the peak is known only when the headroom is above 1. At 1 the display's maximum is lost: SDL
+///   also gives 1 when Windows' SDR white is at or above the maximum (a 400-nit display with SDR
+///   white at 480 nits).
+/// A value that is not known keeps its default here, and the sliders' value is used for it.
+struct HdrNits {
+    int paper_white = HdrPaperWhiteDefault;
+    int peak = HdrPeakDefault;
+    bool paper_white_known = false;
+    bool peak_known = false;
+};
+inline HdrNits HdrFromDisplay(float sdr_white_level, float hdr_headroom) {
+    // Anything not a finite number above 1 counts as not reported (1, SDL's floor).
+    const auto reported = [](float value) { return std::isfinite(value) && value > 1.0f ? double(value) : 1.0; };
+    const double white = reported(sdr_white_level), headroom = reported(hdr_headroom);
+    HdrNits nits;
+    nits.paper_white_known = white > 1.0 || headroom > 1.0;
+    nits.peak_known = headroom > 1.0;
+    if (nits.paper_white_known) {
+        nits.paper_white = int(std::lround(std::clamp(white * 80.0, double(HdrPaperWhiteMin), double(HdrPaperWhiteMax))));
+    }
+    if (nits.peak_known) {
+        nits.peak = int(std::lround(std::clamp(white * 80.0 * headroom, double(HdrPeakMin), double(HdrPeakMax))));
+    }
+    return nits;
+}
+
+/// SMPTE ST 2084 (PQ): nits to the PQ value in [0, 1], and back.
+inline double HdrPq(double nits) {
+    const double m1 = 0.1593017578125, m2 = 78.84375, c1 = 0.8359375, c2 = 18.8515625, c3 = 18.6875;
+    const double y = std::pow(std::clamp(nits / 10000.0, 0.0, 1.0), m1);
+    return std::pow((c1 + c2 * y) / (1.0 + c3 * y), m2);
+}
+inline double HdrPqToNits(double pq) {
+    const double m1 = 0.1593017578125, m2 = 78.84375, c1 = 0.8359375, c2 = 18.8515625, c3 = 18.6875;
+    const double p = std::pow(std::clamp(pq, 0.0, 1.0), 1.0 / m2);
+    return 10000.0 * std::pow(std::max(p - c1, 0.0) / (c2 - c3 * p), 1.0 / m1);
+}
+
+/// The highlight roll-off of HDR output (post_process.frag sdr_to_hdr10()), for F12 screenshots to
+/// undo: ITU-R BT.2390's EETF on a pixel's brightest channel in PQ, from the source maximum LW =
+/// paper white x 1.5 to the peak, black at 0. With E the PQ value over PQ(LW) and maxLum =
+/// PQ(peak) / PQ(LW), it is the identity up to KS = 1.5 maxLum - 0.5, then the Hermite spline
+/// P(T) = (2T^3 - 3T^2 + 1) KS + (T^3 - 2T^2 + T)(1 - KS) + (-2T^3 + 3T^2) maxLum, T = (E - KS) / (1 - KS).
+/// With that KS, 1 - KS = 3 (maxLum - KS), so P(T) = KS + (maxLum - KS)(1 - (1 - T)^3), which
+/// Undo() solves for T in closed form. When LW fits under the peak (maxLum >= 1) nothing is rolled off.
+class HdrRollOff {
+public:
+    HdrRollOff(double paper_white, double peak)
+        : source_pq{HdrPq(paper_white * HdrHighlightGain)}, max_lum{HdrPq(peak) / source_pq},
+          ks{1.5 * max_lum - 0.5},
+          knee_nits{max_lum < 1.0 ? HdrPqToNits(ks * source_pq) : std::numeric_limits<double>::infinity()} {}
+
+    /// The brightest channel before the roll-off, from the one after it (nits). An input at or
+    /// above the peak gives LW.
+    double Undo(double out_nits) const {
+        if (!(out_nits > knee_nits)) {
+            return out_nits;
+        }
+        const double e2 = HdrPq(out_nits) / source_pq;
+        const double rest = std::max(1.0 - (e2 - ks) / (max_lum - ks), 0.0); // (1 - T)^3
+        const double t = 1.0 - std::cbrt(rest);
+        return HdrPqToNits((ks + t * (1.0 - ks)) * source_pq);
+    }
+
+private:
+    double source_pq, max_lum, ks, knee_nits;
+};
+
 /// Whether the FSR pass runs: FSR 1 when the window is larger than the game's image, RCAS
 /// alone when they are the same size. A smaller window is left to the regular scaling.
 inline bool FsrPassRuns(bool fsr1, bool rcas, int in_w, int in_h, int out_w, int out_h) {

@@ -24,15 +24,12 @@ Swapchain::Swapchain(const Instance& instance_, const Frontend::WindowSDL& windo
     // spartanport: HDR output (SPARTAN_HDR) starts on the HDR10 swapchain and stays there, so every
     // pass is built for its format; the post process pass expands the game's SDR picture to it
     // (Presenter::SetHDR). Sampled once, as the launcher's HDR switch takes effect on restart.
+    // When it is on, the presenter logs the "HDR output: on" line with the paper white and peak.
     needs_hdr = supports_hdr;
-    if (EmulatorSettings.IsHdrAllowed()) {
-        const char* state = "on (HDR10)";
-        if (!supports_hdr) {
-            state = window.GetWindowInfo().hdr_enabled
-                        ? "off (the display offers no HDR10 format)"
-                        : "off (HDR is off in Windows for this display)";
-        }
-        std::printf("HDR output: %s\n", state);
+    if (EmulatorSettings.IsHdrAllowed() && !supports_hdr) {
+        std::printf("HDR output: %s\n", window.GetWindowInfo().hdr_enabled
+                                            ? "off (the display offers no HDR10 format)"
+                                            : "off (HDR is off in Windows for this display)");
     }
 
     Create(window.GetWidth(), window.GetHeight());

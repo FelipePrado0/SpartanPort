@@ -540,6 +540,108 @@ int main() {
     }
 
     {
+        // HDR output's paper white and peak: their defaults, clamped, kept by Save(), env overrides.
+        const SpartanSettings::Values fresh{};
+        assert(fresh.hdr_paper_white == G::HdrPaperWhiteDefault && fresh.hdr_peak == G::HdrPeakDefault);
+        assert(fresh.hdr_paper_white == 200 && fresh.hdr_peak == 1000 && !fresh.hdr_active);
+        assert(fresh.hdr_auto && !fresh.hdr_paper_white_known && !fresh.hdr_peak_known);
+        {
+            std::ofstream out(path);
+            out << "hdr_paper_white=300\nhdr_peak=600\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 300 && v.hdr_peak == 600);
+        SpartanSettings::Save();
+        const std::string hdr_ini = Read(path);
+        assert(hdr_ini.find("hdr_paper_white=300\n") != std::string::npos);
+        assert(hdr_ini.find("hdr_peak=600\n") != std::string::npos);
+        SpartanSettings::Load();  // what Save() wrote reads back the same
+        assert(v.hdr_paper_white == 300 && v.hdr_peak == 600);
+        {
+            std::ofstream out(path);
+            out << "hdr_paper_white=9000\nhdr_peak=99999\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 500 && v.hdr_peak == 10000);
+        {
+            std::ofstream out(path);
+            out << "hdr_paper_white=10\nhdr_peak=-5\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 80 && v.hdr_peak == 400);
+        {
+            std::ofstream out(path);
+            out << "hdr_paper_white=\nhdr_peak=\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 200 && v.hdr_peak == 1000);
+        SetEnvironment("SPARTAN_HDR_PAPER_WHITE", "250");
+        SetEnvironment("SPARTAN_HDR_PEAK", "1500");
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 250 && v.hdr_peak == 1500);
+        SetEnvironment("SPARTAN_HDR_PAPER_WHITE", "");
+        SetEnvironment("SPARTAN_HDR_PEAK", "");
+        {
+            std::ofstream out(path);
+            out << "hdr_paper_white=200\nhdr_peak=1000\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 200 && v.hdr_peak == 1000);
+
+        // Match Windows HDR settings (hdr_auto): on by default and when empty, kept by Save(), env override.
+        {
+            std::ofstream out(path);
+            out << "hdr_auto=0\n";
+        }
+        SpartanSettings::Load();
+        assert(!v.hdr_auto);
+        SpartanSettings::Save();
+        assert(Read(path).find("hdr_auto=0\n") != std::string::npos);
+        {
+            std::ofstream out(path);
+            out << "hdr_auto=\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_auto);
+        SpartanSettings::Save();
+        assert(Read(path).find("hdr_auto=1\n") != std::string::npos);
+        SetEnvironment("SPARTAN_HDR_AUTO", "0");
+        SpartanSettings::Load();
+        assert(!v.hdr_auto);
+        SetEnvironment("SPARTAN_HDR_AUTO", "");
+        {
+            std::ofstream out(path);
+            out << "hdr_auto=1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_auto);
+
+        // The display's values (SDL: SDR white level in units of 80 nits, headroom as a multiple of it).
+        // Windows at 200 nits on a 1000-nit display: 2.5 and 5.
+        const G::HdrNits typical = G::HdrFromDisplay(2.5f, 5.0f);
+        assert(typical.paper_white_known && typical.peak_known && typical.paper_white == 200 && typical.peak == 1000);
+        // A 400-nit display with Windows' SDR white at 480 nits: SDL's headroom (400 / 480) is raised to
+        // its floor of 1, so the display's maximum is lost. Paper white is known; the peak is not and
+        // keeps the default (the slider's value is used).
+        const G::HdrNits bright = G::HdrFromDisplay(6.0f, 1.0f);
+        assert(bright.paper_white_known && bright.paper_white == 480);
+        assert(!bright.peak_known && bright.peak == G::HdrPeakDefault);
+        // The Windows slider at 0 (80 nits, white level 1) on a 360-nit display: both known, the peak
+        // raised to the slider's 400-nit minimum.
+        const G::HdrNits dim = G::HdrFromDisplay(1.0f, 4.5f);
+        assert(dim.paper_white_known && dim.peak_known && dim.paper_white == 80 && dim.peak == 400);
+        // Clamped to the sliders' ranges.
+        const G::HdrNits wide = G::HdrFromDisplay(10.0f, 40.0f);
+        assert(wide.paper_white_known && wide.peak_known && wide.paper_white == 500 && wide.peak == 10000);
+        // Nothing reported (both 1, or not numbers): neither known, with the defaults.
+        for (const G::HdrNits none : {G::HdrFromDisplay(1.0f, 1.0f), G::HdrFromDisplay(0.0f, 0.5f),
+                                      G::HdrFromDisplay(std::numeric_limits<float>::quiet_NaN(),
+                                                        std::numeric_limits<float>::infinity())}) {
+            assert(!none.paper_white_known && !none.peak_known && none.paper_white == 200 && none.peak == 1000);
+        }
+    }
+
+    {
         // Anti-aliasing of the finished frame (aa_pass.cpp): off unless asked, text keys in the ini.
         assert(G::ParseAntiAliasing("off") == G::AaOff && G::ParseAntiAliasing("fxaa") == G::AaFxaa &&
                G::ParseAntiAliasing("smaa") == G::AaSmaa);
