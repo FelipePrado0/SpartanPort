@@ -87,6 +87,7 @@ public:
         info.title = config.title ? config.title : "";
         info.sdk_ver = config.sdk_version;
         info.psf_attributes.raw = config.psf_attributes;
+        info.game_folder = config.game_dir ? config.game_dir : "";
     }
 };
 

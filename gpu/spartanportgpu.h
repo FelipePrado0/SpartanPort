@@ -13,6 +13,7 @@ typedef struct {
     uint32_t sdk_version;       /* from the eboot's procparam */
     uint32_t psf_attributes;    /* param.sfo ATTRIBUTE */
     int32_t width, height;      /* initial window size */
+    const char *game_dir;       /* game folder (/app0): shader code for the shader preparation */
 } SpartanGpuConfig;
 /* Registers kernel event queues (needed with or without graphics). */
 void spartanportgpu_register_kernel(void);

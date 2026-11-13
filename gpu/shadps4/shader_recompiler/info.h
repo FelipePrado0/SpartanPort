@@ -174,6 +174,8 @@ struct Info : InfoPersistent {
     static constexpr u32 MaxUdSnapshots = 6;
     static inline thread_local UdSnapshot ud_snapshots[MaxUdSnapshots];
     static inline thread_local u32 num_ud_snapshots = 0;
+    /// spartanport: on while ReplayTranslate runs. The resource table walk reads guest memory.
+    static inline thread_local bool replaying = false;
 
     const UdSnapshot* Snapshot() const noexcept {
         for (u32 i = 0; i < num_ud_snapshots; ++i) {
@@ -271,7 +273,7 @@ struct Info : InfoPersistent {
         flattened_ud_buf.resize(srt_info.flattened_bufsize_dw);
         ASSERT(user_data.size() <= NUM_USER_DATA_REGS);
         std::memcpy(flattened_ud_buf.data(), user_data.data(), user_data.size_bytes());
-        if (srt_info.walker_func) {
+        if (srt_info.walker_func && !replaying) {
             srt_info.walker_func(user_data.data(), flattened_ud_buf.data());
         }
     }

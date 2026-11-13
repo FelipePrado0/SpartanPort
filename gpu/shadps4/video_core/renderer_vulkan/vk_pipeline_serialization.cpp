@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <fstream>
 #include <map>
+#include <xxhash.h>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -25,6 +26,9 @@
 #include "common/serdes.h"
 #include "common/scope_exit.h"
 #include "video_core/renderer_vulkan/vk_pipeline_serialization.h"
+#include "video_core/renderer_vulkan/vk_precompile_state.h"
+#include "video_core/renderer_vulkan/vk_shader_manifest.h"
+#include "video_core/renderer_vulkan/vk_shader_materialize.h"
 #include "common/thread.h"
 #include "spartanport_overlay.h"
 #include "spartanport_toggles.h"
@@ -43,7 +47,7 @@
 namespace Serialization {
 /* You should increment versions below once corresponding serialization scheme is changed. */
 static constexpr u32 ShaderBinaryVersion = 7u; // spartanport: interpolated integer fix (Pascal)
-static constexpr u32 ShaderMetaVersion = 7u; // spartanport: ImageResource::needs_native
+static constexpr u32 ShaderMetaVersion = 8u; // spartanport: Shader::ReplayInputs at the end
 static constexpr u32 PipelineKeyVersion = 5u; // spartanport: Info layout (ImageResource::needs_native)
 } // namespace Serialization
 
@@ -59,6 +63,13 @@ u32 CurrentShaderBinaryVersion() {
                                        AmdPathsOff::Current().shaderext));
 }
 } // namespace
+
+namespace Manifest {
+Versions CurrentVersions() {
+    return {Serialization::ShaderMetaVersion, CurrentShaderBinaryVersion(),
+            Serialization::PipelineKeyVersion};
+}
+} // namespace Manifest
 
 namespace PipelineBinaryCache {
 bool ValidKey(const Key& key) {
@@ -738,8 +749,8 @@ void RegisterPipelineData(const GraphicsPipelineKey& key, u64 hash,
 
 void RegisterShaderMeta(const Shader::Info& info,
                         const std::optional<Shader::Gcn::FetchShaderData>& fetch_shader_data,
-                        const Shader::StageSpecialization& spec, size_t perm_hash,
-                        size_t perm_idx) {
+                        const Shader::StageSpecialization& spec, size_t perm_hash, size_t perm_idx,
+                        const Shader::ReplayInputs& replay) {
     if (!Storage::DataBase::Instance().IsOpened()) {
         return;
     }
@@ -755,6 +766,7 @@ void RegisterShaderMeta(const Shader::Info& info,
 
     spec.Serialize(ar);
     info.Serialize(ar);
+    replay.Serialize(ar);
 
     Storage::DataBase::Instance().Save(Storage::BlobType::ShaderMeta,
                                        fmt::format("{:#018x}", perm_hash), ar.TakeOff());
@@ -889,6 +901,12 @@ bool GraphicsPipelineKey::Deserialize(Serialization::Archive& ar) {
     Serialization::Reader key{ar};
 
     key.Read(this, sizeof(*this));
+    // Saved and shipped keys can come from other machines: the pipeline build writes one entry
+    // per color target into fixed arrays.
+    if (num_color_attachments > AmdGpu::NUM_COLOR_BUFFERS) {
+        num_color_attachments = 0;
+        return false;
+    }
     return true;
 }
 
@@ -912,14 +930,33 @@ bool GraphicsPipeline::SerializationSupport::Deserialize(Serialization::Archive&
     sdata.Read(multisampling);
     sdata.Read(tcs);
     sdata.Read(tes);
-    return true;
+    // Raw bytes from another machine: its pointers would reach the driver as they are.
+    multisampling.sType = vk::StructureType::ePipelineMultisampleStateCreateInfo;
+    multisampling.pNext = nullptr;
+    multisampling.pSampleMask = nullptr;
+    const auto samples = static_cast<u32>(multisampling.rasterizationSamples);
+    const bool samples_ok = samples != 0 && samples <= 64 && (samples & (samples - 1)) == 0;
+    if (!samples_ok) {
+        multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
+    }
+    // The vectors were copied as raw bytes: a size past their capacity would be read past them.
+    const auto fits = [](const auto& vec) { return vec.size() <= vec.capacity(); };
+    if (samples_ok && fits(vertex_attributes) && fits(vertex_bindings) && fits(divisors)) {
+        return true;
+    }
+    std::memset(static_cast<void*>(&vertex_attributes), 0, sizeof(vertex_attributes));
+    std::memset(static_cast<void*>(&vertex_bindings), 0, sizeof(vertex_bindings));
+    std::memset(static_cast<void*>(&divisors), 0, sizeof(divisors));
+    return false;
 }
 
 bool PipelineCache::LoadGraphicsPipeline(Serialization::Archive& ar) {
-    sel.graphics_key.Deserialize(ar);
+    const bool key_ok = sel.graphics_key.Deserialize(ar);
 
     GraphicsPipeline::SerializationSupport sdata{};
-    sdata.Deserialize(ar);
+    if (!sdata.Deserialize(ar) || !key_ok) {
+        return false; // a key that does not fit the hardware is not built
+    }
 
     for (int stage_idx = 0; stage_idx < MaxShaderStages; ++stage_idx) {
         const auto& hash = sel.graphics_key.stage_hashes[stage_idx];
@@ -1214,6 +1251,286 @@ void PipelineCache::StartOnDemand() {
                 disk_permutations.size());
 }
 
+// spartanport: the shipped shader list, written into the cache before the first frame (the store
+// StartOnDemand reads by name). The marker "precompile" says what was done, for which build, GPU,
+// driver and list (DecideWork).
+void PipelineCache::PrepareShaders(const std::filesystem::path& manifest_path,
+                                   const std::function<bool(u32, u32)>& progress) {
+    namespace fs = std::filesystem;
+    auto& db = Storage::DataBase::Instance();
+    const bool disk_on = EmulatorSettingsImpl::Flag("SPARTAN_DISK_SHADERS", true) &&
+                         !SpartanToggle::Disabled(SpartanToggle::DiskShaders);
+    std::error_code error;
+    if (!EmulatorSettings.IsPipelineCacheEnabled() || EmulatorSettings.IsPipelineCacheArchived() ||
+        !disk_on || !fs::is_regular_file(manifest_path, error)) {
+        return;
+    }
+    std::vector<u8> bytes(size_t(fs::file_size(manifest_path, error)));
+    std::ifstream(manifest_path, std::ios::binary)
+        .read(reinterpret_cast<char*>(bytes.data()), std::streamsize(bytes.size()));
+    u64 manifest_id{};
+    const auto manifest = Manifest::Decode(bytes, &manifest_id);
+    const auto& elf = Common::ElfInfo::Instance();
+    const auto versions = Manifest::CurrentVersions();
+    if (!manifest || !ShaderListFitsGame(manifest->serial, std::string(elf.GameSerial())) ||
+        manifest->versions != versions) {
+        LOG_WARNING(Render_Vulkan, "Shader list {} is damaged or for another build or game: shaders "
+                                   "compile while playing", manifest_path.string());
+        return;
+    }
+    const auto& game_dir = elf.GetGameFolder();
+    if (game_dir.empty() || db.IsOpened()) {
+        LOG_WARNING(Render_Vulkan, "Shader preparation skipped: no game folder or cache opened");
+        return;
+    }
+
+    // A cache of played sessions numbers its shaders its own way: it is set aside, never deleted.
+    const auto cache_dir = Common::FS::GetUserPath(Common::FS::PathType::CacheDir) /
+                           std::string(elf.GameSerial());
+    const auto marker_file = cache_dir / "precompile.bin";
+    if (fs::is_directory(cache_dir, error) && !fs::exists(marker_file, error) &&
+        !fs::is_empty(cache_dir, error)) {
+        auto aside = cache_dir;
+        aside += ".pre-precompile";
+        for (u32 n = 2; fs::exists(aside, error); ++n) {
+            aside = cache_dir;
+            aside += fmt::format(".pre-precompile-{}", n);
+        }
+        fs::rename(cache_dir, aside, error);
+        if (error) {
+            LOG_WARNING(Render_Vulkan, "Shader preparation skipped: cannot move {}: {}",
+                        cache_dir.string(), error.message());
+            return;
+        }
+        std::printf("Shader preparation: earlier cache kept at %s\n", aside.string().c_str());
+    }
+
+    const bool compatible = CheckCacheProfile(); // opens the cache
+    if (!db.IsOpened()) {
+        return;
+    }
+    std::vector<u8> stored_bytes;
+    if (compatible && fs::exists(marker_file, error)) {
+        db.Load(Storage::BlobType::ShaderProfile, "precompile", stored_bytes);
+    }
+    const auto profile_blob = ProfileBlob();
+    const auto& driver = instance.GetPipelineBinaryGlobalKey();
+    PrecompileMarker now{
+        .manifest_id = manifest_id,
+        .meta_version = versions.meta,
+        .binary_version = versions.binary,
+        .pipeline_version = versions.pipeline,
+        .profile_hash = XXH3_64bits(profile_blob.data(), profile_blob.size()),
+        .driver_hash = driver.keySize ? XXH3_64bits(driver.key.data(), driver.keySize) : 0,
+    };
+    const auto stored = DecodeMarker(stored_bytes);
+    const auto work = DecideWork(stored, now);
+    if (!work.Any()) {
+        std::printf("Shader preparation: done at an earlier start\n");
+        return;
+    }
+    // Nothing else runs yet: every core but the one showing the progress.
+    const u32 threads = std::max(1u, std::thread::hardware_concurrency()) - 1;
+    const auto save_marker = [&] {
+        db.Save(Storage::BlobType::ShaderProfile, "precompile", EncodeMarker(now));
+    };
+
+    if (work.shaders || work.keys) {
+        const auto start_over = [&] {
+            db.Clear();
+            db.Save(Storage::BlobType::ShaderProfile, "profile", std::vector<u8>{profile_blob});
+            db.Save(Storage::BlobType::ShaderProfile, "disk_shaders", std::vector<u8>{1});
+            save_marker();
+        };
+        // A new list may number a program's shaders differently, and new keys need their
+        // shaders: written again from nothing.
+        const bool resume = stored && !work.restart_cache && !work.new_only && work.shaders;
+        if (resume) {
+            save_marker();
+        } else {
+            start_over();
+        }
+        const auto started = std::chrono::steady_clock::now();
+        const auto replay = Manifest::DefaultReplay(profile);
+        auto stats = Manifest::Materialize(*manifest, game_dir, replay, threads, resume, progress);
+        if (stats.conflict) {
+            std::printf("Shader preparation: a played session saved other shaders under the "
+                        "list's numbers, starting over\n");
+            start_over();
+            stats = Manifest::Materialize(*manifest, game_dir, replay, threads, false, progress);
+        }
+        if (!stats.stopped) {
+            now.shaders_done = true;
+            save_marker();
+        }
+        // StartOnDemand lists the files next: they must be on disk.
+        if (!db.Flush(std::chrono::minutes(2))) {
+            LOG_WARNING(Render_Vulkan, "Shader preparation: cache writes still queued");
+        }
+        std::printf("Shader preparation: %u written, %u kept, %u without code, %u refused, %u "
+                    "pipeline keys in %.1f s (%u threads)%s\n",
+                    stats.written, stats.kept, stats.no_code, stats.failed, stats.keys,
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
+                        .count(),
+                    threads, stats.stopped ? ", skipped" : "");
+        if (stats.stopped) {
+            return;
+        }
+    } else {
+        now.shaders_done = true; // DecideWork asks for shaders while they are not done
+    }
+
+    // Without pipeline binaries the driver keeps nothing to prepare; a driver that gains them
+    // changes driver_hash, so its pipelines are prepared then.
+    if (!driver.keySize || PreparePipelines(cache_dir, now.driver_hash, threads, progress)) {
+        now.pipelines_done = true;
+        save_marker();
+        db.Flush(std::chrono::seconds(10));
+    }
+}
+
+// spartanport: the driver builds every graphics pipeline of the saved keys once and keeps its binary
+// (pipeline-binaries/); each pipeline is destroyed right away, the game loads them on first use.
+// Compute pipelines keep no binary and stay on demand. A worker names the key it hands to the
+// driver in a journal, so a driver that ends the process skips that key at the next start.
+bool PipelineCache::PreparePipelines(const std::filesystem::path& cache_dir, u64 driver_hash,
+                                     u32 threads,
+                                     const std::function<bool(u32, u32)>& progress) {
+    auto& db = Storage::DataBase::Instance();
+    std::vector<std::vector<u8>> keys;
+    db.ForEachBlob(Storage::BlobType::PipelineKey,
+                   [&](std::vector<u8>&& data) { keys.push_back(std::move(data)); });
+    // Beside the cache folder: a cleared cache keeps them.
+    auto journal_path = cache_dir, skip_path = cache_dir;
+    journal_path += ".precompile-journal";
+    skip_path += ".precompile-skip";
+    const auto skip_keys = LoadSkipList(journal_path, skip_path, fmt::format("{:016x}", driver_hash));
+    std::error_code journal_error;
+    if (std::filesystem::exists(journal_path, journal_error)) {
+        // The skip list could not take the last crash: a new run would overwrite its only record.
+        LOG_WARNING(Render_Vulkan, "Pipeline preparation skipped: cannot write {}",
+                    skip_path.string());
+        return false;
+    }
+    const std::unordered_set<u64> skip(skip_keys.begin(), skip_keys.end());
+    threads = std::max(1u, threads);
+    CrashJournal journal;
+    journal.Open(journal_path, threads);
+
+    static const std::array<Shader::RuntimeInfo, MaxShaderStages> no_runtime_infos{};
+    const vk::Device device = instance.GetDevice();
+    const u32 total = u32(keys.size());
+    std::atomic<u32> next{}, done{}, built{}, failed{}, skipped{}, compute{}, running{threads};
+    std::atomic<bool> stop{};
+    const auto build = [&](u32 slot, std::vector<u8>& data) {
+        Serialization::Archive ar{std::move(data)};
+        Serialization::Reader reader{ar};
+        u32 version{}, is_compute{};
+        reader.Read(version);
+        reader.Read(is_compute);
+        if (version != Serialization::PipelineKeyVersion || is_compute) {
+            ++compute;
+            return;
+        }
+        GraphicsPipelineKey key;
+        GraphicsPipeline::SerializationSupport sdata{};
+        const bool key_ok = key.Deserialize(ar);
+        if (!sdata.Deserialize(ar) || !key_ok) {
+            ++skipped;
+            return;
+        }
+        const u64 name = std::hash<GraphicsPipelineKey>{}(key);
+        if (skip.contains(name)) {
+            ++skipped;
+            return;
+        }
+        std::array<Shader::Info, MaxShaderStages> stage_infos{};
+        std::array<const Shader::Info*, MaxShaderStages> infos{};
+        std::array<vk::ShaderModule, MaxShaderStages> modules{};
+        std::optional<Shader::Gcn::FetchShaderData> fetch;
+        SCOPE_EXIT {
+            for (const auto module : modules) {
+                if (module) {
+                    device.destroyShaderModule(module);
+                }
+            }
+        };
+        for (u32 stage = 0; stage < MaxShaderStages; ++stage) {
+            const u64 hash = key.stage_hashes[stage];
+            if (!hash) {
+                continue;
+            }
+            std::vector<u8> meta;
+            db.Load(Storage::BlobType::ShaderMeta, fmt::format("{:#018x}", hash), meta);
+            if (meta.empty()) {
+                ++skipped;
+                return;
+            }
+            Serialization::Archive meta_ar{std::move(meta)};
+            Shader::StageSpecialization spec;
+            std::optional<Shader::Gcn::FetchShaderData> stage_fetch;
+            size_t perm_idx{};
+            // Motion vertex shaders are refused here too: the game builds those itself.
+            if (!LoadShaderMeta(meta_ar, stage_infos[stage], stage_fetch, spec, perm_idx)) {
+                ++skipped;
+                return;
+            }
+            std::vector<u32> spv;
+            db.Load(Storage::BlobType::ShaderBinary,
+                    fmt::format("{:#018x}_{}", stage_infos[stage].pgm_hash, perm_idx), spv);
+            modules[stage] = spv.empty() ? vk::ShaderModule{} : CompileSPV(spv, device);
+            if (!modules[stage]) {
+                ++skipped;
+                return;
+            }
+            infos[stage] = &stage_infos[stage];
+            if (stage_fetch) {
+                fetch = stage_fetch;
+            }
+        }
+        journal.Mark(slot, name);
+        const bool valid =
+            GraphicsPipeline(instance, scheduler, desc_heap, profile, key, *pipeline_cache, infos,
+                             no_runtime_infos, fetch, modules, sdata, true)
+                .IsValid();
+        journal.Clear(slot);
+        ++(valid ? built : failed);
+    };
+
+    const auto started = std::chrono::steady_clock::now();
+    std::vector<std::jthread> workers;
+    for (u32 slot = 0; slot < threads; ++slot) {
+        workers.emplace_back([&, slot] {
+            for (u32 n; !stop && (n = next++) < total; ++done) {
+                try {
+                    build(slot, keys[n]);
+                } catch (const std::exception& e) {
+                    ++failed;
+                    LOG_ERROR(Render_Vulkan, "Pipeline preparation failed: {}", e.what());
+                }
+            }
+            --running;
+        });
+    }
+    while (running) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        if (!stop && !progress(done, total)) {
+            stop = true;
+        }
+    }
+    workers.clear();
+    if (!stop) {
+        journal.Finish();
+    }
+    std::printf("Pipeline preparation: %u built, %u refused, %u skipped, %u compute left for the "
+                "game, of %u keys in %.1f s (%u threads)%s\n",
+                built.load(), failed.load(), skipped.load(), compute.load(), total,
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count(),
+                threads, stop ? ", skipped" : "");
+    ReportPipelineBinaryCache();
+    return !stop;
+}
+
 bool PipelineCache::DiskShadersActive() const {
     return disk_shaders && !SpartanToggle::Disabled(SpartanToggle::DiskShaders);
 }
@@ -1261,13 +1578,15 @@ static std::vector<DiskBlob> ReadDiskProgram(u64 hash, const std::vector<u32>& i
     return blobs;
 }
 
-// spartanport: one low-priority thread reads every saved program into memory at startup (a few MB),
-// so the GPU thread only deserializes and creates the modules. A program the GPU thread needs
-// first is claimed and read there instead.
+// spartanport: one low-priority thread reads every saved program once at startup, so the GPU thread
+// finds the files in the system's file cache instead of waiting on the disk. The data is not kept:
+// with the shipped list that is about 1 GB, and the system frees its file cache when memory runs
+// short. A program the GPU thread needs first is claimed and read there instead.
 struct PipelineCache::DiskPrefetch {
     std::mutex mutex;
-    std::unordered_map<u64, std::vector<DiskBlob>> ready;
     std::unordered_set<u64> claimed;
+    std::atomic<u32> done{}, total{};
+    std::atomic<bool> finished{};
     std::jthread thread;
 };
 
@@ -1278,36 +1597,39 @@ void PipelineCache::StartDiskPrefetch() {
         return;
     }
     disk_prefetch = new DiskPrefetch;
+    disk_prefetch->total = u32(work.size());
     disk_prefetch->thread = std::jthread{[prefetch = disk_prefetch, work = std::move(work)](
                                              std::stop_token stop) {
         Common::SetCurrentThreadName("spartanport:ShaderPrefetch");
         Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+        // Whatever happens here, the loading screen waiting on it must not wait forever.
+        struct Finished {
+            DiskPrefetch* prefetch;
+            ~Finished() {
+                prefetch->finished = true;
+            }
+        } finished{prefetch};
         const auto started = std::chrono::steady_clock::now();
-        const u32 total = u32(work.size());
-        u32 done = 0;
+        const u32 total = prefetch->total;
         u64 programs = 0, bytes = 0;
         for (const auto& [hash, indices] : work) {
             if (stop.stop_requested()) {
                 SpartanOverlay::SetShaderPrefetch(0, 0);
                 return;
             }
-            SpartanOverlay::SetShaderPrefetch(done++, total);
+            SpartanOverlay::SetShaderPrefetch(prefetch->done++, total);
             {
                 std::scoped_lock lock{prefetch->mutex};
                 if (prefetch->claimed.contains(hash)) {
                     continue;
                 }
             }
-            auto blobs = ReadDiskProgram(hash, indices);
-            for (const auto& blob : blobs) {
+            for (const auto& blob : ReadDiskProgram(hash, indices)) {
                 bytes += blob.meta.size() + blob.spv.size() * sizeof(u32);
             }
-            std::scoped_lock lock{prefetch->mutex};
-            if (!prefetch->claimed.contains(hash)) {
-                prefetch->ready.emplace(hash, std::move(blobs));
-                ++programs;
-            }
+            ++programs;
         }
+        prefetch->done = total;
         SpartanOverlay::SetShaderPrefetch(total, total);
         std::printf("Disk shaders: prefetch read %llu programs (%.1f MB) in %.0f ms\n",
                     static_cast<unsigned long long>(programs), bytes / 1048576.0,
@@ -1353,6 +1675,15 @@ void PipelineCache::StopBinaryConversion() {
     binary_conversion = nullptr;
 }
 
+void PipelineCache::WaitDiskPrefetch(const std::function<bool(u32, u32)>& progress) {
+    while (disk_prefetch && !disk_prefetch->finished) {
+        if (!progress(disk_prefetch->done, disk_prefetch->total)) {
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+}
+
 void PipelineCache::StopDiskPrefetch() {
     delete disk_prefetch; // the jthread member asks the thread to stop and joins it
     disk_prefetch = nullptr;
@@ -1367,23 +1698,15 @@ bool PipelineCache::LoadDiskProgram(u64 hash) {
         return false;
     }
     const auto started = std::chrono::steady_clock::now();
-    std::optional<std::vector<DiskBlob>> blobs;
     if (disk_prefetch) {
         std::scoped_lock lock{disk_prefetch->mutex};
-        if (const auto it = disk_prefetch->ready.find(hash); it != disk_prefetch->ready.end()) {
-            blobs = std::move(it->second);
-            disk_prefetch->ready.erase(it);
-        } else {
-            disk_prefetch->claimed.insert(hash);
-        }
+        disk_prefetch->claimed.insert(hash);
     }
-    if (!blobs) {
-        blobs = ReadDiskProgram(hash, found->second);
-    }
+    auto blobs = ReadDiskProgram(hash, found->second);
     auto program = std::make_unique<Program>();
     bool have_info = false;
     size_t inserted = 0;
-    for (auto& blob : *blobs) {
+    for (auto& blob : blobs) {
         Shader::Info info{};
         Shader::StageSpecialization spec{};
         std::optional<Shader::Gcn::FetchShaderData> fetch;
@@ -1454,6 +1777,24 @@ bool PipelineCache::NewPipelineKey(const std::string& name) {
     return true;
 }
 
+// On demand has no end of warm-up to print these, so ReportDiskShaders prints them as it goes.
+static void PrintPipelineBuildTime() {
+    std::printf("Pipeline binary profile: keys %.3f thread-s, disk/decode/migration %.3f thread-s, "
+                "binary handles %.3f thread-s, driver restore %.3f thread-s, "
+                "driver compile %.3f thread-s\n",
+                binary_key_ns.load() / 1e9, binary_load_ns.load() / 1e9,
+                binary_handles_ns.load() / 1e9, binary_restore_ns.load() / 1e9,
+                binary_compile_ns.load() / 1e9);
+    extern std::atomic<u64> g_spartanport_pipeline_total_ns, g_spartanport_pipeline_driver_ns;
+    extern std::atomic<u32> g_spartanport_pipelines_built;
+    const u32 built = std::max(1u, g_spartanport_pipelines_built.load());
+    std::printf("Pipeline build time: %u graphics pipelines, %.1f ms each (driver %.1f ms, the rest "
+                "%.1f ms), %.1f s in all\n",
+                built, g_spartanport_pipeline_total_ns / 1e6 / built, g_spartanport_pipeline_driver_ns / 1e6 / built,
+                (g_spartanport_pipeline_total_ns - g_spartanport_pipeline_driver_ns) / 1e6 / built,
+                g_spartanport_pipeline_total_ns / 1e9);
+}
+
 void PipelineCache::ReportDiskShaders() {
     if (disk_shaders && !disk_store_untrusted && SpartanToggle::Disabled(SpartanToggle::DiskShaders)) {
         // Switched off live: later permutations follow first-use order again (see StartOnDemand).
@@ -1479,6 +1820,7 @@ void PipelineCache::ReportDiskShaders() {
                 static_cast<unsigned long long>(s.compiled),
                 static_cast<unsigned long long>(s.keys_written),
                 static_cast<unsigned long long>(s.keys_skipped));
+    PrintPipelineBuildTime();
 }
 
 // spartanport: one cached shader stage read by the background warm-up, shared by every cached
@@ -1599,8 +1941,10 @@ void PipelineCache::ReadWarmEntry(BackgroundWarmup& warm, std::vector<u8>&& data
         sdata.Deserialize(ar);
         hashes[0] = entry.compute_key.value;
     } else {
-        entry.graphics_key.Deserialize(ar);
-        entry.sdata.Deserialize(ar);
+        const bool key_ok = entry.graphics_key.Deserialize(ar);
+        if (!entry.sdata.Deserialize(ar) || !key_ok) {
+            return skip();
+        }
         for (u32 i = 0; i < MaxShaderStages; ++i) {
             hashes[i] = entry.graphics_key.stage_hashes[i];
         }
@@ -1818,20 +2162,7 @@ void PipelineCache::PumpWarmUp() {
                 warm.pump_ns / 1e9, warm.pump_max_ns / 1e6, warm.pump_gap_max_ns / 1e6,
                 warm.batches, warm.build_ns.load() / 1e9, warm.read_queue_ns.load() / 1e9,
                 warm.build_queue_ns.load() / 1e9);
-    std::printf("Pipeline binary profile: keys %.3f thread-s, disk/decode/migration %.3f thread-s, "
-                "binary handles %.3f thread-s, driver restore %.3f thread-s, "
-                "driver compile %.3f thread-s\n",
-                binary_key_ns.load() / 1e9, binary_load_ns.load() / 1e9,
-                binary_handles_ns.load() / 1e9, binary_restore_ns.load() / 1e9,
-                binary_compile_ns.load() / 1e9);
-    extern std::atomic<u64> g_spartanport_pipeline_total_ns, g_spartanport_pipeline_driver_ns;
-    extern std::atomic<u32> g_spartanport_pipelines_built;
-    const u32 built = std::max(1u, g_spartanport_pipelines_built.load());
-    std::printf("Pipeline build time: %u graphics pipelines, %.1f ms each (driver %.1f ms, the rest "
-                "%.1f ms), %.1f s in all\n",
-                built, g_spartanport_pipeline_total_ns / 1e6 / built, g_spartanport_pipeline_driver_ns / 1e6 / built,
-                (g_spartanport_pipeline_total_ns - g_spartanport_pipeline_driver_ns) / 1e6 / built,
-                g_spartanport_pipeline_total_ns / 1e9);
+    PrintPipelineBuildTime();
     // The idle threads stay parked (StopWarmUp).
     warm.finished = true;
     SpartanOverlay::SetBackgroundLoading(0, 0);

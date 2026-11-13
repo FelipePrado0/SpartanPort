@@ -404,6 +404,15 @@ pub fn view(state: &State) -> Element<'_, Message> {
         ),
         checkbox(
             state.rtl,
+            "shader_prefetch_wait",
+            &restart("Read the shader cache before the game starts"),
+            state.store.flag("shader_prefetch_wait"),
+            Some(&hint(
+                "Recommended on a hard disk (HDD): the loading screen waits until the saved shaders are read, so the disk does not serve the read and the game at once and the game does not stutter. Esc or Circle starts the game earlier. After a PC restart the read can take several minutes. Needs the option above."
+            )),
+        ),
+        checkbox(
+            state.rtl,
             "shader_notes",
             &restart("Show shader notes in the corner"),
             state.store.flag("shader_notes"),

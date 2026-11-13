@@ -354,6 +354,12 @@ pub enum Message {
     ClearShaderCacheConfirmed,
     /// Done, or the cache folder that would not go.
     ShaderCacheCleared(Result<(), String>),
+    /// Export recorded shaders (Advanced): the save dialog opens.
+    ExportShaders,
+    /// The file the dialog chose; none when cancelled.
+    ShaderExportPicked(Option<PathBuf>),
+    /// The file and how many recorded files went in (0: nothing recorded), or why not.
+    ShadersExported(PathBuf, Result<usize, String>),
     Noop,
 }
 
@@ -590,7 +596,10 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
         | Message::ClearShaderCache
         | Message::ShaderCacheSized(_)
         | Message::ClearShaderCacheConfirmed
-        | Message::ShaderCacheCleared(_)) => return advanced::update(state, message),
+        | Message::ShaderCacheCleared(_)
+        | Message::ExportShaders
+        | Message::ShaderExportPicked(_)
+        | Message::ShadersExported(..)) => return advanced::update(state, message),
         Message::OpenFolder(folder) => {
             // As the Python's `mkdir`: Explorer would open Documents instead, and `xdg-open`
             // would fail without a word. A folder that cannot be made is opened all the same.

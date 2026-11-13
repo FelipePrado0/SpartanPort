@@ -57,6 +57,8 @@ if [[ $probe_status -ne 0 && $probe_status -ne 20 ]] || grep -q 'error while loa
     exit 1
 fi
 echo "OK: probe loaded dependencies successfully"
+# The shader preparation reads its list beside the game executable.
+[[ -f "$(dirname "$probe")/shaders/CUSA01623.spm" ]] || { echo "FAIL: no shaders/CUSA01623.spm beside $probe" >&2; exit 1; }
 
 # Reproduce #704 without altering the artifact: expose every bundled library except OpenCL.
 mkdir without-opencl

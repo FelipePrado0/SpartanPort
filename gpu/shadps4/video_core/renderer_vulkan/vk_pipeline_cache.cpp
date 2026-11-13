@@ -54,6 +54,7 @@ struct AsyncShaderCompilation {
     std::optional<Shader::IR::Program> ir;
     Shader::StageSpecialization spec;
     Shader::Gcn::FetchShaderSnapshot fetch;
+    Shader::ReplayInputs replay;
     Shader::Backend::Bindings binding;
     vk::Device device;
     vk::ShaderModule module{};
@@ -503,6 +504,8 @@ bool PipelineCache::QueueShader(Program& program, HwStage stage, SwStage l_stage
                                                    build->runtime, profile));
         build->spec = Shader::StageSpecialization(build->info, build->runtime, profile, binding);
         build->fetch.Capture(build->info);
+        build->replay = Shader::CaptureReplayInputs(build->info, build->user_data, build->code,
+                                                    build->fetch);
         return true;
     })) {
         return false;
@@ -602,7 +605,7 @@ void PipelineCache::PublishShaders(bool wait) {
             }
             build->spec.info = &program->info;
             RegisterShaderMeta(program->info, build->spec.fetch_shader_data, build->spec,
-                               perm_hash, build->permutation);
+                               perm_hash, build->permutation, build->replay);
             program->InsertPermut(build->module, std::move(build->spec), build->permutation);
             disk_stats.compiled += DiskShadersActive();
             build->module = nullptr;
@@ -1380,7 +1383,11 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
         auto spec = Shader::StageSpecialization(new_program->info, runtime_info, profile, start);
         const auto perm_hash = HashCombine(params.hash, 0);
 
-        RegisterShaderMeta(new_program->info, spec.fetch_shader_data, spec, perm_hash, 0);
+        Shader::Gcn::FetchShaderSnapshot fetch;
+        fetch.Capture(new_program->info);
+        RegisterShaderMeta(new_program->info, spec.fetch_shader_data, spec, perm_hash, 0,
+                           Shader::CaptureReplayInputs(new_program->info, params.user_data,
+                                                       params.code, fetch));
         new_program->AddPermut(module, std::move(spec));
         new_program->info_template = std::make_unique<Shader::Info>(new_program->info);
         Program* program = new_program.get();
@@ -1438,7 +1445,12 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
         module = CompileModule(new_info, runtime_info, params.code, perm_idx, binding);
         ++compiles_started;
 
-        RegisterShaderMeta(info, spec.fetch_shader_data, spec, perm_hash, perm_idx);
+        // spartanport: new_info saw this translation; info keeps the buffers of later draws.
+        Shader::Gcn::FetchShaderSnapshot fetch;
+        fetch.Capture(new_info);
+        RegisterShaderMeta(info, spec.fetch_shader_data, spec, perm_hash, perm_idx,
+                           Shader::CaptureReplayInputs(new_info, params.user_data, params.code,
+                                                       fetch));
         disk_stats.compiled += DiskShadersActive();
         std::unique_lock lk{programs_mutex};
         program->InsertPermut(module, std::move(spec), perm_idx);
