@@ -135,6 +135,18 @@ static void Crashes() {
     // Damaged lines are left out.
     std::ofstream(skip, std::ios::app) << "gpu:driver1\n\nnot a line\n";
     assert(LoadSkipList(journal, skip, "gpu:driver1") == crashed);
+
+    // The skip list cannot be written: the crash is still skipped now, and the journal stays so
+    // the next start records it.
+    const auto blocked = dir / "blocked";
+    fs::create_directories(blocked); // a folder where the list file should be
+    {
+        CrashJournal run;
+        assert(run.Open(journal, 1));
+        run.Mark(0, 0x77);
+    }
+    assert(LoadSkipList(journal, blocked, "gpu:driver1") == std::vector<u64>{0x77});
+    assert(fs::exists(journal));
     fs::remove_all(dir);
 }
 
@@ -157,6 +169,15 @@ static void ListByRegion() {
     std::ofstream(dir / "CUSA01740.spm") << "own";
     assert(ShaderListPath(dir, "CUSA01740") == dir / "CUSA01740.spm");
     fs::remove_all(dir);
+
+    // The list itself names its game: the shipped one is accepted by the other regions only.
+    assert(ShaderListFitsGame("CUSA01623", "CUSA01623"));
+    for (const char* region : {"CUSA01715", "CUSA01720", "CUSA01740"}) {
+        assert(ShaderListFitsGame("CUSA01623", region));
+        assert(ShaderListFitsGame(region, region));
+    }
+    assert(!ShaderListFitsGame("CUSA01623", "CUSA99999"));
+    assert(!ShaderListFitsGame("CUSA01740", "CUSA01623"));
 }
 
 int main() {

@@ -127,11 +127,23 @@ DumpIndex IndexDump(const fs::path& game_dir) {
     return index;
 }
 
+bool InsideGameFolder(const fs::path& relative) {
+    return !relative.empty() && !relative.has_root_name() && !relative.has_root_directory() &&
+           std::ranges::find(relative, fs::path("..")) == relative.end();
+}
+
+DumpIndex IndexGameFile(const fs::path& game_dir, const fs::path& relative) {
+    DumpIndex index;
+    if (InsideGameFolder(relative) && IsGameFile(relative)) {
+        IndexFile(game_dir, relative, index);
+    }
+    return index;
+}
+
 std::optional<std::vector<u32>> ReadShaderCode(const fs::path& game_dir,
                                                const ShaderLocation& location, u64 code_xxh3) {
     // A location can come from a shipped manifest: it never leaves the game folder.
-    if (location.size == 0 || location.size % 4 != 0 || location.file.is_absolute() ||
-        std::ranges::find(location.file, fs::path("..")) != location.file.end()) {
+    if (location.size == 0 || location.size % 4 != 0 || !InsideGameFolder(location.file)) {
         return std::nullopt;
     }
     std::ifstream file(game_dir / location.file, std::ios::binary);

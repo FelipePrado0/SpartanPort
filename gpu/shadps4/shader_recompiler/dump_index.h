@@ -29,6 +29,13 @@ void ScanShaderBlock(std::span<const u8> data, u64 file_offset, u64 first_footer
 /// Scans the WADs and eboot.bin of a game folder. The first file holding a hash wins. Read only.
 DumpIndex IndexDump(const std::filesystem::path& game_dir);
 
+/// A path a shipped manifest gives stays in the game folder: relative, with no drive or "..".
+bool InsideGameFolder(const std::filesystem::path& relative);
+
+/// Scans one WAD or eboot.bin of the game folder; nothing for a path outside it. Read only.
+DumpIndex IndexGameFile(const std::filesystem::path& game_dir,
+                        const std::filesystem::path& relative);
+
 /// The code at location, or nothing when it cannot be read or its hash is not code_xxh3.
 std::optional<std::vector<u32>> ReadShaderCode(const std::filesystem::path& game_dir,
                                                const ShaderLocation& location, u64 code_xxh3);

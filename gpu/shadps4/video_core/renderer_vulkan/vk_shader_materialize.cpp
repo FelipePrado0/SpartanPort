@@ -3,6 +3,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <string>
@@ -121,8 +123,14 @@ MaterializeStats Materialize(const Manifest& manifest, const fs::path& game_dir,
 
     std::atomic<u32> done{stats.kept}, written{}, no_code{}, failed{}, next{};
     std::atomic<bool> stop{};
-    std::once_flag index_once;
-    Shader::DumpIndex index;
+    // One index per game file a mod or update changed, built once: never every game file, which
+    // takes minutes and held every worker.
+    struct FileIndex {
+        std::once_flag once;
+        Shader::DumpIndex index;
+    };
+    std::mutex index_mutex;
+    std::map<std::string, std::unique_ptr<FileIndex>> file_indexes;
 
     const auto run_program = [&](u32 program_idx) {
         const auto& program = manifest.programs[program_idx];
@@ -139,13 +147,23 @@ MaterializeStats Materialize(const Manifest& manifest, const fs::path& game_dir,
             game_dir, {.file = program.file, .offset = program.offset, .size = program.code_size},
             program.code_xxh3);
         if (!code) {
-            // Another version of the game files may keep the shader elsewhere: look it up once.
-            std::call_once(index_once, [&] {
+            // A replaced game file may keep the shader at another offset: index that file once.
+            FileIndex* file_index;
+            {
+                std::scoped_lock lock{index_mutex};
+                auto& slot = file_indexes[program.file];
+                if (!slot) {
+                    slot = std::make_unique<FileIndex>();
+                }
+                file_index = slot.get();
+            }
+            std::call_once(file_index->once, [&] {
                 LOG_INFO(Render_Vulkan, "Shader {:#x} is not where the shader list says: "
-                                        "indexing the game files", program.pgm_hash);
-                index = Shader::IndexDump(game_dir);
+                                        "indexing {}", program.pgm_hash, program.file);
+                file_index->index = Shader::IndexGameFile(game_dir, program.file);
             });
-            if (const auto found = index.find(program.pgm_hash); found != index.end()) {
+            if (const auto found = file_index->index.find(program.pgm_hash);
+                found != file_index->index.end()) {
                 code = Shader::ReadShaderCode(game_dir, found->second, program.code_xxh3);
             }
         }
@@ -160,7 +178,14 @@ MaterializeStats Materialize(const Manifest& manifest, const fs::path& game_dir,
             Shader::StageSpecialization spec;
             spec.Deserialize(spec_ar);
             Shader::Info info;
-            auto spv = replay(*code, program, permutation, spec, info);
+            std::vector<u32> spv;
+            try {
+                spv = replay(*code, program, permutation, spec, info);
+            } catch (const std::exception& error) {
+                // Left to the game: one bad shader must not end the preparation.
+                LOG_WARNING(Render_Vulkan, "Shader {:#x} not prepared: {}", program.pgm_hash,
+                            error.what());
+            }
             if (spv.empty()) {
                 ++failed;
             } else {
@@ -230,15 +255,19 @@ MaterializeStats Materialize(const Manifest& manifest, const fs::path& game_dir,
         if (pipeline.is_compute) {
             ComputePipelineKey key{};
             ComputePipeline::SerializationSupport support;
-            key.Deserialize(ar);
-            support.Deserialize(ar);
+            const bool key_ok = key.Deserialize(ar);
+            if (!support.Deserialize(ar) || !key_ok) {
+                continue;
+            }
             key.value = hashes[0];
             RegisterPipelineData(key, support);
         } else {
             GraphicsPipelineKey key;
             GraphicsPipeline::SerializationSupport support;
-            key.Deserialize(ar);
-            support.Deserialize(ar);
+            const bool key_ok = key.Deserialize(ar);
+            if (!support.Deserialize(ar) || !key_ok) {
+                continue; // a key that does not fit the hardware is not registered
+            }
             std::copy_n(hashes.begin(), key.stage_hashes.size(), key.stage_hashes.begin());
             RegisterPipelineData(key, std::hash<GraphicsPipelineKey>{}(key), support);
         }

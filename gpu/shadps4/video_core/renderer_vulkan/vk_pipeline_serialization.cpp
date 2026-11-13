@@ -1272,7 +1272,8 @@ void PipelineCache::PrepareShaders(const std::filesystem::path& manifest_path,
     const auto manifest = Manifest::Decode(bytes, &manifest_id);
     const auto& elf = Common::ElfInfo::Instance();
     const auto versions = Manifest::CurrentVersions();
-    if (!manifest || manifest->serial != elf.GameSerial() || manifest->versions != versions) {
+    if (!manifest || !ShaderListFitsGame(manifest->serial, std::string(elf.GameSerial())) ||
+        manifest->versions != versions) {
         LOG_WARNING(Render_Vulkan, "Shader list {} is damaged or for another build or game: shaders "
                                    "compile while playing", manifest_path.string());
         return;
@@ -1404,6 +1405,13 @@ bool PipelineCache::PreparePipelines(const std::filesystem::path& cache_dir, u64
     journal_path += ".precompile-journal";
     skip_path += ".precompile-skip";
     const auto skip_keys = LoadSkipList(journal_path, skip_path, fmt::format("{:016x}", driver_hash));
+    std::error_code journal_error;
+    if (std::filesystem::exists(journal_path, journal_error)) {
+        // The skip list could not take the last crash: a new run would overwrite its only record.
+        LOG_WARNING(Render_Vulkan, "Pipeline preparation skipped: cannot write {}",
+                    skip_path.string());
+        return false;
+    }
     const std::unordered_set<u64> skip(skip_keys.begin(), skip_keys.end());
     threads = std::max(1u, threads);
     CrashJournal journal;

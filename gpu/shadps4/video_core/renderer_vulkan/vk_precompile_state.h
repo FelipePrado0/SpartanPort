@@ -78,4 +78,8 @@ std::vector<u64> LoadSkipList(const std::filesystem::path& journal,
 /// another region. Each shader's code is checked by hash, so one that differs is left to the game.
 std::filesystem::path ShaderListPath(const std::filesystem::path& dir, const std::string& serial);
 
+/// Whether a list made for list_serial serves game_serial: its own, or the shipped one for the
+/// other regions of the same game.
+bool ShaderListFitsGame(const std::string& list_serial, const std::string& game_serial);
+
 } // namespace Vulkan

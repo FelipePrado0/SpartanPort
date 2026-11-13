@@ -401,6 +401,19 @@ std::optional<Manifest> Decode(std::span<const u8> data, u64* id) {
         ReadBytes(reader, pipeline.key);
         reader.Read(pipeline.stages.data(), sizeof(pipeline.stages));
     }
+    // The hash only catches accidents: indexes past the lists are refused before anyone uses them.
+    for (const auto& permutation : manifest.permutations) {
+        if (permutation.program >= manifest.programs.size()) {
+            return std::nullopt;
+        }
+    }
+    for (const auto& pipeline : manifest.pipelines) {
+        for (const auto& stage : pipeline.stages) {
+            if (stage.permutation != NoStage && stage.permutation >= manifest.permutations.size()) {
+                return std::nullopt;
+            }
+        }
+    }
     if (id) {
         *id = header.id;
     }

@@ -91,6 +91,10 @@ std::vector<u32> ReplayTranslate(std::span<const u32> code, HwStage hw_stage, Sw
                                  u64 pgm_hash, const ReplayInputs& inputs,
                                  const StageSpecialization& spec, const Profile& profile,
                                  Pools& pools, Info& info) {
+    // A geometry shader's recorded copy shader points into the recording process's memory.
+    if (hw_stage == HwStage::Geometry) {
+        return {};
+    }
     const size_t attributes = spec.fetch_shader_data ? spec.fetch_shader_data->attributes.size() : 0;
     if (attributes != inputs.fetch_buffers.size() ||
         inputs.user_data.size() != ShaderParams::NumShaderUserData) {

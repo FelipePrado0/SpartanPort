@@ -225,6 +225,14 @@ int main() {
     assert(!Manifest::Decode(std::span<const u8>{bytes.data(), 8}));
     assert(!Manifest::Decode({}));
 
+    // An index that points past the lists is refused too, even with a matching hash.
+    auto bad_program = *manifest;
+    bad_program.permutations[0].program = u32(bad_program.programs.size());
+    assert(!Manifest::Decode(Manifest::Encode(bad_program)));
+    auto bad_stage = *manifest;
+    bad_stage.pipelines[0].stages[0].permutation = u32(bad_stage.permutations.size());
+    assert(!Manifest::Decode(Manifest::Encode(bad_stage)));
+
     // Equal specialization with different SPIR-V stops the build.
     const auto c = dir / "c", d = dir / "d";
     ComputePermutation(c, 0xCCCC, 0, 50, 1);

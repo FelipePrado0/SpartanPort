@@ -156,16 +156,23 @@ void CrashJournal::Finish() {
 std::vector<u64> LoadSkipList(const fs::path& journal, const fs::path& skip_list,
                               const std::string& stamp) {
     const auto crashed = ReadJournal(journal);
+    bool recorded = true;
     if (!crashed.empty()) {
         std::ofstream out(skip_list, std::ios::app);
         for (const u64 key : crashed) {
             out << stamp << ' ' << std::hex << key << std::dec << '\n';
         }
+        out.close();
+        recorded = !out.fail();
     }
-    std::error_code ec;
-    fs::remove(journal, ec);
-
+    // The journal is the only record of the crash until the skip list holds it.
     std::vector<u64> keys;
+    if (recorded) {
+        std::error_code ec;
+        fs::remove(journal, ec);
+    } else {
+        keys = crashed;
+    }
     std::ifstream in(skip_list);
     std::string line;
     while (std::getline(in, line)) {
@@ -181,9 +188,18 @@ std::vector<u64> LoadSkipList(const fs::path& journal, const fs::path& skip_list
     return keys;
 }
 
+namespace {
+constexpr const char* Shipped = "CUSA01623";
+constexpr std::array OtherRegions{"CUSA01715", "CUSA01720", "CUSA01740"};
+} // namespace
+
+bool ShaderListFitsGame(const std::string& list_serial, const std::string& game_serial) {
+    return list_serial == game_serial ||
+           (list_serial == Shipped &&
+            std::ranges::find(OtherRegions, game_serial) != OtherRegions.end());
+}
+
 std::filesystem::path ShaderListPath(const std::filesystem::path& dir, const std::string& serial) {
-    constexpr const char* Shipped = "CUSA01623";
-    constexpr std::array OtherRegions{"CUSA01715", "CUSA01720", "CUSA01740"};
     const auto own = dir / (serial + ".spm");
     const auto shipped = dir / (std::string(Shipped) + ".spm");
     const bool other_region = std::ranges::find(OtherRegions, serial) != OtherRegions.end();

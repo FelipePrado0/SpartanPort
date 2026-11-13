@@ -14,6 +14,7 @@
 #include "common/path_util.h"
 #include "common/serdes.h"
 #include "shader_recompiler/info.h"
+#include "video_core/amdgpu/regs_shader.h"
 #include "video_core/cache_storage.h"
 #include "video_core/renderer_vulkan/vk_compute_pipeline.h"
 #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
@@ -80,6 +81,21 @@ static size_t Count(const fs::path& cache, std::string_view extension) {
         count += entry.path().extension() == extension;
     }
     return count;
+}
+
+// Made-up bytes, never game code: a shader with the footer the game files carry.
+static std::vector<u8> MakeShader(u64 hash, u32 words) {
+    std::vector<u32> code(words, 0x12345678);
+    code[0] = 0xBEEB03FF;
+    code[1] = words / 2 - 1;
+    AmdGpu::BinaryInfo footer{};
+    std::memcpy(&footer, "OrbShdr", 7);
+    footer.length = words * 4;
+    footer.shader_hash = hash;
+    std::vector<u8> bytes(words * 4 + sizeof(footer));
+    std::memcpy(bytes.data(), code.data(), words * 4);
+    std::memcpy(bytes.data() + words * 4, &footer, sizeof(footer));
+    return bytes;
 }
 
 int main() {
@@ -187,6 +203,39 @@ int main() {
     replays = 0;
     stats = Manifest::Materialize(manifest, game, StandIn, 4, true, [](u32, u32) { return true; });
     assert(stats.conflict && stats.written == 0 && replays == 0);
+
+    // A mod replaced a game file: a shader moved inside it is found again by indexing that file
+    // only; one that left the file is compiled while playing, never searched for in every file.
+    const auto modded = dir / "modded";
+    std::vector<u8> moved_wad(64, 0xAA);
+    const auto moved = MakeShader(0xEEEE, 16);
+    moved_wad.insert(moved_wad.end(), moved.begin(), moved.end());
+    fs::create_directories(modded / "EXEC/WAD");
+    std::ofstream(modded / "EXEC/WAD/m.WAD", std::ios::binary)
+        .write(reinterpret_cast<const char*>(moved_wad.data()), std::streamsize(moved_wad.size()));
+    const auto elsewhere = MakeShader(0xFFFF, 16);
+    std::ofstream(modded / "EXEC/WAD/other.WAD", std::ios::binary)
+        .write(reinterpret_cast<const char*>(elsewhere.data()), std::streamsize(elsewhere.size()));
+    const auto code_hash = [](const std::vector<u8>& shader) {
+        return XXH3_64bits(shader.data(), 16 * 4);
+    };
+    Manifest::Manifest mod_manifest{.serial = "TEST00000",
+                                    .versions = Manifest::CurrentVersions()};
+    mod_manifest.programs = {
+        {0xEEEE, u32(HwStage::Vertex), u32(SwStage::Vertex), "EXEC/WAD/m.WAD", 0, 64,
+         code_hash(moved)},
+        {0xFFFF, u32(HwStage::Vertex), u32(SwStage::Vertex), "EXEC/WAD/m.WAD", 0, 64,
+         code_hash(elsewhere)},
+    };
+    mod_manifest.permutations = {
+        {.program = 0, .perm_idx = 0, .spec = Spec(50)},
+        {.program = 1, .perm_idx = 0, .spec = Spec(60)},
+    };
+    replays = 0;
+    stats = Manifest::Materialize(mod_manifest, modded, StandIn, 4, true,
+                                  [](u32, u32) { return true; });
+    flush();
+    assert(stats.written == 1 && stats.no_code == 1 && replays == 1);
 
     db.Close();
     fs::remove_all(dir);
