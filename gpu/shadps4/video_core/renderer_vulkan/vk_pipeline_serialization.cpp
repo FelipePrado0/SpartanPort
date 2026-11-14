@@ -1329,6 +1329,10 @@ void PipelineCache::PrepareShaders(const std::filesystem::path& manifest_path,
         std::printf("Shader preparation: done at an earlier start\n");
         return;
     }
+    // What the loading screen lists and why it says the game prepares.
+    SpartanOverlay::SetLoadingReason(u32(ReasonFor(stored, now)));
+    SpartanOverlay::AddLoadingSteps((work.shaders || work.keys ? SpartanOverlay::LoadingShaders : 0u) |
+                                    (work.pipelines && driver.keySize ? SpartanOverlay::LoadingPipelines : 0u));
     // Nothing else runs yet: every core but the one showing the progress.
     const u32 threads = std::max(1u, std::thread::hardware_concurrency()) - 1;
     const auto save_marker = [&] {
@@ -1351,6 +1355,7 @@ void PipelineCache::PrepareShaders(const std::filesystem::path& manifest_path,
             start_over();
         }
         const auto started = std::chrono::steady_clock::now();
+        SpartanOverlay::SetLoadingStage(SpartanOverlay::LoadingShaders);
         const auto replay = Manifest::DefaultReplay(profile);
         auto stats = Manifest::Materialize(*manifest, game_dir, replay, threads, resume, progress);
         if (stats.conflict) {
@@ -1382,6 +1387,9 @@ void PipelineCache::PrepareShaders(const std::filesystem::path& manifest_path,
 
     // Without pipeline binaries the driver keeps nothing to prepare; a driver that gains them
     // changes driver_hash, so its pipelines are prepared then.
+    if (driver.keySize) {
+        SpartanOverlay::SetLoadingStage(SpartanOverlay::LoadingPipelines);
+    }
     if (!driver.keySize || PreparePipelines(cache_dir, now.driver_hash, threads, progress)) {
         now.pipelines_done = true;
         save_marker();
@@ -1513,7 +1521,7 @@ bool PipelineCache::PreparePipelines(const std::filesystem::path& cache_dir, u64
         });
     }
     while (running) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(33));
         if (!stop && !progress(done, total)) {
             stop = true;
         }
@@ -1680,7 +1688,7 @@ void PipelineCache::WaitDiskPrefetch(const std::function<bool(u32, u32)>& progre
         if (!progress(disk_prefetch->done, disk_prefetch->total)) {
             return;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(33));
     }
 }
 

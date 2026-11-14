@@ -180,11 +180,39 @@ static void ListByRegion() {
     assert(!ShaderListFitsGame("CUSA01740", "CUSA01623"));
 }
 
+// What the loading screen says about why the game prepares again.
+static void Reasons() {
+    const auto now = Done();
+    assert(ReasonFor(std::nullopt, now) == PrecompileReason::FirstStart);
+    auto stored = now;
+    stored.shaders_done = false; // a first start skipped with Esc goes on as one
+    assert(ReasonFor(stored, now) == PrecompileReason::FirstStart);
+    stored = now;
+    stored.profile_hash = 50; // another GPU: everything again
+    assert(ReasonFor(stored, now) == PrecompileReason::FirstStart);
+    stored = now;
+    stored.meta_version = 20;
+    assert(ReasonFor(stored, now) == PrecompileReason::PortUpdate);
+    stored = now;
+    stored.pipeline_version = 40;
+    assert(ReasonFor(stored, now) == PrecompileReason::PortUpdate);
+    stored = now;
+    stored.manifest_id = 10;
+    assert(ReasonFor(stored, now) == PrecompileReason::NewList);
+    stored = now;
+    stored.driver_hash = 60;
+    assert(ReasonFor(stored, now) == PrecompileReason::NewDriver);
+    stored = now;
+    stored.pipelines_done = false;
+    assert(ReasonFor(stored, now) == PrecompileReason::FirstStart);
+}
+
 int main() {
     Table();
     MarkerFormat();
     Crashes();
     ListByRegion();
+    Reasons();
     std::printf("PASS: precompile state\n");
     return 0;
 }

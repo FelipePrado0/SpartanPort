@@ -300,6 +300,22 @@ inline constexpr std::pair<std::string_view, const char*> ChineseText[] = {
     {"The controller's gyro and accelerometer are passed to the game.", "将手柄的陀螺仪和加速度计数据传给游戏。"},
     {"Gyro aim", "陀螺仪瞄准"},
     {"While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.", "按住 L2 时，转动和倾斜手柄可移动视角。包含“体感传感器”。"},
+    // The shader preparation screen.
+    {"Preparing shaders", "正在准备着色器"},
+    {"Preparing pipelines", "正在准备管线"},
+    {"Reading the shader cache", "正在读取着色器缓存"},
+    {"First start: preparing the graphics once", "首次启动：仅准备一次图形"},
+    {"New graphics driver: preparing the pipelines again", "新的显卡驱动：重新准备管线"},
+    {"New shader list: preparing what changed", "新的着色器列表：准备已更改的内容"},
+    {"Reading the saved shaders from the disk", "正在从磁盘读取已保存的着色器"},
+    {"Port update: preparing the graphics again", "移植版更新：重新准备图形"},
+    {"Shaders", "着色器"},
+    {"Pipelines", "管线"},
+    {"Cache", "缓存"},
+    {"About %d s left", "剩余约 %d 秒"},
+    {"About %d min left", "剩余约 %d 分钟"},
+    {"Almost done", "即将完成"},
+    {"Esc or Circle: start playing now", "Esc 或圆圈键：立即开始游戏"},
 };
 using TextTable = std::pair<std::string_view, const char*>;
 
