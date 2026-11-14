@@ -150,6 +150,25 @@ void Set(Values& v, const std::string& key, const std::string& value) {
         v.anti_aliasing = SpartanGraphics::ParseAntiAliasing(value);
     } else if (key == "depth_of_field") {
         v.depth_of_field = i != 0;
+    } else if (key == "picture_brightness") {
+        v.picture_brightness = value.empty() ? SpartanGraphics::PictureBrightnessNeutral
+                                             : std::clamp(i, SpartanGraphics::PictureBrightnessMin,
+                                                          SpartanGraphics::PictureBrightnessMax);
+    } else if (key == "picture_contrast") {
+        v.picture_contrast = value.empty() ? SpartanGraphics::PictureContrastNeutral
+                                           : std::clamp(i, SpartanGraphics::PictureContrastMin,
+                                                        SpartanGraphics::PictureContrastMax);
+    } else if (key == "picture_gamma") {
+        v.picture_gamma = SpartanGraphics::ParsePictureGamma(value);
+    } else if (key == "hdr_paper_white") {
+        v.hdr_paper_white = value.empty() ? SpartanGraphics::HdrPaperWhiteDefault
+                                          : std::clamp(i, SpartanGraphics::HdrPaperWhiteMin,
+                                                       SpartanGraphics::HdrPaperWhiteMax);
+    } else if (key == "hdr_peak") {
+        v.hdr_peak = value.empty() ? SpartanGraphics::HdrPeakDefault
+                                   : std::clamp(i, SpartanGraphics::HdrPeakMin, SpartanGraphics::HdrPeakMax);
+    } else if (key == "hdr_auto") {
+        v.hdr_auto = value.empty() || i != 0;
     } else if (key == "rcas_strength") {
         v.rcas_strength = SpartanGraphics::ParseRcasStrength(value.empty() ? -1 : i);
     } else if (key == "taa_static") {
@@ -329,6 +348,10 @@ void Load() {
         {"SPARTAN_AUTO_QTE", "auto_qte"},                {"SPARTAN_MOTION_BLUR", "motion_blur"},
         {"SPARTAN_DEPTH_OF_FIELD", "depth_of_field"},    {"SPARTAN_ANTI_ALIASING", "anti_aliasing"},
         {"SPARTAN_FREE_CAMERA", "free_camera"},
+        {"SPARTAN_PICTURE_BRIGHTNESS", "picture_brightness"}, {"SPARTAN_PICTURE_CONTRAST", "picture_contrast"},
+        {"SPARTAN_PICTURE_GAMMA", "picture_gamma"},
+        {"SPARTAN_HDR_PAPER_WHITE", "hdr_paper_white"}, {"SPARTAN_HDR_PEAK", "hdr_peak"},
+        {"SPARTAN_HDR_AUTO", "hdr_auto"},
         {"SPARTAN_MONITOR", "monitor"}, {"SPARTAN_HDR", "hdr"},
         {"SPARTAN_GLYPH_STYLE", "glyph_style"},     {"SPARTAN_AUTO_SAFE_FPS", "auto_safe_fps"},
     };
@@ -574,6 +597,10 @@ void Save() {
                  v.anisotropy.load(), v.vibration.load(), v.menu_confirm_swap.load(), v.mouse_prompt_distance.load(), int(v.mouse_lock.load()),
                  v.mouse_aim_style.load(), v.mouse_aim_sensitivity.load());
     std::fprintf(file, "depth_of_field=%d\n", int(v.depth_of_field.load()));
+    std::fprintf(file, "picture_brightness=%d\npicture_contrast=%d\npicture_gamma=%d\n",
+                 v.picture_brightness.load(), v.picture_contrast.load(), v.picture_gamma.load());
+    std::fprintf(file, "hdr_paper_white=%d\nhdr_peak=%d\nhdr_auto=%d\n", v.hdr_paper_white.load(), v.hdr_peak.load(),
+                 int(v.hdr_auto.load()));
     std::fprintf(file, "taa_static=%d\ntaa_moving=%d\ntaa_tolerance=%d\ntaa_objects=%d\ntaa_sharpen=%d\n"
                  "taa_lod=%d\ntaa_spatial=%d\n",
                  v.taa_static.load(), v.taa_moving.load(), v.taa_tolerance.load(), v.taa_objects.load(),

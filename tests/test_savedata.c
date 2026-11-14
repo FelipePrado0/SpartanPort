@@ -4,6 +4,8 @@
 #include <assert.h>
 #include <utime.h>
 
+/* Times near 1970 come back from the Windows CRT stat() as -1 west of UTC: use present-day ones. */
+#define T(x) ((time_t)1700000000+(x))
 static char user_dir[256];
 const char *runtime_file_user_dir(void) { return user_dir; }
 int runtime_file_mount(const char *guest, const char *host) { (void)guest; (void)host; return 0; }
@@ -49,30 +51,30 @@ int main(void) {
     /* A save's time is the newest of its files and its param.bin, whatever the folder's own time. */
     char base[600], path[800];
     root(1,NULL,base,sizeof(base));
-    snprintf(path,sizeof(path),"%s/AUTOSAVE.sce_sys/param.bin",base); touch(path,1000);
-    snprintf(path,sizeof(path),"%s/SAVE0001.sce_sys/param.bin",base); touch(path,1500);
-    snprintf(path,sizeof(path),"%s/SAVE0001",base); assert(!touch_dir(path,1000));
-    snprintf(path,sizeof(path),"%s/AUTOSAVE/data.bin",base); touch(path,2000);
-    snprintf(path,sizeof(path),"%s/AUTOSAVE",base); assert(!touch_dir(path,1000));
-    assert(runtime_savedata_mtime(1,"AUTOSAVE")==2000 && runtime_savedata_mtime(1,"SAVE0001")==1500);
+    snprintf(path,sizeof(path),"%s/AUTOSAVE.sce_sys/param.bin",base); touch(path,T(1000));
+    snprintf(path,sizeof(path),"%s/SAVE0001.sce_sys/param.bin",base); touch(path,T(1500));
+    snprintf(path,sizeof(path),"%s/SAVE0001",base); assert(!touch_dir(path,T(1000)));
+    snprintf(path,sizeof(path),"%s/AUTOSAVE/data.bin",base); touch(path,T(2000));
+    snprintf(path,sizeof(path),"%s/AUTOSAVE",base); assert(!touch_dir(path,T(1000)));
+    assert(runtime_savedata_mtime(1,"AUTOSAVE")==T(2000) && runtime_savedata_mtime(1,"SAVE0001")==T(1500));
     assert(runtime_savedata_mtime(1,"MISSING")==0 && runtime_savedata_mtime(1,"../x")==0);
 
     /* A directory touched with a newer timestamp must NOT override the files inside. */
-    snprintf(path,sizeof(path),"%s/SAVE0001",base); assert(!touch_dir(path,5000));
-    assert(runtime_savedata_mtime(1,"SAVE0001")==1500);
+    snprintf(path,sizeof(path),"%s/SAVE0001",base); assert(!touch_dir(path,T(5000)));
+    assert(runtime_savedata_mtime(1,"SAVE0001")==T(1500));
 
     /* An empty save directory without any files or param.bin returns 0 even if directory mtime > 0. */
     snprintf(path,sizeof(path),"%s/SAVEEMPTY",base);
     assert(!make_dirs(path));
-    assert(!touch_dir(path,3000));
+    assert(!touch_dir(path,T(3000)));
     assert(runtime_savedata_mtime(1,"SAVEEMPTY")==0);
 
 #ifndef _WIN32
     /* Symlinks pointing outside the save directory are not followed. */
-    snprintf(path,sizeof(path),"%s/external.bin",user_dir); touch(path,99999);
+    snprintf(path,sizeof(path),"%s/external.bin",user_dir); touch(path,T(99999));
     char link_path[800]; snprintf(link_path,sizeof(link_path),"%s/SAVE0001/symlink.bin",base);
     assert(!symlink(path,link_path));
-    assert(runtime_savedata_mtime(1,"SAVE0001")==1500);
+    assert(runtime_savedata_mtime(1,"SAVE0001")==T(1500));
     assert(!unlink(link_path));
 #endif
 

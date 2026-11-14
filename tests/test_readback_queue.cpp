@@ -47,7 +47,9 @@ int main() {
     assert(queue.ReleaseOutside(0x10000100, 8, 64 << 10, release) == 1);
     assert((released == std::vector<std::uint64_t>{0x10000c00}));
     assert(queue.RequiredTick(0x10000100, 8) == 0);   // nothing left to wait for there
-    assert(queue.RequiredTick(0x10000c00, 4) == 0);   // released copies never block again
+    assert(queue.RequiredTick(0x10000c00, 4) == 0);   // released copies never block page-wide
+    assert(queue.RequiredTick(0x10000c00, 4, true) == 8); // exact-byte consumers still wait
+    assert(queue.RequiredTick(0x10000100, 8, true) == 0);
     assert(queue.ReleaseOutside(0x10001010, 8, 64 << 10, release) == 0);  // inside the bytes
     assert(queue.RequiredTick(0x10001010, 8) == 9);
     assert(queue.ReleaseOutside(0x20000008, 8, 64 << 10, release) == 0);  // too large

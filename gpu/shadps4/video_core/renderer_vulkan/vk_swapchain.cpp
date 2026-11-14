@@ -17,15 +17,20 @@
 
 namespace Vulkan {
 
-static constexpr vk::SurfaceFormatKHR SURFACE_FORMAT_HDR = {
-    .format = vk::Format::eA2B10G10R10UnormPack32,
-    .colorSpace = vk::ColorSpaceKHR::eHdr10St2084EXT,
-};
-
 Swapchain::Swapchain(const Instance& instance_, const Frontend::WindowSDL& window_)
     : instance{instance_}, window{window_}, surface{CreateSurface(instance.GetInstance(), window)} {
     FindPresentFormat();
     FindPresentMode();
+    // spartanport: HDR output (SPARTAN_HDR) starts on the HDR10 swapchain and stays there, so every
+    // pass is built for its format; the post process pass expands the game's SDR picture to it
+    // (Presenter::SetHDR). Sampled once, as the launcher's HDR switch takes effect on restart.
+    // When it is on, the presenter logs the "HDR output: on" line with the paper white and peak.
+    needs_hdr = supports_hdr;
+    if (EmulatorSettings.IsHdrAllowed() && !supports_hdr) {
+        std::printf("HDR output: %s\n", window.GetWindowInfo().hdr_enabled
+                                            ? "off (the display offers no HDR10 format)"
+                                            : "off (HDR is off in Windows for this display)");
+    }
 
     Create(window.GetWidth(), window.GetHeight());
     ImGui::Core::Initialize(instance, window, image_count, surface_format.format);
@@ -206,8 +211,9 @@ void Swapchain::FindPresentFormat() {
         std::find_if(formats.begin(), formats.end(), [](const vk::SurfaceFormatKHR& format) {
             return format == SURFACE_FORMAT_HDR;
         }) != formats.end();
-    // Also make sure that user allowed us to use HDR
-    supports_hdr &= EmulatorSettings.IsHdrAllowed();
+    // Also make sure that user allowed us to use HDR, and (spartanport) that HDR is on for the
+    // window's display: a driver can offer the HDR10 format for an SDR desktop too.
+    supports_hdr &= EmulatorSettings.IsHdrAllowed() && window.GetWindowInfo().hdr_enabled;
 
     // If there is a single undefined surface format, the device doesn't care, so we'll just use
     // RGBA sRGB.
