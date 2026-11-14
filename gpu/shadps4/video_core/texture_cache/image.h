@@ -22,8 +22,15 @@ class Runtime;
 
 VK_DEFINE_HANDLE(VmaAllocation)
 VK_DEFINE_HANDLE(VmaAllocator)
+struct VmaAllocationInfo;
 
 namespace VideoCore {
+
+/// Creates an image via VMA, retrying without the soft budget limit and then in host-preferred
+/// (shared system) memory if device-local memory is exhausted.
+VkResult CreateImageWithFallback(VmaAllocator allocator, const vk::ImageCreateInfo& image_ci,
+                                 VkImage* out_image, VmaAllocation* out_allocation,
+                                 VmaAllocationInfo* out_alloc_info = nullptr);
 
 enum ImageFlagBits : u32 {
     Empty = 0,
