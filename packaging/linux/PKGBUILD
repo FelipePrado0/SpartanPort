@@ -137,7 +137,7 @@ package() {
   install -m755 launcher-rust/target/release/spartanport-launcher "${sharedir}/"
   cp -r patches "${sharedir}/"
   cp -r scripts/controller_diagrams "${sharedir}/scripts/"
-  install -m644 launcher/spartanport.png launcher/logo.png launcher/*.ttf launcher/OFL-*.txt \
+  install -m644 launcher/spartanport.png launcher/logo.png launcher/loading-background.jpg launcher/*.ttf launcher/OFL-*.txt \
     "${sharedir}/launcher/"
 
   install -d "${pkgdir}/usr/bin"

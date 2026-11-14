@@ -39,6 +39,7 @@ icon=launcher/spartanport.png
 [[ -f packaging/linux/spartanport.png ]] && icon=packaging/linux/spartanport.png
 install -m644 "$icon" "$share/launcher/spartanport.png"
 install -m644 launcher/logo.png "$share/launcher/logo.png"
+install -m644 launcher/loading-background.jpg "$share/launcher/loading-background.jpg"
 install -m644 launcher/Cinzel-Black.ttf "$share/launcher/Cinzel-Black.ttf"
 install -m644 launcher/OFL-Cinzel.txt "$share/launcher/OFL-Cinzel.txt"
 install -m644 launcher/BodoniModa.ttf "$share/launcher/BodoniModa.ttf"

@@ -20,7 +20,9 @@ bool DecodeRgba(const unsigned char* data, size_t size, Image& out) {
     if (!data || !size || size > 64u << 20) {
         return false;
     }
-    const AVCodec* codec = avcodec_find_decoder(AV_CODEC_ID_PNG);
+    // A JPEG starts with FF D8 (the loading screen's backdrop); everything else is read as PNG.
+    const bool jpeg = size > 2 && data[0] == 0xFF && data[1] == 0xD8;
+    const AVCodec* codec = avcodec_find_decoder(jpeg ? AV_CODEC_ID_MJPEG : AV_CODEC_ID_PNG);
     AVCodecContext* context = codec ? avcodec_alloc_context3(codec) : nullptr;
     AVPacket* packet = av_packet_alloc();
     AVFrame* frame = av_frame_alloc();
@@ -46,6 +48,9 @@ bool DecodeRgba(const unsigned char* data, size_t size, Image& out) {
             ok = sws_scale(sws, frame->data, frame->linesize, 0, frame->height, planes, strides) ==
                  frame->height;
             sws_freeContext(sws);
+            if (jpeg) { // no alpha in a JPEG: the scaler leaves that byte at 0
+                for (size_t i = 3; i < out.rgba.size(); i += 4) out.rgba[i] = 255;
+            }
         }
     }
     av_frame_free(&frame);

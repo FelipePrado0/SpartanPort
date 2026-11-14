@@ -280,5 +280,21 @@ inline constexpr std::pair<std::string_view, const char*> PortugueseText[] = {
     {"The controller's gyro and accelerometer are passed to the game.", "O giroscópio e o acelerômetro do controle são passados ao jogo."},
     {"Gyro aim", "Mira por giroscópio"},
     {"While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.", "Enquanto L2 estiver pressionado, girar e inclinar o controle move a visão. Inclui Sensores de movimento."},
+    // The shader preparation screen.
+    {"Preparing shaders", "Preparando shaders"},
+    {"Preparing pipelines", "Preparando pipelines"},
+    {"Reading the shader cache", "Lendo o cache de shaders"},
+    {"First start: preparing the graphics once", "Primeira abertura: preparando os gráficos uma vez só"},
+    {"New graphics driver: preparing the pipelines again", "Driver de vídeo novo: preparando os pipelines de novo"},
+    {"New shader list: preparing what changed", "Lista de shaders nova: preparando o que mudou"},
+    {"Reading the saved shaders from the disk", "Lendo do disco os shaders salvos"},
+    {"Port update: preparing the graphics again", "Atualização do port: preparando os gráficos de novo"},
+    {"Shaders", "Shaders"},
+    {"Pipelines", "Pipelines"},
+    {"Cache", "Cache"},
+    {"About %d s left", "Faltam cerca de %d s"},
+    {"About %d min left", "Faltam cerca de %d min"},
+    {"Almost done", "Quase pronto"},
+    {"Esc or Circle: start playing now", "Esc ou Círculo: começar a jogar agora"},
 };
 } // namespace SpartanUi

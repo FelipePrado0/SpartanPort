@@ -220,7 +220,7 @@ MaterializeStats Materialize(const Manifest& manifest, const fs::path& game_dir,
             });
         }
         while (running) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            std::this_thread::sleep_for(std::chrono::milliseconds(33));
             if (!stop && !progress(done, total)) {
                 stop = true;
             }

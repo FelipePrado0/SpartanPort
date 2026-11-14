@@ -106,6 +106,23 @@ PrecompileWork DecideWork(const std::optional<PrecompileMarker>& stored,
     return work;
 }
 
+PrecompileReason ReasonFor(const std::optional<PrecompileMarker>& stored,
+                           const PrecompileMarker& now) {
+    if (!stored || stored->profile_hash != now.profile_hash || !stored->shaders_done ||
+        !stored->pipelines_done) {
+        return PrecompileReason::FirstStart; // a skipped first start goes on as one
+    }
+    if (stored->meta_version != now.meta_version ||
+        stored->binary_version != now.binary_version ||
+        stored->pipeline_version != now.pipeline_version) {
+        return PrecompileReason::PortUpdate;
+    }
+    if (stored->manifest_id != now.manifest_id) {
+        return PrecompileReason::NewList;
+    }
+    return PrecompileReason::NewDriver;
+}
+
 CrashJournal::~CrashJournal() {
     // Not Finish: a run that stops early proved nothing, and its slots are clear anyway.
     if (file) {

@@ -23,6 +23,8 @@ mkdir -p "$dest/bin" "$dest/launcher"
 cp "$launcher" "$dest/SpartanPort.exe"
 llvm-strip -o "$dest/Play SpartanPort.exe" out/spartanport-play.exe
 cp launcher/spartanport.ico launcher/spartanport.png launcher/logo.png launcher/Cinzel-Black.ttf launcher/OFL-Cinzel.txt "$dest/launcher/"
+# The shader preparation screen backdrop (the launcher key art, smaller).
+cp launcher/loading-background.jpg "$dest/launcher/"
 cp launcher/BodoniModa.ttf launcher/OFL-BodoniModa.txt "$dest/launcher/"
 # The executables without debug information (out/ keeps the symbols for crash reports).
 for exe in spartanport-probe.exe spartanport-gpu-capabilities.exe; do

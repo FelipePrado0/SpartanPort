@@ -30,6 +30,14 @@ void UpdateTextInput(SDL_Window* window);
 
 /// Start-up loading screen (pipeline cache warm-up): `total` 0 shows no count.
 void SetLoading(bool active, u32 done, u32 total);
+/// The shader preparation's steps, as bits; the loading screen lists the ones added.
+enum LoadingStep : u32 { LoadingShaders = 1, LoadingPipelines = 2, LoadingCache = 4 };
+/// Why the screen shows: Vulkan::PrecompileReason, or LoadingCacheOnly for a plain cache read.
+inline constexpr u32 LoadingCacheOnly = 4;
+void AddLoadingSteps(u32 steps);
+void SetLoadingReason(u32 reason);
+/// The step running now (one LoadingStep), 0 for none.
+void SetLoadingStage(u32 step);
 /// Background cache warm-up: a small corner note while the game runs; `total` 0 hides it.
 void SetBackgroundLoading(u32 done, u32 total);
 /// Saved shaders read into memory at start (any thread): a lower-right note; `total` 0 hides it.
