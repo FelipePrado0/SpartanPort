@@ -17,6 +17,11 @@ namespace Vulkan {
 class Instance;
 class Scheduler;
 
+static constexpr vk::SurfaceFormatKHR SURFACE_FORMAT_HDR = {
+    .format = vk::Format::eA2B10G10R10UnormPack32,
+    .colorSpace = vk::ColorSpaceKHR::eHdr10St2084EXT,
+};
+
 class Swapchain {
 public:
     explicit Swapchain(const Instance& instance, const Frontend::WindowSDL& window);
@@ -46,8 +51,10 @@ public:
         return (image_index < images_view.size()) ? images_view[image_index] : vk::ImageView{};
     }
 
+    /// The format of the swapchain images, which every pass drawing into them is built for: HDR10
+    /// while the swapchain is in HDR (spartanport: from the start with HDR output).
     vk::SurfaceFormatKHR GetSurfaceFormat() const {
-        return surface_format;
+        return needs_hdr ? SURFACE_FORMAT_HDR : surface_format;
     }
 
     vk::SwapchainKHR GetHandle() const {

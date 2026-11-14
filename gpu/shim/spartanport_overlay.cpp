@@ -40,6 +40,8 @@ extern "C" void runtime_restart(void); // src/probe.c: starts run.py again, ends
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
 #include "video_core/renderdoc.h"
+#include "video_core/host_shaders/overlay_hdr_frag.h"
+#include "video_core/renderer_vulkan/vk_shader_util.h"
 
 // DejaVu Sans (Cyrillic), embedded (third_party/fonts, Bitstream Vera license), and the launcher's
 // title face, Cinzel Black (launcher/Cinzel-Black.ttf, SIL OFL 1.1, launcher/OFL-Cinzel.txt), for the
@@ -389,6 +391,51 @@ void SliderRow(const char* label, std::atomic<int>& value, int lo, int hi, const
     ImGui::PopID();
 }
 
+// Picture controls (SpartanGraphics::Picture*): gamma is kept in hundredths but shown and typed
+// (Ctrl+click) as 2.20, so the slider works on the plain value and rounds back to hundredths.
+void PictureGammaRow(std::atomic<int>& value, const char* help) {
+    namespace G = SpartanGraphics;
+    Row("Gamma");
+    float v = value / 100.0f;
+    // A typed "nan" passes ImGui's clamp, so a value that is not finite keeps the current setting.
+    if (ImGui::SliderFloat("##value", &v, G::PictureGammaMin / 100.0f, G::PictureGammaMax / 100.0f, "%.2f",
+                           ImGuiSliderFlags_AlwaysClamp) &&
+        std::isfinite(v)) {
+        // AlwaysClamp keeps a finite v within 1.80 to 2.80, so the rounding below cannot overflow.
+        Store(value, std::clamp(int(std::lround(v * 100.0f)), G::PictureGammaMin, G::PictureGammaMax), true);
+    }
+    Help(help);
+    ImGui::PopID();
+}
+
+void PictureRows(SpartanSettings::Values& s) {
+    namespace G = SpartanGraphics;
+    SliderRow("Brightness", s.picture_brightness, G::PictureBrightnessMin, G::PictureBrightnessMax, "%d",
+              "Raises or lowers the black level, like a TV's Brightness; white stays white. 0 is the game as "
+              "made. Use the game's own Brightness first. Seen when this menu closes, or at once with Pause game off.");
+    SliderRow("Contrast", s.picture_contrast, G::PictureContrastMin, G::PictureContrastMax, "%d%%",
+              "Spreads or narrows the tones around mid grey. 100% is the game as made. Seen when this menu "
+              "closes, or at once with Pause game off.");
+    PictureGammaRow(s.picture_gamma,
+                    "The display gamma the picture is shaped for: 2.20 is a PC monitor and the game as made, 2.40 "
+                    "the TVs the game was made for (darker mid tones). Seen when this menu closes, or at once "
+                    "with Pause game off.");
+}
+
+// Brightness 0, contrast 100% and gamma 2.20 again; greyed out while they already are.
+void PictureResetButton(SpartanSettings::Values& s) {
+    namespace G = SpartanGraphics;
+    const bool neutral = G::PictureNeutral(s.picture_brightness, s.picture_contrast, s.picture_gamma);
+    if (neutral) ImGui::BeginDisabled();
+    if (Button("Picture as made")) {
+        Store(s.picture_brightness, G::PictureBrightnessNeutral, true);
+        Store(s.picture_contrast, G::PictureContrastNeutral, true);
+        Store(s.picture_gamma, G::PictureGammaNeutral, true);
+    }
+    if (neutral) ImGui::EndDisabled();
+    Help("Brightness 0, contrast 100% and gamma 2.20: the picture exactly as the game draws it.");
+}
+
 const char* UpscalerLabel(int upscaler) {
     switch (upscaler) {
     case SpartanSettings::UpscalerFsr3: return "FSR 3.1";
@@ -587,6 +634,39 @@ void ImageTab() {
         ChoiceRow("Display mode", s.display_mode, G::DisplayModeNames.data(), nullptr, G::DisplayModeCount,
                   "Windowed, borderless window or exclusive fullscreen.");
         CheckRow("VSync", s.vsync, "Waits for the monitor: no tearing, a little more input delay.");
+        ImGui::EndTable();
+    }
+    Separator("Picture");
+    if (BeginRows("##picture")) {
+        PictureRows(s);
+        ImGui::EndTable();
+    }
+    PictureResetButton(s);
+    // HDR output's paper white and peak: greyed out unless the picture is being shown in HDR10. With
+    // Match Windows HDR settings the presenter put the display's values into the sliders at start;
+    // each slider is greyed out while it is on and Windows reported its value, and turning it off
+    // starts from them.
+    Separator("HDR");
+    const bool hdr = s.hdr_active;
+    if (!hdr) DisabledText("HDR output is off: turn on HDR in the launcher and in Windows, then restart.");
+    if (BeginRows("##hdr")) {
+        namespace G = SpartanGraphics;
+        ImGui::BeginDisabled(!hdr);
+        CheckRow("Match Windows HDR settings", s.hdr_auto,
+                 "HDR brightness follows Windows' SDR content brightness and HDR peak brightness the display's "
+                 "own peak, as Windows reports them; a value Windows does not report stays on its slider. "
+                 "Turned on, it applies on restart.");
+        ImGui::BeginDisabled(s.hdr_auto && s.hdr_paper_white_known);
+        SliderRow("HDR brightness", s.hdr_paper_white, G::HdrPaperWhiteMin, G::HdrPaperWhiteMax, "%d nits",
+                  "Where the game's white is shown, in nits: higher is brighter. 200 suits most rooms. "
+                  "Seen when this menu closes, or at once with Pause game off.");
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(s.hdr_auto && s.hdr_peak_known);
+        SliderRow("HDR peak brightness", s.hdr_peak, G::HdrPeakMin, G::HdrPeakMax, "%d nits",
+                  "Set it to your display's peak brightness, so the brightest parts keep their detail. "
+                  "Seen when this menu closes, or at once with Pause game off.");
+        ImGui::EndDisabled();
+        ImGui::EndDisabled();
         ImGui::EndTable();
     }
     const int iw = s.image_width, ih = s.image_height, ww = s.window_width, wh = s.window_height;
@@ -2597,7 +2677,7 @@ void StartNotifications() {
     ApplyLanguage(SpartanUi::language);
 }
 
-void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) {
+void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count, float hdr10_white_nits) {
     std::scoped_lock lock{imgui_mutex};
     if (initialized) {
         return;
@@ -2635,6 +2715,21 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
         .colorAttachmentCount = 1,
         .pColorAttachmentFormats = &color_format,
     };
+    if (hdr10_white_nits > 0.0f) {
+        // ImGui draws SDR values; on the HDR10 swapchain they are encoded to PQ with white at the
+        // paper white in use now (host_shaders/overlay_hdr.frag). The pipeline is built once, so a
+        // later move of the HDR brightness slider leaves the menu at this value until a restart. The
+        // backend keeps the pointer: the code is static (Init runs once).
+        static std::vector<u32> code(std::begin(OVERLAY_HDR_FRAG), std::end(OVERLAY_HDR_FRAG));
+        if (!Vulkan::SetSpecConstantDefault(code, 0, hdr10_white_nits)) {
+            std::printf("Overlay: menu white not set, the menu stays at 200 nits\n");
+        }
+        info.CustomShaderFragCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = code.size() * sizeof(u32),
+            .pCode = code.data(),
+        };
+    }
     if (!ImGui_ImplVulkan_Init(&info)) {
         std::printf("Overlay: ImGui Vulkan backend init failed\n");
         ImGui::DestroyContext();

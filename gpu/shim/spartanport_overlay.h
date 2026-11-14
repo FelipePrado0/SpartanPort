@@ -20,8 +20,9 @@ class Instance;
 
 namespace SpartanOverlay {
 
-/// Present thread, once: the ImGui context and its Vulkan backend.
-void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count);
+/// Present thread, once: the ImGui context and its Vulkan backend. hdr10_white_nits: 0 on an SDR
+/// swapchain; on the HDR10 one (HDR output), the menu is encoded to PQ with its white at these nits.
+void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count, float hdr10_white_nits);
 
 /// Window thread, for every SDL event: true when the menu consumed it.
 bool HandleEvent(const SDL_Event& event);
