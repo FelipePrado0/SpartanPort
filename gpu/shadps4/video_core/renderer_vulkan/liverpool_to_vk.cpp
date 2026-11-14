@@ -804,6 +804,25 @@ vk::Format SurfaceFormat(AmdGpu::DataFormat data_format, AmdGpu::NumberFormat nu
             break;
         }
     }
+    if (result == vk::Format::eUndefined) {
+        // spartanport: if no number format exists for this data_format (such as unused
+        // data_format=15 on GPUs without VK_EXT_vertex_input_dynamic_state), provide a safe
+        // fallback format matching the numeric type so pipeline creation does not assert (#1181).
+        switch (num_format) {
+        case AmdGpu::NumberFormat::Sint:
+            result = vk::Format::eR32G32B32A32Sint;
+            break;
+        case AmdGpu::NumberFormat::Uint:
+            result = vk::Format::eR32G32B32A32Uint;
+            break;
+        case AmdGpu::NumberFormat::Float:
+            result = vk::Format::eR32G32B32A32Sfloat;
+            break;
+        default:
+            result = vk::Format::eR8G8B8A8Unorm;
+            break;
+        }
+    }
     static std::array<std::atomic_bool, std::tuple_size_v<decltype(surface_format_table)>> logged{};
     if (!logged[index].exchange(true, std::memory_order_relaxed)) {
         LOG_WARNING(Render_Vulkan,
