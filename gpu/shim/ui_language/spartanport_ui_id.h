@@ -280,5 +280,21 @@ inline constexpr std::pair<std::string_view, const char*> IndonesianText[] = {
     {"The controller's gyro and accelerometer are passed to the game.", "Giroskop dan akselerometer kontroler diteruskan ke game."},
     {"Gyro aim", "Bidik giroskop"},
     {"While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.", "Selama L2 ditahan, memutar dan memiringkan kontroler menggerakkan pandangan. Termasuk Sensor gerak."},
+    // The shader preparation screen.
+    {"Preparing shaders", "Menyiapkan shader"},
+    {"Preparing pipelines", "Menyiapkan pipeline"},
+    {"Reading the shader cache", "Membaca cache shader"},
+    {"First start: preparing the graphics once", "Mulai pertama: menyiapkan grafis sekali saja"},
+    {"New graphics driver: preparing the pipelines again", "Driver grafis baru: menyiapkan pipeline lagi"},
+    {"New shader list: preparing what changed", "Daftar shader baru: menyiapkan yang berubah"},
+    {"Reading the saved shaders from the disk", "Membaca shader tersimpan dari disk"},
+    {"Port update: preparing the graphics again", "Pembaruan port: menyiapkan grafis lagi"},
+    {"Shaders", "Shader"},
+    {"Pipelines", "Pipeline"},
+    {"Cache", "Cache"},
+    {"About %d s left", "Sekitar %d dtk lagi"},
+    {"About %d min left", "Sekitar %d mnt lagi"},
+    {"Almost done", "Hampir selesai"},
+    {"Esc or Circle: start playing now", "Esc atau Lingkaran: main sekarang"},
 };
 } // namespace SpartanUi

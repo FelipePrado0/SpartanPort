@@ -280,5 +280,21 @@ inline constexpr std::pair<std::string_view, const char*> TurkishText[] = {
     {"The controller's gyro and accelerometer are passed to the game.", "Kumandanın jiroskopu ve ivmeölçeri oyuna iletilir."},
     {"Gyro aim", "Jiroskopla nişan"},
     {"While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.", "L2 basılı tutulurken kumandayı döndürmek ve eğmek görüşü hareket ettirir. Hareket sensörleri dahildir."},
+    // The shader preparation screen.
+    {"Preparing shaders", "Gölgelendiriciler hazırlanıyor"},
+    {"Preparing pipelines", "Ardışık düzenler hazırlanıyor"},
+    {"Reading the shader cache", "Gölgelendirici önbelleği okunuyor"},
+    {"First start: preparing the graphics once", "İlk başlatma: grafikler bir kez hazırlanıyor"},
+    {"New graphics driver: preparing the pipelines again", "Yeni grafik sürücüsü: ardışık düzenler yeniden hazırlanıyor"},
+    {"New shader list: preparing what changed", "Yeni gölgelendirici listesi: değişenler hazırlanıyor"},
+    {"Reading the saved shaders from the disk", "Kayıtlı gölgelendiriciler diskten okunuyor"},
+    {"Port update: preparing the graphics again", "Port güncellemesi: grafikler yeniden hazırlanıyor"},
+    {"Shaders", "Gölgelendiriciler"},
+    {"Pipelines", "Ardışık düzenler"},
+    {"Cache", "Önbellek"},
+    {"About %d s left", "Yaklaşık %d sn kaldı"},
+    {"About %d min left", "Yaklaşık %d dk kaldı"},
+    {"Almost done", "Neredeyse bitti"},
+    {"Esc or Circle: start playing now", "Esc veya Daire: şimdi oyna"},
 };
 } // namespace SpartanUi

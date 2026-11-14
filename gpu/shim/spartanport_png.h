@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// spartanport: PNG pictures for the overlay (save list icons), decoded by FFmpeg to RGBA8.
+// spartanport: PNG and JPEG pictures for the overlay (save list icons, the loading screen's art),
+// decoded by FFmpeg to RGBA8.
 
 #pragma once
 

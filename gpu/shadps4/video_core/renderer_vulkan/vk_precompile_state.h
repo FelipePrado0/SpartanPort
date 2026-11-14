@@ -46,6 +46,11 @@ struct PrecompileWork {
 PrecompileWork DecideWork(const std::optional<PrecompileMarker>& stored,
                           const PrecompileMarker& now);
 
+/// Why the preparation runs, as the loading screen tells the player.
+enum class PrecompileReason : u32 { FirstStart, NewDriver, NewList, PortUpdate };
+PrecompileReason ReasonFor(const std::optional<PrecompileMarker>& stored,
+                           const PrecompileMarker& now);
+
 /// Survives a driver that kills the process: while a worker is inside the driver, its slot in this
 /// file names the pipeline. A run that ends well deletes the file.
 class CrashJournal {

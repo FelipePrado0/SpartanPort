@@ -280,5 +280,21 @@ inline constexpr std::pair<std::string_view, const char*> PolishText[] = {
     {"The controller's gyro and accelerometer are passed to the game.", "Żyroskop i akcelerometr kontrolera są przekazywane do gry."},
     {"Gyro aim", "Celowanie żyroskopem"},
     {"While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.", "Gdy L2 jest wciśnięty, obracanie i przechylanie kontrolera porusza widokiem. Obejmuje Czujniki ruchu."},
+    // The shader preparation screen.
+    {"Preparing shaders", "Przygotowywanie shaderów"},
+    {"Preparing pipelines", "Przygotowywanie potoków"},
+    {"Reading the shader cache", "Odczyt pamięci shaderów"},
+    {"First start: preparing the graphics once", "Pierwsze uruchomienie: jednorazowe przygotowanie grafiki"},
+    {"New graphics driver: preparing the pipelines again", "Nowy sterownik grafiki: ponowne przygotowanie potoków"},
+    {"New shader list: preparing what changed", "Nowa lista shaderów: przygotowanie zmian"},
+    {"Reading the saved shaders from the disk", "Odczyt zapisanych shaderów z dysku"},
+    {"Port update: preparing the graphics again", "Aktualizacja portu: ponowne przygotowanie grafiki"},
+    {"Shaders", "Shadery"},
+    {"Pipelines", "Potoki"},
+    {"Cache", "Pamięć"},
+    {"About %d s left", "Pozostało około %d s"},
+    {"About %d min left", "Pozostało około %d min"},
+    {"Almost done", "Prawie gotowe"},
+    {"Esc or Circle: start playing now", "Esc lub Kółko: graj teraz"},
 };
 } // namespace SpartanUi

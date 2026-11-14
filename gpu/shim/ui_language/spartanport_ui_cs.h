@@ -281,5 +281,21 @@ inline constexpr std::pair<std::string_view, const char*> CzechText[] = {
     {"The controller's gyro and accelerometer are passed to the game.", "The controller's gyro and accelerometer are passed to the game."},
     {"Gyro aim", "Gyro aim"},
     {"While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors.", "While L2 is held, turning and tilting the controller moves the view. Includes Motion sensors."},
+    // The shader preparation screen.
+    {"Preparing shaders", "Příprava shaderů"},
+    {"Preparing pipelines", "Příprava pipeline"},
+    {"Reading the shader cache", "Načítání mezipaměti shaderů"},
+    {"First start: preparing the graphics once", "První spuštění: jednorázová příprava grafiky"},
+    {"New graphics driver: preparing the pipelines again", "Nový grafický ovladač: nová příprava pipeline"},
+    {"New shader list: preparing what changed", "Nový seznam shaderů: příprava změn"},
+    {"Reading the saved shaders from the disk", "Načítání uložených shaderů z disku"},
+    {"Port update: preparing the graphics again", "Aktualizace portu: nová příprava grafiky"},
+    {"Shaders", "Shadery"},
+    {"Pipelines", "Pipeline"},
+    {"Cache", "Mezipaměť"},
+    {"About %d s left", "Zbývá asi %d s"},
+    {"About %d min left", "Zbývá asi %d min"},
+    {"Almost done", "Skoro hotovo"},
+    {"Esc or Circle: start playing now", "Esc nebo Kolečko: hrát hned"},
 };
 } // namespace SpartanUi

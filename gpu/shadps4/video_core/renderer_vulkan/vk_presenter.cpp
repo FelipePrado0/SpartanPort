@@ -354,7 +354,8 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
                 return false;
             }
             const auto now = std::chrono::steady_clock::now();
-            if (now - last >= std::chrono::milliseconds(250)) {
+            // About 30 frames a second: the screen's ember and sparks move smoothly.
+            if (now - last >= std::chrono::milliseconds(33)) {
                 last = now;
                 shown = true;
                 SpartanOverlay::SetLoading(true, done, total);
@@ -362,15 +363,21 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
             }
             return true;
         };
-        rasterizer->GetPipelineCache().PrepareShaders(list, progress);
         const bool on_demand = UseOnDemandPipelines(
             binary_cache, instance.GetPipelineBinaryGlobalKey().keySize != 0, capture_only);
+        const bool wait_cache =
+            on_demand && EmulatorSettingsImpl::Flag("SPARTAN_SHADER_PREFETCH_WAIT", false);
+        if (wait_cache) {
+            SpartanOverlay::AddLoadingSteps(SpartanOverlay::LoadingCache);
+        }
+        rasterizer->GetPipelineCache().PrepareShaders(list, progress);
         if (on_demand) {
             rasterizer->GetPipelineCache().StartOnDemand();
             // Launcher: "Read the shader cache before the game starts". A hard disk cannot serve
             // the startup read and the game at once (#1331). Off by default: a cold read of the
             // shipped list's files took minutes even on an NVMe drive.
-            if (EmulatorSettingsImpl::Flag("SPARTAN_SHADER_PREFETCH_WAIT", false)) {
+            if (wait_cache) {
+                SpartanOverlay::SetLoadingStage(SpartanOverlay::LoadingCache);
                 rasterizer->GetPipelineCache().WaitDiskPrefetch(progress);
             }
         }

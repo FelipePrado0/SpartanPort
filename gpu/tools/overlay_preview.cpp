@@ -62,6 +62,9 @@ uint64_t runtime_process_time_counter() { return runtime_process_time_us() * 100
 uint64_t runtime_read_tsc() { return runtime_process_time_counter(); }
 int32_t* runtime_errno() { std::abort(); }
 int runtime_memory_write_backing(uintptr_t, const void*, uint64_t) { std::abort(); }
+void runtime_memory_read_backing(uintptr_t, void*, uint64_t) { std::abort(); }
+uint64_t runtime_wait_begin() { return 0; }
+void runtime_wait_end(const char*, uint64_t, const char*, long long) {}
 void runtime_report() {}
 }
 
@@ -287,7 +290,10 @@ int main(int argc, char** argv) {
     const std::string out = argv[1], scene = argv[2];
     const int width = argc > 4 ? std::atoi(argv[3]) : 1920, height = argc > 4 ? std::atoi(argv[4]) : 1080;
     if (const char* language = std::getenv("SPARTAN_PREVIEW_LANG")) {
-        SpartanSettings::Get().ui_language = SpartanUi::FindLanguage(language);
+        // A launcher language the menu has no table for stays "same as the launcher", as in the game
+        // (the shader preparation screen still follows it).
+        const int index = SpartanUi::FindLanguage(language);
+        SpartanSettings::Get().ui_language = index || std::string_view(language) == "en" ? index : -1;
         static std::string env = std::string("SPARTAN_UI_LANGUAGE=") + language;
         putenv(env.data());
     }
@@ -333,6 +339,23 @@ int main(int argc, char** argv) {
         DemoSaves(scene, language && std::string(language) == "pt");
     } else if (scene == "health") {
         SpartanSettings::Get().enemy_health_bar = true;
+    } else if (scene == "loading") {
+        // The shader preparation screen: SPARTAN_PREVIEW_STAGE 1 shaders, 2 pipelines, 4 cache read,
+        // SPARTAN_PREVIEW_REASON 0-4 (SpartanOverlay::SetLoadingReason), SPARTAN_PREVIEW_PERCENT.
+        const u32 stage = u32(Env("SPARTAN_PREVIEW_STAGE", LoadingShaders));
+        const u32 reason = u32(std::clamp(Env("SPARTAN_PREVIEW_REASON", 0), 0, int(LoadingCacheOnly)));
+        AddLoadingSteps(reason == LoadingCacheOnly ? LoadingCache
+                                                   : LoadingShaders | LoadingPipelines |
+                                                         (stage == LoadingCache ? LoadingCache : 0u));
+        SetLoadingReason(reason);
+        SetLoadingStage(stage);
+        const u32 total = stage == LoadingShaders ? 27742 : stage == LoadingPipelines ? 15460 : 25004;
+        SetLoading(true, u32(u64(total) * std::clamp(Env("SPARTAN_PREVIEW_PERCENT", 40), 0, 100) / 100), total);
+        // As after half a minute of work, so the time left shows.
+        eta_stage = stage;
+        eta_done = 0;
+        eta_total = total;
+        eta_start = -30.0;
     }
     // One grade, or several in a row ("1234": bronze, silver, gold, platinum).
     const char* grades = std::getenv("SPARTAN_PREVIEW_TOAST");
