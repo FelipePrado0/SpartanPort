@@ -114,6 +114,8 @@ add_host_shader(fs_tri.vert fs_tri_vert)
 add_host_shader(fsr.comp fsr_easu_comp SAMPLE_EASU=1)
 add_host_shader(fsr.comp fsr_rcas_comp SAMPLE_RCAS=1)
 add_host_shader(post_process.frag post_process_frag)
+# spartanport: the menu overlay's fragment shader on the HDR10 swapchain (spartanport_overlay.cpp).
+add_host_shader(overlay_hdr.frag overlay_hdr_frag)
 # spartanport: anti-aliasing of the finished frame (host_passes/aa_pass.cpp): FXAA and the three SMAA passes.
 add_host_shader(fxaa.comp fxaa_comp)
 add_host_shader(smaa.comp smaa_edges_comp SMAA_EDGES=1)
@@ -552,6 +554,19 @@ target_compile_options(aa-pass-test PRIVATE -UNDEBUG -fPIC -Wno-deprecated-decla
 target_link_libraries(aa-pass-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
     tsl::robin_map GPUOpen::VulkanMemoryAllocator miniz::miniz Threads::Threads ${CMAKE_DL_LIBS})
 add_dependencies(aa-pass-test host_shaders)
+# The post-process pass's picture controls (brightness, contrast, gamma and the dither) on a ramp of every
+# 8-bit code, and its HDR output (the SDR picture expanded to HDR10) against a CPU model, written for
+# Lavapipe (its exact checks assume round-to-nearest UNORM conversion), under the validation layer when it
+# is installed. It also checks that the menu overlay's HDR shader takes its white (SetSpecConstantDefault).
+add_executable(pp-pass-test EXCLUDE_FROM_ALL ../tests/test_pp_pass.cpp
+    shadps4/video_core/renderer_vulkan/host_passes/pp_pass.cpp
+    shadps4/video_core/renderer_vulkan/vk_shader_util.cpp shim/common/logging/log.cpp)
+target_include_directories(pp-pass-test PRIVATE shim shadps4 ${SHADER_INCLUDE} third_party/gcn/include third_party/half/include)
+target_compile_definitions(pp-pass-test PRIVATE BOOST_ASIO_STANDALONE)
+target_compile_options(pp-pass-test PRIVATE -UNDEBUG -fPIC -Wno-deprecated-declarations -Wno-missing-field-initializers)
+target_link_libraries(pp-pass-test PRIVATE Vulkan::Headers fmt::fmt Boost::headers magic_enum::magic_enum
+    tsl::robin_map GPUOpen::VulkanMemoryAllocator miniz::miniz Threads::Threads ${CMAKE_DL_LIBS})
+add_dependencies(pp-pass-test host_shaders)
 
 add_executable(reactive-shader-test EXCLUDE_FROM_ALL ../tests/test_reactive_shader.cpp)
 target_include_directories(reactive-shader-test PRIVATE ${SHADER_INCLUDE})
