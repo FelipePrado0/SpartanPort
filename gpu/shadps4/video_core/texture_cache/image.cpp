@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "spartanport_toggles.h"
+#include <atomic>
+#include <cstdio>
 #include <ranges>
 #include "common/assert.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
@@ -99,10 +101,10 @@ void UniqueImage::Destroy() {
     }
 }
 
-void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
-    this->image_ci = image_ci;
-    ASSERT(!image);
-    const VmaAllocationCreateInfo alloc_ci = {
+VkResult CreateImageWithFallback(VmaAllocator allocator, const vk::ImageCreateInfo& image_ci,
+                                 VkImage* out_image, VmaAllocation* out_allocation,
+                                 VmaAllocationInfo* out_alloc_info) {
+    VmaAllocationCreateInfo alloc_ci = {
         .flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT,
         .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         .requiredFlags = 0,
@@ -112,10 +114,43 @@ void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
     };
 
     const VkImageCreateInfo image_ci_unsafe = static_cast<VkImageCreateInfo>(image_ci);
+    VkResult result = vmaCreateImage(allocator, &image_ci_unsafe, &alloc_ci, out_image,
+                                     out_allocation, out_alloc_info);
+    // spartanport: a budget refusal may still fit; retry without the budget limit first.
+    if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+        static std::atomic_flag noted_budget = ATOMIC_FLAG_INIT;
+        if (!noted_budget.test_and_set(std::memory_order_relaxed)) {
+            std::printf("GPU memory: image allocation failed within budget; retrying without "
+                        "the budget limit.\n");
+            std::fflush(stdout);
+        }
+        alloc_ci.flags &= ~VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT;
+        result = vmaCreateImage(allocator, &image_ci_unsafe, &alloc_ci, out_image, out_allocation,
+                                out_alloc_info);
+    }
+    // spartanport: if device-local memory is still exhausted (e.g. small iGPU VRAM carve-out),
+    // fall back to host-preferred (shared system) memory instead of crashing.
+    if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+        static std::atomic_flag noted_host = ATOMIC_FLAG_INIT;
+        if (!noted_host.test_and_set(std::memory_order_relaxed)) {
+            std::printf("GPU memory: image allocation failed in device-local memory; falling back "
+                        "to shared system memory.\n");
+            std::fflush(stdout);
+        }
+        alloc_ci.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+        result = vmaCreateImage(allocator, &image_ci_unsafe, &alloc_ci, out_image, out_allocation,
+                                out_alloc_info);
+    }
+    return result;
+}
+
+void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
+    this->image_ci = image_ci;
+    ASSERT(!image);
     VkImage unsafe_image{};
     VmaAllocationInfo alloc_info{};
-    VkResult result = vmaCreateImage(allocator, &image_ci_unsafe, &alloc_ci, &unsafe_image,
-                                     &allocation, &alloc_info);
+    const VkResult result =
+        CreateImageWithFallback(allocator, image_ci, &unsafe_image, &allocation, &alloc_info);
     ASSERT_MSG(result == VK_SUCCESS, "Failed allocating image with error {}",
                vk::to_string(vk::Result{result}));
     image = vk::Image{unsafe_image};
