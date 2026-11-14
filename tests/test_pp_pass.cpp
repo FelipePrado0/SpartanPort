@@ -421,6 +421,9 @@ void CheckCommon(const char* name, const Picture& p, const Output& o) {
     // different noise but the same output leave no common value, so this also proves the dither.
     const bool dithered = Fill(p).picture_adjust != 0;
     constexpr double slack = 0.02; // the GPU's float pow against the CPU's double
+    // Vulkan lets the UNORM write take either nearest code when not rounding to nearest; the
+    // RX 6700 XT lands up to 0.06 of a code past a bin edge. Far below the dither's +-1 code.
+    constexpr double unorm_slack = 0.1;
     int off = 0, worst_code = -1;
     double worst = 0;
     for (u32 x = 0; x < W; ++x) {
@@ -433,8 +436,8 @@ void CheckCommon(const char* name, const Picture& p, const Output& o) {
             double a = std::max(lo, from), b = std::min(hi, to);
             for (u32 y = 0; y < H; ++y) {
                 const double out = At(o, x, y), n = with_noise ? DitherNoise(x, y) : 0.0;
-                a = std::max(a, (out == 0 ? -1e9 : out - 0.5) - n);
-                b = std::min(b, (out == 255 ? 1e9 : out + 0.5) - n);
+                a = std::max(a, (out == 0 ? -1e9 : out - 0.5 - unorm_slack) - n);
+                b = std::min(b, (out == 255 ? 1e9 : out + 0.5 + unorm_slack) - n);
             }
             return a < b ? 0.0 : a - b + 1e-9;
         };
