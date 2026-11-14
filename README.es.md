@@ -408,6 +408,30 @@ en una lista larga, probalo con una **Saves folder** separada que contenga solo 
 `savedata\1\CUSA01623\`, con su carpeta de metadatos vecina. Conservá las partidas originales y
 restaurá la configuración anterior de Saves folder después de probar.
 
+### Copiar partidas en las dos direcciones con un script
+
+[`tools/shadps4_saves.ps1`](tools/shadps4_saves.ps1) hace los pasos de arriba para cada slot, y también
+el camino de vuelta, del port a shadPS4. Sirve para pasar un lugar que el port todavía no puede jugar:
+lo jugás en shadPS4 y después traés la partida de vuelta. Convierte el `param.bin` y el `param.sfo` de
+cada slot y conserva las fechas que muestra la lista de partidas.
+
+Cerrá el juego, el launcher y shadPS4, y ejecutá en PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File shadps4_saves.ps1 -To ShadPS4 -Port C:\Games\spartanport-windows -ShadPS4 C:\Games\shadPS4
+powershell -ExecutionPolicy Bypass -File shadps4_saves.ps1 -To Port -Port C:\Games\spartanport-windows -ShadPS4 C:\Games\shadPS4
+```
+
+- `-Port` es la carpeta con `SpartanPort.exe`, o tu **Saves folder** personalizada. `-ShadPS4` es la
+  carpeta de shadPS4, o su carpeta de usuario (`%APPDATA%\shadPS4` si no es portable).
+- Los slots con el mismo nombre del otro lado se reemplazan; los demás quedan. Antes se hace una copia
+  de ambos lados: las partidas del port van a **Game → Save backups** (el launcher guarda las 10 más
+  recientes), las de shadPS4 a `savedata_backups` en su carpeta de usuario.
+- Si un slot es más nuevo del lado que se va a escribir, no se cambia nada y el script lo nombra.
+  Agregá `-Force` para reemplazarlo igual.
+- Una partida que shadPS4 no terminó de escribir (dejó `sce_sys\corrupted`) no se copia: cargala en
+  shadPS4 y guardá de nuevo.
+
 ## Overlays de terceros (Windows)
 
 El proceso del juego es **`bin\spartanport-probe.exe`**, no `SpartanPort.exe` (las builds desde el código
