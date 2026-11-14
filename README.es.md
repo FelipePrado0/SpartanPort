@@ -427,7 +427,11 @@ powershell -ExecutionPolicy Bypass -File .\tools\shadps4_saves.ps1 -To Port -Por
 - Los slots con el mismo nombre del otro lado se reemplazan; los demás quedan. Antes se hace una copia
   de ambos lados: las partidas del port van a **Game → Save backups** (el launcher guarda las 10 más
   recientes), las de shadPS4 a `savedata_backups` en su carpeta de usuario.
-- Si un slot es más nuevo del lado que se va a escribir, no se cambia nada y el script lo nombra.
+- Un slot del port solo se copia a shadPS4 con su `<slot>.sce_sys\param.bin`. Un slot importado a
+  mano con los pasos de arriba puede no tenerlo: cargalo y guardá una vez en el port antes.
+- Si un slot es más de 2 segundos más nuevo del lado que se va a escribir, no se cambia nada y el
+  script lo nombra (hasta 2 segundos cuenta como la misma partida, porque las horas de los archivos
+  se redondean).
   Agregá `-Force` para reemplazarlo igual.
 - Una partida que shadPS4 no terminó de escribir (dejó `sce_sys\corrupted`) no se copia: cargala en
   shadPS4 y guardá de nuevo.

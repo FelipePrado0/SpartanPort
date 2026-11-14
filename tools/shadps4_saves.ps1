@@ -223,13 +223,22 @@ function Backup-Folder([string]$from, [string]$backups, [string]$inside) {
     $name = $stamp
     for ($n = 2; Test-Path -LiteralPath (Join $backups $name); $n++) { $name = "$stamp-$n" }
     $folder = Join $backups $name
-    $target = if ($inside) { Join $folder $inside } else { $folder }
-    [IO.Directory]::CreateDirectory($target) | Out-Null
-    Get-ChildItem -LiteralPath $from -Force | Copy-Item -Destination $target -Recurse -Force
-    $before = Get-Inventory $from
-    $after = Get-Inventory $target
-    $missing = @($before.Keys | Where-Object { $after[$_] -ne $before[$_] })
-    if ($missing.Count -or $after.Count -ne $before.Count) { throw "the backup in $folder does not match $from ($($missing -join ', '))" }
+    # Built under a dot name, which the launcher's backup list skips (save_restore.rs), and renamed only
+    # once every file checks out: restoring a half-copied backup would replace the saves with it.
+    $pending = Join $backups ".pending-$name"
+    try {
+        $target = if ($inside) { Join $pending $inside } else { $pending }
+        [IO.Directory]::CreateDirectory($target) | Out-Null
+        Get-ChildItem -LiteralPath $from -Force | Copy-Item -Destination $target -Recurse -Force
+        $before = Get-Inventory $from
+        $after = Get-Inventory $target
+        $missing = @($before.Keys | Where-Object { $after[$_] -ne $before[$_] })
+        if ($missing.Count -or $after.Count -ne $before.Count) { throw "the backup of $from does not match it ($($missing -join ', '))" }
+        [IO.Directory]::Move($pending, $folder)
+    } catch {
+        if (Test-Path -LiteralPath $pending) { Remove-Item -LiteralPath $pending -Recurse -Force -ErrorAction SilentlyContinue }
+        throw
+    }
     Write-Host "Backup: $folder ($($before.Count) files)"
     $folder
 }
