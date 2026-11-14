@@ -389,6 +389,51 @@ void SliderRow(const char* label, std::atomic<int>& value, int lo, int hi, const
     ImGui::PopID();
 }
 
+// Picture controls (SpartanGraphics::Picture*): gamma is kept in hundredths but shown and typed
+// (Ctrl+click) as 2.20, so the slider works on the plain value and rounds back to hundredths.
+void PictureGammaRow(std::atomic<int>& value, const char* help) {
+    namespace G = SpartanGraphics;
+    Row("Gamma");
+    float v = value / 100.0f;
+    // A typed "nan" passes ImGui's clamp, so a value that is not finite keeps the current setting.
+    if (ImGui::SliderFloat("##value", &v, G::PictureGammaMin / 100.0f, G::PictureGammaMax / 100.0f, "%.2f",
+                           ImGuiSliderFlags_AlwaysClamp) &&
+        std::isfinite(v)) {
+        // AlwaysClamp keeps a finite v within 1.80 to 2.80, so the rounding below cannot overflow.
+        Store(value, std::clamp(int(std::lround(v * 100.0f)), G::PictureGammaMin, G::PictureGammaMax), true);
+    }
+    Help(help);
+    ImGui::PopID();
+}
+
+void PictureRows(SpartanSettings::Values& s) {
+    namespace G = SpartanGraphics;
+    SliderRow("Brightness", s.picture_brightness, G::PictureBrightnessMin, G::PictureBrightnessMax, "%d",
+              "Raises or lowers the black level, like a TV's Brightness; white stays white. 0 is the game as "
+              "made. Use the game's own Brightness first. Seen when this menu closes, or at once with Pause game off.");
+    SliderRow("Contrast", s.picture_contrast, G::PictureContrastMin, G::PictureContrastMax, "%d%%",
+              "Spreads or narrows the tones around mid grey. 100% is the game as made. Seen when this menu "
+              "closes, or at once with Pause game off.");
+    PictureGammaRow(s.picture_gamma,
+                    "The display gamma the picture is shaped for: 2.20 is a PC monitor and the game as made, 2.40 "
+                    "the TVs the game was made for (darker mid tones). Seen when this menu closes, or at once "
+                    "with Pause game off.");
+}
+
+// Brightness 0, contrast 100% and gamma 2.20 again; greyed out while they already are.
+void PictureResetButton(SpartanSettings::Values& s) {
+    namespace G = SpartanGraphics;
+    const bool neutral = G::PictureNeutral(s.picture_brightness, s.picture_contrast, s.picture_gamma);
+    if (neutral) ImGui::BeginDisabled();
+    if (Button("Picture as made")) {
+        Store(s.picture_brightness, G::PictureBrightnessNeutral, true);
+        Store(s.picture_contrast, G::PictureContrastNeutral, true);
+        Store(s.picture_gamma, G::PictureGammaNeutral, true);
+    }
+    if (neutral) ImGui::EndDisabled();
+    Help("Brightness 0, contrast 100% and gamma 2.20: the picture exactly as the game draws it.");
+}
+
 const char* UpscalerLabel(int upscaler) {
     switch (upscaler) {
     case SpartanSettings::UpscalerFsr3: return "FSR 3.1";
@@ -589,6 +634,12 @@ void ImageTab() {
         CheckRow("VSync", s.vsync, "Waits for the monitor: no tearing, a little more input delay.");
         ImGui::EndTable();
     }
+    Separator("Picture");
+    if (BeginRows("##picture")) {
+        PictureRows(s);
+        ImGui::EndTable();
+    }
+    PictureResetButton(s);
     const int iw = s.image_width, ih = s.image_height, ww = s.window_width, wh = s.window_height;
     const bool downscaling = iw > ww || ih > wh;
     // With an upscaler the switch also controls the upscaler's own sharpening, so it stays usable; the

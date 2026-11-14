@@ -753,6 +753,16 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     // spartanport: black bars around a cutscene when the render resolution is not 16:9 (movie_bars.h).
     pp_settings.picture = MovieBars::Cutscenes().Bars(image_size.width, image_size.height,
                                                       MovieBars::NowMs());
+    // spartanport: the player's brightness, contrast and gamma, read once for the real and the
+    // generated frame. Neutral values skip the adjustment in the shader.
+    {
+        const int brightness = graphics.picture_brightness, contrast = graphics.picture_contrast;
+        const int gamma = graphics.picture_gamma;
+        pp_settings.picture_power = SpartanGraphics::PicturePower(gamma);
+        pp_settings.picture_contrast = SpartanGraphics::PictureContrast(contrast);
+        pp_settings.picture_brightness = SpartanGraphics::PictureBrightness(brightness);
+        pp_settings.picture_adjust = !SpartanGraphics::PictureNeutral(brightness, contrast, gamma);
+    }
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
     if (generated_image) {
         // The same passes over the generated frame, into a frame of its own.

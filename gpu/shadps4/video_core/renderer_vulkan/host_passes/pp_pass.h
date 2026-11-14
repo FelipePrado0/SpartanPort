@@ -22,8 +22,13 @@ public:
         u32 padding = 0; // std430: the vec4 below starts at offset 16
         // spartanport: the part of the input shown; the rest is drawn black (cutscene bars).
         MovieBars::Rect picture = MovieBars::Whole;
+        // spartanport: the player's picture controls (SpartanGraphics::Picture*); offsets 32 to 44.
+        float picture_power = 1.0f;
+        float picture_contrast = 1.0f;
+        float picture_brightness = 0.0f;
+        u32 picture_adjust = 0; // 0: the shader skips all three
     };
-    static_assert(sizeof(Settings) == 32);
+    static_assert(sizeof(Settings) == 48);
 
     void Create(vk::Device device, vk::Format surface_format);
 
