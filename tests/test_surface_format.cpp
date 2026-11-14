@@ -50,6 +50,14 @@ int main() {
     assert(FromDescriptor(6, 5) == vk::Format::eB10G11R11UfloatPack32);   // #1181, #1060
     assert(FromDescriptor(14, 1) == vk::Format::eR32G32B32A32Sfloat);     // 32_32_32_32 Snorm
 
+    // Formats with no number format representation in the table (e.g. unused data_format 15
+    // on GPUs without VK_EXT_vertex_input_dynamic_state, #1181) fall back to a safe format
+    // matching their numeric type rather than asserting.
+    assert(FromDescriptor(15, 5) == vk::Format::eR32G32B32A32Sint);       // #1181 (Medusa)
+    assert(FromDescriptor(15, 4) == vk::Format::eR32G32B32A32Uint);
+    assert(FromDescriptor(15, 7) == vk::Format::eR32G32B32A32Sfloat);
+    assert(FromDescriptor(15, 0) == vk::Format::eR8G8B8A8Unorm);
+
     // Values the hardware leaves unused are recognised; real formats are not.
     for (const u32 unused : {15u, 23u, 24u, 31u, 42u, 43u}) {
         assert(AmdGpu::IsUnusedDataFormat(unused));
