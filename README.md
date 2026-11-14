@@ -404,11 +404,11 @@ way back, from the port to shadPS4. That gets you past a place the port can't pl
 shadPS4, then bring the save back. It converts each slot's `param.bin` and `param.sfo` and keeps the
 dates the save list shows.
 
-Close the game, the launcher and shadPS4, then run in PowerShell:
+Close the game, the launcher and shadPS4, then run in PowerShell from the SpartanPort source folder (the one with `tools`; the release zip does not have it, get it from GitHub with Code > Download ZIP):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File shadps4_saves.ps1 -To ShadPS4 -Port C:\Games\spartanport-windows -ShadPS4 C:\Games\shadPS4
-powershell -ExecutionPolicy Bypass -File shadps4_saves.ps1 -To Port -Port C:\Games\spartanport-windows -ShadPS4 C:\Games\shadPS4
+powershell -ExecutionPolicy Bypass -File .\tools\shadps4_saves.ps1 -To ShadPS4 -Port C:\Games\spartanport-windows -ShadPS4 C:\Games\shadPS4
+powershell -ExecutionPolicy Bypass -File .\tools\shadps4_saves.ps1 -To Port -Port C:\Games\spartanport-windows -ShadPS4 C:\Games\shadPS4
 ```
 
 - `-Port` is the folder with `SpartanPort.exe`, or your custom **Saves folder**. `-ShadPS4` is

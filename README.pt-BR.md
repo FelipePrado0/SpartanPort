@@ -409,11 +409,11 @@ caminho de volta, do port para o shadPS4. Assim dá para passar de um trecho que
 jogue-o no shadPS4 e depois traga o save de volta. Ele converte o `param.bin` e o `param.sfo` de cada
 slot e mantém as datas mostradas na lista de saves.
 
-Feche o jogo, o launcher e o shadPS4 e execute no PowerShell:
+Feche o jogo, o launcher e o shadPS4 e execute no PowerShell a partir da pasta do código do SpartanPort (a que tem `tools`; o zip da release não traz essa pasta, baixe pelo GitHub em Code > Download ZIP):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File shadps4_saves.ps1 -To ShadPS4 -Port C:\Games\spartanport-windows -ShadPS4 C:\Games\shadPS4
-powershell -ExecutionPolicy Bypass -File shadps4_saves.ps1 -To Port -Port C:\Games\spartanport-windows -ShadPS4 C:\Games\shadPS4
+powershell -ExecutionPolicy Bypass -File .\tools\shadps4_saves.ps1 -To ShadPS4 -Port C:\Games\spartanport-windows -ShadPS4 C:\Games\shadPS4
+powershell -ExecutionPolicy Bypass -File .\tools\shadps4_saves.ps1 -To Port -Port C:\Games\spartanport-windows -ShadPS4 C:\Games\shadPS4
 ```
 
 - `-Port` é a pasta com `SpartanPort.exe`, ou a sua **Saves folder** personalizada. `-ShadPS4` é a

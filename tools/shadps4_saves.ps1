@@ -253,11 +253,19 @@ function Assert-Closed {
 # The lock the launcher takes to make or restore a save backup (save_restore.rs, where fs2 locks the
 # whole file). Held to the end, so the backup the launcher makes at start cannot copy half-done slots.
 function Lock-PortSaves([string]$user) {
-    $path = Join $user '.save-restore.lock'
+    Lock-File (Join $user '.save-restore.lock') "the launcher is making or restoring a save backup in ${user}: try again when it finishes"
+}
+
+# shadPS4's saves can be the target of two runs with different -Port folders: this lock keeps them apart.
+function Lock-ShadPS4Saves([string]$user) {
+    Lock-File (Join $user '.shadps4_saves.lock') "another copy of this script is copying saves in ${user}: try again when it finishes"
+}
+
+function Lock-File([string]$path, [string]$busy) {
     $file = [IO.FileStream]::new($path, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::ReadWrite)
     try { $file.Lock(0, [long]::MaxValue) } catch {
         $file.Dispose()
-        throw "the launcher is making or restoring a save backup in ${user}: try again when it finishes"
+        throw $busy
     }
     $file
 }
@@ -294,6 +302,7 @@ function Publish-Slots([string]$new, [string]$target, [string]$old) {
 
 $backupsMade = @()
 $lock = $null
+$shadLock = $null
 $stage = $null
 $keepStage = $false
 $failed = $false
@@ -312,9 +321,11 @@ try {
     else { $source = $shad.Saves; $target = $portSaves; $targetUser = $portUser }
     if (-not (Test-Path -LiteralPath $source -PathType Container)) { throw "no saves of $TitleId in $source" }
     $lock = Lock-PortSaves $portUser
+    $shadLock = Lock-ShadPS4Saves $shad.User
 
     $slots = @()
-    foreach ($dir in Get-ChildItem -LiteralPath $source -Directory | Where-Object { $_.Name -notlike '*.sce_sys' }) {
+    # sce_bu_<slot>, sce_bu_tmp_<slot> and sce_bu_old_<slot> are shadPS4's backups beside each slot (save_backup.cpp).
+    foreach ($dir in Get-ChildItem -LiteralPath $source -Directory | Where-Object { $_.Name -notlike '*.sce_sys' -and $_.Name -notlike 'sce_bu_*' }) {
         if ($To -eq 'ShadPS4') {
             $meta = Join $source "$($dir.Name).sce_sys" 'param.bin'
             if (-not (Test-Path -LiteralPath $meta -PathType Leaf)) { Write-Host "Skipped $($dir.Name): it has no $($dir.Name).sce_sys\param.bin (save it once in the port)"; continue }
@@ -384,6 +395,7 @@ try {
     if ($stage -and -not $keepStage -and (Test-Path -LiteralPath $stage)) {
         Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
     }
+    if ($shadLock) { $shadLock.Dispose() }
     if ($lock) { $lock.Dispose() }
 }
 if ($failed) { exit 1 }
