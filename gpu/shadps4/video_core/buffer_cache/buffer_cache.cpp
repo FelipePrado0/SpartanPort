@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <array>
+#include <atomic>
 #include <map>
 #include <unordered_map>
 #include <algorithm>
@@ -526,12 +527,14 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
                arena_memory_props.memoryHeaps[heap].size / 4 * 3;
     };
     const u32 limit_heap = heap_of(arena_memory_types[0]);
+    u32 reserved_types = 0; // skipped by the carve-out reserve, not refused by the driver
     for (const u32 type : arena_memory_types) {
         const u32 heap = heap_of(type);
         if (arena_limit_bytes != 0 && heap == limit_heap &&
             arena_heap_bytes[heap] + alloc_size > arena_limit_bytes) {
             last_result = vk::Result::eErrorOutOfDeviceMemory;
         } else if (carve_out_full(type)) {
+            reserved_types |= 1u << type;
             if ((arena_fallback_logged & (1u << type)) == 0) {
                 arena_fallback_logged |= 1u << type;
                 std::printf("GPU: buffer arena type %u is in device-local heap %u with %llu MiB "
@@ -566,6 +569,28 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
                         type, heap, (unsigned long long)(arena_heap_bytes[heap] >> 20),
                         (unsigned long long)(alloc_size >> 20), instance.HeapUsageText().c_str());
             std::fflush(stdout);
+        }
+    }
+    // spartanport: the reserve only steers arenas away from the carve-out; when every other type
+    // refused too (one device-local heap), ask the driver for the reserved types before failing.
+    for (const u32 type : arena_memory_types) {
+        if (device_memory || last_result != vk::Result::eErrorOutOfDeviceMemory ||
+            (reserved_types & (1u << type)) == 0) {
+            continue;
+        }
+        auto [result, memory] = instance.GetDevice().allocateMemory(
+            vk::MemoryAllocateInfo{.allocationSize = alloc_size, .memoryTypeIndex = type});
+        last_result = result;
+        if (result == vk::Result::eSuccess) {
+            device_memory = memory;
+            arena_heap_bytes[heap_of(type)] += alloc_size;
+            static std::atomic_flag noted = ATOMIC_FLAG_INIT;
+            if (!noted.test_and_set(std::memory_order_relaxed)) {
+                std::printf("GPU: buffer arena placed in the carve-out reserve (type %u): every "
+                            "other memory type refused; heaps:%s\n",
+                            type, instance.HeapUsageText().c_str());
+                std::fflush(stdout);
+            }
         }
     }
     if (!device_memory) {

@@ -266,10 +266,16 @@ void UniqueImage::Create(const vk::ImageCreateInfo& image_ci) {
         // spartanport: this image does not support the shared heap (format or usage
         // restrictions), or that heap is at its budget while the others are not. Fall back to
         // VMA's own choice before treating the failure as memory pressure.
+        const VkResult shared_result = result;
         VmaAllocationCreateInfo relaxed_ci = alloc_ci;
         relaxed_ci.memoryTypeBits = 0;
         result = vmaCreateImage(allocator, &image_ci_unsafe, &relaxed_ci, &unsafe_image,
                                 &allocation, &alloc_info);
+        // The retries below keep VMA's choice only when the shared heap cannot hold this image at
+        // all; a budget refusal retries in the shared heap, so the carve-out is not overcommitted.
+        if (shared_result != VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            alloc_ci.memoryTypeBits = 0;
+        }
     }
     if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
         // spartanport: WITHIN_BUDGET made VMA refuse once every allowed heap was at its budget. On
