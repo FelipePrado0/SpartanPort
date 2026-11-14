@@ -123,14 +123,25 @@ void TextureCache::WatchReadback(VAddr address, u64 size) {
 }
 
 void TextureCache::RetireReadbacks() {
+    auto* mem = Core::Memory::Instance();
     pending_readbacks.Retire([this](u64 tick) { return scheduler.IsFree(tick); },
-        [this](auto& entry) {
+        [this, mem](auto& entry) {
             if (entry.valid) {
-                entry.payload.Invalidate();
-                Core::Memory::Instance()->TryWriteBacking(std::bit_cast<u8*>(entry.address),
-                    entry.payload.mapped, entry.size);
+                bool cpu_overwrote = false;
+                if (!entry.watched && entry.has_release_hash) {
+                    if (mem->ClampRangeSize(entry.address, entry.size) != entry.size ||
+                        XXH3_64bits(std::bit_cast<const u8*>(entry.address), entry.size) !=
+                            entry.release_hash) {
+                        cpu_overwrote = true;
+                    }
+                }
+                if (!cpu_overwrote) {
+                    entry.payload.Invalidate();
+                    mem->TryWriteBacking(std::bit_cast<u8*>(entry.address),
+                                         entry.payload.mapped, entry.size);
+                    ++readbacks_completed;
+                }
                 if (entry.watched) WatchReadback<false>(entry.address, entry.size);
-                ++readbacks_completed;
             }
             runtime.GetStagingPool().FreeDeferred(entry.payload);
         });
@@ -152,8 +163,16 @@ bool TextureCache::ResolveReadbacks(VAddr address, u64 size, bool assume_locks,
         // 1x1 exposure copy, but not to its bytes. That write need not wait for the GPU: the
         // copy only stops protecting its page and is still published when the GPU is done.
         if (stale_readbacks && source == ReadbackSource::CpuWrite) {
+            auto* mem = Core::Memory::Instance();
             readbacks_released += pending_readbacks.ReleaseOutside(address, size, 64_KB,
-                [this](auto& entry) { WatchReadback<false>(entry.address, entry.size); });
+                [this, mem](auto& entry) {
+                    if (mem->ClampRangeSize(entry.address, entry.size) == entry.size) {
+                        entry.release_hash =
+                            XXH3_64bits(std::bit_cast<const u8*>(entry.address), entry.size);
+                        entry.has_release_hash = true;
+                    }
+                    WatchReadback<false>(entry.address, entry.size);
+                });
         }
         if (!pending_readbacks.RequiredTick(address, size, exact)) {
             if (exact && pending_readbacks.RequiredTick(address, size)) ++readbacks_neighbors;
@@ -1839,6 +1858,17 @@ void TextureCache::GarbageCollectImages() {
                 pressure_gc_memory = budget / 100 * 85;
                 critical_gc_memory = budget / 100 * 95;
             }
+        }
+        // spartanport: the heaps every 30 s, to follow memory use over a session in the log.
+        const auto now = std::chrono::steady_clock::now();
+        if (now - heap_report_time >= std::chrono::seconds(30)) {
+            heap_report_time = now;
+            std::printf("Memory: GPU usage %llu MiB (GC at %llu/%llu/%llu MiB); heaps:%s\n",
+                        (unsigned long long)(total_used_memory >> 20),
+                        (unsigned long long)(trigger_gc_memory >> 20),
+                        (unsigned long long)(pressure_gc_memory >> 20),
+                        (unsigned long long)(critical_gc_memory >> 20),
+                        instance.HeapUsageText().c_str());
         }
     }
     if (total_used_memory < trigger_gc_memory) {

@@ -229,6 +229,12 @@ int main() {
     assert(G::ParseMonitor(widest) == std::numeric_limits<int>::max());
     assert(G::ParseMonitor(std::to_string(std::numeric_limits<int>::max() + 1LL)) == G::PrimaryMonitor);
     assert(G::ParseMonitor("99999999999999999999") == G::PrimaryMonitor);
+    // HDR on for the window's display (window.cpp): SDL's flag, or an SDR white level above 1 (80 nits),
+    // which SDL reports only while Windows drives the display in HDR10. A 400-nit display with the SDR
+    // slider at 480 nits has a headroom under 1, so SDL's flag is off; the white level (6) still says on.
+    assert(G::HdrOnForDisplay(true, 1.0f) && G::HdrOnForDisplay(true, 2.5f));
+    assert(G::HdrOnForDisplay(false, 6.0f) && G::HdrOnForDisplay(false, 1.05f));
+    assert(!G::HdrOnForDisplay(false, 1.0f) && !G::HdrOnForDisplay(false, 0.0f));
     assert(G::ParseFpsLimit(240) == 240 && G::ParseFpsLimit(144) == 144 && G::ParseFpsLimit(180) == 180 && G::ParseFpsLimit(100) == 100 && G::ParseFpsLimit(75) == 0);
     assert(G::ParseResolution("900p") == 3 && G::ParseResolution("1440p") == 4 && G::ParseResolution("8K") == 25);
     // #964, #1038: 2880x1800 (16:10) and 5120x2880 (5K, 16:9).
@@ -263,6 +269,20 @@ int main() {
     assert(G::ParseFramesQueued(2) == 2 && G::ParseFramesQueued(0) == 0 && G::ParseFramesQueued(5) == 1);
     assert(G::ParseRcasStrength(100) == 100 && G::ParseRcasStrength(101) == 75 && G::ParseRcasStrength(-1) == 75);
     assert(G::RcasAttenuation(100) == 0.0f && G::RcasAttenuation(0) == 2.0f && G::RcasAttenuation(75) == 0.5f);
+    // Picture controls: only the neutral triple leaves the picture alone, and the mappings hold their ends.
+    assert(G::PictureNeutral(0, 100, 220) && !G::PictureNeutral(1, 100, 220) && !G::PictureNeutral(0, 99, 220) &&
+           !G::PictureNeutral(0, 100, 240));
+    assert(G::PicturePower(220) == 1.0f && G::PicturePower(180) == 180.0f / 220.0f && G::PicturePower(280) == 280.0f / 220.0f);
+    assert(G::PicturePower(100) == G::PicturePower(180) && G::PicturePower(999) == G::PicturePower(280));
+    assert(G::PictureContrast(100) == 1.0f && G::PictureContrast(50) == 0.5f && G::PictureContrast(150) == 1.5f);
+    assert(G::PictureContrast(0) == 0.5f && G::PictureContrast(400) == 1.5f);
+    assert(G::PictureBrightness(0) == 0.0f && G::PictureBrightness(-50) == -0.125f && G::PictureBrightness(50) == 0.125f);
+    assert(G::PictureBrightness(-90) == -0.125f && G::PictureBrightness(90) == 0.125f);
+    assert(G::ParsePictureGamma("2.4") == 240 && G::ParsePictureGamma("240") == 240 && G::ParsePictureGamma("2.2") == 220);
+    assert(G::ParsePictureGamma("") == 220 && G::ParsePictureGamma("9") == 280 && G::ParsePictureGamma("1") == 180);
+    assert(G::ParsePictureGamma("bogus") == 180 && G::ParsePictureGamma("-3") == 180 && G::ParsePictureGamma("2.45") == 245);
+    assert(G::ParsePictureGamma("nan") == 220 && G::ParsePictureGamma("inf") == 280 && G::ParsePictureGamma("-inf") == 180);
+    assert(G::ParsePictureGamma("1e100") == 280 && G::ParsePictureGamma("-1e100") == 180);
     assert(G::FsrPassRuns(true, false, 1280, 720, 2560, 1440) && !G::FsrPassRuns(false, false, 1280, 720, 2560, 1440));
     assert(G::FsrPassRuns(false, true, 1920, 1080, 1920, 1080) && !G::FsrPassRuns(true, false, 1920, 1080, 1920, 1080));
     assert(!G::FsrPassRuns(true, true, 2560, 1440, 1920, 1080));  // larger image: regular scaling
@@ -466,6 +486,159 @@ int main() {
         assert(v.depth_of_field);
         SpartanSettings::Save();
         assert(Read(path).find("depth_of_field=1\n") != std::string::npos);
+    }
+
+    {
+        // Picture controls: neutral by default, clamped, either gamma spelling, kept by Save().
+        const SpartanSettings::Values fresh{};
+        assert(G::PictureNeutral(fresh.picture_brightness, fresh.picture_contrast, fresh.picture_gamma));
+        {
+            std::ofstream out(path);
+            out << "picture_brightness=-20\npicture_contrast=120\npicture_gamma=2.4\n";
+        }
+        SpartanSettings::Load();
+        assert(v.picture_brightness == -20 && v.picture_contrast == 120 && v.picture_gamma == 240);
+        SpartanSettings::Save();
+        const std::string picture_ini = Read(path);
+        assert(picture_ini.find("picture_brightness=-20\n") != std::string::npos);
+        assert(picture_ini.find("picture_contrast=120\n") != std::string::npos);
+        assert(picture_ini.find("picture_gamma=240\n") != std::string::npos);
+        SpartanSettings::Load();  // what Save() wrote reads back the same
+        assert(v.picture_brightness == -20 && v.picture_contrast == 120 && v.picture_gamma == 240);
+        {
+            std::ofstream out(path);
+            out << "picture_brightness=900\npicture_contrast=900\npicture_gamma=900\n";
+        }
+        SpartanSettings::Load();
+        assert(v.picture_brightness == 50 && v.picture_contrast == 150 && v.picture_gamma == 280);
+        {
+            std::ofstream out(path);
+            out << "picture_brightness=-900\npicture_contrast=-900\npicture_gamma=0\n";
+        }
+        SpartanSettings::Load();
+        assert(v.picture_brightness == -50 && v.picture_contrast == 50 && v.picture_gamma == 180);
+        {
+            std::ofstream out(path);
+            out << "picture_brightness=\npicture_contrast=\npicture_gamma=\n";
+        }
+        SpartanSettings::Load();
+        assert(G::PictureNeutral(v.picture_brightness, v.picture_contrast, v.picture_gamma));
+        SetEnvironment("SPARTAN_PICTURE_BRIGHTNESS", "10");
+        SetEnvironment("SPARTAN_PICTURE_CONTRAST", "90");
+        SetEnvironment("SPARTAN_PICTURE_GAMMA", "2.6");
+        SpartanSettings::Load();
+        assert(v.picture_brightness == 10 && v.picture_contrast == 90 && v.picture_gamma == 260);
+        SetEnvironment("SPARTAN_PICTURE_BRIGHTNESS", "");
+        SetEnvironment("SPARTAN_PICTURE_CONTRAST", "");
+        SetEnvironment("SPARTAN_PICTURE_GAMMA", "");
+        {
+            std::ofstream out(path);
+            out << "picture_brightness=0\npicture_contrast=100\npicture_gamma=220\n";
+        }
+        SpartanSettings::Load();
+        assert(G::PictureNeutral(v.picture_brightness, v.picture_contrast, v.picture_gamma));
+    }
+
+    {
+        // HDR output's paper white and peak: their defaults, clamped, kept by Save(), env overrides.
+        const SpartanSettings::Values fresh{};
+        assert(fresh.hdr_paper_white == G::HdrPaperWhiteDefault && fresh.hdr_peak == G::HdrPeakDefault);
+        assert(fresh.hdr_paper_white == 200 && fresh.hdr_peak == 1000 && !fresh.hdr_active);
+        assert(fresh.hdr_auto && !fresh.hdr_paper_white_known && !fresh.hdr_peak_known);
+        {
+            std::ofstream out(path);
+            out << "hdr_paper_white=300\nhdr_peak=600\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 300 && v.hdr_peak == 600);
+        SpartanSettings::Save();
+        const std::string hdr_ini = Read(path);
+        assert(hdr_ini.find("hdr_paper_white=300\n") != std::string::npos);
+        assert(hdr_ini.find("hdr_peak=600\n") != std::string::npos);
+        SpartanSettings::Load();  // what Save() wrote reads back the same
+        assert(v.hdr_paper_white == 300 && v.hdr_peak == 600);
+        {
+            std::ofstream out(path);
+            out << "hdr_paper_white=9000\nhdr_peak=99999\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 500 && v.hdr_peak == 10000);
+        {
+            std::ofstream out(path);
+            out << "hdr_paper_white=10\nhdr_peak=-5\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 80 && v.hdr_peak == 400);
+        {
+            std::ofstream out(path);
+            out << "hdr_paper_white=\nhdr_peak=\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 200 && v.hdr_peak == 1000);
+        SetEnvironment("SPARTAN_HDR_PAPER_WHITE", "250");
+        SetEnvironment("SPARTAN_HDR_PEAK", "1500");
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 250 && v.hdr_peak == 1500);
+        SetEnvironment("SPARTAN_HDR_PAPER_WHITE", "");
+        SetEnvironment("SPARTAN_HDR_PEAK", "");
+        {
+            std::ofstream out(path);
+            out << "hdr_paper_white=200\nhdr_peak=1000\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_paper_white == 200 && v.hdr_peak == 1000);
+
+        // Match Windows HDR settings (hdr_auto): on by default and when empty, kept by Save(), env override.
+        {
+            std::ofstream out(path);
+            out << "hdr_auto=0\n";
+        }
+        SpartanSettings::Load();
+        assert(!v.hdr_auto);
+        SpartanSettings::Save();
+        assert(Read(path).find("hdr_auto=0\n") != std::string::npos);
+        {
+            std::ofstream out(path);
+            out << "hdr_auto=\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_auto);
+        SpartanSettings::Save();
+        assert(Read(path).find("hdr_auto=1\n") != std::string::npos);
+        SetEnvironment("SPARTAN_HDR_AUTO", "0");
+        SpartanSettings::Load();
+        assert(!v.hdr_auto);
+        SetEnvironment("SPARTAN_HDR_AUTO", "");
+        {
+            std::ofstream out(path);
+            out << "hdr_auto=1\n";
+        }
+        SpartanSettings::Load();
+        assert(v.hdr_auto);
+
+        // The display's values (SDL: SDR white level in units of 80 nits, headroom as a multiple of it).
+        // Windows at 200 nits on a 1000-nit display: 2.5 and 5.
+        const G::HdrNits typical = G::HdrFromDisplay(2.5f, 5.0f);
+        assert(typical.paper_white_known && typical.peak_known && typical.paper_white == 200 && typical.peak == 1000);
+        // A 400-nit display with Windows' SDR white at 480 nits: SDL's headroom (400 / 480) is raised to
+        // its floor of 1, so the display's maximum is lost. Paper white is known; the peak is not and
+        // keeps the default (the slider's value is used).
+        const G::HdrNits bright = G::HdrFromDisplay(6.0f, 1.0f);
+        assert(bright.paper_white_known && bright.paper_white == 480);
+        assert(!bright.peak_known && bright.peak == G::HdrPeakDefault);
+        // The Windows slider at 0 (80 nits, white level 1) on a 360-nit display: both known, the peak
+        // raised to the slider's 400-nit minimum.
+        const G::HdrNits dim = G::HdrFromDisplay(1.0f, 4.5f);
+        assert(dim.paper_white_known && dim.peak_known && dim.paper_white == 80 && dim.peak == 400);
+        // Clamped to the sliders' ranges.
+        const G::HdrNits wide = G::HdrFromDisplay(10.0f, 40.0f);
+        assert(wide.paper_white_known && wide.peak_known && wide.paper_white == 500 && wide.peak == 10000);
+        // Nothing reported (both 1, or not numbers): neither known, with the defaults.
+        for (const G::HdrNits none : {G::HdrFromDisplay(1.0f, 1.0f), G::HdrFromDisplay(0.0f, 0.5f),
+                                      G::HdrFromDisplay(std::numeric_limits<float>::quiet_NaN(),
+                                                        std::numeric_limits<float>::infinity())}) {
+            assert(!none.paper_white_known && !none.peak_known && none.paper_white == 200 && none.peak == 1000);
+        }
     }
 
     {
