@@ -231,25 +231,36 @@ bool PipelineBinaryCacheRequested() {
     return !setting || *setting != '0';
 }
 
-// NVIDIA 595.x (595.104.02, 595.112.07) returns from vkGetPipelineKeyKHR(device, nullptr, key) with
-// rbx, a callee-saved register, set to 1; 615.78.08 keeps it. A caller holding the key pointer in rbx
-// then crashed reading 0x11. Pipeline keys (non-null info) and the other binary calls keep rbx.
+// The global key query, vkGetPipelineKeyKHR(device, nullptr, key), returns with callee-saved
+// registers changed on NVIDIA drivers: rbx set to 1 on 595.x for Linux (595.104.02, 595.112.07;
+// 615.78.08 keeps it), and rdi set to 0 or 1 on Windows (#1352: GTX 1660 Ti, MX550, RTX 4060
+// Laptop).
+// A caller holding the key pointer in that register then crashed reading 0x11 or 0x10.
 #if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
-// The clobber makes this function save rbx on entry and restore it on return, whatever the driver
-// left in it, and keep no value in rbx across the call; noinline keeps that to this one call.
-[[gnu::noinline]] VkResult GetGlobalPipelineKeyKeepingRbx(VkDevice device, VkPipelineBinaryKeyKHR* key) {
+// The clobbers make this function save on entry and restore on return every callee-saved register
+// of the Win64 ABI (rbx, rsi, rdi, r12 to r15, xmm6 to xmm15), whatever the driver left in it, and
+// keep no value in them across the call; noinline keeps that to this one call. On SysV only rbx and
+// r12 to r15 of these are callee-saved, and the compiler saves just those. rbp cannot be listed: it
+// is the frame pointer (-fno-omit-frame-pointer) and GCC rejects it ("bp cannot be used in asm
+// here"). The prologue pushes rbp and the epilogue pops it, but an epilogue may also address the
+// saved registers through rbp, so a driver that changed rbp is not covered.
+[[gnu::noinline]] VkResult GetGlobalPipelineKeyKeepingRegisters(VkDevice device,
+                                                                VkPipelineBinaryKeyKHR* key) {
     const VkResult result = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetPipelineKeyKHR(device, nullptr, key);
-    asm volatile("" ::: "rbx");
+    asm volatile("" ::
+                     : "rbx", "rsi", "rdi", "r12", "r13", "r14", "r15", "xmm6", "xmm7", "xmm8",
+                       "xmm9", "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15");
     return result;
 }
 #endif
 
-// The global pipeline key (vkGetPipelineKeyKHR with no create info) into key: through the rbx-keeping
-// wrapper on x86-64 GCC/Clang, directly elsewhere. Returns the driver's result; key is unchecked.
+// The global pipeline key (vkGetPipelineKeyKHR with no create info) into key: through the
+// register-keeping wrapper on x86-64 GCC/Clang, directly elsewhere. Returns the driver's result;
+// key is unchecked.
 vk::Result GetGlobalPipelineKey(vk::Device device, vk::PipelineBinaryKeyKHR& key) {
 #if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
-    return vk::Result{GetGlobalPipelineKeyKeepingRbx(static_cast<VkDevice>(device),
-                                                     reinterpret_cast<VkPipelineBinaryKeyKHR*>(&key))};
+    return vk::Result{GetGlobalPipelineKeyKeepingRegisters(
+        static_cast<VkDevice>(device), reinterpret_cast<VkPipelineBinaryKeyKHR*>(&key))};
 #else
     return device.getPipelineKeyKHR(nullptr, &key);
 #endif
