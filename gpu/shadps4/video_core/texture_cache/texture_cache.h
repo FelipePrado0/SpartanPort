@@ -403,9 +403,6 @@ private:
         }
     }
 
-    /// Copies image memory back to CPU.
-    void DownloadImageMemory(ImageId image_id, bool sync = false);
-
     /// spartanport: a recorded image-to-staging copy, written to guest memory after a GPU wait.
     struct PendingDownload {
         VAddr guest_address;
@@ -474,7 +471,7 @@ private:
     tsl::robin_map<u64, Sampler> samplers;
     std::unordered_set<ImageId> download_images;
     u64 total_used_memory = 0;
-    u64 gc_evictions = 0, gc_downloads = 0; ///< spartanport: pressure report
+    u64 gc_evictions = 0; ///< spartanport: pressure report
     // spartanport: count old tiled images retained by the latest pass for pressure diagnostics.
     u64 gc_kept = 0, gc_kept_bytes = 0;
     std::chrono::steady_clock::time_point gc_report_time{};

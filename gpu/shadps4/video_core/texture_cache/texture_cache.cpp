@@ -420,50 +420,6 @@ std::optional<TextureCache::PendingDownload> TextureCache::RecordImageDownload(I
     return PendingDownload{image.info.guest_address, download_size, download};
 }
 
-void TextureCache::DownloadImageMemory(ImageId image_id, bool sync) {
-    Image& image = slot_images[image_id];
-    ResolveReadbacks(image.info.guest_address, image.info.guest_size, true,
-                     ReadbackSource::ImageDownload);
-    if (False(image.flags & ImageFlagBits::GpuModified)) {
-        return;
-    }
-    const u32 download_size = image.info.pitch * image.info.size.height * image.info.size.depth *
-                              image.info.resources.layers * (image.info.num_bits / 8);
-    ASSERT(download_size <= image.info.guest_size);
-    const auto download =
-        runtime.GetStagingPool().Request(download_size, MemoryType::HostCached, 16, !sync);
-    const vk::BufferImageCopy image_download = {
-        .bufferOffset = download.offset,
-        .bufferRowLength = image.info.pitch,
-        .bufferImageHeight = image.info.size.height,
-        .imageSubresource =
-            {
-                .aspectMask = image.info.props.is_depth ? vk::ImageAspectFlagBits::eDepth
-                                                        : vk::ImageAspectFlagBits::eColor,
-                .mipLevel = 0,
-                .baseArrayLayer = 0,
-                .layerCount = image.info.resources.layers,
-            },
-        .imageOffset = {0, 0, 0},
-        .imageExtent = {image.info.size.width, image.info.size.height, image.info.size.depth},
-    };
-    runtime.DownloadImage(&image, download.buffer, std::span{&image_download, 1});
-    if (sync) {
-        scheduler.Finish();
-        download.Invalidate();
-        Core::Memory::Instance()->TryWriteBacking(std::bit_cast<u8*>(image.info.guest_address),
-                                                  download.mapped, download_size);
-    } else {
-        scheduler.DeferPriorityOperation(
-            [this, device_addr = image.info.guest_address, download, download_size] {
-                download.Invalidate();
-                Core::Memory::Instance()->TryWriteBacking(std::bit_cast<u8*>(device_addr),
-                                                          download.mapped, download_size);
-                runtime.GetStagingPool().FreeDeferred(download);
-            });
-    }
-}
-
 void TextureCache::DiagDumpImage(ImageId image_id, const char* tag) {
     Image& image = slot_images[image_id];
     const u32 bytes_per_pixel = image.info.num_bits / 8;
@@ -1901,7 +1857,6 @@ void TextureCache::GarbageCollectImages() {
         ResolveReadbacks(image.info.guest_address, image.info.guest_size, true,
                          ReadbackSource::CacheCleanup);
         const bool download = image.SafeToDownload();
-        const bool tiled = image.info.IsTiled();
         // spartanport: a neighboring CPU write can leave the only valid contents on the GPU.
         // GPU-dirty images are not kept; their data is in the buffer cache.
         // Keep unresolved images below critical; test usage so the first pass can free them too.
@@ -1909,29 +1864,17 @@ void TextureCache::GarbageCollectImages() {
             True(image.flags & ImageFlagBits::GpuModified) && !download &&
             False(image.flags & ImageFlagBits::GpuDirty) &&
             False(image.flags & ImageFlagBits::CpuDirty) && total_used_memory < critical_gc_memory;
-        if ((tiled && download) || gpu_contents_unresolved) {
-            // This is a workaround for now. We can't handle non-linear image downloads.
-            // spartanport: report kept tiled or unresolved images and move them behind evictable
-            // entries.
+        if (download || gpu_contents_unresolved) {
+            // spartanport: GPU-written images stay, reported and moved behind evictable entries.
+            // Writing a linear one back before evicting it corrupted textures across the game
+            // under memory pressure (#1059: reproduced with a 1500 MiB budget, gone when kept).
             ++gc_kept;
             gc_kept_bytes += image.info.guest_size;
             lru_cache.Touch(image.lru_id, gc_tick);
             return false;
         }
-        if (download && !pressured) {
-            // spartanport: kept linear images must not block the next pass either.
-            lru_cache.Touch(image.lru_id, gc_tick);
-            return false;
-        }
         // spartanport: only actual evictions spend the deletion budget.
         --num_deletions;
-        if (download) {
-            // spartanport: synchronously, while the image still protects its pages. A deferred
-            // write-back landed after FreeImage had unprotected them, over whatever the game
-            // had meanwhile stored there (e.g. its heap after unloading an area).
-            DownloadImageMemory(image_id, true);
-            ++gc_downloads;
-        }
         ++gc_evictions;
         FreeImage(image_id);
         if (total_used_memory < critical_gc_memory) {
@@ -1958,20 +1901,20 @@ void TextureCache::GarbageCollectImages() {
         lru_cache.ForEachItemBelow(gc_tick - ticks_to_destroy, clean_up);
     }
     // spartanport: evictions under memory pressure, at most every 5 s (SPARTAN_FRAME_STATS or not).
-    if (pressured || gc_downloads != 0) {
+    if (pressured) {
         const auto now = std::chrono::steady_clock::now();
         if (now - gc_report_time >= std::chrono::seconds(5)) {
             // spartanport: expose tiled or unresolved images that the latest pass cannot evict.
             std::printf("Texture cache: memory pressure, %llu of %llu MiB (critical %llu): "
-                        "%llu images evicted, %llu written back since the last report; "
+                        "%llu images evicted since the last report; "
                         "%llu old GPU-written images kept (%llu MiB)\n",
                         (unsigned long long)(total_used_memory >> 20),
                         (unsigned long long)(pressure_gc_memory >> 20),
                         (unsigned long long)(critical_gc_memory >> 20),
-                        (unsigned long long)gc_evictions, (unsigned long long)gc_downloads,
+                        (unsigned long long)gc_evictions,
                         (unsigned long long)gc_kept, (unsigned long long)(gc_kept_bytes >> 20));
             gc_report_time = now;
-            gc_evictions = gc_downloads = 0;
+            gc_evictions = 0;
         }
     }
 }
