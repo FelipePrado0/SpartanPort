@@ -138,6 +138,19 @@ fn the_settings_line_reads_like_the_mockup() {
 }
 
 #[test]
+fn an_unknown_output_resolution_shows_the_one_the_game_uses() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    mockup_settings(&mut state);
+    // The game ignores a value it does not know and keeps 1920x1080 (#1316).
+    state.store.set("output_res", json!("samzian"));
+    assert_eq!(
+        home::quick_line(&state),
+        "1920 × 1080 · 120 FPS · Fullscreen · Monitor 1"
+    );
+}
+
+#[test]
 fn the_settings_line_leaves_out_the_parked_keys() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state_in(dir.path());
