@@ -17,6 +17,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+/* The GPU tests force-include this header into C++ files: keep the C names. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef O_NONBLOCK
 #define O_NONBLOCK 0
 #endif
@@ -78,5 +83,8 @@ int compat_cpu_times(int who, int64_t *user_us, int64_t *kernel_us);
 typedef unsigned long long spartanport_jmp_buf[32];
 __attribute__((returns_twice)) int spartanport_setjmp(spartanport_jmp_buf buffer);
 __attribute__((noreturn)) void spartanport_longjmp(spartanport_jmp_buf buffer, int value);
+#ifdef __cplusplus
+}
+#endif
 #endif
 #endif

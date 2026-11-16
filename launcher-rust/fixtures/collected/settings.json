@@ -57,6 +57,6 @@
   "switch_attacks": false,
   "glyph_style": "off",
   "patches_offered": [
-    "High FPS Wall Seam Fix"
+    "CUSA01623:High FPS Wall Seam Fix"
   ]
 }
