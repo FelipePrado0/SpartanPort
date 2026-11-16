@@ -100,8 +100,9 @@ fn offer_key(title_id: &str, name: &str) -> String {
 
 fn was_offered(done: &[Value], title_id: &str, name: &str) -> bool {
     let key = offer_key(title_id, name);
-    done.iter()
-        .any(|offered| offered == key.as_str() || (title_id == LEGACY_OFFER_TITLE && offered == name))
+    done.iter().any(|offered| {
+        offered == key.as_str() || (title_id == LEGACY_OFFER_TITLE && offered == name)
+    })
 }
 
 /// The new default patches of the game `title_id` belongs to.
@@ -120,7 +121,9 @@ fn offer_new_default_patches(saved: &mut Map<String, Value>) {
     let before = done.len();
     if let Some(Value::Object(all)) = saved.get_mut("game_patches") {
         for (title_id, list) in all.iter_mut() {
-            let Some(list) = list.as_array_mut() else { continue };
+            let Some(list) = list.as_array_mut() else {
+                continue;
+            };
             for name in new_defaults_for(title_id) {
                 if was_offered(&done, title_id, name) {
                     continue;
@@ -367,7 +370,10 @@ mod tests {
             .clone();
         offer_new_default_patches(&mut saved);
         assert_eq!(patches(&saved), ["Skip Intro", "High FPS Wall Seam Fix"]);
-        assert_eq!(saved["patches_offered"], json!(["CUSA01623:High FPS Wall Seam Fix"]));
+        assert_eq!(
+            saved["patches_offered"],
+            json!(["CUSA01623:High FPS Wall Seam Fix"])
+        );
         // Unticked by the player afterwards: it stays off.
         saved["game_patches"]["CUSA01623"] = json!(["Skip Intro"]);
         offer_new_default_patches(&mut saved);
@@ -405,7 +411,10 @@ mod tests {
         .clone();
         offer_new_default_patches(&mut saved);
         for id in ["CUSA01715", "CUSA01720", "CUSA01740"] {
-            assert!(list(&saved, id).contains(&"High FPS Wall Seam Fix".to_string()), "{id}");
+            assert!(
+                list(&saved, id).contains(&"High FPS Wall Seam Fix".to_string()),
+                "{id}"
+            );
         }
         // Unticked in one release afterwards: it stays off there.
         saved["game_patches"]["CUSA01715"] = json!(["Skip Intro"]);
@@ -424,15 +433,24 @@ mod tests {
         .clone();
         offer_new_default_patches(&mut saved);
         assert_eq!(list(&saved, "CUSA01623"), ["Skip Intro"]);
-        assert_eq!(list(&saved, "CUSA01715"), ["Skip Intro", "High FPS Wall Seam Fix"]);
+        assert_eq!(
+            list(&saved, "CUSA01715"),
+            ["Skip Intro", "High FPS Wall Seam Fix"]
+        );
     }
 
     #[test]
     fn the_patches_page_marks_the_release_it_shows() {
         let mut saved = Map::new();
         mark_default_patches_offered(&mut saved, "CUSA01740");
-        assert_eq!(saved["patches_offered"], json!(["CUSA01740:High FPS Wall Seam Fix"]));
+        assert_eq!(
+            saved["patches_offered"],
+            json!(["CUSA01740:High FPS Wall Seam Fix"])
+        );
         mark_default_patches_offered(&mut saved, "CUSA99999");
-        assert_eq!(saved["patches_offered"], json!(["CUSA01740:High FPS Wall Seam Fix"]));
+        assert_eq!(
+            saved["patches_offered"],
+            json!(["CUSA01740:High FPS Wall Seam Fix"])
+        );
     }
 }
