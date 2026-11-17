@@ -635,7 +635,9 @@ std::pair<int, int> UpscaleRenderSize(int preset, int width, int height) {
     const double scale = PresetScale(preset);
     const auto even = [](double value) { return int(std::round(value / 2.0) * 2.0); };
     const int w = std::clamp(even(width / scale), 640, 7680), h = std::clamp(even(height / scale), 360, 4320);
-    if ((w == width && h == height) || (w == 1920 && h == 1080)) return {w - 2, h - 2};
+    // Near 1920x1080 a scene rounding up to it played the pre-rendered cutscenes black (#1184).
+    if (w == 1920 && h == 1080) return {1904, 1072};
+    if (w == width && h == height) return {w - 2, h - 2};
     if (h == 480) return {w, 478}; // at this height the game shows a third of the frame, zoomed in
     return {w, h};
 }

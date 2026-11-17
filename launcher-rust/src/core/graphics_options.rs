@@ -429,7 +429,9 @@ const PRESET_SCALES: [f64; 6] = [1.0, 1.5, 1.7, 2.0, 3.0, 1.3];
 /// The game's render size for an upscaler preset and output size: even, from 640x360 to 7680x4320.
 /// Never the game's own 1920x1080 nor the output size (Native AA): at that size the game composites
 /// straight into the display buffer, before the upscaler can run, so it is 2 pixels short instead.
-/// None for an unknown preset.
+/// Near 1920x1080 that is not enough: a scene that rounds up to 1920x1080 (width to 16, height to
+/// 8, 1918x1078 for one) played the pre-rendered cutscenes black (#1184), so 1920x1080 renders at
+/// 1904x1072, still 16:9. None for an unknown preset.
 pub fn upscale_render_size(preset: &str, output: (u32, u32)) -> Option<(u32, u32)> {
     let scale = *PRESET_SCALES.get(preset.trim().parse::<usize>().ok()?)?;
     let even = |value: f64| ((value / 2.0).round() * 2.0) as u32;
@@ -437,7 +439,10 @@ pub fn upscale_render_size(preset: &str, output: (u32, u32)) -> Option<(u32, u32
         even(f64::from(output.0) / scale).clamp(640, 7680),
         even(f64::from(output.1) / scale).clamp(360, 4320),
     );
-    if size == output || size == (1920, 1080) {
+    if size == (1920, 1080) {
+        return Some((1904, 1072));
+    }
+    if size == output {
         return Some((size.0 - 2, size.1 - 2));
     }
     // At a height of 480 the game shows a third of the frame, zoomed in.
@@ -1384,11 +1389,12 @@ render_resolution=3440x1440
         assert_eq!(upscale_render_size("1", (3840, 2160)), Some((2560, 1440)));
         assert_eq!(upscale_render_size("5", (3840, 2160)), Some((2954, 1662)));
         // Never the game's 1920x1080 nor the output (Native AA): at that size the game composites
-        // straight into the display buffer, before the upscaler can run.
-        assert_eq!(upscale_render_size("0", (1920, 1080)), Some((1918, 1078)));
+        // straight into the display buffer, before the upscaler can run. Near 1920x1080 a scene that
+        // rounds up to it played the pre-rendered cutscenes black (#1184): 1904x1072 instead.
+        assert_eq!(upscale_render_size("0", (1920, 1080)), Some((1904, 1072)));
         assert_eq!(upscale_render_size("0", (2560, 1440)), Some((2558, 1438)));
         assert_eq!(upscale_render_size("0", (3840, 2160)), Some((3838, 2158)));
-        assert_eq!(upscale_render_size("3", (3840, 2160)), Some((1918, 1078)));
+        assert_eq!(upscale_render_size("3", (3840, 2160)), Some((1904, 1072)));
         for preset in ["0", "1", "2", "3", "4", "5"] {
             let (w, h) = upscale_render_size(preset, (2560, 1440)).unwrap();
             assert_eq!((w % 2, h % 2), (0, 0), "{preset}");
@@ -1478,12 +1484,12 @@ output_res=1280x720
         let mut off = on.clone();
         off.insert("SPARTAN_UPSCALER".into(), "off".into());
         assert_eq!(upscaler_render_size(&ini, &off), None);
-        // FSR 3.1 with Native AA at 1080p: the 1918x1078 patch (the game's own 1920x1080 would
+        // FSR 3.1 with Native AA at 1080p: the 1904x1072 patch (the game's own 1920x1080 would
         // composite straight into the display buffer in that session).
         fs::write(&ini, "upscaler=fsr3\npreset=0\nrender_resolution=native\n").unwrap();
         assert_eq!(
             upscaler_render_size(&ini, &on),
-            Some((1918, 1078, (1920, 1080)))
+            Some((1904, 1072, (1920, 1080)))
         );
         // FSR 3.1 with native HUD and text: no patch at any preset, the game keeps its own targets.
         for preset in ["0", "1", "3"] {
