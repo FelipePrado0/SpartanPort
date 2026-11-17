@@ -62,10 +62,11 @@ static uint32_t call_circle(unsigned char* stub, void* pad) {
 }
 
 // r14: the pad; the held buttons come back in r9d.
-static uint32_t call_charged(unsigned char* stub, void* pad) {
-    uint32_t result;
+// eax: the bit the update tests next (the prompt's button + 2); the held buttons come back in r9d.
+static uint32_t call_charged(unsigned char* stub, void* pad, uint32_t bit) {
+    uint32_t result = bit;
     register void* r14 asm("r14") = pad;
-    asm volatile("call *%1" : "=a"(result) : "r"(stub), "r"(r14) : "r9", "memory", "cc");
+    asm volatile("call *%1" : "+a"(result) : "r"(stub), "r"(r14) : "r9", "memory", "cc");
     return result;
 }
 
@@ -199,10 +200,11 @@ int main(int argc, char** argv) {
     assert(state.kinds[SPARTAN_QTE_COUNT_CIRCLE] == 4);
     std::memcpy(pad + 0x94, &held, 4);
 
-    // Charged press: the held buttons, or all of them.
-    assert(call_charged(charged, pad) == held);
+    // Charged press: the held buttons, plus only the prompt's own one when automatic, so another
+    // button (X to kick a dragged object) still reaches the game as a new press (#1291).
+    assert(call_charged(charged, pad, 7) == held);
     automatic = true;
-    assert(call_charged(charged, pad) == 0xffffffffu);
+    assert(call_charged(charged, pad, 7) == (held | 0x80u));
     automatic = false;
     assert(state.kinds[SPARTAN_QTE_COUNT_CHARGED] == 2 && state.heartbeat == 2);
 
