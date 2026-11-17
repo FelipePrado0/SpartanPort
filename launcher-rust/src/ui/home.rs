@@ -550,8 +550,18 @@ pub fn quick_segments(state: &State) -> Vec<(String, bool)> {
         .text("monitor")
         .parse::<u32>()
         .map_or(1, |index| index.saturating_add(1));
+    // The game ignores an output size it does not know and keeps its 1920x1080 (#1316).
+    let output = state.store.text("output_res");
+    let output = if OUTPUTS.iter().any(|choice| choice.value == output) {
+        output
+    } else {
+        "1920x1080".to_string()
+    };
     let items = [
-        (short(OUTPUTS, "output_res"), true),
+        (
+            short_label(&choice_label(OUTPUTS, &output, lang)).to_string(),
+            true,
+        ),
         (fps, true),
         (
             choice_label(DISPLAY_MODES, &state.store.text("display_mode"), lang),

@@ -151,6 +151,22 @@ fn the_settings_line_leaves_out_the_parked_keys() {
 }
 
 #[test]
+fn an_unknown_output_resolution_shows_the_one_the_game_uses() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    mockup_settings(&mut state);
+    // The game ignores a value it does not know and keeps 1920x1080 (#1316).
+    for saved in ["samzian", "1366x768", ""] {
+        state.store.set("output_res", json!(saved));
+        assert!(
+            home::quick_line(&state).starts_with("1920 × 1080 · "),
+            "{saved:?}: {}",
+            home::quick_line(&state)
+        );
+    }
+}
+
+#[test]
 fn the_monitor_counts_from_one() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state_in(dir.path());
