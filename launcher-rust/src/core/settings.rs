@@ -78,10 +78,14 @@ pub fn app_defaults(env: &dyn Fn(&str) -> Option<String>) -> Map<String, Value> 
         .collect()
 }
 
-/// Built-in patches that became on by default after players had saved their list. A saved list
-/// is exact, so each is ticked in it once; `patches_offered` remembers that, and unticking it
+/// Built-in patches that became on by default after players had saved their list, by the patch
+/// file that holds them. A saved list is exact, so each is ticked once in the list of every title
+/// ID that uses that file; `patches_offered` remembers "<title ID>:<patch>", and unticking it
 /// later sticks. ponytail: a fixed list, read the XML defaults if more such patches come.
-const NEW_DEFAULT_PATCHES: &[(&str, &str)] = &[("CUSA01623", "High FPS Wall Seam Fix")];
+const NEW_DEFAULT_PATCHES: &[(&str, &str)] = &[("CUSA01623.xml", "High FPS Wall Seam Fix")];
+
+/// 3.2.0 offered the patch in CUSA01623's list only and saved its bare name.
+const LEGACY_OFFER_TITLE: &str = "CUSA01623";
 
 fn offered(saved: &Map<String, Value>) -> Vec<Value> {
     match saved.get("patches_offered") {
@@ -90,24 +94,45 @@ fn offered(saved: &Map<String, Value>) -> Vec<Value> {
     }
 }
 
-/// Ticks each new default patch once in a saved list; with no saved list the XML defaults apply
-/// and nothing changes.
+fn offer_key(title_id: &str, name: &str) -> String {
+    format!("{title_id}:{name}")
+}
+
+fn was_offered(done: &[Value], title_id: &str, name: &str) -> bool {
+    let key = offer_key(title_id, name);
+    done.iter().any(|offered| {
+        offered == key.as_str() || (title_id == LEGACY_OFFER_TITLE && offered == name)
+    })
+}
+
+/// The new default patches of the game `title_id` belongs to.
+fn new_defaults_for(title_id: &str) -> impl Iterator<Item = &'static str> + '_ {
+    let xml = crate::core::game::game_profile(Some(title_id), None).map(|game| game.xml);
+    NEW_DEFAULT_PATCHES
+        .iter()
+        .filter(move |(file, _)| Some(*file) == xml)
+        .map(|(_, name)| *name)
+}
+
+/// Ticks each new default patch once in every saved list; with no saved list the XML defaults
+/// apply and nothing changes.
 fn offer_new_default_patches(saved: &mut Map<String, Value>) {
     let mut done = offered(saved);
     let before = done.len();
-    for (title_id, name) in NEW_DEFAULT_PATCHES {
-        if done.iter().any(|offered| offered == name) {
-            continue;
-        }
-        let list = saved
-            .get_mut("game_patches")
-            .and_then(|all| all.get_mut(*title_id))
-            .and_then(Value::as_array_mut);
-        if let Some(list) = list {
-            if !list.iter().any(|chosen| chosen == name) {
-                list.push(json!(name));
+    if let Some(Value::Object(all)) = saved.get_mut("game_patches") {
+        for (title_id, list) in all.iter_mut() {
+            let Some(list) = list.as_array_mut() else {
+                continue;
+            };
+            for name in new_defaults_for(title_id) {
+                if was_offered(&done, title_id, name) {
+                    continue;
+                }
+                if !list.iter().any(|chosen| chosen == name) {
+                    list.push(json!(name));
+                }
+                done.push(json!(offer_key(title_id, name)));
             }
-            done.push(json!(name));
         }
     }
     if done.len() > before {
@@ -120,9 +145,9 @@ fn offer_new_default_patches(saved: &mut Map<String, Value>) {
 pub fn mark_default_patches_offered(saved: &mut Map<String, Value>, title_id: &str) {
     let mut done = offered(saved);
     let before = done.len();
-    for (_, name) in NEW_DEFAULT_PATCHES.iter().filter(|(id, _)| *id == title_id) {
-        if !done.iter().any(|offered| offered == name) {
-            done.push(json!(name));
+    for name in new_defaults_for(title_id) {
+        if !was_offered(&done, title_id, name) {
+            done.push(json!(offer_key(title_id, name)));
         }
     }
     if done.len() > before {
@@ -345,7 +370,10 @@ mod tests {
             .clone();
         offer_new_default_patches(&mut saved);
         assert_eq!(patches(&saved), ["Skip Intro", "High FPS Wall Seam Fix"]);
-        assert_eq!(saved["patches_offered"], json!(["High FPS Wall Seam Fix"]));
+        assert_eq!(
+            saved["patches_offered"],
+            json!(["CUSA01623:High FPS Wall Seam Fix"])
+        );
         // Unticked by the player afterwards: it stays off.
         saved["game_patches"]["CUSA01623"] = json!(["Skip Intro"]);
         offer_new_default_patches(&mut saved);
@@ -362,5 +390,67 @@ mod tests {
         mark_default_patches_offered(&mut saved, "CUSA01623");
         offer_new_default_patches(&mut saved);
         assert_eq!(patches(&saved), ["Skip Intro"]);
+    }
+
+    fn list(saved: &Map<String, Value>, title_id: &str) -> Vec<String> {
+        saved["game_patches"][title_id]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn every_release_of_the_game_gets_the_new_default_once() {
+        let mut saved = json!({"game_patches": {
+            "CUSA01715": ["Skip Intro"], "CUSA01720": [], "CUSA01740": ["Skip Intro"]}})
+        .as_object()
+        .unwrap()
+        .clone();
+        offer_new_default_patches(&mut saved);
+        for id in ["CUSA01715", "CUSA01720", "CUSA01740"] {
+            assert!(
+                list(&saved, id).contains(&"High FPS Wall Seam Fix".to_string()),
+                "{id}"
+            );
+        }
+        // Unticked in one release afterwards: it stays off there.
+        saved["game_patches"]["CUSA01715"] = json!(["Skip Intro"]);
+        offer_new_default_patches(&mut saved);
+        assert_eq!(list(&saved, "CUSA01715"), ["Skip Intro"]);
+    }
+
+    #[test]
+    fn the_3_2_0_offer_counts_only_for_cusa01623() {
+        // 3.2.0 wrote the bare patch name after offering it in CUSA01623's list only.
+        let mut saved = json!({
+            "game_patches": {"CUSA01623": ["Skip Intro"], "CUSA01715": ["Skip Intro"]},
+            "patches_offered": ["High FPS Wall Seam Fix"]})
+        .as_object()
+        .unwrap()
+        .clone();
+        offer_new_default_patches(&mut saved);
+        assert_eq!(list(&saved, "CUSA01623"), ["Skip Intro"]);
+        assert_eq!(
+            list(&saved, "CUSA01715"),
+            ["Skip Intro", "High FPS Wall Seam Fix"]
+        );
+    }
+
+    #[test]
+    fn the_patches_page_marks_the_release_it_shows() {
+        let mut saved = Map::new();
+        mark_default_patches_offered(&mut saved, "CUSA01740");
+        assert_eq!(
+            saved["patches_offered"],
+            json!(["CUSA01740:High FPS Wall Seam Fix"])
+        );
+        mark_default_patches_offered(&mut saved, "CUSA99999");
+        assert_eq!(
+            saved["patches_offered"],
+            json!(["CUSA01740:High FPS Wall Seam Fix"])
+        );
     }
 }

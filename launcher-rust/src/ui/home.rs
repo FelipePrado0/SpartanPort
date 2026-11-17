@@ -16,6 +16,7 @@ use iced::{
     Rectangle, Renderer, Right, Size, Theme, Top, Vector,
 };
 
+use crate::core::catalog::{setting, Default};
 use crate::core::gpu::chosen_gpu;
 use crate::core::i18n::{tr, tr_fmt};
 use crate::core::options::{short_label, Choice, DISPLAY_MODES, FPS_LIMITS, OUTPUTS};
@@ -537,6 +538,16 @@ pub fn status_line(state: &State) -> String {
 /// counts from 1.
 pub fn quick_segments(state: &State) -> Vec<(String, bool)> {
     let lang = state.lang.as_str();
+    // A value the table does not know shows the default, which is what the game then uses.
+    let short = |table: &[Choice], key: &str| {
+        let mut value = state.store.text(key);
+        if !table.iter().any(|choice| choice.value == value) {
+            if let Some(Default::Text(default)) = setting(key).map(|s| &s.default) {
+                value = (*default).to_string();
+            }
+        }
+        short_label(&choice_label(table, &value, lang)).to_string()
+    };
     let fps = match state.store.text("fps_limit").as_str() {
         "0" => choice_label(FPS_LIMITS, "0", lang),
         limit => format!("{limit} FPS"),
@@ -547,18 +558,8 @@ pub fn quick_segments(state: &State) -> Vec<(String, bool)> {
         .text("monitor")
         .parse::<u32>()
         .map_or(1, |index| index.saturating_add(1));
-    // The game ignores an output size it does not know and keeps its 1920x1080 (#1316).
-    let output = state.store.text("output_res");
-    let output = if OUTPUTS.iter().any(|choice| choice.value == output) {
-        output
-    } else {
-        "1920x1080".to_string()
-    };
     let items = [
-        (
-            short_label(&choice_label(OUTPUTS, &output, lang)).to_string(),
-            true,
-        ),
+        (short(OUTPUTS, "output_res"), true),
         (fps, true),
         (
             choice_label(DISPLAY_MODES, &state.store.text("display_mode"), lang),

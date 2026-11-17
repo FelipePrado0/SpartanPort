@@ -3764,7 +3764,7 @@ dependencies = [
 
 [[package]]
 name = "spartanport-launcher"
-version = "3.2.0"
+version = "3.2.1"
 dependencies = [
  "ab_glyph_rasterizer",
  "chrono",
