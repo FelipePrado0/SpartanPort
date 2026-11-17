@@ -537,9 +537,6 @@ pub fn status_line(state: &State) -> String {
 /// counts from 1.
 pub fn quick_segments(state: &State) -> Vec<(String, bool)> {
     let lang = state.lang.as_str();
-    let short = |table: &[Choice], key: &str| {
-        short_label(&choice_label(table, &state.store.text(key), lang)).to_string()
-    };
     let fps = match state.store.text("fps_limit").as_str() {
         "0" => choice_label(FPS_LIMITS, "0", lang),
         limit => format!("{limit} FPS"),
