@@ -112,7 +112,7 @@ pub fn view(state: &State) -> Element<'_, Message> {
             &tr(lang, "Upscaler"),
             select("upscaler", UPSCALERS, &ini("upscaler"), lang),
             Some(&hint(if ini("upscaler") == "fsr3ui" {
-                "FSR 3.1 (native HUD and text): the game keeps its own 1920x1080 targets, so the HUD, text and loading screens are not stretched (FSR 3.1 draws everything at 1918x1078 with Native AA). Has the port's own sharpening in the in-game menu. Experimental."
+                "FSR 3.1 (native HUD and text): the game keeps its own 1920x1080 targets, so the HUD, text and loading screens are not stretched (FSR 3.1 draws everything at 1904x1072 with Native AA). Has the port's own sharpening in the in-game menu. Experimental."
             } else if ini("upscaler") == "xess" {
                 "XeSS (Intel): anti-aliasing at the game's own resolution, in place of the TAA's accumulation. Needs libxess.dll next to the game (the Windows package includes it). Texture detail and sharpening are in the in-game menu. Experimental."
             } else {

@@ -425,10 +425,10 @@ class SteamDeckTest(unittest.TestCase):
     def test_the_scene_is_never_the_display_size(self):
         # At the game's own 1920x1080 (or the output size) the game composites straight into the
         # display buffer, before the upscaler can run: 2 pixels short instead.
-        self.assertEqual(g.upscale_render_size(0, (1920, 1080)), (1918, 1078))
+        self.assertEqual(g.upscale_render_size(0, (1920, 1080)), (1904, 1072))
         self.assertEqual(g.upscale_render_size(0, (2560, 1440)), (2558, 1438))
         self.assertEqual(g.upscale_render_size(0, (3840, 2160)), (3838, 2158))
-        self.assertEqual(g.upscale_render_size(3, (3840, 2160)), (1918, 1078))
+        self.assertEqual(g.upscale_render_size(3, (3840, 2160)), (1904, 1072))
 
     def test_upscaler_output_is_the_chosen_render_resolution(self):
         on = {'SPARTAN_EXPERIMENTAL_UPSCALER': '1'}

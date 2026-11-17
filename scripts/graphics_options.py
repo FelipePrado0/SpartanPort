@@ -119,7 +119,9 @@ def upscale_render_size(preset, output):
         return None
     even = lambda value: 2 * round(value / 2)
     size = (min(max(even(output[0] / scale), 640), 7680), min(max(even(output[1] / scale), 360), 4320))
-    if size in (tuple(output), SIZES['native']):
+    if size == SIZES['native']:
+        size = (1904, 1072)  # a scene rounding up to 1920x1080 played cutscenes black (#1184)
+    elif size == tuple(output):
         size = (size[0] - 2, size[1] - 2)
     return size
 

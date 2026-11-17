@@ -194,7 +194,9 @@ static inline uint64_t spartanport_qte_call_target(const unsigned char *code, ui
 }
 
 /* Charged press (hold): the update loads the held buttons (mov r9d, [r14+0x94]) and fills the bar
- * while bit button+2 is set. With the byte set every button is held. */
+ * while bit button+2 (eax, tested next with bt r9d, eax) is set. With the byte set that bit is held
+ * on top of the real buttons: holding all of them kept the drag prompt (R1, it never fills) from
+ * ever seeing a new X press, so Kratos could not kick the object and stayed stuck (#1291). */
 static const SpartanSignature spartanport_qte_charged_site = {
     "83 c0 02 45 8b 8e 94 00 00 00 44 20 c2 31 f6 41 0f a3 c1", 3};
 static inline unsigned spartanport_qte_build_charged_stub(unsigned char *out, uintptr_t count, uintptr_t automatic,
@@ -203,8 +205,8 @@ static inline unsigned spartanport_qte_build_charged_stub(unsigned char *out, ui
         0x49,0xb9, 0,0,0,0,0,0,0,0,               /* movabs r9, auto */
         0x41,0x80,0x39,0x00,                      /* cmp byte [r9], 0 */
         0x45,0x8b,0x8e,0x94,0x00,0x00,0x00,       /* mov r9d, [r14+0x94] */
-        0x74,0x06,                                /* je back */
-        0x41,0xb9,0xff,0xff,0xff,0xff,            /* mov r9d, -1: held */
+        0x74,0x04,                                /* je back */
+        0x41,0x0f,0xab,0xc1,                      /* bts r9d, eax: the prompt's button held */
     };
     const unsigned n0 = spartanport_qte_count(out, count);
     memcpy(out + n0, body, sizeof(body));

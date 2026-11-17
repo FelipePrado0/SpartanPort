@@ -897,12 +897,12 @@ static UI_EXTRA: &[(&str, &[(&str, &str)])] = &[
         ],
     ),
     (
-        "FSR 3.1 (native HUD and text): the game keeps its own 1920x1080 targets, so the HUD, text and loading screens are not stretched (FSR 3.1 draws everything at 1918x1078 with Native AA). Has the port's own sharpening in the in-game menu. Experimental.",
+        "FSR 3.1 (native HUD and text): the game keeps its own 1920x1080 targets, so the HUD, text and loading screens are not stretched (FSR 3.1 draws everything at 1904x1072 with Native AA). Has the port's own sharpening in the in-game menu. Experimental.",
         &[
-            ("zh", "FSR 3.1（原生 HUD 与文字）：游戏保留自身的 1920x1080 渲染目标，因此 HUD、文字和加载画面不会被拉伸（原生 AA 下的 FSR 3.1 会以 1918x1078 绘制全部内容）。游戏内菜单提供本移植版自带的锐化。实验性功能。"),
-            ("pt", "FSR 3.1 (HUD e texto nativos): o jogo mantém seus próprios alvos de 1920x1080, então a HUD, o texto e as telas de carregamento não são esticados (o FSR 3.1 desenha tudo em 1918x1078 com Native AA). Tem a nitidez própria do port no menu do jogo. Experimental."),
-            ("es", "FSR 3.1 (HUD y texto nativos): el juego mantiene sus propios objetivos de 1920x1080, así que el HUD, el texto y las pantallas de carga no se estiran (el FSR 3.1 dibuja todo a 1918x1078 con Native AA). Tiene el enfoque propio del port en el menú del juego. Experimental."),
-            ("cs", "FSR 3.1 (nativní HUD a text): hra si ponechá vlastní cíle 1920×1080, takže HUD, text a loadingy se neroztahují (FSR 3.1 s Native AA kreslí všechno v 1918×1078). V herním menu má vlastní ostření portu. Experimentální."),
+            ("zh", "FSR 3.1（原生 HUD 与文字）：游戏保留自身的 1920x1080 渲染目标，因此 HUD、文字和加载画面不会被拉伸（原生 AA 下的 FSR 3.1 会以 1904x1072 绘制全部内容）。游戏内菜单提供本移植版自带的锐化。实验性功能。"),
+            ("pt", "FSR 3.1 (HUD e texto nativos): o jogo mantém seus próprios alvos de 1920x1080, então a HUD, o texto e as telas de carregamento não são esticados (o FSR 3.1 desenha tudo em 1904x1072 com Native AA). Tem a nitidez própria do port no menu do jogo. Experimental."),
+            ("es", "FSR 3.1 (HUD y texto nativos): el juego mantiene sus propios objetivos de 1920x1080, así que el HUD, el texto y las pantallas de carga no se estiran (el FSR 3.1 dibuja todo a 1904x1072 con Native AA). Tiene el enfoque propio del port en el menú del juego. Experimental."),
+            ("cs", "FSR 3.1 (nativní HUD a text): hra si ponechá vlastní cíle 1920×1080, takže HUD, text a loadingy se neroztahují (FSR 3.1 s Native AA kreslí všechno v 1904×1072). V herním menu má vlastní ostření portu. Experimentální."),
         ],
     ),
     (
