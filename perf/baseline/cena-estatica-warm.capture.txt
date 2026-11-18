@@ -1,0 +1,134 @@
+presented buffer 0x10ba9f8000
+
+#0 PASS draws 6 (indices 1008), vs/ps 30e354c9bbe4f109 30e354c9fa8dbe71
+  color0 0x10b9a08000 R8G8B8A8Srgb 1920x1080
+  depth  0x10c6b30000 D32SfloatS8Uint 1920x1080
+  state samples c1 d1 r1 equal shading 0 | stencil t0 w0 c0 | zclear none | ds DepthStencilReadOnlyOptimal | fb 0 | area 1920x1080
+  samples 0x10e0370c00 Bc3UnormBlock 256x128
+  samples 0x10cfa17a00 Bc3UnormBlock 1024x512
+  note: 
+  blend ps fa8dbe71 idx 192: src 4 dst 5 func 0 z 10
+  blend ps fa8dbe71 idx 150: src 4 dst 5 func 0 z 10
+  blend ps fa8dbe71 idx 144: src 4 dst 5 func 0 z 10
+  blend ps fa8dbe71 idx 174: src 4 dst 5 func 0 z 10
+  blend ps fa8dbe71 idx 174: src 4 dst 5 func 0 z 10
+  blend ps fa8dbe71 idx 174: src 4 dst 5 func 0 z 10
+  buffer stage 30e354c9bbe4f109 slot 0 at 0x114d200ebc size 64:
+    [  0]      1.96855            0            0            0            0      3.49965            0            0
+    [  8]           -0            0           -1           -1           -0           -0    -0.500001           -0
+  buffer stage 30e354c9bbe4f109 slot 0 at 0x114d200f7c size 64:
+    [  0]      1.96855            0            0            0            0      3.49965            0            0
+    [  8]           -0            0           -1           -1           -0           -0    -0.500001           -0
+  buffer stage 30e354c9bbe4f109 slot 0 at 0x114d20103c size 64:
+    [  0]      1.96855            0            0            0            0      3.49965            0            0
+    [  8]           -0            0           -1           -1           -0           -0    -0.500001           -0
+  buffer stage 30e354c9bbe4f109 slot 0 at 0x114d2010fc size 64:
+    [  0]      1.96855            0            0            0            0      3.49965            0            0
+    [  8]           -0            0           -1           -1           -0           -0    -0.500001           -0
+
+#1 PASS draws 37 (indices 12816), vs/ps c0fc9fb7bbe4f109 c0fc9fb7dde36e11 6bb8b900bdf2186d 6bb8b90042c89056
+  color0 0x10b9a08000 R8G8B8A8Srgb 1920x1080
+  color1 0x10c8c00000 R8G8B8A8Srgb 1920x1080
+  depth  0x10c6b30000 D32SfloatS8Uint 1920x1080
+  state samples c1,1 d1 r1 equal shading 0 | stencil t0 w0 c0 | zclear none | ds DepthStencilReadOnlyOptimal | fb 0 | area 1920x1080
+  samples 0x10e01e8400 Bc3UnormBlock 256x256
+  samples 0x10ec769c00 Bc1RgbaUnormBlock 1024x512
+  samples 0x10cf569e00 Bc3UnormBlock 1024x1024
+  samples 0x10d007de00 Bc3UnormBlock 512x256
+  samples 0x10d00a9600 Bc3UnormBlock 512x256
+  note: 
+  blend ps dde36e11 idx 402: src 4 dst 1 func 0 z 10
+  blend ps dde36e11 idx 162: src 4 dst 1 func 0 z 10
+  blend ps dde36e11 idx 294: src 4 dst 1 func 0 z 10
+  blend ps dde36e11 idx 294: src 4 dst 1 func 0 z 10
+  blend ps dde36e11 idx 294: src 4 dst 1 func 0 z 10
+  blend ps dde36e11 idx 294: src 4 dst 1 func 0 z 10
+  blend ps dde36e11 idx 258: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 342: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 348: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 342: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 498: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 162: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 600: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 600: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 336: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 60: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 600: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 72: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 600: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 324: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 90: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 498: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 186: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 138: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 600: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 600: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 150: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 600: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 600: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 150: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 600: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 600: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 48: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 108: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 18: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 600: src 4 dst 1 func 0 z 10
+  blend ps 42c89056 idx 348: src 4 dst 1 func 0 z 10
+  buffer stage c0fc9fb7bbe4f109 slot 0 at 0x114d20133c size 64:
+    [  0]      1.96855            0            0            0            0      3.49965            0            0
+    [  8]           -0            0           -1           -1           -0           -0    -0.500001           -0
+  buffer stage c0fc9fb7bbe4f109 slot 0 at 0x114d2013fc size 64:
+    [  0]      1.96855            0            0            0            0      3.49965            0            0
+    [  8]           -0            0           -1           -1           -0           -0    -0.500001           -0
+  buffer stage c0fc9fb7bbe4f109 slot 0 at 0x114d2014bc size 64:
+    [  0]      1.96855            0            0            0            0      3.49965            0            0
+    [  8]           -0            0           -1           -1           -0           -0    -0.500001           -0
+  buffer stage c0fc9fb7bbe4f109 slot 0 at 0x114d20157c size 64:
+    [  0]      1.96855            0            0            0            0      3.49965            0            0
+    [  8]           -0            0           -1           -1           -0           -0    -0.500001           -0
+
+#2 PASS draws 2 (indices 12), vs/ps 683cb941d9bba52f 683cb941b24f0169
+  color0 -
+  depth  0x10c6b30000 D32SfloatS8Uint 1920x1080
+  state samples c0 d1 r1 equal shading 0 | stencil t0 w0 c0 | zclear none | ds DepthStencilReadOnlyOptimal | fb 0 | area 1920x1080
+  note: 
+  blend ps b24f0169 idx 6: src 4 dst 1 func 0 z 10
+  blend ps b24f0169 idx 6: src 4 dst 1 func 0 z 10
+  buffer stage 683cb941d9bba52f slot 0 at 0x114d2034dc size 32:
+    [  0]    -0.273271    -0.390755      27.9047      28.4046         0.05    0.0888889            0            0
+  buffer stage 683cb941d9bba52f slot 0 at 0x114d20350c size 32:
+    [  0]      2.61227     0.632341      425.741      426.239         0.05    0.0888889            0            0
+
+#3 PASS draws 2 (indices 7), vs/ps 06a65fa677985107 06a65fa6ddab4a1a 4047d5f777985107 4047d5f72ed88f23
+  color0 0x10c63b0000 R8G8B8A8Srgb 960x540
+  depth  -
+  state samples c1 d0 r1 equal shading 0 | stencil t0 w0 c0 | zclear none | ds - | fb 0 | area 960x540
+  samples 0x10c76a0000 R32Sfloat 1920x1080
+  buffer stage 06a65fa6ddab4a1a slot 0 at 0x114d20354c size 16:
+    [  0]     0.363365     0.695377      28.4046            1
+  buffer stage 4047d5f72ed88f23 slot 0 at 0x114d2035a0 size 32:
+    [  0]     0.363365     0.695377      28.4046            1         0.05    0.0888889            0            0
+
+#4 PASS draws 1 (indices 4), vs/ps 6bd6064f77985107 6bd6064f26080ea8
+  color0 0x10c65f0000 R8G8B8A8Srgb 960x540
+  depth  -
+  state samples c1 d0 r1 equal shading 0 | stencil t0 w0 c0 | zclear none | ds - | fb 0 | area 960x540
+  samples 0x10c63b0000 R8G8B8A8Srgb 960x540
+  buffer stage 6bd6064f26080ea8 slot 0 at 0x114d2035f8 size 16:
+    [  0]     0.363365     0.695377      28.4046            1
+
+#5 PASS draws 1 (indices 4), vs/ps 6bd6064f77985107 6bd6064f26080ea8
+  color0 0x10c63b0000 R8G8B8A8Srgb 960x540
+  depth  -
+  state samples c1 d0 r1 equal shading 0 | stencil t0 w0 c0 | zclear none | ds - | fb 0 | area 960x540
+  samples 0x10c65f0000 R8G8B8A8Srgb 960x540
+  buffer stage 6bd6064f26080ea8 slot 0 at 0x114d203650 size 16:
+    [  0]     0.363365     0.695377      28.4046            1
+
+#6 PASS draws 1 (indices 4), vs/ps 6bd6064f77985107 6bd6064f26080ea8
+  color0 0x10c65f0000 R8G8B8A8Srgb 960x540
+  depth  -
+  state samples c1 d0 r1 equal shading 0 | stencil t0 w0 c0 | zclear none | ds - | fb 0 | area 960x540
+  samples 0x10c63b0000 R8G8B8A8Srgb 960x540
+  buffer stage 6bd6064f26080ea8 slot 0 at 0x114d2036a0 size 16:
+    [  0]     0.363365     0.695377      28.4046            1

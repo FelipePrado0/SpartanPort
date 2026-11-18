@@ -1,0 +1,67 @@
+{
+  "scenario": "troca-de-area",
+  "cache": "warm",
+  "runs": 3,
+  "runs_requested": 3,
+  "summary": {
+    "fps_median": 203.3,
+    "us_per_draw_median": null,
+    "draws_per_frame_median": 1343.5,
+    "p99_frametime_ms": 12.96,
+    "frames_over_25ms": 4,
+    "frames_over_40ms": 2,
+    "window_compiles": 2,
+    "worst_frame_ms": 70.8,
+    "crashes": 0,
+    "crash_line": ""
+  },
+  "spread": {
+    "fps_median": [
+      201.2,
+      206.5
+    ],
+    "us_per_draw_median": [
+      null,
+      null
+    ],
+    "draws_per_frame_median": [
+      1334.0,
+      1344.5
+    ],
+    "p99_frametime_ms": [
+      12.83,
+      12.98
+    ],
+    "frames_over_25ms": [
+      3,
+      5
+    ],
+    "frames_over_40ms": [
+      2,
+      2
+    ],
+    "window_compiles": [
+      2,
+      2
+    ],
+    "worst_frame_ms": [
+      70.0,
+      70.9
+    ]
+  },
+  "infra_fail": null,
+  "limits": {},
+  "machine": {
+    "gpu": "AMD Radeon RX 6700 XT"
+  },
+  "build": "b358431d+dirty",
+  "toggles": 0,
+  "date": "2026-11-18T17:09:27",
+  "run_ids": [
+    "troca-de-area-warm-20261118-170226-2",
+    "troca-de-area-warm-20261118-170226-3",
+    "troca-de-area-warm-20261118-170226-4"
+  ],
+  "load_s": 32.5,
+  "source": "troca-de-area-warm-20261118-170226.json"
+}
