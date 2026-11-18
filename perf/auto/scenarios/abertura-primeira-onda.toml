@@ -1,0 +1,28 @@
+name = "abertura-primeira-onda"
+description = "Issue #1260: New Game, the opening up to the first wave, with Automatic QTE and infinite health, attacking by pad."
+start = "new-game"
+settle_s = 0
+duration_s = 240
+min_draws = 300
+timeout_s = 900
+loop_steps = true
+
+[[steps]]
+pad = "ly=0 square"
+hold_s = 0.3
+wait_s = 0.2
+
+[[steps]]
+pad = "square"
+hold_s = 0.2
+wait_s = 0.2
+
+[[steps]]
+pad = "triangle"
+hold_s = 0.3
+wait_s = 0.3
+
+[[steps]]
+pad = "cross lx=200"
+hold_s = 0.3
+wait_s = 0.3

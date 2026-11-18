@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# perf/auto/full: every scenario, warm and cold, the whole shader corpus and the launcher checks (see quick).
+PERF_MODE=full exec bash "$(dirname -- "$0")/quick" "$@"

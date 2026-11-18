@@ -1,0 +1,9 @@
+name = "cena-estatica"
+description = "Second row of the test saves (Destroyed Chambers, no enemies), camera still, no input: CPU/GPU baseline and toggle A/B."
+start = "load"
+load_index = 1
+settle_s = 15
+duration_s = 60
+min_draws = 600
+capture = true
+timeout_s = 420
