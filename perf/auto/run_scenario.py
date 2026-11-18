@@ -204,6 +204,7 @@ class Game:
         })
         if self.s["replay"]:
             env["SPARTAN_PAD_REPLAY"] = self.s["replay"]
+        env.update(self.s["env"])
         exe = REPO / "launcher-rust" / "target" / "release" / (
             "spartanport-launcher.exe" if sys.platform == "win32" else "spartanport-launcher")
         if not exe.exists():

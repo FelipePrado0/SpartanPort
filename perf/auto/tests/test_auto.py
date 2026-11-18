@@ -240,6 +240,10 @@ class Scenario(unittest.TestCase):
             s = scenario.load(f)
             self.assertTrue(s["name"])
 
+    def test_env_switches_become_game_values(self):
+        s = scenario.load(self.write('name = "x"\n[env]\nSPARTAN_GPU_PROFILE = true\nSPARTAN_X = 3\n'))
+        self.assertEqual(s["env"], {"SPARTAN_GPU_PROFILE": "1", "SPARTAN_X": "3"})
+
     def test_defaults_and_ini_strings(self):
         s = scenario.load(self.write('name = "x"\n[ini]\ncheat_health = 1\n[[steps]]\npad = "rx=60 square"\n'))
         self.assertEqual(s["start"], "load")
@@ -249,7 +253,9 @@ class Scenario(unittest.TestCase):
     def test_rejects(self):
         for bad in ['start = "load"', 'name = "x"\nfoo = 1', 'name = "x"\nstart = "menu"',
                     'name = "x"\n[[steps]]\npad = "jump"', 'name = "x"\n[[steps]]\npad = "lx=300"',
-                    'name = "x"\nduration_s = 900', 'name = "x"\n[[steps]]\nhold_s = 1']:
+                    'name = "x"\nduration_s = 900', 'name = "x"\n[[steps]]\nhold_s = 1',
+                    'name = "x"\n[env]\nPATH = "x"', 'name = "x"\n[env]\nSPARTAN_USER_DIR = "C:/u"',
+                    'name = "x"\n[env]\nSPARTAN_CONFIG = "a.ini"', 'name = "x"\n[env]\nSPARTAN_PAD_FILE = "p"']:
             with self.assertRaises(scenario.ScenarioError, msg=bad):
                 scenario.load(self.write(bad + "\n"))
 

@@ -12,6 +12,8 @@
     loop_steps = true         # repeat [[steps]] until the window ends
     replay = ""               # or a SPARTAN_PAD_REPLAY file (relative to the scenario)
 
+    [env]                     # SPARTAN_* diagnostics for this scenario, e.g. SPARTAN_GPU_PROFILE = 1
+
     [ini]                     # spartanport.ini overrides for this scenario
     cheat_health = "1"
 
@@ -28,15 +30,26 @@ from pathlib import Path
 DEFAULTS = {
     "start": "load", "load_index": 0, "expect_save": "", "settle_s": 20, "duration_s": 60,
     "min_draws": 600, "capture": False, "timeout_s": 600, "loop_steps": False, "replay": "",
-    "ini": {}, "steps": [], "limits": {}, "description": "",
+    "ini": {}, "env": {}, "steps": [], "limits": {}, "description": "",
 }
 PAD_BUTTONS = {"cross", "circle", "square", "triangle", "l1", "r1", "l2", "r2", "l3", "r3", "options",
                "touchpad", "touchpad_left", "touchpad_right", "up", "down", "left", "right",
                "weapon_next", "weapon_prev", "replay"}
 
 
+# Set by perf/auto/run_scenario.py itself.
+ORCHESTRATOR_ENV = {"SPARTAN_PAD_FILE", "SPARTAN_TOGGLE_FILE", "SPARTAN_FRAME_STATS", "SPARTAN_FPS_LIMIT",
+                    "SPARTAN_STALL_MS", "SPARTAN_PAD_REPLAY"}
+PATH_SUFFIXES = ("_DIR", "_FILE", "_CONFIG", "_TRIGGER", "_RECORD", "_REPLAY", "_PATH")
+
+
 class ScenarioError(ValueError):
     pass
+
+
+def env_value(v):
+    """TOML true/false as the game's 1/0 switches; numbers and text as written."""
+    return ("1" if v else "0") if isinstance(v, bool) else str(v)
 
 
 def validate_pad(tokens):
@@ -74,4 +87,10 @@ def load(path):
     if s["replay"]:
         s["replay"] = str((path.parent / s["replay"]).resolve())
     s["ini"] = {k: str(v) for k, v in s["ini"].items()}
+    # Only diagnostics the scenario names (inherited SPARTAN_* are dropped by the orchestrator). No
+    # folders, files or the orchestrator's own variables: they could point the game at real saves.
+    for k in s["env"]:
+        if not k.startswith("SPARTAN_") or k in ORCHESTRATOR_ENV or k.endswith(PATH_SUFFIXES):
+            raise ScenarioError(f"{path.name}: [env] {k} is not allowed (SPARTAN_* diagnostics only)")
+    s["env"] = {k: env_value(v) for k, v in s["env"].items()}
     return s
