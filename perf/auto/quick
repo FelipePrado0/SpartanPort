@@ -24,6 +24,7 @@ build() {
 }
 l0() {
     $PY -m unittest discover -s perf/auto/tests > "$out/l0-perf.log" 2>&1 || { echo "FAIL perf/auto tests"; return 1; }
+    $PY -m unittest discover -s perf/harness/tests >> "$out/l0-perf.log" 2>&1 || { echo "FAIL perf/harness tests"; return 1; }
     if [[ $mode == full ]]; then
         (cd launcher-rust && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test) \
             > "$out/l0-cargo.log" 2>&1 || { echo "FAIL launcher cargo (see $out/l0-cargo.log)"; return 1; }
