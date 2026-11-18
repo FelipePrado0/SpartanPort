@@ -410,7 +410,7 @@ def run_once(s, args, run_id, cold):
         result["crash"] = ended  # no crash line in the log: the exit itself is the evidence
     caps = sorted((run_dir / "captures").glob("frame_*.txt")) if (run_dir / "captures").exists() else []
     result["capture"] = str(caps[-1]) if caps else None
-    (run_dir / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    (run_dir / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8", newline="\n")
     return result
 
 
@@ -501,7 +501,7 @@ def main(argv=None):
     combined = combine(s, args, runs)
     Path(args.out).mkdir(parents=True, exist_ok=True)
     out = Path(args.out) / f"{s['name']}-{args.cache}-{stamp}.json"
-    out.write_text(json.dumps(combined, indent=2), encoding="utf-8")
+    out.write_text(json.dumps(combined, indent=2), encoding="utf-8", newline="\n")  # LF: baselines are copied from it
     print(f"result: {out}")
     return 2 if combined["infra_fail"] else 0
 
