@@ -1,8 +1,9 @@
 # WV-A: inventário das ferramentas de validação sem jogador
 
 Executado em 2026-11-18, Windows 11 (MSYS2 CLANG64 e Git Bash), Ryzen 5 5600X, AMD RX 6700 XT,
-build `origin/main` @ `b358431d` num worktree limpo (`perf/wv`). Jogo CUSA01623 01.02 (eboot
-`d85c8135…`), dump em disco local. Linux não foi testado nesta máquina: toda linha "Linux" abaixo é
+build `origin/main` @ `b358431d` num worktree limpo (`perf/wv`). Jogo CUSA01623 com eboot
+`d85c8135…` (código da 1.00; o `param.sfo` diz 01.02 porque só o `sce_sys` veio do pacote 1.02),
+dump em disco local. Linux não foi testado nesta máquina: toda linha "Linux" abaixo é
 leitura de código, marcada como tal.
 
 Legenda: **OK** rodou e fez o que promete; **FALHA** rodou e não fez; **NÃO RODA** não chega a rodar

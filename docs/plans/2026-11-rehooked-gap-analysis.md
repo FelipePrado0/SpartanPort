@@ -35,8 +35,9 @@ Tags: **[VERIFICADO]** lido no código; **[INFERIDO]** dedução; **[A CONFIRMAR
 
 ## Decisão G1
 
-**G1 = "sem dados".** O W0 não mediu o rehooked: rodar o binário dele exige baixar a release e
-extraí-la numa cópia separada da pasta do jogo 01.02, o que depende do mantenedor. Pela regra do
+**G1 = "sem dados".** O W0 não mediu o rehooked. Ele só aceita o eboot da 1.02 real
+(sha256 `6e72330e…`), e o único dump desta máquina tem o eboot `d85c8135…`, que é o código da 1.00
+(procurado em todos os discos em 2026-11-18). Sem um dump 1.02 real, a comparação não roda. Pela regra do
 roadmap, W4 fica bloqueado; W2 e W3 seguem. O perfil por thread do SpartanPort (passo 2 do W1) também
 não foi feito: no Windows o `us/draw` sai `0.00` e o perfil precisa de ETW/WPA ou de Linux.
 
