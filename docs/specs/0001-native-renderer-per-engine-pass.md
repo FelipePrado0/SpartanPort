@@ -22,3 +22,11 @@ The game's graphics currently reach the screen through GPU emulation built from 
 - The Native renderer lives in its own `renderer/` directory, outside the vendored tree, so removing GPU emulation is a deletion of `gpu/shadps4` and `gpu/shim`.
 - Target is Vulkan 1.3 core with no required optional extensions; D3D12 or D3D11 come later only if a GPU or driver needs them. macOS stays out of scope.
 - Reverse engineering uses REA with Ghidra. Only signatures, documentation of engine structures and functions, and original code go into the repository, never decompiled game code or game shaders.
+
+## Status in 2026-11
+
+Recorded, not a change of scope: this spec stays accepted as written.
+
+- GPU emulation got a measurement harness that needs no player (`perf/auto`, `perf/README.md`): on an RX 6700 XT at native 1080p, the reference still scene runs at 191.5 FPS (188.2 to 193.1 over 5 runs) and the opening's first fight at 117.9 FPS, both with 0 frames over 40 ms on a warm cache (`perf/baseline/`).
+- cuesta4's rehooked port, often described as native, also emulates the GPU: it reads PM4 and translates GCN shaders to SPIR-V, like this port's video core. Its ideas (preparing shaders from the game data, per-piece page hashing, lazy barriers, thread planning by CPU topology) are compared in `docs/plans/2026-11-rehooked-gap-analysis.md`. Its performance was not measured: it accepts only the real 1.02 eboot, which the test machine does not have.
+- Open question for the maintainer: if optimized emulation reaches the performance target on the Steam Deck and on a low-end Windows machine, does the Native renderer stay the priority?
