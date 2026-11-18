@@ -335,6 +335,9 @@ def ship_shader_lists():
     names = []
     for src in sorted((REPO / "shaders").glob("*.spm")):
         dst = REPO / "out" / "shaders" / src.name
+        if os.environ.get("PERF_SHADER_LISTS") == "0":  # A/B of the list itself: a checkout without it
+            dst.unlink(missing_ok=True)
+            continue
         if not dst.exists() or dst.read_bytes() != src.read_bytes():
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(src, dst)

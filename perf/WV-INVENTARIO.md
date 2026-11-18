@@ -59,8 +59,9 @@ neste SO; **LIMITADO** roda, com ressalva.
 1. **`build.sh` quebra num clone/worktree feito pelo Git do Windows.** Os submódulos saem com CRLF;
    o `git` do MSYS2 que o `build.sh` usa não reconhece os patches de `gpu/patches/fsr-vulkan` como
    aplicados (`apply --reverse --check` falha) e tenta aplicar de novo. Contorno usado: `core.autocrlf
-   false` nos submódulos e checkout de novo. Correção possível (não feita aqui, fora do escopo):
-   `.gitattributes` nos submódulos ou `--ignore-whitespace` no `build.sh`.
+   false` nos submódulos e checkout de novo. **Corrigido depois** com `--ignore-whitespace` nos dois
+   `git apply` do `build.sh` (reproduzido num clone CRLF isolado: aplica uma vez e a 2ª passada
+   reconhece como aplicado; o checkout LF continua reconhecido; a parte Linux não foi testada).
 2. **`us/draw` não existe no Windows.** O roadmap usa µs/draw como métrica principal de A/B; no
    Windows só FPS e frametime valem. O gate ignora o campo quando ele vem vazio.
 3. **Ferramentas de jogo do projeto são Linux.** `restart.sh` e `soak.sh` dependem de `pkill`,
@@ -73,7 +74,8 @@ neste SO; **LIMITADO** roda, com ressalva.
    executável (`vk_presenter.cpp`, `SDL_GetBasePath()`), ou seja, `out/shaders/`. Só os scripts de
    `packaging/` copiam o arquivo; `build.sh` não. Num checkout limpo a 1ª abertura compila tudo sob
    demanda (medido: `Disk shaders: 0 programs read ... 459 a 473 compiled` na cena estática). O
-   orquestrador agora espelha `shaders/*.spm` em `out/shaders/` como o pacote faz.
+   orquestrador espelha `shaders/*.spm` em `out/shaders/` como o pacote faz, e o `build.sh` passou a
+   copiar também (Windows e Linux).
 6. **1ª abertura com manifest leva ~7,5 min nesta máquina.** `Shader preparation: 27742 written ...
    in 116.9 s (11 threads)` e `Pipeline preparation: 15460 built ... in 331.2 s (11 threads)`. O
    modo frio do orquestrador dá 25 min de folga para isso.
@@ -108,3 +110,10 @@ de pausa (Exit to Desktop, Yes) em todas as execuções listadas.
   vezes sem jogador, com QTE automático e vida infinita.
 - O que não foi feito: `qte-fps` (falta um save parado num QTE conhecido; a rota da abertura passa
   por QTE, mas a troca 120/60/120 não foi isolada), Linux, outra GPU, o port de comparação.
+9. **A lista de shaders não derruba o FPS; a máquina derivou.** As 3 últimas execuções do `quick`
+   reprovaram (−7 %, −22 %, −12 %). A/B alternado com e sem `out/shaders/CUSA01623.spm`, 3 pares:
+   mediana 177,1 FPS com a lista e 178,6 FPS sem (0,8 %, dentro do ruído). As duas ficaram ~7 %
+   abaixo da baseline gravada 3 h antes (191,5), sem outro programa acima de 5 % de GPU nos contadores.
+   É deriva do ambiente (estado da máquina), que o detector de GPU ocupada não pega. Limite conhecido:
+   a baseline vale para o estado da máquina em que foi gravada; antes de um A/B importante, gravar a
+   baseline na mesma sessão.
