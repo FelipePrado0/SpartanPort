@@ -345,9 +345,28 @@ def ship_shader_lists():
     return names
 
 
+def clear_dir(path):
+    """Empties `path` for a cold run. Deleting ~55k cache files in place failed on Windows (WinError
+    145: entries still pending when the folder is removed), so the folder is renamed aside at once
+    and the old ones are deleted as far as they go; leftovers retry on the next run."""
+    trash_root = path.parent / "trash"
+    trash_root.mkdir(exist_ok=True)
+    for attempt in range(6):  # antivirus held files of a fresh cache for ~50 s once
+        try:
+            if path.exists():
+                path.rename(trash_root / f"{path.name}-{time.time_ns()}")
+            break
+        except PermissionError as e:
+            if attempt == 5:
+                raise RuntimeError(f"cold folder {path} still locked after 50 s (antivirus?): {e}") from e
+            time.sleep(10)
+    for old in trash_root.iterdir():
+        shutil.rmtree(old, ignore_errors=True)
+
+
 def prepare_data(data_dir, settings_src, saves_src, cache_seed, s, cold):
-    if cold and data_dir.exists():
-        shutil.rmtree(data_dir)
+    if cold:
+        clear_dir(data_dir)
     (data_dir / "user").mkdir(parents=True, exist_ok=True)
     settings = json.loads(Path(settings_src).read_text(encoding="utf-8"))
     settings.update(SETTINGS_OVERRIDES)

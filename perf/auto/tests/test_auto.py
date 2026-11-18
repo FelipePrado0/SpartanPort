@@ -173,6 +173,15 @@ class Orchestrator(unittest.TestCase):
         with self.assertRaises(self.rs.GameEnded):
             self.rs.Log(self.path).wait(lambda l: "in play" in l, 5, "the level", FakeProc(3))
 
+    def test_clear_dir_moves_aside_and_empties(self):
+        cold = Path(self.dir.name) / "cold"
+        (cold / "user" / "cache").mkdir(parents=True)
+        (cold / "user" / "cache" / "a.spv").write_bytes(b"x")
+        self.rs.clear_dir(cold)
+        self.assertFalse(cold.exists())
+        self.assertEqual(list((Path(self.dir.name) / "trash").iterdir()), [])
+        self.rs.clear_dir(cold)  # nothing to move: still fine
+
     def test_gpu_load_parsing(self):
         text = ("msedge|video codec 0|25,7\nmsedge|high priority 3d|5,5\ndwm|high priority 3d|3,6\n"
                 "spartanport-probe|3D|91.0\n|3D|4\nbroken line\n")
