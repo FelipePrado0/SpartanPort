@@ -32,11 +32,13 @@ COLD_PREPARATION_S = 1500
 PERF_DATA = REPO / "out" / "perf"
 PROBE = "spartanport-probe.exe" if sys.platform == "win32" else "spartanport-probe"
 # The measured configuration (roadmap W0): 1080p render and output, no upscaler, no frame
-# generation, no overlay, engine at its highest rate, no frame limit, main monitor.
+# generation, no overlay, engine at its highest rate, no frame limit. PERF_MONITOR: the display index
+# from `spartanport-probe --displays` (the same one on every run, so baselines stay comparable).
+MONITOR = os.environ.get("PERF_MONITOR", "0")
 TEST_INI = {
     "upscaler": "off", "frame_generation": "off", "anti_aliasing": "off", "fsr1": "0", "rcas": "0",
     "render_resolution": "native", "output_res": "1920x1080", "display_mode": "windowed",
-    "monitor": "0", "vsync": "0", "fps_limit": "0", "engine_fps": "240", "hdr": "0",
+    "monitor": MONITOR, "vsync": "0", "fps_limit": "0", "engine_fps": "240", "hdr": "0",
     "show_fps": "0", "overlay_fps": "0", "overlay_frametime": "0", "overlay_upscaler": "0",
     "overlay_gpu": "0", "overlay_cpu": "0", "overlay_ram": "0", "overlay_vram": "0",
     "pause_game": "0", "auto_qte": "1", "cheat_health": "1", "free_camera": "1",
@@ -44,7 +46,7 @@ TEST_INI = {
 }
 SETTINGS_OVERRIDES = {"user_dir": "", "discord_rpc": False, "check_updates": False, "frame_stats": True,
                       "gpu_profile": False, "vk_validation": False, "close_on_play": False,
-                      "shader_notes": False, "monitor": "0"}
+                      "shader_notes": False, "monitor": MONITOR}
 
 
 class InfraFail(Exception):

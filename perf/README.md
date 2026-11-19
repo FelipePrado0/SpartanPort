@@ -11,6 +11,9 @@ jogador são só copiados, nunca usados no lugar:
 
 ```bash
 export PERF_SETTINGS=$PWD/settings.json PERF_SAVES=$PWD/user/savedata PERF_CACHE_SEED=$PWD/user/cache
+# Monitor da janela de medição: o índice que `out/spartanport-probe --displays` lista (padrão 0).
+# Use sempre o mesmo, ou as baselines deixam de ser comparáveis.
+export PERF_MONITOR=2
 
 # 1. Ciclo curto (L0 + L1 em paralelo, depois 1 execução de cena-estatica e o gate): ~6 min
 bash perf/auto/quick
