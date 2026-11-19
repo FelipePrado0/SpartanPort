@@ -605,3 +605,27 @@ Indirect draws count whole as record. With the profiler on, 3 alternating pairs 
 89.7 FPS median, with overlapping ranges (81.7-101.0 vs 85.9-91.5): its cost is within the run
 noise at that count. Use it for shares, not for frame rates. Inputs plus the buffer part of
 bind is the largest piece that can move: the "buffer side of the draw to stage A" item above.
+
+### Tried and reverted: small vertex and index streams through the constant ring (2026-11-19)
+
+`SPARTAN_BUFFER_STATS` in the same view: about 368k small copies/s (16 KiB or less, the stream
+path of `ObtainBuffer`, ~1.1 GB/s) against 93k arena bindings/s, so four of five buffers stage B
+resolves are small copies. The idea: stage A takes the small vertex and index streams of direct
+draws (the ranges a draw-preparation worker merged, and the index stream from the draw's
+registers) under the shader constants' rules (16 KiB, not GPU-modified, no pending
+`WriteData`/DMA), and stage B binds the ring offset without `ObtainBuffer` and
+`IsBufferAccessed`. Toggle 1 << 56, live A/B with `tools/ab.sh` (4 pairs of 25 s, one run each):
+
+| variant | stage B busy | stage A waiting for B | streams through the ring | FPS on / off |
+|---|---|---|---|---|
+| A copies the streams (memcpy on stage A), 32 MiB ring | 90% -> 77% | 23% -> 19% | ~270k/s, ~85k/s found it full | 89.4 / 91.6 |
+| A only reserves, B queues the copy on the recording thread in order (as `SmallGuestCopy`), 64 MiB ring | 90% -> 86% | 23% -> 15% | ~420k/s, none full | 100.6 / 103.6 |
+
+Both lost ~2-3% in every pair. Stage B got lighter, but stage A, never idle here (`idle 0.0%`)
+and waiting for B only ~20% of the time, took the checks and the ring work it handed over, and
+the frame rate followed A. With the two stages this close to saturation, moving work from one to
+the other does not raise the frame rate: only less total work or more threads do (a frame-to-frame
+memo of the binds, or recording split into blocks each thread owns). A worker-side copy (before
+stage A reaches the draw) was not tried: a write the GPU makes after the worker's copy and before
+the draw would make it stale, and catching that needs new ordering bookkeeping in the area of the
+past heap corruption. The diff is not kept in the tree.
