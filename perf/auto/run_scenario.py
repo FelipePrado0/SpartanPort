@@ -202,8 +202,8 @@ class Game:
             "SPARTAN_CAPTURE_TRIGGER": str(self.trigger),
             "SPARTAN_CAPTURE_DIR": str(self.run_dir / "captures"),
         })
-        if self.s["replay"]:
-            env["SPARTAN_PAD_REPLAY"] = self.s["replay"]
+        if self.s["replay"] or self.s["route"]:
+            env["SPARTAN_PAD_REPLAY"] = self.s["replay"] or self.s["route"]
         env.update(self.s["env"])
         exe = REPO / "launcher-rust" / "target" / "release" / (
             "spartanport-launcher.exe" if sys.platform == "win32" else "spartanport-launcher")
@@ -260,6 +260,12 @@ class Game:
 
     def measure(self):
         s = self.s
+        if s["route"]:  # walk to the measured spot first (a recording made with record_route.py)
+            mark = len(self.log.poll())
+            self.press("replay", 0.3)
+            self.log.wait(lambda l: l.startswith("Runtime: pad replay finished"), 180, "the end of the route",
+                          self.proc, mark)
+            self.screenshot("route-end")
         time.sleep(s["settle_s"])
         start = len(self.log.poll())
         end = time.monotonic() + s["duration_s"]

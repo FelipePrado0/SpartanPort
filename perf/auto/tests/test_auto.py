@@ -240,6 +240,12 @@ class Scenario(unittest.TestCase):
             s = scenario.load(f)
             self.assertTrue(s["name"])
 
+    def test_route_is_resolved_and_exclusive_with_replay(self):
+        s = scenario.load(self.write('name = "x"\nroute = "walk.pad"\n'))
+        self.assertTrue(Path(s["route"]).is_absolute() and s["route"].endswith("walk.pad"))
+        with self.assertRaises(scenario.ScenarioError):
+            scenario.load(self.write('name = "x"\nroute = "a.pad"\nreplay = "b.pad"\n'))
+
     def test_env_switches_become_game_values(self):
         s = scenario.load(self.write('name = "x"\n[env]\nSPARTAN_GPU_PROFILE = true\nSPARTAN_X = 3\n'))
         self.assertEqual(s["env"], {"SPARTAN_GPU_PROFILE": "1", "SPARTAN_X": "3"})

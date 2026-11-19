@@ -10,7 +10,8 @@
     capture = true            # one SPARTAN_CAPTURE_TRIGGER capture mid-window + a window PNG
     timeout_s = 600           # watchdog for the whole run
     loop_steps = true         # repeat [[steps]] until the window ends
-    replay = ""               # or a SPARTAN_PAD_REPLAY file (relative to the scenario)
+    replay = ""               # or a SPARTAN_PAD_REPLAY file played during the measured window
+    route = ""                # or one played before it: walks to the spot, then the window is still
 
     [env]                     # SPARTAN_* diagnostics for this scenario, e.g. SPARTAN_GPU_PROFILE = 1
 
@@ -29,7 +30,7 @@ from pathlib import Path
 
 DEFAULTS = {
     "start": "load", "load_index": 0, "expect_save": "", "settle_s": 20, "duration_s": 60,
-    "min_draws": 600, "capture": False, "timeout_s": 600, "loop_steps": False, "replay": "",
+    "min_draws": 600, "capture": False, "timeout_s": 600, "loop_steps": False, "replay": "", "route": "",
     "ini": {}, "env": {}, "steps": [], "limits": {}, "description": "",
 }
 PAD_BUTTONS = {"cross", "circle", "square", "triangle", "l1", "r1", "l2", "r2", "l3", "r3", "options",
@@ -84,8 +85,11 @@ def load(path):
         validate_pad(step["pad"])
         step.setdefault("hold_s", 0.3)
         step.setdefault("wait_s", 0.0)
-    if s["replay"]:
-        s["replay"] = str((path.parent / s["replay"]).resolve())
+    if s["replay"] and s["route"]:
+        raise ScenarioError(f"{path.name}: replay and route both play SPARTAN_PAD_REPLAY; use one")
+    for key in ("replay", "route"):
+        if s[key]:
+            s[key] = str((path.parent / s[key]).resolve())
     s["ini"] = {k: str(v) for k, v in s["ini"].items()}
     # Only diagnostics the scenario names (inherited SPARTAN_* are dropped by the orchestrator). No
     # folders, files or the orchestrator's own variables: they could point the game at real saves.
