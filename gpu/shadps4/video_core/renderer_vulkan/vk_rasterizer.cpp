@@ -6,6 +6,7 @@
 #include "spartanport_depth_of_field.h"
 #include "spartanport_settings.h"
 #include "spartanport_toggles.h"
+#include "spartanport_vertex_table.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
 #include "video_core/renderer_vulkan/vk_lighting_test.h"
 #include "video_core/renderer_vulkan/vk_pass_census.h"
@@ -472,6 +473,7 @@ struct DrawPacket {
     std::array<AmdGpu::CbDbExtent, AmdGpu::NUM_COLOR_BUFFERS> cb_extent;
     AmdGpu::CbDbExtent db_extent;
     u64 ring_end; ///< constant ring position after this packet's copies
+    u8 sharps_final; ///< Rasterizer::VertexTableSettled held when the packet was built
 };
 struct PacketStage {
     const Shader::Info* info;
@@ -598,6 +600,27 @@ bool Rasterizer::PendingWriteOverlaps(VAddr address, u64 size) {
         }
     }
     return false;
+}
+
+bool Rasterizer::VertexTableSettled(const GraphicsPipeline& pipeline, const PreparedDraw& prepared) {
+    // The same conditions as the V# check in TryPreparedPipeline: without it nothing was checked.
+    const auto& fetch = pipeline.GetFetchShader();
+    if (!fetch || !prepared.vertex.valid || fetch->attributes.size() != prepared.vertex.count) {
+        return false;
+    }
+    const auto ud = pipeline.GetStage(Shader::SwStage::Vertex).UserData();
+    SpartanVertexTable::Span span;
+    for (const auto& attribute : fetch->attributes) {
+        const u32 ptr = attribute.sgpr_base;
+        // V#s in user data itself travel in the packet; a short pair reads as empty.
+        if (ptr == Shader::IR::NumScalarRegs || ptr >= ud.size() || ud.size() - ptr < 2) {
+            continue;
+        }
+        u64 pointer;
+        std::memcpy(&pointer, &ud[ptr], sizeof(pointer));
+        span.Add(pointer, attribute.dword_offset);
+    }
+    return span.Empty() || !PendingWriteOverlaps(span.begin, span.end - span.begin);
 }
 
 // spartanport: the game's depth of field is switched off in the settings; the composite's constants
@@ -776,6 +799,11 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
     packet.cb_extent = liverpool->last_cb_extent;
     packet.db_extent = liverpool->last_db_extent;
     packet.ring_end = constant_ring ? constant_ring->Position() : 0;
+    // Bit set: on (off by default, as the TAA techniques).
+    packet.sharps_final = packet.kind == PacketKind::Draw && used_prepared &&
+                          SpartanToggle::Disabled(SpartanToggle::SharpsCheckedOnce) &&
+                          VertexTableSettled(*static_cast<const GraphicsPipeline*>(pipeline),
+                                             *used_prepared);
     out += sizeof(DrawPacket);
     std::memcpy(out, blocks.data(), num_blocks * sizeof(u16));
     out += AlignPacket(num_blocks * sizeof(u16));
@@ -988,8 +1016,10 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
         StageLap(SpartanStageProfile::Record);
         stage_profile.draws += profile;
     } else {
+        self.sharps_final = packet.sharps_final;
         self.DrawRecord(static_cast<const GraphicsPipeline*>(packet.pipeline), packet.prepared,
                         packet.is_indexed, packet.index_offset);
+        self.sharps_final = false;
         StageLap(SpartanStageProfile::Record);
         stage_profile.draws += profile;
     }
@@ -2122,9 +2152,16 @@ void Rasterizer::ResolveVertexBuffers(const GraphicsPipeline* pipeline,
             : nullptr;
     // spartanport: TryPreparedPipeline compared the V#s when the pipeline was chosen, but a
     // write queued before this draw (WriteData, DMA) can change the table after that. Stale
-    // addresses or strides stretch polygons across the screen: the V#s are read again then.
-    if (ready &&
+    // addresses or strides stretch polygons across the screen: the V#s are read again then,
+    // unless stage A found no such write over the table (sharps_final). SPARTAN_PIPE_VERIFY
+    // checks those too and reports any that changed all the same.
+    if (ready && (!sharps_final || VerifyInterval()) &&
         !fetch->SharpsUnchanged(pipeline->GetStage(Shader::SwStage::Vertex), ready->buffers)) {
+        if (sharps_final) {
+            static u64 missed = 0;
+            std::printf("Draw pipe verify: V#s changed after stage A found them settled (%llu)\n",
+                        static_cast<unsigned long long>(++missed));
+        }
         NoteStaleVertexInputs();
         ready = nullptr;
     }

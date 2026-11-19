@@ -1,0 +1,18 @@
+name = "cidade-olimpia-verify"
+description = "City of Olympia (Load list row 22), walked to the plaza of the comparison screenshot by a recorded route, then camera still. 1080p with SPARTAN_PIPE_VERIFY=1 (every packet compared on stage B) and the stage profile; run with --toggles to check a draw pipe optimization."
+start = "load"
+route = "../cidade-olimpia.pad"
+load_index = 22
+expect_save = "SD-261110045516"
+settle_s = 15
+duration_s = 60
+min_draws = 600
+capture = false  # the plaza's enemies move: the frame structure differs between runs
+timeout_s = 600
+
+[ini]
+render_resolution = "native"
+
+[env]
+SPARTAN_PIPE_VERIFY = 1
+SPARTAN_STAGE_PROFILE = 1

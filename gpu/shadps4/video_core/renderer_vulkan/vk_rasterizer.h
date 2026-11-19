@@ -516,6 +516,11 @@ private:
     u64 scene_depth_address = 0;   ///< spartanport: guest address of the scene's depth (God of War III)
     bool scene_debug_frame = false; ///< SPARTAN_SCENE_DEBUG: this frame's passes are printed
     bool PendingWriteOverlaps(VAddr address, u64 size);
+    /// Stage A: the prepared draw's V# check (TryPreparedPipeline) stays true until stage B records
+    /// it: no queued write overlaps the V# table (toggle SharpsCheckedOnce).
+    bool VertexTableSettled(const GraphicsPipeline& pipeline, const PreparedDraw& prepared);
+    /// Stage B: set while recording a packet whose V#s stage A found settled.
+    bool sharps_final = false;
     /// Stage B: the ring bindings of the stages of the packet being recorded.
     struct RingStage {
         const Shader::Info* info;
