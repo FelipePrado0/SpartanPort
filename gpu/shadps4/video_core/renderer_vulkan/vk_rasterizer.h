@@ -34,6 +34,11 @@ class GraphicsPipeline;
 class Runtime;
 
 class Rasterizer {
+    /// spartanport: the parts every draw resolver shares (parallel recording,
+    /// docs/plans/2026-11-parallel-recording-spec.md); the members below refer to them.
+    struct Owned;
+    std::unique_ptr<Owned> owned;
+
 public:
     explicit Rasterizer(const Instance& instance, Scheduler& scheduler, Runtime& runtime,
                         AmdGpu::Liverpool* liverpool);
@@ -152,7 +157,7 @@ public:
 
     template <typename Func>
     void ForEachMappedRangeInRange(VAddr addr, u64 size, Func&& func) {
-        const auto range = decltype(mapped_ranges)::interval_type::right_open(addr, addr + size);
+        const auto range = boost::icl::interval_set<VAddr>::interval_type::right_open(addr, addr + size);
         Common::RecursiveSharedLock lock{mapped_ranges_mutex};
         for (const auto& mapped_range : (mapped_ranges & range)) {
             func(mapped_range);
@@ -298,7 +303,7 @@ private:
     /// Display pass: counts the frame (SpartanStats::gpu_frames) and, with SPARTAN_BUFFER_STATS, the lag.
     void NoteFrameStart();
     /// Without an upscaler: the display buffer of the last NoteFrameStart (HUD draws go there too).
-    VAddr last_display_buffer = 0;
+    VAddr& last_display_buffer;
     /// SPARTAN_GPU_PROFILE: a timestamp where a render pass starts (vk_gpu_profiler.h).
     void MarkPass(const GraphicsPipeline* pipeline, const RenderState& state);
     void BindVertexBuffers(const GraphicsPipeline* pipeline,
@@ -323,19 +328,19 @@ private:
     const Instance& instance;
     Scheduler& scheduler;
     Runtime& runtime;
-    VideoCore::PageManager page_manager;
-    VideoCore::BufferCache buffer_cache;
-    VideoCore::TextureCache texture_cache;
+    VideoCore::PageManager& page_manager;
+    VideoCore::BufferCache& buffer_cache;
+    VideoCore::TextureCache& texture_cache;
     AmdGpu::Liverpool* liverpool;
     Core::MemoryManager* memory;
-    boost::icl::interval_set<VAddr> mapped_ranges;
-    Common::SharedFirstMutex mapped_ranges_mutex;
-    PipelineCache pipeline_cache;
-    std::unique_ptr<DrawPreparation> draw_prep;
-    std::unique_ptr<CameraMotion> camera_motion; // spartanport: motion vectors (docs/upscaler.md)
-    std::unique_ptr<SceneTargets> scene_targets;
-    bool scene_started = false;
-    std::unique_ptr<ObjectMotion> object_motion;
+    boost::icl::interval_set<VAddr>& mapped_ranges;
+    Common::SharedFirstMutex& mapped_ranges_mutex;
+    PipelineCache& pipeline_cache;
+    std::unique_ptr<DrawPreparation>& draw_prep;
+    std::unique_ptr<CameraMotion>& camera_motion; // spartanport: motion vectors (docs/upscaler.md)
+    std::unique_ptr<SceneTargets>& scene_targets;
+    bool& scene_started;
+    std::unique_ptr<ObjectMotion>& object_motion;
     bool motion_draw = false;
     u64 motion_geometry{};    ///< vertex-stream identity of the current direct draw
     /// The draw's depth target takes the upscaler's jitter (the scene's, or SpartanPort's second one).
@@ -343,13 +348,13 @@ private:
     bool gbuffer_draw = false;
     bool scan_camera = false;                    ///< depth pre-pass draw: look for the camera constants
     std::array<u32, 2> scan_size{};              ///< its depth size
-    bool in_display_pass = false;                ///< the draws of one display pass count once
+    bool& in_display_pass; ///< the draws of one display pass count once
     /// SpartanPort: this draw's depth when it is a depth-only pass at the render size (the depth pre-pass).
     VideoCore::ImageId prepass_depth{};
     /// spartanport: the draws of the game's motion blur skipped when the setting is off
     /// (spartanport_motion_blur.h). Only touched by the thread that selects pipelines.
-    SpartanMotionBlur::Rule motion_blur_rule;
-    std::unique_ptr<TemporalUpscaler> upscaler; // spartanport: FSR (docs/upscaler.md)
+    SpartanMotionBlur::Rule& motion_blur_rule;
+    std::unique_ptr<TemporalUpscaler>& upscaler; // spartanport: FSR (docs/upscaler.md)
     std::array<float, 2> draw_jitter{};         ///< viewport offset of the current draw, pixels
     std::array<float, 2> target_scale{1.0f, 1.0f}; ///< pass drawn into the upscaler's output-size images
     const bool host_markers_enabled;
@@ -493,7 +498,7 @@ private:
     static inline thread_local const AmdGpu::Regs* stage_regs = nullptr;
     static inline thread_local const AmdGpu::ComputeProgram* stage_cs = nullptr;
     AmdGpu::Regs pipe_regs{};
-    bool pipe_synced = false;
+    bool& pipe_synced;
     std::array<AmdGpu::CbDbExtent, AmdGpu::NUM_COLOR_BUFFERS> pipe_cb_extent{};
     AmdGpu::CbDbExtent pipe_db_extent{};
     /// Stage A: small read-only guest buffers copied into the constant ring for a packet.
@@ -508,13 +513,14 @@ private:
         VAddr end;
         u64 position;
     };
-    std::vector<PendingWrite> pending_writes;
-    VAddr pending_min = ~VAddr{0}, pending_max = 0; ///< bounds of pending_writes
-    u32 pending_checks = 0;
+    std::vector<PendingWrite>& pending_writes;
+    VAddr& pending_min; ///< bounds of pending_writes
+    VAddr& pending_max;
+    u32& pending_checks;
     u64 proxy_samples = 0; ///< texture bindings that read a scene proxy (statistics)
     float sampler_lod_bias = 0.0f; ///< spartanport: extra bias of this draw's samplers
     u64 scene_depth_address = 0;   ///< spartanport: guest address of the scene's depth (God of War III)
-    bool scene_debug_frame = false; ///< SPARTAN_SCENE_DEBUG: this frame's passes are printed
+    bool& scene_debug_frame; ///< SPARTAN_SCENE_DEBUG: this frame's passes are printed
     bool PendingWriteOverlaps(VAddr address, u64 size);
     /// Stage A: the prepared draw's V# check (TryPreparedPipeline) stays true until stage B records
     /// it: no queued write overlaps the V# table (toggle SharpsCheckedOnce).
@@ -542,10 +548,10 @@ private:
         }
         return nullptr;
     }
-    std::unique_ptr<ConstantRing> constant_ring;
+    std::unique_ptr<ConstantRing>& constant_ring;
     /// Submissions (prepared draws) kept alive until stage B reaches the position.
-    std::deque<std::pair<u64, std::shared_ptr<const void>>> pipe_keepalive;
-    std::unique_ptr<DrawPipe> draw_pipe;
+    std::deque<std::pair<u64, std::shared_ptr<const void>>>& pipe_keepalive;
+    std::unique_ptr<DrawPipe>& draw_pipe;
 };
 
 } // namespace Vulkan

@@ -70,15 +70,74 @@ static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
     return push_data;
 }
 
+struct Rasterizer::Owned {
+    Owned(const Instance& instance, Scheduler& scheduler, Runtime& runtime,
+          AmdGpu::Liverpool* liverpool, Rasterizer* rasterizer)
+        : page_manager{rasterizer},
+          buffer_cache{instance, scheduler, runtime, liverpool, texture_cache, page_manager},
+          texture_cache{instance, scheduler, runtime, liverpool, buffer_cache, page_manager},
+          pipeline_cache{instance, scheduler, liverpool, buffer_cache.GetSparsePageShift()} {}
+
+    VideoCore::PageManager page_manager;
+    VideoCore::BufferCache buffer_cache;
+    VideoCore::TextureCache texture_cache;
+    PipelineCache pipeline_cache;
+    VAddr last_display_buffer = 0;
+    boost::icl::interval_set<VAddr> mapped_ranges;
+    Common::SharedFirstMutex mapped_ranges_mutex;
+    std::unique_ptr<DrawPreparation> draw_prep;
+    std::unique_ptr<CameraMotion> camera_motion;
+    std::unique_ptr<SceneTargets> scene_targets;
+    bool scene_started = false;
+    std::unique_ptr<ObjectMotion> object_motion;
+    bool in_display_pass = false;
+    SpartanMotionBlur::Rule motion_blur_rule;
+    std::unique_ptr<TemporalUpscaler> upscaler;
+    bool pipe_synced = false;
+    std::vector<PendingWrite> pending_writes;
+    VAddr pending_min = ~VAddr{0};
+    VAddr pending_max = 0;
+    u32 pending_checks = 0;
+    bool scene_debug_frame = false;
+    std::unique_ptr<ConstantRing> constant_ring;
+    std::deque<std::pair<u64, std::shared_ptr<const void>>> pipe_keepalive;
+    std::unique_ptr<DrawPipe> draw_pipe;
+};
+
 Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime& runtime_,
                        AmdGpu::Liverpool* liverpool_)
-    : instance{instance_}, scheduler{scheduler_}, runtime{runtime_}, page_manager{this},
-      buffer_cache{instance, scheduler, runtime, liverpool_, texture_cache, page_manager},
-      texture_cache{instance, scheduler, runtime, liverpool_, buffer_cache, page_manager},
-      liverpool{liverpool_}, memory{Core::Memory::Instance()},
-      pipeline_cache{instance, scheduler, liverpool, buffer_cache.GetSparsePageShift()},
+    : owned{std::make_unique<Owned>(instance_, scheduler_, runtime_, liverpool_, this)},
+      last_display_buffer{owned->last_display_buffer},
+      instance{instance_},
+      scheduler{scheduler_},
+      runtime{runtime_},
+      page_manager{owned->page_manager},
+      buffer_cache{owned->buffer_cache},
+      texture_cache{owned->texture_cache},
+      liverpool{liverpool_},
+      memory{Core::Memory::Instance()},
+      mapped_ranges{owned->mapped_ranges},
+      mapped_ranges_mutex{owned->mapped_ranges_mutex},
+      pipeline_cache{owned->pipeline_cache},
+      draw_prep{owned->draw_prep},
+      camera_motion{owned->camera_motion},
+      scene_targets{owned->scene_targets},
+      scene_started{owned->scene_started},
+      object_motion{owned->object_motion},
+      in_display_pass{owned->in_display_pass},
+      motion_blur_rule{owned->motion_blur_rule},
+      upscaler{owned->upscaler},
       host_markers_enabled{EmulatorSettings.IsVkHostMarkersEnabled()},
-      guest_markers_enabled{EmulatorSettings.IsVkGuestMarkersEnabled()} {
+      guest_markers_enabled{EmulatorSettings.IsVkGuestMarkersEnabled()},
+      pipe_synced{owned->pipe_synced},
+      pending_writes{owned->pending_writes},
+      pending_min{owned->pending_min},
+      pending_max{owned->pending_max},
+      pending_checks{owned->pending_checks},
+      scene_debug_frame{owned->scene_debug_frame},
+      constant_ring{owned->constant_ring},
+      pipe_keepalive{owned->pipe_keepalive},
+      draw_pipe{owned->draw_pipe} {
     // Before the rasterizer is bound: Liverpool enqueues buffers only once it sees it.
     draw_prep = std::make_unique<DrawPreparation>(pipeline_cache);
     scene_targets = std::make_unique<SceneTargets>(instance, scheduler, runtime, texture_cache);
@@ -106,7 +165,10 @@ Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime
     });
 }
 
-Rasterizer::~Rasterizer() = default;
+Rasterizer::~Rasterizer() {
+    // The draw recording thread uses this object's own members: it stops before they go.
+    owned->draw_pipe.reset();
+}
 
 inline const AmdGpu::Regs& Rasterizer::Regs() const {
     return stage_regs ? *stage_regs : liverpool->regs;
@@ -3720,7 +3782,7 @@ bool Rasterizer::IsMapped(VAddr addr, u64 size) {
         // Memory range wrapped the address space, cannot be mapped.
         return false;
     }
-    const auto range = decltype(mapped_ranges)::interval_type::right_open(addr, addr + size);
+    const auto range = boost::icl::interval_set<VAddr>::interval_type::right_open(addr, addr + size);
 
     Common::RecursiveSharedLock lock{mapped_ranges_mutex};
     return boost::icl::contains(mapped_ranges, range);
@@ -3729,7 +3791,7 @@ bool Rasterizer::IsMapped(VAddr addr, u64 size) {
 void Rasterizer::MapMemory(VAddr addr, u64 size) {
     {
         std::scoped_lock lock{mapped_ranges_mutex};
-        mapped_ranges += decltype(mapped_ranges)::interval_type::right_open(addr, addr + size);
+        mapped_ranges += boost::icl::interval_set<VAddr>::interval_type::right_open(addr, addr + size);
     }
 }
 
@@ -3743,7 +3805,7 @@ void Rasterizer::UnmapMemory(VAddr addr, u64 size) {
     texture_cache.UnmapMemory(addr, size);
     {
         std::scoped_lock lock{mapped_ranges_mutex};
-        mapped_ranges -= decltype(mapped_ranges)::interval_type::right_open(addr, addr + size);
+        mapped_ranges -= boost::icl::interval_set<VAddr>::interval_type::right_open(addr, addr + size);
     }
 }
 
