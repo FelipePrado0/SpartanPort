@@ -123,3 +123,27 @@ Implementation order inside P1 to P2:
    hooks (upscaler, camera and object motion, scene targets) behind a fixed lock order; hooks with
    draw-order effects run in the stitch.
 6. **Two resolvers (P2), then N with the cost-based cut (P3).**
+
+### Design notes for P2 (code read on 2026-11-19)
+
+- Vulkan commands stay recorded by the one recording thread: block streams are closure lists
+  spliced in order into the same primary command buffer (`RecordStream`, step 1, done). That
+  thread is ~67% busy today, so parallel resolution alone tops out near 1.5x; going further
+  needs secondary command buffers per resolver (a later step).
+- Image layouts live in `Image::backing->state` and `subresource_states`. In block mode,
+  `Image::GetBarriers` works on a block-local shadow of each image it touches: the first use
+  records what the block needs (layout, access, stage per subresource) and emits nothing; later
+  uses in the block see the shadow. The stitch, serial and in block order, emits the barrier from
+  the real state to each block's first needs before splicing the block, then writes the block's
+  end shadow state back to the real image.
+- Buffer hazards: each block keeps its own barrier tracker and pending memory barrier. The stitch
+  emits one memory barrier before a block when an earlier block since the last flush wrote memory
+  (conservative: one barrier per block boundary at most).
+- Render passes: a block ends its render pass at its end, and the next block starts its own
+  (continuing an open pass across blocks is a later optimization). Dynamic state and the
+  draw-to-draw memos start empty in every block, so the first draw of a block sets everything.
+- Order-dependent hooks in `DrawRecord` (frame start and display pass detection, upscaler,
+  camera and object motion) stay serial: block mode is only used while the upscaler and motion
+  vectors are off, at first; draws that start a frame or touch a display buffer cut the block.
+- Guest memory written by queued GPU work (WriteData, DMA, ordered tasks) cuts the block, so a
+  block never sees memory change under it.
