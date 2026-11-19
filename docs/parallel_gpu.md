@@ -669,4 +669,13 @@ Stage profile with the bit set: "inputs" 0.76-0.79 -> 0.58 us/draw, 257-270k -> 
 no register differences, no faults. Other ways to save draw-to-draw work measured first and left
 out: the same small vertex or index range copied again in the same submission is only 6-8% of
 them, and `setVertexInputEXT` repeats the previous draw's state 71% of the time but recording it
-costs ~0.13 us/draw in all. Off by default until the default is decided.
+costs ~0.13 us/draw in all.
+
+Default left off (2026-11-19). The gate run with the bit on by default passed the abertura and the
+four City of Olympia scenarios and failed cena-estatica (cold p99, warm FPS -7.9%), troca-de-area and
+the 20 min soak. An interleaved A/B in cena-estatica, one run per launch, with the other programs'
+GPU load sampled during each run (runs with a sample at 10% or more left out), gave the bit on
+163.4, 132.9, 159.3, 157.0 FPS (median 158.2) and off 160.9, 150.1, 159.1, 163.1 (median 160.0):
+no difference over the run-to-run spread, and both arms ~30 FPS under the 191.5 baseline recorded
+the day before, so the gate failures came from the machine that day. A +2% change was not worth
+more gate time against a 4x gap; turning it on is one line in PostDraw.

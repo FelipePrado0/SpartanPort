@@ -76,6 +76,15 @@ Phases, each behind its toggle and measured by live A/B in the City of Olympia:
 - **P1: whole-submission batching.** Stage B takes a complete submission and resolves it serially
   as blocks with saved registers and per-block hazard sets, still on one thread. Its output must
   match serial recording under `SPARTAN_PIPE_VERIFY`. No gain expected; it is the base for P2.
+  Where the per-block state goes (code read on 2026-11-19): every image layout change passes
+  `Runtime::Transit` (`vk_runtime.h`), and buffer hazards pass `Runtime::AccessBuffer` and
+  `IsBufferAccessed` over one `barrier_tracker`. In block mode those three record, per block, the
+  layout each image needs at its first use, its layout at the end, and the buffer ranges read and
+  written, instead of changing the shared state. A stitch step after the blocks walks them in
+  stream order, compares each block's needs with the state the blocks before left, emits the
+  transitions and memory barriers between them, and then applies each block's end state. P1 is
+  correct when this stitch, with one resolver, records the barriers serial recording records
+  (a recording diff under `SPARTAN_PIPE_VERIFY`).
 - **P2: two resolvers.** Blocks without shared writes on two threads, caches under a lock. The A/B
   decides whether the lock costs more than the second thread gives.
 - **P3: more resolvers and the cost-based cut.**
