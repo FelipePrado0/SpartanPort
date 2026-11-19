@@ -65,6 +65,14 @@ Phases, each behind its toggle and measured by live A/B in the City of Olympia:
 
 - **P0: measure.** Time of stage B per block-sized run of draws, and how much of it touches shared
   caches (lock candidates) against block-local work. Without P0 the split is a guess.
+  Measured on 2026-11-19 (City of Olympia, 1080p, temporary counters at the cache entry points,
+  nested calls counted once, stage B only): the buffer and texture caches take ~13% of stage B's
+  window: `ObtainBuffer` 7% (~560k calls/s), `ResolveReadbacks` called directly 4.5% (only
+  ~210 calls/s, ~0.2 ms each: waits for GPU-to-RAM copies), texture views 0.8%, image and target
+  lookups 0.6%. The caches are not what limits a split; the order-dependent state outside them
+  is: barrier tracking in `runtime` (`IsBufferAccessed`, `FlushBarriers`), the recording stream,
+  and the draw-to-draw memos. P1 has to give each block its own copy of that state and merge the
+  barriers between blocks, as the observed renderer does with its hazard sets.
 - **P1: whole-submission batching.** Stage B takes a complete submission and resolves it serially
   as blocks with saved registers and per-block hazard sets, still on one thread. Its output must
   match serial recording under `SPARTAN_PIPE_VERIFY`. No gain expected; it is the base for P2.
