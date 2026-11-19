@@ -311,24 +311,29 @@ class Game:
         """Exit to Desktop through the pause menu (Continue, Options, Photo Mode, Restart, Quit Game,
         Exit to Desktop); ends the process tree only if the game does not close."""
         if self.proc.poll() is None:
-            try:
-                self.press("touchpad_right", 0.3, 3.0)  # the menu ignores input while it slides in
-                self.screenshot("pause")
-                for i in range(int(os.environ.get("PERF_EXIT_DOWNS", "5"))):
-                    self.press("down", 0.15, 0.6)
-                    if os.environ.get("PERF_EXIT_SHOTS"):
-                        self.screenshot(f"pause-down{i + 1}")
-                self.screenshot("pause-exit")
-                self.press("cross", 0.3, 2.0)
-                # The row asks Quit Game's question with No selected (scripts/pause_menu.py).
-                self.screenshot("exit-question")
-                self.press(os.environ.get("PERF_EXIT_YES", "up"), 0.15, 0.8)
-                self.screenshot("exit-yes")
-                self.press("cross", 0.3, 0.5)
-                self.proc.wait(timeout=40)
-                how = "menu"
-            except Exception:
-                how = "killed"
+            how = "killed"
+            # The game ignored the pause press once (2026-11-18): one more try before ending it.
+            for attempt in range(2):
+                try:
+                    suffix = "-retry" if attempt else ""
+                    self.press("touchpad_right", 0.3, 3.0)  # the menu ignores input while it slides in
+                    self.screenshot("pause" + suffix)
+                    for i in range(int(os.environ.get("PERF_EXIT_DOWNS", "5"))):
+                        self.press("down", 0.15, 0.6)
+                        if os.environ.get("PERF_EXIT_SHOTS"):
+                            self.screenshot(f"pause-down{i + 1}{suffix}")
+                    self.screenshot("pause-exit" + suffix)
+                    self.press("cross", 0.3, 2.0)
+                    # The row asks Quit Game's question with No selected (scripts/pause_menu.py).
+                    self.screenshot("exit-question" + suffix)
+                    self.press(os.environ.get("PERF_EXIT_YES", "up"), 0.15, 0.8)
+                    self.screenshot("exit-yes" + suffix)
+                    self.press("cross", 0.3, 0.5)
+                    self.proc.wait(timeout=20)
+                    how = "menu" if not attempt else "menu (second try)"
+                    break
+                except Exception:
+                    continue
         else:
             how = f"ended by itself (exit {self.proc.returncode})"
         if self.proc.poll() is None:
