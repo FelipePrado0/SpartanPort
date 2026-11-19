@@ -714,6 +714,46 @@ private:
     CommandBase* last{};
 };
 
+/// spartanport: the commands of one block of draws, recorded apart and spliced into the command
+/// stream in block order (docs/plans/2026-11-parallel-recording-spec.md).
+struct RecordStream {
+    std::vector<std::unique_ptr<RecordChunk>> chunks;
+
+    /// Appends `func`; `acquire()` gives an empty chunk when the last one is full.
+    template <typename Func, typename Acquire>
+    void Push(Func&& func, Acquire&& acquire) {
+        if (chunks.empty() || !chunks.back()->Push(std::forward<Func>(func))) {
+            chunks.push_back(acquire());
+            const bool pushed = chunks.back()->Push(std::forward<Func>(func));
+            ASSERT(pushed);
+        }
+    }
+
+    /// The chunk that keeps `bytes` of data and the command using them (RecordChunk::ReserveData).
+    template <typename Acquire>
+    RecordChunk& Reserve(size_t bytes, Acquire&& acquire) {
+        if (chunks.empty() || !chunks.back()->ReserveData(bytes)) {
+            chunks.push_back(acquire());
+            const bool reserved = chunks.back()->ReserveData(bytes);
+            ASSERT_MSG(reserved, "Cannot reserve {} bytes in an empty recording chunk", bytes);
+        }
+        return *chunks.back();
+    }
+
+    /// Moves the recorded chunks to the end of `out` in order; empty ones go to `recycle`.
+    template <typename Recycle>
+    void Splice(std::vector<std::unique_ptr<RecordChunk>>& out, Recycle&& recycle) {
+        for (auto& chunk : chunks) {
+            if (chunk->Empty()) {
+                recycle(std::move(chunk));
+            } else {
+                out.push_back(std::move(chunk));
+            }
+        }
+        chunks.clear();
+    }
+};
+
 class Scheduler {
 public:
     /// `threaded_recording`: Vulkan commands passed to Record() are recorded by a worker thread.
@@ -774,6 +814,7 @@ public:
     /// records directly (Record() included, so callers may mix both) until the next
     /// KickRecording() or submission.
     [[gnu::noinline]] vk::CommandBuffer CommandBuffer() {
+        ASSERT_MSG(!block_stream, "Direct recording inside a block stream");
         if (recording_threaded && !direct_mode) {
             SyncRecording();
             direct_mode = true;
@@ -790,6 +831,10 @@ public:
     /// everything it uses (capture by value): it may run later on the recording thread.
     template <typename Func>
     void Record(Func&& func) {
+        if (block_stream) [[unlikely]] {
+            block_stream->Push(std::forward<Func>(func), [this] { return AcquireChunk(); });
+            return;
+        }
         if (!recording_threaded || direct_mode) {
             func(current_cmdbuf);
             return;
@@ -817,13 +862,17 @@ public:
 
     /// True when Record() defers commands (and RecordData() copies into chunks).
     [[nodiscard]] bool IsRecordingDeferred() const noexcept {
-        return recording_threaded && !direct_mode &&
+        return block_stream || recording_threaded && !direct_mode &&
                !SpartanToggle::Disabled(SpartanToggle::ThreadedRecording);
     }
 
     /// Makes room for `bytes` of RecordData() plus the command that uses them in the current
     /// chunk: data and command must share a chunk, which is recycled once executed.
     void ReserveRecordData(size_t bytes) {
+        if (block_stream) [[unlikely]] {
+            block_stream->Reserve(bytes, [this] { return AcquireChunk(); });
+            return;
+        }
         if (!IsRecordingDeferred()) {
             return;
         }
@@ -846,9 +895,31 @@ public:
         // Room for the data and the command that follows it, so both stay in one chunk.
         const size_t bytes = data.size_bytes();
         ReserveRecordData(bytes + alignof(T));
-        auto* dst = static_cast<T*>(record_chunk->Allocate(bytes, alignof(T)));
+        RecordChunk& chunk = block_stream ? *block_stream->chunks.back() : *record_chunk;
+        auto* dst = static_cast<T*>(chunk.Allocate(bytes, alignof(T)));
         std::memcpy(dst, data.data(), bytes);
         return {dst, data.size()};
+    }
+
+    /// spartanport: until EndStream(), Record() and RecordData() on this thread go to `stream`
+    /// (parallel recording). Needs threaded recording; direct recording is not allowed meanwhile.
+    void BeginStream(RecordStream& stream) {
+        ASSERT(recording_threaded && !direct_mode && !block_stream);
+        block_stream = &stream;
+    }
+    void EndStream() {
+        block_stream = nullptr;
+    }
+    /// Appends `stream`'s commands after everything recorded so far on the owning thread.
+    void SpliceStream(RecordStream& stream) {
+        ASSERT(!block_stream);
+        if (!record_chunk->Empty()) {
+            RetireChunk();
+        }
+        stream.Splice(full_chunks, [this](std::unique_ptr<RecordChunk> chunk) {
+            std::scoped_lock lk{recorder_mutex};
+            free_chunks.push_back(std::move(chunk));
+        });
     }
 
     /// Hands recorded commands to the recording thread. Called at points where no caller holds
@@ -991,6 +1062,8 @@ private:
     // spartanport: whether recorder_thread runs, read on every Record(). std::jthread::joinable()
     // compares thread ids, which on Windows (libc++ over winpthreads) costs two system calls.
     bool recording_threaded{false};
+    /// The block stream this thread records into (BeginStream), or null.
+    static inline thread_local RecordStream* block_stream = nullptr;
     std::jthread recorder_thread;
     tracy::VkCtxScope* profiler_scope{};
 };

@@ -264,7 +264,8 @@ void Scheduler::WaitHostCopies() {
 }
 
 void Scheduler::KickRecording(bool force) {
-    if (!recording_threaded) {
+    // A block's commands reach the recording thread when the block is spliced.
+    if (!recording_threaded || block_stream) {
         return;
     }
     // Callers kick where nobody holds the raw command buffer: deferral resumes.
@@ -302,6 +303,7 @@ void Scheduler::KickRecording(bool force) {
 }
 
 void Scheduler::SyncRecording() {
+    ASSERT_MSG(!block_stream, "Recording synced inside a block stream");
     if (!recording_threaded) {
         return;
     }
