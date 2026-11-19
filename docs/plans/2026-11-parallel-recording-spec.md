@@ -91,3 +91,35 @@ Phases, each behind its toggle and measured by live A/B in the City of Olympia:
 
 Acceptance at every phase: no fault, `SPARTAN_PIPE_VERIFY` clean, gain over twice the noise in the
 City of Olympia; otherwise the phase is reverted and recorded in docs/parallel_gpu.md.
+
+## Decision of 2026-11-19: blocks, not a longer pipeline
+
+Measured in the City of Olympia at 1080p (99-102 FPS, toggles 0): stage A busy ~85% (pipeline
+selection 0.95-1.03 us/draw, constants 0.87-0.98, hand-off 0.26), stage B busy ~91% (3.5 us/draw:
+bind 0.80, inputs 0.78, record 0.66, task 0.32, begin 0.24), the Vulkan recording thread busy
+~67%. Readback waits were down to a few per minute (no longer worth a change).
+
+A longer pipeline (each busy thread cut in two) was costed at +20-25% at best: stage B splits
+cleanly only at its record tail (~20% of it); bind and inputs share the buffer and texture caches,
+which a split would have to lock anyway. Felipe chose the blocks directly. Every step below is
+behind a toggle, off by default; the game runs today's path until the gate, `SPARTAN_PIPE_VERIFY`,
+the patches and a run of each supported title version pass with it on (the automated scenarios
+only cover one version).
+
+Implementation order inside P1 to P2:
+
+1. **Ordered block streams in the scheduler.** A block records its commands into its own chunk
+   list; the stitch splices the lists into the command stream in block order, with the barriers
+   between them. Unit-tested on the chunk lists alone.
+2. **Per-block barrier capture.** `Runtime::Transit`, `AccessBuffer` and `IsBufferAccessed`
+   record a block's first-use needs and end state instead of changing the shared state; the
+   stitch resolves them in order (P1 above).
+3. **Per-resolver draw context.** The per-draw scratch state of `Rasterizer` (descriptor writes,
+   push data, bound buffers and images, render target descriptors, draw inputs, memos) moves into
+   a context object each resolver owns; stage B keeps one.
+4. **Register snapshots.** Each resolver applies every packet's register blocks to its own copy
+   (0.16 us/draw) and resolves only the draws of its blocks.
+5. **Shared caches under locks.** Buffer cache, texture cache, page manager and the frame-wide
+   hooks (upscaler, camera and object motion, scene targets) behind a fixed lock order; hooks with
+   draw-order effects run in the stitch.
+6. **Two resolvers (P2), then N with the cost-based cut (P3).**
