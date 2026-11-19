@@ -629,3 +629,19 @@ memo of the binds, or recording split into blocks each thread owns). A worker-si
 stage A reaches the draw) was not tried: a write the GPU makes after the worker's copy and before
 the draw would make it stale, and catching that needs new ordering bookkeeping in the area of the
 past heap corruption. The diff is not kept in the tree.
+
+### Stage A by section in the City of Olympia (2026-11-19)
+
+The same profiler marks stage A in `Draw` and `PostDraw` (`SPARTAN_STAGE_PROFILE=1`, a second
+"Stage A profile:" line). Median of 18 five-second windows, 1080p, ~101 FPS in that run:
+
+| section | share of the window | us/draw |
+|---|---|---|
+| constants (`CollectRingBindings`: small shader buffers copied into the ring, with their checks) | 24.6% | 0.93 |
+| waiting for stage B (`Draw pipe:` "stage A waited") | 22.4% | |
+| pipeline (`GetGraphicsPipeline`, the prepared draw check) | 21.4% | 0.81 |
+| hand-off (register blocks, user data and ring bindings into the packet) | 7.0% | 0.27 |
+| the rest: PM4 decoding, register writes, packets that are not draws | ~24.6% | |
+
+Stage A is never idle here (`idle 0.0%`): the constants it copies for stage B are its largest
+single piece, as large as its wait for stage B.
