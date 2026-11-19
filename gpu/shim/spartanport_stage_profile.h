@@ -29,15 +29,21 @@ enum Section : unsigned {
     Dispatch,    ///< compute dispatches
     Special,     ///< draws FilterDraw handles (clears, resolves, depth copies)
     Task,        ///< other work run on stage B
+    // Stage A (the GPU command thread) in its own totals: the rest of its time is PM4 decoding
+    // and register writes, and the wait for stage B the "Draw pipe:" line already reports.
+    APipeline,   ///< graphics pipeline selection (GetGraphicsPipeline, prepared draw check)
+    ARing,       ///< small shader constants copied into the constant ring
+    APacket,     ///< the rest of handing a draw to stage B: register blocks, user data, the ring
     Count,
 };
 
-inline constexpr const char* Names[Count] = {"packet", "pending", "frame",   "render state",
-                                             "bind",   "begin",   "inputs",  "barriers",
-                                             "record", "dispatch", "special", "task"};
+inline constexpr const char* Names[Count] = {"packet", "pending",   "frame",    "render state",
+                                             "bind",   "begin",     "inputs",   "barriers",
+                                             "record", "dispatch",  "special",  "task",
+                                             "pipeline", "constants", "hand-off"};
 
-/// Cycles per section and draws, written by stage B only (relaxed: stage A reads totals that may
-/// be one draw old, which a 5 s report does not notice).
+/// Cycles per section and draws, each Totals written by one thread only (relaxed: the reporting
+/// thread reads totals that may be one draw old, which a 5 s report does not notice).
 struct Totals {
     std::array<uint64_t, Count> cycles{};
     uint64_t draws = 0;
@@ -66,9 +72,10 @@ private:
 };
 
 /// One line: sections by share of the window (under 0.05% left out), with microseconds per draw.
-inline std::string Format(const Totals& delta, double window_cycles, double seconds) {
+inline std::string Format(const Totals& delta, double window_cycles, double seconds,
+                          const char* label = "Stage B profile:") {
     if (delta.draws == 0 || window_cycles <= 0 || seconds <= 0) {
-        return "Stage B profile: no draws in this window";
+        return std::string(label) + " no draws in this window";
     }
     const double hz = window_cycles / seconds;
     std::array<unsigned, Count> order{};
@@ -77,7 +84,7 @@ inline std::string Format(const Totals& delta, double window_cycles, double seco
     }
     std::stable_sort(order.begin(), order.end(),
                      [&](unsigned a, unsigned b) { return delta.cycles[a] > delta.cycles[b]; });
-    std::string line = "Stage B profile:";
+    std::string line = label;
     double measured = 0;
     char part[96];
     for (const unsigned i : order) {

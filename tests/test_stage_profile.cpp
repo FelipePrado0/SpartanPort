@@ -48,6 +48,17 @@ int main() {
     // No draws or no time: no division by zero, no section lines.
     assert(Contains(Format(Totals{}, 0.0, 0.0), "no draws"));
 
+    // Stage A: its own sections and label.
+    Totals a;
+    a.cycles[APipeline] = 250'000'000;
+    a.cycles[ARing] = 50'000'000;
+    a.draws = 500;
+    const std::string a_line = Format(a, 1'000'000'000.0, 1.0, "Stage A profile:");
+    std::printf("%s\n", a_line.c_str());
+    assert(a_line.rfind("Stage A profile: ", 0) == 0);
+    assert(Contains(a_line, "pipeline 25.0% 500.00 us/draw"));
+    assert(Contains(a_line, "constants 5.0% 100.00 us/draw"));
+
     // Names cover every section.
     for (unsigned i = 0; i < Count; ++i) {
         assert(Names[i] && Names[i][0]);

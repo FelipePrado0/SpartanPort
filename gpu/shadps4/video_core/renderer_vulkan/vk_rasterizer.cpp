@@ -48,6 +48,9 @@ static u32 UiColorMask(const GraphicsPipeline* pipeline, bool upscale) {
 // runs DrawRecord while the pipe is drained; those draws are not marked).
 static SpartanStageProfile::Totals stage_profile;
 static SpartanStageProfile::Laps stage_laps{stage_profile};
+// Stage A's own totals: marked in Draw and PostDraw, which run there only with the draw pipe.
+static SpartanStageProfile::Totals stage_a_profile;
+static SpartanStageProfile::Laps stage_a_laps{stage_a_profile};
 
 static void StageLap(SpartanStageProfile::Section section) {
     if (SpartanStageProfile::Enabled() && DrawPipe::OnStageB()) {
@@ -702,6 +705,10 @@ void Rasterizer::CollectRingBindings(const Shader::Info& stage, const PreparedDr
 void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_prepared,
                           bool is_indexed, u32 index_offset, const AmdGpu::ComputeProgram* cs,
                           const IndirectDraw* indirect) {
+    const bool profile_a = SpartanStageProfile::Enabled();
+    if (profile_a) {
+        stage_a_laps.Start(__rdtsc());
+    }
     auto& dirty = liverpool->pipe_dirty;
     if (!pipe_synced) {
         // Stage B has not run yet: its register copy starts as this one.
@@ -735,6 +742,9 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
                                 sizeof(u32)) +
                     u32(ring.size() * sizeof(RingBinding));
         }
+    }
+    if (profile_a) {
+        stage_a_laps.Lap(SpartanStageProfile::ARing, __rdtsc());
     }
     if (cs) {
         size += AlignPacket(sizeof(AmdGpu::ComputeProgram));
@@ -811,6 +821,10 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
     }
     dirty.Clear();
     draw_pipe->Commit(static_cast<u32>(out - start));
+    if (profile_a) {
+        stage_a_laps.Lap(SpartanStageProfile::APacket, __rdtsc());
+        ++stage_a_profile.draws;
+    }
     PrintPipeStats();
 }
 
@@ -1043,6 +1057,17 @@ void Rasterizer::PrintPipeStats() {
         delta.draws = stage_profile.draws - last_profile.draws;
         last_profile = stage_profile;
         std::printf("%s\n", SpartanStageProfile::Format(delta, cycles, seconds).c_str());
+        // Stage A: the window not in these sections nor in the drain wait above is PM4 decoding,
+        // register writes and the packets that are not draws.
+        static SpartanStageProfile::Totals last_a;
+        SpartanStageProfile::Totals delta_a;
+        for (u32 i = 0; i < SpartanStageProfile::Count; ++i) {
+            delta_a.cycles[i] = stage_a_profile.cycles[i] - last_a.cycles[i];
+        }
+        delta_a.draws = stage_a_profile.draws - last_a.draws;
+        last_a = stage_a_profile;
+        std::printf("%s\n",
+                    SpartanStageProfile::Format(delta_a, cycles, seconds, "Stage A profile:").c_str());
     }
     drain_sites.clear();
     draw_pipe->drains_by_reason = {};
@@ -1105,6 +1130,10 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
     // spartanport: with the draw pipeline this thread only selects the pipeline and hands the draw
     // to the recording thread (DrawRecord there); draws FilterDraw handles itself run here.
     const bool pipelined = UseDrawPipe();
+    const bool profile_a = pipelined && SpartanStageProfile::Enabled();
+    if (profile_a) {
+        stage_a_laps.Start(__rdtsc());
+    }
     if (pipelined && !FilterDrawPasses() &&
         !SpartanToggle::Disabled(SpartanToggle::PipelinedMemoryWrites)) {
         PostDraw(nullptr, nullptr, false, 0);
@@ -1124,6 +1153,9 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
         draw_prep->Count(pipeline != nullptr &&
                          prepared->state.load(std::memory_order_acquire) == PreparedDraw::Ready &&
                          prepared->reg_checksum == liverpool->gfx_reg_checksum);
+    }
+    if (profile_a) {
+        stage_a_laps.Lap(SpartanStageProfile::APipeline, __rdtsc());
     }
     if (!pipeline) {
         return;
