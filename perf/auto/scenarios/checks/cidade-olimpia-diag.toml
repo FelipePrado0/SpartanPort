@@ -1,0 +1,14 @@
+name = "cidade-olimpia-diag"
+description = "City of Olympia by the recorded route, with guest blocking calls over 20 ms and the wait diagnostics logged: where the stutter outside the GPU thread comes from."
+start = "load"
+route = "../cidade-olimpia.pad"
+load_index = 22
+expect_save = "SD-261110045516"
+settle_s = 5
+duration_s = 90
+min_draws = 600
+timeout_s = 600
+
+[env]
+SPARTAN_SLOW_WAITS = 20
+SPARTAN_PERF_DIAG = 1
