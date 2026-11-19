@@ -714,6 +714,10 @@ if (WIN32)
     target_link_libraries(frame-pacing-test PRIVATE onecore bcrypt)
 endif()
 
+add_executable(stage-profile-test EXCLUDE_FROM_ALL ../tests/test_stage_profile.cpp)
+target_include_directories(stage-profile-test PRIVATE shim)
+target_compile_options(stage-profile-test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+
 add_executable(reg-dirty-test EXCLUDE_FROM_ALL ../tests/test_reg_dirty.cpp)
 target_compile_options(reg-dirty-test PRIVATE -UNDEBUG)
 target_include_directories(reg-dirty-test PRIVATE shim shadps4 third_party/gcn/include)

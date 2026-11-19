@@ -24,6 +24,7 @@
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
+#include "spartanport_stage_profile.h"
 #include "spartanport_threads.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -41,6 +42,17 @@ static u32 UiColorMask(const GraphicsPipeline* pipeline, bool upscale) {
         ? UiComposition::ColorMask(pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
                                     key.mrt_mask, key.blend_controls[1])
         : key.mrt_mask;
+}
+
+// spartanport: SPARTAN_STAGE_PROFILE section marks, on the draw recording thread only (stage A also
+// runs DrawRecord while the pipe is drained; those draws are not marked).
+static SpartanStageProfile::Totals stage_profile;
+static SpartanStageProfile::Laps stage_laps{stage_profile};
+
+static void StageLap(SpartanStageProfile::Section section) {
+    if (SpartanStageProfile::Enabled() && DrawPipe::OnStageB()) {
+        stage_laps.Lap(section, __rdtsc());
+    }
 }
 
 static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
@@ -830,9 +842,14 @@ bool Rasterizer::RunInOrder(OrderedTask task, const void* data, u32 size, u64 to
 
 void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
     auto& self = *static_cast<Rasterizer*>(context);
+    const bool profile = SpartanStageProfile::Enabled();
+    if (profile) {
+        stage_laps.Start(__rdtsc());
+    }
     if (*reinterpret_cast<const PacketKind*>(data) == PacketKind::Task) {
         const auto& task = *reinterpret_cast<const TaskPacket*>(data);
         task.task(self, data + sizeof(TaskPacket));
+        StageLap(SpartanStageProfile::Task);
         return;
     }
     const auto& packet = *reinterpret_cast<const DrawPacket*>(data);
@@ -933,11 +950,13 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
     stage_regs = &regs;
     self.pipe_cb_extent = packet.cb_extent;
     self.pipe_db_extent = packet.db_extent;
+    StageLap(SpartanStageProfile::Packet);
     if (packet.kind == PacketKind::Special) {
         // A draw FilterDraw handles (fast clear elimination, resolve, depth copy, skip).
         FrameCapture::Poll();
         self.scheduler.PopPendingOperations();
         self.FilterDraw();
+        StageLap(SpartanStageProfile::Special);
     } else if (cs) {
         stage_cs = cs;
         const auto* pipeline = static_cast<const ComputePipeline*>(packet.pipeline);
@@ -947,18 +966,25 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
             self.DispatchRecord(pipeline);
         }
         stage_cs = nullptr;
+        StageLap(SpartanStageProfile::Dispatch);
     } else if (indirect) {
+        // Indirect draws carry no inner marks: the whole draw counts as record.
         self.DrawIndirectRecord(static_cast<const GraphicsPipeline*>(packet.pipeline),
                                 packet.is_indexed, *indirect);
+        StageLap(SpartanStageProfile::Record);
+        stage_profile.draws += profile;
     } else {
         self.DrawRecord(static_cast<const GraphicsPipeline*>(packet.pipeline), packet.prepared,
                         packet.is_indexed, packet.index_offset);
+        StageLap(SpartanStageProfile::Record);
+        stage_profile.draws += profile;
     }
     Shader::Info::num_ud_snapshots = 0;
     self.num_ring_stages = 0;
     if (self.constant_ring) {
         self.constant_ring->Stamp(packet.ring_end);
     }
+    StageLap(SpartanStageProfile::Packet);
 }
 
 void Rasterizer::PrintPipeStats() {
@@ -1008,6 +1034,16 @@ void Rasterizer::PrintPipeStats() {
         }
     }
     std::printf("\n");
+    if (SpartanStageProfile::Enabled()) {
+        static SpartanStageProfile::Totals last_profile;
+        SpartanStageProfile::Totals delta;
+        for (u32 i = 0; i < SpartanStageProfile::Count; ++i) {
+            delta.cycles[i] = stage_profile.cycles[i] - last_profile.cycles[i];
+        }
+        delta.draws = stage_profile.draws - last_profile.draws;
+        last_profile = stage_profile;
+        std::printf("%s\n", SpartanStageProfile::Format(delta, cycles, seconds).c_str());
+    }
     drain_sites.clear();
     draw_pipe->drains_by_reason = {};
     window = now;
@@ -1138,6 +1174,7 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     if (DrawPipe::OnStageB()) {
         FrameCapture::Poll();
         scheduler.PopPendingOperations();
+        StageLap(SpartanStageProfile::Pending);
     }
     upscaler->RunPending();
     DiagPassBoundary(false);
@@ -1191,8 +1228,10 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     bind_prepared = used_prepared;
     motion_draw = pipeline->GetGraphicsKey().motion_vectors;
     motion_geometry = 0;
+    StageLap(SpartanStageProfile::Frame);
 
     PrepareRenderState(pipeline);
+    StageLap(SpartanStageProfile::RenderState);
     if (upscaler->Enabled() && pipeline->GetGraphicsKey().mrt_mask) {
         upscaler->OnGraphicsDraw(pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
                                  cb_descs[0].first);
@@ -1206,11 +1245,13 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
             upscaler->OnPixelShader(ps->pgm_hash, cb_descs[0].first);
         }
     }
+    StageLap(SpartanStageProfile::Frame);
     const PreparedDraw* draw_prepared = bind_prepared;
     // spartanport: vertex and index buffers are resolved while the helper binds textures (their
     // commands are recorded after BeginRendering, as before).
     draw_inputs = {pipeline, draw_prepared, index_offset, is_indexed, true, false};
     const bool bound = BindResources(pipeline);
+    StageLap(SpartanStageProfile::Bind);
     bind_prepared = nullptr; // indirect draws and dispatches bind without prepared sharps
     const bool inputs_resolved = draw_inputs.resolved;
     draw_inputs.pending = false;
@@ -1218,6 +1259,7 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         return;
     }
     const auto state = BeginRendering(pipeline);
+    StageLap(SpartanStageProfile::Begin);
 
     if (!inputs_resolved) {
         ResolveVertexBuffers(pipeline, draw_prepared);
@@ -1229,10 +1271,12 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     if (is_indexed) {
         EmitIndexBuffer();
     }
+    StageLap(SpartanStageProfile::Inputs);
 
     if (needs_barrier) {
         runtime.FlushBarriers();
     }
+    StageLap(SpartanStageProfile::Barriers);
 
     // spartanport: screen-space (clip disabled) draws into the upscaler's output-size images.
     push_data.xscale *= target_scale[0];
