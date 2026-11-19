@@ -578,3 +578,30 @@ now reads guest memory for the constant ring, is not treated as a GPU-side threa
 (`IsGpuSideThreadId` accepts only stage B). Next: a run with `SPARTAN_WRITE_LOG=1` that crashes
 prints which logged write landed near the corrupted block; bisect the pipeline toggles
 (38 tasks, 39 pending fence waits, 41 recorder fences, 42 memory writes, 36 constant ring).
+
+## Stage B by section in the City of Olympia (2026-11-18)
+
+Windows, Ryzen 5 5600X, RX 6700 XT (`perf/baseline/MAQUINA.md`), no upscaler, engine at 240, the
+plaza of the rehooked port's comparison screenshot reached by a recorded route
+(`perf/auto/scenarios/cidade-olimpia*.toml`, nobody playing). The frame rate does not follow the
+resolution: 99.2 FPS at 480p, 92.5 at 1080p, 96.0 at 1440p, 90.7 at 4K (medians of 3 runs), about
+2620 draws/frame. `Draw pipe:` reports stage B busy 90-91%, stage A waiting for it 20-25%
+(`OnSubmit`), so stage B is the limit here, not the GPU.
+
+`SPARTAN_STAGE_PROFILE=1` (`gpu/shim/spartanport_stage_profile.h`: one rdtsc lap per section on
+stage B) splits it, median of 54 five-second windows:
+
+| section | share of the window | us/draw |
+|---|---|---|
+| bind (`BindResources`: textures and buffers) | 21.2% | 0.91 |
+| inputs (vertex and index buffers, resolve and emit) | 19.6% | 0.84 |
+| record (motion vectors, push constants, the draw command) | 16.0% | 0.67 |
+| begin (`BeginRendering`) | 10.5% | 0.42 |
+| task (other work queued to stage B) | 10.4% | 0.45 |
+| packet (registers, user data, ring stages) | 5.2% | 0.22 |
+| render state, frame, pending, barriers, dispatch | 7.3% | 0.31 |
+
+Indirect draws count whole as record. With the profiler on, 3 alternating pairs gave 84.2 vs
+89.7 FPS median, with overlapping ranges (81.7-101.0 vs 85.9-91.5): its cost is within the run
+noise at that count. Use it for shares, not for frame rates. Inputs plus the buffer part of
+bind is the largest piece that can move: the "buffer side of the draw to stage A" item above.
