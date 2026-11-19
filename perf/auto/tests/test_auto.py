@@ -183,10 +183,12 @@ class Orchestrator(unittest.TestCase):
         self.rs.clear_dir(cold)  # nothing to move: still fine
 
     def test_gpu_load_parsing(self):
-        text = ("msedge|video codec 0|25,7\nmsedge|high priority 3d|5,5\ndwm|high priority 3d|3,6\n"
-                "spartanport-probe|3D|91.0\n|3D|4\nbroken line\n")
-        self.assertEqual(self.rs.parse_gpu_load(text), {"msedge": 31.2})
-        self.assertGreaterEqual(31.2, self.rs.BUSY_GPU_PCT)
+        # Video decode/encode run on their own block: a browser video does not compete with the game.
+        text = ("msedge|video codec 0|57,1\nmsedge|high priority 3d|5,5\ndwm|high priority 3d|3,6\n"
+                "spartanport-probe|3D|91.0\n|3D|4\nbroken line\nAMDRSServ|high priority compute|83,7\n"
+                "osu!|3d|14,4\nobs64|video encode 0|40\nx|copy|2,0\n")
+        self.assertEqual(self.rs.parse_gpu_load(text), {"msedge": 5.5, "AMDRSServ": 83.7, "osu!": 14.4, "x": 2.0})
+        self.assertLess(5.5, self.rs.BUSY_GPU_PCT)
 
     def test_combine_keeps_crashes(self):
         class Args:

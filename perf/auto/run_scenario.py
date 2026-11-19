@@ -95,11 +95,14 @@ def other_gpu_load():
 
 
 def parse_gpu_load(text):
-    """`name|engine|percent` lines (GPU_LOAD_PS) summed per process, without dwm and the game."""
+    """`name|engine|percent` lines (GPU_LOAD_PS) summed per process, without dwm and the game. Only the
+    engines the game uses count (3D, compute, copy): video decode and encode are a separate block."""
     load = {}
     for line in text.splitlines():
         parts = line.strip().split("|")
         if len(parts) != 3 or not parts[0] or parts[0].lower().startswith(("spartanport", "dwm")):
+            continue
+        if "video" in parts[1].lower():
             continue
         try:
             load[parts[0]] = round(load.get(parts[0], 0.0) + float(parts[2].replace(",", ".")), 1)
