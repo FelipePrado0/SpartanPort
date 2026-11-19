@@ -147,3 +147,14 @@ Implementation order inside P1 to P2:
   vectors are off, at first; draws that start a frame or touch a display buffer cut the block.
 - Guest memory written by queued GPU work (WriteData, DMA, ordered tasks) cuts the block, so a
   block never sees memory change under it.
+- Stage A is ~85% busy and two thirds of that is pipeline selection and constant copies. Blocks
+  only pay off once those move into the resolvers too (stage A then only decodes PM4 and keeps
+  the registers, ~1.2 us/draw). Expected steps of gain: parallel resolvers with pipeline
+  selection and constants inside them, up to the recording thread's limit (~1.5x); then
+  secondary command buffers per resolver, up to stage A's decode (~3x).
+- Per-resolver state without moving code: a resolver is a second `Rasterizer` object whose
+  shared parts (caches, page manager, pipeline cache, draw pipe, constant ring, upscaler, motion,
+  frame-level flags) are references to the one the renderer owns, while the per-draw scratch
+  (descriptor writes, push data, bound buffers and images, target descriptors, draw inputs,
+  memos) stays per object. Method bodies compile unchanged; function-local statics in the draw
+  path have to be checked one by one (counters may race, state may not).
