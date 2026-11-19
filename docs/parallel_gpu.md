@@ -645,3 +645,28 @@ The same profiler marks stage A in `Draw` and `PostDraw` (`SPARTAN_STAGE_PROFILE
 
 Stage A is never idle here (`idle 0.0%`): the constants it copies for stage B are its largest
 single piece, as large as its wait for stage B.
+
+### Vertex V#s checked once (toggle 1 << 56, opt-in, 2026-11-19)
+
+Inside stage B's "inputs" (0.69 us/draw in the City of Olympia), the second read of a prepared
+draw's vertex V#s (`SharpsUnchanged` in `ResolveVertexBuffers`) took 0.15-0.17 us/draw and never
+found a changed table (0.00%). It exists for writes queued before the draw (WriteData, DMA, storage
+writes) that stage B runs after stage A checked the V#s. Stage A now marks the packet when no entry
+of `pending_writes` overlaps the V# table (`spartanport_vertex_table.h`), and stage B skips the read
+for it. With `SPARTAN_PIPE_VERIFY` stage B still reads those and reports any that changed.
+
+Measured on 1440p monitor, 1080p window, `checks/cidade-olimpia-ab` (4 pairs of 25 s per session):
+
+| session | off | on | gain |
+|---|---|---|---|
+| 1 | 102.9 | 106.0 | +3.0% |
+| 2 | 103.0 | 104.9 | +1.9% |
+| 3 | 101.2 | 102.4 | +1.2% |
+| A/A on a free bit (noise) | 106.4 | 106.7 | 0.3% |
+
+Stage profile with the bit set: "inputs" 0.76-0.79 -> 0.58 us/draw, 257-270k -> 288-295k draws/s.
+`checks/cidade-olimpia-verify` with the bit set: no V# table changed after stage A found it settled,
+no register differences, no faults. Other ways to save draw-to-draw work measured first and left
+out: the same small vertex or index range copied again in the same submission is only 6-8% of
+them, and `setVertexInputEXT` repeats the previous draw's state 71% of the time but recording it
+costs ~0.13 us/draw in all. Off by default until the default is decided.
