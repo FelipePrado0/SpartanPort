@@ -706,3 +706,16 @@ by default.
 took 0.28 us/draw of stage B in the City of Olympia. On the copy threads: 0.17. Interleaved A/B,
 three pairs: copy threads 107.95, 108.5, 106.65 FPS; recording thread 102.2, 104.75, 105.15
 (+3.5%). Static scene 185.6 against 182.1. Now the default; the toggle restores the old path.
+
+## Readback queries outside every pending copy skip the mutex (toggle 1 << 30, on by default)
+
+2026-11-20, found with the CPU sampler (`SPARTAN_CPU_SAMPLER`, perf/auto/cpu_profile.py):
+`TextureCache::ResolveReadbacks` took 2.3% of stage B in the City of Olympia. A few small images
+(exposure copies) are almost always pending, so every `ObtainBuffer` took the readback mutex and
+searched the pending list. Queries outside the span of the pending copies now return at once
+(`spartanport_readback_bounds.h`); CPU writes keep the full path (they may release a copy on a
+shared page).
+
+Live A/B in on-off-off-on order (tools/ab_abba.sh, 4 groups of 22 s in one game session, the
+scene drifts as enemies walk in): on 98.38 against 95.62 FPS (+2.9%), and 85.40 against 84.35
+(+1.2%) in a second session on a busier PC. On by default.

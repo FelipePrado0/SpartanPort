@@ -4,6 +4,7 @@
 #pragma once
 
 #include "spartanport_image_state.h"
+#include "spartanport_readback_bounds.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -551,6 +552,7 @@ private:
     ReadbackQueue<Vulkan::StagingBufferRef> pending_readbacks;
     std::mutex readback_mutex;
     std::atomic<bool> has_pending_readbacks{false};
+    SpartanReadback::Bounds readback_bounds; ///< the span of pending_readbacks (ReadbackBounds)
     std::atomic<u64> readback_generation{0};
     u64 readbacks_queued = 0, readbacks_completed = 0, readbacks_waited = 0;
     u64 readbacks_canceled = 0, readbacks_peak_bytes = 0;

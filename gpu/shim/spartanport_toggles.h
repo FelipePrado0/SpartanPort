@@ -88,6 +88,9 @@ enum : std::uint64_t {
     /// into block streams spliced in order (parallel recording, P1;
     /// docs/plans/2026-11-parallel-recording-spec.md).
     ParallelBlocks = 1ull << 62,
+    /// A readback query outside the span of every pending GPU-to-RAM copy returns without the
+    /// readback mutex (spartanport_readback_bounds.h).
+    ReadbackBounds = 1ull << 30,
     /// A guest MSAA image counts as up to date despite Dirty (RefreshImage never uploads it), so
     /// texture sets holding it hit their memo (spartanport_image_state.h).
     MsaaDirtyIgnored = 1ull << 63,
