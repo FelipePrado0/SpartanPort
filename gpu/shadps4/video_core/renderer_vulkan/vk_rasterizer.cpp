@@ -1223,10 +1223,12 @@ bool Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
         self.resolver = std::make_unique<Rasterizer>(self, ResolverTag{});
         self.resolver->pipe_regs = self.pipe_regs;
         self.worker = std::make_unique<BlockWorker>(self);
+        self.buffer_cache.obtain_lock = &resolve_lock;
     } else if (!blocks_on && self.resolver) {
         FlushBlock(&self);
         self.worker.reset();
         self.resolver.reset();
+        self.buffer_cache.obtain_lock = nullptr;
     }
     const auto kind = *reinterpret_cast<const PacketKind*>(data);
     if (blocks_on && kind == PacketKind::Draw && self.scheduler.IsRecordingDeferred()) {
@@ -1708,6 +1710,11 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     }
     const auto state = BeginRendering(pipeline);
     StageLap(SpartanStageProfile::Begin);
+    // Vertex and index inputs only reach the shared caches through ObtainBuffer, which takes
+    // the lock itself.
+    if (resolve_guard.owns_lock()) {
+        resolve_guard.unlock();
+    }
 
     if (!inputs_resolved) {
         ResolveVertexBuffers(pipeline, draw_prepared);
@@ -1731,6 +1738,9 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     push_data.xoffset *= target_scale[0];
     push_data.yscale *= target_scale[1];
     push_data.yoffset *= target_scale[1];
+    if (lock_resolve) {
+        resolve_guard.lock(); // object motion and the upscaler's jitter
+    }
     if (motion_draw && motion_geometry) {
         const auto& vs = pipeline->GetStage(Shader::SwStage::Vertex);
         const auto [base_vertex, first_instance] =

@@ -193,3 +193,13 @@ both resolvers hold the one lock for most of `DrawRecord` (bind, inputs, begin),
 and each block adds a stitch, a full barrier and a render pass break. The gain needs the lock
 narrowed: the memo hits of bind and inputs (most draws) must run without it, which needs the
 buffer and texture cache lookups safe against a concurrent writer.
+
+Measured with temporary counters (City of Olympia, toggle 1 << 62, after vertex and index inputs
+left the lock: `ObtainBuffer` takes it itself): stage B resolved its own blocks 52% of the window
+and the worker 48%; lock waits (both threads) 12%; waiting for the worker 5%; stitch and splice 3%;
+ordered tasks, which only stage B runs, 16%. Per draw the two threads together spend ~60% more CPU
+than serial recording, and FPS stayed at 64-67. Next, by size: binding (textures and buffers)
+out of the lock, which needs the texture cache safe per call (image view lists grow under
+`FindView`); tasks off stage B where they do not touch guest memory a block reads; the full
+barrier per block replaced by the union of the blocks' buffer hazards; and a render pass left
+open across blocks when the next one starts with the same targets.
