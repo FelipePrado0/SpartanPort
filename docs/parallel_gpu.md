@@ -679,3 +679,18 @@ GPU load sampled during each run (runs with a sample at 10% or more left out), g
 no difference over the run-to-run spread, and both arms ~30 FPS under the 191.5 baseline recorded
 the day before, so the gate failures came from the machine that day. A +2% change was not worth
 more gate time against a 4x gap; turning it on is one line in PostDraw.
+
+## Guest MSAA images counted as up to date (toggle 1 << 63, on by default)
+
+Found on 2026-11-20 while looking at the texture set memo: in the City of Olympia ~30% of texture
+binds missed it, all on "image not up to date", and nearly all for one image: a 1920x1080 RGBA8
+target with two guest samples (0x10c42d0000). `RefreshImage` returns before clearing `Dirty` for
+guest MSAA images (it never uploads them), so the image stayed dirty and every texture set holding
+it went down the slow path (`UpdateImage` under the texture cache mutex, a full bind). Dirty now
+does not keep a guest MSAA image from being up to date (`spartanport_image_state.h`; the other
+conditions still apply), which is what `UpdateImage` did for it anyway.
+
+Interleaved A/B, City of Olympia at 1080p, toggles 0 against 1 << 63 (serial, no parallel blocks):
+on 101.2, 103.5, 103.9 FPS; off 98.75, 98.9 (a third off run left the route and is not counted):
++4.1%. Texture set hits 138k/3k misses per window against 83k/56k; bind 0.76 against 0.86 us/draw.
+Static scene 172.4 against 165.6 FPS with the same image (0.5% of pixels differ, its animation).

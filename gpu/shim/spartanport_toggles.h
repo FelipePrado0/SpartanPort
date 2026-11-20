@@ -88,6 +88,9 @@ enum : std::uint64_t {
     /// into block streams spliced in order (parallel recording, P1;
     /// docs/plans/2026-11-parallel-recording-spec.md).
     ParallelBlocks = 1ull << 62,
+    /// A guest MSAA image counts as up to date despite Dirty (RefreshImage never uploads it), so
+    /// texture sets holding it hit their memo (spartanport_image_state.h).
+    MsaaDirtyIgnored = 1ull << 63,
     // Bits 20-29 are used as raw debug toggles by the camera/object motion and the upscaler.
 };
 inline bool Disabled(std::uint64_t bit) {
