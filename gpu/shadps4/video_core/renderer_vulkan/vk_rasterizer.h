@@ -547,7 +547,12 @@ private:
     static constexpr size_t BlockDraws = 64;
     /// A thread with a second resolver that records the earlier of two blocks (P2).
     struct BlockWorker;
-    std::unique_ptr<BlockWorker> worker;
+    std::vector<std::unique_ptr<BlockWorker>> workers;
+    /// The blocks handed to workers since the last flush, in stream order.
+    std::vector<BlockWorker*> block_group;
+    /// The register blocks of `packets` applied to `regs`, in order.
+    static void ApplyRegBlocks(std::span<const std::pair<const u8*, u32>> packets,
+                               AmdGpu::Regs& regs);
     /// Resolvers running in parallel take this around the part of DrawRecord that touches the
     /// shared caches and state.
     static inline SpartanSpin::RecursiveLock resolve_lock;

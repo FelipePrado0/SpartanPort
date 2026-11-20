@@ -134,6 +134,8 @@ struct Rasterizer::BlockWorker {
     }
 
     enum : u32 { Idle, Work, Done, Quit };
+    /// The worker running on this thread, if any.
+    static inline thread_local BlockWorker* current = nullptr;
     Rasterizer resolver;
     RecordStream stream;
     BlockBarriers barriers;
@@ -144,6 +146,7 @@ struct Rasterizer::BlockWorker {
 private:
     void Run() {
         Common::SetCurrentThreadName("spartanport:DrawRec2");
+        current = this;
         while (true) {
             for (u32 spins = 0;; ++spins) {
                 const u32 now = state.load(std::memory_order_acquire);
@@ -1086,13 +1089,14 @@ void Rasterizer::OnStreamBreak(void* context) {
     if (!self.runtime.InBlock()) {
         return;
     }
-    // The worker always holds the earlier block: its stream can go now. Stage B's later block
-    // cannot while the worker runs (P2 limit, not seen in the measured scenes).
-    const bool on_worker = !DrawPipe::OnStageB();
-    ASSERT_MSG(on_worker || !self.worker || !self.worker->Busy(),
+    // Only the earliest block still recording may splice early (P2 limit, not seen in the
+    // measured scenes).
+    auto* worker = BlockWorker::current;
+    ASSERT_MSG(worker ? !self.block_group.empty() && self.block_group.front() == worker
+                      : self.block_group.empty(),
                "A parallel block recorded directly while an earlier block was still recording");
     self.runtime.EndBlock();
-    self.runtime.StitchBlock(on_worker ? self.worker->barriers : self.block_barriers);
+    self.runtime.StitchBlock(worker ? worker->barriers : self.block_barriers);
 }
 
 void Rasterizer::ApplyRegBlocks(const u8* data, AmdGpu::Regs& regs) {
@@ -1154,31 +1158,39 @@ bool Rasterizer::BlockEligible() const {
     return eligible;
 }
 
+void Rasterizer::ApplyRegBlocks(std::span<const std::pair<const u8*, u32>> packets,
+                                AmdGpu::Regs& regs) {
+    for (const auto& packet : packets) {
+        ApplyRegBlocks(packet.first, regs);
+    }
+}
+
 void Rasterizer::FlushBlock(void* context) {
     auto& self = *static_cast<Rasterizer*>(context);
-    auto* worker = self.worker.get();
-    const bool parallel = worker && worker->Busy();
-    if (self.block_packets.empty() && !parallel) {
+    auto& group = self.block_group;
+    if (self.block_packets.empty() && group.empty()) {
         return;
     }
     auto& r = *self.resolver;
-    const auto& last = self.block_packets.empty() ? worker->packets.back()
+    const auto& last = self.block_packets.empty() ? group.back()->packets.back()
                                                   : self.block_packets.back();
     const u64 ring_end = reinterpret_cast<const DrawPacket*>(last.first)->ring_end;
-    if (parallel) {
-        // This resolver's registers start after the worker's block.
-        for (const auto& packet : worker->packets) {
-            ApplyRegBlocks(packet.first, r.pipe_regs);
-        }
-    }
     const bool own = !self.block_packets.empty();
     if (own) {
-        r.lock_resolve = parallel;
+        // This resolver's registers start after the workers' blocks.
+        for (auto* worker : group) {
+            ApplyRegBlocks(worker->packets, r.pipe_regs);
+        }
+        r.lock_resolve = !group.empty();
         ResolveBlock(r, self.block_packets, self.block_commands, self.block_barriers);
         r.lock_resolve = false;
+    } else {
+        for (auto* worker : group) {
+            ApplyRegBlocks(worker->packets, r.pipe_regs);
+        }
     }
     stage_regs = &self.pipe_regs;
-    if (parallel) {
+    for (auto* worker : group) {
         worker->Join();
         if (!worker->stream.chunks.empty() || !worker->barriers.images.empty()) {
             self.runtime.StitchBlock(worker->barriers);
@@ -1186,7 +1198,6 @@ void Rasterizer::FlushBlock(void* context) {
         }
         self.block_draws += worker->packets.size();
         ++self.blocks_parallel;
-        worker->packets.clear();
     }
     if (own) {
         if (!self.block_commands.chunks.empty() || !self.block_barriers.images.empty()) {
@@ -1195,11 +1206,19 @@ void Rasterizer::FlushBlock(void* context) {
         }
         self.block_draws += self.block_packets.size();
         ++self.blocks_serial;
-        // The worker's registers catch up with the block recorded here.
-        for (const auto& packet : self.block_packets) {
-            ApplyRegBlocks(packet.first, worker->resolver.pipe_regs);
-        }
     }
+    // Every worker catches up with the blocks after its own (or all of them).
+    for (auto& worker : self.workers) {
+        const auto it = std::ranges::find(group, worker.get());
+        for (auto next = it == group.end() ? group.begin() : it + 1; next != group.end(); ++next) {
+            ApplyRegBlocks((*next)->packets, worker->resolver.pipe_regs);
+        }
+        ApplyRegBlocks(self.block_packets, worker->resolver.pipe_regs);
+    }
+    for (auto* worker : group) {
+        worker->packets.clear();
+    }
+    group.clear();
     // What follows the blocks did not see their buffer writes in the shared tracker.
     self.scheduler.Record([](vk::CommandBuffer cmdbuf) { Scheduler::RecordFullBarrier(cmdbuf); });
     if (self.constant_ring) {
@@ -1222,11 +1241,17 @@ bool Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
     if (blocks_on && !self.resolver) {
         self.resolver = std::make_unique<Rasterizer>(self, ResolverTag{});
         self.resolver->pipe_regs = self.pipe_regs;
-        self.worker = std::make_unique<BlockWorker>(self);
+        static const u32 count = [] {
+            const char* env = std::getenv("SPARTAN_BLOCK_WORKERS");
+            return env ? std::clamp(std::atoi(env), 1, 6) : 2;
+        }();
+        for (u32 i = 0; i < count; ++i) {
+            self.workers.push_back(std::make_unique<BlockWorker>(self));
+        }
         self.buffer_cache.obtain_lock = &resolve_lock;
     } else if (!blocks_on && self.resolver) {
         FlushBlock(&self);
-        self.worker.reset();
+        self.workers.clear();
         self.resolver.reset();
         self.buffer_cache.obtain_lock = nullptr;
     }
@@ -1243,12 +1268,20 @@ bool Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
             if (self.block_packets.size() < BlockDraws) {
                 return true;
             }
-            if (!self.worker->Busy()) {
-                // The worker records this block while the next one is collected and recorded
-                // here; both stay held in the ring until they are spliced.
-                self.worker->packets.swap(self.block_packets);
+            for (auto& worker : self.workers) {
+                if (std::ranges::find(self.block_group, worker.get()) != self.block_group.end()) {
+                    continue;
+                }
+                // A free worker records this block while the next ones are collected; all stay
+                // held in the ring until they are spliced. Its registers start after the blocks
+                // handed out before this one.
+                for (auto* earlier : self.block_group) {
+                    ApplyRegBlocks(earlier->packets, worker->resolver.pipe_regs);
+                }
+                worker->packets.swap(self.block_packets);
                 self.block_packets.clear();
-                self.worker->Start();
+                self.block_group.push_back(worker.get());
+                worker->Start();
                 return true;
             }
             FlushBlock(&self);
@@ -1256,7 +1289,7 @@ bool Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
             return false;
         }
     }
-    if (!self.block_packets.empty() || (self.worker && self.worker->Busy())) {
+    if (!self.block_packets.empty() || !self.block_group.empty()) {
         // What ends blocks (frame stats): the packet kinds, then draws kept out of blocks.
         ++block_cuts[kind == PacketKind::Draw ? (self.scheduler.IsRecordingDeferred() ? 6 : 7)
                                               : u32(kind)];
@@ -1280,7 +1313,9 @@ bool Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
         (void)blocks;
         (void)blocks_in;
         ApplyRegBlocks(data, self.resolver->pipe_regs);
-        ApplyRegBlocks(data, self.worker->resolver.pipe_regs);
+        for (auto& worker : self.workers) {
+            ApplyRegBlocks(data, worker->resolver.pipe_regs);
+        }
     }
     const AmdGpu::ComputeProgram* cs = nullptr;
     if (packet.kind == PacketKind::Dispatch || packet.kind == PacketKind::IndirectDispatch) {
