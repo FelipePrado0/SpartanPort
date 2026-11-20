@@ -694,3 +694,7 @@ Interleaved A/B, City of Olympia at 1080p, toggles 0 against 1 << 63 (serial, no
 on 101.2, 103.5, 103.9 FPS; off 98.75, 98.9 (a third off run left the route and is not counted):
 +4.1%. Texture set hits 138k/3k misses per window against 83k/56k; bind 0.76 against 0.86 us/draw.
 Static scene 172.4 against 165.6 FPS with the same image (0.5% of pixels differ, its animation).
+
+Bit 56 rechecked on 2026-11-20 (City of Olympia, 1080p C27M, three interleaved pairs, serial): on
+104.15, 96.95, 98.0 FPS; off 103.6, 99.55, 103.5. No gain over the run-to-run spread: still off
+by default.
