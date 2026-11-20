@@ -2451,15 +2451,16 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
                               stage->samplers.size());
             stage->PushUd(binding, push_data);
             const PreparedStage* prepared = FindPreparedStage(*stage);
-            // Buffers take the resolve lock only where they reach shared state.
+            // Buffers and memoized texture sets take the resolve lock only where they reach
+            // shared state.
             if (lock_resolve) {
                 resolve_lock.unlock();
             }
             BindBuffers(*stage, prepared, binding, push_data, set_write_index);
+            BindTextures(*stage, prepared, binding, set_write_index, needs_barrier);
             if (lock_resolve) {
                 resolve_lock.lock();
             }
-            BindTextures(*stage, prepared, binding, set_write_index, needs_barrier);
             uses_dma |= stage->uses_dma;
         }
     } else {
@@ -3184,6 +3185,7 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
     const u32 first_image_idx = image_infos.size();
     TextureSet* set_slot = nullptr;
     if (!on_helper && BindTexturesFromSet(stage, prepared, first_image_idx, barrier, set_slot)) {
+        auto shared = SharedScope(); // the sampler cache
         // Descriptor writes: one per image (no mip arrays in a memoized set).
         for (u32 i = 0; i < stage.images.size(); ++i) {
             auto& set_write = set_writes[write_index++];
@@ -3197,6 +3199,8 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
         BindSamplers(stage, prepared, binding, write_index);
         return;
     }
+    // The rest finds and refreshes images and views in the shared texture cache.
+    auto shared = SharedScope();
     image_bindings.clear();
     image_binding_entries.clear();
     image_desc_overflow.clear();
@@ -3544,6 +3548,9 @@ bool Rasterizer::BindTexturesFromSet(const Shader::Info& stage, const PreparedSt
     key |= 1; // 0 marks an empty slot
     auto& set = texture_sets[key % texture_sets.size()];
     slot = &set;
+    // The hash and the memo lookup run without the lock; the images are checked and changed with
+    // it (another resolver may unregister one in between).
+    auto shared = SharedScope();
     const u64 generation = texture_cache.RegistryGeneration();
     const bool match = set.key == key && set.stage == &stage && set.count == count &&
                        set.generation == generation &&
