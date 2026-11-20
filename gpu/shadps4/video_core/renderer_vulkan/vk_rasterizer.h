@@ -545,6 +545,22 @@ private:
     /// Held direct draw packets (in the draw pipe ring) of the block being collected.
     std::vector<std::pair<const u8*, u32>> block_packets;
     static constexpr size_t BlockDraws = 64;
+    /// A thread with a second resolver that records the earlier of two blocks (P2).
+    struct BlockWorker;
+    std::unique_ptr<BlockWorker> worker;
+    /// Resolvers running in parallel take this around the part of DrawRecord that touches the
+    /// shared caches and state.
+    static inline std::recursive_mutex resolve_lock;
+    bool lock_resolve = false;
+    u64 blocks_parallel = 0, blocks_serial = 0, block_draws = 0;
+    /// The register blocks of a packet applied to `regs` (a resolver that does not record it).
+    static void ApplyRegBlocks(const u8* data, AmdGpu::Regs& regs);
+    /// Records `packets` on `r` into `stream` with `barriers` (this thread's block mode).
+    static void ResolveBlock(Rasterizer& r, std::span<const std::pair<const u8*, u32>> packets,
+                             RecordStream& stream, BlockBarriers& barriers);
+    /// Whether a held draw may go to a block (P2 limits: no upscaler, motion vectors, frame
+    /// capture, GPU profiler or texture helper; not a display buffer draw).
+    [[nodiscard]] bool BlockEligible() const;
     /// Stage B: the ring bindings of the stages of the packet being recorded.
     struct RingStage {
         const Shader::Info* info;

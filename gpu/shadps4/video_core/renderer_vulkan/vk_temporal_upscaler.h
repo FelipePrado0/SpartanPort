@@ -50,6 +50,10 @@ public:
     [[nodiscard]] bool Enabled() const noexcept {
         return enabled;
     }
+    /// spartanport: TAA or FSR is switched on and running (Active).
+    [[nodiscard]] bool Running() const {
+        return Active();
+    }
 
     /// A draw into a full-size RGBA16F target with the scene depth: the scene color.
     void OnSceneColor(VideoCore::ImageId color);
