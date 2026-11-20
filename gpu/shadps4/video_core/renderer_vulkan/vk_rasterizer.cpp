@@ -159,6 +159,8 @@ Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime
         constant_ring = std::make_unique<ConstantRing>(instance, scheduler);
         draw_pipe = std::make_unique<DrawPipe>(&RunDrawPacket, &FlushBlock, this);
     }
+    // spartanport: a block stream ended early is stitched right before its commands.
+    scheduler.SetBreakHook(&OnStreamBreak, this);
     // spartanport: this thread joins the texture binding helper before it changes image state.
     runtime.SetImageAccessHook(&JoinBindHelper, this);
     scheduler.SetSubmitCallback([this](Vulkan::SubmitInfo& info) {
@@ -1017,6 +1019,14 @@ const u8* Rasterizer::ParsePacket(Rasterizer& target, const u8* data) {
     return in;
 }
 
+void Rasterizer::OnStreamBreak(void* context) {
+    auto& self = *static_cast<Rasterizer*>(context);
+    if (self.runtime.InBlock()) {
+        self.runtime.EndBlock();
+        self.runtime.StitchBlock(self.block_barriers);
+    }
+}
+
 void Rasterizer::FlushBlock(void* context) {
     auto& self = *static_cast<Rasterizer*>(context);
     if (self.block_packets.empty()) {
@@ -1024,6 +1034,7 @@ void Rasterizer::FlushBlock(void* context) {
     }
     auto& r = *self.resolver;
     u64 ring_end = 0;
+    self.runtime.BeginBlock(self.block_barriers);
     self.scheduler.BeginStream(self.block_commands);
     for (const auto& [data, size] : self.block_packets) {
         const auto& packet = *reinterpret_cast<const DrawPacket*>(data);
@@ -1038,9 +1049,15 @@ void Rasterizer::FlushBlock(void* context) {
         ring_end = packet.ring_end;
     }
     if (Scheduler::InStream()) {
+        self.runtime.FlushBarriers();
         self.scheduler.EndStream();
+        self.runtime.EndBlock();
+        self.runtime.StitchBlock(self.block_barriers);
     }
+    // Else ended early by a direct recording: OnStreamBreak stitched it then.
     self.scheduler.SpliceStream(self.block_commands);
+    // What follows the block did not see its buffer writes in the shared tracker.
+    self.scheduler.Record([](vk::CommandBuffer cmdbuf) { Scheduler::RecordFullBarrier(cmdbuf); });
     Shader::Info::num_ud_snapshots = 0;
     r.num_ring_stages = 0;
     stage_regs = &self.pipe_regs;
@@ -3167,7 +3184,7 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
             }
 
             vk::ImageView view = *image_view.image_view;
-            vk::ImageLayout layout = image.backing->state.layout;
+            vk::ImageLayout layout = runtime.Layout(image);
             if (upscaler->Enabled()) {
                 // spartanport: the display pass reads the upscaled frame (scaled presets).
                 upscaler->RedirectSampled(image_id, image_view.info, view, layout);
@@ -3341,7 +3358,7 @@ bool Rasterizer::BindTexturesFromSet(const Shader::Info& stage, const PreparedSt
                                     : vk::ImageLayout::eShaderReadOnlyOptimal;
         barrier |= runtime.Transit(&image, new_layout, vk::PipelineStageFlagBits2::eAllCommands,
                                    vk::AccessFlagBits2::eShaderRead, entry.range);
-        image_infos.emplace_back(VK_NULL_HANDLE, entry.view, image.backing->state.layout);
+        image_infos.emplace_back(VK_NULL_HANDLE, entry.view, runtime.Layout(image));
     }
     (void)first_image_idx;
     return true;
@@ -3547,7 +3564,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
             is_clear ? LiverpoolToVK::ColorBufferClearValue(col_buf) : vk::ClearValue{};
         auto& attachment = state.color_attachments[cb];
         attachment.image_view = *image_view.image_view;
-        attachment.image_layout = image->backing->state.layout;
+        attachment.image_layout = runtime.Layout(*image);
         attachment.clear_value = clear_value.color.uint32;
         attachment.is_clear = is_clear;
 
@@ -3629,7 +3646,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
 
         auto& attachment = state.depth_stencil_attachment;
         attachment.image_view = *image_view.image_view;
-        attachment.image_layout = image.backing->state.layout;
+        attachment.image_layout = runtime.Layout(image);
         attachment.clear_value = {};
         attachment.is_clear = 0;
 
@@ -3700,7 +3717,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
                 auto& depth_image = texture_cache.GetImage(db_desc.first);
                 state.depth_stencil_attachment.image_view =
                     *texture_cache.FindDepthTarget(db_desc.first, db_desc.second).image_view;
-                state.depth_stencil_attachment.image_layout = depth_image.backing->state.layout;
+                state.depth_stencil_attachment.image_layout = runtime.Layout(depth_image);
             }
         } else {
             state.width = redirect.width;

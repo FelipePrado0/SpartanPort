@@ -718,6 +718,11 @@ private:
 /// stream in block order (docs/plans/2026-11-parallel-recording-spec.md).
 struct RecordStream {
     std::vector<std::unique_ptr<RecordChunk>> chunks;
+    /// The block's own render pass and dynamic state: a block starts with no pass open and every
+    /// dynamic state dirty (Scheduler::BeginStream), and closes its pass at its end.
+    RenderState render_state{};
+    bool is_rendering = false;
+    DynamicState dynamic_state{};
 
     /// Appends `func`; `acquire()` gives an empty chunk when the last one is full.
     template <typename Func, typename Acquire>
@@ -801,12 +806,12 @@ public:
 
     /// Returns the current render state.
     const RenderState& GetRenderState() const {
-        return render_state;
+        return block_stream ? block_stream->render_state : render_state;
     }
 
     /// Returns the current pipeline dynamic state tracking.
     DynamicState& GetDynamicState() {
-        return dynamic_state;
+        return block_stream ? block_stream->dynamic_state : dynamic_state;
     }
 
     /// Returns the current command buffer for recording on the calling thread. With threaded
@@ -905,9 +910,12 @@ public:
     /// (parallel recording). Needs threaded recording; direct recording is not allowed meanwhile.
     void BeginStream(RecordStream& stream) {
         ASSERT(recording_threaded && !direct_mode && !block_stream);
+        stream.is_rendering = false;
+        stream.dynamic_state.Invalidate();
         block_stream = &stream;
     }
     void EndStream() {
+        EndRendering();
         block_stream = nullptr;
     }
     /// Serial blocks (P1): a direct recording or a recording sync inside a block stream splices
@@ -916,13 +924,28 @@ public:
     void BreakStream() {
         if (block_stream) [[unlikely]] {
             auto* stream = std::exchange(block_stream, nullptr);
+            if (break_hook) {
+                break_hook(break_context); // the block's barriers, ahead of its commands
+            }
             SpliceStream(*stream);
+            // The rest of the block goes on directly from where its stream left the pass.
+            is_rendering = stream->is_rendering;
+            render_state = stream->render_state;
+            dynamic_state = stream->dynamic_state;
             stream_breaks.fetch_add(1, std::memory_order_relaxed);
         }
     }
+    /// Runs when BreakStream() is about to splice a stream early (the owner's stitch).
+    void SetBreakHook(void (*hook)(void*), void* context) {
+        break_hook = hook;
+        break_context = context;
+    }
+
     /// Appends `stream`'s commands after everything recorded so far on the owning thread.
     void SpliceStream(RecordStream& stream) {
         ASSERT(!block_stream);
+        // The block starts with no pass open, and leaves the dynamic state unknown.
+        EndRendering();
         if (!record_chunk->Empty()) {
             RetireChunk();
         }
@@ -930,6 +953,7 @@ public:
             std::scoped_lock lk{recorder_mutex};
             free_chunks.push_back(std::move(chunk));
         });
+        dynamic_state.Invalidate();
     }
 
     /// Hands recorded commands to the recording thread. Called at points where no caller holds
@@ -949,10 +973,11 @@ public:
     /// work anyway, so small copies cost no wakeup); WaitHostCopies() covers it.
     template <typename Func>
     void RecordHostCopy(Func&& copy) {
-        Record([copy = std::forward<Func>(copy), this,
-                seq = ++host_copies_issued](vk::CommandBuffer) {
+        // Counted, not numbered: block streams recorded in parallel issue copies out of order.
+        host_copies_issued.fetch_add(1, std::memory_order_relaxed);
+        Record([copy = std::forward<Func>(copy), this](vk::CommandBuffer) {
             copy();
-            host_copies_done.store(seq, std::memory_order_release);
+            host_copies_done.fetch_add(1, std::memory_order_release);
         });
     }
 
@@ -969,12 +994,13 @@ public:
 
     /// Whether a render pass with exactly this state is open.
     [[nodiscard]] bool IsRenderingWith(const RenderState& state) const {
-        return is_rendering && render_state == state;
+        return block_stream ? block_stream->is_rendering && block_stream->render_state == state
+                            : is_rendering && render_state == state;
     }
 
     /// Whether BeginRendering(state) would start a new render pass.
     [[nodiscard]] bool WillBeginRendering(const RenderState& state) const {
-        return !(is_rendering && render_state == state);
+        return !IsRenderingWith(state);
     }
 
     /// CommandBuffer() calls that waited for a recording thread (SPARTAN_FRAME_STATS).
@@ -1069,7 +1095,7 @@ private:
     std::atomic<size_t> queued_chunks{0}; ///< recorder_queue.size() for lock-free polling
     bool recorder_sleeping = false; ///< waiting on recorder_cv (guarded by recorder_mutex)
     bool direct_mode = false; ///< the command buffer is recorded on the caller's thread
-    u64 host_copies_issued = 0;
+    std::atomic<u64> host_copies_issued{0};
     std::atomic<u64> host_copies_done{0};
     std::atomic<u64> deferred_signals_issued{0}; ///< by the thread recording (A or B)
     std::shared_ptr<std::atomic<u64>> deferred_signals_done =
@@ -1079,6 +1105,8 @@ private:
     bool recording_threaded{false};
     /// The block stream this thread records into (BeginStream), or null.
     static inline thread_local RecordStream* block_stream = nullptr;
+    void (*break_hook)(void*) = nullptr;
+    void* break_context = nullptr;
     std::jthread recorder_thread;
     tracy::VkCtxScope* profiler_scope{};
 };

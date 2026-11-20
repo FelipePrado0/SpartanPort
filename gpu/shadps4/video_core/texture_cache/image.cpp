@@ -571,4 +571,118 @@ void Image::GetBarriers(Barriers& barriers, vk::ImageLayout dst_layout, vk::Acce
     last_state.pl_stage = dst_stage;
 }
 
+void Image::GetBlockBarriers(BlockShadow& shadow, Barriers& out_barriers,
+                             vk::ImageLayout dst_layout, vk::AccessFlags2 dst_mask,
+                             vk::PipelineStageFlags2 dst_stage,
+                             std::optional<SubresourceRange> subres_range) {
+    const u32 layers = info.resources.layers;
+    const u32 count = info.resources.levels * layers;
+    if (shadow.states.size() != count) {
+        shadow.states.assign(count, {});
+        shadow.needs.assign(count, {});
+        shadow.touched.assign(count, 0);
+    }
+    const u32 base_level = subres_range ? subres_range->base.level : 0;
+    const u32 levels = subres_range ? subres_range->extent.levels : info.resources.levels;
+    const u32 base_layer = subres_range ? subres_range->base.layer : 0;
+    const u32 num_layers = subres_range ? subres_range->extent.layers : layers;
+    constexpr auto write_flags = vk::AccessFlagBits2::eTransferWrite |
+                                 vk::AccessFlagBits2::eShaderWrite |
+                                 vk::AccessFlagBits2::eMemoryWrite;
+    const State dst{dst_stage, dst_mask, dst_layout};
+    for (u32 mip = base_level; mip < base_level + levels; ++mip) {
+        for (u32 layer = base_layer; layer < base_layer + num_layers; ++layer) {
+            const u32 index = mip * layers + layer;
+            ASSERT(index < count);
+            auto& state = shadow.states[index];
+            if (!shadow.touched[index]) {
+                shadow.touched[index] = 1;
+                shadow.needs[index] = dst;
+                state = dst;
+                continue;
+            }
+            const bool is_write = static_cast<bool>(state.access_mask & write_flags);
+            if (state.layout != dst_layout || state.access_mask != dst_mask || is_write) {
+                out_barriers.emplace_back(vk::ImageMemoryBarrier2{
+                    .srcStageMask = state.pl_stage,
+                    .srcAccessMask = state.access_mask,
+                    .dstStageMask = dst_stage,
+                    .dstAccessMask = dst_mask,
+                    .oldLayout = state.layout,
+                    .newLayout = dst_layout,
+                    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .image = GetImage(),
+                    .subresourceRange{
+                        .aspectMask = aspect_mask,
+                        .baseMipLevel = mip,
+                        .levelCount = 1,
+                        .baseArrayLayer = layer,
+                        .layerCount = 1,
+                    },
+                });
+            }
+            state = dst;
+        }
+    }
+}
+
+void Image::StitchBlock(const BlockShadow& shadow, Barriers& out_barriers) {
+    auto& real = *backing;
+    ASSERT(shadow.backing == &real);
+    const u32 layers = info.resources.layers;
+    const u32 count = static_cast<u32>(shadow.states.size());
+    if (real.subresource_states.empty()) {
+        real.subresource_states.assign(count, real.state);
+    }
+    constexpr auto write_flags = vk::AccessFlagBits2::eTransferWrite |
+                                 vk::AccessFlagBits2::eShaderWrite |
+                                 vk::AccessFlagBits2::eMemoryWrite;
+    bool uniform = true;
+    for (u32 index = 0; index < count; ++index) {
+        auto& state = real.subresource_states[index];
+        if (shadow.touched[index]) {
+            const auto& need = shadow.needs[index];
+            const bool is_write = static_cast<bool>(state.access_mask & write_flags);
+            if (state.layout != need.layout || state.access_mask != need.access_mask || is_write) {
+                out_barriers.emplace_back(vk::ImageMemoryBarrier2{
+                    .srcStageMask = state.pl_stage,
+                    .srcAccessMask = state.access_mask,
+                    .dstStageMask = need.pl_stage,
+                    .dstAccessMask = need.access_mask,
+                    .oldLayout = state.layout,
+                    .newLayout = need.layout,
+                    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .image = GetImage(),
+                    .subresourceRange{
+                        .aspectMask = aspect_mask,
+                        .baseMipLevel = index / layers,
+                        .levelCount = 1,
+                        .baseArrayLayer = index % layers,
+                        .layerCount = 1,
+                    },
+                });
+            }
+            state = shadow.states[index];
+        }
+        const auto& first = real.subresource_states[0];
+        uniform &= state.layout == first.layout && state.access_mask == first.access_mask &&
+                   state.pl_stage == first.pl_stage;
+    }
+    // One state for the whole image again, as a full transition leaves it serially.
+    real.state = real.subresource_states.back();
+    if (uniform) {
+        real.state = real.subresource_states[0];
+        real.subresource_states.clear();
+    }
+}
+
+vk::ImageLayout Image::BlockLayout(const BlockShadow& shadow) const {
+    if (!shadow.touched.empty() && shadow.touched[0]) {
+        return shadow.states[0].layout;
+    }
+    return backing->state.layout;
+}
+
 } // namespace VideoCore

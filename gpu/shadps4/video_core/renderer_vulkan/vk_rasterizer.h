@@ -17,6 +17,7 @@
 #include "video_core/renderer_vulkan/vk_draw_prep.h"
 #include "video_core/renderer_vulkan/vk_temporal_upscaler.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
+#include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/texture_cache/texture_cache.h"
 
@@ -253,6 +254,7 @@ private:
     static const u8* ParsePacket(Rasterizer& target, const u8* data);
     /// Stage B, parallel recording: records the held direct draws as one block (DrawPipe::Flush).
     static void FlushBlock(void* rasterizer);
+    static void OnStreamBreak(void* rasterizer);
     struct RingBinding;
     void CollectRingBindings(const Shader::Info& stage, const PreparedDraw* prepared,
                              boost::container::static_vector<RingBinding, Shader::NUM_BUFFERS>& out);
@@ -539,6 +541,7 @@ private:
     /// with, and the stream it records them into.
     std::unique_ptr<Rasterizer> resolver;
     RecordStream block_commands;
+    BlockBarriers block_barriers;
     /// Held direct draw packets (in the draw pipe ring) of the block being collected.
     std::vector<std::pair<const u8*, u32>> block_packets;
     static constexpr size_t BlockDraws = 64;
