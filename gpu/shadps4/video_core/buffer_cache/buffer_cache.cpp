@@ -332,7 +332,7 @@ void PrintBufferStats() {
 
 std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 size,
                                                         bool is_written, bool is_texel_buffer) {
-    std::unique_lock<std::recursive_mutex> lock;
+    std::unique_lock<SpartanSpin::RecursiveLock> lock;
     if (obtain_lock) {
         lock = std::unique_lock{*obtain_lock};
     }

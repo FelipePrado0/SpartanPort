@@ -1617,7 +1617,7 @@ void Rasterizer::DiagPassBoundary(bool force) {
 
 void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw* used_prepared,
                             bool is_indexed, u32 index_offset) {
-    std::unique_lock<std::recursive_mutex> resolve_guard{resolve_lock, std::defer_lock};
+    std::unique_lock<SpartanSpin::RecursiveLock> resolve_guard{resolve_lock, std::defer_lock};
     if (lock_resolve) {
         resolve_guard.lock();
     }

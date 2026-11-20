@@ -550,7 +550,7 @@ private:
     std::unique_ptr<BlockWorker> worker;
     /// Resolvers running in parallel take this around the part of DrawRecord that touches the
     /// shared caches and state.
-    static inline std::recursive_mutex resolve_lock;
+    static inline SpartanSpin::RecursiveLock resolve_lock;
     bool lock_resolve = false;
     u64 blocks_parallel = 0, blocks_serial = 0, block_draws = 0;
     /// The register blocks of a packet applied to `regs` (a resolver that does not record it).
