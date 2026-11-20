@@ -1182,6 +1182,11 @@ void Rasterizer::FlushBlock(void* context) {
         for (auto* worker : group) {
             ApplyRegBlocks(worker->packets, r.pipe_regs);
         }
+        if (!group.empty()) {
+            std::scoped_lock poll{resolve_lock};
+            FrameCapture::Poll();
+            self.scheduler.PopPendingOperations();
+        }
         r.lock_resolve = !group.empty();
         ResolveBlock(r, self.block_packets, self.block_commands, self.block_barriers);
         r.lock_resolve = false;
@@ -1659,7 +1664,8 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     if (lock_resolve) {
         resolve_guard.lock();
     }
-    if (DrawPipe::OnStageB()) {
+    // A block recorded next to others polls once before it (FlushBlock), not per draw.
+    if (DrawPipe::OnStageB() && !lock_resolve) {
         FrameCapture::Poll();
         scheduler.PopPendingOperations();
         StageLap(SpartanStageProfile::Pending);
