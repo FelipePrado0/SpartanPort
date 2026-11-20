@@ -354,14 +354,22 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 s
         if (!stream_buffer.mapped_data.empty() &&
             !SpartanToggle::Disabled(SpartanToggle::DeferredStreamCopies)) {
             if (const auto offset = stream_buffer.Reserve(size, instance.UniformMinAlignment())) {
-                SmallGuestCopy({
+                const SpartanCopy::Item item{
                     .run = &RunGuestCopy,
                     .context = this,
                     .source = device_addr,
                     .destination = reinterpret_cast<u64>(stream_buffer.mapped_data.data() + *offset),
                     .size = size,
                     .extra = reinterpret_cast<u64>(static_cast<Buffer*>(&stream_buffer)),
-                });
+                };
+                if (lock.owns_lock()) {
+                    // Parallel resolvers copy their own small reads, outside the lock: nothing
+                    // left for the recording thread that later guest-visible writes wait for.
+                    lock.unlock();
+                    RunGuestCopy(item);
+                } else {
+                    SmallGuestCopy(item);
+                }
                 return {&stream_buffer, *offset};
             }
         }
