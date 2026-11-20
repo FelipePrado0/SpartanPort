@@ -814,7 +814,7 @@ public:
     /// records directly (Record() included, so callers may mix both) until the next
     /// KickRecording() or submission.
     [[gnu::noinline]] vk::CommandBuffer CommandBuffer() {
-        ASSERT_MSG(!block_stream, "Direct recording inside a block stream");
+        BreakStream();
         if (recording_threaded && !direct_mode) {
             SyncRecording();
             direct_mode = true;
@@ -910,6 +910,16 @@ public:
     void EndStream() {
         block_stream = nullptr;
     }
+    /// Serial blocks (P1): a direct recording or a recording sync inside a block stream splices
+    /// what the block recorded so far, and the rest of the block is recorded directly. A parallel
+    /// resolver has to cut the block before such a draw instead.
+    void BreakStream() {
+        if (block_stream) [[unlikely]] {
+            auto* stream = std::exchange(block_stream, nullptr);
+            SpliceStream(*stream);
+            stream_breaks.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
     /// Appends `stream`'s commands after everything recorded so far on the owning thread.
     void SpliceStream(RecordStream& stream) {
         ASSERT(!block_stream);
@@ -969,6 +979,11 @@ public:
 
     /// CommandBuffer() calls that waited for a recording thread (SPARTAN_FRAME_STATS).
     static inline std::atomic<u64> direct_recordings{0};
+    /// CommandBuffer() calls that ended a block stream early (SPARTAN_FRAME_STATS).
+    static inline std::atomic<u64> stream_breaks{0};
+    [[nodiscard]] static bool InStream() noexcept {
+        return block_stream != nullptr;
+    }
 
     /// Returns the current command buffer tick.
     [[nodiscard]] u64 CurrentTick() const noexcept {

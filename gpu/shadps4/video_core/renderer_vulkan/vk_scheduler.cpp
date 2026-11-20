@@ -303,7 +303,7 @@ void Scheduler::KickRecording(bool force) {
 }
 
 void Scheduler::SyncRecording() {
-    ASSERT_MSG(!block_stream, "Recording synced inside a block stream");
+    BreakStream();
     if (!recording_threaded) {
         return;
     }

@@ -42,6 +42,9 @@ class Rasterizer {
 public:
     explicit Rasterizer(const Instance& instance, Scheduler& scheduler, Runtime& runtime,
                         AmdGpu::Liverpool* liverpool);
+    /// spartanport: a draw resolver sharing `owner`'s caches and state (parallel recording).
+    struct ResolverTag {};
+    Rasterizer(Rasterizer& owner, ResolverTag);
     ~Rasterizer();
 
     [[nodiscard]] Runtime& GetRuntime() noexcept {
@@ -490,7 +493,7 @@ private:
     u64 helper_full = 0, helper_partial = 0, helper_serial = 0;
     /// The memoized cache entry of each image binding (FindImage memo taken), else null.
     boost::container::static_vector<ImageDescCacheEntry*, Shader::NUM_IMAGES> image_binding_entries;
-    bool fault_process_pending{};
+    bool& fault_process_pending; ///< shared: OnSubmit processes what any resolver flagged
     bool attachment_feedback_loop{};
     bool needs_barrier{};
     // spartanport: two-stage draw pipeline (stage B state; the thread is the last member so it
@@ -527,6 +530,12 @@ private:
     bool VertexTableSettled(const GraphicsPipeline& pipeline, const PreparedDraw& prepared);
     /// Stage B: set while recording a packet whose V#s stage A found settled.
     bool sharps_final = false;
+    /// spartanport: parallel recording (ParallelBlocks): the resolver stage B records direct draws
+    /// with, and the stream it records them into.
+    std::unique_ptr<Rasterizer> resolver;
+    RecordStream block_commands;
+    void RecordInBlock(const GraphicsPipeline* pipeline, const PreparedDraw* prepared,
+                       bool is_indexed, u32 index_offset);
     /// Stage B: the ring bindings of the stages of the packet being recorded.
     struct RingStage {
         const Shader::Info* info;

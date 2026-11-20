@@ -84,6 +84,10 @@ enum : std::uint64_t {
     /// Pipeline binaries are stored once each in pipeline-binaries/shared, the per-pipeline
     /// files hold their keys only; old files are converted at start (vk_pipeline_serialization).
     SharedBinaries = 1ull << 61,
+    /// Off by default (bit set: on): stage B records direct draws through a second rasterizer
+    /// into block streams spliced in order (parallel recording, P1;
+    /// docs/plans/2026-11-parallel-recording-spec.md).
+    ParallelBlocks = 1ull << 62,
     // Bits 20-29 are used as raw debug toggles by the camera/object motion and the upscaler.
 };
 inline bool Disabled(std::uint64_t bit) {

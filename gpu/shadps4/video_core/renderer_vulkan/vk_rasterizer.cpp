@@ -93,6 +93,7 @@ struct Rasterizer::Owned {
     bool in_display_pass = false;
     SpartanMotionBlur::Rule motion_blur_rule;
     std::unique_ptr<TemporalUpscaler> upscaler;
+    bool fault_process_pending = false;
     bool pipe_synced = false;
     std::vector<PendingWrite> pending_writes;
     VAddr pending_min = ~VAddr{0};
@@ -129,6 +130,7 @@ Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime
       upscaler{owned->upscaler},
       host_markers_enabled{EmulatorSettings.IsVkHostMarkersEnabled()},
       guest_markers_enabled{EmulatorSettings.IsVkGuestMarkersEnabled()},
+      fault_process_pending{owned->fault_process_pending},
       pipe_synced{owned->pipe_synced},
       pending_writes{owned->pending_writes},
       pending_min{owned->pending_min},
@@ -165,9 +167,67 @@ Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime
     });
 }
 
+Rasterizer::Rasterizer(Rasterizer& owner, ResolverTag)
+    : owned{},
+      last_display_buffer{owner.owned->last_display_buffer},
+      instance{owner.instance},
+      scheduler{owner.scheduler},
+      runtime{owner.runtime},
+      page_manager{owner.owned->page_manager},
+      buffer_cache{owner.owned->buffer_cache},
+      texture_cache{owner.owned->texture_cache},
+      liverpool{owner.liverpool},
+      memory{owner.memory},
+      mapped_ranges{owner.owned->mapped_ranges},
+      mapped_ranges_mutex{owner.owned->mapped_ranges_mutex},
+      pipeline_cache{owner.owned->pipeline_cache},
+      draw_prep{owner.owned->draw_prep},
+      camera_motion{owner.owned->camera_motion},
+      scene_targets{owner.owned->scene_targets},
+      scene_started{owner.owned->scene_started},
+      object_motion{owner.owned->object_motion},
+      in_display_pass{owner.owned->in_display_pass},
+      motion_blur_rule{owner.owned->motion_blur_rule},
+      upscaler{owner.owned->upscaler},
+      host_markers_enabled{owner.host_markers_enabled},
+      guest_markers_enabled{owner.guest_markers_enabled},
+      fault_process_pending{owner.owned->fault_process_pending},
+      pipe_synced{owner.owned->pipe_synced},
+      pending_writes{owner.owned->pending_writes},
+      pending_min{owner.owned->pending_min},
+      pending_max{owner.owned->pending_max},
+      pending_checks{owner.owned->pending_checks},
+      scene_debug_frame{owner.owned->scene_debug_frame},
+      constant_ring{owner.owned->constant_ring},
+      pipe_keepalive{owner.owned->pipe_keepalive},
+      draw_pipe{owner.owned->draw_pipe} {}
+
 Rasterizer::~Rasterizer() {
     // The draw recording thread uses this object's own members: it stops before they go.
-    owned->draw_pipe.reset();
+    if (owned) {
+        owned->draw_pipe.reset();
+    }
+}
+
+void Rasterizer::RecordInBlock(const GraphicsPipeline* pipeline, const PreparedDraw* prepared,
+                               bool is_indexed, u32 index_offset) {
+    if (!resolver) {
+        resolver = std::make_unique<Rasterizer>(*this, ResolverTag{});
+    }
+    auto& r = *resolver;
+    // What RunDrawPacket set up for this draw on this object.
+    r.ring_stages = ring_stages;
+    r.num_ring_stages = num_ring_stages;
+    r.pipe_cb_extent = pipe_cb_extent;
+    r.pipe_db_extent = pipe_db_extent;
+    r.sharps_final = sharps_final;
+    scheduler.BeginStream(block_commands);
+    r.DrawRecord(pipeline, prepared, is_indexed, index_offset);
+    if (Scheduler::InStream()) {
+        scheduler.EndStream();
+    }
+    scheduler.SpliceStream(block_commands);
+    r.sharps_final = false;
 }
 
 inline const AmdGpu::Regs& Rasterizer::Regs() const {
@@ -1079,8 +1139,15 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
         stage_profile.draws += profile;
     } else {
         self.sharps_final = packet.sharps_final;
-        self.DrawRecord(static_cast<const GraphicsPipeline*>(packet.pipeline), packet.prepared,
-                        packet.is_indexed, packet.index_offset);
+        // Bit set: on (off by default, as the TAA techniques).
+        if (SpartanToggle::Disabled(SpartanToggle::ParallelBlocks) &&
+            self.scheduler.IsRecordingDeferred()) {
+            self.RecordInBlock(static_cast<const GraphicsPipeline*>(packet.pipeline),
+                               packet.prepared, packet.is_indexed, packet.index_offset);
+        } else {
+            self.DrawRecord(static_cast<const GraphicsPipeline*>(packet.pipeline), packet.prepared,
+                            packet.is_indexed, packet.index_offset);
+        }
         self.sharps_final = false;
         StageLap(SpartanStageProfile::Record);
         stage_profile.draws += profile;
@@ -1130,6 +1197,13 @@ void Rasterizer::PrintPipeStats() {
                 std::printf(" %s=%.0f (%.1f%%)", names[r - 256], n / seconds, share);
             }
         }
+    }
+    if (SpartanToggle::Disabled(SpartanToggle::ParallelBlocks)) {
+        static u64 last_breaks = 0;
+        const u64 breaks = Scheduler::stream_breaks.load(std::memory_order_relaxed);
+        std::printf("\n  block streams: %.0f ended early by direct recording/s",
+                    (breaks - last_breaks) / seconds);
+        last_breaks = breaks;
     }
     std::printf("\n  stage A waits over 0.5%%:");
     for (const auto& [function, lines] : drain_sites) {
