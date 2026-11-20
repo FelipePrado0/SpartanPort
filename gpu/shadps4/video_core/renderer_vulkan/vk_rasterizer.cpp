@@ -1744,7 +1744,14 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     // spartanport: vertex and index buffers are resolved while the helper binds textures (their
     // commands are recorded after BeginRendering, as before).
     draw_inputs = {pipeline, draw_prepared, index_offset, is_indexed, true, false};
+    // Binding takes the resolve lock itself where it reaches shared state (its start only reads).
+    if (resolve_guard.owns_lock()) {
+        resolve_guard.unlock();
+    }
     const bool bound = BindResources(pipeline);
+    if (lock_resolve) {
+        resolve_guard.lock();
+    }
     StageLap(SpartanStageProfile::Bind);
     bind_prepared = nullptr; // indirect draws and dispatches bind without prepared sharps
     const bool inputs_resolved = draw_inputs.resolved;
@@ -2465,15 +2472,9 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
             stage->PushUd(binding, push_data);
             const PreparedStage* prepared = FindPreparedStage(*stage);
             // Buffers and memoized texture sets take the resolve lock only where they reach
-            // shared state.
-            if (lock_resolve) {
-                resolve_lock.unlock();
-            }
+            // shared state (DrawRecord calls this without it).
             BindBuffers(*stage, prepared, binding, push_data, set_write_index);
             BindTextures(*stage, prepared, binding, set_write_index, needs_barrier);
-            if (lock_resolve) {
-                resolve_lock.lock();
-            }
             uses_dma |= stage->uses_dma;
         }
     } else {
@@ -2538,6 +2539,7 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
     }
 
     if (uses_dma) {
+        auto shared = SharedScope();
         buffer_cache.SynchronizeDmaBuffers();
         fault_process_pending = true;
     }
