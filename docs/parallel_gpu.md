@@ -728,3 +728,10 @@ the draw with the memo's signature field by field, without building one, and ret
 memo's state by reference agreed with the old comparison on every verified draw
 (`SPARTAN_PIPE_VERIFY`, 0 disagreements) but gave no gain: live A/B in on-off-off-on order, City of
 Olympia, 94.95 against 97.41 FPS and 96.45 against 95.65 FPS. Reverted; toggle bit 31 stays free.
+
+### The three gains of 2026-11-20 together
+
+Guest MSAA images up to date (1 << 63), small guest copies on the copy threads (524288) and the
+readback span (1 << 30), all on against all off, live A/B in on-off-off-on order in the City of
+Olympia (the game read the combined mask correctly): 98.41 against 92.11 FPS (+6.8%) and 103.05
+against 95.81 FPS (+7.6%): about +7.2% together (the separate A/Bs added up to 9.6%; they overlap).
