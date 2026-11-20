@@ -1220,7 +1220,9 @@ void Rasterizer::FlushBlock(void* context) {
     }
     group.clear();
     // What follows the blocks did not see their buffer writes in the shared tracker.
-    self.scheduler.Record([](vk::CommandBuffer cmdbuf) { Scheduler::RecordFullBarrier(cmdbuf); });
+    if (self.runtime.TakeBlocksWrote()) {
+        self.scheduler.Record([](vk::CommandBuffer cmdbuf) { Scheduler::RecordFullBarrier(cmdbuf); });
+    }
     if (self.constant_ring) {
         self.constant_ring->Stamp(ring_end);
     }

@@ -29,6 +29,7 @@ struct BlockBarriers {
     VideoCore::Image::Barriers image_barriers;
     vk::MemoryBarrier2 memory_barrier{};
     std::vector<std::pair<VideoCore::Image*, VideoCore::Image::BlockShadow>> images;
+    bool wrote = false; ///< a buffer write (shader, transfer) in the block
 };
 
 class Runtime {
@@ -114,6 +115,11 @@ public:
     void EndBlock();
     void StitchBlock(BlockBarriers& block);
     [[nodiscard]] bool InBlock() const;
+    /// Whether blocks stitched since the last call wrote buffers (what follows them then needs a
+    /// memory barrier); clears it.
+    bool TakeBlocksWrote() {
+        return std::exchange(blocks_wrote, false);
+    }
     void FlushBarriers(vk::MemoryBarrier2& memory_barrier, VideoCore::Image::Barriers& image_barriers,
                        BarrierTracker& barrier_tracker);
     /// The layout this thread sees for `image` (a block sees its own shadow).
@@ -133,6 +139,7 @@ public:
 
 private:
     static inline thread_local BlockBarriers* block_barriers = nullptr;
+    bool blocks_wrote = false; ///< a stitched block wrote buffers since the last memory barrier
     void (*image_access_hook)(void*) = nullptr;
     void* image_access_context = nullptr;
     const Instance& instance;

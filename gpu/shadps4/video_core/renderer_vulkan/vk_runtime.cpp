@@ -234,6 +234,7 @@ void Runtime::BeginBlock(BlockBarriers& block) {
     block.image_barriers.clear();
     block.memory_barrier = vk::MemoryBarrier2{};
     block.images.clear();
+    block.wrote = false;
     block_barriers = &block;
 }
 
@@ -244,8 +245,8 @@ void Runtime::EndBlock() {
 void Runtime::StitchBlock(BlockBarriers& block) {
     ASSERT(!block_barriers);
     // What was recorded before the block is ordered before it: its pending barriers first, then
-    // a full memory barrier (the block's buffer tracker started empty) and the transitions from
-    // the real layouts to what the block's first accesses need.
+    // a memory barrier when an earlier block wrote buffers (the block's tracker started empty)
+    // and the transitions from the real layouts to what the block's first accesses need.
     FlushBarriers();
     image_barriers.clear();
     for (auto& [image, shadow] : block.images) {
@@ -253,12 +254,15 @@ void Runtime::StitchBlock(BlockBarriers& block) {
             image->StitchBlock(shadow, image_barriers);
         }
     }
-    memory_barrier.srcStageMask = vk::PipelineStageFlagBits2::eAllCommands;
-    memory_barrier.srcAccessMask = vk::AccessFlagBits2::eMemoryWrite;
+    if (std::exchange(blocks_wrote, false)) {
+        memory_barrier.srcStageMask = vk::PipelineStageFlagBits2::eAllCommands;
+        memory_barrier.srcAccessMask = vk::AccessFlagBits2::eMemoryWrite;
+    }
     memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eAllCommands;
     memory_barrier.dstAccessMask =
         vk::AccessFlagBits2::eMemoryRead | vk::AccessFlagBits2::eMemoryWrite;
     FlushBarriers();
+    blocks_wrote = block.wrote;
     memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eNone;
     memory_barrier.dstAccessMask = vk::AccessFlagBits2::eNone;
     block.images.clear();
@@ -957,6 +961,9 @@ void Runtime::AccessBuffer(const VideoCore::Buffer* handle, u64 offset, u64 size
     }
     auto& barrier_tracker = block_barriers ? block_barriers->barrier_tracker : this->barrier_tracker;
     auto& memory_barrier = block_barriers ? block_barriers->memory_barrier : this->memory_barrier;
+    if (block_barriers && (src_access & WRITE_MASK)) {
+        block_barriers->wrote = true;
+    }
     const auto insert = [&](Access access) {
         // The memo belongs to the shared tracker.
         if (SpartanToggle::Disabled(SpartanToggle::AccessMemo) || block_barriers) {
