@@ -114,6 +114,7 @@ public:
         const u32 slot = reason < NumReasons ? reason : ReasonRasterizer;
         ++drains_by_reason[slot];
         const u64 start = __rdtsc();
+        draining.store(true, std::memory_order_release);
         for (u32 spins = 0; consumed.load(std::memory_order_acquire) != head; ++spins) {
             if (spins < 4096) {
                 __builtin_ia32_pause();
@@ -121,6 +122,7 @@ public:
                 std::this_thread::yield();
             }
         }
+        draining.store(false, std::memory_order_release);
         const u64 waited = __rdtsc() - start;
         drain_cycles += waited;
         cycles_by_reason[slot] += waited;
@@ -155,9 +157,14 @@ private:
     }
 
     void WaitForSpace(u64 at, u64 size) {
+        if (at + size - consumed.load(std::memory_order_acquire) <= Capacity) {
+            return;
+        }
+        draining.store(true, std::memory_order_release); // held packets may be what fills it
         while (at + size - consumed.load(std::memory_order_acquire) > Capacity) {
             __builtin_ia32_pause();
         }
+        draining.store(false, std::memory_order_release);
     }
 
     void Run(std::stop_token stop) {
@@ -170,6 +177,16 @@ private:
             // Packets follow each other within microseconds while a frame is decoded: spin,
             // and sleep only after a longer pause (between frames).
             u64 available = published.load(std::memory_order_acquire);
+            if (available == at && held && !draining.load(std::memory_order_acquire)) {
+                // Stage A usually hands the next draw within microseconds: wait a little for it
+                // before closing the block (unless stage A is waiting for this one).
+                const u64 until = __rdtsc() + hold_cycles;
+                while (published.load(std::memory_order_acquire) == at &&
+                       !draining.load(std::memory_order_acquire) && __rdtsc() < until) {
+                    __builtin_ia32_pause();
+                }
+                available = published.load(std::memory_order_acquire);
+            }
             if (available == at && held) {
                 // Nothing more to add to the block: record it before stage A waits on it.
                 const u64 start = __rdtsc();
@@ -235,6 +252,16 @@ private:
     alignas(64) std::atomic<u64> consumed{0};
     alignas(64) std::atomic<u32> wake{0};
     std::atomic<bool> sleeping{false};
+    /// Stage A waits for stage B (Drain, ring space): held packets are recorded at once.
+    alignas(64) std::atomic<bool> draining{false};
+    /// How long stage B waits for the next packet before recording held ones (~30 us).
+    const u64 hold_cycles = [] {
+        const auto t0 = std::chrono::steady_clock::now();
+        const u64 c0 = __rdtsc();
+        while (std::chrono::steady_clock::now() - t0 < std::chrono::microseconds(200)) {
+        }
+        return (__rdtsc() - c0) * 30 / 200;
+    }();
     std::atomic<u32> stage_b_tid{0};
     std::jthread thread;
 };

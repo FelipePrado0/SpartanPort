@@ -620,6 +620,7 @@ void Rasterizer::EliminateFastClear() {
 // PacketStage with its user data and flattened user data, then (verification) the full file.
 namespace {
 enum class PacketKind : u32 { Draw, Task, Dispatch, Special, Indirect, IndirectDispatch };
+static std::array<u64, 8> block_cuts{}; ///< DIAG
 struct TaskPacket {
     PacketKind kind;
     u32 size;
@@ -1254,6 +1255,9 @@ bool Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
         }
     }
     if (!self.block_packets.empty() || (self.worker && self.worker->Busy())) {
+        // What ends blocks (frame stats): the packet kinds, then draws kept out of blocks.
+        ++block_cuts[kind == PacketKind::Draw ? (self.scheduler.IsRecordingDeferred() ? 6 : 7)
+                                              : u32(kind)];
         FlushBlock(&self);
         StageLap(SpartanStageProfile::Record);
     }
@@ -1433,6 +1437,15 @@ void Rasterizer::PrintPipeStats() {
                     (breaks - last_breaks) / seconds, (blocks_parallel - last_parallel) / seconds,
                     (blocks_serial - last_serial) / seconds,
                     blocks ? double(block_draws - last_draws) / blocks : 0.0);
+        static std::array<u64, 8> last_cuts{};
+        static constexpr const char* cut_names[] = {"-", "task", "dispatch", "special", "indirect",
+                                                    "indirect dispatch", "kept-out draw",
+                                                    "direct-mode draw"};
+        std::printf("; cuts/s:");
+        for (u32 i = 1; i < 8; ++i) {
+            std::printf(" %s %.0f", cut_names[i], (block_cuts[i] - last_cuts[i]) / seconds);
+        }
+        last_cuts = block_cuts;
         last_breaks = breaks;
         last_parallel = blocks_parallel;
         last_serial = blocks_serial;

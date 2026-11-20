@@ -180,3 +180,16 @@ before the next:
    `DrawRecord`; blocks only while the upscaler and motion vectors are off, display draws cut.
    An early splice on the later block is a fatal error (not seen in the measured scenes).
 5. Measure; narrow the lock where memo hits do not touch the caches.
+
+### P2 state on 2026-11-19 (night)
+
+Two resolvers record blocks in parallel with the same image and no fault (static scene, City of
+Olympia, toggle 1 << 62). Blocks were short at first (12 to 21 draws): stage B closed a block
+whenever the ring was empty for an instant (~8,000 times a second, against ~1,100 real cuts:
+tasks ~700/s, dispatches ~60/s, kept-out draws ~300/s). Waiting up to 30 us for the next packet
+(at once when stage A drains or waits for ring space) raised blocks to 47 draws and the share
+recorded in parallel to ~35%. Still slower than serial (City of Olympia 67 FPS against 85-100):
+both resolvers hold the one lock for most of `DrawRecord` (bind, inputs, begin), so they take turns,
+and each block adds a stitch, a full barrier and a render pass break. The gain needs the lock
+narrowed: the memo hits of bind and inputs (most draws) must run without it, which needs the
+buffer and texture cache lookups safe against a concurrent writer.
