@@ -158,3 +158,25 @@ Implementation order inside P1 to P2:
   (descriptor writes, push data, bound buffers and images, target descriptors, draw inputs,
   memos) stays per object. Method bodies compile unchanged; function-local statics in the draw
   path have to be checked one by one (counters may race, state may not).
+
+### P2 checklist (2026-11-19, after P1a and P1b landed)
+
+P1a (one draw per block) and P1b (up to 64 held draws per block, recorded on the resolver, still
+on stage B) work behind toggle 1 << 62 with the same image and no fault in the static scene and
+the City of Olympia; P1b costs ~5% there (serial). Next, in order, each step tested serially
+before the next:
+
+1. Render pass and dynamic state per block stream: a block starts with no pass open and all
+   dynamic state dirty and closes its pass at its end; a splice closes the owner's pass first
+   and marks its dynamic state dirty after; an early splice hands the stream's state over.
+2. Host copy completion counted, not stamped with a sequence number (blocks recorded in parallel
+   issue copies out of order).
+3. Barrier state per block in `Runtime` (tracker, pending image and memory barriers) and image
+   layout shadows with first needs; the stitch emits the barriers from the real state to each
+   block's first needs and writes the block's end state back; the rasterizer's reads of
+   `backing->state.layout` (descriptor and attachment layouts) go through the shadow.
+4. A worker thread with a second resolver: the worker takes the earlier block, stage B the later
+   one, joined and spliced in order; caches under one lock around the resolve part of
+   `DrawRecord`; blocks only while the upscaler and motion vectors are off, display draws cut.
+   An early splice on the later block is a fatal error (not seen in the measured scenes).
+5. Measure; narrow the lock where memo hits do not touch the caches.
