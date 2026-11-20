@@ -210,6 +210,9 @@ class Game:
         if self.s["replay"] or self.s["route"]:
             env["SPARTAN_PAD_REPLAY"] = self.s["replay"] or self.s["route"]
         env.update(self.s["env"])
+        # SPARTAN_CPU_SAMPLER = 1 in a scenario: the samples go to this run's folder.
+        if str(env.get("SPARTAN_CPU_SAMPLER", "")) == "1":
+            env["SPARTAN_CPU_SAMPLER"] = str(self.run_dir / "cpu_samples.tsv")
         exe = REPO / "launcher-rust" / "target" / "release" / (
             "spartanport-launcher.exe" if sys.platform == "win32" else "spartanport-launcher")
         if not exe.exists():

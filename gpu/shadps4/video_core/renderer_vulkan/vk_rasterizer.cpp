@@ -7,6 +7,7 @@
 #include "spartanport_settings.h"
 #include "spartanport_toggles.h"
 #include "spartanport_vertex_table.h"
+#include "spartanport_cpu_sampler.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
 #include "video_core/renderer_vulkan/vk_lighting_test.h"
 #include "video_core/renderer_vulkan/vk_pass_census.h"
@@ -205,6 +206,8 @@ Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime
       constant_ring{owned->constant_ring},
       pipe_keepalive{owned->pipe_keepalive},
       draw_pipe{owned->draw_pipe} {
+    // spartanport: SPARTAN_CPU_SAMPLER (spartanport_cpu_sampler.h).
+    SpartanCpuSampler::StartFromEnv();
     // Before the rasterizer is bound: Liverpool enqueues buffers only once it sees it.
     draw_prep = std::make_unique<DrawPreparation>(pipeline_cache);
     scene_targets = std::make_unique<SceneTargets>(instance, scheduler, runtime, texture_cache);
