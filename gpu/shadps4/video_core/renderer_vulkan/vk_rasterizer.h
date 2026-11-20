@@ -544,7 +544,14 @@ private:
     BlockBarriers block_barriers;
     /// Held direct draw packets (in the draw pipe ring) of the block being collected.
     std::vector<std::pair<const u8*, u32>> block_packets;
-    static constexpr size_t BlockDraws = 64;
+    /// Draws per block (SPARTAN_BLOCK_DRAWS, default 32: City of Olympia 88.7 FPS against 86 with 64).
+    static size_t BlockDraws() {
+        static const size_t draws = [] {
+            const char* env = std::getenv("SPARTAN_BLOCK_DRAWS");
+            return env ? std::clamp<size_t>(std::strtoul(env, nullptr, 10), 8, 1024) : 32;
+        }();
+        return draws;
+    }
     /// A thread with a second resolver that records the earlier of two blocks (P2).
     struct BlockWorker;
     std::vector<std::unique_ptr<BlockWorker>> workers;

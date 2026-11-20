@@ -1265,7 +1265,7 @@ bool Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
             self.block_packets.emplace_back(data, size);
             stage_profile.draws += profile;
             StageLap(SpartanStageProfile::Packet);
-            if (self.block_packets.size() < BlockDraws) {
+            if (self.block_packets.size() < BlockDraws()) {
                 return true;
             }
             for (auto& worker : self.workers) {
