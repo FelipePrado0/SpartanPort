@@ -147,6 +147,7 @@ private:
     void Run() {
         Common::SetCurrentThreadName("spartanport:DrawRec2");
         current = this;
+        FrameCapture::muted = true;
         while (true) {
             for (u32 spins = 0;; ++spins) {
                 const u32 now = state.load(std::memory_order_acquire);
@@ -443,7 +444,7 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
         }
         const auto& hint = CbExtent(cb);
         const u32 tag = 1;
-        image_id = bound_images.emplace_back(FindTargetMemoized(
+        image_id = BindImage(FindTargetMemoized(
             desc, last_targets[cb], [&] { std::construct_at(&desc, col_buf, hint); }, tag,
             col_buf, hint));
         auto& image = texture_cache.GetImage(image_id);
@@ -455,7 +456,7 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
         const auto& hint = DbExtent();
         auto& [image_id, desc] = db_desc;
         const u32 tag = 2;
-        image_id = bound_images.emplace_back(FindTargetMemoized(
+        image_id = BindImage(FindTargetMemoized(
             desc, last_targets[AmdGpu::NUM_COLOR_BUFFERS],
             [&] {
                 std::construct_at(&desc, regs.depth_buffer, regs.depth_view, regs.depth_control,
@@ -2749,9 +2750,21 @@ void Rasterizer::ResolveIndexBuffer(u32 index_offset) {
     index_bind = {buffer->Handle(), offset, index_type};
 }
 
+VideoCore::ImageId Rasterizer::BindImage(VideoCore::ImageId image_id) {
+    bound_images.emplace_back(image_id);
+    ++texture_cache.GetImage(image_id).binding_users;
+    return image_id;
+}
+
 void Rasterizer::ResetBindings(bool is_compute) {
-    for (auto& image_id : bound_images) {
-        texture_cache.GetImage(image_id).binding = {};
+    {
+        auto shared = SharedScope();
+        for (auto& image_id : bound_images) {
+            auto& image = texture_cache.GetImage(image_id);
+            if (image.binding_users == 0 || --image.binding_users == 0) {
+                image.binding = {};
+            }
+        }
     }
     for (const auto [buffer, offset, size, is_written] : bound_buffers) {
         const auto dst_stage = is_compute ? vk::PipelineStageFlagBits2::eComputeShader
@@ -3362,7 +3375,7 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
         if (!image_id) {
             image_infos.emplace_back(VK_NULL_HANDLE, VK_NULL_HANDLE, vk::ImageLayout::eGeneral);
         } else {
-            bound_images.emplace_back(image_id);
+            BindImage(image_id);
 
             auto& image = texture_cache.GetImage(image_id);
             auto& image_view = texture_cache.FindTexture(
@@ -3581,7 +3594,7 @@ bool Rasterizer::BindTexturesFromSet(const Shader::Info& stage, const PreparedSt
         texture_cache.MarkFound(entry.id);
         auto& image = texture_cache.GetImage(entry.id);
         image.binding.is_bound = 1u;
-        bound_images.emplace_back(entry.id);
+        BindImage(entry.id);
         image.usage.texture = 1u;
         if (entry.proxy) {
             image_infos.emplace_back(VK_NULL_HANDLE, entry.view,
@@ -3756,7 +3769,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
         auto* image = &texture_cache.GetImage(image_id);
         if (image->binding.needs_rebind) {
             last_targets[cb].generation = ~0ULL; // FindImage may rewrite the description
-            image_id = bound_images.emplace_back(texture_cache.FindImage(desc));
+            image_id = BindImage(texture_cache.FindImage(desc));
             image = &texture_cache.GetImage(image_id);
         }
         texture_cache.UpdateImage(image_id);

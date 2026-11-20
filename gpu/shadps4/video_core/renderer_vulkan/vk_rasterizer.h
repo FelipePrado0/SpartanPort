@@ -564,6 +564,8 @@ private:
     /// shared caches and state.
     static inline SpartanSpin::RecursiveLock resolve_lock;
     bool lock_resolve = false;
+    /// Adds `image_id` to this draw's bound images and counts this draw as one of its users.
+    VideoCore::ImageId BindImage(VideoCore::ImageId image_id);
     /// The resolve lock while resolvers run in parallel, else nothing.
     [[nodiscard]] std::unique_lock<SpartanSpin::RecursiveLock> SharedScope() const {
         return lock_resolve ? std::unique_lock{resolve_lock}

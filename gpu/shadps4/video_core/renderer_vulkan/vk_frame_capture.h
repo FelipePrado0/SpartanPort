@@ -31,12 +31,15 @@ public:
 
     /// GPU thread: whether passes are being looked at (armed or recording; cheap).
     static bool Active() {
-        return state.load(std::memory_order_relaxed) != Idle;
+        return !muted && state.load(std::memory_order_relaxed) != Idle;
     }
     /// GPU thread: whether a frame is being recorded right now.
     static bool IsRecording() {
-        return state.load(std::memory_order_relaxed) == Recording;
+        return !muted && state.load(std::memory_order_relaxed) == Recording;
     }
+    /// spartanport: a parallel draw resolver's thread never records (the capture is not thread
+    /// safe and may be armed by the GPU thread while a block records).
+    static inline thread_local bool muted = false;
     /// GPU thread, at every draw/dispatch: starts or ends a recording at frame boundaries.
     static void Poll();
 

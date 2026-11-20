@@ -160,6 +160,9 @@ public:
         u32 vo_surface : 1;
     } usage{};
     bool scene_proxy = false; ///< spartanport: SceneTargets holds a reduced-size proxy of it
+    /// spartanport: draws that hold `binding` now (resolvers in parallel each add theirs); the
+    /// flags are cleared when the last one is done (Rasterizer::ResetBindings).
+    u16 binding_users = 0;
     VAddr track_addr = 0;
     VAddr track_addr_end = 0;
     VAddr guest_begin = 0; ///< info.guest_address

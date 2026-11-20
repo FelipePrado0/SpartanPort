@@ -203,3 +203,21 @@ out of the lock, which needs the texture cache safe per call (image view lists g
 `FindView`); tasks off stage B where they do not touch guest memory a block reads; the full
 barrier per block replaced by the union of the blocks' buffer hazards; and a render pass left
 open across blocks when the next one starts with the same targets.
+
+### P2 tuning on 2026-11-20 (City of Olympia, 1080p, toggle 1 << 62; serial 96-106 FPS)
+
+- Spin lock instead of `std::recursive_mutex`: 64-67 to 70 FPS. Buffer binding out of the lock: 71.
+- Two workers, stage B recording a block only when none is free: 81. Three workers: no better.
+- Parallel resolvers copy their own small stream reads outside the lock instead of queueing them
+  for the Vulkan recording thread, which WriteData and fences then waited for: tasks 18% to 0.7%
+  of stage B; 84-89 FPS.
+- Blocks of 32 draws: 88.1-89.3 (64: 84-89; 16: 85).
+- Memory barrier between blocks only after a block wrote buffers: 90.7-91.1 (the unconditional
+  barrier cost ~5%, measured by removing it).
+- Tried and dropped: stage B only dispatching and splicing (blocks streamed to workers and
+  spliced as they finish): 87-88 with two workers, 86-87 with three, 85-86 with four. The workers
+  then wait on the resolve lock (texture binding, render targets, the upscaler's hooks), so more
+  of them do not help.
+- Fixed: the per-draw image flags (`binding`: bound, target, rebind, general layout) are shared by
+  resolvers drawing at the same time, and one resolver's reset cleared another's. Each image now
+  counts the draws holding its flags and clears them when the last one is done.
