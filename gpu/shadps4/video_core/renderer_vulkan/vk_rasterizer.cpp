@@ -1776,8 +1776,8 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     push_data.xoffset *= target_scale[0];
     push_data.yscale *= target_scale[1];
     push_data.yoffset *= target_scale[1];
-    if (lock_resolve) {
-        resolve_guard.lock(); // object motion and the upscaler's jitter
+    if (lock_resolve && motion_draw && motion_geometry) {
+        resolve_guard.lock(); // object motion
     }
     if (motion_draw && motion_geometry) {
         const auto& vs = pipeline->GetStage(Shader::SwStage::Vertex);
@@ -1861,7 +1861,14 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
             });
         }
     }
+    // The descriptors go into this block's stream: no shared state.
+    if (resolve_guard.owns_lock()) {
+        resolve_guard.unlock();
+    }
     pipeline->BindResources(set_writes, push_data);
+    if (lock_resolve) {
+        resolve_guard.lock(); // the upscaler's jitter
+    }
     // spartanport: jitter geometry drawn with the scene depth, not full-screen passes (a shifted
     // full-screen quad leaves an edge column unwritten). God of War III's screen passes are a
     // triangle (3 indices) or a strip quad (4); its sky and sun glow are quads of 6 indices that
