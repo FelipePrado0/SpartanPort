@@ -247,7 +247,12 @@ private:
     void DispatchRecord(const ComputePipeline* pipeline);
     /// The compute registers of the dispatch being recorded.
     const AmdGpu::ComputeProgram& CsRegs() const;
-    static void RunDrawPacket(void* rasterizer, const u8* packet, u32 size);
+    static bool RunDrawPacket(void* rasterizer, const u8* packet, u32 size);
+    /// Applies a packet's register blocks to `target`'s copy and points this thread's stage
+    /// snapshots and `target`'s ring stages at its user data; returns the rest of the packet.
+    static const u8* ParsePacket(Rasterizer& target, const u8* data);
+    /// Stage B, parallel recording: records the held direct draws as one block (DrawPipe::Flush).
+    static void FlushBlock(void* rasterizer);
     struct RingBinding;
     void CollectRingBindings(const Shader::Info& stage, const PreparedDraw* prepared,
                              boost::container::static_vector<RingBinding, Shader::NUM_BUFFERS>& out);
@@ -534,8 +539,9 @@ private:
     /// with, and the stream it records them into.
     std::unique_ptr<Rasterizer> resolver;
     RecordStream block_commands;
-    void RecordInBlock(const GraphicsPipeline* pipeline, const PreparedDraw* prepared,
-                       bool is_indexed, u32 index_offset);
+    /// Held direct draw packets (in the draw pipe ring) of the block being collected.
+    std::vector<std::pair<const u8*, u32>> block_packets;
+    static constexpr size_t BlockDraws = 64;
     /// Stage B: the ring bindings of the stages of the packet being recorded.
     struct RingStage {
         const Shader::Info* info;

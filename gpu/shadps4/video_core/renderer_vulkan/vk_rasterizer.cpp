@@ -157,7 +157,7 @@ Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime
     GpuProfiler::Init(instance, scheduler);
     if (DrawPipeWanted()) {
         constant_ring = std::make_unique<ConstantRing>(instance, scheduler);
-        draw_pipe = std::make_unique<DrawPipe>(&RunDrawPacket, this);
+        draw_pipe = std::make_unique<DrawPipe>(&RunDrawPacket, &FlushBlock, this);
     }
     // spartanport: this thread joins the texture binding helper before it changes image state.
     runtime.SetImageAccessHook(&JoinBindHelper, this);
@@ -209,26 +209,6 @@ Rasterizer::~Rasterizer() {
     }
 }
 
-void Rasterizer::RecordInBlock(const GraphicsPipeline* pipeline, const PreparedDraw* prepared,
-                               bool is_indexed, u32 index_offset) {
-    if (!resolver) {
-        resolver = std::make_unique<Rasterizer>(*this, ResolverTag{});
-    }
-    auto& r = *resolver;
-    // What RunDrawPacket set up for this draw on this object.
-    r.ring_stages = ring_stages;
-    r.num_ring_stages = num_ring_stages;
-    r.pipe_cb_extent = pipe_cb_extent;
-    r.pipe_db_extent = pipe_db_extent;
-    r.sharps_final = sharps_final;
-    scheduler.BeginStream(block_commands);
-    r.DrawRecord(pipeline, prepared, is_indexed, index_offset);
-    if (Scheduler::InStream()) {
-        scheduler.EndStream();
-    }
-    scheduler.SpliceStream(block_commands);
-    r.sharps_final = false;
-}
 
 inline const AmdGpu::Regs& Rasterizer::Regs() const {
     return stage_regs ? *stage_regs : liverpool->regs;
@@ -1004,23 +984,12 @@ bool Rasterizer::RunInOrder(OrderedTask task, const void* data, u32 size, u64 to
     return true;
 }
 
-void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
-    auto& self = *static_cast<Rasterizer*>(context);
-    const bool profile = SpartanStageProfile::Enabled();
-    if (profile) {
-        stage_laps.Start(__rdtsc());
-    }
-    if (*reinterpret_cast<const PacketKind*>(data) == PacketKind::Task) {
-        const auto& task = *reinterpret_cast<const TaskPacket*>(data);
-        task.task(self, data + sizeof(TaskPacket));
-        StageLap(SpartanStageProfile::Task);
-        return;
-    }
+const u8* Rasterizer::ParsePacket(Rasterizer& target, const u8* data) {
     const auto& packet = *reinterpret_cast<const DrawPacket*>(data);
     const u8* in = data + sizeof(DrawPacket);
     const auto* blocks = reinterpret_cast<const u16*>(in);
     in += AlignPacket(packet.num_blocks * sizeof(u16));
-    auto& regs = self.pipe_regs;
+    auto& regs = target.pipe_regs;
     if (packet.regs_reset) {
         regs.SetDefaults();
     }
@@ -1033,8 +1002,8 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
     for (u32 i = 0; i < packet.num_stages; ++i) {
         const auto& stage = *reinterpret_cast<const PacketStage*>(in);
         in += sizeof(PacketStage);
-        self.ring_stages[i] = {stage.info, reinterpret_cast<const RingBinding*>(in),
-                               stage.num_ring};
+        target.ring_stages[i] = {stage.info, reinterpret_cast<const RingBinding*>(in),
+                                 stage.num_ring};
         in += stage.num_ring * sizeof(RingBinding);
         const auto* words = reinterpret_cast<const u32*>(in);
         Shader::Info::ud_snapshots[i] = {stage.info, words, stage.ud_size, words + stage.ud_size,
@@ -1042,7 +1011,110 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
         in += AlignPacket((stage.ud_size + stage.flat_size) * sizeof(u32));
     }
     Shader::Info::num_ud_snapshots = packet.num_stages;
-    self.num_ring_stages = packet.num_stages;
+    target.num_ring_stages = packet.num_stages;
+    target.pipe_cb_extent = packet.cb_extent;
+    target.pipe_db_extent = packet.db_extent;
+    return in;
+}
+
+void Rasterizer::FlushBlock(void* context) {
+    auto& self = *static_cast<Rasterizer*>(context);
+    if (self.block_packets.empty()) {
+        return;
+    }
+    auto& r = *self.resolver;
+    u64 ring_end = 0;
+    self.scheduler.BeginStream(self.block_commands);
+    for (const auto& [data, size] : self.block_packets) {
+        const auto& packet = *reinterpret_cast<const DrawPacket*>(data);
+        ParsePacket(r, data);
+        stage_regs = &r.pipe_regs;
+        r.sharps_final = packet.sharps_final;
+        // A direct recording may end the stream early (Scheduler::BreakStream): the rest of the
+        // block is then recorded directly, still in order.
+        r.DrawRecord(static_cast<const GraphicsPipeline*>(packet.pipeline), packet.prepared,
+                     packet.is_indexed, packet.index_offset);
+        r.sharps_final = false;
+        ring_end = packet.ring_end;
+    }
+    if (Scheduler::InStream()) {
+        self.scheduler.EndStream();
+    }
+    self.scheduler.SpliceStream(self.block_commands);
+    Shader::Info::num_ud_snapshots = 0;
+    r.num_ring_stages = 0;
+    stage_regs = &self.pipe_regs;
+    if (self.constant_ring) {
+        self.constant_ring->Stamp(ring_end);
+    }
+    self.block_packets.clear();
+    self.scheduler.KickRecording();
+}
+
+bool Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
+    auto& self = *static_cast<Rasterizer*>(context);
+    const bool profile = SpartanStageProfile::Enabled();
+    if (profile) {
+        stage_laps.Start(__rdtsc());
+    }
+    // Bit set: on (off by default, as the TAA techniques). The resolver starts from this
+    // register copy before the packet changes it, and is dropped while the bit is off (its
+    // copy would go stale).
+    const bool blocks_on = SpartanToggle::Disabled(SpartanToggle::ParallelBlocks);
+    if (blocks_on && !self.resolver) {
+        self.resolver = std::make_unique<Rasterizer>(self, ResolverTag{});
+        self.resolver->pipe_regs = self.pipe_regs;
+    } else if (!blocks_on && self.resolver) {
+        FlushBlock(&self);
+        self.resolver.reset();
+    }
+    const auto kind = *reinterpret_cast<const PacketKind*>(data);
+    const bool hold = blocks_on && kind == PacketKind::Draw && self.scheduler.IsRecordingDeferred();
+    if (hold) {
+        // The resolver applies its registers when it records the block.
+        const auto& packet = *reinterpret_cast<const DrawPacket*>(data);
+        ParsePacket(self, data);
+        Shader::Info::num_ud_snapshots = 0;
+        self.num_ring_stages = 0;
+        self.block_packets.emplace_back(data, size);
+        stage_profile.draws += profile;
+        StageLap(SpartanStageProfile::Packet);
+        (void)packet;
+        if (self.block_packets.size() >= BlockDraws) {
+            FlushBlock(&self);
+            StageLap(SpartanStageProfile::Record);
+            return false;
+        }
+        return true;
+    }
+    if (!self.block_packets.empty()) {
+        FlushBlock(&self);
+        StageLap(SpartanStageProfile::Record);
+    }
+    if (kind == PacketKind::Task) {
+        const auto& task = *reinterpret_cast<const TaskPacket*>(data);
+        task.task(self, data + sizeof(TaskPacket));
+        StageLap(SpartanStageProfile::Task);
+        return false;
+    }
+    const auto& packet = *reinterpret_cast<const DrawPacket*>(data);
+    auto& regs = self.pipe_regs;
+    const u8* in = ParsePacket(self, data);
+    if (self.resolver) {
+        // The resolver's copy follows the packets it does not record.
+        const u8* blocks_in = data + sizeof(DrawPacket);
+        const auto* blocks = reinterpret_cast<const u16*>(blocks_in);
+        blocks_in += AlignPacket(packet.num_blocks * sizeof(u16));
+        auto& resolver_regs = self.resolver->pipe_regs;
+        if (packet.regs_reset) {
+            resolver_regs.SetDefaults();
+        }
+        for (u32 i = 0; i < packet.num_blocks; ++i) {
+            std::memcpy(resolver_regs.reg_array.data() + blocks[i] * AmdGpu::RegDirty::BlockWords,
+                        blocks_in, AmdGpu::RegDirty::BlockWords * sizeof(u32));
+            blocks_in += AmdGpu::RegDirty::BlockWords * sizeof(u32);
+        }
+    }
     const AmdGpu::ComputeProgram* cs = nullptr;
     if (packet.kind == PacketKind::Dispatch || packet.kind == PacketKind::IndirectDispatch) {
         cs = reinterpret_cast<const AmdGpu::ComputeProgram*>(in);
@@ -1112,8 +1184,6 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
     }
     ASSERT(static_cast<u32>(in - data) == size);
     stage_regs = &regs;
-    self.pipe_cb_extent = packet.cb_extent;
-    self.pipe_db_extent = packet.db_extent;
     StageLap(SpartanStageProfile::Packet);
     if (packet.kind == PacketKind::Special) {
         // A draw FilterDraw handles (fast clear elimination, resolve, depth copy, skip).
@@ -1139,15 +1209,8 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
         stage_profile.draws += profile;
     } else {
         self.sharps_final = packet.sharps_final;
-        // Bit set: on (off by default, as the TAA techniques).
-        if (SpartanToggle::Disabled(SpartanToggle::ParallelBlocks) &&
-            self.scheduler.IsRecordingDeferred()) {
-            self.RecordInBlock(static_cast<const GraphicsPipeline*>(packet.pipeline),
-                               packet.prepared, packet.is_indexed, packet.index_offset);
-        } else {
-            self.DrawRecord(static_cast<const GraphicsPipeline*>(packet.pipeline), packet.prepared,
-                            packet.is_indexed, packet.index_offset);
-        }
+        self.DrawRecord(static_cast<const GraphicsPipeline*>(packet.pipeline), packet.prepared,
+                        packet.is_indexed, packet.index_offset);
         self.sharps_final = false;
         StageLap(SpartanStageProfile::Record);
         stage_profile.draws += profile;
@@ -1158,6 +1221,7 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
         self.constant_ring->Stamp(packet.ring_end);
     }
     StageLap(SpartanStageProfile::Packet);
+    return false;
 }
 
 void Rasterizer::PrintPipeStats() {
