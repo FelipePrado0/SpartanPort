@@ -735,3 +735,13 @@ Guest MSAA images up to date (1 << 63), small guest copies on the copy threads (
 readback span (1 << 30), all on against all off, live A/B in on-off-off-on order in the City of
 Olympia (the game read the combined mask correctly): 98.41 against 92.11 FPS (+6.8%) and 103.05
 against 95.81 FPS (+7.6%): about +7.2% together (the separate A/Bs added up to 9.6%; they overlap).
+
+### Measured: memory copies are not what limits the frame (2026-11-20)
+
+The CPU sampler showed memcpy (ucrtbase) at ~21% of stage A and ~10% of stage B. To know what
+removing it would give before rewriting anything, each side's copies were done twice (an
+experiment, not kept) in a live A/B in on-off-off-on order, City of Olympia: stage A's constant
+copies twice, 94.27 FPS normal against 94.83 doubled; stage B's guest memory reads and recording
+data copies twice, 110.25 against 109.46 (-0.7%). Removing them would give at most about as
+much: the copies sit in time the pipeline already waits. (Skipping the constant copies instead
+lost the device.) Not pursued.
