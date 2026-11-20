@@ -41,7 +41,7 @@ TEST_INI = {
     "monitor": MONITOR, "vsync": "0", "fps_limit": "0", "engine_fps": "240", "hdr": "0",
     "show_fps": "0", "overlay_fps": "0", "overlay_frametime": "0", "overlay_upscaler": "0",
     "overlay_gpu": "0", "overlay_cpu": "0", "overlay_ram": "0", "overlay_vram": "0",
-    "pause_game": "0", "auto_qte": "1", "cheat_health": "1", "free_camera": "1",
+    "pause_game": "0", "auto_qte": "1", "cheat_health": "1", "free_camera": "0",
     "restart_unconfirmed": "0", "auto_safe_fps": "1",
 }
 SETTINGS_OVERRIDES = {"user_dir": "", "discord_rpc": False, "check_updates": False, "frame_stats": True,
