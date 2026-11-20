@@ -160,10 +160,11 @@ void BufferCache::RunGuestCopy(const SpartanCopy::Item& item) {
     buffer->Flush(dst - buffer->mapped_data.data(), item.size);
 }
 
-// Small guest copies run on the recording thread (it spins for work: no wakeup, and it is
-// idle most of the time); PoolSmallCopies (toggle 524288) batches them for the copy threads.
+// Small guest copies run on the copy threads, done before WriteData and fences wait for them
+// (City of Olympia +3.5% against the Vulkan recording thread, whose backlog they waited behind,
+// 2026-11-20). Toggle 524288 (PoolSmallCopies) puts them back on the recording thread.
 void BufferCache::SmallGuestCopy(const SpartanCopy::Item& item) {
-    if (scheduler.IsRecordingDeferred() && !SpartanToggle::Disabled(SpartanToggle::PoolSmallCopies)) {
+    if (scheduler.IsRecordingDeferred() && SpartanToggle::Disabled(SpartanToggle::PoolSmallCopies)) {
         scheduler.RecordHostCopy([item] { item.run(item); });
         return;
     }

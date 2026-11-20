@@ -698,3 +698,11 @@ Static scene 172.4 against 165.6 FPS with the same image (0.5% of pixels differ,
 Bit 56 rechecked on 2026-11-20 (City of Olympia, 1080p C27M, three interleaved pairs, serial): on
 104.15, 96.95, 98.0 FPS; off 103.6, 99.55, 103.5. No gain over the run-to-run spread: still off
 by default.
+
+## Small guest copies on the copy threads (toggle 524288 now puts them back)
+
+2026-11-20: WriteData and fences wait for every small guest copy issued before them
+(`WaitHostCopies`). On the Vulkan recording thread those copies waited behind its backlog: tasks
+took 0.28 us/draw of stage B in the City of Olympia. On the copy threads: 0.17. Interleaved A/B,
+three pairs: copy threads 107.95, 108.5, 106.65 FPS; recording thread 102.2, 104.75, 105.15
+(+3.5%). Static scene 185.6 against 182.1. Now the default; the toggle restores the old path.
