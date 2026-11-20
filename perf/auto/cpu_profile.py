@@ -62,6 +62,9 @@ def aggregate(rows, names, exe_module):
     "via:" rows (the executable's code that led to them) count under "(called from) function"."""
     per_thread = collections.defaultdict(collections.Counter)
     for thread, module, offset, count in rows:
+        if module.startswith("via2:"):
+            per_thread[thread]["(two calls up) " + names.get(offset, f"+{offset:x}")] += count
+            continue
         if module.startswith("via:"):
             per_thread[thread]["(called from) " + names.get(offset, f"+{offset:x}")] += count
             continue
@@ -77,19 +80,23 @@ def aggregate(rows, names, exe_module):
 
 def report(per_thread, top):
     lines = []
-    totals = {t: sum(n for f, n in c.items() if not f.startswith("(called from)"))
+    extra = ("(called from)", "(two calls up)")
+    totals = {t: sum(n for f, n in c.items() if not f.startswith(extra))
               for t, c in per_thread.items()}
     for thread in sorted(per_thread, key=lambda t: -totals[t]):
         counter = per_thread[thread]
         total = max(1, totals[thread])
         lines.append(f"== {thread}: {totals[thread]} samples")
-        own = collections.Counter({f: n for f, n in counter.items() if not f.startswith("(called from)")})
+        own = collections.Counter({f: n for f, n in counter.items() if not f.startswith(extra)})
         via = collections.Counter({f: n for f, n in counter.items() if f.startswith("(called from)")})
+        via2 = collections.Counter({f: n for f, n in counter.items() if f.startswith("(two calls up)")})
         for function, count in own.most_common(top):
             lines.append(f"  {100.0 * count / total:5.1f}%  {function}")
         if via:
             lines.append("  system, driver and guest code above, by the game function that called it:")
             for function, count in via.most_common(top // 2):
+                lines.append(f"  {100.0 * count / total:5.1f}%  {function}")
+            for function, count in via2.most_common(top // 2):
                 lines.append(f"  {100.0 * count / total:5.1f}%  {function}")
     return "\n".join(lines)
 
@@ -103,7 +110,8 @@ def main():
     args = ap.parse_args()
     rows = read_samples(args.samples)
     exe_module = os.path.basename(args.exe)
-    names = symbolize(args.exe, {o for _, m, o, _ in rows if m in (exe_module, "via:" + exe_module)})
+    names = symbolize(args.exe, {o for _, m, o, _ in rows
+                                 if m in (exe_module, "via:" + exe_module, "via2:" + exe_module)})
     print(report(aggregate(rows, names, exe_module), args.top))
 
 

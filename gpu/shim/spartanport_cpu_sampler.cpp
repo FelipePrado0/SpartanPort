@@ -80,6 +80,8 @@ struct Sampled {
 /// Samples outside the game's executable also count, once, the nearest return address into it
 /// (who called the system or driver code), marked with this bit.
 constexpr std::uint64_t CallerBit = 1ull << 63;
+/// And the game function one level above that one, marked with this bit.
+constexpr std::uint64_t Caller2Bit = 1ull << 62;
 
 /// The top of a thread's stack, from its TEB (read while it runs: no lock is involved).
 std::uintptr_t StackTop(HANDLE thread) {
@@ -239,12 +241,16 @@ private:
             CONTEXT context{};
             context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
             const bool got = GetThreadContext(thread.handle, &context);
-            const std::uint64_t caller = got ? Caller(context, thread.stack_top) : 0;
+            std::uint64_t caller2 = 0;
+            const std::uint64_t caller = got ? Caller(context, thread.stack_top, caller2) : 0;
             ResumeThread(thread.handle);
             if (got) {
                 table.Add(thread.name, context.Rip);
                 if (caller) {
                     table.Add(thread.name, caller | CallerBit);
+                }
+                if (caller2) {
+                    table.Add(thread.name, caller2 | Caller2Bit);
                 }
                 ++samples;
             }
@@ -259,7 +265,11 @@ private:
     /// the executable, the return address that leads back into it. [RSP] first (leaf code such
     /// as memcpy or a system call stub), then the frame pointer chain (the executable keeps
     /// frame pointers).
-    [[nodiscard]] std::uint64_t Caller(const CONTEXT& context, std::uintptr_t top) const {
+    /// `caller2`: the next return address into the executable above the first one (the frame
+    /// pointer chain), 0 when there is none.
+    [[nodiscard]] std::uint64_t Caller(const CONTEXT& context, std::uintptr_t top,
+                                       std::uint64_t& caller2) const {
+        caller2 = 0;
         if (InExe(context.Rip) || !top || context.Rsp >= top) {
             return 0;
         }
@@ -267,8 +277,9 @@ private:
             return at >= context.Rsp && at + 8 <= top ? *reinterpret_cast<const std::uint64_t*>(at)
                                                      : 0;
         };
+        std::uint64_t first = 0;
         if (const std::uint64_t ret = read(context.Rsp); InExe(ret)) {
-            return ret;
+            first = ret;
         }
         std::uint64_t frame = context.Rbp;
         for (int depth = 0; depth < 16; ++depth) {
@@ -276,8 +287,13 @@ private:
             if (!ret) {
                 break;
             }
-            if (InExe(ret)) {
-                return ret;
+            if (InExe(ret) && ret != first) {
+                if (!first) {
+                    first = ret;
+                } else {
+                    caller2 = ret;
+                    break;
+                }
             }
             const std::uint64_t next = read(frame);
             if (next <= frame) {
@@ -285,7 +301,7 @@ private:
             }
             frame = next;
         }
-        return 0;
+        return first;
     }
 
     void Dump() {
@@ -296,10 +312,11 @@ private:
             return;
         }
         table.ForEach([&](std::uint32_t name, std::uint64_t address, std::uint32_t count) {
-            if (address & CallerBit) {
-                std::fprintf(file, "%s\tvia:%s\t%llx\t%u\n", names[name].c_str(),
-                             exe_name.c_str(),
-                             static_cast<unsigned long long>((address & ~CallerBit) - exe_begin),
+            if (address & (CallerBit | Caller2Bit)) {
+                std::fprintf(file, "%s\t%s:%s\t%llx\t%u\n", names[name].c_str(),
+                             address & CallerBit ? "via" : "via2", exe_name.c_str(),
+                             static_cast<unsigned long long>(
+                                 (address & ~(CallerBit | Caller2Bit)) - exe_begin),
                              count);
                 return;
             }
