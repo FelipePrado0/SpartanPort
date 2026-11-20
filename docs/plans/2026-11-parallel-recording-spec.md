@@ -221,3 +221,19 @@ open across blocks when the next one starts with the same targets.
 - Fixed: the per-draw image flags (`binding`: bound, target, rebind, general layout) are shared by
   resolvers drawing at the same time, and one resolver's reset cleared another's. Each image now
   counts the draws holding its flags and clears them when the last one is done.
+
+### P2 state on 2026-11-20 (afternoon; tests on the 1080p C27M, free camera off)
+
+- Guest MSAA images counted as up to date (toggle 1 << 63, docs/parallel_gpu.md) also helps
+  here: memoized texture sets now hit ~98% of the time, so fewer binds take the lock.
+- Pending operations and frame capture polled once per parallel block instead of per draw:
+  City of Olympia 95.8 and 98.7 FPS with toggle 1 << 62 against 98.7-99.2 serial in the same
+  session: parity, at ~284k draws/s either way.
+- Three workers: 95.6 and 97.6 (no better than two).
+- The constant ring off with blocks (stage A no longer copies constants, the resolvers read them
+  through ObtainBuffer): stage A waits 46% of the time, but stage B binding rises from 0.64 to
+  1.30 us/draw and stage B is 95% busy: 88.1 and 88.9 FPS. Dropped.
+- Where stage B waits now: the resolve lock at the start of each draw (~0.58 us/draw), held about
+  10% of the window by the start of draws (render targets, upscaler hooks), 6% by render pass
+  setup, 2% by ObtainBuffer, the rest by texture binding. Stage A is ~78% busy: past ~1.25x it
+  becomes the limit, so a larger gain also needs pipeline selection and constants off stage A.
