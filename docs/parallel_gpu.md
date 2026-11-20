@@ -745,3 +745,22 @@ copies twice, 94.27 FPS normal against 94.83 doubled; stage B's guest memory rea
 data copies twice, 110.25 against 109.46 (-0.7%). Removing them would give at most about as
 much: the copies sit in time the pipeline already waits. (Skipping the constant copies instead
 lost the device.) Not pursued.
+
+## Where a frame's CPU time goes, measured (2026-11-20)
+
+CPU sampler with per-thread CPU cycles (QueryThreadCycleTime), City of Olympia at 1080p, 91.9 FPS
+with the sampler on (~105 without it). Milliseconds of CPU per frame; spinning counts as busy.
+
+| Thread | CPU ms/frame | Of which |
+|---|---|---|
+| Stage B (`spartanport:DrawRec`) | 10.6 | work 9.25, waits and spinning 1.3 |
+| Stage A (`GpuCommandProcessor`) | 10.4 | PM4 decode 1.8, pipeline selection 1.8, constants and packets 1.5, memcpy 2.1, waits 2.0, other 0.9 |
+| Vulkan recording thread | 10.4 | AMD driver 2.2, spinning 7.7 |
+| Game main thread (`main`) | 5.9 | guest game code 2.07, HLE ~0.3, waiting for the GPU path 3.6 |
+| Game worker threads (5) | 2.6 each | guest code 0.14 to 0.37 each, the rest waiting |
+
+The game's own work on its critical thread is ~2.3 ms per frame: a ceiling of ~430 FPS for any
+renderer on this CPU, consistent with the 403 FPS cuesta4 reports at 480p on a Ryzen 5 5600.
+SpartanPort's frame is set by stages A and B (~9 ms of work each, in a two-stage pipeline); the
+recording thread has room to spare. Doubling the memory copies of either stage changed FPS by
+under 1% (above), so the limit is the per-draw emulation work itself, not one hot function.

@@ -13,6 +13,7 @@
 #include <unordered_map>
 
 #include <windows.h>
+#include <x86intrin.h>
 #include <psapi.h>
 #include <tlhelp32.h>
 #endif
@@ -74,6 +75,7 @@ struct Sampled {
     std::uint32_t name;
     bool named;
     ULONG64 cycles;          ///< the thread's CPU cycles at the last look
+    ULONG64 used = 0;        ///< CPU cycles it used since sampling started
     std::uintptr_t stack_top; ///< its stack's highest address (TEB), 0 when unknown
 };
 
@@ -135,6 +137,8 @@ public:
                     path.c_str());
         std::fflush(stdout);
         std::this_thread::sleep_for(std::chrono::seconds(delay_s));
+        start_tsc = __rdtsc();
+        start_time = std::chrono::steady_clock::now();
         auto next_refresh = std::chrono::steady_clock::now();
         auto next_dump = next_refresh + std::chrono::seconds(10);
         while (true) {
@@ -218,6 +222,7 @@ private:
             if (alive.contains(it->first)) {
                 ++it;
             } else {
+                retired_used[it->second.name] += it->second.used; // a thread that ended
                 CloseHandle(it->second.handle);
                 it = threads.erase(it);
             }
@@ -231,6 +236,9 @@ private:
             ULONG64 cycles = 0;
             if (!QueryThreadCycleTime(thread.handle, &cycles) || cycles == thread.cycles) {
                 continue;
+            }
+            if (thread.cycles) {
+                thread.used += cycles - thread.cycles;
             }
             thread.cycles = cycles;
             // Nothing between the pause and the resume may allocate or take a lock: the paused
@@ -330,6 +338,21 @@ private:
                          static_cast<unsigned long long>(module ? address - module->begin : address),
                          count);
         });
+        // CPU time per thread name (cycles used while sampled), and the time sampled: what each
+        // thread costs per frame (perf/auto/cpu_profile.py --frames).
+        std::unordered_map<std::uint32_t, ULONG64> used;
+        for (const auto& [tid, thread] : threads) {
+            used[thread.name] += thread.used;
+        }
+        for (const auto& [name, cycles] : used) {
+            std::fprintf(file, "%s\t#cycles\t0\t%llu\n", names[name].c_str(),
+                         static_cast<unsigned long long>(cycles + retired_used[name]));
+        }
+        const double seconds =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - start_time).count();
+        std::fprintf(file, "#\t#elapsed\t%llu\t%llu\n",
+                     static_cast<unsigned long long>(__rdtsc() - start_tsc),
+                     static_cast<unsigned long long>(seconds * 1000.0));
         std::fclose(file);
         std::remove(path.c_str());
         std::rename(temp.c_str(), path.c_str());
@@ -347,6 +370,9 @@ private:
     std::vector<std::string> names;
     std::unordered_map<std::string, std::uint32_t> name_index;
     std::uint64_t samples = 0;
+    std::uint64_t start_tsc = 0;
+    std::chrono::steady_clock::time_point start_time{};
+    std::unordered_map<std::uint32_t, ULONG64> retired_used;
 };
 
 } // namespace

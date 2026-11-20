@@ -25,7 +25,8 @@ def read_samples(path):
             if len(parts) != 4:
                 continue
             thread, module, offset, count = parts
-            rows.append((thread, module, int(offset, 16), int(count)))
+            # The elapsed line holds decimal TSC ticks where the others hold hex offsets.
+            rows.append((thread, module, int(offset, 10 if module == "#elapsed" else 16), int(count)))
     return rows
 
 
@@ -62,6 +63,8 @@ def aggregate(rows, names, exe_module):
     "via:" rows (the executable's code that led to them) count under "(called from) function"."""
     per_thread = collections.defaultdict(collections.Counter)
     for thread, module, offset, count in rows:
+        if module.startswith("#"):
+            continue  # CPU time lines (thread_time)
         if module.startswith("via2:"):
             per_thread[thread]["(two calls up) " + names.get(offset, f"+{offset:x}")] += count
             continue
@@ -76,6 +79,21 @@ def aggregate(rows, names, exe_module):
             function = module
         per_thread[thread][function] += count
     return per_thread
+
+
+def thread_time(rows, fps=0.0):
+    """Lines of each thread's CPU use while sampled: busy share and, with `fps`, ms per frame."""
+    used = {t: c for t, m, _, c in rows if m == "#cycles"}
+    elapsed = next((o for t, m, o, c in rows if m == "#elapsed"), 0)
+    if not used or not elapsed:
+        return ""
+    lines = ["CPU time per thread while sampled (busy share of one core" +
+             (f", ms per frame at {fps:.1f} FPS)" if fps else ")")]
+    for thread, cycles in sorted(used.items(), key=lambda kv: -kv[1])[:20]:
+        busy = cycles / elapsed
+        lines.append(f"  {100.0 * busy:6.1f}%" + (f"  {1000.0 * busy / fps:6.2f} ms" if fps else "") +
+                     f"  {thread}")
+    return "\n".join(lines)
 
 
 def report(per_thread, top):
@@ -107,11 +125,13 @@ def main():
     ap.add_argument("--exe", default=os.path.join(os.path.dirname(__file__), "..", "..", "out",
                                                   "spartanport-probe.exe"))
     ap.add_argument("--top", type=int, default=15)
+    ap.add_argument("--fps", type=float, default=0.0, help="the run's FPS, for ms per frame")
     args = ap.parse_args()
     rows = read_samples(args.samples)
     exe_module = os.path.basename(args.exe)
     names = symbolize(args.exe, {o for _, m, o, _ in rows
                                  if m in (exe_module, "via:" + exe_module, "via2:" + exe_module)})
+    print(thread_time(rows, args.fps))
     print(report(aggregate(rows, names, exe_module), args.top))
 
 
