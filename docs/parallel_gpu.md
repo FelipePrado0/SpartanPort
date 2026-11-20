@@ -719,3 +719,12 @@ shared page).
 Live A/B in on-off-off-on order (tools/ab_abba.sh, 4 groups of 22 s in one game session, the
 scene drifts as enemies walk in): on 98.38 against 95.62 FPS (+2.9%), and 85.40 against 84.35
 (+1.2%) in a second session on a busier PC. On by default.
+
+### Tried and reverted: the render state memo compared in place
+
+2026-11-20: the CPU sampler put the render state memo (building a `BeginSignature` per draw and
+comparing it member by member, then copying the memo's `RenderState`) at ~5% of stage B. Comparing
+the draw with the memo's signature field by field, without building one, and returning the
+memo's state by reference agreed with the old comparison on every verified draw
+(`SPARTAN_PIPE_VERIFY`, 0 disagreements) but gave no gain: live A/B in on-off-off-on order, City of
+Olympia, 94.95 against 97.41 FPS and 96.45 against 95.65 FPS. Reverted; toggle bit 31 stays free.
