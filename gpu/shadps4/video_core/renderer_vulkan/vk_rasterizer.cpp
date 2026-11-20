@@ -2413,7 +2413,14 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
                               stage->samplers.size());
             stage->PushUd(binding, push_data);
             const PreparedStage* prepared = FindPreparedStage(*stage);
+            // Buffers take the resolve lock only where they reach shared state.
+            if (lock_resolve) {
+                resolve_lock.unlock();
+            }
             BindBuffers(*stage, prepared, binding, push_data, set_write_index);
+            if (lock_resolve) {
+                resolve_lock.lock();
+            }
             BindTextures(*stage, prepared, binding, set_write_index, needs_barrier);
             uses_dma |= stage->uses_dma;
         }
@@ -2898,6 +2905,8 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                                      constant_ring->Data(ring->offset), ring->size);
             }
             if (!desc.IsSpecial()) {
+                auto shared = (gbuffer_draw || scan_camera || prepass_depth) ? SharedScope()
+                                                                              : NoScope();
                 if (ring->size == 864 && gbuffer_draw &&
                     memory->IsValidGpuMapping(ring->address, 0)) {
                     camera_motion->OnConstants(reinterpret_cast<const float*>(ring->address));
@@ -2916,6 +2925,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
             }
             buffer_infos.emplace_back(constant_ring->Handle(), ring->offset, ring->size);
         } else if (desc.IsSpecial()) {
+            auto shared = SharedScope(); // the stream buffer and the camera scan
             if (desc.buffer_type == Shader::BufferType::GdsBuffer) {
                 const auto* gds_buf = buffer_cache.GetGdsBuffer();
                 buffer_infos.emplace_back(gds_buf->Handle(), 0, gds_buf->SizeBytes());
@@ -2975,6 +2985,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
         } else {
             const auto vsharp =
                 prepared ? prepared->buffer_sharps[buffer_index] : desc.GetSharp(stage);
+            auto shared = (gbuffer_draw || scan_camera || prepass_depth) ? SharedScope() : NoScope();
             if (vsharp.GetSize() == 864 && gbuffer_draw &&
                 memory->IsValidGpuMapping(vsharp.base_address, 0)) {
                 camera_motion->OnConstants(reinterpret_cast<const float*>(vsharp.base_address));
@@ -3018,6 +3029,9 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
             }
             // spartanport: the game's depth of field is off: the composite reads a changed copy of
             // its constants from the stream buffer (the draw pipeline does this in its ring copy).
+            if (shared.owns_lock()) {
+                shared.unlock();
+            }
             alignas(16) std::array<float, SpartanDepthOfField::ConstantWords> dof_constants;
             bool dof_off = false;
             if (vsharp.base_address != 0 && !desc.is_written && !desc.is_formatted &&
@@ -3030,6 +3044,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
             if (vsharp.base_address == 0 || vsharp.GetSize() == 0) {
                 buffer_infos.emplace_back(VK_NULL_HANDLE, 0, VK_WHOLE_SIZE);
             } else if (dof_off) {
+                auto stream = SharedScope();
                 auto& vk_buffer = buffer_cache.GetStreamBuffer();
                 const u64 offset = vk_buffer.Copy(dof_constants.data(), sizeof(dof_constants), alignment);
                 push_data.AddOffset(binding.buffer, 0);
@@ -3053,6 +3068,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                 bound_buffers.emplace_back(buffer, offset, size, desc.is_written);
                 if (desc.is_written) {
                     // Raw storage-buffer writes can also make an aliased cached image stale.
+                    auto invalidate = SharedScope();
                     texture_cache.InvalidateMemoryFromGPU(vsharp.base_address, size);
                 }
                 needs_barrier |= runtime.IsBufferAccessed(buffer, offset, size, desc.is_written);

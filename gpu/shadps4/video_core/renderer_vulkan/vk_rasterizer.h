@@ -552,6 +552,14 @@ private:
     /// shared caches and state.
     static inline SpartanSpin::RecursiveLock resolve_lock;
     bool lock_resolve = false;
+    /// The resolve lock while resolvers run in parallel, else nothing.
+    [[nodiscard]] std::unique_lock<SpartanSpin::RecursiveLock> SharedScope() const {
+        return lock_resolve ? std::unique_lock{resolve_lock}
+                            : std::unique_lock<SpartanSpin::RecursiveLock>{};
+    }
+    [[nodiscard]] static std::unique_lock<SpartanSpin::RecursiveLock> NoScope() {
+        return {};
+    }
     u64 blocks_parallel = 0, blocks_serial = 0, block_draws = 0;
     /// The register blocks of a packet applied to `regs` (a resolver that does not record it).
     static void ApplyRegBlocks(const u8* data, AmdGpu::Regs& regs);
