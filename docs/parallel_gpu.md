@@ -578,3 +578,189 @@ now reads guest memory for the constant ring, is not treated as a GPU-side threa
 (`IsGpuSideThreadId` accepts only stage B). Next: a run with `SPARTAN_WRITE_LOG=1` that crashes
 prints which logged write landed near the corrupted block; bisect the pipeline toggles
 (38 tasks, 39 pending fence waits, 41 recorder fences, 42 memory writes, 36 constant ring).
+
+## Stage B by section in the City of Olympia (2026-11-18)
+
+Windows, Ryzen 5 5600X, RX 6700 XT (`perf/baseline/MAQUINA.md`), no upscaler, engine at 240, the
+plaza of the rehooked port's comparison screenshot reached by a recorded route
+(`perf/auto/scenarios/cidade-olimpia*.toml`, nobody playing). The frame rate does not follow the
+resolution: 99.2 FPS at 480p, 92.5 at 1080p, 96.0 at 1440p, 90.7 at 4K (medians of 3 runs), about
+2620 draws/frame. `Draw pipe:` reports stage B busy 90-91%, stage A waiting for it 20-25%
+(`OnSubmit`), so stage B is the limit here, not the GPU.
+
+`SPARTAN_STAGE_PROFILE=1` (`gpu/shim/spartanport_stage_profile.h`: one rdtsc lap per section on
+stage B) splits it, median of 54 five-second windows:
+
+| section | share of the window | us/draw |
+|---|---|---|
+| bind (`BindResources`: textures and buffers) | 21.2% | 0.91 |
+| inputs (vertex and index buffers, resolve and emit) | 19.6% | 0.84 |
+| record (motion vectors, push constants, the draw command) | 16.0% | 0.67 |
+| begin (`BeginRendering`) | 10.5% | 0.42 |
+| task (other work queued to stage B) | 10.4% | 0.45 |
+| packet (registers, user data, ring stages) | 5.2% | 0.22 |
+| render state, frame, pending, barriers, dispatch | 7.3% | 0.31 |
+
+Indirect draws count whole as record. With the profiler on, 3 alternating pairs gave 84.2 vs
+89.7 FPS median, with overlapping ranges (81.7-101.0 vs 85.9-91.5): its cost is within the run
+noise at that count. Use it for shares, not for frame rates. Inputs plus the buffer part of
+bind is the largest piece that can move: the "buffer side of the draw to stage A" item above.
+
+### Tried and reverted: small vertex and index streams through the constant ring (2026-11-19)
+
+`SPARTAN_BUFFER_STATS` in the same view: about 368k small copies/s (16 KiB or less, the stream
+path of `ObtainBuffer`, ~1.1 GB/s) against 93k arena bindings/s, so four of five buffers stage B
+resolves are small copies. The idea: stage A takes the small vertex and index streams of direct
+draws (the ranges a draw-preparation worker merged, and the index stream from the draw's
+registers) under the shader constants' rules (16 KiB, not GPU-modified, no pending
+`WriteData`/DMA), and stage B binds the ring offset without `ObtainBuffer` and
+`IsBufferAccessed`. Toggle 1 << 56, live A/B with `tools/ab.sh` (4 pairs of 25 s, one run each):
+
+| variant | stage B busy | stage A waiting for B | streams through the ring | FPS on / off |
+|---|---|---|---|---|
+| A copies the streams (memcpy on stage A), 32 MiB ring | 90% -> 77% | 23% -> 19% | ~270k/s, ~85k/s found it full | 89.4 / 91.6 |
+| A only reserves, B queues the copy on the recording thread in order (as `SmallGuestCopy`), 64 MiB ring | 90% -> 86% | 23% -> 15% | ~420k/s, none full | 100.6 / 103.6 |
+
+Both lost ~2-3% in every pair. Stage B got lighter, but stage A, never idle here (`idle 0.0%`)
+and waiting for B only ~20% of the time, took the checks and the ring work it handed over, and
+the frame rate followed A. With the two stages this close to saturation, moving work from one to
+the other does not raise the frame rate: only less total work or more threads do (a frame-to-frame
+memo of the binds, or recording split into blocks each thread owns). A worker-side copy (before
+stage A reaches the draw) was not tried: a write the GPU makes after the worker's copy and before
+the draw would make it stale, and catching that needs new ordering bookkeeping in the area of the
+past heap corruption. The diff is not kept in the tree.
+
+### Stage A by section in the City of Olympia (2026-11-19)
+
+The same profiler marks stage A in `Draw` and `PostDraw` (`SPARTAN_STAGE_PROFILE=1`, a second
+"Stage A profile:" line). Median of 18 five-second windows, 1080p, ~101 FPS in that run:
+
+| section | share of the window | us/draw |
+|---|---|---|
+| constants (`CollectRingBindings`: small shader buffers copied into the ring, with their checks) | 24.6% | 0.93 |
+| waiting for stage B (`Draw pipe:` "stage A waited") | 22.4% | |
+| pipeline (`GetGraphicsPipeline`, the prepared draw check) | 21.4% | 0.81 |
+| hand-off (register blocks, user data and ring bindings into the packet) | 7.0% | 0.27 |
+| the rest: PM4 decoding, register writes, packets that are not draws | ~24.6% | |
+
+Stage A is never idle here (`idle 0.0%`): the constants it copies for stage B are its largest
+single piece, as large as its wait for stage B.
+
+### Vertex V#s checked once (toggle 1 << 56, opt-in, 2026-11-19)
+
+Inside stage B's "inputs" (0.69 us/draw in the City of Olympia), the second read of a prepared
+draw's vertex V#s (`SharpsUnchanged` in `ResolveVertexBuffers`) took 0.15-0.17 us/draw and never
+found a changed table (0.00%). It exists for writes queued before the draw (WriteData, DMA, storage
+writes) that stage B runs after stage A checked the V#s. Stage A now marks the packet when no entry
+of `pending_writes` overlaps the V# table (`spartanport_vertex_table.h`), and stage B skips the read
+for it. With `SPARTAN_PIPE_VERIFY` stage B still reads those and reports any that changed.
+
+Measured on 1440p monitor, 1080p window, `checks/cidade-olimpia-ab` (4 pairs of 25 s per session):
+
+| session | off | on | gain |
+|---|---|---|---|
+| 1 | 102.9 | 106.0 | +3.0% |
+| 2 | 103.0 | 104.9 | +1.9% |
+| 3 | 101.2 | 102.4 | +1.2% |
+| A/A on a free bit (noise) | 106.4 | 106.7 | 0.3% |
+
+Stage profile with the bit set: "inputs" 0.76-0.79 -> 0.58 us/draw, 257-270k -> 288-295k draws/s.
+`checks/cidade-olimpia-verify` with the bit set: no V# table changed after stage A found it settled,
+no register differences, no faults. Other ways to save draw-to-draw work measured first and left
+out: the same small vertex or index range copied again in the same submission is only 6-8% of
+them, and `setVertexInputEXT` repeats the previous draw's state 71% of the time but recording it
+costs ~0.13 us/draw in all.
+
+Default left off (2026-11-19). The gate run with the bit on by default passed the abertura and the
+four City of Olympia scenarios and failed cena-estatica (cold p99, warm FPS -7.9%), troca-de-area and
+the 20 min soak. An interleaved A/B in cena-estatica, one run per launch, with the other programs'
+GPU load sampled during each run (runs with a sample at 10% or more left out), gave the bit on
+163.4, 132.9, 159.3, 157.0 FPS (median 158.2) and off 160.9, 150.1, 159.1, 163.1 (median 160.0):
+no difference over the run-to-run spread, and both arms ~30 FPS under the 191.5 baseline recorded
+the day before, so the gate failures came from the machine that day. A +2% change was not worth
+more gate time against a 4x gap; turning it on is one line in PostDraw.
+
+## Guest MSAA images counted as up to date (toggle 1 << 63, on by default)
+
+Found on 2026-11-20 while looking at the texture set memo: in the City of Olympia ~30% of texture
+binds missed it, all on "image not up to date", and nearly all for one image: a 1920x1080 RGBA8
+target with two guest samples (0x10c42d0000). `RefreshImage` returns before clearing `Dirty` for
+guest MSAA images (it never uploads them), so the image stayed dirty and every texture set holding
+it went down the slow path (`UpdateImage` under the texture cache mutex, a full bind). Dirty now
+does not keep a guest MSAA image from being up to date (`spartanport_image_state.h`; the other
+conditions still apply), which is what `UpdateImage` did for it anyway.
+
+Interleaved A/B, City of Olympia at 1080p, toggles 0 against 1 << 63 (serial, no parallel blocks):
+on 101.2, 103.5, 103.9 FPS; off 98.75, 98.9 (a third off run left the route and is not counted):
++4.1%. Texture set hits 138k/3k misses per window against 83k/56k; bind 0.76 against 0.86 us/draw.
+Static scene 172.4 against 165.6 FPS with the same image (0.5% of pixels differ, its animation).
+
+Bit 56 rechecked on 2026-11-20 (City of Olympia, 1080p C27M, three interleaved pairs, serial): on
+104.15, 96.95, 98.0 FPS; off 103.6, 99.55, 103.5. No gain over the run-to-run spread: still off
+by default.
+
+## Small guest copies on the copy threads (toggle 524288 now puts them back)
+
+2026-11-20: WriteData and fences wait for every small guest copy issued before them
+(`WaitHostCopies`). On the Vulkan recording thread those copies waited behind its backlog: tasks
+took 0.28 us/draw of stage B in the City of Olympia. On the copy threads: 0.17. Interleaved A/B,
+three pairs: copy threads 107.95, 108.5, 106.65 FPS; recording thread 102.2, 104.75, 105.15
+(+3.5%). Static scene 185.6 against 182.1. Now the default; the toggle restores the old path.
+
+## Readback queries outside every pending copy skip the mutex (toggle 1 << 30, on by default)
+
+2026-11-20, found with the CPU sampler (`SPARTAN_CPU_SAMPLER`, perf/auto/cpu_profile.py):
+`TextureCache::ResolveReadbacks` took 2.3% of stage B in the City of Olympia. A few small images
+(exposure copies) are almost always pending, so every `ObtainBuffer` took the readback mutex and
+searched the pending list. Queries outside the span of the pending copies now return at once
+(`spartanport_readback_bounds.h`); CPU writes keep the full path (they may release a copy on a
+shared page).
+
+Live A/B in on-off-off-on order (tools/ab_abba.sh, 4 groups of 22 s in one game session, the
+scene drifts as enemies walk in): on 98.38 against 95.62 FPS (+2.9%), and 85.40 against 84.35
+(+1.2%) in a second session on a busier PC. On by default.
+
+### Tried and reverted: the render state memo compared in place
+
+2026-11-20: the CPU sampler put the render state memo (building a `BeginSignature` per draw and
+comparing it member by member, then copying the memo's `RenderState`) at ~5% of stage B. Comparing
+the draw with the memo's signature field by field, without building one, and returning the
+memo's state by reference agreed with the old comparison on every verified draw
+(`SPARTAN_PIPE_VERIFY`, 0 disagreements) but gave no gain: live A/B in on-off-off-on order, City of
+Olympia, 94.95 against 97.41 FPS and 96.45 against 95.65 FPS. Reverted; toggle bit 31 stays free.
+
+### The three gains of 2026-11-20 together
+
+Guest MSAA images up to date (1 << 63), small guest copies on the copy threads (524288) and the
+readback span (1 << 30), all on against all off, live A/B in on-off-off-on order in the City of
+Olympia (the game read the combined mask correctly): 98.41 against 92.11 FPS (+6.8%) and 103.05
+against 95.81 FPS (+7.6%): about +7.2% together (the separate A/Bs added up to 9.6%; they overlap).
+
+### Measured: memory copies are not what limits the frame (2026-11-20)
+
+The CPU sampler showed memcpy (ucrtbase) at ~21% of stage A and ~10% of stage B. To know what
+removing it would give before rewriting anything, each side's copies were done twice (an
+experiment, not kept) in a live A/B in on-off-off-on order, City of Olympia: stage A's constant
+copies twice, 94.27 FPS normal against 94.83 doubled; stage B's guest memory reads and recording
+data copies twice, 110.25 against 109.46 (-0.7%). Removing them would give at most about as
+much: the copies sit in time the pipeline already waits. (Skipping the constant copies instead
+lost the device.) Not pursued.
+
+## Where a frame's CPU time goes, measured (2026-11-20)
+
+CPU sampler with per-thread CPU cycles (QueryThreadCycleTime), City of Olympia at 1080p, 91.9 FPS
+with the sampler on (~105 without it). Milliseconds of CPU per frame; spinning counts as busy.
+
+| Thread | CPU ms/frame | Of which |
+|---|---|---|
+| Stage B (`spartanport:DrawRec`) | 10.6 | work 9.25, waits and spinning 1.3 |
+| Stage A (`GpuCommandProcessor`) | 10.4 | PM4 decode 1.8, pipeline selection 1.8, constants and packets 1.5, memcpy 2.1, waits 2.0, other 0.9 |
+| Vulkan recording thread | 10.4 | AMD driver 2.2, spinning 7.7 |
+| Game main thread (`main`) | 5.9 | guest game code 2.07, HLE ~0.3, waiting for the GPU path 3.6 |
+| Game worker threads (5) | 2.6 each | guest code 0.14 to 0.37 each, the rest waiting |
+
+The game's own work on its critical thread is ~2.3 ms per frame: a ceiling of ~430 FPS for any
+renderer on this CPU, consistent with the 403 FPS cuesta4 reports at 480p on a Ryzen 5 5600.
+SpartanPort's frame is set by stages A and B (~9 ms of work each, in a two-stage pipeline); the
+recording thread has room to spare. Doubling the memory copies of either stage changed FPS by
+under 1% (above), so the limit is the per-draw emulation work itself, not one hot function.

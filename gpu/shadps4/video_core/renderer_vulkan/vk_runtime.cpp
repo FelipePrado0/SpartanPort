@@ -211,9 +211,84 @@ bool Runtime::Transit(VideoCore::Image* image, vk::ImageLayout dst_layout,
                       std::optional<VideoCore::SubresourceRange> subres_range) {
     BeforeImageAccess();
     if (scene_targets) scene_targets->NativeAccess(*image, dst_access);
+    if (auto* block = block_barriers) [[unlikely]] {
+        auto it = std::ranges::find_if(block->images, [&](const auto& entry) {
+            return entry.first == image && entry.second.backing == image->backing;
+        });
+        if (it == block->images.end()) {
+            block->images.emplace_back(image, VideoCore::Image::BlockShadow{.backing = image->backing});
+            it = block->images.end() - 1;
+        }
+        const size_t prev = block->image_barriers.size();
+        image->GetBlockBarriers(it->second, block->image_barriers, dst_layout, dst_access, dst_stage,
+                                subres_range);
+        return block->image_barriers.size() != prev;
+    }
     const size_t prev_num_barriers = static_cast<size_t>(image_barriers.size());
     image->GetBarriers(image_barriers, dst_layout, dst_access, dst_stage, subres_range);
     return image_barriers.size() != prev_num_barriers;
+}
+
+void Runtime::BeginBlock(BlockBarriers& block) {
+    block.barrier_tracker.Clear();
+    block.image_barriers.clear();
+    block.memory_barrier = vk::MemoryBarrier2{};
+    block.images.clear();
+    block.wrote = false;
+    block_barriers = &block;
+}
+
+void Runtime::EndBlock() {
+    block_barriers = nullptr;
+}
+
+void Runtime::StitchBlock(BlockBarriers& block) {
+    ASSERT(!block_barriers);
+    // What was recorded before the block is ordered before it: its pending barriers first, then
+    // a memory barrier when an earlier block wrote buffers (the block's tracker started empty)
+    // and the transitions from the real layouts to what the block's first accesses need.
+    FlushBarriers();
+    image_barriers.clear();
+    for (auto& [image, shadow] : block.images) {
+        if (shadow.backing == image->backing) {
+            image->StitchBlock(shadow, image_barriers);
+        }
+    }
+    if (std::exchange(blocks_wrote, false)) {
+        memory_barrier.srcStageMask = vk::PipelineStageFlagBits2::eAllCommands;
+        memory_barrier.srcAccessMask = vk::AccessFlagBits2::eMemoryWrite;
+    }
+    memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eAllCommands;
+    memory_barrier.dstAccessMask =
+        vk::AccessFlagBits2::eMemoryRead | vk::AccessFlagBits2::eMemoryWrite;
+    FlushBarriers();
+    blocks_wrote = block.wrote;
+    memory_barrier.dstStageMask = vk::PipelineStageFlagBits2::eNone;
+    memory_barrier.dstAccessMask = vk::AccessFlagBits2::eNone;
+    block.images.clear();
+    // Barriers the block left pending (a stream ended early) follow its commands: its end state
+    // already counts them.
+    image_barriers.insert(image_barriers.end(), block.image_barriers.begin(),
+                          block.image_barriers.end());
+    memory_barrier.srcStageMask |= block.memory_barrier.srcStageMask;
+    memory_barrier.srcAccessMask |= block.memory_barrier.srcAccessMask;
+    block.image_barriers.clear();
+    block.memory_barrier = vk::MemoryBarrier2{};
+}
+
+bool Runtime::InBlock() const {
+    return block_barriers != nullptr;
+}
+
+vk::ImageLayout Runtime::Layout(const VideoCore::Image& image) const {
+    if (const auto* block = block_barriers) [[unlikely]] {
+        for (const auto& [shadowed, shadow] : block->images) {
+            if (shadowed == &image && shadow.backing == image.backing) {
+                return image.BlockLayout(shadow);
+            }
+        }
+    }
+    return image.backing->state.layout;
 }
 
 Runtime::TransferMark::TransferMark(Runtime& runtime, const char* what,
@@ -843,6 +918,7 @@ void Runtime::SetBackingSamples(VideoCore::Image* image, u32 num_samples, bool c
 
 bool Runtime::IsBufferAccessed(const VideoCore::Buffer* handle, u64 offset, u64 size,
                                bool check_read_access) {
+    auto& barrier_tracker = block_barriers ? block_barriers->barrier_tracker : this->barrier_tracker;
     const AddressRange range = {
         .resource = reinterpret_cast<u64>(handle),
         .range_start = offset,
@@ -883,8 +959,14 @@ void Runtime::AccessBuffer(const VideoCore::Buffer* handle, u64 offset, u64 size
         range.range_start &= ~u64{0xFFF};
         range.range_end |= 0xFFF;
     }
+    auto& barrier_tracker = block_barriers ? block_barriers->barrier_tracker : this->barrier_tracker;
+    auto& memory_barrier = block_barriers ? block_barriers->memory_barrier : this->memory_barrier;
+    if (block_barriers && (src_access & WRITE_MASK)) {
+        block_barriers->wrote = true;
+    }
     const auto insert = [&](Access access) {
-        if (SpartanToggle::Disabled(SpartanToggle::AccessMemo)) {
+        // The memo belongs to the shared tracker.
+        if (SpartanToggle::Disabled(SpartanToggle::AccessMemo) || block_barriers) {
             barrier_tracker.InsertRange(range, access);
             return;
         }
@@ -913,6 +995,17 @@ void Runtime::AccessBuffer(const VideoCore::Buffer* handle, u64 offset, u64 size
 
 void Runtime::FlushBarriers() {
     BeforeImageAccess();
+    if (auto* block = block_barriers) [[unlikely]] {
+        FlushBarriers(block->memory_barrier, block->image_barriers, block->barrier_tracker);
+        return;
+    }
+    FlushBarriers(memory_barrier, image_barriers, barrier_tracker);
+    ++access_epoch;
+}
+
+void Runtime::FlushBarriers(vk::MemoryBarrier2& memory_barrier,
+                            VideoCore::Image::Barriers& image_barriers,
+                            BarrierTracker& barrier_tracker) {
     vk::DependencyInfo dep_info{};
 
     if (memory_barrier.srcStageMask) {
@@ -946,7 +1039,6 @@ void Runtime::FlushBarriers() {
 
     image_barriers.clear();
     barrier_tracker.Clear();
-    ++access_epoch;
 }
 
 } // namespace Vulkan

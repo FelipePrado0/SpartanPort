@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "spartanport_image_state.h"
+#include "spartanport_readback_bounds.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -172,13 +174,26 @@ public:
         const Image& image = slot_images[image_id];
         const u32 flags = std::atomic_ref<u32>(const_cast<u32&>(reinterpret_cast<const u32&>(image.flags)))
                               .load(std::memory_order_acquire);
+        return UpToDate(image, flags);
+    }
+
+    /// spartanport: IsUpToDate and the fast path of UpdateImage (spartanport_image_state.h).
+    [[nodiscard]] bool UpToDate(const Image& image, u32 flags) const {
         constexpr u32 Dirty = static_cast<u32>(ImageFlagBits::Dirty);
         constexpr u32 Registered = static_cast<u32>(ImageFlagBits::Registered);
         constexpr u32 Aliased = static_cast<u32>(ImageFlagBits::Aliased);
-        return (flags & (Dirty | Registered | Aliased)) == Registered &&
-               !has_backing_writes.load(std::memory_order_acquire) &&
-               image.track_addr == image.guest_begin && image.track_addr_end == image.guest_end &&
-               image.lru_touched_tick == gc_tick;
+        const bool dirty = (flags & Dirty) != 0;
+        return SpartanImageState::UpToDate({
+            .registered = (flags & Registered) != 0,
+            .dirty = dirty,
+            .aliased = (flags & Aliased) != 0,
+            // Only read when it matters: the field sits in the large ImageInfo.
+            .guest_samples = dirty ? image.info.guest_samples : 1u,
+            .backing_writes = has_backing_writes.load(std::memory_order_acquire),
+            .tracked = image.track_addr == image.guest_begin && image.track_addr_end == image.guest_end,
+            .touched = image.lru_touched_tick == gc_tick,
+            .msaa_dirty_ignored = dirty && !SpartanToggle::Disabled(SpartanToggle::MsaaDirtyIgnored),
+        });
     }
 
     /// Updates image contents if it was modified by CPU.
@@ -191,14 +206,8 @@ public:
             const Image& image = slot_images[image_id];
             const u32 flags = std::atomic_ref<u32>(const_cast<u32&>(reinterpret_cast<const u32&>(image.flags)))
                                   .load(std::memory_order_acquire);
-            constexpr u32 Dirty = static_cast<u32>(ImageFlagBits::Dirty);
-            constexpr u32 Registered = static_cast<u32>(ImageFlagBits::Registered);
             // Images sharing memory with another take the locked path: SynchronizeAlias.
-            constexpr u32 Aliased = static_cast<u32>(ImageFlagBits::Aliased);
-            if ((flags & (Dirty | Registered | Aliased)) == Registered &&
-                !has_backing_writes.load(std::memory_order_acquire) &&
-                image.track_addr == image.guest_begin && image.track_addr_end == image.guest_end &&
-                image.lru_touched_tick == gc_tick) {
+            if (UpToDate(image, flags)) {
                 return;
             }
         }
@@ -543,6 +552,7 @@ private:
     ReadbackQueue<Vulkan::StagingBufferRef> pending_readbacks;
     std::mutex readback_mutex;
     std::atomic<bool> has_pending_readbacks{false};
+    SpartanReadback::Bounds readback_bounds; ///< the span of pending_readbacks (ReadbackBounds)
     std::atomic<u64> readback_generation{0};
     u64 readbacks_queued = 0, readbacks_completed = 0, readbacks_waited = 0;
     u64 readbacks_canceled = 0, readbacks_peak_bytes = 0;

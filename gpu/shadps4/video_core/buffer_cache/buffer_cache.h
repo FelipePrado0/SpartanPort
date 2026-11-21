@@ -5,6 +5,8 @@
 
 #include "spartanport_copy.h"
 
+#include <mutex>
+#include "spartanport_spin_lock.h"
 #include <array>
 #include <deque>
 #include <boost/container/small_vector.hpp>
@@ -91,6 +93,9 @@ public:
     void ReadMemory(VAddr device_addr, u64 size, bool is_write = false, bool assume_locks = false);
 
     /// Finds a buffer for the specified region.
+    /// spartanport: taken by ObtainBuffer while draw resolvers run in parallel (parallel
+    /// recording); null otherwise.
+    SpartanSpin::RecursiveLock* obtain_lock = nullptr;
     [[nodiscard]] std::pair<const Buffer*, u64> ObtainBuffer(VAddr device_addr, u32 size,
                                                              bool is_written,
                                                              bool is_texel_buffer = false);

@@ -1,0 +1,19 @@
+name = "troca-de-area"
+description = "Loads an older save (another area) and measures right after the level opens: streaming and shader stalls."
+start = "load"
+load_index = 8
+settle_s = 0
+duration_s = 60
+min_draws = 300
+timeout_s = 420
+loop_steps = true
+
+[[steps]]
+pad = "ly=0"
+hold_s = 3
+wait_s = 1
+
+[[steps]]
+pad = "rx=60"
+hold_s = 1.5
+wait_s = 0.5

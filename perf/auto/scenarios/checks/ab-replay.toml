@@ -1,0 +1,9 @@
+name = "ab-replay"
+description = "Inventory check: a long still window (for tools/ab.sh on the live log) that also plays a synthetic SPARTAN_PAD_REPLAY recording."
+start = "load"
+load_index = 1
+settle_s = 5
+duration_s = 200
+min_draws = 600
+timeout_s = 600
+replay = "camera-turn.pad"

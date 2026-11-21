@@ -17,6 +17,7 @@
 #include "video_core/renderer_vulkan/vk_draw_prep.h"
 #include "video_core/renderer_vulkan/vk_temporal_upscaler.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
+#include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/texture_cache/texture_cache.h"
 
@@ -34,9 +35,17 @@ class GraphicsPipeline;
 class Runtime;
 
 class Rasterizer {
+    /// spartanport: the parts every draw resolver shares (parallel recording,
+    /// docs/plans/2026-11-parallel-recording-spec.md); the members below refer to them.
+    struct Owned;
+    std::unique_ptr<Owned> owned;
+
 public:
     explicit Rasterizer(const Instance& instance, Scheduler& scheduler, Runtime& runtime,
                         AmdGpu::Liverpool* liverpool);
+    /// spartanport: a draw resolver sharing `owner`'s caches and state (parallel recording).
+    struct ResolverTag {};
+    Rasterizer(Rasterizer& owner, ResolverTag);
     ~Rasterizer();
 
     [[nodiscard]] Runtime& GetRuntime() noexcept {
@@ -152,7 +161,7 @@ public:
 
     template <typename Func>
     void ForEachMappedRangeInRange(VAddr addr, u64 size, Func&& func) {
-        const auto range = decltype(mapped_ranges)::interval_type::right_open(addr, addr + size);
+        const auto range = boost::icl::interval_set<VAddr>::interval_type::right_open(addr, addr + size);
         Common::RecursiveSharedLock lock{mapped_ranges_mutex};
         for (const auto& mapped_range : (mapped_ranges & range)) {
             func(mapped_range);
@@ -239,7 +248,13 @@ private:
     void DispatchRecord(const ComputePipeline* pipeline);
     /// The compute registers of the dispatch being recorded.
     const AmdGpu::ComputeProgram& CsRegs() const;
-    static void RunDrawPacket(void* rasterizer, const u8* packet, u32 size);
+    static bool RunDrawPacket(void* rasterizer, const u8* packet, u32 size);
+    /// Applies a packet's register blocks to `target`'s copy and points this thread's stage
+    /// snapshots and `target`'s ring stages at its user data; returns the rest of the packet.
+    static const u8* ParsePacket(Rasterizer& target, const u8* data);
+    /// Stage B, parallel recording: records the held direct draws as one block (DrawPipe::Flush).
+    static void FlushBlock(void* rasterizer);
+    static void OnStreamBreak(void* rasterizer);
     struct RingBinding;
     void CollectRingBindings(const Shader::Info& stage, const PreparedDraw* prepared,
                              boost::container::static_vector<RingBinding, Shader::NUM_BUFFERS>& out);
@@ -298,7 +313,7 @@ private:
     /// Display pass: counts the frame (SpartanStats::gpu_frames) and, with SPARTAN_BUFFER_STATS, the lag.
     void NoteFrameStart();
     /// Without an upscaler: the display buffer of the last NoteFrameStart (HUD draws go there too).
-    VAddr last_display_buffer = 0;
+    VAddr& last_display_buffer;
     /// SPARTAN_GPU_PROFILE: a timestamp where a render pass starts (vk_gpu_profiler.h).
     void MarkPass(const GraphicsPipeline* pipeline, const RenderState& state);
     void BindVertexBuffers(const GraphicsPipeline* pipeline,
@@ -323,19 +338,19 @@ private:
     const Instance& instance;
     Scheduler& scheduler;
     Runtime& runtime;
-    VideoCore::PageManager page_manager;
-    VideoCore::BufferCache buffer_cache;
-    VideoCore::TextureCache texture_cache;
+    VideoCore::PageManager& page_manager;
+    VideoCore::BufferCache& buffer_cache;
+    VideoCore::TextureCache& texture_cache;
     AmdGpu::Liverpool* liverpool;
     Core::MemoryManager* memory;
-    boost::icl::interval_set<VAddr> mapped_ranges;
-    Common::SharedFirstMutex mapped_ranges_mutex;
-    PipelineCache pipeline_cache;
-    std::unique_ptr<DrawPreparation> draw_prep;
-    std::unique_ptr<CameraMotion> camera_motion; // spartanport: motion vectors (docs/upscaler.md)
-    std::unique_ptr<SceneTargets> scene_targets;
-    bool scene_started = false;
-    std::unique_ptr<ObjectMotion> object_motion;
+    boost::icl::interval_set<VAddr>& mapped_ranges;
+    Common::SharedFirstMutex& mapped_ranges_mutex;
+    PipelineCache& pipeline_cache;
+    std::unique_ptr<DrawPreparation>& draw_prep;
+    std::unique_ptr<CameraMotion>& camera_motion; // spartanport: motion vectors (docs/upscaler.md)
+    std::unique_ptr<SceneTargets>& scene_targets;
+    bool& scene_started;
+    std::unique_ptr<ObjectMotion>& object_motion;
     bool motion_draw = false;
     u64 motion_geometry{};    ///< vertex-stream identity of the current direct draw
     /// The draw's depth target takes the upscaler's jitter (the scene's, or SpartanPort's second one).
@@ -343,13 +358,13 @@ private:
     bool gbuffer_draw = false;
     bool scan_camera = false;                    ///< depth pre-pass draw: look for the camera constants
     std::array<u32, 2> scan_size{};              ///< its depth size
-    bool in_display_pass = false;                ///< the draws of one display pass count once
+    bool& in_display_pass; ///< the draws of one display pass count once
     /// SpartanPort: this draw's depth when it is a depth-only pass at the render size (the depth pre-pass).
     VideoCore::ImageId prepass_depth{};
     /// spartanport: the draws of the game's motion blur skipped when the setting is off
     /// (spartanport_motion_blur.h). Only touched by the thread that selects pipelines.
-    SpartanMotionBlur::Rule motion_blur_rule;
-    std::unique_ptr<TemporalUpscaler> upscaler; // spartanport: FSR (docs/upscaler.md)
+    SpartanMotionBlur::Rule& motion_blur_rule;
+    std::unique_ptr<TemporalUpscaler>& upscaler; // spartanport: FSR (docs/upscaler.md)
     std::array<float, 2> draw_jitter{};         ///< viewport offset of the current draw, pixels
     std::array<float, 2> target_scale{1.0f, 1.0f}; ///< pass drawn into the upscaler's output-size images
     const bool host_markers_enabled;
@@ -485,7 +500,7 @@ private:
     u64 helper_full = 0, helper_partial = 0, helper_serial = 0;
     /// The memoized cache entry of each image binding (FindImage memo taken), else null.
     boost::container::static_vector<ImageDescCacheEntry*, Shader::NUM_IMAGES> image_binding_entries;
-    bool fault_process_pending{};
+    bool& fault_process_pending; ///< shared: OnSubmit processes what any resolver flagged
     bool attachment_feedback_loop{};
     bool needs_barrier{};
     // spartanport: two-stage draw pipeline (stage B state; the thread is the last member so it
@@ -493,7 +508,7 @@ private:
     static inline thread_local const AmdGpu::Regs* stage_regs = nullptr;
     static inline thread_local const AmdGpu::ComputeProgram* stage_cs = nullptr;
     AmdGpu::Regs pipe_regs{};
-    bool pipe_synced = false;
+    bool& pipe_synced;
     std::array<AmdGpu::CbDbExtent, AmdGpu::NUM_COLOR_BUFFERS> pipe_cb_extent{};
     AmdGpu::CbDbExtent pipe_db_extent{};
     /// Stage A: small read-only guest buffers copied into the constant ring for a packet.
@@ -508,14 +523,66 @@ private:
         VAddr end;
         u64 position;
     };
-    std::vector<PendingWrite> pending_writes;
-    VAddr pending_min = ~VAddr{0}, pending_max = 0; ///< bounds of pending_writes
-    u32 pending_checks = 0;
+    std::vector<PendingWrite>& pending_writes;
+    VAddr& pending_min; ///< bounds of pending_writes
+    VAddr& pending_max;
+    u32& pending_checks;
     u64 proxy_samples = 0; ///< texture bindings that read a scene proxy (statistics)
     float sampler_lod_bias = 0.0f; ///< spartanport: extra bias of this draw's samplers
     u64 scene_depth_address = 0;   ///< spartanport: guest address of the scene's depth (God of War III)
-    bool scene_debug_frame = false; ///< SPARTAN_SCENE_DEBUG: this frame's passes are printed
+    bool& scene_debug_frame; ///< SPARTAN_SCENE_DEBUG: this frame's passes are printed
     bool PendingWriteOverlaps(VAddr address, u64 size);
+    /// Stage A: the prepared draw's V# check (TryPreparedPipeline) stays true until stage B records
+    /// it: no queued write overlaps the V# table (toggle SharpsCheckedOnce).
+    bool VertexTableSettled(const GraphicsPipeline& pipeline, const PreparedDraw& prepared);
+    /// Stage B: set while recording a packet whose V#s stage A found settled.
+    bool sharps_final = false;
+    /// spartanport: parallel recording (ParallelBlocks): the resolver stage B records direct draws
+    /// with, and the stream it records them into.
+    std::unique_ptr<Rasterizer> resolver;
+    RecordStream block_commands;
+    BlockBarriers block_barriers;
+    /// Held direct draw packets (in the draw pipe ring) of the block being collected.
+    std::vector<std::pair<const u8*, u32>> block_packets;
+    /// Draws per block (SPARTAN_BLOCK_DRAWS, default 32: City of Olympia 88.7 FPS against 86 with 64).
+    static size_t BlockDraws() {
+        static const size_t draws = [] {
+            const char* env = std::getenv("SPARTAN_BLOCK_DRAWS");
+            return env ? std::clamp<size_t>(std::strtoul(env, nullptr, 10), 8, 1024) : 32;
+        }();
+        return draws;
+    }
+    /// A thread with a second resolver that records the earlier of two blocks (P2).
+    struct BlockWorker;
+    std::vector<std::unique_ptr<BlockWorker>> workers;
+    /// The blocks handed to workers since the last flush, in stream order.
+    std::vector<BlockWorker*> block_group;
+    /// The register blocks of `packets` applied to `regs`, in order.
+    static void ApplyRegBlocks(std::span<const std::pair<const u8*, u32>> packets,
+                               AmdGpu::Regs& regs);
+    /// Resolvers running in parallel take this around the part of DrawRecord that touches the
+    /// shared caches and state.
+    static inline SpartanSpin::RecursiveLock resolve_lock;
+    bool lock_resolve = false;
+    /// Adds `image_id` to this draw's bound images and counts this draw as one of its users.
+    VideoCore::ImageId BindImage(VideoCore::ImageId image_id);
+    /// The resolve lock while resolvers run in parallel, else nothing.
+    [[nodiscard]] std::unique_lock<SpartanSpin::RecursiveLock> SharedScope() const {
+        return lock_resolve ? std::unique_lock{resolve_lock}
+                            : std::unique_lock<SpartanSpin::RecursiveLock>{};
+    }
+    [[nodiscard]] static std::unique_lock<SpartanSpin::RecursiveLock> NoScope() {
+        return {};
+    }
+    u64 blocks_parallel = 0, blocks_serial = 0, block_draws = 0;
+    /// The register blocks of a packet applied to `regs` (a resolver that does not record it).
+    static void ApplyRegBlocks(const u8* data, AmdGpu::Regs& regs);
+    /// Records `packets` on `r` into `stream` with `barriers` (this thread's block mode).
+    static void ResolveBlock(Rasterizer& r, std::span<const std::pair<const u8*, u32>> packets,
+                             RecordStream& stream, BlockBarriers& barriers);
+    /// Whether a held draw may go to a block (P2 limits: no upscaler, motion vectors, frame
+    /// capture, GPU profiler or texture helper; not a display buffer draw).
+    [[nodiscard]] bool BlockEligible() const;
     /// Stage B: the ring bindings of the stages of the packet being recorded.
     struct RingStage {
         const Shader::Info* info;
@@ -537,10 +604,10 @@ private:
         }
         return nullptr;
     }
-    std::unique_ptr<ConstantRing> constant_ring;
+    std::unique_ptr<ConstantRing>& constant_ring;
     /// Submissions (prepared draws) kept alive until stage B reaches the position.
-    std::deque<std::pair<u64, std::shared_ptr<const void>>> pipe_keepalive;
-    std::unique_ptr<DrawPipe> draw_pipe;
+    std::deque<std::pair<u64, std::shared_ptr<const void>>>& pipe_keepalive;
+    std::unique_ptr<DrawPipe>& draw_pipe;
 };
 
 } // namespace Vulkan

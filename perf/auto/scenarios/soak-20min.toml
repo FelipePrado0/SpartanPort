@@ -1,0 +1,24 @@
+name = "soak-20min"
+description = "Survival: 20 min turning the camera and attacking lightly, with infinite health."
+start = "load"
+load_index = 0
+settle_s = 10
+duration_s = 1200
+min_draws = 600
+timeout_s = 1500
+loop_steps = true
+
+[[steps]]
+pad = "rx=60"
+hold_s = 2
+wait_s = 4
+
+[[steps]]
+pad = "square"
+hold_s = 0.2
+wait_s = 1
+
+[[steps]]
+pad = "rx=195"
+hold_s = 2
+wait_s = 4

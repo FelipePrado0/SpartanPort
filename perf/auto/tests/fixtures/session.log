@@ -1,0 +1,14 @@
+GPU: using AMD Radeon RX 6700 XT
+Free camera: title screen, the game's camera (SHELL.WAD)
+Frame stats: 240.0 FPS, worst frame 12.0 ms (vblank 240 Hz); 9 shader/pipeline compiles, 0.0 ms; async: capture 0.0 ms, workers 0.0 ms, sync wait 0.0 ms, snapshots 0.0 ms, GPU capture wait 0.0 ms, 0 pending draws; 0 recorder syncs; 0 write faults/s, 0 hot pages; GPU thread 1.1 us/draw, 112 draws/frame, idle 1.0%; blocked: recorder 0.0%, host copies 0.0% (0/frame), copy threads 0.0%, GPU ticks 0.0%; reduced-size draws 0/frame of 0 in the scene
+Disk shaders: 157 programs, 236 permutations read (103.4 ms GPU thread); 162 used, 0 compiled; pipeline keys 0 written, 90 already saved
+Free camera: in play (POS050.WAD)
+Frame stats: 98.0 FPS, worst frame 12.0 ms (vblank 240 Hz); 1 shader/pipeline compiles, 0.0 ms; async: capture 0.0 ms, workers 0.0 ms, sync wait 0.0 ms, snapshots 0.0 ms, GPU capture wait 0.0 ms, 0 pending draws; 0 recorder syncs; 0 write faults/s, 0 hot pages; GPU thread 2.75 us/draw, 4100 draws/frame, idle 1.0%; blocked: recorder 0.0%, host copies 0.0% (0/frame), copy threads 0.0%, GPU ticks 0.0%; reduced-size draws 0/frame of 0 in the scene
+Frame pacing: median 9.80 ms, stddev 1.10 ms, p99 13.10 ms, 2 frames over 1.5x median
+Stall: 30.0 ms frame; waits: readback 0.0 ms, GPU ticks 0.0 ms, recorder 0.0 ms, host copies 0.0 ms; 1 compiles 20.0 ms; GC 0.0 ms
+Frame stats: 101.5 FPS, worst frame 12.0 ms (vblank 240 Hz); 2 shader/pipeline compiles, 0.0 ms; async: capture 0.0 ms, workers 0.0 ms, sync wait 0.0 ms, snapshots 0.0 ms, GPU capture wait 0.0 ms, 0 pending draws; 0 recorder syncs; 0 write faults/s, 0 hot pages; GPU thread 2.81 us/draw, 4200 draws/frame, idle 1.0%; blocked: recorder 0.0%, host copies 0.0% (0/frame), copy threads 0.0%, GPU ticks 0.0%; reduced-size draws 0/frame of 0 in the scene
+Frame pacing: median 9.70 ms, stddev 1.30 ms, p99 14.20 ms, 3 frames over 1.5x median
+Stall: 45.0 ms frame; waits: readback 0.0 ms, GPU ticks 0.0 ms, recorder 0.0 ms, host copies 0.0 ms; 0 compiles 0.0 ms; GC 0.0 ms
+Frame stats: 103.0 FPS, worst frame 12.0 ms (vblank 240 Hz); 0 shader/pipeline compiles, 0.0 ms; async: capture 0.0 ms, workers 0.0 ms, sync wait 0.0 ms, snapshots 0.0 ms, GPU capture wait 0.0 ms, 0 pending draws; 0 recorder syncs; 0 write faults/s, 0 hot pages; GPU thread 2.9 us/draw, 4150 draws/frame, idle 1.0%; blocked: recorder 0.0%, host copies 0.0% (0/frame), copy threads 0.0%, GPU ticks 0.0%; reduced-size draws 0/frame of 0 in the scene
+Disk shaders: 171 programs, 256 permutations read (109.7 ms GPU thread); 176 used, 4 compiled; pipeline keys 0 written, 97 already saved
+Pipeline binary cache: 120 hits, 7 compiled, 0 rejected, 7 saved, 0 cache errors (restore 0.010 ms, compile 4.000 ms each)

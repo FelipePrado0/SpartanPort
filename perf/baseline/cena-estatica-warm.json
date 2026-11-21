@@ -1,0 +1,70 @@
+{
+  "scenario": "cena-estatica",
+  "cache": "warm",
+  "runs": 5,
+  "runs_requested": 5,
+  "summary": {
+    "fps_median": 191.5,
+    "us_per_draw_median": null,
+    "draws_per_frame_median": 1352.0,
+    "p99_frametime_ms": 9.03,
+    "frames_over_25ms": 0,
+    "frames_over_40ms": 0,
+    "window_compiles": 2,
+    "worst_frame_ms": 12.9,
+    "crashes": 0,
+    "crash_line": ""
+  },
+  "spread": {
+    "fps_median": [
+      188.2,
+      193.10000000000002
+    ],
+    "us_per_draw_median": [
+      null,
+      null
+    ],
+    "draws_per_frame_median": [
+      1352.0,
+      1353.0
+    ],
+    "p99_frametime_ms": [
+      8.97,
+      12.81
+    ],
+    "frames_over_25ms": [
+      0,
+      0
+    ],
+    "frames_over_40ms": [
+      0,
+      0
+    ],
+    "window_compiles": [
+      2,
+      2
+    ],
+    "worst_frame_ms": [
+      12.5,
+      17.0
+    ]
+  },
+  "infra_fail": null,
+  "limits": {},
+  "machine": {
+    "gpu": "AMD Radeon RX 6700 XT"
+  },
+  "build": "b358431d+dirty",
+  "toggles": 0,
+  "date": "2026-11-18T15:12:23",
+  "run_ids": [
+    "cena-estatica-warm-20261118-150050-2",
+    "cena-estatica-warm-20261118-150050-3",
+    "cena-estatica-warm-20261118-150050-4",
+    "cena-estatica-warm-20261118-150050-5",
+    "cena-estatica-warm-20261118-150050-6"
+  ],
+  "load_s": 27.2,
+  "capture_ref": "cena-estatica-warm.capture.txt",
+  "source": "cena-estatica-warm-20261118-150050.json"
+}

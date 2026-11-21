@@ -102,6 +102,10 @@ bool TextureCache::ReadbackBlocksRead(VAddr address, u64 size) {
         !has_pending_readbacks.load(std::memory_order_acquire)) {
         return false;
     }
+    if (!SpartanToggle::Disabled(SpartanToggle::ReadbackBounds) &&
+        readback_bounds.Outside(address, size)) {
+        return false;
+    }
     std::scoped_lock lock{readback_mutex};
     return pending_readbacks.RequiredTick(address, size) != 0;
 }
@@ -145,12 +149,22 @@ void TextureCache::RetireReadbacks() {
             }
             runtime.GetStagingPool().FreeDeferred(entry.payload);
         });
-    has_pending_readbacks.store(pending_readbacks.Bytes() != 0, std::memory_order_release);
+    const bool pending = pending_readbacks.Bytes() != 0;
+    if (!pending) {
+        readback_bounds.Reset();
+    }
+    has_pending_readbacks.store(pending, std::memory_order_release);
 }
 
 bool TextureCache::ResolveReadbacks(VAddr address, u64 size, bool assume_locks,
                                     ReadbackSource source) {
     if (!deferred_readbacks || !has_pending_readbacks.load(std::memory_order_acquire)) return false;
+    // A CPU write may still release a copy whose page it touches (below): only the others skip.
+    if (source != ReadbackSource::CpuWrite &&
+        !SpartanToggle::Disabled(SpartanToggle::ReadbackBounds) &&
+        readback_bounds.Outside(address, size)) {
+        return false;
+    }
     // spartanport: image uploads read, and frees drop, exactly the image's bytes. A copy of a
     // neighboring image that only shares a page is published later over other bytes. Only with
     // stale readbacks: otherwise pending pages are read-protected and the copy threads fault.
@@ -329,6 +343,7 @@ void TextureCache::ProcessDownloadImages() {
                     }
                     pending_readbacks.Push(copy->guest_address, copy->size,
                         scheduler.CurrentTick(), copy->staging);
+                    readback_bounds.Add(copy->guest_address, copy->size);
                     has_pending_readbacks.store(true, std::memory_order_release);
                     readback_generation.fetch_add(1, std::memory_order_release);
                     ++readbacks_queued;

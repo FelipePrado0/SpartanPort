@@ -22,6 +22,16 @@ class SceneTargets;
 class Instance;
 class Scheduler;
 
+/// spartanport: what a block of draws does to barriers, kept apart from the shared state until
+/// the stitch (parallel recording, docs/plans/2026-11-parallel-recording-spec.md).
+struct BlockBarriers {
+    BarrierTracker barrier_tracker;
+    VideoCore::Image::Barriers image_barriers;
+    vk::MemoryBarrier2 memory_barrier{};
+    std::vector<std::pair<VideoCore::Image*, VideoCore::Image::BlockShadow>> images;
+    bool wrote = false; ///< a buffer write (shader, transfer) in the block
+};
+
 class Runtime {
 public:
     explicit Runtime(const Instance& instance, Scheduler& scheduler);
@@ -98,6 +108,23 @@ public:
 
     void FlushBarriers();
 
+    /// spartanport: until EndBlock(), this thread's barriers and image layout changes go to
+    /// `block` (parallel recording); StitchBlock() then records the barriers that order the block
+    /// after everything recorded before it, and makes its end state the real one.
+    void BeginBlock(BlockBarriers& block);
+    void EndBlock();
+    void StitchBlock(BlockBarriers& block);
+    [[nodiscard]] bool InBlock() const;
+    /// Whether blocks stitched since the last call wrote buffers (what follows them then needs a
+    /// memory barrier); clears it.
+    bool TakeBlocksWrote() {
+        return std::exchange(blocks_wrote, false);
+    }
+    void FlushBarriers(vk::MemoryBarrier2& memory_barrier, VideoCore::Image::Barriers& image_barriers,
+                       BarrierTracker& barrier_tracker);
+    /// The layout this thread sees for `image` (a block sees its own shadow).
+    [[nodiscard]] vk::ImageLayout Layout(const VideoCore::Image& image) const;
+
     /// spartanport: runs before this thread changes image state (layouts, pending image
     /// barriers): the rasterizer joins its texture binding helper there (BindHelper).
     void SetImageAccessHook(void (*hook)(void*), void* context) {
@@ -111,6 +138,8 @@ public:
     }
 
 private:
+    static inline thread_local BlockBarriers* block_barriers = nullptr;
+    bool blocks_wrote = false; ///< a stitched block wrote buffers since the last memory barrier
     void (*image_access_hook)(void*) = nullptr;
     void* image_access_context = nullptr;
     const Instance& instance;

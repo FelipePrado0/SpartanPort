@@ -1,0 +1,11 @@
+name = "gpu-profile"
+description = "cena-estatica with the per-label GPU profile on (SPARTAN_GPU_PROFILE=1): where the GPU time goes, for W3."
+start = "load"
+load_index = 1
+settle_s = 15
+duration_s = 60
+min_draws = 600
+timeout_s = 420
+
+[env]
+SPARTAN_GPU_PROFILE = 1

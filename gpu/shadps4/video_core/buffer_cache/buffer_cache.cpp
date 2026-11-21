@@ -160,10 +160,11 @@ void BufferCache::RunGuestCopy(const SpartanCopy::Item& item) {
     buffer->Flush(dst - buffer->mapped_data.data(), item.size);
 }
 
-// Small guest copies run on the recording thread (it spins for work: no wakeup, and it is
-// idle most of the time); PoolSmallCopies (toggle 524288) batches them for the copy threads.
+// Small guest copies run on the copy threads, done before WriteData and fences wait for them
+// (City of Olympia +3.5% against the Vulkan recording thread, whose backlog they waited behind,
+// 2026-11-20). Toggle 524288 (PoolSmallCopies) puts them back on the recording thread.
 void BufferCache::SmallGuestCopy(const SpartanCopy::Item& item) {
-    if (scheduler.IsRecordingDeferred() && !SpartanToggle::Disabled(SpartanToggle::PoolSmallCopies)) {
+    if (scheduler.IsRecordingDeferred() && SpartanToggle::Disabled(SpartanToggle::PoolSmallCopies)) {
         scheduler.RecordHostCopy([item] { item.run(item); });
         return;
     }
@@ -332,6 +333,10 @@ void PrintBufferStats() {
 
 std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 size,
                                                         bool is_written, bool is_texel_buffer) {
+    std::unique_lock<SpartanSpin::RecursiveLock> lock;
+    if (obtain_lock) {
+        lock = std::unique_lock{*obtain_lock};
+    }
     texture_cache.ResolveReadbacks(device_addr, size, true, ReadbackSource::BufferObtain);
     const bool stats = BufferStatsEnabled();
     if (stats) {
@@ -350,14 +355,22 @@ std::pair<const Buffer*, u64> BufferCache::ObtainBuffer(VAddr device_addr, u32 s
         if (!stream_buffer.mapped_data.empty() &&
             !SpartanToggle::Disabled(SpartanToggle::DeferredStreamCopies)) {
             if (const auto offset = stream_buffer.Reserve(size, instance.UniformMinAlignment())) {
-                SmallGuestCopy({
+                const SpartanCopy::Item item{
                     .run = &RunGuestCopy,
                     .context = this,
                     .source = device_addr,
                     .destination = reinterpret_cast<u64>(stream_buffer.mapped_data.data() + *offset),
                     .size = size,
                     .extra = reinterpret_cast<u64>(static_cast<Buffer*>(&stream_buffer)),
-                });
+                };
+                if (lock.owns_lock()) {
+                    // Parallel resolvers copy their own small reads, outside the lock: nothing
+                    // left for the recording thread that later guest-visible writes wait for.
+                    lock.unlock();
+                    RunGuestCopy(item);
+                } else {
+                    SmallGuestCopy(item);
+                }
                 return {&stream_buffer, *offset};
             }
         }

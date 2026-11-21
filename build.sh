@@ -15,9 +15,11 @@ MINGW*|MSYS*)
           ! -f gpu/third_party/xbyak/xbyak/xbyak.h ]]; then
         git submodule update --init --recursive
     fi
+    # --ignore-whitespace: a clone made by Git for Windows checks the submodule out with CRLF, and
+    # the LF patches would neither match nor be seen as applied.
     for patch in gpu/patches/fsr-vulkan/*.patch; do
-        if ! git -C gpu/third_party/fsr-vulkan apply --reverse --check "$PWD/$patch" 2>/dev/null; then
-            git -C gpu/third_party/fsr-vulkan apply "$PWD/$patch"
+        if ! git -C gpu/third_party/fsr-vulkan apply --ignore-whitespace --reverse --check "$PWD/$patch" 2>/dev/null; then
+            git -C gpu/third_party/fsr-vulkan apply --ignore-whitespace "$PWD/$patch"
         fi
     done
     cmake -S gpu -B out/gpu -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSPARTAN_PGO=off \
@@ -28,13 +30,15 @@ MINGW*|MSYS*)
         echo 'Build failed (full log: out/gpu-build.log)' >&2; exit 1
     fi
     cp out/gpu/spartanport-probe.exe out/gpu/spartanport-gpu-capabilities.exe out/gpu/spartanport-play.exe out/
+    # The game reads the shipped shader list from shaders/ beside its executable, as packaged.
+    mkdir -p out/shaders && cp shaders/*.spm out/shaders/
     echo "Built $PWD/out/spartanport-probe.exe"
     if [[ ${1:-} == --test ]]; then
         clang -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_services.c src/compat_win.c -lbcrypt -o out/services-test.exe
         out/services-test.exe
         clang -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -I. -Isrc tests/test_savedata.c src/compat_win.c -lbcrypt -o out/savedata-test.exe
         out/savedata-test.exe
-        ninja -C out/gpu reg-dirty-test frame-pacing-test graphics-settings-test player-hook-test ledge-hook-test slot-vector-test subresource-extent-test irq-controller-test
+        ninja -C out/gpu reg-dirty-test frame-pacing-test graphics-settings-test player-hook-test ledge-hook-test slot-vector-test subresource-extent-test irq-controller-test stage-profile-test vertex-table-test record-stream-test spin-lock-test image-up-to-date-test cpu-sampler-test readback-bounds-test
         out/gpu/reg-dirty-test.exe
         out/gpu/frame-pacing-test.exe
         out/gpu/graphics-settings-test.exe
@@ -43,6 +47,13 @@ MINGW*|MSYS*)
         out/gpu/slot-vector-test.exe
         out/gpu/subresource-extent-test.exe
         out/gpu/irq-controller-test.exe
+        out/gpu/stage-profile-test.exe
+        out/gpu/vertex-table-test.exe
+        out/gpu/record-stream-test.exe
+        out/gpu/spin-lock-test.exe
+        out/gpu/image-up-to-date-test.exe
+        out/gpu/cpu-sampler-test.exe
+        out/gpu/readback-bounds-test.exe
     fi
     exit 0
     ;;
@@ -80,8 +91,8 @@ if [[ ! -f gpu/third_party/fsr-vulkan/CMakeLists.txt || ! -f gpu/third_party/img
     git submodule update --init --recursive
 fi
 for patch in gpu/patches/fsr-vulkan/*.patch; do
-    if ! git -C gpu/third_party/fsr-vulkan apply --reverse --check "$PWD/$patch" 2>/dev/null; then
-        git -C gpu/third_party/fsr-vulkan apply "$PWD/$patch"
+    if ! git -C gpu/third_party/fsr-vulkan apply --ignore-whitespace --reverse --check "$PWD/$patch" 2>/dev/null; then
+        git -C gpu/third_party/fsr-vulkan apply --ignore-whitespace "$PWD/$patch"
     fi
 done
 cmake -S gpu -B out/gpu -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSPARTAN_PGO="$pgo" \
@@ -105,6 +116,8 @@ fi
 # isa_emulate runs inside guest code: no XMM/YMM.
 "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -mgeneral-regs-only -c src/isa_emulate.c -o out/isa_emulate.o
 "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -no-pie "${includes[@]}" -I. -Isrc src/probe.c "${runtime[@]}" src/cpu_check.c src/vulkan_smoke.c out/isa_emulate.o src/isa_rewrite.c out/libatrac9.a -lm "${gpu[@]}" "${libraries[@]}" -o out/spartanport-probe
+# The game reads the shipped shader list from shaders/ beside its executable, as packaged.
+mkdir -p out/shaders && cp shaders/*.spm out/shaders/
 echo "Built $PWD/out/spartanport-probe"
 # GPU check for run.sh (live_resolution=auto): links only the Vulkan loader.
 "$CC" -std=c11 -O2 -Wall -Wextra -Werror -Igpu/shadps4 tools/gpu_capabilities.c "${libraries[@]}" -o out/spartanport-gpu-capabilities
@@ -140,11 +153,18 @@ if [[ ${1:-} == --test ]]; then
     "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -c src/isa_rewrite.c -I. -Isrc -o out/isa_rewrite.o
     "$CC" -std=c11 -O2 -g -Wall -Wextra -Werror -mbmi -mlzcnt -I. -Isrc tests/test_isa_stub.c out/isa_rewrite.o out/isa_emulate.o -o out/isa-stub-test
     out/isa-stub-test tests/data/isa_fixture.bin
-    ninja -C out/gpu reg-dirty-test frame-pacing-test graphics-settings-test slot-vector-test subresource-extent-test irq-controller-test
+    ninja -C out/gpu reg-dirty-test frame-pacing-test graphics-settings-test slot-vector-test subresource-extent-test irq-controller-test stage-profile-test vertex-table-test record-stream-test spin-lock-test image-up-to-date-test cpu-sampler-test readback-bounds-test
     out/gpu/reg-dirty-test
     out/gpu/frame-pacing-test
     out/gpu/graphics-settings-test
     out/gpu/slot-vector-test
     out/gpu/subresource-extent-test
     out/gpu/irq-controller-test
+    out/gpu/stage-profile-test
+    out/gpu/vertex-table-test
+    out/gpu/record-stream-test
+    out/gpu/spin-lock-test
+    out/gpu/image-up-to-date-test
+    out/gpu/cpu-sampler-test
+    out/gpu/readback-bounds-test
 fi

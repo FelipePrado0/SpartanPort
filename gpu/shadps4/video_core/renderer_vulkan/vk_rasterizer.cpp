@@ -6,6 +6,8 @@
 #include "spartanport_depth_of_field.h"
 #include "spartanport_settings.h"
 #include "spartanport_toggles.h"
+#include "spartanport_vertex_table.h"
+#include "spartanport_cpu_sampler.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
 #include "video_core/renderer_vulkan/vk_lighting_test.h"
 #include "video_core/renderer_vulkan/vk_pass_census.h"
@@ -24,6 +26,7 @@
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
+#include "spartanport_stage_profile.h"
 #include "spartanport_threads.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -43,6 +46,20 @@ static u32 UiColorMask(const GraphicsPipeline* pipeline, bool upscale) {
         : key.mrt_mask;
 }
 
+// spartanport: SPARTAN_STAGE_PROFILE section marks, on the draw recording thread only (stage A also
+// runs DrawRecord while the pipe is drained; those draws are not marked).
+static SpartanStageProfile::Totals stage_profile;
+static SpartanStageProfile::Laps stage_laps{stage_profile};
+// Stage A's own totals: marked in Draw and PostDraw, which run there only with the draw pipe.
+static SpartanStageProfile::Totals stage_a_profile;
+static SpartanStageProfile::Laps stage_a_laps{stage_a_profile};
+
+static void StageLap(SpartanStageProfile::Section section) {
+    if (SpartanStageProfile::Enabled() && DrawPipe::OnStageB()) {
+        stage_laps.Lap(section, __rdtsc());
+    }
+}
+
 static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
     // TODO(roamic): Add support for multiple viewports and geometry shaders when ViewportIndex
     // is encountered and implemented in the recompiler.
@@ -54,15 +71,143 @@ static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
     return push_data;
 }
 
+struct Rasterizer::Owned {
+    Owned(const Instance& instance, Scheduler& scheduler, Runtime& runtime,
+          AmdGpu::Liverpool* liverpool, Rasterizer* rasterizer)
+        : page_manager{rasterizer},
+          buffer_cache{instance, scheduler, runtime, liverpool, texture_cache, page_manager},
+          texture_cache{instance, scheduler, runtime, liverpool, buffer_cache, page_manager},
+          pipeline_cache{instance, scheduler, liverpool, buffer_cache.GetSparsePageShift()} {}
+
+    VideoCore::PageManager page_manager;
+    VideoCore::BufferCache buffer_cache;
+    VideoCore::TextureCache texture_cache;
+    PipelineCache pipeline_cache;
+    VAddr last_display_buffer = 0;
+    boost::icl::interval_set<VAddr> mapped_ranges;
+    Common::SharedFirstMutex mapped_ranges_mutex;
+    std::unique_ptr<DrawPreparation> draw_prep;
+    std::unique_ptr<CameraMotion> camera_motion;
+    std::unique_ptr<SceneTargets> scene_targets;
+    bool scene_started = false;
+    std::unique_ptr<ObjectMotion> object_motion;
+    bool in_display_pass = false;
+    SpartanMotionBlur::Rule motion_blur_rule;
+    std::unique_ptr<TemporalUpscaler> upscaler;
+    bool fault_process_pending = false;
+    bool pipe_synced = false;
+    std::vector<PendingWrite> pending_writes;
+    VAddr pending_min = ~VAddr{0};
+    VAddr pending_max = 0;
+    u32 pending_checks = 0;
+    bool scene_debug_frame = false;
+    std::unique_ptr<ConstantRing> constant_ring;
+    std::deque<std::pair<u64, std::shared_ptr<const void>>> pipe_keepalive;
+    std::unique_ptr<DrawPipe> draw_pipe;
+};
+
+struct Rasterizer::BlockWorker {
+    explicit BlockWorker(Rasterizer& owner) : resolver{owner, ResolverTag{}} {
+        resolver.pipe_regs = owner.pipe_regs;
+        resolver.lock_resolve = true;
+        thread = std::jthread([this] { Run(); });
+    }
+    ~BlockWorker() {
+        state.store(Quit, std::memory_order_release);
+        state.notify_one();
+    }
+    [[nodiscard]] bool Busy() const {
+        return state.load(std::memory_order_acquire) != Idle;
+    }
+    void Start() {
+        state.store(Work, std::memory_order_release);
+        state.notify_one();
+    }
+    void Join() {
+        for (u32 spins = 0; state.load(std::memory_order_acquire) == Work; ++spins) {
+            if (spins < 4096) {
+                __builtin_ia32_pause();
+            } else {
+                state.wait(Work, std::memory_order_acquire);
+            }
+        }
+        state.store(Idle, std::memory_order_release);
+    }
+
+    enum : u32 { Idle, Work, Done, Quit };
+    /// The worker running on this thread, if any.
+    static inline thread_local BlockWorker* current = nullptr;
+    Rasterizer resolver;
+    RecordStream stream;
+    BlockBarriers barriers;
+    std::vector<std::pair<const u8*, u32>> packets;
+    std::atomic<u32> state{Idle};
+    std::jthread thread;
+
+private:
+    void Run() {
+        Common::SetCurrentThreadName("spartanport:DrawRec2");
+        current = this;
+        FrameCapture::muted = true;
+        while (true) {
+            for (u32 spins = 0;; ++spins) {
+                const u32 now = state.load(std::memory_order_acquire);
+                if (now == Work || now == Quit) {
+                    break;
+                }
+                if (spins < 4096) {
+                    __builtin_ia32_pause();
+                } else {
+                    state.wait(now, std::memory_order_acquire);
+                }
+            }
+            if (state.load(std::memory_order_acquire) == Quit) {
+                return;
+            }
+            ResolveBlock(resolver, packets, stream, barriers);
+            state.store(Done, std::memory_order_release);
+            state.notify_one();
+        }
+    }
+};
+
 Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime& runtime_,
                        AmdGpu::Liverpool* liverpool_)
-    : instance{instance_}, scheduler{scheduler_}, runtime{runtime_}, page_manager{this},
-      buffer_cache{instance, scheduler, runtime, liverpool_, texture_cache, page_manager},
-      texture_cache{instance, scheduler, runtime, liverpool_, buffer_cache, page_manager},
-      liverpool{liverpool_}, memory{Core::Memory::Instance()},
-      pipeline_cache{instance, scheduler, liverpool, buffer_cache.GetSparsePageShift()},
+    : owned{std::make_unique<Owned>(instance_, scheduler_, runtime_, liverpool_, this)},
+      last_display_buffer{owned->last_display_buffer},
+      instance{instance_},
+      scheduler{scheduler_},
+      runtime{runtime_},
+      page_manager{owned->page_manager},
+      buffer_cache{owned->buffer_cache},
+      texture_cache{owned->texture_cache},
+      liverpool{liverpool_},
+      memory{Core::Memory::Instance()},
+      mapped_ranges{owned->mapped_ranges},
+      mapped_ranges_mutex{owned->mapped_ranges_mutex},
+      pipeline_cache{owned->pipeline_cache},
+      draw_prep{owned->draw_prep},
+      camera_motion{owned->camera_motion},
+      scene_targets{owned->scene_targets},
+      scene_started{owned->scene_started},
+      object_motion{owned->object_motion},
+      in_display_pass{owned->in_display_pass},
+      motion_blur_rule{owned->motion_blur_rule},
+      upscaler{owned->upscaler},
       host_markers_enabled{EmulatorSettings.IsVkHostMarkersEnabled()},
-      guest_markers_enabled{EmulatorSettings.IsVkGuestMarkersEnabled()} {
+      guest_markers_enabled{EmulatorSettings.IsVkGuestMarkersEnabled()},
+      fault_process_pending{owned->fault_process_pending},
+      pipe_synced{owned->pipe_synced},
+      pending_writes{owned->pending_writes},
+      pending_min{owned->pending_min},
+      pending_max{owned->pending_max},
+      pending_checks{owned->pending_checks},
+      scene_debug_frame{owned->scene_debug_frame},
+      constant_ring{owned->constant_ring},
+      pipe_keepalive{owned->pipe_keepalive},
+      draw_pipe{owned->draw_pipe} {
+    // spartanport: SPARTAN_CPU_SAMPLER (spartanport_cpu_sampler.h).
+    SpartanCpuSampler::StartFromEnv();
     // Before the rasterizer is bound: Liverpool enqueues buffers only once it sees it.
     draw_prep = std::make_unique<DrawPreparation>(pipeline_cache);
     scene_targets = std::make_unique<SceneTargets>(instance, scheduler, runtime, texture_cache);
@@ -80,8 +225,10 @@ Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime
     GpuProfiler::Init(instance, scheduler);
     if (DrawPipeWanted()) {
         constant_ring = std::make_unique<ConstantRing>(instance, scheduler);
-        draw_pipe = std::make_unique<DrawPipe>(&RunDrawPacket, this);
+        draw_pipe = std::make_unique<DrawPipe>(&RunDrawPacket, &FlushBlock, this);
     }
+    // spartanport: a block stream ended early is stitched right before its commands.
+    scheduler.SetBreakHook(&OnStreamBreak, this);
     // spartanport: this thread joins the texture binding helper before it changes image state.
     runtime.SetImageAccessHook(&JoinBindHelper, this);
     scheduler.SetSubmitCallback([this](Vulkan::SubmitInfo& info) {
@@ -90,7 +237,48 @@ Rasterizer::Rasterizer(const Instance& instance_, Scheduler& scheduler_, Runtime
     });
 }
 
-Rasterizer::~Rasterizer() = default;
+Rasterizer::Rasterizer(Rasterizer& owner, ResolverTag)
+    : owned{},
+      last_display_buffer{owner.owned->last_display_buffer},
+      instance{owner.instance},
+      scheduler{owner.scheduler},
+      runtime{owner.runtime},
+      page_manager{owner.owned->page_manager},
+      buffer_cache{owner.owned->buffer_cache},
+      texture_cache{owner.owned->texture_cache},
+      liverpool{owner.liverpool},
+      memory{owner.memory},
+      mapped_ranges{owner.owned->mapped_ranges},
+      mapped_ranges_mutex{owner.owned->mapped_ranges_mutex},
+      pipeline_cache{owner.owned->pipeline_cache},
+      draw_prep{owner.owned->draw_prep},
+      camera_motion{owner.owned->camera_motion},
+      scene_targets{owner.owned->scene_targets},
+      scene_started{owner.owned->scene_started},
+      object_motion{owner.owned->object_motion},
+      in_display_pass{owner.owned->in_display_pass},
+      motion_blur_rule{owner.owned->motion_blur_rule},
+      upscaler{owner.owned->upscaler},
+      host_markers_enabled{owner.host_markers_enabled},
+      guest_markers_enabled{owner.guest_markers_enabled},
+      fault_process_pending{owner.owned->fault_process_pending},
+      pipe_synced{owner.owned->pipe_synced},
+      pending_writes{owner.owned->pending_writes},
+      pending_min{owner.owned->pending_min},
+      pending_max{owner.owned->pending_max},
+      pending_checks{owner.owned->pending_checks},
+      scene_debug_frame{owner.owned->scene_debug_frame},
+      constant_ring{owner.owned->constant_ring},
+      pipe_keepalive{owner.owned->pipe_keepalive},
+      draw_pipe{owner.owned->draw_pipe} {}
+
+Rasterizer::~Rasterizer() {
+    // The draw recording thread uses this object's own members: it stops before they go.
+    if (owned) {
+        owned->draw_pipe.reset();
+    }
+}
+
 
 inline const AmdGpu::Regs& Rasterizer::Regs() const {
     return stage_regs ? *stage_regs : liverpool->regs;
@@ -259,7 +447,7 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
         }
         const auto& hint = CbExtent(cb);
         const u32 tag = 1;
-        image_id = bound_images.emplace_back(FindTargetMemoized(
+        image_id = BindImage(FindTargetMemoized(
             desc, last_targets[cb], [&] { std::construct_at(&desc, col_buf, hint); }, tag,
             col_buf, hint));
         auto& image = texture_cache.GetImage(image_id);
@@ -271,7 +459,7 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
         const auto& hint = DbExtent();
         auto& [image_id, desc] = db_desc;
         const u32 tag = 2;
-        image_id = bound_images.emplace_back(FindTargetMemoized(
+        image_id = BindImage(FindTargetMemoized(
             desc, last_targets[AmdGpu::NUM_COLOR_BUFFERS],
             [&] {
                 std::construct_at(&desc, regs.depth_buffer, regs.depth_view, regs.depth_control,
@@ -439,6 +627,7 @@ void Rasterizer::EliminateFastClear() {
 // PacketStage with its user data and flattened user data, then (verification) the full file.
 namespace {
 enum class PacketKind : u32 { Draw, Task, Dispatch, Special, Indirect, IndirectDispatch };
+static std::array<u64, 8> block_cuts{}; ///< DIAG
 struct TaskPacket {
     PacketKind kind;
     u32 size;
@@ -457,6 +646,7 @@ struct DrawPacket {
     std::array<AmdGpu::CbDbExtent, AmdGpu::NUM_COLOR_BUFFERS> cb_extent;
     AmdGpu::CbDbExtent db_extent;
     u64 ring_end; ///< constant ring position after this packet's copies
+    u8 sharps_final; ///< Rasterizer::VertexTableSettled held when the packet was built
 };
 struct PacketStage {
     const Shader::Info* info;
@@ -585,6 +775,27 @@ bool Rasterizer::PendingWriteOverlaps(VAddr address, u64 size) {
     return false;
 }
 
+bool Rasterizer::VertexTableSettled(const GraphicsPipeline& pipeline, const PreparedDraw& prepared) {
+    // The same conditions as the V# check in TryPreparedPipeline: without it nothing was checked.
+    const auto& fetch = pipeline.GetFetchShader();
+    if (!fetch || !prepared.vertex.valid || fetch->attributes.size() != prepared.vertex.count) {
+        return false;
+    }
+    const auto ud = pipeline.GetStage(Shader::SwStage::Vertex).UserData();
+    SpartanVertexTable::Span span;
+    for (const auto& attribute : fetch->attributes) {
+        const u32 ptr = attribute.sgpr_base;
+        // V#s in user data itself travel in the packet; a short pair reads as empty.
+        if (ptr == Shader::IR::NumScalarRegs || ptr >= ud.size() || ud.size() - ptr < 2) {
+            continue;
+        }
+        u64 pointer;
+        std::memcpy(&pointer, &ud[ptr], sizeof(pointer));
+        span.Add(pointer, attribute.dword_offset);
+    }
+    return span.Empty() || !PendingWriteOverlaps(span.begin, span.end - span.begin);
+}
+
 // spartanport: the game's depth of field is switched off in the settings; the composite's constants
 // are then changed on their way to the GPU (spartanport_depth_of_field.h).
 static bool DepthOfFieldOff() {
@@ -690,6 +901,10 @@ void Rasterizer::CollectRingBindings(const Shader::Info& stage, const PreparedDr
 void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_prepared,
                           bool is_indexed, u32 index_offset, const AmdGpu::ComputeProgram* cs,
                           const IndirectDraw* indirect) {
+    const bool profile_a = SpartanStageProfile::Enabled();
+    if (profile_a) {
+        stage_a_laps.Start(__rdtsc());
+    }
     auto& dirty = liverpool->pipe_dirty;
     if (!pipe_synced) {
         // Stage B has not run yet: its register copy starts as this one.
@@ -724,6 +939,9 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
                     u32(ring.size() * sizeof(RingBinding));
         }
     }
+    if (profile_a) {
+        stage_a_laps.Lap(SpartanStageProfile::ARing, __rdtsc());
+    }
     if (cs) {
         size += AlignPacket(sizeof(AmdGpu::ComputeProgram));
     }
@@ -754,6 +972,11 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
     packet.cb_extent = liverpool->last_cb_extent;
     packet.db_extent = liverpool->last_db_extent;
     packet.ring_end = constant_ring ? constant_ring->Position() : 0;
+    // Bit set: on (off by default, as the TAA techniques).
+    packet.sharps_final = packet.kind == PacketKind::Draw && used_prepared &&
+                          SpartanToggle::Disabled(SpartanToggle::SharpsCheckedOnce) &&
+                          VertexTableSettled(*static_cast<const GraphicsPipeline*>(pipeline),
+                                             *used_prepared);
     out += sizeof(DrawPacket);
     std::memcpy(out, blocks.data(), num_blocks * sizeof(u16));
     out += AlignPacket(num_blocks * sizeof(u16));
@@ -799,6 +1022,10 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
     }
     dirty.Clear();
     draw_pipe->Commit(static_cast<u32>(out - start));
+    if (profile_a) {
+        stage_a_laps.Lap(SpartanStageProfile::APacket, __rdtsc());
+        ++stage_a_profile.draws;
+    }
     PrintPipeStats();
 }
 
@@ -828,18 +1055,12 @@ bool Rasterizer::RunInOrder(OrderedTask task, const void* data, u32 size, u64 to
     return true;
 }
 
-void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
-    auto& self = *static_cast<Rasterizer*>(context);
-    if (*reinterpret_cast<const PacketKind*>(data) == PacketKind::Task) {
-        const auto& task = *reinterpret_cast<const TaskPacket*>(data);
-        task.task(self, data + sizeof(TaskPacket));
-        return;
-    }
+const u8* Rasterizer::ParsePacket(Rasterizer& target, const u8* data) {
     const auto& packet = *reinterpret_cast<const DrawPacket*>(data);
     const u8* in = data + sizeof(DrawPacket);
     const auto* blocks = reinterpret_cast<const u16*>(in);
     in += AlignPacket(packet.num_blocks * sizeof(u16));
-    auto& regs = self.pipe_regs;
+    auto& regs = target.pipe_regs;
     if (packet.regs_reset) {
         regs.SetDefaults();
     }
@@ -852,8 +1073,8 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
     for (u32 i = 0; i < packet.num_stages; ++i) {
         const auto& stage = *reinterpret_cast<const PacketStage*>(in);
         in += sizeof(PacketStage);
-        self.ring_stages[i] = {stage.info, reinterpret_cast<const RingBinding*>(in),
-                               stage.num_ring};
+        target.ring_stages[i] = {stage.info, reinterpret_cast<const RingBinding*>(in),
+                                 stage.num_ring};
         in += stage.num_ring * sizeof(RingBinding);
         const auto* words = reinterpret_cast<const u32*>(in);
         Shader::Info::ud_snapshots[i] = {stage.info, words, stage.ud_size, words + stage.ud_size,
@@ -861,7 +1082,252 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
         in += AlignPacket((stage.ud_size + stage.flat_size) * sizeof(u32));
     }
     Shader::Info::num_ud_snapshots = packet.num_stages;
-    self.num_ring_stages = packet.num_stages;
+    target.num_ring_stages = packet.num_stages;
+    target.pipe_cb_extent = packet.cb_extent;
+    target.pipe_db_extent = packet.db_extent;
+    return in;
+}
+
+void Rasterizer::OnStreamBreak(void* context) {
+    auto& self = *static_cast<Rasterizer*>(context);
+    if (!self.runtime.InBlock()) {
+        return;
+    }
+    // Only the earliest block still recording may splice early (P2 limit, not seen in the
+    // measured scenes).
+    auto* worker = BlockWorker::current;
+    ASSERT_MSG(worker ? !self.block_group.empty() && self.block_group.front() == worker
+                      : self.block_group.empty(),
+               "A parallel block recorded directly while an earlier block was still recording");
+    self.runtime.EndBlock();
+    self.runtime.StitchBlock(worker ? worker->barriers : self.block_barriers);
+}
+
+void Rasterizer::ApplyRegBlocks(const u8* data, AmdGpu::Regs& regs) {
+    const auto& packet = *reinterpret_cast<const DrawPacket*>(data);
+    const u8* in = data + sizeof(DrawPacket);
+    const auto* blocks = reinterpret_cast<const u16*>(in);
+    in += AlignPacket(packet.num_blocks * sizeof(u16));
+    if (packet.regs_reset) {
+        regs.SetDefaults();
+    }
+    for (u32 i = 0; i < packet.num_blocks; ++i) {
+        std::memcpy(regs.reg_array.data() + blocks[i] * AmdGpu::RegDirty::BlockWords, in,
+                    AmdGpu::RegDirty::BlockWords * sizeof(u32));
+        in += AmdGpu::RegDirty::BlockWords * sizeof(u32);
+    }
+}
+
+void Rasterizer::ResolveBlock(Rasterizer& r, std::span<const std::pair<const u8*, u32>> packets,
+                              RecordStream& stream, BlockBarriers& barriers) {
+    r.runtime.BeginBlock(barriers);
+    r.scheduler.BeginStream(stream);
+    for (const auto& [data, size] : packets) {
+        const auto& packet = *reinterpret_cast<const DrawPacket*>(data);
+        ParsePacket(r, data);
+        stage_regs = &r.pipe_regs;
+        r.sharps_final = packet.sharps_final;
+        // A direct recording may end the stream early (Scheduler::BreakStream): the rest of the
+        // block is then recorded directly, still in order.
+        r.DrawRecord(static_cast<const GraphicsPipeline*>(packet.pipeline), packet.prepared,
+                     packet.is_indexed, packet.index_offset);
+        r.sharps_final = false;
+    }
+    if (Scheduler::InStream()) {
+        r.runtime.FlushBarriers();
+        r.scheduler.EndStream();
+        r.runtime.EndBlock();
+    }
+    // Else ended early by a direct recording: OnStreamBreak stitched and spliced it then.
+    Shader::Info::num_ud_snapshots = 0;
+    r.num_ring_stages = 0;
+    stage_regs = nullptr;
+}
+
+bool Rasterizer::BlockEligible() const {
+    const auto& regs = pipe_regs;
+    const bool display =
+        regs.color_buffers[0] && FrameCapture::IsDisplayBuffer(regs.color_buffers[0].Address());
+    // The upscaler's per-draw hooks run under the resolve lock, in lock order: fine while TAA
+    // and FSR are off (nothing temporal reads them), not when they run.
+    const bool eligible = !display && !upscaler->Running() && !FrameCapture::Active() &&
+                          !GpuProfiler::Get() && !bind_helper.Available();
+    static bool reported = false;
+    if (!eligible && !std::exchange(reported, true)) {
+        std::printf("Parallel blocks: first draw kept out (display %d, upscaler %d, motion %d, "
+                    "capture %d, profiler %d, texture helper %d)\n",
+                    display, upscaler->Running(), camera_motion->Enabled(), FrameCapture::Active(),
+                    GpuProfiler::Get() != nullptr, bind_helper.Available());
+    }
+    return eligible;
+}
+
+void Rasterizer::ApplyRegBlocks(std::span<const std::pair<const u8*, u32>> packets,
+                                AmdGpu::Regs& regs) {
+    for (const auto& packet : packets) {
+        ApplyRegBlocks(packet.first, regs);
+    }
+}
+
+void Rasterizer::FlushBlock(void* context) {
+    auto& self = *static_cast<Rasterizer*>(context);
+    auto& group = self.block_group;
+    if (self.block_packets.empty() && group.empty()) {
+        return;
+    }
+    auto& r = *self.resolver;
+    const auto& last = self.block_packets.empty() ? group.back()->packets.back()
+                                                  : self.block_packets.back();
+    const u64 ring_end = reinterpret_cast<const DrawPacket*>(last.first)->ring_end;
+    const bool own = !self.block_packets.empty();
+    if (own) {
+        // This resolver's registers start after the workers' blocks.
+        for (auto* worker : group) {
+            ApplyRegBlocks(worker->packets, r.pipe_regs);
+        }
+        if (!group.empty()) {
+            std::scoped_lock poll{resolve_lock};
+            FrameCapture::Poll();
+            self.scheduler.PopPendingOperations();
+        }
+        r.lock_resolve = !group.empty();
+        ResolveBlock(r, self.block_packets, self.block_commands, self.block_barriers);
+        r.lock_resolve = false;
+    } else {
+        for (auto* worker : group) {
+            ApplyRegBlocks(worker->packets, r.pipe_regs);
+        }
+    }
+    stage_regs = &self.pipe_regs;
+    for (auto* worker : group) {
+        worker->Join();
+        if (!worker->stream.chunks.empty() || !worker->barriers.images.empty()) {
+            self.runtime.StitchBlock(worker->barriers);
+            self.scheduler.SpliceStream(worker->stream);
+        }
+        self.block_draws += worker->packets.size();
+        ++self.blocks_parallel;
+    }
+    if (own) {
+        if (!self.block_commands.chunks.empty() || !self.block_barriers.images.empty()) {
+            self.runtime.StitchBlock(self.block_barriers);
+            self.scheduler.SpliceStream(self.block_commands);
+        }
+        self.block_draws += self.block_packets.size();
+        ++self.blocks_serial;
+    }
+    // Every worker catches up with the blocks after its own (or all of them).
+    for (auto& worker : self.workers) {
+        const auto it = std::ranges::find(group, worker.get());
+        for (auto next = it == group.end() ? group.begin() : it + 1; next != group.end(); ++next) {
+            ApplyRegBlocks((*next)->packets, worker->resolver.pipe_regs);
+        }
+        ApplyRegBlocks(self.block_packets, worker->resolver.pipe_regs);
+    }
+    for (auto* worker : group) {
+        worker->packets.clear();
+    }
+    group.clear();
+    // What follows the blocks did not see their buffer writes in the shared tracker.
+    if (self.runtime.TakeBlocksWrote()) {
+        self.scheduler.Record([](vk::CommandBuffer cmdbuf) { Scheduler::RecordFullBarrier(cmdbuf); });
+    }
+    if (self.constant_ring) {
+        self.constant_ring->Stamp(ring_end);
+    }
+    self.block_packets.clear();
+    self.scheduler.KickRecording();
+}
+
+bool Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
+    auto& self = *static_cast<Rasterizer*>(context);
+    const bool profile = SpartanStageProfile::Enabled();
+    if (profile) {
+        stage_laps.Start(__rdtsc());
+    }
+    // Bit set: on (off by default, as the TAA techniques). The resolver starts from this
+    // register copy before the packet changes it, and is dropped while the bit is off (its
+    // copy would go stale).
+    const bool blocks_on = SpartanToggle::Disabled(SpartanToggle::ParallelBlocks);
+    if (blocks_on && !self.resolver) {
+        self.resolver = std::make_unique<Rasterizer>(self, ResolverTag{});
+        self.resolver->pipe_regs = self.pipe_regs;
+        static const u32 count = [] {
+            const char* env = std::getenv("SPARTAN_BLOCK_WORKERS");
+            return env ? std::clamp(std::atoi(env), 1, 6) : 2;
+        }();
+        for (u32 i = 0; i < count; ++i) {
+            self.workers.push_back(std::make_unique<BlockWorker>(self));
+        }
+        self.buffer_cache.obtain_lock = &resolve_lock;
+    } else if (!blocks_on && self.resolver) {
+        FlushBlock(&self);
+        self.workers.clear();
+        self.resolver.reset();
+        self.buffer_cache.obtain_lock = nullptr;
+    }
+    const auto kind = *reinterpret_cast<const PacketKind*>(data);
+    if (blocks_on && kind == PacketKind::Draw && self.scheduler.IsRecordingDeferred()) {
+        // The resolvers apply its registers when they record or pass the packet.
+        ParsePacket(self, data);
+        Shader::Info::num_ud_snapshots = 0;
+        self.num_ring_stages = 0;
+        if (self.BlockEligible()) {
+            self.block_packets.emplace_back(data, size);
+            stage_profile.draws += profile;
+            StageLap(SpartanStageProfile::Packet);
+            if (self.block_packets.size() < BlockDraws()) {
+                return true;
+            }
+            for (auto& worker : self.workers) {
+                if (std::ranges::find(self.block_group, worker.get()) != self.block_group.end()) {
+                    continue;
+                }
+                // A free worker records this block while the next ones are collected; all stay
+                // held in the ring until they are spliced. Its registers start after the blocks
+                // handed out before this one.
+                for (auto* earlier : self.block_group) {
+                    ApplyRegBlocks(earlier->packets, worker->resolver.pipe_regs);
+                }
+                worker->packets.swap(self.block_packets);
+                self.block_packets.clear();
+                self.block_group.push_back(worker.get());
+                worker->Start();
+                return true;
+            }
+            FlushBlock(&self);
+            StageLap(SpartanStageProfile::Record);
+            return false;
+        }
+    }
+    if (!self.block_packets.empty() || !self.block_group.empty()) {
+        // What ends blocks (frame stats): the packet kinds, then draws kept out of blocks.
+        ++block_cuts[kind == PacketKind::Draw ? (self.scheduler.IsRecordingDeferred() ? 6 : 7)
+                                              : u32(kind)];
+        FlushBlock(&self);
+        StageLap(SpartanStageProfile::Record);
+    }
+    if (kind == PacketKind::Task) {
+        const auto& task = *reinterpret_cast<const TaskPacket*>(data);
+        task.task(self, data + sizeof(TaskPacket));
+        StageLap(SpartanStageProfile::Task);
+        return false;
+    }
+    const auto& packet = *reinterpret_cast<const DrawPacket*>(data);
+    auto& regs = self.pipe_regs;
+    const u8* in = ParsePacket(self, data);
+    if (self.resolver) {
+        // The resolver's copy follows the packets it does not record.
+        const u8* blocks_in = data + sizeof(DrawPacket);
+        const auto* blocks = reinterpret_cast<const u16*>(blocks_in);
+        blocks_in += AlignPacket(packet.num_blocks * sizeof(u16));
+        (void)blocks;
+        (void)blocks_in;
+        ApplyRegBlocks(data, self.resolver->pipe_regs);
+        for (auto& worker : self.workers) {
+            ApplyRegBlocks(data, worker->resolver.pipe_regs);
+        }
+    }
     const AmdGpu::ComputeProgram* cs = nullptr;
     if (packet.kind == PacketKind::Dispatch || packet.kind == PacketKind::IndirectDispatch) {
         cs = reinterpret_cast<const AmdGpu::ComputeProgram*>(in);
@@ -931,13 +1397,13 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
     }
     ASSERT(static_cast<u32>(in - data) == size);
     stage_regs = &regs;
-    self.pipe_cb_extent = packet.cb_extent;
-    self.pipe_db_extent = packet.db_extent;
+    StageLap(SpartanStageProfile::Packet);
     if (packet.kind == PacketKind::Special) {
         // A draw FilterDraw handles (fast clear elimination, resolve, depth copy, skip).
         FrameCapture::Poll();
         self.scheduler.PopPendingOperations();
         self.FilterDraw();
+        StageLap(SpartanStageProfile::Special);
     } else if (cs) {
         stage_cs = cs;
         const auto* pipeline = static_cast<const ComputePipeline*>(packet.pipeline);
@@ -947,18 +1413,28 @@ void Rasterizer::RunDrawPacket(void* context, const u8* data, u32 size) {
             self.DispatchRecord(pipeline);
         }
         stage_cs = nullptr;
+        StageLap(SpartanStageProfile::Dispatch);
     } else if (indirect) {
+        // Indirect draws carry no inner marks: the whole draw counts as record.
         self.DrawIndirectRecord(static_cast<const GraphicsPipeline*>(packet.pipeline),
                                 packet.is_indexed, *indirect);
+        StageLap(SpartanStageProfile::Record);
+        stage_profile.draws += profile;
     } else {
+        self.sharps_final = packet.sharps_final;
         self.DrawRecord(static_cast<const GraphicsPipeline*>(packet.pipeline), packet.prepared,
                         packet.is_indexed, packet.index_offset);
+        self.sharps_final = false;
+        StageLap(SpartanStageProfile::Record);
+        stage_profile.draws += profile;
     }
     Shader::Info::num_ud_snapshots = 0;
     self.num_ring_stages = 0;
     if (self.constant_ring) {
         self.constant_ring->Stamp(packet.ring_end);
     }
+    StageLap(SpartanStageProfile::Packet);
+    return false;
 }
 
 void Rasterizer::PrintPipeStats() {
@@ -999,6 +1475,30 @@ void Rasterizer::PrintPipeStats() {
             }
         }
     }
+    if (SpartanToggle::Disabled(SpartanToggle::ParallelBlocks)) {
+        static u64 last_breaks = 0;
+        const u64 breaks = Scheduler::stream_breaks.load(std::memory_order_relaxed);
+        static u64 last_parallel = 0, last_serial = 0, last_draws = 0;
+        const u64 blocks = blocks_parallel + blocks_serial - last_parallel - last_serial;
+        std::printf("\n  block streams: %.0f ended early by direct recording/s; blocks/s %.0f in "
+                    "parallel, %.0f alone, %.1f draws each",
+                    (breaks - last_breaks) / seconds, (blocks_parallel - last_parallel) / seconds,
+                    (blocks_serial - last_serial) / seconds,
+                    blocks ? double(block_draws - last_draws) / blocks : 0.0);
+        static std::array<u64, 8> last_cuts{};
+        static constexpr const char* cut_names[] = {"-", "task", "dispatch", "special", "indirect",
+                                                    "indirect dispatch", "kept-out draw",
+                                                    "direct-mode draw"};
+        std::printf("; cuts/s:");
+        for (u32 i = 1; i < 8; ++i) {
+            std::printf(" %s %.0f", cut_names[i], (block_cuts[i] - last_cuts[i]) / seconds);
+        }
+        last_cuts = block_cuts;
+        last_breaks = breaks;
+        last_parallel = blocks_parallel;
+        last_serial = blocks_serial;
+        last_draws = block_draws;
+    }
     std::printf("\n  stage A waits over 0.5%%:");
     for (const auto& [function, lines] : drain_sites) {
         for (const auto& [line, waited] : lines) {
@@ -1008,6 +1508,27 @@ void Rasterizer::PrintPipeStats() {
         }
     }
     std::printf("\n");
+    if (SpartanStageProfile::Enabled()) {
+        static SpartanStageProfile::Totals last_profile;
+        SpartanStageProfile::Totals delta;
+        for (u32 i = 0; i < SpartanStageProfile::Count; ++i) {
+            delta.cycles[i] = stage_profile.cycles[i] - last_profile.cycles[i];
+        }
+        delta.draws = stage_profile.draws - last_profile.draws;
+        last_profile = stage_profile;
+        std::printf("%s\n", SpartanStageProfile::Format(delta, cycles, seconds).c_str());
+        // Stage A: the window not in these sections nor in the drain wait above is PM4 decoding,
+        // register writes and the packets that are not draws.
+        static SpartanStageProfile::Totals last_a;
+        SpartanStageProfile::Totals delta_a;
+        for (u32 i = 0; i < SpartanStageProfile::Count; ++i) {
+            delta_a.cycles[i] = stage_a_profile.cycles[i] - last_a.cycles[i];
+        }
+        delta_a.draws = stage_a_profile.draws - last_a.draws;
+        last_a = stage_a_profile;
+        std::printf("%s\n",
+                    SpartanStageProfile::Format(delta_a, cycles, seconds, "Stage A profile:").c_str());
+    }
     drain_sites.clear();
     draw_pipe->drains_by_reason = {};
     window = now;
@@ -1069,6 +1590,10 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
     // spartanport: with the draw pipeline this thread only selects the pipeline and hands the draw
     // to the recording thread (DrawRecord there); draws FilterDraw handles itself run here.
     const bool pipelined = UseDrawPipe();
+    const bool profile_a = pipelined && SpartanStageProfile::Enabled();
+    if (profile_a) {
+        stage_a_laps.Start(__rdtsc());
+    }
     if (pipelined && !FilterDrawPasses() &&
         !SpartanToggle::Disabled(SpartanToggle::PipelinedMemoryWrites)) {
         PostDraw(nullptr, nullptr, false, 0);
@@ -1088,6 +1613,9 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
         draw_prep->Count(pipeline != nullptr &&
                          prepared->state.load(std::memory_order_acquire) == PreparedDraw::Ready &&
                          prepared->reg_checksum == liverpool->gfx_reg_checksum);
+    }
+    if (profile_a) {
+        stage_a_laps.Lap(SpartanStageProfile::APipeline, __rdtsc());
     }
     if (!pipeline) {
         return;
@@ -1135,9 +1663,15 @@ void Rasterizer::DiagPassBoundary(bool force) {
 
 void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw* used_prepared,
                             bool is_indexed, u32 index_offset) {
-    if (DrawPipe::OnStageB()) {
+    std::unique_lock<SpartanSpin::RecursiveLock> resolve_guard{resolve_lock, std::defer_lock};
+    if (lock_resolve) {
+        resolve_guard.lock();
+    }
+    // A block recorded next to others polls once before it (FlushBlock), not per draw.
+    if (DrawPipe::OnStageB() && !lock_resolve) {
         FrameCapture::Poll();
         scheduler.PopPendingOperations();
+        StageLap(SpartanStageProfile::Pending);
     }
     upscaler->RunPending();
     DiagPassBoundary(false);
@@ -1191,8 +1725,10 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     bind_prepared = used_prepared;
     motion_draw = pipeline->GetGraphicsKey().motion_vectors;
     motion_geometry = 0;
+    StageLap(SpartanStageProfile::Frame);
 
     PrepareRenderState(pipeline);
+    StageLap(SpartanStageProfile::RenderState);
     if (upscaler->Enabled() && pipeline->GetGraphicsKey().mrt_mask) {
         upscaler->OnGraphicsDraw(pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
                                  cb_descs[0].first);
@@ -1206,11 +1742,20 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
             upscaler->OnPixelShader(ps->pgm_hash, cb_descs[0].first);
         }
     }
+    StageLap(SpartanStageProfile::Frame);
     const PreparedDraw* draw_prepared = bind_prepared;
     // spartanport: vertex and index buffers are resolved while the helper binds textures (their
     // commands are recorded after BeginRendering, as before).
     draw_inputs = {pipeline, draw_prepared, index_offset, is_indexed, true, false};
+    // Binding takes the resolve lock itself where it reaches shared state (its start only reads).
+    if (resolve_guard.owns_lock()) {
+        resolve_guard.unlock();
+    }
     const bool bound = BindResources(pipeline);
+    if (lock_resolve) {
+        resolve_guard.lock();
+    }
+    StageLap(SpartanStageProfile::Bind);
     bind_prepared = nullptr; // indirect draws and dispatches bind without prepared sharps
     const bool inputs_resolved = draw_inputs.resolved;
     draw_inputs.pending = false;
@@ -1218,6 +1763,12 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         return;
     }
     const auto state = BeginRendering(pipeline);
+    StageLap(SpartanStageProfile::Begin);
+    // Vertex and index inputs only reach the shared caches through ObtainBuffer, which takes
+    // the lock itself.
+    if (resolve_guard.owns_lock()) {
+        resolve_guard.unlock();
+    }
 
     if (!inputs_resolved) {
         ResolveVertexBuffers(pipeline, draw_prepared);
@@ -1229,16 +1780,21 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     if (is_indexed) {
         EmitIndexBuffer();
     }
+    StageLap(SpartanStageProfile::Inputs);
 
     if (needs_barrier) {
         runtime.FlushBarriers();
     }
+    StageLap(SpartanStageProfile::Barriers);
 
     // spartanport: screen-space (clip disabled) draws into the upscaler's output-size images.
     push_data.xscale *= target_scale[0];
     push_data.xoffset *= target_scale[0];
     push_data.yscale *= target_scale[1];
     push_data.yoffset *= target_scale[1];
+    if (lock_resolve && motion_draw && motion_geometry) {
+        resolve_guard.lock(); // object motion
+    }
     if (motion_draw && motion_geometry) {
         const auto& vs = pipeline->GetStage(Shader::SwStage::Vertex);
         const auto [base_vertex, first_instance] =
@@ -1321,7 +1877,14 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
             });
         }
     }
+    // The descriptors go into this block's stream: no shared state.
+    if (resolve_guard.owns_lock()) {
+        resolve_guard.unlock();
+    }
     pipeline->BindResources(set_writes, push_data);
+    if (lock_resolve) {
+        resolve_guard.lock(); // the upscaler's jitter
+    }
     // spartanport: jitter geometry drawn with the scene depth, not full-screen passes (a shifted
     // full-screen quad leaves an edge column unwritten). God of War III's screen passes are a
     // triangle (3 indices) or a strip quad (4); its sky and sun glow are quads of 6 indices that
@@ -1340,6 +1903,10 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         } else if (regs.num_indices > 6 || regs.num_instances.NumInstances() > 1) {
             draw_jitter = upscaler->Jitter();
         }
+    }
+    // The rest records this draw's own state into the block's stream.
+    if (resolve_guard.owns_lock()) {
+        resolve_guard.unlock();
     }
     UpdateDynamicState(pipeline, is_indexed);
     MarkPass(pipeline, state);
@@ -1907,6 +2474,8 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
                               stage->samplers.size());
             stage->PushUd(binding, push_data);
             const PreparedStage* prepared = FindPreparedStage(*stage);
+            // Buffers and memoized texture sets take the resolve lock only where they reach
+            // shared state (DrawRecord calls this without it).
             BindBuffers(*stage, prepared, binding, push_data, set_write_index);
             BindTextures(*stage, prepared, binding, set_write_index, needs_barrier);
             uses_dma |= stage->uses_dma;
@@ -1973,6 +2542,7 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
     }
 
     if (uses_dma) {
+        auto shared = SharedScope();
         buffer_cache.SynchronizeDmaBuffers();
         fault_process_pending = true;
     }
@@ -2046,9 +2616,16 @@ void Rasterizer::ResolveVertexBuffers(const GraphicsPipeline* pipeline,
             : nullptr;
     // spartanport: TryPreparedPipeline compared the V#s when the pipeline was chosen, but a
     // write queued before this draw (WriteData, DMA) can change the table after that. Stale
-    // addresses or strides stretch polygons across the screen: the V#s are read again then.
-    if (ready &&
+    // addresses or strides stretch polygons across the screen: the V#s are read again then,
+    // unless stage A found no such write over the table (sharps_final). SPARTAN_PIPE_VERIFY
+    // checks those too and reports any that changed all the same.
+    if (ready && (!sharps_final || VerifyInterval()) &&
         !fetch->SharpsUnchanged(pipeline->GetStage(Shader::SwStage::Vertex), ready->buffers)) {
+        if (sharps_final) {
+            static u64 missed = 0;
+            std::printf("Draw pipe verify: V#s changed after stage A found them settled (%llu)\n",
+                        static_cast<unsigned long long>(++missed));
+        }
         NoteStaleVertexInputs();
         ready = nullptr;
     }
@@ -2192,9 +2769,21 @@ void Rasterizer::ResolveIndexBuffer(u32 index_offset) {
     index_bind = {buffer->Handle(), offset, index_type};
 }
 
+VideoCore::ImageId Rasterizer::BindImage(VideoCore::ImageId image_id) {
+    bound_images.emplace_back(image_id);
+    ++texture_cache.GetImage(image_id).binding_users;
+    return image_id;
+}
+
 void Rasterizer::ResetBindings(bool is_compute) {
-    for (auto& image_id : bound_images) {
-        texture_cache.GetImage(image_id).binding = {};
+    {
+        auto shared = SharedScope();
+        for (auto& image_id : bound_images) {
+            auto& image = texture_cache.GetImage(image_id);
+            if (image.binding_users == 0 || --image.binding_users == 0) {
+                image.binding = {};
+            }
+        }
     }
     for (const auto [buffer, offset, size, is_written] : bound_buffers) {
         const auto dst_stage = is_compute ? vk::PipelineStageFlagBits2::eComputeShader
@@ -2385,6 +2974,8 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                                      constant_ring->Data(ring->offset), ring->size);
             }
             if (!desc.IsSpecial()) {
+                auto shared = (gbuffer_draw || scan_camera || prepass_depth) ? SharedScope()
+                                                                              : NoScope();
                 if (ring->size == 864 && gbuffer_draw &&
                     memory->IsValidGpuMapping(ring->address, 0)) {
                     camera_motion->OnConstants(reinterpret_cast<const float*>(ring->address));
@@ -2403,6 +2994,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
             }
             buffer_infos.emplace_back(constant_ring->Handle(), ring->offset, ring->size);
         } else if (desc.IsSpecial()) {
+            auto shared = SharedScope(); // the stream buffer and the camera scan
             if (desc.buffer_type == Shader::BufferType::GdsBuffer) {
                 const auto* gds_buf = buffer_cache.GetGdsBuffer();
                 buffer_infos.emplace_back(gds_buf->Handle(), 0, gds_buf->SizeBytes());
@@ -2462,6 +3054,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
         } else {
             const auto vsharp =
                 prepared ? prepared->buffer_sharps[buffer_index] : desc.GetSharp(stage);
+            auto shared = (gbuffer_draw || scan_camera || prepass_depth) ? SharedScope() : NoScope();
             if (vsharp.GetSize() == 864 && gbuffer_draw &&
                 memory->IsValidGpuMapping(vsharp.base_address, 0)) {
                 camera_motion->OnConstants(reinterpret_cast<const float*>(vsharp.base_address));
@@ -2505,6 +3098,9 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
             }
             // spartanport: the game's depth of field is off: the composite reads a changed copy of
             // its constants from the stream buffer (the draw pipeline does this in its ring copy).
+            if (shared.owns_lock()) {
+                shared.unlock();
+            }
             alignas(16) std::array<float, SpartanDepthOfField::ConstantWords> dof_constants;
             bool dof_off = false;
             if (vsharp.base_address != 0 && !desc.is_written && !desc.is_formatted &&
@@ -2517,6 +3113,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
             if (vsharp.base_address == 0 || vsharp.GetSize() == 0) {
                 buffer_infos.emplace_back(VK_NULL_HANDLE, 0, VK_WHOLE_SIZE);
             } else if (dof_off) {
+                auto stream = SharedScope();
                 auto& vk_buffer = buffer_cache.GetStreamBuffer();
                 const u64 offset = vk_buffer.Copy(dof_constants.data(), sizeof(dof_constants), alignment);
                 push_data.AddOffset(binding.buffer, 0);
@@ -2540,6 +3137,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                 bound_buffers.emplace_back(buffer, offset, size, desc.is_written);
                 if (desc.is_written) {
                     // Raw storage-buffer writes can also make an aliased cached image stale.
+                    auto invalidate = SharedScope();
                     texture_cache.InvalidateMemoryFromGPU(vsharp.base_address, size);
                 }
                 needs_barrier |= runtime.IsBufferAccessed(buffer, offset, size, desc.is_written);
@@ -2605,6 +3203,7 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
     const u32 first_image_idx = image_infos.size();
     TextureSet* set_slot = nullptr;
     if (!on_helper && BindTexturesFromSet(stage, prepared, first_image_idx, barrier, set_slot)) {
+        auto shared = SharedScope(); // the sampler cache
         // Descriptor writes: one per image (no mip arrays in a memoized set).
         for (u32 i = 0; i < stage.images.size(); ++i) {
             auto& set_write = set_writes[write_index++];
@@ -2618,6 +3217,8 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
         BindSamplers(stage, prepared, binding, write_index);
         return;
     }
+    // The rest finds and refreshes images and views in the shared texture cache.
+    auto shared = SharedScope();
     image_bindings.clear();
     image_binding_entries.clear();
     image_desc_overflow.clear();
@@ -2796,7 +3397,7 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
         if (!image_id) {
             image_infos.emplace_back(VK_NULL_HANDLE, VK_NULL_HANDLE, vk::ImageLayout::eGeneral);
         } else {
-            bound_images.emplace_back(image_id);
+            BindImage(image_id);
 
             auto& image = texture_cache.GetImage(image_id);
             auto& image_view = texture_cache.FindTexture(
@@ -2854,7 +3455,7 @@ void Rasterizer::BindTextures(const Shader::Info& stage, const PreparedStage* pr
             }
 
             vk::ImageView view = *image_view.image_view;
-            vk::ImageLayout layout = image.backing->state.layout;
+            vk::ImageLayout layout = runtime.Layout(image);
             if (upscaler->Enabled()) {
                 // spartanport: the display pass reads the upscaled frame (scaled presets).
                 upscaler->RedirectSampled(image_id, image_view.info, view, layout);
@@ -2965,6 +3566,9 @@ bool Rasterizer::BindTexturesFromSet(const Shader::Info& stage, const PreparedSt
     key |= 1; // 0 marks an empty slot
     auto& set = texture_sets[key % texture_sets.size()];
     slot = &set;
+    // The hash and the memo lookup run without the lock; the images are checked and changed with
+    // it (another resolver may unregister one in between).
+    auto shared = SharedScope();
     const u64 generation = texture_cache.RegistryGeneration();
     const bool match = set.key == key && set.stage == &stage && set.count == count &&
                        set.generation == generation &&
@@ -3015,7 +3619,7 @@ bool Rasterizer::BindTexturesFromSet(const Shader::Info& stage, const PreparedSt
         texture_cache.MarkFound(entry.id);
         auto& image = texture_cache.GetImage(entry.id);
         image.binding.is_bound = 1u;
-        bound_images.emplace_back(entry.id);
+        BindImage(entry.id);
         image.usage.texture = 1u;
         if (entry.proxy) {
             image_infos.emplace_back(VK_NULL_HANDLE, entry.view,
@@ -3028,7 +3632,7 @@ bool Rasterizer::BindTexturesFromSet(const Shader::Info& stage, const PreparedSt
                                     : vk::ImageLayout::eShaderReadOnlyOptimal;
         barrier |= runtime.Transit(&image, new_layout, vk::PipelineStageFlagBits2::eAllCommands,
                                    vk::AccessFlagBits2::eShaderRead, entry.range);
-        image_infos.emplace_back(VK_NULL_HANDLE, entry.view, image.backing->state.layout);
+        image_infos.emplace_back(VK_NULL_HANDLE, entry.view, runtime.Layout(image));
     }
     (void)first_image_idx;
     return true;
@@ -3190,7 +3794,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
         auto* image = &texture_cache.GetImage(image_id);
         if (image->binding.needs_rebind) {
             last_targets[cb].generation = ~0ULL; // FindImage may rewrite the description
-            image_id = bound_images.emplace_back(texture_cache.FindImage(desc));
+            image_id = BindImage(texture_cache.FindImage(desc));
             image = &texture_cache.GetImage(image_id);
         }
         texture_cache.UpdateImage(image_id);
@@ -3234,7 +3838,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
             is_clear ? LiverpoolToVK::ColorBufferClearValue(col_buf) : vk::ClearValue{};
         auto& attachment = state.color_attachments[cb];
         attachment.image_view = *image_view.image_view;
-        attachment.image_layout = image->backing->state.layout;
+        attachment.image_layout = runtime.Layout(*image);
         attachment.clear_value = clear_value.color.uint32;
         attachment.is_clear = is_clear;
 
@@ -3316,7 +3920,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
 
         auto& attachment = state.depth_stencil_attachment;
         attachment.image_view = *image_view.image_view;
-        attachment.image_layout = image.backing->state.layout;
+        attachment.image_layout = runtime.Layout(image);
         attachment.clear_value = {};
         attachment.is_clear = 0;
 
@@ -3387,7 +3991,7 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
                 auto& depth_image = texture_cache.GetImage(db_desc.first);
                 state.depth_stencil_attachment.image_view =
                     *texture_cache.FindDepthTarget(db_desc.first, db_desc.second).image_view;
-                state.depth_stencil_attachment.image_layout = depth_image.backing->state.layout;
+                state.depth_stencil_attachment.image_layout = runtime.Layout(depth_image);
             }
         } else {
             state.width = redirect.width;
@@ -3607,7 +4211,7 @@ bool Rasterizer::IsMapped(VAddr addr, u64 size) {
         // Memory range wrapped the address space, cannot be mapped.
         return false;
     }
-    const auto range = decltype(mapped_ranges)::interval_type::right_open(addr, addr + size);
+    const auto range = boost::icl::interval_set<VAddr>::interval_type::right_open(addr, addr + size);
 
     Common::RecursiveSharedLock lock{mapped_ranges_mutex};
     return boost::icl::contains(mapped_ranges, range);
@@ -3616,7 +4220,7 @@ bool Rasterizer::IsMapped(VAddr addr, u64 size) {
 void Rasterizer::MapMemory(VAddr addr, u64 size) {
     {
         std::scoped_lock lock{mapped_ranges_mutex};
-        mapped_ranges += decltype(mapped_ranges)::interval_type::right_open(addr, addr + size);
+        mapped_ranges += boost::icl::interval_set<VAddr>::interval_type::right_open(addr, addr + size);
     }
 }
 
@@ -3630,7 +4234,7 @@ void Rasterizer::UnmapMemory(VAddr addr, u64 size) {
     texture_cache.UnmapMemory(addr, size);
     {
         std::scoped_lock lock{mapped_ranges_mutex};
-        mapped_ranges -= decltype(mapped_ranges)::interval_type::right_open(addr, addr + size);
+        mapped_ranges -= boost::icl::interval_set<VAddr>::interval_type::right_open(addr, addr + size);
     }
 }
 

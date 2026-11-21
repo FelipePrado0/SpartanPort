@@ -160,6 +160,9 @@ public:
         u32 vo_surface : 1;
     } usage{};
     bool scene_proxy = false; ///< spartanport: SceneTargets holds a reduced-size proxy of it
+    /// spartanport: draws that hold `binding` now (resolvers in parallel each add theirs); the
+    /// flags are cleared when the last one is done (Rasterizer::ResetBindings).
+    u16 binding_users = 0;
     VAddr track_addr = 0;
     VAddr track_addr_end = 0;
     VAddr guest_begin = 0; ///< info.guest_address
@@ -197,6 +200,25 @@ public:
         u32 num_samples;
     };
     std::deque<BackingImage> backing_images;
+
+    /// spartanport: one block of draws' view of the current backing's state (parallel recording,
+    /// docs/plans/2026-11-parallel-recording-spec.md). Per subresource (level-major).
+    struct BlockShadow {
+        const BackingImage* backing = nullptr;
+        std::vector<State> states; ///< valid where touched
+        std::vector<State> needs;  ///< what the block's first access of each subresource needs
+        std::vector<u8> touched;
+    };
+    /// GetBarriers on `shadow`: a subresource the block has not touched yet emits nothing and
+    /// records what the block needs from it; the stitch emits that barrier.
+    void GetBlockBarriers(BlockShadow& shadow, Barriers& out_barriers, vk::ImageLayout dst_layout,
+                          vk::AccessFlags2 dst_mask, vk::PipelineStageFlags2 dst_stage,
+                          std::optional<SubresourceRange> subres_range);
+    /// The stitch (serial, block order): barriers from the real state to the block's needs, then
+    /// the block's end state becomes the real one.
+    void StitchBlock(const BlockShadow& shadow, Barriers& out_barriers);
+    /// The layout a block sees for the whole image (what backing->state.layout reads serially).
+    [[nodiscard]] vk::ImageLayout BlockLayout(const BlockShadow& shadow) const;
     boost::container::static_vector<u64, 16> mip_hashes{};
     u64 lru_id{};
     u64 hash{};

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# perf/auto/quick: the developer's short loop with nobody playing. L0 (build + tests) and L1 (shader
+# golden on a slice of the corpus) in parallel, then one short L2 scenario (cena-estatica, 1 run) and
+# the gate against its baseline. One screen: PASS / FAIL / INFRA_FAIL per level.
+# perf/auto/full: the same with the whole corpus, every scenario, warm and cold, 1 warm-up + 3 runs.
+# Environment (defaults in brackets): PERF_SETTINGS [settings.json], PERF_SAVES [user/savedata],
+# PERF_CACHE_SEED [user/cache], PERF_CORPUS [user/cache/CUSA01623], PERF_INDEX [out/perf/dump.idx].
+set -uo pipefail
+cd -- "$(dirname -- "$0")/../.."
+mode=${PERF_MODE:-quick}
+out=perf/results/$mode-$(date +%Y%m%d-%H%M%S)
+mkdir -p "$out" out/perf
+PY=${PYTHON:-python}
+corpus=${PERF_CORPUS:-user/cache/CUSA01623}
+index=${PERF_INDEX:-out/perf/dump.idx}
+exe=out/gpu/shader-replay-test; [[ -f $exe.exe ]] && exe=$exe.exe
+case $(uname -s) in MINGW*|MSYS*) source ./msys2-env.sh ;; esac
+
+# Builds run one after the other (two ninja runs in out/gpu at once race); the tests and the shader
+# check then run side by side.
+build() {
+    bash build.sh --test > "$out/l0-build.log" 2>&1 || { echo "FAIL build.sh --test (see $out/l0-build.log)"; return 1; }
+    ninja -C out/gpu shader-replay-test dump-index-test > "$out/l1-build.log" 2>&1 || { echo "FAIL L1 build"; return 1; }
+}
+l0() {
+    $PY -m unittest discover -s perf/auto/tests > "$out/l0-perf.log" 2>&1 || { echo "FAIL perf/auto tests"; return 1; }
+    $PY -m unittest discover -s perf/harness/tests >> "$out/l0-perf.log" 2>&1 || { echo "FAIL perf/harness tests"; return 1; }
+    if [[ $mode == full ]]; then
+        (cd launcher-rust && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test) \
+            > "$out/l0-cargo.log" 2>&1 || { echo "FAIL launcher cargo (see $out/l0-cargo.log)"; return 1; }
+    fi
+    echo "PASS L0"
+}
+l1() {
+    if [[ ! -d $corpus ]]; then echo "SKIP L1: no corpus at $corpus"; return 0; fi
+    if [[ ! -s $index ]]; then
+        game=$($PY -c "import json,sys;print(json.load(open(sys.argv[1]))['game_dir'])" "${PERF_SETTINGS:-settings.json}")
+        out/gpu/dump-index-test "$game" "$index" > "$out/l1-index.log" 2>&1 || { echo "FAIL dump index"; return 1; }
+    fi
+    slice=(--first 0 --count 3000); [[ $mode == full ]] && slice=()
+    $PY perf/auto/shader_golden.py --corpus "$corpus" --index "$index" --after "$exe" "${slice[@]}" \
+        > "$out/l1-golden.log" 2>&1 && echo "PASS L1 ($(grep translated "$out/l1-golden.log" | xargs))" \
+        || { echo "FAIL L1: $(head -c 600 "$out/l1-golden.log")"; return 1; }
+}
+build || { echo "L1/L2 not started: build failed"; exit 1; }
+l0 > "$out/l0.txt" & p0=$!
+l1 > "$out/l1.txt" & p1=$!
+wait $p0; r0=$?; wait $p1; r1=$?
+cat "$out/l0.txt" "$out/l1.txt"
+if ((r0 || r1)); then echo "L2 not started: L0/L1 failed"; exit 1; fi
+
+if [[ $mode == full ]]; then scenarios=(perf/auto/scenarios/*.toml); runs=(--warmup 1 --runs 3); caches=(warm cold)
+else scenarios=(perf/auto/scenarios/cena-estatica.toml); runs=(--warmup 0 --runs 1); caches=(warm); fi
+verdict=0
+for s in "${scenarios[@]}"; do
+    name=$(basename "$s" .toml)
+    for cache in "${caches[@]}"; do
+        $PY perf/auto/run_scenario.py --scenario "$s" --cache "$cache" "${runs[@]}" --out "$out" > "$out/l2-$name-$cache.log" 2>&1
+        res=$(sed -n 's/^result: //p' "$out/l2-$name-$cache.log")
+        base=perf/baseline/$name-$cache.json
+        if [[ -z $res ]]; then echo "FAIL L2 $name $cache: no result ($(tail -1 "$out/l2-$name-$cache.log"))"; verdict=1
+        elif [[ -f $base ]]; then
+            $PY perf/auto/gate.py "$res" "$base"; g=$?
+            ((g == 1)) && verdict=1; ((g == 2 && verdict == 0)) && verdict=2  # 2: INFRA_FAIL only
+        else echo "NO BASELINE L2 $name $cache: $(grep -E '^(run|warmup)' "$out/l2-$name-$cache.log" | tail -1)"; fi
+    done
+done
+echo "results: $out"
+exit $verdict  # 0 PASS, 1 FAIL, 2 only INFRA_FAIL
