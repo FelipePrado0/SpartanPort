@@ -1364,21 +1364,24 @@ void PipelineCache::PrepareShaders(const std::filesystem::path& manifest_path,
             start_over();
             stats = Manifest::Materialize(*manifest, game_dir, replay, threads, false, progress);
         }
-        if (!stats.stopped) {
-            now.shaders_done = true;
-            save_marker();
-        }
         // StartOnDemand lists the files next: they must be on disk.
-        if (!db.Flush(std::chrono::minutes(2))) {
-            LOG_WARNING(Render_Vulkan, "Shader preparation: cache writes still queued");
+        bool flushed = false;
+        if (!stats.stopped) {
+            flushed = db.Flush(std::chrono::minutes(2), progress);
+            if (!flushed) {
+                LOG_WARNING(Render_Vulkan, "Shader preparation: cache writes still queued");
+            } else {
+                now.shaders_done = true;
+                save_marker();
+            }
         }
         std::printf("Shader preparation: %u written, %u kept, %u without code, %u refused, %u "
                     "pipeline keys in %.1f s (%u threads)%s\n",
                     stats.written, stats.kept, stats.no_code, stats.failed, stats.keys,
                     std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
                         .count(),
-                    threads, stats.stopped ? ", skipped" : "");
-        if (stats.stopped) {
+                    threads, stats.stopped || !flushed ? ", skipped" : "");
+        if (stats.stopped || !flushed) {
             return;
         }
     } else {
@@ -1391,9 +1394,10 @@ void PipelineCache::PrepareShaders(const std::filesystem::path& manifest_path,
         SpartanOverlay::SetLoadingStage(SpartanOverlay::LoadingPipelines);
     }
     if (!driver.keySize || PreparePipelines(cache_dir, now.driver_hash, threads, progress)) {
-        now.pipelines_done = true;
-        save_marker();
-        db.Flush(std::chrono::seconds(10));
+        if (db.Flush(std::chrono::seconds(10), progress)) {
+            now.pipelines_done = true;
+            save_marker();
+        }
     }
 }
 
