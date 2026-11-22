@@ -1856,16 +1856,16 @@ void TextureCache::GarbageCollectImages() {
     const auto configure = [&](bool allow_aggressive) {
         pressured = total_used_memory >= pressure_gc_memory;
         aggresive = allow_aggressive && total_used_memory >= critical_gc_memory;
-        ticks_to_destroy = aggresive ? 160 : pressured ? 80 : 16;
+        ticks_to_destroy = aggresive ? 16 : pressured ? 80 : 160;
         ticks_to_destroy = std::min(ticks_to_destroy, gc_tick);
-        num_deletions = aggresive ? 40 : pressured ? 20 : 10;
+        num_deletions = aggresive ? 80 : pressured ? 30 : 10;
         // spartanport: each pass has its own visit limit and kept-image report.
         visited = 0;
         gc_kept = gc_kept_bytes = 0;
     };
     const auto clean_up = [&](ImageId image_id) {
         // spartanport: stop at the deletion budget or the visit limit.
-        if (num_deletions == 0 || ++visited > 256) {
+        if (num_deletions == 0 || ++visited > (aggresive ? 512 : 256)) {
             return true;
         }
         auto& image = slot_images[image_id];
@@ -1948,9 +1948,9 @@ void TextureCache::GarbageCollectSamplers() {
     const auto configure = [&](bool allow_aggressive) {
         pressured = total_used_samplers >= pressure_gc_samplers;
         aggresive = allow_aggressive && total_used_samplers >= critical_gc_samplers;
-        ticks_to_destroy = aggresive ? 160 : pressured ? 80 : 16;
+        ticks_to_destroy = aggresive ? 16 : pressured ? 80 : 160;
         ticks_to_destroy = std::min(ticks_to_destroy, gc_tick);
-        num_deletions = aggresive ? 40 : pressured ? 20 : 10;
+        num_deletions = aggresive ? 80 : pressured ? 30 : 10;
     };
     const auto clean_up = [&](u64 hash) {
         if (num_deletions == 0) {
@@ -1996,6 +1996,30 @@ void TextureCache::TouchImage(const Image& image) {
     }
     image.lru_touched_tick = gc_tick;
     lru_cache.Touch(image.lru_id, gc_tick);
+}
+
+u64 TextureCache::EmergencyEvict(u64 bytes_needed) {
+    std::scoped_lock lock{mutex};
+    ApplyBackingWrites();
+    u64 bytes_freed = 0;
+    std::vector<ImageId> to_free;
+
+    lru_cache.ForEachItemBelow(gc_tick, [&](ImageId image_id) {
+        auto& image = slot_images[image_id];
+        const bool download = image.SafeToDownload();
+        const bool gpu_modified = True(image.flags & ImageFlagBits::GpuModified);
+        if (download || gpu_modified) {
+            return false;
+        }
+        to_free.push_back(image_id);
+        bytes_freed += image.info.guest_size;
+        return bytes_freed >= bytes_needed;
+    });
+
+    for (const ImageId id : to_free) {
+        FreeImage(id);
+    }
+    return bytes_freed;
 }
 
 void TextureCache::DeleteImage(ImageId image_id) {

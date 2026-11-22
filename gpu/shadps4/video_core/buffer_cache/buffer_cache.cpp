@@ -606,6 +606,30 @@ void BufferCache::EnsureResident(const Buffer* arena, u64 first_block, u64 last_
             }
         }
     }
+    if (!device_memory && last_result == vk::Result::eErrorOutOfDeviceMemory) {
+        // spartanport: under memory pressure, evict old textures and flush deferred deletions before failing.
+        const u64 freed = texture_cache.EmergencyEvict(std::max<u64>(alloc_size, 32_MB));
+        if (freed > 0) {
+            scheduler.Finish();
+            std::printf("GPU: buffer arena allocation under memory pressure; evicted %llu MiB of "
+                        "textures; retrying; heaps:%s\n",
+                        (unsigned long long)(freed >> 20), instance.HeapUsageText().c_str());
+            std::fflush(stdout);
+            for (const u32 type : arena_memory_types) {
+                const vk::MemoryAllocateInfo alloc_info = {
+                    .allocationSize = alloc_size,
+                    .memoryTypeIndex = type,
+                };
+                auto [result, memory] = instance.GetDevice().allocateMemory(alloc_info);
+                last_result = result;
+                if (result == vk::Result::eSuccess) {
+                    device_memory = memory;
+                    arena_heap_bytes[heap_of(type)] += alloc_size;
+                    break;
+                }
+            }
+        }
+    }
     if (!device_memory) {
         std::string resident_text;
         for (u32 heap = 0; heap < arena_memory_props.memoryHeapCount; ++heap) {
