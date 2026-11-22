@@ -427,8 +427,12 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
             }
             return true;
         };
+        const bool disk_on = !capture_only &&
+                             EmulatorSettingsImpl::Flag("SPARTAN_DISK_SHADERS", true) &&
+                             !SpartanToggle::Disabled(SpartanToggle::DiskShaders);
         const bool on_demand = UseOnDemandPipelines(
-            binary_cache, instance.GetPipelineBinaryGlobalKey().keySize != 0, capture_only);
+            binary_cache, instance.GetPipelineBinaryGlobalKey().keySize != 0, capture_only) ||
+            disk_on;
         const bool wait_cache =
             on_demand && EmulatorSettingsImpl::Flag("SPARTAN_SHADER_PREFETCH_WAIT", false);
         if (wait_cache) {
