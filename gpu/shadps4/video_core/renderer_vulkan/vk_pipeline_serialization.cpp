@@ -1260,9 +1260,11 @@ void PipelineCache::PrepareShaders(const std::filesystem::path& manifest_path,
     auto& db = Storage::DataBase::Instance();
     const bool disk_on = EmulatorSettingsImpl::Flag("SPARTAN_DISK_SHADERS", true) &&
                          !SpartanToggle::Disabled(SpartanToggle::DiskShaders);
+    const bool precompile = EmulatorSettingsImpl::Flag("SPARTAN_SHADER_PRECOMPILE", true);
     std::error_code error;
-    if (!EmulatorSettings.IsPipelineCacheEnabled() || EmulatorSettings.IsPipelineCacheArchived() ||
-        !disk_on || !fs::is_regular_file(manifest_path, error)) {
+    if (!precompile || !EmulatorSettings.IsPipelineCacheEnabled() ||
+        EmulatorSettings.IsPipelineCacheArchived() || !disk_on ||
+        !fs::is_regular_file(manifest_path, error)) {
         return;
     }
     std::vector<u8> bytes(size_t(fs::file_size(manifest_path, error)));

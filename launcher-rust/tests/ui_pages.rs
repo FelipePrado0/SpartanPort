@@ -2476,6 +2476,7 @@ fn performance_page_has_the_shader_cache_rows() {
         &state,
         &[
             "Reuse compiled shaders from disk  ·  restart",
+            "Prepare all shaders on first start  ·  restart",
             "Read the shader cache into memory at start  ·  restart",
             "Show shader notes in the corner  ·  restart",
             "Shader cache",
@@ -2483,6 +2484,7 @@ fn performance_page_has_the_shader_cache_rows() {
         ],
     );
     assert!(state.store.flag("disk_shaders"));
+    assert!(state.store.flag("shader_precompile"));
     assert!(!state.store.flag("shader_notes"));
     // The rows sit below the first screen: a tall window reaches them.
     let mut ui = settled(&mut state, Page::Performance, 1280.0, 4000.0);
