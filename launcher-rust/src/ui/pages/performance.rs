@@ -395,6 +395,15 @@ pub fn view(state: &State) -> Element<'_, Message> {
         ),
         checkbox(
             state.rtl,
+            "shader_precompile",
+            &restart("Prepare all shaders on first start"),
+            state.store.flag("shader_precompile"),
+            Some(&hint(
+                "Compiles the shipped shader list before the game runs, on the first launch or after a driver update, so new areas stutter less. Esc or Circle skips it. Switch it off to start the game immediately without waiting."
+            )),
+        ),
+        checkbox(
+            state.rtl,
             "shader_prefetch",
             &restart("Read the shader cache into memory at start"),
             state.store.flag("shader_prefetch"),

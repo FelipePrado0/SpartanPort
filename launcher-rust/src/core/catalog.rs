@@ -233,6 +233,12 @@ pub static SETTINGS: &[Setting] = &[
         env("SPARTAN_DISK_SHADERS", ""),
     ),
     app(
+        "shader_precompile",
+        Flag,
+        Bool(true),
+        env("SPARTAN_SHADER_PRECOMPILE", ""),
+    ),
+    app(
         "shader_prefetch",
         Flag,
         Bool(true),

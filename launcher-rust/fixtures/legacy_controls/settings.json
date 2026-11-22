@@ -21,6 +21,7 @@
   "monitor": "",
   "partial_height_views": true,
   "disk_shaders": true,
+  "shader_precompile": true,
   "shader_prefetch": true,
   "shader_prefetch_wait": false,
   "shader_notes": false,

@@ -399,7 +399,8 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
     // spartanport: on the first start, the shipped shader list (shaders/<serial>.spm beside the
     // executable) fills the shader cache before the game runs. Esc or Circle (B) skips; the window
     // thread keeps the keyboard and gamepad state current.
-    {
+    const bool precompile = EmulatorSettingsImpl::Flag("SPARTAN_SHADER_PRECOMPILE", true);
+    if (precompile) {
         const char* base = SDL_GetBasePath();
         const auto list = ShaderListPath(std::filesystem::path(base ? base : "") / "shaders",
                                          std::string(Common::ElfInfo::Instance().GameSerial()));
@@ -452,6 +453,13 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
             SpartanOverlay::SetLoading(false, 0, 0);
         }
         if (on_demand) {
+            return;
+        }
+    } else {
+        const bool on_demand = UseOnDemandPipelines(
+            binary_cache, instance.GetPipelineBinaryGlobalKey().keySize != 0, capture_only);
+        if (on_demand) {
+            rasterizer->GetPipelineCache().StartOnDemand();
             return;
         }
     }

@@ -496,7 +496,7 @@ APP_DEFAULTS = {'ui_language': 'en', 'ui_scale': 'auto', 'game_dir': os.environ.
                 'video_backend': 'auto', 'gamemode': False, 'mangohud': False, 'desktop_integration': True, 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'hdr': False, 'draw_pipe': '', 'readbacks': '', 'no_msaa': '', 'stream_memory': 'cached',
-                'gpu_id': '', 'monitor': '', 'partial_height_views': True, 'disk_shaders': True, 'shader_prefetch': True, 'shader_notes': False, 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
+                'gpu_id': '', 'monitor': '', 'partial_height_views': True, 'disk_shaders': True, 'shader_precompile': True, 'shader_prefetch': True, 'shader_notes': False, 'background_warmup': True, 'parallel_warmup': True, 'pipeline_binary_cache': True,
                 'perf_diag': False, 'frame_capture_key': False, 'frame_stats': False, 'gpu_profile': False,
                 'vk_validation': False, 'close_on_play': False, 'discord_rpc': False,
                 'check_updates': False, 'game_patches': {}, 'controls': {}, 'pad_style': 'playstation',
@@ -1387,6 +1387,7 @@ def game_environment(s):
     env['SPARTAN_PERF_DIAG'] = '1' if s.get('perf_diag', False) else '0'
     env['SPARTAN_PARTIAL_HEIGHT_VIEWS'] = '1' if s.get('partial_height_views', True) else '0'
     env['SPARTAN_DISK_SHADERS'] = '1' if s.get('disk_shaders', True) else '0'
+    env['SPARTAN_SHADER_PRECOMPILE'] = '1' if s.get('shader_precompile', True) else '0'
     env['SPARTAN_SHADER_PREFETCH'] = '1' if s.get('shader_prefetch', True) else '0'
     env['SPARTAN_SHADER_NOTES'] = '1' if s.get('shader_notes', False) else '0'
     for key, name in (('frame_stats', 'SPARTAN_FRAME_STATS'), ('gpu_profile', 'SPARTAN_GPU_PROFILE'),
@@ -2237,6 +2238,14 @@ class Launcher:
                      'каждый раз (антивирус проверяет каждый записанный файл). Первый запуск с этой опцией один '
                      'раз пересобирает кэш. Выключите, если объект, эффект или цвет выглядит неправильно только '
                      'после перезапуска.'),
+                   restart=True)
+        self.check(f, 'shader_precompile', 'app', _('Prepare all shaders on first start', 'Подготавливать все шейдеры при первом запуске'),
+                   _('Compiles the shipped shader list before the game runs, on the first launch or after a driver'
+                     ' update, so new areas stutter less. Esc or Circle skips it. Switch it off to start the game'
+                     ' immediately without waiting.',
+                     'Компилирует встроенный список шейдеров перед запуском игры при первом запуске или обновлении'
+                     ' видеодрайвера, уменьшая подтормаживания в новых зонах. Esc или Circle пропускает. Отключите,'
+                     ' чтобы запустить игру сразу без ожидания.'),
                    restart=True)
         self.check(f, 'shader_prefetch', 'app', _('Read the shader cache into memory at start', 'Читать кэш шейдеров в память при запуске'),
                    _('A background thread reads the saved shaders into memory while the game starts; a note in the'
