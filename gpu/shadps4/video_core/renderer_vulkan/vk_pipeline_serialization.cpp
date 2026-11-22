@@ -31,6 +31,7 @@
 #include "video_core/renderer_vulkan/vk_shader_materialize.h"
 #include "common/thread.h"
 #include "spartanport_overlay.h"
+#include "spartanport_threads.h"
 #include "spartanport_toggles.h"
 #include "core/emulator_settings.h"
 #include "shader_recompiler/frontend/fetch_shader.h"
@@ -334,6 +335,9 @@ std::pair<u64, s64> ConvertToShared(const std::filesystem::path& directory,
             continue;
         }
         ++files;
+        if ((files & 63) == 0) {
+            std::this_thread::yield();
+        }
         freed += s64(bytes->size()) - s64(std::filesystem::file_size(it->path(), status)) -
                  s64(shared_bytes - shared_before);
     }
@@ -619,8 +623,9 @@ struct PipelineCache::WarmupPool {
                 if (low_priority) {
                     Common::SetCurrentThreadName("SpartanPort:ShaderWarmup");
                     Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+                    SpartanThreads::MakeBackground();
                 }
-                Run();
+                Run(low_priority);
             });
         }
     }
@@ -675,7 +680,7 @@ struct PipelineCache::WarmupPool {
     std::atomic<u32> failed{0};
 
 private:
-    void Run() {
+    void Run(bool low_priority = false) {
         std::unique_lock lock{mutex};
         while (true) {
             cv.wait(lock, [this] { return closing || !jobs.empty(); });
@@ -695,6 +700,9 @@ private:
                 LOG_ERROR(Render_Vulkan, "spartanport: warm-up pipeline failed");
             }
             (ok ? built : failed).fetch_add(1, std::memory_order_relaxed);
+            if (low_priority) {
+                std::this_thread::yield();
+            }
             lock.lock();
             --running;
             idle.notify_all();
@@ -1610,6 +1618,7 @@ void PipelineCache::StartDiskPrefetch() {
                                              std::stop_token stop) {
         Common::SetCurrentThreadName("spartanport:ShaderPrefetch");
         Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+        SpartanThreads::MakeBackground();
         // Whatever happens here, the loading screen waiting on it must not wait forever.
         struct Finished {
             DiskPrefetch* prefetch;
@@ -1636,6 +1645,9 @@ void PipelineCache::StartDiskPrefetch() {
                 bytes += blob.meta.size() + blob.spv.size() * sizeof(u32);
             }
             ++programs;
+            if ((programs & 63) == 0) {
+                std::this_thread::yield();
+            }
         }
         prefetch->done = total;
         SpartanOverlay::SetShaderPrefetch(total, total);
@@ -1665,6 +1677,7 @@ void PipelineCache::StartBinaryConversion() {
     binary_conversion->thread = std::jthread{[directory](std::stop_token stop) {
         Common::SetCurrentThreadName("spartanport:BinaryConvert");
         Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+        SpartanThreads::MakeBackground();
         const auto started = std::chrono::steady_clock::now();
         const auto [files, freed] = PipelineBinaryCache::ConvertToShared(
             directory, [&stop] { return stop.stop_requested(); });
@@ -2047,7 +2060,12 @@ void PipelineCache::PumpWarmUp() {
     }
     auto& warm = *background;
     using namespace std::chrono_literals;
-    const auto pump_started = std::chrono::steady_clock::now();
+    const auto now = std::chrono::steady_clock::now();
+    if (now - warm.last_batch < 4ms) {
+        return;
+    }
+    warm.last_batch = now;
+    const auto pump_started = now;
     if (warm.last_pump.time_since_epoch().count()) {
         warm.pump_gap_max_ns = std::max(warm.pump_gap_max_ns,
             u64(std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -2070,11 +2088,6 @@ void PipelineCache::PumpWarmUp() {
         warm.done.fetch_add(1, std::memory_order_relaxed);
     }
 
-    const auto now = std::chrono::steady_clock::now();
-    if (now - warm.last_batch < 4ms) {
-        return;
-    }
-    warm.last_batch = now;
     ++warm.batches;
     const u32 done = warm.done + warm.pool->failed;
     SpartanOverlay::SetBackgroundLoading(done, std::max(warm.total.load(), done));
