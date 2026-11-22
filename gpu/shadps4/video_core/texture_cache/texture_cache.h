@@ -338,6 +338,9 @@ public:
     /// Runs the garbage collector.
     void RunGarbageCollector();
 
+    /// Evicts unmodified images under memory pressure to free up device memory.
+    u64 EmergencyEvict(u64 bytes_needed);
+
     template <typename Func>
     void ForEachImageInRegion(VAddr cpu_addr, size_t size, Func&& func) {
         using FuncReturn = typename std::invoke_result<Func, ImageId, Image&>::type;
