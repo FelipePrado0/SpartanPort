@@ -145,6 +145,38 @@ bool DataBase::Flush(std::chrono::milliseconds timeout) {
     return idle_cv.wait_for(lk, timeout, [] { return req_queue.empty() && !io_busy; });
 }
 
+bool DataBase::Flush(std::chrono::milliseconds timeout,
+                     const std::function<bool(u32 done, u32 total)>& progress) {
+    if (!IsOpened()) {
+        return true;
+    }
+    if (!progress) {
+        return Flush(timeout);
+    }
+    std::unique_lock lk{m_request};
+    const size_t initial_queued = req_queue.size() + (io_busy ? 1 : 0);
+    if (initial_queued == 0) {
+        return true;
+    }
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!req_queue.empty() || io_busy) {
+        idle_cv.wait_for(lk, std::chrono::milliseconds(33),
+                         [] { return req_queue.empty() && !io_busy; });
+        const size_t remaining = req_queue.size() + (io_busy ? 1 : 0);
+        const size_t done = initial_queued > remaining ? initial_queued - remaining : 0;
+        lk.unlock();
+        const bool keep_going = progress(u32(done), u32(initial_queued));
+        lk.lock();
+        if (!keep_going) {
+            return false;
+        }
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return req_queue.empty() && !io_busy;
+        }
+    }
+    return true;
+}
+
 template <typename T>
 bool WriteVector(const BlobType type, std::filesystem::path&& path_, std::vector<T>&& v) {
     {

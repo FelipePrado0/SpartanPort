@@ -35,6 +35,8 @@ public:
     void Close();
     // spartanport: wait for queued and active writes; false if the timeout expires first.
     bool Flush(std::chrono::milliseconds timeout);
+    bool Flush(std::chrono::milliseconds timeout,
+               const std::function<bool(u32 done, u32 total)>& progress);
     [[nodiscard]] bool IsOpened() const {
         return opened;
     }
