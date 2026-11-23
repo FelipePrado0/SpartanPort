@@ -198,7 +198,8 @@ struct ColorBuffer {
     std::array<u32, 2> pad1;
 
     operator bool() const {
-        return base_address && info.format;
+        // spartanport: an unused format value reads as no target (IsUnusedDataFormat).
+        return base_address && info.format && !IsUnusedDataFormat(info.format);
     }
 
     u32 Pitch() const {

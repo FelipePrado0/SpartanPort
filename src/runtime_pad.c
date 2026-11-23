@@ -8,11 +8,16 @@
  *   IJKL d-pad (I up, K down, J left, L right).
  * SPARTAN_KEY_MAP also takes the mouse: Mouse Left, Mouse Right, Mouse Middle, Mouse Back,
  * Mouse Forward, Wheel Up and Wheel Down (see mouse_names). The wheel cycles the weapons
- * (weapon_next, weapon_prev: apply_weapon_cycle). */
+ * (weapon_next, weapon_prev: apply_weapon_cycle). G turns the free camera off and on (camera:
+ * apply_free_camera). */
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "gpu/spartanportgpu.h"
 #include "qte_hook.h"
+#include "camera_hook.h"
+#include "switch_hook.h"
+#include "actor_hook.h"
+#include "dualsense.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,8 +42,9 @@ enum {
     CLICK_LEFT=0x40000000, CLICK_RIGHT=0x80000000,
     /* Host-only actions of the keyboard map: dodge tilts the right stick (apply_dodge); rage and
      * grab press two buttons together (apply_combos); weapon_next and weapon_prev press the
-     * d-pad button of the next or previous weapon (apply_weapon_cycle). */
-    DODGE=0x20000000, RAGE=0x10000000, GRAB=0x08000000,
+     * d-pad button of the next or previous weapon (apply_weapon_cycle); camera turns the free
+     * camera off and on (apply_free_camera; bit 0 is not a button of the pad). */
+    DODGE=0x20000000, RAGE=0x10000000, GRAB=0x08000000, CAMERA_TOGGLE=0x1,
     WEAPON_NEXT=0x04000000, WEAPON_PREV=0x02000000,
     MOVE_UP=0x00010000, MOVE_DOWN=0x00020000, MOVE_LEFT=0x00040000, MOVE_RIGHT=0x00080000,
     LOOK_UP=0x00200000, LOOK_DOWN=0x00400000, LOOK_LEFT=0x00800000, LOOK_RIGHT=0x01000000,
@@ -92,6 +98,7 @@ static uint16_t touch_axis(float v, int max) {
  * right source with L1 held is a left click (photo mode on pads without a touchpad). */
 enum { CLICK_LEAD_US=50000, CLICK_HOLD_US=50000, CLICK_TAIL_US=100000 };
 static struct { int side; uint64_t pressed, released; } click={-1,0,0};
+static uint32_t pad_held; /* the buttons of the last read that came from the gamepad */
 static void play_click(PadData *d) {
     const uint64_t now=d->timestamp;
     uint32_t sources=d->buttons & (CLICK_LEFT|CLICK_RIGHT);
@@ -116,11 +123,22 @@ static void play_click(PadData *d) {
     if (now>=down && now<up) d->buttons|=BTN_TOUCHPAD;
 }
 
+/* Last light bar colour the game asked for, and the pad it was last written to (so a pad that
+ * reconnects gets it again). Called under lock. */
+static struct { uint8_t rgb[3]; bool set; SDL_Gamepad *applied_to; } light_bar;
+/* Writes the game's light bar colour to the pad, once per pad. Pads without an RGB LED are skipped. */
+static void apply_light_bar(SDL_Gamepad *g) {
+    if (!g || !light_bar.set || light_bar.applied_to==g) return;
+    light_bar.applied_to=g;
+    if (SDL_GetBooleanProperty(SDL_GetGamepadProperties(g),SDL_PROP_GAMEPAD_CAP_RGB_LED_BOOLEAN,false))
+        SDL_SetGamepadLED(g,light_bar.rgb[0],light_bar.rgb[1],light_bar.rgb[2]);
+}
+
 /* Opens the first gamepad SDL knows about; called under lock. */
 static SDL_Gamepad *current_gamepad(void) {
     if (!sdl_ready) sdl_ready = SDL_WasInit(SDL_INIT_GAMEPAD) ? 1 : SDL_InitSubSystem(SDL_INIT_GAMEPAD) ? 1 : -1;
     if (sdl_ready<0) return NULL;
-    if (gamepad && !SDL_GamepadConnected(gamepad)) { SDL_CloseGamepad(gamepad); gamepad=NULL; }
+    if (gamepad && !SDL_GamepadConnected(gamepad)) { SDL_CloseGamepad(gamepad); gamepad=NULL; light_bar.applied_to=NULL; ds_forget(); }
     if (!gamepad) {
         int count=0;
         SDL_JoystickID *ids=SDL_GetGamepads(&count);
@@ -130,13 +148,15 @@ static SDL_Gamepad *current_gamepad(void) {
         }
         SDL_free(ids);
     }
+    apply_light_bar(gamepad);
     return gamepad;
 }
 /* Button sources: a host button or key and the PS4 button it presses. The defaults below can be
  * changed per PS4 button with SPARTAN_PAD_MAP (gamepad) and SPARTAN_KEY_MAP (keyboard), e.g.
  * SPARTAN_KEY_MAP="cross=Q,square=Left Shift" or SPARTAN_PAD_MAP="cross=b,circle=a": comma-separated
  * <ps4 button>=<SDL key or gamepad button name>. A mapped PS4 button loses its default sources;
- * <ps4 button>=None leaves it without any.
+ * <ps4 button>=None leaves it without any. Several names joined by | are all sources of the button
+ * (SPARTAN_KEY_MAP="cross=Space|K": Space or K), up to MAX_SOURCES_PER_BUTTON.
  * touchpad_left (alias touchpad) and touchpad_right are the two sides of the touchpad click:
  * photo mode and the pause menu. Back/View (Share on a DualSense) is the right click, and with
  * L1 held the left one. Keyboard stick directions are mapped too; gamepad axes, the real touchpad
@@ -147,11 +167,14 @@ static const struct { const char *name; uint32_t ps; } ps_names[]={
     {"options",BTN_OPTIONS}, {"touchpad",CLICK_LEFT}, {"touchpad_left",CLICK_LEFT}, {"touchpad_right",CLICK_RIGHT},
     {"up",BTN_UP}, {"down",BTN_DOWN}, {"left",BTN_LEFT}, {"right",BTN_RIGHT},
     {"dodge",DODGE}, {"rage",RAGE}, {"grab",GRAB}, {"weapon_next",WEAPON_NEXT}, {"weapon_prev",WEAPON_PREV},
+    {"camera",CAMERA_TOGGLE},
     {"move_up",MOVE_UP}, {"move_down",MOVE_DOWN}, {"move_left",MOVE_LEFT}, {"move_right",MOVE_RIGHT},
     {"look_up",LOOK_UP}, {"look_down",LOOK_DOWN}, {"look_left",LOOK_LEFT}, {"look_right",LOOK_RIGHT},
 };
 typedef struct { int source; uint32_t ps; } ButtonSource;
-typedef struct { ButtonSource entries[48]; size_t count; } ButtonMap;
+/* Room for every button of the map with its sources: 31 buttons (see ps_names) at most. */
+enum { MAX_SOURCES_PER_BUTTON=4, MAP_CAPACITY=128 };
+typedef struct { ButtonSource entries[MAP_CAPACITY]; size_t count; } ButtonMap;
 static ButtonMap pad_map={{
     {SDL_GAMEPAD_BUTTON_SOUTH,BTN_CROSS}, {SDL_GAMEPAD_BUTTON_EAST,BTN_CIRCLE},
     {SDL_GAMEPAD_BUTTON_WEST,BTN_SQUARE}, {SDL_GAMEPAD_BUTTON_NORTH,BTN_TRIANGLE},
@@ -171,7 +194,43 @@ static ButtonMap key_map={{
     {SDL_SCANCODE_W,MOVE_UP}, {SDL_SCANCODE_S,MOVE_DOWN}, {SDL_SCANCODE_A,MOVE_LEFT}, {SDL_SCANCODE_D,MOVE_RIGHT},
     {SDL_SCANCODE_UP,LOOK_UP}, {SDL_SCANCODE_DOWN,LOOK_DOWN},
     {SDL_SCANCODE_LEFT,LOOK_LEFT}, {SDL_SCANCODE_RIGHT,LOOK_RIGHT},
-},25};
+    {SDL_SCANCODE_G,CAMERA_TOGGLE},
+},26};
+
+/* The triggers as gamepad-map sources, numbered above every SDL gamepad button. Mapping l2 or r2
+ * takes the PS4 trigger off its physical trigger, so two inputs never fight over it. */
+enum { PAD_LEFT_TRIGGER=0x100, PAD_RIGHT_TRIGGER, TRIGGER_DOWN=30 };
+static bool trigger_mapped[2];
+static int pad_source(const char *name) {
+    if (!SDL_strcasecmp(name,"lefttrigger")) return PAD_LEFT_TRIGGER;
+    if (!SDL_strcasecmp(name,"righttrigger")) return PAD_RIGHT_TRIGGER;
+    return (int)SDL_GetGamepadButtonFromString(name);
+}
+static bool pad_source_down(SDL_Gamepad *g, int source) {
+    if (source==PAD_LEFT_TRIGGER) return trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFT_TRIGGER))>TRIGGER_DOWN;
+    if (source==PAD_RIGHT_TRIGGER) return trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHT_TRIGGER))>TRIGGER_DOWN;
+    return SDL_GetGamepadButton(g,(SDL_GamepadButton)source);
+}
+
+/* SPARTAN_DEADZONE_LEFT and SPARTAN_DEADZONE_RIGHT: the stick's radial dead zone in percent, 0 (the
+ * default) leaves it as read. Past the zone the stick is rescaled, so it still starts from zero. */
+static int stick_deadzone[2];
+static int deadzone_setting(const char *name) {
+    const char *value=getenv(name);
+    const int percent=value ? atoi(value) : 0;
+    return percent<0 ? 0 : percent>90 ? 90 : percent;
+}
+static void apply_deadzone(uint8_t *x, uint8_t *y, int percent) {
+    if (percent<=0) return;
+    const float dx=((float)*x-128.0f)/127.0f, dy=((float)*y-128.0f)/127.0f;
+    const float length=SDL_sqrtf(dx*dx+dy*dy), zone=(float)percent/100.0f;
+    if (length<=zone) { *x=*y=128; return; }
+    float scale=(length-zone)/(1.0f-zone)/length;
+    if (length*scale>1.0f) scale=1.0f/length;
+    const float sx=128.0f+dx*scale*127.0f, sy=128.0f+dy*scale*127.0f;
+    *x=(uint8_t)SDL_clamp(sx+0.5f,0.0f,255.0f);
+    *y=(uint8_t)SDL_clamp(sy+0.5f,0.0f,255.0f);
+}
 
 static char *trim(char *text) {
     while (*text==' ' || *text=='\t') ++text;
@@ -258,12 +317,34 @@ static int key_source(const char *name) {
     return (int)SDL_GetScancodeFromName(name);
 }
 
-/* Applies a SPARTAN_PAD_MAP/SPARTAN_KEY_MAP value; returns how many entries were used. Bad entries are
- * logged and skipped, so their PS4 button keeps its default. */
+/* One source of an entry, by name; -1 when the name is not one (a gamepad button can be 0). */
+static int named_source(const char *name, bool keyboard) {
+    if (!*name) return -1;
+    const int mouse=keyboard ? mouse_source(name) : 0;
+    const int source=mouse ? mouse : keyboard ? key_source(name) : pad_source(name);
+    return source>(keyboard ? (int)SDL_SCANCODE_UNKNOWN : (int)SDL_GAMEPAD_BUTTON_INVALID) ? source : -1;
+}
+
+static void drop_sources(ButtonMap *map, uint32_t ps, bool keyboard) {
+    size_t kept=0;
+    for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
+    map->count=kept;
+    if (!keyboard && ps==BTN_L2) trigger_mapped[0]=true;
+    if (!keyboard && ps==BTN_R2) trigger_mapped[1]=true;
+}
+
+/* Applies a SPARTAN_PAD_MAP/SPARTAN_KEY_MAP value; returns how many entries were used. An entry is
+ * <button>=<name>[|<name>...]: every listed source replaces the button's own. A name that is not
+ * valid is logged and skipped by itself; an entry with no valid name is skipped as a whole, so its
+ * PS4 button keeps its default. */
 static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
     if (!spec || !*spec) return 0;
-    char copy[1024];
-    snprintf(copy,sizeof(copy),"%s",spec);
+    /* The whole value, whatever its length: a copy cut short would drop the last entries unseen. */
+    char *copy=SDL_strdup(spec);
+    if (!copy) {
+        printf("Runtime: pad map: out of memory, no entry applied\n");
+        return 0;
+    }
     int used=0;
     char *entry=copy;
     while (entry) {
@@ -276,31 +357,38 @@ static int apply_button_map(ButtonMap *map, const char *spec, bool keyboard) {
             continue;
         }
         *eq=0;
-        const char *button=trim(entry), *name=trim(eq+1);
+        const char *button=trim(entry);
+        char *names=trim(eq+1);
         entry=next;
         uint32_t ps=0;
         for (size_t i=0;i<sizeof(ps_names)/sizeof(*ps_names);++i) if (!SDL_strcasecmp(button,ps_names[i].name)) ps=ps_names[i].ps;
         if (!keyboard && (ps & STICK_DIRECTIONS)) ps=0;
-        if (ps && !SDL_strcasecmp(name,"None")) { /* the button gets no source at all */
-            size_t kept=0;
-            for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
-            map->count=kept;
+        if (ps && !SDL_strcasecmp(names,"None")) { /* the button gets no source at all */
+            drop_sources(map,ps,keyboard);
             ++used;
             continue;
         }
-        const int mouse=keyboard && *name ? mouse_source(name) : 0;
-        const int source=!*name ? -1 : mouse ? mouse : keyboard ? key_source(name)
-                                                         : (int)SDL_GetGamepadButtonFromString(name);
-        if (!ps || source<=(keyboard ? (int)SDL_SCANCODE_UNKNOWN : (int)SDL_GAMEPAD_BUTTON_INVALID)) {
-            printf("Runtime: pad map: ignored '%s=%s'\n",button,name);
-            continue;
+        int sources[MAX_SOURCES_PER_BUTTON];
+        size_t source_count=0;
+        char *name=names;
+        while (name) {
+            char *more=strchr(name,'|');
+            if (more) *more++=0;
+            const char *trimmed=trim(name);
+            name=more;
+            const int source=named_source(trimmed,keyboard);
+            bool repeated=false;
+            for (size_t i=0;i<source_count;++i) repeated|=sources[i]==source;
+            if (!ps || source<0) printf("Runtime: pad map: ignored '%s=%s'\n",button,trimmed);
+            else if (!repeated && source_count<MAX_SOURCES_PER_BUTTON) sources[source_count++]=source;
         }
-        size_t kept=0;
-        for (size_t i=0;i<map->count;++i) if (map->entries[i].ps!=ps) map->entries[kept++]=map->entries[i];
-        map->count=kept;
-        if (map->count<sizeof(map->entries)/sizeof(*map->entries)) map->entries[map->count++]=(ButtonSource){source,ps};
+        if (!source_count) continue;
+        drop_sources(map,ps,keyboard);
+        for (size_t i=0;i<source_count && map->count<sizeof(map->entries)/sizeof(*map->entries);++i)
+            map->entries[map->count++]=(ButtonSource){sources[i],ps};
         ++used;
     }
+    SDL_free(copy);
     return used;
 }
 
@@ -311,6 +399,9 @@ static void load_button_maps(void) {
     const int pad=apply_button_map(&pad_map,getenv("SPARTAN_PAD_MAP"),false);
     const int keys=apply_button_map(&key_map,getenv("SPARTAN_KEY_MAP"),true);
     if (pad || keys) printf("Runtime: pad map: %d gamepad and %d keyboard buttons remapped\n",pad,keys);
+    stick_deadzone[0]=deadzone_setting("SPARTAN_DEADZONE_LEFT");
+    stick_deadzone[1]=deadzone_setting("SPARTAN_DEADZONE_RIGHT");
+    if (stick_deadzone[0] || stick_deadzone[1]) printf("Runtime: stick dead zone: left %d%%, right %d%%\n",stick_deadzone[0],stick_deadzone[1]);
 }
 
 static void key_axis(uint8_t *axis, bool negative, bool positive) {
@@ -332,8 +423,8 @@ static const char *const qte_defaults[QTE_ROTATIONS]={"A>W>D","D>W>A","D>S>A","A
 static struct { int keys[QTE_KEYS_MAX]; unsigned length; bool directions; } qte_sequences[QTE_ROTATIONS];
 static struct {
     int loaded, mode, rotation;
-    uint32_t heartbeat;
-    uint64_t seen;       /* the last read that saw the prompt's frame count move */
+    uint32_t beat[SPARTAN_QTE_KINDS];
+    uint64_t seen[SPARTAN_QTE_KINDS];  /* the last read that saw each kind's frame count move */
     unsigned step;
     bool fresh, passed;  /* fresh: keys already held when the prompt appeared do not count */
     bool held[SDL_SCANCODE_COUNT];
@@ -403,15 +494,33 @@ static void qte_reset(void) {
     __atomic_store_n(&spartanport_qte.pass,0,__ATOMIC_RELAXED);
 }
 
-/* The rotation (0..5) the prompt on screen asks for, else -1. A prompt is up while its update
- * keeps counting frames; QTE_ACTIVE_US without a frame ends it (and resets the minigame). */
+/* The prompt kinds (SPARTAN_QTE_KIND_* bits) up now: a kind is up while its frame count keeps moving,
+ * one frame within QTE_ACTIVE_US. The update's count (heartbeat) needs the rotation hooks; the
+ * others come from the Automatic QTE stubs, whether Automatic QTE is on or not. */
+static unsigned qte_active(uint64_t now) {
+    unsigned kinds=0;
+    for (unsigned k=0;k<SPARTAN_QTE_KINDS;++k) {
+        const uint32_t beat=__atomic_load_n(k==SPARTAN_QTE_KIND_UPDATE ? &spartanport_qte.heartbeat
+                                            : &spartanport_qte.kinds[k-1],__ATOMIC_RELAXED);
+        if (beat!=qte.beat[k]) { qte.beat[k]=beat; qte.seen[k]=now; }
+        if (now-qte.seen[k]<=QTE_ACTIVE_US) kinds|=1u<<k;
+    }
+    return kinds;
+}
+
+/* The rotation (0..5) the prompt on screen asks for, else -1. A prompt that ends resets the minigame.
+ * Only the update's frames count here: the type at +0x10 is its prompt's. */
 static int qte_rotation(uint64_t now) {
     if (!spartanport_qte.block) return -1;
-    const uint32_t beat=__atomic_load_n(&spartanport_qte.heartbeat,__ATOMIC_RELAXED);
-    if (beat!=qte.heartbeat) { qte.heartbeat=beat; qte.seen=now; }
-    if (now-qte.seen>QTE_ACTIVE_US) { qte_reset(); return -1; }
+    if (!(qte_active(now) & 1u<<SPARTAN_QTE_KIND_UPDATE)) { qte_reset(); return -1; }
     const unsigned type=*(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET);
     return type-QTE_FIRST_ROTATION<QTE_ROTATIONS ? (int)(type-QTE_FIRST_ROTATION) : -1;
+}
+
+/* Any prompt on screen: a button, mashing, holding or a turn of the stick. */
+static bool qte_prompt_up(uint64_t now) {
+    if (qte_rotation(now)>=0) return true;
+    return spartanport_qte.block && (qte_active(now) & 1u<<SPARTAN_QTE_KIND_UPDATE);
 }
 
 /* A direction key (pressed or drawn) in the minigame: the next step, or back to the start. */
@@ -480,6 +589,69 @@ static bool qte_play(const bool *keys, uint64_t now) {
     return true;
 }
 
+/* The engine at 60 FPS during QTEs (gpu: spartanportgpu_engine_fps_cap, which does nothing when the
+ * menu's option is off or the engine already runs at 60): down on the first frame of any prompt kind,
+ * back after QTE_FPS_HOLD_US more without one, so prompts in a row keep it. A cap held
+ * QTE_FPS_REPORT_US is reported once with the kinds still counting (a site that also runs outside
+ * prompts would keep the game at 60). Atomics only on this thread. */
+/* 5 s: on Poseidon's horse the single presses of one sequence come seconds apart, and 1.5 s let the
+ * engine go back to the player's rate between them (maintainer's test, 2026-10-30); staying at 60 a
+ * few seconds after a QTE costs little. */
+enum { QTE_FPS_HOLD_US=5000000, QTE_FPS_REPORT_US=20000000 };
+static struct { bool capped, reported; uint64_t since; } qte_fps;
+/* In Cronos, one blade pull (R1) at 240 FPS throws Kratos out of the map, at 60 it works. R1 there
+ * caps the engine at 60 until R1_FPS_HOLD_US after the last R1; the QTE cap and this one only lift
+ * the cap when both are done. */
+uintptr_t runtime_player_object;
+enum { R1_FPS_HOLD_US=4000000 };
+static uint64_t r1_fps_until;
+/* Charged prompts (hold a button: chests, doors) only play an animation: they keep the player's rate
+ * (maintainer, 2026-10-31). */
+enum { QTE_FPS_KINDS=((1u<<SPARTAN_QTE_KINDS)-1) & ~(1u<<SPARTAN_QTE_KIND_CHARGED) };
+static void qte_fps_cap(uint64_t now) {
+    const unsigned kinds=qte_active(now) & QTE_FPS_KINDS;
+    uint64_t last=0;  /* the latest frame of any kind that caps */
+    for (unsigned k=0;k<SPARTAN_QTE_KINDS;++k) if (QTE_FPS_KINDS>>k & 1 && qte.seen[k]>last) last=qte.seen[k];
+    if (kinds) {
+        if (!qte_fps.capped) {
+            qte_fps.capped=true; qte_fps.reported=false; qte_fps.since=now;
+            const int type=(kinds & 1u<<SPARTAN_QTE_KIND_UPDATE) && spartanport_qte.block
+                ? *(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET) : -1;
+            spartanportgpu_engine_fps_cap_qte(kinds,type);
+            if (!r1_fps_until) spartanportgpu_engine_fps_cap(60);
+        } else if (!qte_fps.reported && now-qte_fps.since>=QTE_FPS_REPORT_US) {
+            qte_fps.reported=true;
+            spartanportgpu_engine_fps_cap_held(kinds);
+        }
+    } else if (qte_fps.capped && now-last>QTE_ACTIVE_US+QTE_FPS_HOLD_US) {
+        qte_fps.capped=false;
+        if (!r1_fps_until) spartanportgpu_engine_fps_cap(0);
+    }
+}
+/* The pull that fails, Kratos at obj+0xa0 when R1 starts it: between the maintainer's marks of
+ * 2026-10-31 (z 81 to 101) and the 9 pulls that validated the cap (z 64 to 90), each within 24. */
+static const float r1_pull_spot[3]={-90,372,80};
+enum { R1_PULL_RADIUS=25 };
+static void r1_fps_cap(const PadData *d, uintptr_t kratos) {
+    static bool was_down;
+    const bool down=(d->buttons & (BTN_R3|BTN_L1|BTN_R1))==BTN_R1;  /* not the frame rate combo */
+    if (down && !was_down && kratos && runtime_file_cronos()) {
+        float position[3], squared=0;
+        memcpy(position,(const void *)(kratos+0xa0),sizeof(position));
+        for (int i=0;i<3;++i) squared+=(position[i]-r1_pull_spot[i])*(position[i]-r1_pull_spot[i]);
+        if (squared>R1_PULL_RADIUS*R1_PULL_RADIUS) { was_down=down; return; }
+        /* +0x298: 0 for the player in the damage code (src/actor_hook.h), a check on the object. */
+        printf("Engine FPS: 60 for %d s, the Cronos blade pull at [%.1f,%.1f,%.1f] (player byte %u)\n",
+               R1_FPS_HOLD_US/1000000,position[0],position[1],position[2],*(const volatile uint8_t *)(kratos+0x298));
+        if (!r1_fps_until && !qte_fps.capped) spartanportgpu_engine_fps_cap(60);
+        r1_fps_until=d->timestamp+R1_FPS_HOLD_US;
+    } else if (r1_fps_until && d->timestamp>r1_fps_until) {
+        r1_fps_until=0;
+        if (!qte_fps.capped) spartanportgpu_engine_fps_cap(0);
+    }
+    was_down=down;
+}
+
 static void sample_keyboard(PadData *d, const bool *keys, SDL_MouseButtonFlags mouse, const bool wheel[2]) {
     uint32_t pressed=0;
     for (size_t i=0;i<key_map.count;++i)
@@ -495,6 +667,176 @@ static void sample_keyboard(PadData *d, const bool *keys, SDL_MouseButtonFlags m
     key_axis(&d->right_y,pressed & LOOK_UP,pressed & LOOK_DOWN);
 }
 
+/* DualSense extras, each one switched on by SPARTAN_DUALSENSE (dualsense.h); called under lock
+ * with the pad sampled so far.
+ *
+ * hitflash: the light bar flashes red when the player's health drops. The health hook
+ * (actor_hook.h, slot 0) bumps its sequence on every hit of the player; the colour the game set
+ * is put back after HIT_FLASH_US. */
+extern uintptr_t spartanport_actor_slots_address(void);
+enum { HIT_FLASH_US=180000 };
+static struct { bool seen, flashing; uint32_t seq; float health; uint64_t until; } hit;
+/* Puts the light bar back to the colour the game set, or to the PS4 player 1 blue if it set none. */
+static void restore_light(SDL_Gamepad *g) {
+    if (light_bar.set) { light_bar.applied_to=NULL; apply_light_bar(g); }
+    else SDL_SetGamepadLED(g,0,0,255); /* the pad's own colour: player 1 blue */
+}
+/* Ends a finished flash, then starts one (red, HIT_FLASH_US) when the player's health dropped since
+ * the last hit the hook counted. The first reading only sets the baseline. */
+static void update_hit_flash(SDL_Gamepad *g, uint64_t now) {
+    if (hit.flashing && now>=hit.until) {
+        hit.flashing=false;
+        restore_light(g);
+    }
+    const void *slots=(const void *)spartanport_actor_slots_address();
+    if (!slots || !SDL_GetBooleanProperty(SDL_GetGamepadProperties(g),SDL_PROP_GAMEPAD_CAP_RGB_LED_BOOLEAN,false)) return;
+    SpartanActorSlot player;
+    memcpy(&player,slots,sizeof(player));
+    if (player.seq==hit.seq) return;
+    if (hit.seen && player.health<hit.health) {
+        hit.until=now+HIT_FLASH_US;
+        if (!hit.flashing) { hit.flashing=true; SDL_SetGamepadLED(g,255,0,0); }
+    }
+    hit.seen=true; hit.seq=player.seq; hit.health=player.health;
+}
+
+/* qte: while a QTE prompt is up (the same hook as the stick prompts) the light bar blinks in the
+ * colour of its button, and the pad gives a short tap at each new prompt. A hit flash goes first. */
+enum { QTE_BLINK_US=120000, QTE_TAP_MS=90 };
+static struct { uint32_t beat; uint64_t seen; int type, shown; } qte_led={.type=-1,.shown=-1};
+/* Reads the QTE prompt type while the hook's heartbeat is fresh, taps the pad when a new prompt
+ * appears, and blinks the light bar in the prompt's colour every QTE_BLINK_US. Back to the game's
+ * colour when the prompt ends; a running hit flash takes the light bar first. */
+static void update_qte_flash(SDL_Gamepad *g, uint64_t now) {
+    int type=-1;
+    if (spartanport_qte.block) {
+        const uint32_t beat=__atomic_load_n(&spartanport_qte.heartbeat,__ATOMIC_RELAXED);
+        if (beat!=qte_led.beat) { qte_led.beat=beat; qte_led.seen=now; }
+        if (now-qte_led.seen<=QTE_ACTIVE_US)
+            type=(int)*(const volatile uint16_t *)(uintptr_t)(spartanport_qte.block+SPARTAN_QTE_TYPE_OFFSET);
+    }
+    uint8_t rgb[3]={0,0,0};
+    if (type>=0 && !ds_qte_color((unsigned)type,rgb)) type=-1;
+    if (type>=0 && type!=qte_led.type) SDL_RumbleGamepad(g,0x4000,0xC000,QTE_TAP_MS);
+    qte_led.type=type;
+    if (hit.flashing) { qte_led.shown=-1; return; }
+    const int shown=type>=0 && (now/QTE_BLINK_US)%2==0 ? type : -1;
+    if (shown==qte_led.shown) return;
+    qte_led.shown=shown;
+    if (shown>=0) SDL_SetGamepadLED(g,rgb[0],rgb[1],rgb[2]);
+    else restore_light(g);
+}
+
+/* triggers: R2 gets a click (a wall that gives way near the end of the travel) on a DualSense,
+ * and counts as pressed only past it (R2_PRESS_AT of 255, where the wall gives way), so the game's
+ * action starts at the click instead of at the first touch.
+ * This is where a trigger effect for something in the game (a chest, a bow) would be chosen. */
+enum { R2_CLICK_START=4, R2_CLICK_END=6, R2_CLICK_STRENGTH=6, R2_PRESS_AT=150 };
+static bool r2_under_click; /* R2 is held but hidden from the game, short of the click */
+/* atexit hook: frees both triggers, since the pad keeps an effect until the next one. */
+static void restore_triggers(void) {
+    const DsTrigger off=ds_trigger_off();
+    if (gamepad && SDL_WasInit(SDL_INIT_GAMEPAD) && SDL_GamepadConnected(gamepad)) ds_set_triggers(gamepad,&off,&off);
+}
+/* Gives R2 its click and the left trigger none; true while the effect is on the pad. The first
+ * effect that reaches the pad also registers restore_triggers to run at exit. */
+static bool update_triggers(SDL_Gamepad *g) {
+    static bool exit_hook;
+    const DsTrigger off=ds_trigger_off();
+    const DsTrigger right=ds_trigger_weapon(R2_CLICK_START,R2_CLICK_END,R2_CLICK_STRENGTH);
+    if (!ds_set_triggers(g,&right,&off)) return false;
+    if (exit_hook) return true;
+    exit_hook=true;
+    atexit(restore_triggers); /* the pad keeps an effect until the next one: leave it free */
+    return true;
+}
+
+/* motion: the pad's gyro (rad/s) and accelerometer (g) in the PS4 pad data, which the game may
+ * read. gyroaim: with L2 held (aiming), the gyro also moves the right stick: turning the pad
+ * left or right turns the view, tilting it up or down raises or lowers it (SDL's gyro x is
+ * pitch, y is yaw; a stick up is a smaller value). The pitch sign was checked on a DualSense. */
+enum { GYRO_DEADZONE_MILLI=40, GYRO_STICK_PER_RAD=64 };
+static SDL_Gamepad *motion_enabled_for;
+/* A stick value moved by `delta` steps, kept within 0..255. */
+static uint8_t add_stick(uint8_t value, float delta) {
+    const float x=(float)value+delta;
+    return (uint8_t)(x<0.0f ? 0.0f : x>255.0f ? 255.0f : x+0.5f);
+}
+/* Switches the pad's sensors on once per pad and copies gyro and acceleration into the pad data;
+ * with gyroaim and L2 held, adds the gyro (past a small deadzone) to the right stick. */
+static void update_motion(SDL_Gamepad *g, PadData *d) {
+    if (motion_enabled_for!=g) {
+        motion_enabled_for=g;
+        if (SDL_GamepadHasSensor(g,SDL_SENSOR_GYRO)) SDL_SetGamepadSensorEnabled(g,SDL_SENSOR_GYRO,true);
+        if (SDL_GamepadHasSensor(g,SDL_SENSOR_ACCEL)) SDL_SetGamepadSensorEnabled(g,SDL_SENSOR_ACCEL,true);
+    }
+    float gyro[3]={0,0,0}, accel[3]={0,0,0};
+    if (SDL_GetGamepadSensorData(g,SDL_SENSOR_GYRO,gyro,3)) memcpy(d->angular_velocity,gyro,sizeof(gyro));
+    if (SDL_GetGamepadSensorData(g,SDL_SENSOR_ACCEL,accel,3))
+        for (int i=0;i<3;++i) d->acceleration[i]=accel[i]/SDL_STANDARD_GRAVITY;
+    if (!(ds_features() & DS_GYROAIM) || d->l2<=30) return;
+    const float dead=GYRO_DEADZONE_MILLI/1000.0f;
+    const float yaw=fabsf(gyro[1])>dead ? gyro[1] : 0.0f, pitch=fabsf(gyro[0])>dead ? gyro[0] : 0.0f;
+    d->right_x=add_stick(d->right_x,-yaw*GYRO_STICK_PER_RAD);
+    d->right_y=add_stick(d->right_y,-pitch*GYRO_STICK_PER_RAD);
+}
+/* speaker: a short beep on the pad's speaker when the gain changes while the game runs (the menu's
+ * slider), so its level can be heard. A stream of its own on the pad's output, beside the game's. */
+enum { BEEP_HZ=880, BEEP_MS=150 };
+static struct { SDL_AudioStream *stream; SDL_AudioDeviceID device; int gain; } beep={NULL,0,-1};
+static void speaker_beep(int gain) {
+    const int last=beep.gain;
+    beep.gain=gain;
+    if (last<0 || last==gain) return; /* not at start */
+    const SDL_AudioDeviceID device=ds_speaker_device();
+    if (!device) return;
+    if (beep.stream && beep.device!=device) { SDL_DestroyAudioStream(beep.stream); beep.stream=NULL; }
+    if (!beep.stream) {
+        const SDL_AudioSpec spec={SDL_AUDIO_F32,1,48000};
+        beep.stream=SDL_OpenAudioDeviceStream(device,&spec,NULL,NULL);
+        if (!beep.stream) return;
+        beep.device=device;
+        SDL_ResumeAudioStreamDevice(beep.stream);
+    }
+    float tone[48*BEEP_MS];
+    const int frames=(int)(sizeof(tone)/sizeof(tone[0]));
+    for (int i=0;i<frames;++i) {
+        const float fade=i<480 ? i/480.0f : i>frames-480 ? (frames-i)/480.0f : 1.0f; /* 10 ms, no clicks */
+        tone[i]=0.5f*fade*sinf(2.0f*3.14159265f*BEEP_HZ*i/48000.0f);
+    }
+    SDL_ClearAudioStream(beep.stream);
+    SDL_PutAudioStreamData(beep.stream,tone,(int)sizeof(tone));
+}
+
+/* Runs the extras that are on for a DualSense (ds_features). An extra that was switched off while
+ * the game runs is undone here: the light bar and the triggers go back to what the game set. */
+static void update_dualsense(SDL_Gamepad *g, PadData *d) {
+    if (!ds_is_dualsense(g)) return;
+    const unsigned features=ds_features();
+    /* An extra switched off while the game runs leaves the pad as the game set it. */
+    if (features & DS_HITFLASH) update_hit_flash(g,d->timestamp);
+    else if (hit.flashing) { hit.flashing=false; restore_light(g); }
+    if (features & DS_QTE) update_qte_flash(g,d->timestamp);
+    else if (qte_led.shown>=0) { qte_led.shown=-1; restore_light(g); }
+    r2_under_click=false;
+    if (features & DS_TRIGGERS) {
+        /* Without the wall on the trigger, R2 keeps its usual threshold. */
+        if (update_triggers(g) && d->r2<R2_PRESS_AT) {
+            r2_under_click=d->r2>0;
+            d->r2=0; d->buttons&=~(uint32_t)BTN_R2;
+        }
+    } else if (ds_sent.sent_to==g) { const DsTrigger off=ds_trigger_off(); ds_set_triggers(g,&off,&off); }
+    if (features & DS_MOTION) update_motion(g,d);
+}
+/* Also while the settings menu is open, where its gain slider is. */
+static void update_speaker(SDL_Gamepad *g) {
+    if (!ds_is_dualsense(g) || !(ds_features() & DS_SPEAKER)) return;
+    const int gain=ds_speaker_gain();
+    if (ds_set_speaker(g,gain,ds_jack_plugged())) speaker_beep(gain);
+}
+
+/* One sample of the host's pad and keyboard as PS4 pad data. A neutral pad stays when the settings
+ * menu has the input. */
 static void sample_host(PadData *d) {
     memset(d,0,sizeof(*d));
     d->left_x=d->left_y=d->right_x=d->right_y=128;
@@ -502,19 +844,25 @@ static void sample_host(PadData *d) {
     d->connected=1; d->connected_count=connected_count ? connected_count : 1;
     d->timestamp=now_us();
     SDL_Gamepad *g=current_gamepad();
+    pad_held=0;
     watch_wheel();
+    if (g) update_speaker(g);
     if (spartanportgpu_overlay_captures_input()) { drop_wheel(); return; } /* settings menu open: neutral input */
     const bool *k=SDL_WasInit(SDL_INIT_VIDEO) ? SDL_GetKeyboardState(NULL) : NULL;
     load_button_maps();
     if (g) {
         for (size_t i=0;i<pad_map.count;++i)
-            if (SDL_GetGamepadButton(g,(SDL_GamepadButton)pad_map.entries[i].source)) d->buttons|=pad_map.entries[i].ps;
+            if (pad_source_down(g,pad_map.entries[i].source)) d->buttons|=pad_map.entries[i].ps;
         const uint32_t mapped=d->buttons;
+        pad_held=mapped;
         d->left_x=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFTX)); d->left_y=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFTY));
         d->right_x=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHTX)); d->right_y=axis(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHTY));
-        d->l2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFT_TRIGGER)); d->r2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
-        if (d->l2>30) d->buttons|=BTN_L2;
-        if (d->r2>30) d->buttons|=BTN_R2;
+        apply_deadzone(&d->left_x,&d->left_y,stick_deadzone[0]);
+        apply_deadzone(&d->right_x,&d->right_y,stick_deadzone[1]);
+        if (!trigger_mapped[0]) d->l2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_LEFT_TRIGGER));
+        if (!trigger_mapped[1]) d->r2=trigger(SDL_GetGamepadAxis(g,SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
+        if (d->l2>TRIGGER_DOWN) d->buttons|=BTN_L2;
+        if (d->r2>TRIGGER_DOWN) d->buttons|=BTN_R2;
         if (mapped & BTN_L2) d->l2=255;
         if (mapped & BTN_R2) d->r2=255;
         if (SDL_GetNumGamepadTouchpads(g)>0) {
@@ -528,6 +876,7 @@ static void sample_host(PadData *d) {
                 }
             }
         }
+        update_dualsense(g,d);
     }
     /* The keyboard works with or without a gamepad: its buttons add to the pad's, and a stick
      * follows the keys only while one of them is held. */
@@ -728,6 +1077,99 @@ static void apply_dodge(PadData *d) {
     if (held || d->timestamp<dodge.until) { d->right_x=dodge.x; d->right_y=dodge.y; }
 }
 
+/* Free camera (src/runtime_camera.c, on in the menu or the launcher): the right stick turns the camera and
+ * the game does not see it, except with L1 held (the game's evade is L1 + right stick), L2 held (the
+ * items' aim) or a QTE prompt up (any of them: the camera goes back to the game's, which frames the
+ * scripted moves better, and the stick reaches the game for a turn). The keyboard's dodge action
+ * runs after this and still tilts the stick. The mouse turns it too (apply_camera_mouse); reads
+ * before the mouse aim, which only works with L2.
+ * The left stick (and the evade with L1) is turned with the camera: camera_turn_stick. */
+enum { CAMERA_DEADZONE=24, CAMERA_TAP_US=400000 };
+static uint64_t camera_last;
+static struct { bool key_held, r3_held, r3_alone; uint64_t r3_since; } camera_toggle;
+static uint32_t overlay_chord_hidden;  /* overlay_chords: the R3 chord's buttons hidden from the game */
+static float camera_axis(uint8_t value) {
+    const int v=value-128;
+    if (abs(v)<CAMERA_DEADZONE) return 0;
+    const float t=(float)(abs(v)-CAMERA_DEADZONE)/(127-CAMERA_DEADZONE);
+    return (v<0 ? -1.0f : 1.0f)*(t>1 ? 1 : t*t);  /* squared: fine control near the centre */
+}
+/* The game moves Kratos (and aims the evade) relative to its own camera, not the turned one: a
+ * stick direction is turned by the camera's yaw so that up is ahead of the camera on screen. */
+static void camera_turn_stick(uint8_t *x, uint8_t *y) {
+    const float yaw=spartanport_camera_yaw();
+    if (yaw==0 || (*x==128 && *y==128)) return;
+    const float c=cosf(yaw), s=sinf(yaw);
+    const float sx=(float)(*x-128), sy=(float)(128-*y);  /* right, up */
+    const float tx=sx*c-sy*s, ty=sx*s+sy*c;              /* a positive yaw turns the camera left */
+    const float nx=128+tx, ny=128-ty;
+    *x=(uint8_t)(nx<0 ? 0 : nx>255 ? 255 : lroundf(nx));
+    *y=(uint8_t)(ny<0 ? 0 : ny>255 ? 255 : lroundf(ny));
+}
+/* The mouse turns the free camera like a mouse look, CAMERA_MOUSE_DEGREES per px at the menu's
+ * right stick sensitivity of 100 %, while the game has the mouse (the window's lock: not in the
+ * pause menu or another window) and L2 is not held (the items' aim keeps it, apply_mouse_aim). */
+static const float CAMERA_MOUSE_DEGREES=0.12f;
+static void apply_camera_mouse(const PadData *d) {
+    if ((d->buttons & BTN_L2) || !spartanportgpu_mouse_locked()) return;
+    const float dx=SDL_SetAtomicInt(&mouse_motion[0],0)/16.0f, dy=SDL_SetAtomicInt(&mouse_motion[1],0)/16.0f;
+    const float scale=CAMERA_MOUSE_DEGREES*(float)spartanportgpu_mouse_aim_sensitivity()/100.0f;
+    if (dx!=0 || dy!=0) spartanport_camera_look(dx*scale,dy*scale);
+}
+/* A game menu (the pause menu, photo mode, the Power Up menu) takes WASD and the sticks as they
+ * are: it is up from the button that opens it until the game's controller writes the camera again
+ * (the game is paused under it). Writes in the first CAMERA_MENU_SETTLE_US still belong to play. */
+enum { CAMERA_MENU_SETTLE_US=300000 };
+static struct { bool up, held; uint64_t since; unsigned writes; } camera_menu;
+static bool camera_menu_up(const PadData *d) {
+    const bool held=(d->buttons & (BTN_OPTIONS|BTN_TOUCHPAD|CLICK_LEFT|CLICK_RIGHT))!=0;
+    if (held && !camera_menu.held) {
+        if (!camera_menu.up) { printf("Free camera: game menu up\n"); fflush(stdout); }
+        camera_menu.up=true; camera_menu.since=d->timestamp;
+    }
+    camera_menu.held=held;
+    if (!camera_menu.up) return false;
+    const unsigned writes=spartanport_camera_writes();
+    if (d->timestamp-camera_menu.since<CAMERA_MENU_SETTLE_US) camera_menu.writes=writes;
+    else if (writes!=camera_menu.writes) {
+        camera_menu.up=false;
+        printf("Free camera: game menu closed (the game's camera moves again)\n");
+        fflush(stdout);
+    }
+    return camera_menu.up;
+}
+static void apply_free_camera(PadData *d) {
+    const bool key=(d->buttons & CAMERA_TOGGLE)!=0;
+    d->buttons&=~CAMERA_TOGGLE;
+    if (!spartanport_camera_stick_enabled()) return;
+    /* The toggle: the keyboard's camera key, or a tap of the pad's R3 alone (R3 with L3 is Rage of
+     * Sparta, with L2 the settings menu and R2 the trophy list, with L1 and R1 the frame rate; R3
+     * still reaches the game). overlay_chords has already hidden the chord's trigger: it counts too. */
+    if (key && !camera_toggle.key_held) spartanport_camera_toggle();
+    camera_toggle.key_held=key;
+    const bool r3=(pad_held & BTN_R3)!=0;
+    if (r3 && !camera_toggle.r3_held) { camera_toggle.r3_since=d->timestamp; camera_toggle.r3_alone=true; }
+    if (r3 && (r2_under_click || ((d->buttons|overlay_chord_hidden) & (BTN_L1|BTN_R1|BTN_L2|BTN_R2|BTN_L3)))) camera_toggle.r3_alone=false;
+    if (!r3 && camera_toggle.r3_held && camera_toggle.r3_alone && d->timestamp-camera_toggle.r3_since<CAMERA_TAP_US)
+        spartanport_camera_toggle();
+    camera_toggle.r3_held=r3;
+    const uint64_t step=camera_last && d->timestamp>camera_last ? d->timestamp-camera_last : 0;
+    camera_last=d->timestamp;
+    const float seconds=step>100000 ? 0.1f : (float)step/1e6f;
+    if (camera_menu_up(d) || !spartanport_camera_live()) return;  /* a game menu, the title screen */
+    if (!spartanport_camera_on() || qte_prompt_up(d->timestamp)) spartanport_camera_steer(0,0,seconds,1);
+    else {
+        apply_camera_mouse(d);
+        if (d->buttons & (BTN_L1|BTN_L2)) {
+            if (d->buttons & BTN_L1) camera_turn_stick(&d->right_x,&d->right_y);  /* the evade's direction */
+        } else {
+            spartanport_camera_steer(camera_axis(d->right_x),camera_axis(d->right_y),seconds,0);
+            d->right_x=d->right_y=128;
+        }
+    }
+    camera_turn_stick(&d->left_x,&d->left_y);
+}
+
 /* The game's menus (the title menu, the pause menu, the Power Up menu) move a list with the
  * d-pad, and nothing here can see them, so they are told by the buttons that open them: a menu is
  * up from the start (the title menu) and after Options (the Power Up menu) or a touchpad click
@@ -789,27 +1231,187 @@ static void apply_weapon_cycle(PadData *d) {
     if (weapon_cycle.pressing) d->buttons|=weapon_cycle.button;
 }
 
-/* R3 + L1 + R1 goes through the engine frame rates live (60 for spots that break at a higher
- * rate). The three stay hidden from the game until each one is released: a stray R1 grabs. */
-enum { ENGINE_FPS_COMBO=BTN_R3|BTN_L1|BTN_R1 };
-static uint32_t engine_fps_hidden;
-static bool engine_fps_held;
-static void engine_fps_combo(PadData *d) {
-    const bool held=(d->buttons & ENGINE_FPS_COMBO)==ENGINE_FPS_COMBO;
-    if (held && !engine_fps_held) {
-        spartanportgpu_engine_fps_cycle();
-        engine_fps_hidden=ENGINE_FPS_COMBO;
+/* Switch attacks (SPARTAN_SWITCH_ATTACKS=1, src/switch_hook.h). L1 + Cross asks for the switch attack
+ * of the weapon in his hands, L1 + a d-pad direction for that weapon's (the game selects the
+ * weapon as always). The pad only leaves the request; the hooks let the move he is in take its
+ * branch to a switch attack for it (a block move has them) and swap that branch for one of the
+ * game's branches to the requested weapon's switch attack, of the same kind. A request no move
+ * takes lapses after SWITCH_REQUEST_US. Cross alone no longer cycles through the weapons.
+ * The same weapon's switch attack again waits SWITCH_REPEAT_US after the last one: in the game
+ * each L1 + Cross also changed the weapon, so the attacks' short recovery was not spammable. A
+ * switch attack of another weapon is not held back.
+ *
+ * The branches are found once, in the hero's move data around the first one the game asks about
+ * (all of them within SWITCH_SCAN_BYTES): per weapon, the switch attack most of them go to is
+ * the common kind, the other one the rare kind. */
+enum { SWITCH_REQUEST_US=200000, SWITCH_REPEAT_US=800000, SWITCH_CURRENT=0xff, SWITCH_FOUND=128, SWITCH_STEP=0x10000,
+       SWITCH_SCAN_BYTES=8<<20 };
+int runtime_memory_is_mapped(uintptr_t address, uint64_t size);
+static SpartanSwitchState spartanport_switch;
+typedef struct { const uint8_t *branch, *target; } SwitchFound;
+static struct {
+    int loaded, enabled, hooks;
+    uint32_t previous, request;    /* request: 0, a weapon, or SWITCH_CURRENT */
+    uint64_t until;
+    int scanned;                   /* the rest: game thread */
+    unsigned last;                 /* the weapon of the last switch attack, and when */
+    uint64_t last_at;
+    unsigned found;
+    SwitchFound branches[SWITCH_FOUND];
+    const uint8_t *attack[4][2];   /* per weapon: its switch attack moves, common kind first */
+} sw;
+uintptr_t spartanport_switch_state_address(void) { return (uintptr_t)&spartanport_switch; }
+void spartanport_switch_status(int supported) { sw.hooks=supported; }
+static const char *switch_name(unsigned w) {
+    static const char *names[4]={"Nemean Cestus","Nemesis Whip","Blades of Exile","Claws of Hades"};
+    return w>=0x10 && w<=0x13 ? names[w-0x10] : "?";
+}
+static const uint8_t *switch_target(const uint8_t *b) {
+    int32_t rel; memcpy(&rel,b,4);
+    return rel ? b+rel : NULL;
+}
+static void switch_scan(const uint8_t *seen) {
+    sw.scanned=1;
+    const uintptr_t at=(uintptr_t)seen & ~(uintptr_t)(SWITCH_STEP-1);
+    uintptr_t lo=at, hi=at+SWITCH_STEP;
+    while (at-lo<SWITCH_SCAN_BYTES && lo>=SWITCH_STEP && runtime_memory_is_mapped(lo-SWITCH_STEP,SWITCH_STEP)) lo-=SWITCH_STEP;
+    while (hi-at<SWITCH_SCAN_BYTES && runtime_memory_is_mapped(hi,SWITCH_STEP)) hi+=SWITCH_STEP;
+    unsigned counts[4][4]={{0}};
+    const uint8_t *targets[4][4]={{0}};
+    for (uintptr_t p=lo;p+0x38<=hi && sw.found<SWITCH_FOUND;p+=4) {
+        const uint8_t *b=(const uint8_t *)p;
+        if (!spartanport_switch_branch(b)) continue;
+        const uint8_t *target=switch_target(b);
+        if (!target || (uintptr_t)target<lo || (uintptr_t)target>=hi) continue;
+        sw.branches[sw.found++]=(SwitchFound){b,target};
+        const unsigned w=b[0x2f]-0x10;
+        for (unsigned i=0;i<4;++i) {
+            if (targets[w][i]==target || !targets[w][i]) { targets[w][i]=target; ++counts[w][i]; break; }
+        }
     }
-    engine_fps_held=held;
+    for (unsigned w=0;w<4;++w) {
+        for (unsigned k=0;k<2;++k) {
+            unsigned best=4;
+            for (unsigned i=0;i<4;++i)
+                if (targets[w][i] && targets[w][i]!=sw.attack[w][0] && (best==4 || counts[w][i]>counts[w][best])) best=i;
+            if (best<4) sw.attack[w][k]=targets[w][best];
+        }
+    }
+    printf("Switch attacks: %u branches to switch attacks in %llu KB of move data (Cestus %d, Whip %d, Blades %d, Claws %d kinds)\n",
+           sw.found,(unsigned long long)((hi-lo)>>10),!!sw.attack[0][0]+!!sw.attack[0][1],!!sw.attack[1][0]+!!sw.attack[1][1],
+           !!sw.attack[2][0]+!!sw.attack[2][1],!!sw.attack[3][0]+!!sw.attack[3][1]);
+}
+/* The weapon a live request is for, if he owns it and it is not a repeat too soon. */
+static unsigned switch_requested(void) {
+    const uint32_t request=__atomic_load_n(&sw.request,__ATOMIC_ACQUIRE);
+    const uint64_t now=now_us();
+    if (!request || now>__atomic_load_n(&sw.until,__ATOMIC_RELAXED)) return 0;
+    const uint8_t *stats=(const uint8_t *)(uintptr_t)__atomic_load_n(&spartanport_switch.stats,__ATOMIC_RELAXED);
+    if (!stats) return 0;
+    const unsigned w=request==SWITCH_CURRENT ? stats[0x20b] : request;
+    uint32_t owned; memcpy(&owned,stats+0x1c4,4);
+    if (w==sw.last && now-sw.last_at<SWITCH_REPEAT_US) return 0;
+    return w>=0x10 && w<=0x13 && (owned>>(w-1) & 1) ? w : 0;
+}
+/* One of the game's branches to weapon w's switch attack, of the kind branch b goes to. */
+static const uint8_t *switch_pick(const uint8_t *b, unsigned w) {
+    if (b[0x2f]==w) return b;
+    const uint8_t *target=switch_target(b);
+    const unsigned kind=target && target==sw.attack[b[0x2f]-0x10][1];
+    const uint8_t *want=sw.attack[w-0x10][kind] ? sw.attack[w-0x10][kind] : sw.attack[w-0x10][0];
+    const uint8_t *pick=NULL;
+    for (unsigned i=0;i<sw.found;++i) {
+        const SwitchFound *f=&sw.branches[i];
+        if (f->branch[0x2f]!=w || f->target!=want) continue;
+        if (!memcmp(f->branch+0x14,b+0x14,4)) return f->branch;  /* the same timing */
+        if (!pick) pick=f->branch;
+    }
+    return pick;
+}
+ABI int spartanport_switch_input(const unsigned char *b, uintptr_t caller) {
+    if (!spartanport_switch_branch(b)) return 2;
+    if (caller!=spartanport_switch.caller) return 0;  /* 0xe9a70 would take them on Cross: no cycling there either */
+    if (!sw.scanned) switch_scan(b);
+    const unsigned w=switch_requested();
+    return w && switch_pick(b,w);
+}
+ABI const unsigned char *spartanport_switch_queue(const unsigned char *b) {
+    if (!spartanport_switch_branch(b)) return b;
+    const unsigned w=switch_requested();
+    const uint8_t *pick=w ? switch_pick(b,w) : NULL;
+    if (!pick) return b;
+    const uint8_t *stats=(const uint8_t *)(uintptr_t)spartanport_switch.stats;
+    __atomic_store_n(&sw.request,0,__ATOMIC_RELEASE);
+    sw.last=w;
+    sw.last_at=now_us();
+    printf("Runtime: switch attack of the %s (in his hands: %s)\n",switch_name(w),switch_name(stats[0x20b]));
+    return pick;
+}
+
+static void reset_switch_attack(void) { __atomic_store_n(&sw.request,0,__ATOMIC_RELEASE); }
+static void apply_switch_attack(const PadData *d) {
+    if (!sw.loaded) {
+        sw.loaded=1;
+        const char *value=getenv("SPARTAN_SWITCH_ATTACKS");
+        sw.enabled=value && !strcmp(value,"1");
+        if (sw.enabled) printf("Runtime: switch attacks on L1 + d-pad and L1 + Cross%s\n",
+                               sw.hooks ? "" : " unavailable (hooks not installed)");
+    }
+    if (!sw.enabled || !sw.hooks) return;
+    const uint32_t pressed=d->buttons & ~sw.previous;
+    sw.previous=d->buttons;
+    const uint32_t request=__atomic_load_n(&sw.request,__ATOMIC_ACQUIRE);
+    if (request && d->timestamp>sw.until) {
+        printf("Runtime: switch attack request lapsed (no move could switch)\n");
+        reset_switch_attack();
+    }
+    if (!(d->buttons & BTN_L1)) return;
+    static const struct { uint32_t button, weapon; } asks[]={
+        {BTN_CROSS,SWITCH_CURRENT},{BTN_DOWN,0x10},{BTN_LEFT,0x11},{BTN_UP,0x12},{BTN_RIGHT,0x13}};
+    for (unsigned i=0;i<sizeof(asks)/sizeof(asks[0]);++i) {
+        if (!(pressed & asks[i].button)) continue;
+        __atomic_store_n(&sw.until,d->timestamp+SWITCH_REQUEST_US,__ATOMIC_RELAXED);
+        __atomic_store_n(&sw.request,asks[i].weapon,__ATOMIC_RELEASE);
+        break;
+    }
+}
+
+/* Hold R3: each R1 press raises the engine frame rate 5 FPS live, each L1 press lowers it (60 for
+ * spots that break at a higher rate). Once used, R3, R1 and L1 stay hidden from the game until
+ * each one is released: a stray R1 grabs. */
+enum { ENGINE_FPS_COMBO=BTN_R3|BTN_L1|BTN_R1 };
+static uint32_t engine_fps_hidden, engine_fps_previous;
+static void engine_fps_combo(PadData *d) {
+    const uint32_t pressed=d->buttons & ~engine_fps_previous;
+    engine_fps_previous=d->buttons;
+    if ((d->buttons & BTN_R3) && (pressed & (BTN_R1|BTN_L1))) {
+        if (pressed & BTN_R1) spartanportgpu_engine_fps_step(1);
+        if (pressed & BTN_L1) spartanportgpu_engine_fps_step(-1);
+        engine_fps_hidden|=d->buttons & ENGINE_FPS_COMBO;
+    }
     engine_fps_hidden&=d->buttons;
     d->buttons&=~engine_fps_hidden;
+}
+/* R3 + L2 opens the port's menu and R3 + R2 the trophy list (gpu/shim/spartanport_overlay.cpp),
+ * at half a pull, while the game takes a trigger from a slight one. With R3 held, the trigger and
+ * R3 stay hidden from the game until each one is released: a stray R2 uses the item. */
+enum { OVERLAY_TRIGGERS=BTN_L2|BTN_R2 };
+static void overlay_chords(PadData *d) {
+    if ((d->buttons & BTN_R3) && (d->buttons & OVERLAY_TRIGGERS))
+        overlay_chord_hidden|=BTN_R3|(d->buttons & OVERLAY_TRIGGERS);
+    overlay_chord_hidden&=d->buttons;
+    d->buttons&=~overlay_chord_hidden;
+    if (overlay_chord_hidden & BTN_L2) d->l2=0;
+    if (overlay_chord_hidden & BTN_R2) d->r2=0;
 }
 /* After the menu or the text dialog closes, buttons still held (the Cross that accepted a
  * name) stay hidden until released: the game would take them as a new press. */
 static int hold_after_capture;
 static void sample(PadData *d) {
     sample_host(d);
-    if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); return; }
+    qte_fps_cap(d->timestamp);
+    r1_fps_cap(d, __atomic_load_n(&runtime_player_object, __ATOMIC_RELAXED));
+    if (spartanportgpu_overlay_captures_input()) { hold_after_capture=1; click.side=-1; reset_dodge(); reset_weapon_cycle(); reset_switch_attack(); return; }
     record_sample(d); /* the click sources as they are: a replay plays them again */
     read_inject();
     replay_sample(d);
@@ -818,8 +1420,11 @@ static void sample(PadData *d) {
     if (injected.buttons & BTN_R2) d->r2=255;
     uint8_t *axes[4]={&d->left_x,&d->left_y,&d->right_x,&d->right_y};
     for (int i=0;i<4;++i) if (injected.stick[i]>=0) *axes[i]=(uint8_t)injected.stick[i];
+    overlay_chords(d);
     note_game_menu(d); /* before the actions turn into the buttons they press */
     apply_combos(d);
+    apply_free_camera(d);
+    apply_switch_attack(d);
     apply_dodge(d);
     apply_weapon_cycle(d);
     apply_mouse_aim(d);
@@ -892,12 +1497,30 @@ static ABI int32_t pad_vibration(int32_t handle, const uint8_t *param) {
 static ABI int32_t pad_ok_handle(int32_t handle) { return handle==PAD_HANDLE && opened ? 0 : ERR_INVALID_HANDLE; }
 static ABI int32_t pad_ok_handle_flag(int32_t handle, uint8_t flag) { (void)flag; return pad_ok_handle(handle); }
 
+/* The game's light bar colour (OrbisPadLightBarParam: r, g, b, reserved) goes to the pad's LED when
+ * it has one (a DualSense); a pad that connects later gets the last colour (apply_light_bar). */
 static ABI int32_t pad_light_bar(int32_t handle, const uint8_t *rgb) {
     if (handle!=PAD_HANDLE || !opened) return ERR_INVALID_HANDLE;
-    (void)rgb; return 0;
+    if (!rgb) return ERR_INVALID_ARG;
+    pthread_mutex_lock(&lock);
+    memcpy(light_bar.rgb,rgb,3);
+    light_bar.set=true; light_bar.applied_to=NULL;
+    apply_light_bar(current_gamepad());
+    pthread_mutex_unlock(&lock);
+    return 0;
+}
+/* scePadResetLightBar returns the colour to the pad's own: the blue of player 1 on a PS4. */
+static ABI int32_t pad_reset_light_bar(int32_t handle) {
+    if (handle!=PAD_HANDLE || !opened) return ERR_INVALID_HANDLE;
+    pthread_mutex_lock(&lock);
+    memcpy(light_bar.rgb,(const uint8_t[3]){0,0,255},3);
+    light_bar.set=true; light_bar.applied_to=NULL;
+    apply_light_bar(current_gamepad());
+    pthread_mutex_unlock(&lock);
+    return 0;
 }
 static const RuntimeExport exports[]={
-    {"scePadSetLightBar",pad_light_bar}, {"scePadResetLightBar",pad_ok_handle},
+    {"scePadSetLightBar",pad_light_bar}, {"scePadResetLightBar",pad_reset_light_bar},
     {"scePadInit",pad_init}, {"scePadOpen",pad_open}, {"scePadClose",pad_close},
     {"scePadReadState",pad_read_state}, {"scePadRead",pad_read},
     {"scePadGetControllerInformation",pad_info}, {"scePadSetVibration",pad_vibration},

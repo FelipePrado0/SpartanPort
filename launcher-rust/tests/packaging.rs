@@ -1,7 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use spartanport_launcher::core::legacy::{LEGACY_EXE, LEGACY_PLAY_EXE};
-
 fn read(relative: &str) -> String {
     let path = format!("{}/../{relative}", env!("CARGO_MANIFEST_DIR"));
     std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path}: {error}"))
@@ -12,10 +10,6 @@ fn the_windows_package_ships_the_rust_launcher() {
     let package = read("packaging/windows/package.sh");
     for needed in [
         "launcher-rust/target/release/spartanport-launcher.exe",
-        "legacy::LEGACY_EXE",
-        "legacy::LEGACY_PLAY_EXE",
-        LEGACY_EXE,
-        LEGACY_PLAY_EXE,
         "scripts/controller_diagrams",
         "-iname '*.py'",
         "-iname _internal",
@@ -32,6 +26,7 @@ fn the_windows_package_ships_the_rust_launcher() {
         "run.py",
         "cp -r scripts patches",
         "--manifest-path launcher-rust/Cargo.toml",
+        "God of War III",
     ] {
         assert!(!package.contains(banned), "package.sh still has {banned}");
     }

@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// spartanport: frame generation's inputs. The depth as an R32 float color image, and the motion
+// vectors with valid object motion preserved. Camera-only vectors moved Kratos (who follows
+// the camera) back and forth in generated frames. On characters without valid object vectors,
+// the stencil mask zeroes them so frame generation's optical flow takes over.
+#version 450
+#extension GL_EXT_samplerless_texture_functions : require
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(binding = 0) uniform texture2D depth_tex;
+layout(binding = 1, r32f) uniform writeonly image2D depth_out;
+layout(binding = 2) uniform texture2D motion_tex;
+layout(binding = 3) uniform texture2D character_mask;
+layout(binding = 4, rg16f) uniform writeonly image2D motion_out;
+layout(binding = 5) uniform texture2D object_tex;
+
+layout(push_constant) uniform Params {
+    uint use_mask;
+    uint use_objects;
+    float projection_z;
+};
+
+void main() {
+    const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(pixel, imageSize(depth_out)))) {
+        return;
+    }
+    const float depth = texelFetch(depth_tex, pixel, 0).r;
+    imageStore(depth_out, pixel, vec4(depth));
+    vec2 motion = texelFetch(motion_tex, pixel, 0).rg;
+    if (use_mask != 0 && texelFetch(character_mask, pixel, 0).r > 0.5) {
+        bool valid = false;
+        if (use_objects != 0) {
+            const vec4 object_motion = texelFetch(object_tex, pixel, 0);
+            // Match camera_motion.comp: a later draw can cover a stale object's vector.
+            const float depth_threshold = max(2e-7, (projection_z - depth) * 0.01);
+            valid = object_motion.b > 0.99 && abs(object_motion.a - depth) < depth_threshold &&
+                    !any(isnan(object_motion.rg)) && !any(isinf(object_motion.rg)) &&
+                    !any(isnan(motion)) && !any(isinf(motion));
+        }
+        if (!valid) motion = vec2(0.0);
+    }
+    imageStore(motion_out, pixel, vec4(motion, 0.0, 0.0));
+}

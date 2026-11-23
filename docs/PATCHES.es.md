@@ -39,9 +39,10 @@ Notas:
   aunque su casilla de la página **Juego** esté desmarcada.
 - **Memoria.** Una nota de parche como "Requires setting DMEM to 3072 MB" hace que el port reserve
   esa memoria directa de más, además de los 5056 MB del juego original. No hay que ajustar nada a mano.
-- **Tasa de fotogramas.** La tasa del motor cambia con el juego en marcha (menú del juego,
-  **R3 + L1 + R1** o **F9**): cada inicio usa el parche de 240 FPS y el port escribe la tasa elegida
-  en el juego. 144 FPS está pensado para pantallas de 144 Hz; con VSync, mantiene la presentación
+- **Tasa de fotogramas.** La tasa del motor es cualquier valor entero de 30 a 240 y cambia con el
+  juego en marcha (menú del juego; mantén **R3** y pulsa **R1** o **L1**, o mantén **F9** y pulsa
+  **Derecha** o **Izquierda**, para 5 FPS más o menos): cada inicio usa el parche de 240 FPS y el
+  port escribe la tasa elegida en el juego. 144 FPS está pensado para pantallas de 144 Hz; con VSync, mantiene la presentación
   alineada con esa frecuencia. Si el parche de 240 FPS no se encuentra en tu `eboot.bin`, se usa el parche de tasa de
   fotogramas más alto que se encuentre; si no se encuentra ninguno, el motor se queda en los 60 FPS
   originales.

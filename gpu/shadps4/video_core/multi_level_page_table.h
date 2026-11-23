@@ -68,7 +68,8 @@ public:
 
 private:
     std::vector<L1Page*> first_level_map{};
-    Common::ObjectPool<L1Page> page_alloc;
+    // spartanport: grow by a few page tables instead of allocating every L1 page at startup.
+    Common::ObjectPool<L1Page> page_alloc{8};
 };
 
 } // namespace VideoCore

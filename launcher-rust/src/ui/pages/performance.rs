@@ -14,13 +14,14 @@ use crate::core::i18n::{tr, tr_fmt};
 use crate::core::mods::{patch_files, selected};
 use crate::core::options::{
     aspect_of, aspects, closest_resolution, resolution_label, resolutions_for, DRAW_PIPE,
-    ENGINE_FPS_CHOICES, FPS_LIMITS, FRAMES_QUEUED, NO_MSAA, READBACKS, RESOLUTIONS, STREAM_MEMORY,
+    FPS_LIMITS, FRAMES_QUEUED, NO_MSAA, READBACKS, RESOLUTIONS, STREAM_MEMORY,
 };
+use crate::core::options::{MAX_ENGINE_FPS, MIN_ENGINE_FPS};
 use crate::core::patches::resolution_names;
 use crate::ui::app::{Message, State};
 use crate::ui::theme;
 use crate::ui::widgets::{
-    checkbox, choice_pairs, min_width, row, section, select_pairs, SELECT_MIN, SELECT_TEXT,
+    checkbox, choice_pairs, min_width, row, section, select_pairs, slider, SELECT_MIN, SELECT_TEXT,
 };
 
 /// Suffix of the labels of the sizes a mod adds.
@@ -214,11 +215,6 @@ pub fn rows(state: &State, lang: &str) -> Vec<SelectRow> {
             stored("frames_queued"),
         ),
         row(
-            "engine_fps",
-            choice_pairs(ENGINE_FPS_CHOICES, lang),
-            stored("engine_fps"),
-        ),
-        row(
             "render_resolution",
             aspect_resolution_options(state),
             stored("render_resolution"),
@@ -241,6 +237,32 @@ pub fn rows(state: &State, lang: &str) -> Vec<SelectRow> {
         ),
         row("no_msaa", no_msaa_label(state, lang), stored("no_msaa")),
     ]
+}
+
+/// Engine frame rate: any whole rate from 30 to 240, as the Insert menu, plus a 60 button.
+fn engine_fps_slider<'a>(state: &State) -> Element<'a, Message> {
+    let fps = state
+        .store
+        .text("engine_fps")
+        .parse::<u32>()
+        .unwrap_or(120)
+        .clamp(MIN_ENGINE_FPS, MAX_ENGINE_FPS);
+    let sixty = button(text("60"))
+        .style(theme::button_flat)
+        .on_press(Message::Set("engine_fps".into(), Value::from(60)));
+    iced::widget::row![
+        slider(
+            "engine_fps",
+            MIN_ENGINE_FPS as f32,
+            MAX_ENGINE_FPS as f32,
+            "FPS",
+            fps as f32
+        ),
+        sixty
+    ]
+    .spacing(10)
+    .align_y(iced::Center)
+    .into()
 }
 
 /// Delete shader cache: the Advanced page's Clear shader cache under the Python's other name,
@@ -306,9 +328,18 @@ pub fn view(state: &State) -> Element<'_, Message> {
         row(
             state.rtl,
             &tr(lang, "Engine frame rate"),
-            pick("engine_fps"),
+            engine_fps_slider(state),
             Some(&hint(
                 "The highest frame rate the game itself runs at (a game patch)."
+            )),
+        ),
+        checkbox(
+            state.rtl,
+            "auto_safe_fps",
+            &tr(lang, "High Frame Rate Physics Fix"),
+            state.store.flag("auto_safe_fps"),
+            Some(&hint(
+                "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate."
             )),
         ),
         row(
@@ -369,6 +400,15 @@ pub fn view(state: &State) -> Element<'_, Message> {
             state.store.flag("shader_prefetch"),
             Some(&hint(
                 "A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower."
+            )),
+        ),
+        checkbox(
+            state.rtl,
+            "shader_prefetch_wait",
+            &restart("Read the shader cache before the game starts"),
+            state.store.flag("shader_prefetch_wait"),
+            Some(&hint(
+                "Recommended on a hard disk (HDD): the loading screen waits until the saved shaders are read, so the disk does not serve the read and the game at once and the game does not stutter. Esc or Circle starts the game earlier. After a PC restart the read can take several minutes. Needs the option above."
             )),
         ),
         checkbox(

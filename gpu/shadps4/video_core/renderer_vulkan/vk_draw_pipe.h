@@ -30,10 +30,14 @@ namespace Vulkan {
 
 class DrawPipe {
 public:
-    /// Runs a packet on stage B.
-    using Handler = void (*)(void* context, const u8* packet, u32 size);
+    /// Runs a packet on stage B. True when the packet is held for a block (parallel recording):
+    /// its ring space stays reserved and Drain() waits until `flush` has recorded it.
+    using Handler = bool (*)(void* context, const u8* packet, u32 size);
+    /// Stage B: records the held packets.
+    using Flush = void (*)(void* context);
 
-    DrawPipe(Handler handler_, void* context_) : handler{handler_}, context{context_} {
+    DrawPipe(Handler handler_, Flush flush_, void* context_)
+        : handler{handler_}, flush{flush_}, context{context_} {
         ring = std::make_unique<u8[]>(Capacity);
         thread = std::jthread([this](std::stop_token stop) { Run(stop); });
     }
@@ -110,6 +114,7 @@ public:
         const u32 slot = reason < NumReasons ? reason : ReasonRasterizer;
         ++drains_by_reason[slot];
         const u64 start = __rdtsc();
+        draining.store(true, std::memory_order_release);
         for (u32 spins = 0; consumed.load(std::memory_order_acquire) != head; ++spins) {
             if (spins < 4096) {
                 __builtin_ia32_pause();
@@ -117,6 +122,7 @@ public:
                 std::this_thread::yield();
             }
         }
+        draining.store(false, std::memory_order_release);
         const u64 waited = __rdtsc() - start;
         drain_cycles += waited;
         cycles_by_reason[slot] += waited;
@@ -151,9 +157,14 @@ private:
     }
 
     void WaitForSpace(u64 at, u64 size) {
+        if (at + size - consumed.load(std::memory_order_acquire) <= Capacity) {
+            return;
+        }
+        draining.store(true, std::memory_order_release); // held packets may be what fills it
         while (at + size - consumed.load(std::memory_order_acquire) > Capacity) {
             __builtin_ia32_pause();
         }
+        draining.store(false, std::memory_order_release);
     }
 
     void Run(std::stop_token stop) {
@@ -161,10 +172,30 @@ private:
         on_stage_b = true;
         stage_b_tid.store(static_cast<u32>(gettid()), std::memory_order_release);
         u64 at = 0;
+        bool held = false;
         while (true) {
             // Packets follow each other within microseconds while a frame is decoded: spin,
             // and sleep only after a longer pause (between frames).
             u64 available = published.load(std::memory_order_acquire);
+            if (available == at && held && !draining.load(std::memory_order_acquire)) {
+                // Stage A usually hands the next draw within microseconds: wait a little for it
+                // before closing the block (unless stage A is waiting for this one).
+                const u64 until = __rdtsc() + hold_cycles;
+                while (published.load(std::memory_order_acquire) == at &&
+                       !draining.load(std::memory_order_acquire) && __rdtsc() < until) {
+                    __builtin_ia32_pause();
+                }
+                available = published.load(std::memory_order_acquire);
+            }
+            if (available == at && held) {
+                // Nothing more to add to the block: record it before stage A waits on it.
+                const u64 start = __rdtsc();
+                flush(context);
+                busy_cycles.fetch_add(__rdtsc() - start, std::memory_order_relaxed);
+                held = false;
+                consumed.store(at, std::memory_order_release);
+                continue;
+            }
             if (available == at) {
                 // With few hardware threads (Steam Deck: 8) a long spin takes time from the
                 // game's own threads. SPARTAN_PIPE_SPIN_US overrides.
@@ -195,19 +226,24 @@ private:
             const auto* header = reinterpret_cast<const Header*>(ring.get() + at % Capacity);
             if (header->size == 0) {
                 at += Capacity - at % Capacity;
-                consumed.store(at, std::memory_order_release);
+                if (!held) {
+                    consumed.store(at, std::memory_order_release);
+                }
                 continue;
             }
             const u64 start = __rdtsc();
-            handler(context, reinterpret_cast<const u8*>(header + 1), header->payload);
+            held = handler(context, reinterpret_cast<const u8*>(header + 1), header->payload);
             busy_cycles.fetch_add(__rdtsc() - start, std::memory_order_relaxed);
             at += header->size;
-            consumed.store(at, std::memory_order_release);
+            if (!held) {
+                consumed.store(at, std::memory_order_release);
+            }
         }
     }
 
     static inline thread_local bool on_stage_b = false;
     Handler handler;
+    Flush flush;
     void* context;
     std::unique_ptr<u8[]> ring;
     u64 head = 0; ///< stage A's write position
@@ -216,6 +252,16 @@ private:
     alignas(64) std::atomic<u64> consumed{0};
     alignas(64) std::atomic<u32> wake{0};
     std::atomic<bool> sleeping{false};
+    /// Stage A waits for stage B (Drain, ring space): held packets are recorded at once.
+    alignas(64) std::atomic<bool> draining{false};
+    /// How long stage B waits for the next packet before recording held ones (~30 us).
+    const u64 hold_cycles = [] {
+        const auto t0 = std::chrono::steady_clock::now();
+        const u64 c0 = __rdtsc();
+        while (std::chrono::steady_clock::now() - t0 < std::chrono::microseconds(200)) {
+        }
+        return (__rdtsc() - c0) * 30 / 200;
+    }();
     std::atomic<u32> stage_b_tid{0};
     std::jthread thread;
 };

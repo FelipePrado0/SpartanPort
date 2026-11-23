@@ -39,8 +39,10 @@ Observações:
   desmarcado na página **Jogo**.
 - **Memória.** Uma nota de patch como "Requires setting DMEM to 3072 MB" faz o port reservar essa
   memória direta a mais, além dos 5056 MB do jogo original. Nada precisa ser ajustado à mão.
-- **Taxa de quadros.** A taxa do motor muda com o jogo rodando (menu do jogo, **R3 + L1 + R1** ou
-  **F9**): toda abertura usa o patch de 240 FPS e o port escreve a taxa escolhida no jogo. 144 FPS é
+- **Taxa de quadros.** A taxa do motor é qualquer valor inteiro de 30 a 240 e muda com o jogo rodando
+  (menu do jogo; segure **R3** e aperte **R1** ou **L1**, ou segure **F9** e aperte **Direita** ou
+  **Esquerda**, para 5 FPS a mais ou a menos): toda abertura usa o patch de 240 FPS e o port escreve
+  a taxa escolhida no jogo. 144 FPS é
   voltado para telas de 144 Hz; com VSync, ele mantém a apresentação alinhada a essa taxa. Se o patch
   de 240 FPS não for encontrado no seu `eboot.bin`, entra o maior patch de taxa de quadros encontrado;
   se nenhum for encontrado, o motor fica nos 60 FPS originais.

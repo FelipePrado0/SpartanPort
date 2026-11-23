@@ -10,6 +10,8 @@
 
 #include <magic_enum/magic_enum.hpp>
 
+// spartanport: fixed IRQ storage avoids concurrent map growth.
+#include <array>
 #include <functional>
 #include <mutex>
 #include <unordered_map>
@@ -38,7 +40,8 @@ struct IrqController {
     void RegisterOnce(InterruptId irq, IrqHandler handler) {
         ASSERT_MSG(static_cast<u32>(irq) <= static_cast<u32>(InterruptId::InterruptIdMax),
                    "Invalid IRQ number");
-        auto& ctx = irq_contexts.try_emplace(irq).first->second;
+        // spartanport: index preallocated contexts so concurrent first use never inserts.
+        auto& ctx = irq_contexts[static_cast<u32>(irq)];
         std::unique_lock lock{ctx.m_lock};
         ctx.one_time_subscribers.emplace(handler);
     }
@@ -46,7 +49,8 @@ struct IrqController {
     void Register(InterruptId irq, IrqHandler handler, void* uid) {
         ASSERT_MSG(static_cast<u32>(irq) <= static_cast<u32>(InterruptId::InterruptIdMax),
                    "Invalid IRQ number");
-        auto& ctx = irq_contexts.try_emplace(irq).first->second;
+        // spartanport: index preallocated contexts so concurrent first use never inserts.
+        auto& ctx = irq_contexts[static_cast<u32>(irq)];
 
         std::unique_lock lock{ctx.m_lock};
         ASSERT_MSG(ctx.persistent_handlers.find(uid) == ctx.persistent_handlers.cend(),
@@ -57,7 +61,8 @@ struct IrqController {
     void Unregister(InterruptId irq, void* uid) {
         ASSERT_MSG(static_cast<u32>(irq) <= static_cast<u32>(InterruptId::InterruptIdMax),
                    "Invalid IRQ number");
-        auto& ctx = irq_contexts.try_emplace(irq).first->second;
+        // spartanport: index preallocated contexts so concurrent first use never inserts.
+        auto& ctx = irq_contexts[static_cast<u32>(irq)];
         std::unique_lock lock{ctx.m_lock};
         ctx.persistent_handlers.erase(uid);
     }
@@ -65,7 +70,8 @@ struct IrqController {
     void Signal(InterruptId irq) {
         ASSERT_MSG(static_cast<u32>(irq) <= static_cast<u32>(InterruptId::InterruptIdMax),
                    "Unexpected IRQ signaled");
-        auto& ctx = irq_contexts.try_emplace(irq).first->second;
+        // spartanport: index preallocated contexts so concurrent first use never inserts.
+        auto& ctx = irq_contexts[static_cast<u32>(irq)];
         std::unique_lock lock{ctx.m_lock};
 
         LOG_TRACE(Core, "IRQ signaled: {}", magic_enum::enum_name(irq));
@@ -88,7 +94,8 @@ private:
         std::queue<IrqHandler> one_time_subscribers{};
         std::mutex m_lock{};
     };
-    std::unordered_map<InterruptId, IrqContext> irq_contexts{};
+    // spartanport: create every context up front to prevent registration/signal heap races.
+    std::array<IrqContext, static_cast<u32>(InterruptId::InterruptIdMax) + 1> irq_contexts{};
 };
 
 using IrqC = Common::Singleton<IrqController>;

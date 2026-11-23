@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string_view>
+#include <cstring>
 #include <boost/container/static_vector.hpp>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -14,6 +15,7 @@
 #include "common/types.h"
 #include "imgui/renderer/imgui_core.h"
 #include "sdl_window.h"
+#include "spartanport_settings.h"
 #include "video_core/amdgpu/spartanport_msaa.h"
 #include "video_core/amdgpu/spartanport_msaa_default.h"
 #include "core/emulator_settings.h"
@@ -21,10 +23,10 @@
 #include "video_core/renderer_vulkan/vk_amd_paths.h"
 #include "video_core/renderer_vulkan/spartanport_vertex_input_default.h"
 #include "video_core/renderer_vulkan/vk_checkpoints.h"
-#include "video_core/renderer_vulkan/vk_dlss.h"
 #include "video_core/renderer_vulkan/vk_extension_policy.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
+#include "video_core/renderer_vulkan/vk_xess.h"
 
 #include <vk_mem_alloc.h>
 
@@ -233,8 +235,46 @@ bool PipelineBinaryCacheRequested() {
     const char* setting = std::getenv("SPARTAN_PIPELINE_BINARIES");
     return !setting || *setting != '0';
 }
+
+// The global key query, vkGetPipelineKeyKHR(device, nullptr, key), returns with callee-saved
+// registers changed on NVIDIA drivers: rbx set to 1 on 595.x for Linux (595.104.02, 595.112.07;
+// 615.78.08 keeps it), and rdi set to 0 or 1 on Windows (#1352: GTX 1660 Ti, MX550, RTX 4060
+// Laptop).
+// A caller holding the key pointer in that register then crashed reading 0x11 or 0x10.
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+// The clobbers make this function save on entry and restore on return every callee-saved register
+// of the Win64 ABI (rbx, rsi, rdi, r12 to r15, xmm6 to xmm15), whatever the driver left in it, and
+// keep no value in them across the call; noinline keeps that to this one call. On SysV only rbx and
+// r12 to r15 of these are callee-saved, and the compiler saves just those. rbp cannot be listed: it
+// is the frame pointer (-fno-omit-frame-pointer) and GCC rejects it ("bp cannot be used in asm
+// here"). The prologue pushes rbp and the epilogue pops it, but an epilogue may also address the
+// saved registers through rbp, so a driver that changed rbp is not covered.
+[[gnu::noinline]] VkResult GetGlobalPipelineKeyKeepingRegisters(VkDevice device,
+                                                                VkPipelineBinaryKeyKHR* key) {
+    const VkResult result = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetPipelineKeyKHR(device, nullptr, key);
+    asm volatile("" ::
+                     : "rbx", "rsi", "rdi", "r12", "r13", "r14", "r15", "xmm6", "xmm7", "xmm8",
+                       "xmm9", "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15");
+    return result;
+}
+#endif
+
+// The global pipeline key (vkGetPipelineKeyKHR with no create info) into key: through the
+// register-keeping wrapper on x86-64 GCC/Clang, directly elsewhere. Returns the driver's result;
+// key is unchecked.
+vk::Result GetGlobalPipelineKey(vk::Device device, vk::PipelineBinaryKeyKHR& key) {
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+    return vk::Result{GetGlobalPipelineKeyKeepingRegisters(
+        static_cast<VkDevice>(device), reinterpret_cast<VkPipelineBinaryKeyKHR*>(&key))};
+#else
+    return device.getPipelineKeyKHR(nullptr, &key);
+#endif
+}
 }
 
+// Turns the pipeline binary disk cache on when settings allow it, the device supports it, every
+// binary entry point is loaded and the driver gives a global key of a valid size. Leaves that key in
+// global_key and returns true; otherwise clears global_key, logs why and returns false.
 bool InitializePipelineBinaryCache(vk::Device device, bool supported,
                                    vk::PipelineBinaryKeyKHR& global_key) {
     global_key = vk::PipelineBinaryKeyKHR{};
@@ -253,7 +293,7 @@ bool InitializePipelineBinaryCache(vk::Device device, bool supported,
         LOG_WARNING(Render_Vulkan, "Pipeline binary cache functions unavailable; using normal compilation");
         return false;
     }
-    const auto result = device.getPipelineKeyKHR(nullptr, &global_key);
+    const auto result = GetGlobalPipelineKey(device, global_key);
     if (result != vk::Result::eSuccess || !global_key.keySize ||
         global_key.keySize > VK_MAX_PIPELINE_BINARY_KEY_SIZE_KHR) {
         const auto key_size = global_key.keySize;
@@ -288,7 +328,8 @@ bool Instance::CreateDevice() {
         vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE,
         vk::PhysicalDevicePipelineBinaryFeaturesKHR,
         vk::PhysicalDeviceMaintenance5FeaturesKHR,
-        vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR>();
+        vk::PhysicalDevicePipelineExecutablePropertiesFeaturesKHR,
+        vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>();
     features = feature_chain.get().features;
 
     const vk::StructureChain properties_chain = physical_device.getProperties2<
@@ -512,6 +553,26 @@ bool Instance::CreateDevice() {
         LOG_INFO(Render_Vulkan, "- sampler2DViewOf3D: {}",
                  image_2d_view_of_3d_features.sampler2DViewOf3D);
     }
+    // spartanport: XeSS (vk_xess.cpp) asks for device extensions of its own (mutable descriptors
+    // among them); they are enabled only when it is selected, so the device is the same without it.
+    const bool xess_selected = SpartanSettings::Get().upscaler == SpartanSettings::UpscalerXess;
+    bool xess_extensions = false; ///< XeSS's own extensions are all enabled
+    if (xess_selected) {
+        const auto enable = [&](const char* name) {
+            const bool already = std::any_of(
+                enabled_extensions.begin(), enabled_extensions.end(),
+                [&](const char* have) { return std::strcmp(have, name) == 0; });
+            return already || add_extension(name);
+        };
+        const auto xess_names = XessAa::DeviceExtensions(*instance, physical_device);
+        xess_extensions = !xess_names.empty();
+        for (const char* name : xess_names) {
+            xess_extensions = enable(name) && xess_extensions;
+        }
+        mutable_descriptor_type = enable(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME) &&
+            feature_chain.get<vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>()
+                .mutableDescriptorType;
+    }
     image_view_min_lod = add_extension(VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME);
     supports_memory_budget = add_extension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
     // spartanport: FSR 4 v07 INT8 (vk_temporal_upscaler): quad derivatives in compute shaders.
@@ -592,33 +653,9 @@ bool Instance::CreateDevice() {
     const auto vk11_features = feature_chain.get<vk::PhysicalDeviceVulkan11Features>();
     vk12_features = feature_chain.get<vk::PhysicalDeviceVulkan12Features>();
     vk13_features = feature_chain.get<vk::PhysicalDeviceVulkan13Features>();
-    // spartanport: DLSS (optional bridge DLL) needs its own device extensions on NVIDIA GPUs.
-    std::vector<const char*> dlss_extensions;
-    if (Dlss* dlss = Dlss::Get()) {
-        dlss->AppendDeviceExtensions(*instance, physical_device, dlss_extensions);
-        for (const char* name : dlss_extensions) {
-            if (std::any_of(enabled_extensions.begin(), enabled_extensions.end(),
-                            [&](const char* e) { return std::string_view{e} == name; })) {
-                continue;
-            }
-            if (ext_policy.IsDisabled(name)) {
-                if (std::find(disabled_extensions.begin(), disabled_extensions.end(), name) ==
-                    disabled_extensions.end()) {
-                    LOG_WARNING(Render_Vulkan, "Extension {} disabled by SPARTAN_VK_DISABLE_EXT",
-                                name);
-                    disabled_extensions.emplace_back(name);
-                }
-                continue;
-            }
-            if (enabled_extensions.size() < enabled_extensions.capacity()) {
-                enabled_extensions.push_back(name);
-            }
-        }
-    }
     // spartanport: binary keys on disk were written under another extension set; while
     // SPARTAN_VK_DISABLE_EXT has turned something off they may not match, so leave binaries out.
-    // Checked after the last optional request, the DLSS ones included, so that every disabled
-    // extension counts.
+    // Checked after the last optional request, so that every disabled extension counts.
     pipeline_binaries = pipeline_binaries && disabled_extensions.empty() &&
                         !EmulatorSettings.IsEmptyFragmentShader(); // spartanport: SPARTAN_EMPTY_FS
     vk::StructureChain device_chain = {
@@ -651,7 +688,10 @@ bool Instance::CreateDevice() {
                 .shaderImageGatherExtended = features.shaderImageGatherExtended,
                 .shaderStorageImageExtendedFormats = features.shaderStorageImageExtendedFormats,
                 .shaderStorageImageMultisample = features.shaderStorageImageMultisample,
-                // spartanport: required by the FSR 3 accumulate shaders (vk_temporal_upscaler).
+                // spartanport: required by the FSR 3 accumulate shaders (vk_temporal_upscaler)
+                // and FSR 3.1 frame generation (vk_frame_generation), which reads them too.
+                .shaderStorageImageReadWithoutFormat =
+                    features.shaderStorageImageReadWithoutFormat,
                 .shaderStorageImageWriteWithoutFormat =
                     features.shaderStorageImageWriteWithoutFormat,
                 .shaderClipDistance = features.shaderClipDistance,
@@ -762,6 +802,9 @@ bool Instance::CreateDevice() {
             .image2DViewOf3D = image_2d_view_of_3d_features.image2DViewOf3D,
             .sampler2DViewOf3D = image_2d_view_of_3d_features.sampler2DViewOf3D,
         },
+        vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT{
+            .mutableDescriptorType = mutable_descriptor_type,
+        },
         vk::PhysicalDeviceImageViewMinLodFeaturesEXT{
             .minLod = true,
         },
@@ -831,6 +874,9 @@ bool Instance::CreateDevice() {
     if (!image_2d_view_of_3d) {
         device_chain.unlink<vk::PhysicalDeviceImage2DViewOf3DFeaturesEXT>();
     }
+    if (!mutable_descriptor_type) {
+        device_chain.unlink<vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>();
+    }
     if (!image_view_min_lod) {
         device_chain.unlink<vk::PhysicalDeviceImageViewMinLodFeaturesEXT>();
     }
@@ -844,7 +890,36 @@ bool Instance::CreateDevice() {
         device_chain.unlink<vk::PhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE>();
     }
 
-    auto [device_result, dev] = physical_device.createDeviceUnique(device_chain.get());
+    // spartanport: XeSS's device features (xessVKGetRequiredDeviceFeatures) are patched into the
+    // chain only when its extensions are there too. A copy of the chain without them is the way
+    // back if the card cannot give them: the game starts, XeSS says why it does not run and the
+    // TAA runs.
+    auto plain_chain = device_chain;
+    bool xess_patched = false;
+    if (xess_selected) {
+        void* head = &device_chain.get<vk::PhysicalDeviceFeatures2>();
+        if (xess_extensions && XessAa::PatchDeviceFeatures(*instance, physical_device, head)) {
+            if (head != static_cast<void*>(&device_chain.get<vk::PhysicalDeviceFeatures2>())) {
+                device_chain.get<vk::DeviceCreateInfo>().pNext = head;
+            }
+            xess_patched = true;
+        }
+        XessAa::SetDeviceReady(xess_patched,
+                               xess_extensions ? "the graphics card or driver does not offer the "
+                                                 "features XeSS needs"
+                                               : "the graphics driver does not offer the "
+                                                 "extensions XeSS needs");
+    }
+    auto created = physical_device.createDeviceUnique(device_chain.get());
+    if (xess_patched && created.result != vk::Result::eSuccess) {
+        LOG_WARNING(Render_Vulkan, "Device with XeSS's features failed ({}), creating it without",
+                    vk::to_string(created.result));
+        XessAa::SetDeviceReady(false, "the graphics card or driver does not offer the features "
+                                      "XeSS needs");
+        created = physical_device.createDeviceUnique(plain_chain.get());
+    }
+    const vk::Result device_result = created.result;
+    auto dev = std::move(created.value);
     if (device_result != vk::Result::eSuccess) {
         LOG_CRITICAL(Render_Vulkan, "Failed to create device: {}", vk::to_string(device_result));
         return false;
@@ -855,9 +930,6 @@ bool Instance::CreateDevice() {
     Checkpoints::Get().Enable(diagnostic_checkpoints); // spartanport: vk_checkpoints.h
     pipeline_binaries =
         InitializePipelineBinaryCache(*device, pipeline_binaries, pipeline_binary_global_key);
-    if (Dlss* dlss = Dlss::Get()) {
-        dlss->Initialize(*instance, physical_device, *device);
-    }
 
     graphics_queue = device->getQueue(queue_family_index, 0);
     sparse_queue = device->getQueue(sparse_queue_family_index, 0);
@@ -957,9 +1029,20 @@ void Instance::CollectDeviceParameters() {
 
     // spartanport: see video_core/amdgpu/spartanport_msaa.h; the default per driver is spartanport_msaa_default.h.
     const char* no_msaa_env = std::getenv("SPARTAN_NO_MSAA");
+    // Temporal AA and FSR 3.1 read the scene depth as a texture: that needs it single-sampled, so
+    // a chosen temporal mode turns the game's own multisampling off unless it is forced on.
+    const char* temporal_env = std::getenv("SPARTAN_UPSCALER");
+    const char* temporal_on = std::getenv("SPARTAN_EXPERIMENTAL_UPSCALER");
+    // The port's TAA is also chosen by the launcher in spartanport.ini (upscaler=taa; settings are
+    // loaded before the device), without any environment variable.
+    const bool temporal_mode =
+        SpartanSettings::IsTaa(SpartanSettings::Get().upscaler) ||
+        (temporal_env && temporal_on && *temporal_on == '1' &&
+         (std::strcmp(temporal_env, "taa") == 0 || std::strcmp(temporal_env, "fsr3") == 0));
     const bool no_msaa = no_msaa_env && *no_msaa_env
                              ? *no_msaa_env == '1'
-                             : spartanport_no_msaa_default(static_cast<VkDriverId>(driver_id)) != 0;
+                             : temporal_mode ||
+                                   spartanport_no_msaa_default(static_cast<VkDriverId>(driver_id)) != 0;
     AmdGpu::no_msaa.store(no_msaa, std::memory_order_relaxed);
     std::printf("GPU: guest multisampling %s\n",
                 no_msaa ? "off (single-sampled images; SPARTAN_NO_MSAA=0 keeps it)" : "on");
@@ -1104,6 +1187,24 @@ u64 Instance::GetDeviceMemoryBudgetNow() const {
         total_budget += memory_budget_props.heapBudget[heap];
     }
     return total_budget;
+}
+
+std::string Instance::HeapUsageText() const {
+    vk::PhysicalDeviceMemoryBudgetPropertiesEXT budget{};
+    vk::PhysicalDeviceMemoryProperties2 props{};
+    if (supports_memory_budget) {
+        props.pNext = &budget;
+    }
+    physical_device.getMemoryProperties2(&props);
+    std::string text;
+    for (u32 i = 0; i < props.memoryProperties.memoryHeapCount; ++i) {
+        const u64 size = props.memoryProperties.memoryHeaps[i].size;
+        text += supports_memory_budget
+                    ? fmt::format(" {}: {}/{} MiB (size {})", i, budget.heapUsage[i] >> 20,
+                                  budget.heapBudget[i] >> 20, size >> 20)
+                    : fmt::format(" {}: size {} MiB", i, size >> 20);
+    }
+    return text;
 }
 
 vk::FormatFeatureFlags2 Instance::GetFormatFeatureFlags(vk::Format format) const {

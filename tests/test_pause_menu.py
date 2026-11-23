@@ -230,7 +230,7 @@ class GameScript(unittest.TestCase):
 
     def test_options_row(self):
         options, row = self.new.one('PauseOptions'), self.new.by_name['HLDisplay'][1]
-        self.assertEqual(len(self.new.records), len(self.old.records) + 62)
+        self.assertEqual(len(self.new.records), len(self.old.records) + 66)
         self.assertEqual(row['parent'], options['at'] - 4)
         cheats = self.new.one('HLNativeCheats')
         graphics = self.new.one('HLNativeGraphics')

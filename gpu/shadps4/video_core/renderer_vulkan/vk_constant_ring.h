@@ -66,10 +66,14 @@ public:
     /// Stage B, after recording a packet whose allocations end at `end`. Stamps of one
     /// submission tick are merged: only the last end per tick is published.
     void Stamp(u64 end) {
+        // spartanport: a full ring still needs its pending region published on a later tick.
+        const u64 tick = scheduler.CurrentTick();
         if (end == pending_end) {
+            if (tick != pending_tick && pending_end != last_published) {
+                Publish(pending_end, pending_tick);
+            }
             return;
         }
-        const u64 tick = scheduler.CurrentTick();
         if (tick != pending_tick && pending_end != last_published) {
             Publish(pending_end, pending_tick);
         }

@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// spartanport: frame generation interpolates the scene without the HUD. Pixels the HUD (or any
+// pass after the upscale) changed are counted, and copied from the real frame over the
+// generated one, so the HUD is never interpolated.
+#version 450
+#extension GL_EXT_samplerless_texture_functions : require
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(binding = 0) uniform texture2D final_tex;  // the real frame, HUD included
+layout(binding = 1) uniform texture2D scene_tex;  // the same frame before the HUD
+layout(binding = 2, rgba8) uniform image2D generated;
+layout(binding = 3) buffer Counts {
+    uint changed[4];
+};
+
+layout(push_constant) uniform Params {
+    float threshold; // per channel, 0..1
+    uint slot;       // counter slot of this frame
+    uint write;      // 0: count only
+    uint color_spaces; // bit 0: sRGB scene, bit 1: sRGB display
+};
+
+vec3 displayColor(vec3 color) {
+    const bool scene_srgb = (color_spaces & 1u) != 0u;
+    const bool display_srgb = (color_spaces & 2u) != 0u;
+    if (scene_srgb == display_srgb) return color;
+    // The display blit converts formats; raw snapshot bytes must undergo the same transfer.
+    if (scene_srgb) {
+        return mix(pow((color + 0.055) / 1.055, vec3(2.4)), color / 12.92,
+                   lessThanEqual(color, vec3(0.04045)));
+    }
+    return mix(1.055 * pow(color, vec3(1.0 / 2.4)) - 0.055, color * 12.92,
+               lessThanEqual(color, vec3(0.0031308)));
+}
+
+void main() {
+    const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(pixel, textureSize(final_tex, 0)))) {
+        return;
+    }
+    const vec4 final_color = texelFetch(final_tex, pixel, 0);
+    const vec3 delta = abs(final_color.rgb - displayColor(texelFetch(scene_tex, pixel, 0).rgb));
+    if (max(delta.r, max(delta.g, delta.b)) <= threshold) {
+        if (write != 0 && color_spaces != 0u && color_spaces != 3u) {
+            vec4 color = imageLoad(generated, pixel);
+            color.rgb = displayColor(color.rgb);
+            imageStore(generated, pixel, color);
+        }
+        return;
+    }
+    atomicAdd(changed[slot], 1u);
+    if (write != 0) {
+        imageStore(generated, pixel, final_color);
+    }
+}

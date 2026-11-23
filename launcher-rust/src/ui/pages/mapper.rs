@@ -26,6 +26,7 @@ use crate::core::controller_mappings::{
 use crate::core::i18n::{tr, tr_fmt};
 use crate::core::joysticks::{Device, JoyError, Joysticks, Sdl3};
 use crate::ui::app::{show_page, Message, State};
+use crate::ui::pages::control_center;
 use crate::ui::pages::Page;
 use crate::ui::play::{refuse_while_live, LiveAction};
 use crate::ui::theme::{self, mirror_x, palette, CINZEL_BOLD};
@@ -487,6 +488,8 @@ fn open(state: &mut State) -> Task<Message> {
     if state.mapper.is_some() {
         return show_page(state, Page::Mapper);
     }
+    // The live view lets go first: one SDL3 at a time.
+    control_center::close_live(state);
     match Sdl3::open(&state.paths.port_dir, &state.paths.data_dir, None) {
         Ok(sdl) => state.open_mapper_with(Box::new(sdl)),
         Err(error) => {

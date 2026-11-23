@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <bit>
 #include "common/alignment.h"
 #include "common/assert.h"
 #include "common/bit_field.h"
@@ -249,7 +250,14 @@ struct Image {
         if (IsGuestMsaa()) {
             return 1;
         }
-        return last_level + 1;
+        // spartanport: clamp from upstream #5453.
+        // Guests may declare more levels than the extent's full mip chain has (the extra ones
+        // would be 1x1), which Vulkan does not allow and makes uploads run past the image.
+        const u32 mip_width = width + 1;
+        const u32 mip_height = height + 1;
+        const u32 mip_depth = GetType() == ImageType::Color3D ? depth + 1 : 1;
+        const u32 max_levels = std::bit_width(std::max(std::max(mip_width, mip_height), mip_depth));
+        return std::min<u32>(last_level + 1, max_levels);
     }
 
     u32 GuestNumSamples() const {

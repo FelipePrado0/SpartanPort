@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+// spartanport: report the over-budget allocation fallback once, across allocation threads.
+#include <atomic>
+#include <cstdio>
 #include <cstdlib>
 #include <numeric>
 #include <string_view>
@@ -131,6 +134,19 @@ void UniqueBuffer::Create(vk::BufferCreateInfo& buffer_ci, MemoryType mem_type,
         VkBuffer unsafe_buffer{};
         VkResult result = vmaCreateBuffer(allocator, &buffer_ci_unsafe, &alloc_ci, &unsafe_buffer,
                                           &allocation, out_alloc_info);
+        // spartanport: a budget refusal may still fit; keep placement and retry without the budget.
+        if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            static std::atomic_flag noted = ATOMIC_FLAG_INIT;
+            if (!noted.test_and_set(std::memory_order_relaxed)) {
+                std::printf("GPU memory: buffer allocation failed within budget; retrying without "
+                            "the budget limit (may use system memory).\n");
+                std::fflush(stdout);
+            }
+            VmaAllocationCreateInfo over_budget = alloc_ci;
+            over_budget.flags &= ~VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT;
+            result = vmaCreateBuffer(allocator, &buffer_ci_unsafe, &over_budget, &unsafe_buffer,
+                                     &allocation, out_alloc_info);
+        }
         ASSERT_MSG(result == VK_SUCCESS, "Failed allocating buffer with error {}",
                    vk::to_string(vk::Result{result}));
         buffer = vk::Buffer{unsafe_buffer};

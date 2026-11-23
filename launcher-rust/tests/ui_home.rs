@@ -138,6 +138,19 @@ fn the_settings_line_reads_like_the_mockup() {
 }
 
 #[test]
+fn an_unknown_output_resolution_shows_the_one_the_game_uses() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_in(dir.path());
+    mockup_settings(&mut state);
+    // The game ignores a value it does not know and keeps 1920x1080 (#1316).
+    state.store.set("output_res", json!("samzian"));
+    assert_eq!(
+        home::quick_line(&state),
+        "1920 × 1080 · 120 FPS · Fullscreen · Monitor 1"
+    );
+}
+
+#[test]
 fn the_settings_line_leaves_out_the_parked_keys() {
     let dir = tempfile::tempdir().unwrap();
     let mut state = state_in(dir.path());
@@ -592,10 +605,10 @@ fn stable_2_6_0() -> ReleaseId {
 #[test]
 fn the_version_button_names_the_installed_release() {
     let dir = tempfile::tempdir().unwrap();
-    let state = state_installed(dir.path(), ReleaseId::fallback());
+    let state = state_installed(dir.path(), ReleaseId::this());
     let mut ui = simulator(app::view(&state));
     assert!(ui
-        .find(format!("Release · {} ▾", spartanport_launcher::VERSION).as_str())
+        .find(format!("{} ▾", ReleaseId::this().label("en")).as_str())
         .is_ok());
     drop(ui);
     let state = state_installed(
@@ -629,6 +642,59 @@ fn the_version_button_offers_a_newer_stable() {
     );
     let mut ui = simulator(app::view(&state));
     assert!(ui.find("Release · 2.6.0 ▾").is_ok());
+}
+
+#[test]
+fn the_version_button_offers_the_next_build_of_the_series() {
+    let dir = tempfile::tempdir().unwrap();
+    let installed = ReleaseId {
+        channel: Channel::PreRelease,
+        version: "2.8.0".into(),
+        build: Some("issue1-test1".into()),
+    };
+    let list = vec![
+        release(Channel::PreRelease, "2.8.0", Some("issue2-test5")),
+        release(Channel::PreRelease, "2.8.0", Some("issue1-test2")),
+        release(Channel::Release, "2.8.0", None),
+    ];
+    let mut state = state_installed(dir.path(), installed);
+    ready_with(&mut state, list.clone());
+    let mut ui = simulator(app::view(&state));
+    assert!(ui
+        .find("Pre-release · 2.8.0 · issue1-test1 · issue1-test2 available ▾")
+        .is_ok());
+    drop(ui);
+    open_menu(&mut state);
+    let mut ui = simulator(app::view(&state));
+    assert!(ui.find("new").is_ok());
+    drop(ui);
+
+    // A stable user sees the same list with nothing new.
+    let mut state = state_installed(dir.path(), release(Channel::Release, "2.8.0", None).id);
+    ready_with(&mut state, list);
+    open_menu(&mut state);
+    let mut ui = simulator(app::view(&state));
+    assert!(ui.find("Release · 2.8.0 ▾").is_ok());
+    assert!(ui.find("new").is_err());
+}
+
+#[test]
+fn the_version_button_offers_the_build_of_a_promoted_series_release() {
+    let dir = tempfile::tempdir().unwrap();
+    let installed = ReleaseId {
+        channel: Channel::PreRelease,
+        version: "2.8.0".into(),
+        build: Some("issue1-test1".into()),
+    };
+    let mut state = state_installed(dir.path(), installed);
+    ready_with(
+        &mut state,
+        vec![release(Channel::Release, "2.8.0", Some("issue1-test2"))],
+    );
+    let mut ui = simulator(app::view(&state));
+    assert!(ui
+        .find("Pre-release · 2.8.0 · issue1-test1 · issue1-test2 available ▾")
+        .is_ok());
 }
 
 #[test]
@@ -829,7 +895,7 @@ fn the_menu_marks_the_installed_and_the_new() {
     assert!(ui.find("✓ 2.8.0").is_err());
     drop(ui);
 
-    // A stamp that says pre-release still matches the stable row of its version.
+    // An identity on the other channel still matches the stable row of its version.
     installed.channel = Channel::PreRelease;
     let mut state = state_installed(dir.path(), installed);
     ready_with(&mut state, list);
@@ -943,12 +1009,13 @@ fn picking_a_row_closes_and_installs() {
     let mut state = state_in(dir.path());
     ready_with(&mut state, five_stables_and_ten_prereleases());
     open_menu(&mut state);
-    // The row's channel differs from the stamp's: still the installed release.
-    let installed = release(
-        Channel::PreRelease,
-        &state.updater.installed().version,
-        None,
-    );
+    // The row's channel differs from the identity compiled into the binary: still the installed release.
+    let mut installed = release(Channel::Release, "0", None);
+    installed.id = state.updater.installed().clone();
+    installed.id.channel = match installed.id.channel {
+        Channel::Release => Channel::PreRelease,
+        Channel::PreRelease => Channel::Release,
+    };
     let task = version(&mut state, VersionMessage::Pick(installed));
     assert!(!state.version_menu.open);
     assert_eq!(task.units(), 0);

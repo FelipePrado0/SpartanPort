@@ -74,6 +74,8 @@ Problems
   set C: to 16384 MB initial, 24576 MB maximum -> Set -> OK, then restart your PC.
 - The game does not open: check Advanced -> Log, and send user\last_run.log with your report.
   With a custom Saves folder, last_run.log is in that folder instead.
+  Next to it, last_run.jsonl has the same lines with the time, level and area of each one, for
+  tools and for telling which event came first; attach both files when you report a bug.
 - Other known GPU, audio, crash and progress issues are tracked in the release notes and issues:
   https://github.com/FelipePrado0/SpartanPort/releases/latest
   https://github.com/FelipePrado0/SpartanPort/issues

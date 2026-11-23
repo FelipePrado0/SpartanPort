@@ -13,6 +13,7 @@
 #include "ffx_vk_fsr4_v07.h"
 #include "ffx_vk_fsr4_v07_assets.h"
 #include "spartanport_settings.h"
+#include "video_core/renderer_vulkan/fsr_driver.h"
 #include "video_core/renderer_vulkan/fsr411/fsr411.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -71,9 +72,12 @@ struct Fsr4Upscaler::Impl {
     std::unique_ptr<Fsr411::Upscaler> fsr411;
     std::deque<u64> fsr411_ticks; ///< scheduler ticks of its recent frames (constant ring)
     std::string fsr411_described;
+    DriverFsrUpscaler driver;
 
     Impl(const Instance& instance_, Scheduler& scheduler_)
-        : instance{instance_}, scheduler{scheduler_} {}
+        : instance{instance_}, scheduler{scheduler_},
+          driver{instance.GetDevice(), instance.GetPhysicalDevice(),
+                 VULKAN_HPP_DEFAULT_DISPATCHER.vkGetDeviceProcAddr} {}
 
     ~Impl() {
         Destroy();
@@ -232,6 +236,14 @@ struct Fsr4Upscaler::Impl {
     }
 
     bool Record411(const Frame& f) {
+#ifdef _WIN32
+        if (!driver.Record(f)) {
+            Fail(driver.Problem(), true);
+            return false;
+        }
+        problem.clear();
+        return true;
+#else
         if (!instance.IsFsr411Supported()) {
             Fail("FSR 4.1.1 needs INT8 dot products and VK_VALVE_shader_mixed_float_dot_product", true);
             return false;
@@ -273,6 +285,7 @@ struct Fsr4Upscaler::Impl {
         }
         problem.clear();
         return true;
+#endif
     }
 
     bool Record(const Frame& f) {
@@ -393,6 +406,14 @@ const char* Fsr4Upscaler::Problem() const noexcept {
 
 bool Fsr4Upscaler::Fatal() const noexcept {
     return impl->fatal;
+}
+
+bool Fsr4Upscaler::DriverAvailable() const noexcept {
+    return impl->driver.Available();
+}
+
+const char* Fsr4Upscaler::DriverProblem() const noexcept {
+    return impl->driver.Problem().empty() ? nullptr : impl->driver.Problem().c_str();
 }
 
 } // namespace Vulkan

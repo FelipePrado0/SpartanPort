@@ -1,6 +1,7 @@
 //! Launcher logic with no UI dependency.
 
 pub mod catalog;
+pub mod control_profiles;
 pub mod controller_mappings;
 pub mod controls;
 pub mod desktop;
@@ -15,10 +16,10 @@ pub mod ini;
 pub mod installation;
 pub mod joysticks;
 pub mod launch;
-pub mod legacy;
 pub mod log;
 pub mod mods;
 pub mod options;
+pub mod pad_model;
 pub mod patches;
 pub mod paths;
 pub mod platform;
@@ -26,11 +27,13 @@ pub mod psarc;
 pub mod python;
 pub mod release;
 pub mod save_backup;
+pub mod save_restore;
 pub mod settings;
 pub mod sfo;
 pub mod steam;
 pub mod steam_art;
 pub mod store;
 pub mod trophies;
+pub mod trophy_sound;
 pub mod update;
 pub mod voice_swap;

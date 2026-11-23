@@ -13,6 +13,8 @@
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_checkpoints.h"
 #include "video_core/renderer_vulkan/vk_platform.h"
+#include "video_core/renderer_vulkan/vk_gpu_profiler.h"
+#include "video_core/renderer_vulkan/vk_precompile_state.h"
 #include "spartanport_overlay.h"
 #include "spartanport_settings.h"
 #include "spartanport_graphics.h"
@@ -22,7 +24,10 @@
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/texture_cache/image.h"
 
+#include <SDL3/SDL.h>
+#include <fmt/format.h>
 #include <miniz.h>
+#include <thread>
 
 #include <algorithm>
 #include <array>
@@ -144,15 +149,38 @@ float PqToNits(float encoded) {
     return 10000.0f * std::pow(std::max(vp - c1, 0.0f) / std::max(c2 - c3 * vp, 1e-6f), 1.0f / m1);
 }
 
-u8 HdrToSrgb8(float nits) {
+// sdr_white_nits: 0 for the game's own HDR10, whose 100 nits become white with the highlights
+// compressed. spartanport: for the SDR picture expanded to HDR10, its white in nits: that maps back
+// to white and the 2.2 power decode is undone, so the screenshot shows the SDR picture (the boosted
+// highlights clip at white).
+u8 HdrToSrgb8(float nits, float sdr_white_nits) {
+    if (sdr_white_nits > 0.0f) {
+        const float linear = std::clamp(nits / sdr_white_nits, 0.0f, 1.0f);
+        return u8(std::pow(linear, 1.0f / 2.2f) * 255.0f + 0.5f);
+    }
     const float x = std::max(nits, 0.0f) / 100.0f; // 100-nit SDR white
     const float linear = std::clamp(2.0f * x / (1.0f + x), 0.0f, 1.0f);
     const float srgb = linear <= 0.0031308f ? 12.92f * linear : 1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
     return u8(std::clamp(srgb, 0.0f, 1.0f) * 255.0f + 0.5f);
 }
 
+// spartanport: undoes post_process.frag's peak roll-off (sdr_to_hdr10()) on Rec.709 nits: the
+// shader scales a pixel by one factor taken from its brightest channel, so the factor that brings
+// that channel back (SpartanGraphics::HdrRollOff) restores all three. Exact when nothing was rolled
+// off, close for greys; near the curve's flat top the 10-bit PQ steps are too coarse to invert, so
+// with the peak far below paper white x 1.5 a bright coloured highlight can come back a few dozen
+// codes off (pp-pass-test, "screenshot colour").
+void UndoPeakRollOff(float& r, float& g, float& b, const SpartanGraphics::HdrRollOff& roll_off) {
+    const float out = std::max({r, g, b});
+    if (out <= 0.0f) {
+        return;
+    }
+    const float scale = float(roll_off.Undo(out) / out);
+    r *= scale, g *= scale, b *= scale;
+}
+
 bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, bool hdr,
-                       std::vector<u8>& rgba) {
+                       float sdr_white_nits, float sdr_peak_nits, std::vector<u8>& rgba) {
     const size_t pixels = size_t(width) * height;
     rgba.resize(pixels * 4);
     switch (format) {
@@ -173,6 +201,7 @@ bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, 
         }
         return true;
     case vk::Format::eA2B10G10R10UnormPack32: {
+        const SpartanGraphics::HdrRollOff roll_off(sdr_white_nits, sdr_peak_nits);
         static const auto nits = [] {
             std::array<float, 1024> lut{};
             for (size_t i = 0; i < lut.size(); ++i) {
@@ -187,9 +216,16 @@ bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, 
             if (hdr) {
                 // Rec.2020 PQ to SDR Rec.709.
                 const float r2020 = nits[r], g2020 = nits[g], b2020 = nits[b];
-                rgba[i * 4 + 0] = HdrToSrgb8(1.6605f * r2020 - 0.5876f * g2020 - 0.0728f * b2020);
-                rgba[i * 4 + 1] = HdrToSrgb8(-0.1246f * r2020 + 1.1329f * g2020 - 0.0083f * b2020);
-                rgba[i * 4 + 2] = HdrToSrgb8(-0.0182f * r2020 - 0.1006f * g2020 + 1.1187f * b2020);
+                const float w = sdr_white_nits;
+                float r709 = 1.6605f * r2020 - 0.5876f * g2020 - 0.0728f * b2020;
+                float g709 = -0.1246f * r2020 + 1.1329f * g2020 - 0.0083f * b2020;
+                float b709 = -0.0182f * r2020 - 0.1006f * g2020 + 1.1187f * b2020;
+                if (w > 0.0f) {
+                    UndoPeakRollOff(r709, g709, b709, roll_off);
+                }
+                rgba[i * 4 + 0] = HdrToSrgb8(r709, w);
+                rgba[i * 4 + 1] = HdrToSrgb8(g709, w);
+                rgba[i * 4 + 2] = HdrToSrgb8(b709, w);
             } else {
                 rgba[i * 4 + 0] = u8((r * 255 + 511) / 1023);
                 rgba[i * 4 + 1] = u8((g * 255 + 511) / 1023);
@@ -204,7 +240,7 @@ bool ScreenshotToRgba8(const u8* src, u32 width, u32 height, vk::Format format, 
     }
 }
 
-std::filesystem::path ScreenshotPath() {
+std::filesystem::path ScreenshotPath(bool generated) {
     const auto& dir = Common::FS::GetUserPath(Common::FS::PathType::ScreenshotsDir);
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
@@ -223,9 +259,9 @@ std::filesystem::path ScreenshotPath() {
     const auto ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
     char name[96];
-    std::snprintf(name, sizeof(name), "%s_%04d%02d%02d_%02d%02d%02d_%03d.png", serial.c_str(),
+    std::snprintf(name, sizeof(name), "%s_%04d%02d%02d_%02d%02d%02d_%03d%s.png", serial.c_str(),
                   local.tm_year + 1900, local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min,
-                  local.tm_sec, int(ms));
+                  local.tm_sec, int(ms), generated ? "-fg" : "");
     return dir / name;
 }
 
@@ -256,12 +292,16 @@ void CaptureScreenshot(const Instance& instance, Scheduler& scheduler, vk::Comma
     cmdbuf.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eHost,
                            vk::DependencyFlags{}, to_host, {}, {});
     scheduler.DeferPriorityOperation([allocator = instance.GetAllocator(), buffer, allocation, info,
-                                      width = frame.width, height = frame.height, format = frame.format,
-                                      hdr = frame.is_hdr, path = ScreenshotPath()] {
+                                      width = frame.width, height = frame.height,
+                                      format = frame.format, hdr = frame.is_hdr,
+                                      sdr_white_nits = frame.sdr_white_nits,
+                                      sdr_peak_nits = frame.sdr_peak_nits,
+                                      path = ScreenshotPath(frame.is_generated)] {
         vmaInvalidateAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
         std::vector<u8> rgba;
         const bool converted =
-            ScreenshotToRgba8(static_cast<const u8*>(info.pMappedData), width, height, format, hdr, rgba);
+            ScreenshotToRgba8(static_cast<const u8*>(info.pMappedData), width, height, format, hdr,
+                              sdr_white_nits, sdr_peak_nits, rgba);
         vmaDestroyBuffer(allocator, buffer, allocation);
         if (!converted) {
             LOG_ERROR(Render_Vulkan, "Screenshot: unsupported format {}", vk::to_string(format));
@@ -318,18 +358,103 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
         free_queue.push(&frame);
     }
 
+    // Two filtered frames per presented one with frame generation: twice the outputs in turn.
+    aa_pass.Create(device, instance.GetAllocator(), num_images * 2);
     fsr_pass.Create(device, instance.GetAllocator(), num_images);
     pp_pass.Create(device, swapchain.GetSurfaceFormat().format);
-    SpartanOverlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images);
+    if (swapchain.GetHDR()) {
+        // spartanport: HDR output; the SDR picture is expanded until a flip says otherwise. With
+        // Match Windows HDR settings (hdr_auto) the paper white and peak are the display's, read
+        // once here like the HDR switch itself; each goes into its slider's setting, which the menu
+        // shows greyed out and which turning the option off starts from. A value Windows does not
+        // report (SpartanGraphics::HdrNits) keeps the slider's own.
+        pp_settings.hdr = 2;
+        auto& s = SpartanSettings::Get();
+        const Frontend::WindowSystemInfo info = window.GetWindowInfo();
+        const SpartanGraphics::HdrNits display =
+            SpartanGraphics::HdrFromDisplay(info.sdr_white_level, info.hdr_headroom);
+        s.hdr_paper_white_known = display.paper_white_known;
+        s.hdr_peak_known = display.peak_known;
+        const bool paper_from_display = s.hdr_auto && display.paper_white_known;
+        const bool peak_from_display = s.hdr_auto && display.peak_known;
+        if (paper_from_display) {
+            s.hdr_paper_white = display.paper_white;
+        }
+        if (peak_from_display) {
+            s.hdr_peak = display.peak;
+        }
+        pp_settings.hdr_paper_white = float(s.hdr_paper_white.load());
+        pp_settings.hdr_peak = float(s.hdr_peak.load());
+        std::printf("HDR output: on (HDR10), paper white %d nits (%s), peak %d nits (%s)\n",
+                    s.hdr_paper_white.load(), paper_from_display ? "from Windows" : "the menu's",
+                    s.hdr_peak.load(), peak_from_display ? "from Windows" : "the menu's");
+    }
+    // spartanport: on the HDR10 swapchain the menu's white is the picture's paper white.
+    SpartanOverlay::Init(instance, swapchain.GetSurfaceFormat().format, num_images,
+                         swapchain.GetHDR() ? pp_settings.hdr_paper_white : 0.0f);
 
     const bool binary_cache = EmulatorSettingsImpl::Flag("SPARTAN_PIPELINE_BINARIES", true) &&
                               EmulatorSettings.IsPipelineCacheEnabled();
     const bool capture_only = EmulatorSettingsImpl::Flag("SPARTAN_PIPELINE_BINARY_ISOLATED", false) &&
                               EmulatorSettingsImpl::Flag("SPARTAN_PIPELINE_CAPTURE_ONLY", false);
-    if (UseOnDemandPipelines(binary_cache, instance.GetPipelineBinaryGlobalKey().keySize != 0,
-                            capture_only)) {
-        rasterizer->GetPipelineCache().StartOnDemand();
-        return;
+    // spartanport: on the first start, the shipped shader list (shaders/<serial>.spm beside the
+    // executable) fills the shader cache before the game runs. Esc or Circle (B) skips; the window
+    // thread keeps the keyboard and gamepad state current.
+    {
+        const char* base = SDL_GetBasePath();
+        const auto list = ShaderListPath(std::filesystem::path(base ? base : "") / "shaders",
+                                         std::string(Common::ElfInfo::Instance().GameSerial()));
+        SDL_Gamepad* pad = nullptr;
+        int pads = 0;
+        if (SDL_JoystickID* ids = SDL_GetGamepads(&pads)) {
+            pad = pads > 0 ? SDL_OpenGamepad(ids[0]) : nullptr;
+            SDL_free(ids);
+        }
+        auto last = std::chrono::steady_clock::time_point{};
+        bool shown = false;
+        const auto progress = [&](u32 done, u32 total) {
+            const bool* keys = SDL_GetKeyboardState(nullptr);
+            if ((keys && keys[SDL_SCANCODE_ESCAPE]) ||
+                (pad && SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST))) {
+                return false;
+            }
+            const auto now = std::chrono::steady_clock::now();
+            // About 30 frames a second: the screen's ember and sparks move smoothly.
+            if (now - last >= std::chrono::milliseconds(33)) {
+                last = now;
+                shown = true;
+                SpartanOverlay::SetLoading(true, done, total);
+                PresentLoadingFrame();
+            }
+            return true;
+        };
+        const bool on_demand = UseOnDemandPipelines(
+            binary_cache, instance.GetPipelineBinaryGlobalKey().keySize != 0, capture_only);
+        const bool wait_cache =
+            on_demand && EmulatorSettingsImpl::Flag("SPARTAN_SHADER_PREFETCH_WAIT", false);
+        if (wait_cache) {
+            SpartanOverlay::AddLoadingSteps(SpartanOverlay::LoadingCache);
+        }
+        rasterizer->GetPipelineCache().PrepareShaders(list, progress);
+        if (on_demand) {
+            rasterizer->GetPipelineCache().StartOnDemand();
+            // Launcher: "Read the shader cache before the game starts". A hard disk cannot serve
+            // the startup read and the game at once (#1331). Off by default: a cold read of the
+            // shipped list's files took minutes even on an NVMe drive.
+            if (wait_cache) {
+                SpartanOverlay::SetLoadingStage(SpartanOverlay::LoadingCache);
+                rasterizer->GetPipelineCache().WaitDiskPrefetch(progress);
+            }
+        }
+        if (pad) {
+            SDL_CloseGamepad(pad);
+        }
+        if (shown) {
+            SpartanOverlay::SetLoading(false, 0, 0);
+        }
+        if (on_demand) {
+            return;
+        }
     }
 
     // spartanport: by default the cached pipelines load while the game runs (a corner note shows the
@@ -399,20 +524,9 @@ void Presenter::RecreateFrame(Frame* frame, u32 width, u32 height) {
                  vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eSampled,
     };
 
-    const VmaAllocationCreateInfo alloc_info = {
-        .flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT,
-        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-        .requiredFlags = 0,
-        .preferredFlags = 0,
-        .pool = VK_NULL_HANDLE,
-        .pUserData = nullptr,
-    };
-
     VkImage unsafe_image{};
-    VkImageCreateInfo unsafe_image_info = static_cast<VkImageCreateInfo>(image_info);
-
-    VkResult result = vmaCreateImage(instance.GetAllocator(), &unsafe_image_info, &alloc_info,
-                                     &unsafe_image, &frame->allocation, nullptr);
+    const VkResult result = VideoCore::CreateImageWithFallback(
+        instance.GetAllocator(), image_info, &unsafe_image, &frame->allocation);
     if (result != VK_SUCCESS) [[unlikely]] {
         LOG_CRITICAL(Render_Vulkan, "Failed allocating texture with error {}",
                      vk::to_string(vk::Result{result}));
@@ -571,6 +685,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     }
 
     Frame* frame = GetRenderFrame();
+    frame->is_generated = false;
 
     const auto frame_subresources = vk::ImageSubresourceRange{
         .aspectMask = vk::ImageAspectFlagBits::eColor,
@@ -597,6 +712,10 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         .imageMemoryBarrierCount = 1,
         .pImageMemoryBarriers = &pre_barrier,
     });
+    // spartanport: frame generation, the frame between the previous one and this one.
+    const vk::Image generated_image = rasterizer->GetUpscaler().GetFrameGeneration().Generate(
+        cmdbuf, upscaled, upscaled ? display.image : vk::Image{},
+        upscaled ? display.format : vk::Format::eUndefined);
 
     VideoCore::ImageViewInfo view_info{};
     view_info.format = GetFrameViewFormat(attribute.attrib.pixel_format);
@@ -640,8 +759,10 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         }
         image_view = *image.FindView(view_info).image_view;
         image_size = vk::Extent2D{image.info.size.width, image.info.size.height};
+        // spartanport: AA and FSR sample the display image from compute shaders.
         runtime.Transit(&image, vk::ImageLayout::eShaderReadOnlyOptimal,
-                        vk::PipelineStageFlagBits2::eFragmentShader,
+                        vk::PipelineStageFlagBits2::eFragmentShader |
+                            vk::PipelineStageFlagBits2::eComputeShader,
                         vk::AccessFlagBits2::eShaderRead);
         runtime.FlushBarriers();
     }
@@ -660,8 +781,37 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         fsr_settings.use_rcas &&
         SpartanGraphics::FsrPassRuns(fsr_settings.enable, true, int(image_size.width), int(image_size.height),
                                   int(frame->width), int(frame->height));
+    // spartanport: anti-aliasing (FXAA, SMAA) of the game's image, before the sharpening so that
+    // the sharpening does not bring the edges back. Colour values: linear light for an sRGB view,
+    // perceptual for 10-bit sRGB values and HDR (the post pass below decodes them the same way).
+    // HDR here is the game's own PQ output; with HDR output on an SDR game the image is still SDR
+    // until the post pass. The same filter runs over the generated frame below, so real and
+    // generated frames match.
+    const bool game_pq = pp_settings.hdr == 1;
+    using VideoFormat = Libraries::VideoOut::PixelFormat;
+    const bool aa_encoded = attribute.attrib.pixel_format == VideoFormat::A2R10G10B10Srgb ||
+                            attribute.attrib.pixel_format == VideoFormat::A2R10G10B10Bt2020Pq;
+    const int aa_mode = graphics.anti_aliasing;
+    const auto apply_aa = [&](vk::ImageView input, bool is_hdr) {
+        return aa_pass.Render(cmdbuf, input, image_size, aa_mode,
+                              SpartanGraphics::AaInputIsLinear(aa_encoded, is_hdr));
+    };
+    {
+        const bool aa_runs = SpartanGraphics::AaPassRuns(aa_mode, int(image_size.width), int(image_size.height)) &&
+                             !aa_pass.Failed(aa_mode);
+        image_view = apply_aa(image_view, game_pq);
+        SpartanSettings::Get().aa_applied = aa_runs && !aa_pass.Failed(aa_mode);
+        // One line when the filter starts, stops or changes, so a log shows what ran.
+        static int logged_aa = -1;
+        const int running = aa_runs ? aa_mode : 0;
+        if (running != logged_aa) {
+            logged_aa = running;
+            std::printf("Anti-aliasing: %s%s (%ux%u)\n", SpartanGraphics::AntiAliasingNames[aa_mode],
+                        aa_runs ? " running" : " not running", image_size.width, image_size.height);
+        }
+    }
     image_view = fsr_pass.Render(cmdbuf, image_view, image_size, {frame->width, frame->height},
-                                 fsr_settings, frame->is_hdr);
+                                 fsr_settings, game_pq);
 
     // Vulkan has no sRGB variant of the 10-bit format, so an A2R10G10B10Srgb buffer reaches
     // the post process pass still sRGB encoded and has to be decoded there instead.
@@ -670,7 +820,49 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     // spartanport: black bars around a cutscene when the render resolution is not 16:9 (movie_bars.h).
     pp_settings.picture = MovieBars::Cutscenes().Bars(image_size.width, image_size.height,
                                                       MovieBars::NowMs());
+    // spartanport: the player's brightness, contrast and gamma, read once for the real and the
+    // generated frame. Neutral values skip the adjustment in the shader.
+    {
+        const int brightness = graphics.picture_brightness, contrast = graphics.picture_contrast;
+        const int gamma = graphics.picture_gamma;
+        pp_settings.picture_power = SpartanGraphics::PicturePower(gamma);
+        pp_settings.picture_contrast = SpartanGraphics::PictureContrast(contrast);
+        pp_settings.picture_brightness = SpartanGraphics::PictureBrightness(brightness);
+        pp_settings.picture_adjust = !SpartanGraphics::PictureNeutral(brightness, contrast, gamma);
+    }
+    // spartanport: HDR output's paper white and peak (live), and whether the menu's HDR rows act.
+    pp_settings.hdr_paper_white = float(graphics.hdr_paper_white);
+    pp_settings.hdr_peak = float(graphics.hdr_peak);
+    SpartanSettings::Get().hdr_active = pp_settings.hdr == 2;
+    frame->sdr_white_nits = pp_settings.hdr == 2 ? pp_settings.hdr_paper_white : 0.0f;
+    frame->sdr_peak_nits = pp_settings.hdr == 2 ? pp_settings.hdr_peak : 0.0f;
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
+    if (generated_image) {
+        // The same passes over the generated frame, into a frame of its own.
+        Frame* generated = GetRenderFrame();
+        const auto generated_barrier = vk::ImageMemoryBarrier2{
+            .srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+            .srcAccessMask = vk::AccessFlagBits2::eColorAttachmentRead,
+            .dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+            .dstAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
+            .oldLayout = vk::ImageLayout::eUndefined,
+            .newLayout = vk::ImageLayout::eColorAttachmentOptimal,
+            .image = generated->image,
+            .subresourceRange{frame_subresources},
+        };
+        cmdbuf.pipelineBarrier2({.imageMemoryBarrierCount = 1,
+                                 .pImageMemoryBarriers = &generated_barrier});
+        const vk::ImageView generated_view = fsr_pass.Render(
+            cmdbuf,
+            apply_aa(rasterizer->GetUpscaler().GetFrameGeneration().GeneratedView(view_info.format),
+                     game_pq),
+            image_size, {generated->width, generated->height}, fsr_settings, game_pq);
+        generated->sdr_white_nits = frame->sdr_white_nits;
+        generated->sdr_peak_nits = frame->sdr_peak_nits;
+        pp_pass.Render(cmdbuf, generated_view, image_size, *generated, pp_settings);
+        generated->is_generated = true;
+        frame->generated = generated;
+    }
     if (frame_dump) {
         // The presented image as the swapchain blit reads it (General after the pass).
         const vk::MemoryBarrier2 done{.srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
@@ -686,6 +878,10 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     // Flush frame creation commands.
     frame->ready_semaphore = draw_scheduler.GetWorkSemaphore()->Handle();
     frame->ready_tick = draw_scheduler.CurrentTick();
+    if (frame->generated) {
+        frame->generated->ready_semaphore = frame->ready_semaphore;
+        frame->generated->ready_tick = frame->ready_tick;
+    }
     SubmitInfo info{};
     draw_scheduler.Flush(info);
 
@@ -790,10 +986,14 @@ void Presenter::PresentLoadingFrame() {
     }
     swapchain.UpdateVsync();
     if (window.GetWidth() != swapchain.GetWidth() || window.GetHeight() != swapchain.GetHeight()) {
+        // spartanport: recreation waits for every queue; no submission may overlap it.
+        std::scoped_lock submit_lock{Scheduler::submit_mutex};
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
     }
     if (!swapchain.AcquireNextImage()) {
         if (!window.IsMinimized() && window.GetWidth() > 0 && window.GetHeight() > 0) {
+            // spartanport: acquire recovery also destroys the old swapchain and waits for idle.
+            std::scoped_lock submit_lock{Scheduler::submit_mutex};
             swapchain.Recreate(window.GetWidth(), window.GetHeight());
         }
         if (!swapchain.AcquireNextImage()) {
@@ -849,6 +1049,30 @@ void Presenter::PresentLoadingFrame() {
 }
 
 void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame) {
+    using Clock = std::chrono::steady_clock;
+    const auto real_deadline = !is_reusing_frame && is_game_frame
+        ? frame_pacing.RealDeadline(Clock::now()) : Clock::time_point{};
+    struct Profile {
+        Clock::time_point window = Clock::now(), last_present{};
+        double pacing_ms = 0, acquire_ms = 0, submit_ms = 0, present_ms = 0;
+        double real_gap_ms = 0, generated_gap_ms = 0;
+        u64 real = 0, generated = 0, real_gaps = 0, generated_gaps = 0;
+    };
+    Profile* profile = nullptr;
+    if (GpuProfiler::Get() && !is_reusing_frame) {
+        static thread_local Profile totals;
+        profile = &totals;
+    }
+    // spartanport: frame generation: the generated frame first, the real one halfway to the next.
+    if (Frame* generated = std::exchange(frame->generated, nullptr)) {
+        Present(generated, false, false);
+        const auto sleep_start = profile ? Clock::now() : Clock::time_point{};
+        std::this_thread::sleep_until(real_deadline);
+        if (profile) {
+            profile->pacing_ms += std::chrono::duration<double, std::milli>(
+                Clock::now() - sleep_start).count();
+        }
+    }
     // Free the frame for reuse
     const auto free_frame = [&] {
         if (!is_reusing_frame) {
@@ -869,11 +1093,16 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     // Recreate the swapchain if the window was resized.
     swapchain.UpdateVsync();
     if (window.GetWidth() != swapchain.GetWidth() || window.GetHeight() != swapchain.GetHeight()) {
+        // spartanport: recreation waits for every queue; no submission may overlap it.
+        std::scoped_lock submit_lock{Scheduler::submit_mutex};
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
     }
 
+    const auto acquire_start = profile ? Clock::now() : Clock::time_point{};
     if (!swapchain.AcquireNextImage()) {
         if (!window.IsMinimized() && window.GetWidth() > 0 && window.GetHeight() > 0) {
+            // spartanport: acquire recovery also destroys the old swapchain and waits for idle.
+            std::scoped_lock submit_lock{Scheduler::submit_mutex};
             swapchain.Recreate(window.GetWidth(), window.GetHeight());
         }
         if (!swapchain.AcquireNextImage()) {
@@ -884,6 +1113,10 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
         }
     }
 
+    if (profile) {
+        profile->acquire_ms += std::chrono::duration<double, std::milli>(
+            Clock::now() - acquire_start).count();
+    }
     // Reset fence for queue submission. Do it here instead of GetRenderFrame() because we may
     // skip frame because of slow swapchain recreation. If a frame skip occurs, we skip signal
     // the frame's present fence and future GetRenderFrame() call will hang waiting for this frame.
@@ -1010,7 +1243,13 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
     info.AddWait(frame->ready_semaphore, frame->ready_tick);
     info.AddSignal(swapchain.GetPresentReadySemaphore());
     info.AddSignal(frame->present_done);
+    const auto submit_start = profile ? Clock::now() : Clock::time_point{};
     scheduler.Flush(info);
+    const auto present_start = profile ? Clock::now() : Clock::time_point{};
+    if (profile) {
+        profile->submit_ms += std::chrono::duration<double, std::milli>(
+            present_start - submit_start).count();
+    }
 
     // Present to swapchain.
     {
@@ -1021,6 +1260,40 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
         }
     }
 
+    if (profile) {
+        const auto now = Clock::now();
+        profile->present_ms += std::chrono::duration<double, std::milli>(now - present_start).count();
+        const bool has_gap = profile->last_present != Clock::time_point{};
+        const double gap = has_gap ? std::chrono::duration<double, std::milli>(
+            now - profile->last_present).count() : 0.0;
+        profile->last_present = now;
+        if (is_game_frame) {
+            ++profile->real;
+            profile->real_gap_ms += gap;
+            profile->real_gaps += has_gap;
+        } else {
+            ++profile->generated;
+            profile->generated_gap_ms += gap;
+            profile->generated_gaps += has_gap;
+        }
+        const double seconds = std::chrono::duration<double>(now - profile->window).count();
+        if (seconds >= 5.0) {
+            const double calls = double(profile->real + profile->generated);
+            std::printf("FG CPU profile: mode=%d real_calls/s=%.1f generated_calls/s=%.1f "
+                        "real=%llu generated=%llu pacing=%.3f ms/real "
+                        "acquire=%.3f submit=%.3f present=%.3f ms/call "
+                        "gap_to_real=%.3f gap_to_generated=%.3f ms\n",
+                        SpartanSettings::Get().frame_generation.load(), profile->real / seconds,
+                        profile->generated / seconds, static_cast<unsigned long long>(profile->real),
+                        static_cast<unsigned long long>(profile->generated),
+                        profile->pacing_ms / double(std::max<u64>(1, profile->real)),
+                        profile->acquire_ms / calls, profile->submit_ms / calls,
+                        profile->present_ms / calls,
+                        profile->real_gap_ms / double(std::max<u64>(1, profile->real_gaps)),
+                        profile->generated_gap_ms / double(std::max<u64>(1, profile->generated_gaps)));
+            *profile = {};
+        }
+    }
     free_frame();
     if (!is_reusing_frame && is_game_frame) {
         DebugState.IncFlipFrameNum();
@@ -1028,6 +1301,9 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame, bool is_game_frame)
 }
 
 Frame* Presenter::GetRenderFrame() {
+    using Clock = std::chrono::steady_clock;
+    const bool profile = GpuProfiler::Get() != nullptr;
+    const auto wait_start = profile ? Clock::now() : Clock::time_point{};
     // Wait for free presentation frames
     Frame* frame;
     {
@@ -1040,6 +1316,7 @@ Frame* Presenter::GetRenderFrame() {
         free_queue.pop();
     }
 
+    const auto queue_ready = profile ? Clock::now() : Clock::time_point{};
     const vk::Device device = instance.GetDevice();
     vk::Result result{};
 
@@ -1061,6 +1338,24 @@ Frame* Presenter::GetRenderFrame() {
         }
     }
 
+    if (profile) {
+        const auto now = Clock::now();
+        static thread_local auto window = wait_start;
+        static thread_local double queue_ms = 0, fence_ms = 0;
+        static thread_local u64 calls = 0;
+        queue_ms += std::chrono::duration<double, std::milli>(queue_ready - wait_start).count();
+        fence_ms += std::chrono::duration<double, std::milli>(now - queue_ready).count();
+        ++calls;
+        const double seconds = std::chrono::duration<double>(now - window).count();
+        if (seconds >= 5.0) {
+            std::printf("FG frame wait profile: mode=%d calls/s=%.1f queue=%.3f fence=%.3f ms/call\n",
+                        SpartanSettings::Get().frame_generation.load(), calls / seconds,
+                        queue_ms / double(calls), fence_ms / double(calls));
+            window = now;
+            queue_ms = fence_ms = 0;
+            calls = 0;
+        }
+    }
     if (frame->width != expected_frame_width || frame->height != expected_frame_height ||
         frame->is_hdr != swapchain.GetHDR()) {
         RecreateFrame(frame, expected_frame_width, expected_frame_height);

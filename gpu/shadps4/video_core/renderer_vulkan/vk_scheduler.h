@@ -582,6 +582,32 @@ using SubmitFunc = Common::UniqueFunction<void, SubmitInfo&>;
 class RecordChunk {
 public:
     static constexpr size_t Capacity = 128 * 1024;
+    // spartanport: keep the consuming command in the chunk that owns its spilled data.
+    static constexpr size_t CommandReserve = 1024;
+
+    // spartanport: oversized groups use chunk-owned storage instead of stopping with exit 23.
+    bool ReserveData(size_t bytes) {
+        const size_t remaining = Capacity - used;
+        if (remaining < CommandReserve) {
+            return false;
+        }
+        if (spill_remaining >= bytes) {
+            return true;
+        }
+        if (bytes <= remaining - CommandReserve) {
+            spill_cursor = nullptr;
+            spill_remaining = 0;
+            return true;
+        }
+        if (bytes <= Capacity - CommandReserve) {
+            return false;
+        }
+        std::unique_ptr<std::byte[]> block{new std::byte[bytes]};
+        spill_cursor = block.get();
+        spill_remaining = bytes;
+        spill_blocks.push_back(std::move(block));
+        return true;
+    }
 
     /// Returns false (and leaves `func` untouched) when the chunk has no room.
     template <typename Func>
@@ -606,8 +632,21 @@ public:
 
     /// Raw storage in the chunk for a command's variable-length data; null when full.
     void* Allocate(size_t bytes, size_t align) {
+        // spartanport: preserve alignment within the oversized group's spill block.
+        if (spill_cursor) {
+            void* result = spill_cursor;
+            size_t remaining = spill_remaining;
+            if (!std::align(align, bytes, result, remaining)) {
+                return nullptr;
+            }
+            spill_used += spill_remaining - remaining + bytes;
+            spill_cursor = static_cast<std::byte*>(result) + bytes;
+            spill_remaining = remaining - bytes;
+            return result;
+        }
         const size_t offset = (used + align - 1) & ~(align - 1);
-        if (offset + bytes > Capacity) {
+        // spartanport: reject oversized inline allocations without overflowing the size check.
+        if (offset > Capacity || bytes > Capacity - offset) {
             return nullptr;
         }
         used = offset + bytes;
@@ -624,6 +663,10 @@ public:
         }
         first = last = nullptr;
         used = 0;
+        // spartanport: release spilled data only after every consuming command has executed.
+        spill_cursor = nullptr;
+        spill_remaining = spill_used = 0;
+        spill_blocks.clear();
     }
 
     [[nodiscard]] bool Empty() const noexcept {
@@ -631,7 +674,8 @@ public:
     }
 
     [[nodiscard]] size_t Size() const noexcept {
-        return used;
+        // spartanport: count spilled payloads toward recording batch thresholds.
+        return used + spill_used;
     }
 
 private:
@@ -662,8 +706,57 @@ private:
 
     alignas(64) std::byte storage[Capacity];
     size_t used = 0;
+    // spartanport: retain oversized groups until this chunk is recycled.
+    std::vector<std::unique_ptr<std::byte[]>> spill_blocks;
+    std::byte* spill_cursor = nullptr;
+    size_t spill_remaining = 0, spill_used = 0;
     CommandBase* first{};
     CommandBase* last{};
+};
+
+/// spartanport: the commands of one block of draws, recorded apart and spliced into the command
+/// stream in block order (docs/plans/2026-11-parallel-recording-spec.md).
+struct RecordStream {
+    std::vector<std::unique_ptr<RecordChunk>> chunks;
+    /// The block's own render pass and dynamic state: a block starts with no pass open and every
+    /// dynamic state dirty (Scheduler::BeginStream), and closes its pass at its end.
+    RenderState render_state{};
+    bool is_rendering = false;
+    DynamicState dynamic_state{};
+
+    /// Appends `func`; `acquire()` gives an empty chunk when the last one is full.
+    template <typename Func, typename Acquire>
+    void Push(Func&& func, Acquire&& acquire) {
+        if (chunks.empty() || !chunks.back()->Push(std::forward<Func>(func))) {
+            chunks.push_back(acquire());
+            const bool pushed = chunks.back()->Push(std::forward<Func>(func));
+            ASSERT(pushed);
+        }
+    }
+
+    /// The chunk that keeps `bytes` of data and the command using them (RecordChunk::ReserveData).
+    template <typename Acquire>
+    RecordChunk& Reserve(size_t bytes, Acquire&& acquire) {
+        if (chunks.empty() || !chunks.back()->ReserveData(bytes)) {
+            chunks.push_back(acquire());
+            const bool reserved = chunks.back()->ReserveData(bytes);
+            ASSERT_MSG(reserved, "Cannot reserve {} bytes in an empty recording chunk", bytes);
+        }
+        return *chunks.back();
+    }
+
+    /// Moves the recorded chunks to the end of `out` in order; empty ones go to `recycle`.
+    template <typename Recycle>
+    void Splice(std::vector<std::unique_ptr<RecordChunk>>& out, Recycle&& recycle) {
+        for (auto& chunk : chunks) {
+            if (chunk->Empty()) {
+                recycle(std::move(chunk));
+            } else {
+                out.push_back(std::move(chunk));
+            }
+        }
+        chunks.clear();
+    }
 };
 
 class Scheduler {
@@ -713,12 +806,12 @@ public:
 
     /// Returns the current render state.
     const RenderState& GetRenderState() const {
-        return render_state;
+        return block_stream ? block_stream->render_state : render_state;
     }
 
     /// Returns the current pipeline dynamic state tracking.
     DynamicState& GetDynamicState() {
-        return dynamic_state;
+        return block_stream ? block_stream->dynamic_state : dynamic_state;
     }
 
     /// Returns the current command buffer for recording on the calling thread. With threaded
@@ -726,6 +819,7 @@ public:
     /// records directly (Record() included, so callers may mix both) until the next
     /// KickRecording() or submission.
     [[gnu::noinline]] vk::CommandBuffer CommandBuffer() {
+        BreakStream();
         if (recording_threaded && !direct_mode) {
             SyncRecording();
             direct_mode = true;
@@ -742,6 +836,10 @@ public:
     /// everything it uses (capture by value): it may run later on the recording thread.
     template <typename Func>
     void Record(Func&& func) {
+        if (block_stream) [[unlikely]] {
+            block_stream->Push(std::forward<Func>(func), [this] { return AcquireChunk(); });
+            return;
+        }
         if (!recording_threaded || direct_mode) {
             func(current_cmdbuf);
             return;
@@ -753,29 +851,42 @@ public:
             return;
         }
         if (!record_chunk->Push(std::forward<Func>(func))) {
-            full_chunks.push_back(std::move(record_chunk));
-            record_chunk = AcquireChunk();
+            // spartanport: replace before retiring so recording storage stays valid.
+            RetireChunk();
             const bool pushed = record_chunk->Push(std::forward<Func>(func));
             ASSERT(pushed);
         }
     }
 
+    // spartanport: acquire the replacement first so reentrant recording during acquisition
+    // still finds a valid chunk, including guest memory faults handled on this thread.
+    void RetireChunk() {
+        auto next = AcquireChunk();
+        full_chunks.push_back(std::exchange(record_chunk, std::move(next)));
+    }
+
     /// True when Record() defers commands (and RecordData() copies into chunks).
     [[nodiscard]] bool IsRecordingDeferred() const noexcept {
-        return recording_threaded && !direct_mode &&
+        return block_stream || recording_threaded && !direct_mode &&
                !SpartanToggle::Disabled(SpartanToggle::ThreadedRecording);
     }
 
     /// Makes room for `bytes` of RecordData() plus the command that uses them in the current
     /// chunk: data and command must share a chunk, which is recycled once executed.
     void ReserveRecordData(size_t bytes) {
+        if (block_stream) [[unlikely]] {
+            block_stream->Reserve(bytes, [this] { return AcquireChunk(); });
+            return;
+        }
         if (!IsRecordingDeferred()) {
             return;
         }
-        ASSERT(bytes + 1024 <= RecordChunk::Capacity);
-        if (RecordChunk::Capacity - record_chunk->Size() < bytes + 1024) {
-            full_chunks.push_back(std::move(record_chunk));
-            record_chunk = AcquireChunk();
+        // spartanport: spill oversized groups while keeping their consumer in the same chunk.
+        if (!record_chunk->ReserveData(bytes)) {
+            // spartanport: replace before retiring so recording storage stays valid.
+            RetireChunk();
+            const bool reserved = record_chunk->ReserveData(bytes);
+            ASSERT_MSG(reserved, "Cannot reserve {} bytes in an empty recording chunk", bytes);
         }
     }
 
@@ -789,9 +900,60 @@ public:
         // Room for the data and the command that follows it, so both stay in one chunk.
         const size_t bytes = data.size_bytes();
         ReserveRecordData(bytes + alignof(T));
-        auto* dst = static_cast<T*>(record_chunk->Allocate(bytes, alignof(T)));
+        RecordChunk& chunk = block_stream ? *block_stream->chunks.back() : *record_chunk;
+        auto* dst = static_cast<T*>(chunk.Allocate(bytes, alignof(T)));
         std::memcpy(dst, data.data(), bytes);
         return {dst, data.size()};
+    }
+
+    /// spartanport: until EndStream(), Record() and RecordData() on this thread go to `stream`
+    /// (parallel recording). Needs threaded recording; direct recording is not allowed meanwhile.
+    void BeginStream(RecordStream& stream) {
+        ASSERT(recording_threaded && !direct_mode && !block_stream);
+        stream.is_rendering = false;
+        stream.dynamic_state.Invalidate();
+        block_stream = &stream;
+    }
+    void EndStream() {
+        EndRendering();
+        block_stream = nullptr;
+    }
+    /// Serial blocks (P1): a direct recording or a recording sync inside a block stream splices
+    /// what the block recorded so far, and the rest of the block is recorded directly. A parallel
+    /// resolver has to cut the block before such a draw instead.
+    void BreakStream() {
+        if (block_stream) [[unlikely]] {
+            auto* stream = std::exchange(block_stream, nullptr);
+            if (break_hook) {
+                break_hook(break_context); // the block's barriers, ahead of its commands
+            }
+            SpliceStream(*stream);
+            // The rest of the block goes on directly from where its stream left the pass.
+            is_rendering = stream->is_rendering;
+            render_state = stream->render_state;
+            dynamic_state = stream->dynamic_state;
+            stream_breaks.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+    /// Runs when BreakStream() is about to splice a stream early (the owner's stitch).
+    void SetBreakHook(void (*hook)(void*), void* context) {
+        break_hook = hook;
+        break_context = context;
+    }
+
+    /// Appends `stream`'s commands after everything recorded so far on the owning thread.
+    void SpliceStream(RecordStream& stream) {
+        ASSERT(!block_stream);
+        // The block starts with no pass open, and leaves the dynamic state unknown.
+        EndRendering();
+        if (!record_chunk->Empty()) {
+            RetireChunk();
+        }
+        stream.Splice(full_chunks, [this](std::unique_ptr<RecordChunk> chunk) {
+            std::scoped_lock lk{recorder_mutex};
+            free_chunks.push_back(std::move(chunk));
+        });
+        dynamic_state.Invalidate();
     }
 
     /// Hands recorded commands to the recording thread. Called at points where no caller holds
@@ -811,10 +973,11 @@ public:
     /// work anyway, so small copies cost no wakeup); WaitHostCopies() covers it.
     template <typename Func>
     void RecordHostCopy(Func&& copy) {
-        Record([copy = std::forward<Func>(copy), this,
-                seq = ++host_copies_issued](vk::CommandBuffer) {
+        // Counted, not numbered: block streams recorded in parallel issue copies out of order.
+        host_copies_issued.fetch_add(1, std::memory_order_relaxed);
+        Record([copy = std::forward<Func>(copy), this](vk::CommandBuffer) {
             copy();
-            host_copies_done.store(seq, std::memory_order_release);
+            host_copies_done.fetch_add(1, std::memory_order_release);
         });
     }
 
@@ -831,16 +994,22 @@ public:
 
     /// Whether a render pass with exactly this state is open.
     [[nodiscard]] bool IsRenderingWith(const RenderState& state) const {
-        return is_rendering && render_state == state;
+        return block_stream ? block_stream->is_rendering && block_stream->render_state == state
+                            : is_rendering && render_state == state;
     }
 
     /// Whether BeginRendering(state) would start a new render pass.
     [[nodiscard]] bool WillBeginRendering(const RenderState& state) const {
-        return !(is_rendering && render_state == state);
+        return !IsRenderingWith(state);
     }
 
     /// CommandBuffer() calls that waited for a recording thread (SPARTAN_FRAME_STATS).
     static inline std::atomic<u64> direct_recordings{0};
+    /// CommandBuffer() calls that ended a block stream early (SPARTAN_FRAME_STATS).
+    static inline std::atomic<u64> stream_breaks{0};
+    [[nodiscard]] static bool InStream() noexcept {
+        return block_stream != nullptr;
+    }
 
     /// Returns the current command buffer tick.
     [[nodiscard]] u64 CurrentTick() const noexcept {
@@ -927,7 +1096,7 @@ private:
     std::atomic<size_t> queued_chunks{0}; ///< recorder_queue.size() for lock-free polling
     bool recorder_sleeping = false; ///< waiting on recorder_cv (guarded by recorder_mutex)
     bool direct_mode = false; ///< the command buffer is recorded on the caller's thread
-    u64 host_copies_issued = 0;
+    std::atomic<u64> host_copies_issued{0};
     std::atomic<u64> host_copies_done{0};
     std::atomic<u64> deferred_signals_issued{0}; ///< by the thread recording (A or B)
     std::shared_ptr<std::atomic<u64>> deferred_signals_done =
@@ -935,6 +1104,10 @@ private:
     // spartanport: whether recorder_thread runs, read on every Record(). std::jthread::joinable()
     // compares thread ids, which on Windows (libc++ over winpthreads) costs two system calls.
     bool recording_threaded{false};
+    /// The block stream this thread records into (BeginStream), or null.
+    static inline thread_local RecordStream* block_stream = nullptr;
+    void (*break_hook)(void*) = nullptr;
+    void* break_context = nullptr;
     std::jthread recorder_thread;
     tracy::VkCtxScope* profiler_scope{};
 };

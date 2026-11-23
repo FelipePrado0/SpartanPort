@@ -23,6 +23,7 @@
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/amdgpu/pm4_cmds.h"
 #include "video_core/renderer_vulkan/vk_presenter.h"
+#include "spartanport_overlay.h"
 
 extern Frontend::WindowSDL* g_window;
 std::unique_ptr<Vulkan::Presenter> presenter;
@@ -78,8 +79,15 @@ static u32 asc_next_offs_dw[Liverpool::NumComputeRings];
 static VAddr tessellation_factors_ring_addr = -1;
 static constexpr u32 tessellation_offchip_buffer_size = 0x800000u;
 
+// spartanport: remember which submissions the lock protects so an older idle cannot clear it.
+static u64 lock_generation{};
+
 static void ResetSubmissionLock(Platform::InterruptId irq) {
     std::unique_lock lock{m_wait_idle};
+    // spartanport: keep later command buffers locked until their own GPU work retires.
+    if (submission_lock && liverpool->IdleGeneration() < lock_generation) {
+        return;
+    }
     submission_lock = 0;
     cv_lock.notify_all();
 }
@@ -1224,6 +1232,14 @@ int PS4_SYSV_ABI sceGnmMapComputeQueue(u32 pipe_id, u32 queue_id, VAddr ring_bas
 
     const auto vqid =
         liverpool->asc_queues.insert(VAddr(ring_base_addr), read_ptr_addr, ring_size_dw, pipe_id);
+    // spartanport: the slot vector grows past the hardware's queue count when a game maps more
+    // queues than it unmaps; refuse a slot that the ring offset table has no entry for.
+    if (vqid.index >= Liverpool::NumComputeRings) {
+        liverpool->asc_queues.erase(vqid);
+        LOG_ERROR(Lib_GnmDriver, "ASC pipe {} queue {}: all {} compute queue slots are mapped",
+                  pipe_id, queue_id, Liverpool::NumComputeRings);
+        return ORBIS_GNM_ERROR_COMPUTEQUEUE_INTERNAL;
+    }
     // We need to offset index as `dingDong` assumes it to be from the range [1..64]
     const auto gnm_vqid = vqid.index + 1;
     LOG_INFO(Lib_GnmDriver, "ASC pipe {} queue {} mapped to vqueue {}", pipe_id, queue_id,
@@ -1231,6 +1247,8 @@ int PS4_SYSV_ABI sceGnmMapComputeQueue(u32 pipe_id, u32 queue_id, VAddr ring_bas
 
     const auto& queue = liverpool->asc_queues[vqid];
     *queue.read_addr = 0u;
+    // spartanport: a reused queue slot must start at the new ring's beginning.
+    asc_next_offs_dw[vqid.index] = 0;
 
     return gnm_vqid;
 }
@@ -2259,6 +2277,8 @@ s32 PS4_SYSV_ABI sceGnmSubmitAndFlipCommandBuffersForWorkload(
     u32 workload, u32 count, u32* dcb_gpu_addrs[], u32* dcb_sizes_in_bytes, u32* ccb_gpu_addrs[],
     u32* ccb_sizes_in_bytes, u32 vo_handle, u32 buf_idx, u32 flip_mode, s64 flip_arg) {
     LOG_DEBUG(Lib_GnmDriver, "called [buf = {}]", buf_idx);
+    // spartanport: the game stops here while the menu or the trophy list pauses it.
+    SpartanOverlay::WaitWhilePaused();
 
     if (count != 0) {
         if (!dcb_gpu_addrs) {
@@ -2357,8 +2377,13 @@ s32 PS4_SYSV_ABI sceGnmSubmitDone() {
     LOG_DEBUG(Lib_GnmDriver, "called");
     std::scoped_lock lk{m_submit_lock};
     WaitGpuIdle();
-    if (!liverpool->IsGpuIdle()) {
-        submission_lock = true;
+    // spartanport: serialize lock setup with idle handling and record the protected generation.
+    {
+        std::unique_lock lock{m_wait_idle};
+        if (!liverpool->IsGpuIdle()) {
+            submission_lock = true;
+            lock_generation = liverpool->SubmissionsTotal();
+        }
     }
     liverpool->SubmitDone();
     send_init_packet = true;

@@ -17,11 +17,21 @@ struct WindowSystemInfo {
     void* render_surface = nullptr;
     float render_surface_scale = 1.0f;
     WindowSystemType type = WindowSystemType::Headless;
+    /// spartanport: HDR is on for the window's display (Windows HDR), sampled once at window
+    /// creation; HDR output needs a restart after a change or a move to another display.
+    bool hdr_enabled = false;
+    /// spartanport: SDL's SDR white level (units of 80 nits) and HDR headroom (the display's maximum
+    /// as a multiple of SDR white) for that display, sampled with hdr_enabled; 1 when not reported
+    /// (SpartanGraphics::HdrFromDisplay).
+    float sdr_white_level = 1.0f;
+    float hdr_headroom = 1.0f;
 };
 
 /// The pause key lets go of the mouse lock while the game's pause menu is up; pressing it again or
 /// clicking in the window takes it back (any thread).
 void ToggleMousePause();
+/// Whether the game has the mouse (relative mode, the window's lock): its movement is the game's (any thread).
+bool MouseLocked();
 
 class WindowSDL {
 public:

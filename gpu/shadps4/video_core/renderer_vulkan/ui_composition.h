@@ -9,6 +9,40 @@ namespace Vulkan::UiComposition {
 
 enum class Background { None, Copy, Temporal };
 
+template <typename Blend>
+constexpr uint32_t ColorMask(uint64_t shader, uint32_t mask, const Blend& blend) {
+    // Verified backdrop PS exports (0,0,0,0) to RT1; omit only a destination-preserving blend.
+    if (shader != 0xbcb456ff6dd871a8ull || mask != 3 || !blend.enable) {
+        return mask;
+    }
+    using Factor = typename Blend::BlendFactor;
+    using Function = typename Blend::BlendFunc;
+    const auto preserves = [](Function function, Factor destination) {
+        return function == Function::Add &&
+               (destination == Factor::One || destination == Factor::OneMinusSrcAlpha);
+    };
+    const auto alpha_function = blend.separate_alpha_blend ? blend.alpha_func : blend.color_func;
+    const auto alpha_destination =
+        blend.separate_alpha_blend ? blend.alpha_dst_factor : blend.color_dst_factor;
+    if (preserves(blend.color_func, blend.color_dst_factor) &&
+        preserves(alpha_function, alpha_destination)) {
+        return 1;
+    }
+    return mask;
+}
+
+struct DisplayDrawPlan {
+    bool seed;
+    bool discard;
+};
+
+constexpr DisplayDrawPlan PlanDisplayDraw(uint64_t shader, bool samples_ui, bool replaces_color,
+                                          bool has_depth, bool seeded) {
+    // Verified display-copy PS: samples pixel coordinates / actual image size, then decodes sRGB.
+    const bool copy = shader == 0x6d2dc8a47f6d9c23ull && samples_ui && replaces_color && !has_depth;
+    return {copy && !seeded, copy};
+}
+
 // UI composition must not require scene depth/camera or an active FSR context.
 constexpr Background Choose(bool scaled, bool ui_draw, bool scene_ready, bool fsr_active) {
     if (!scaled || !ui_draw) {
@@ -34,6 +68,14 @@ inline std::array<float, 2> Scale(uint32_t guest_width, uint32_t guest_height,
                                 bool native_coordinates) {
     return {float(output_width) / float(native_coordinates ? 1920 : guest_width),
             float(output_height) / float(native_coordinates ? 1080 : guest_height)};
+}
+
+// The push constant that turns FragCoord back into guest pixels in a pass scaled by `scale`
+// (PushData::scene_size, read as native / size). Guest clip rectangles compare against it: without
+// this, text past the guest width is cut on ultrawide outputs. Zero: already guest pixels.
+inline uint32_t FragCoordSize(std::array<float, 2> scale) {
+    if (scale[0] == 1.0f && scale[1] == 1.0f) return 0;
+    return uint32_t(1920.0f * scale[0] + 0.5f) | uint32_t(1080.0f * scale[1] + 0.5f) << 16;
 }
 
 } // namespace Vulkan::UiComposition

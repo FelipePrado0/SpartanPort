@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <functional>
 #include <chrono>
 #include <string>
@@ -125,6 +126,9 @@ struct PrepWorker {
 
 struct PreparedDraw;
 
+/// spartanport: counts prepared draws whose V#s were stale; logs the total every 5 s at most.
+void NoteStaleVertexInputs();
+
 class PipelineCache {
 public:
     explicit PipelineCache(const Instance& instance, Scheduler& scheduler,
@@ -138,6 +142,15 @@ public:
     /// the results a few at a time (PumpWarmUp). False when it cannot (zip archive store).
     bool StartBackgroundWarmUp();
     void StartOnDemand();
+    /// spartanport: waits for the startup read of the saved shaders (StartOnDemand), so a hard disk
+    /// does not serve it and the game at once. progress(done, total) false stops waiting; the read
+    /// goes on in the background.
+    void WaitDiskPrefetch(const std::function<bool(u32 done, u32 total)>& progress);
+    /// spartanport: on the first start, writes every shader of the shipped shader list into the
+    /// cache before the game runs. progress(done, total) false stops; what is written stays and the
+    /// next start goes on from there. Nothing happens without the list or once it is done.
+    void PrepareShaders(const std::filesystem::path& manifest_path,
+                        const std::function<bool(u32 done, u32 total)>& progress);
     void Sync();
     void ReportCompilerStats();
 
@@ -188,6 +201,10 @@ private:
     void FinishCompilations();
     void SeedWorkerCaches();
     bool CheckCacheProfile();
+    /// False when progress stopped it.
+    bool PreparePipelines(const std::filesystem::path& cache_dir, u64 driver_hash, u32 threads,
+                          const std::function<bool(u32, u32)>& progress);
+    std::vector<u8> ProfileBlob() const;
     struct BackgroundWarmup;
     struct WarmStage;
     void ReadWarmEntry(BackgroundWarmup& warm, std::vector<u8>&& data);

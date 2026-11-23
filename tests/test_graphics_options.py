@@ -59,7 +59,7 @@ class GraphicsOptionsTest(unittest.TestCase):
 
     def test_defaults_and_invalid_values(self):
         self.ini.write_text(
-            'render_resolution=invalid\nengine_fps=90\nstale_readback=yes\n',
+            'render_resolution=invalid\nengine_fps=300\nstale_readback=yes\n',
             encoding='utf-8',
         )
         options, reverted = g.prepare(self.ini, self.state)
@@ -267,7 +267,10 @@ class GraphicsOptionsTest(unittest.TestCase):
         # 100 is written live over the 240 FPS patch (spartanport_settings.cpp SyncEngineFps).
         self.assertEqual(g.patch_names(['Bug Fix - Texture Corruption Fix'], options),
                          ['Bug Fix - Texture Corruption Fix', 'Frame Rate Patch - 240 FPS'])
-        self.assertEqual(g.startup_options({'engine_fps': '90'})['engine_fps'], '120')  # not a choice: the default
+        for saved in ('90', '75', '30', '240'):  # the in-game slider's rates
+            self.assertEqual(g.startup_options({'engine_fps': saved})['engine_fps'], saved)
+        for saved in ('29', '241', '-60', 'ninety', '75.5'):
+            self.assertEqual(g.startup_options({'engine_fps': saved})['engine_fps'], '120')
 
     def test_engine_rate_180_for_high_refresh_displays(self):
         self.assertEqual(g.ENGINE_FPS, (60, 100, 120, 144, 180, 240))
@@ -341,13 +344,14 @@ class AspectRatioTest(unittest.TestCase):
         self.assertEqual(g.aspect_of('1280x1024'), '5:4')  # a mod's size outside the named ones
 
     def test_aspects_in_a_fixed_order_with_the_others_last(self):
-        self.assertEqual(g.aspects(g.RESOLUTIONS), ['16:9', '16:10', '21:9', '32:9', '4:3'])
-        self.assertEqual(g.aspects(g.resolutions(('1280x1024',))), ['16:9', '16:10', '21:9', '32:9', '4:3', '5:4'])
+        self.assertEqual(g.aspects(g.RESOLUTIONS), ['16:9', '16:10', '21:9', '32:9', '48:9', '4:3'])
+        self.assertEqual(g.resolutions_for('48:9', g.RESOLUTIONS), ['11520x2160'])  # #719
+        self.assertEqual(g.aspects(g.resolutions(('1280x1024',))), ['16:9', '16:10', '21:9', '32:9', '48:9', '4:3', '5:4'])
 
     def test_resolutions_of_an_aspect_smallest_first_native_on_top(self):
         self.assertEqual(g.resolutions_for('16:9', g.RESOLUTIONS),
-                         ['native', '480p', '720p', '1360x768', '900p', '1440p', '1800p', '4K', '8K'])
-        self.assertEqual(g.resolutions_for('16:10', g.RESOLUTIONS), ['1280x800', '1440x900', '1920x1200', '2560x1600'])
+                         ['native', '480p', '720p', '1360x768', '900p', '1440p', '1800p', '4K', '5120x2880', '8K'])
+        self.assertEqual(g.resolutions_for('16:10', g.RESOLUTIONS), ['1280x800', '1440x900', '1920x1200', '2560x1600', '2880x1800'])
         self.assertEqual(g.resolutions_for('4:3', g.RESOLUTIONS),
                          ['1280x960', '1440x1080', '1920x1440', '2048x1536', '2560x1920'])
 
@@ -399,6 +403,61 @@ class SteamDeckTest(unittest.TestCase):
         self.assertIn(g.STEAM_DECK_RESOLUTION, g.TESTED_RESOLUTIONS)
         self.assertEqual(g.aspect_of(g.STEAM_DECK_RESOLUTION), '16:10')
 
+    def test_upscale_render_size_follows_the_preset_scale(self):
+        # Native AA (0), Quality (1), Balanced (2), Performance (3), Ultra Performance (4), Ultra Quality (5)
+        self.assertEqual(g.upscale_render_size(1, (1920, 1080)), (1280, 720))
+        self.assertEqual(g.upscale_render_size(2, (1920, 1080)), (1130, 636))
+        self.assertEqual(g.upscale_render_size(3, (1920, 1080)), (960, 540))
+        self.assertEqual(g.upscale_render_size(4, (1920, 1080)), (640, 360))
+        self.assertEqual(g.upscale_render_size(5, (1920, 1080)), (1476, 830))
+        self.assertEqual(g.upscale_render_size(4, (1280, 720)), (640, 360))
+        for preset in range(6):
+            w, h = g.upscale_render_size(preset, (2560, 1440))
+            self.assertEqual((w % 2, h % 2), (0, 0))
+        self.assertIsNone(g.upscale_render_size(9, (1920, 1080)))
+        self.assertIsNone(g.upscale_render_size('x', (1920, 1080)))
+
+    def test_upscale_render_size_goes_above_the_games_1080p(self):
+        self.assertEqual(g.upscale_render_size(5, (2560, 1440)), (1970, 1108))
+        self.assertEqual(g.upscale_render_size(1, (3840, 2160)), (2560, 1440))
+        self.assertEqual(g.upscale_render_size(5, (3840, 2160)), (2954, 1662))
+
+    def test_the_scene_is_never_the_display_size(self):
+        # At the game's own 1920x1080 (or the output size) the game composites straight into the
+        # display buffer, before the upscaler can run: 2 pixels short instead.
+        self.assertEqual(g.upscale_render_size(0, (1920, 1080)), (1904, 1072))
+        self.assertEqual(g.upscale_render_size(0, (2560, 1440)), (2558, 1438))
+        self.assertEqual(g.upscale_render_size(0, (3840, 2160)), (3838, 2158))
+        self.assertEqual(g.upscale_render_size(3, (3840, 2160)), (1904, 1072))
+
+    def test_upscaler_output_is_the_chosen_render_resolution(self):
+        on = {'SPARTAN_EXPERIMENTAL_UPSCALER': '1'}
+        ini = {'upscaler': 'fsr3', 'preset': '1', 'render_resolution': '1440p', 'output_res': '1280x720'}
+        self.assertEqual(g.upscaler_render_size(ini, on), (1706, 960, (2560, 1440)))
+        self.assertEqual(g.upscaler_render_size({**ini, 'render_resolution': 'native'}, on), (1280, 720, (1920, 1080)))
+        self.assertEqual(g.upscaler_render_size({**ini, 'preset': '0'}, on), (2558, 1438, (2560, 1440)))
+        self.assertIsNone(g.upscaler_render_size(ini, {}))
+        self.assertIsNone(g.upscaler_render_size({**ini, 'upscaler': 'off'}, on))
+
+    def test_resolution_patch_for_any_size_matches_the_built_in_ones(self):
+        builtin = (Path(__file__).resolve().parents[1] / 'patches' / 'CUSA01623.xml').read_text(encoding='utf-8')
+        lines = lambda text: re.findall(r'<Line [^>]*/>', text)
+        for name, size in (('720p', (1280, 720)), ('1440p', (2560, 1440)), ('4K', (3840, 2160)),
+                           ('8K', (7680, 4320))):
+            block = re.search(rf'Name="Resolution Patch - {name}".*?</Metadata>', builtin, re.S)
+            self.assertEqual(lines(g.resolution_patch_xml(*size)), lines(block.group(0)), name)
+        self.assertIn('Name="Resolution Patch - 1280x720"', g.resolution_patch_xml(1280, 720))
+
+    def test_resolution_patch_takes_the_smallest_template_that_fits(self):
+        # The Video Arena (0x7cd918) grows with the template: 2.25 GiB up to 1080p, then 1440p, 4K, 8K.
+        arena = lambda xml: re.search(r'Address="0x007cd918" Value="([0-9a-f]+)"', xml).group(1)
+        self.assertEqual(arena(g.resolution_patch_xml(1918, 1078)), '00000090')
+        self.assertEqual(arena(g.resolution_patch_xml(1970, 1108)), '000000b0')
+        self.assertEqual(arena(g.resolution_patch_xml(2954, 1662)), '000000f0')
+        self.assertEqual(arena(g.resolution_patch_xml(5118, 2878)), '000000ff')
+        xml = g.resolution_patch_xml(2954, 1662)
+        for value in ('8a0b0000', '7e060000', '8a0b', '7e06', 'c5050000', '3f030000'):
+            self.assertIn(f'Value="{value}"', xml)
 
 if __name__ == '__main__':
     unittest.main()

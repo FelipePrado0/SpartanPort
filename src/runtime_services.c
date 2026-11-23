@@ -72,6 +72,16 @@ static ABI int32_t user_event(int32_t *event) {
 
 /* ---- SystemService ---- */
 static int language(void) { const char *v=getenv("SPARTAN_LANGUAGE"); return v ? atoi(v) : 1; }
+static int menu_confirm_is_swapped(const char *s) {
+    if (!s) return 0;
+    while (*s==' ' || *s=='\t') s++;
+    if (!strcmp(s,"1")) return 1;
+#ifdef _WIN32
+    return !_stricmp(s,"circle") || !_stricmp(s,"swapped") || !_stricmp(s,"true") || !_stricmp(s,"yes") || !_stricmp(s,"on");
+#else
+    return !strcasecmp(s,"circle") || !strcasecmp(s,"swapped") || !strcasecmp(s,"true") || !strcasecmp(s,"yes") || !strcasecmp(s,"on");
+#endif
+}
 static ABI int32_t system_param(int32_t id,int32_t *value) {
     if (!value) return SYSTEM_PARAMETER;
     switch (id) {
@@ -85,7 +95,18 @@ static ABI int32_t system_param(int32_t id,int32_t *value) {
 #endif
     case 5: *value=0; break;                    /* summer time */
     case 7: *value=0; break;                    /* parental level off */
-    case 1000: *value=1; break;                 /* enter button = cross */
+    case 1000: {
+        const char *v=getenv("SPARTAN_MENU_CONFIRM_SWAP");
+        if (!v || !*v) v=getenv("SPARTAN_MENU_CONFIRM");
+        int swapped=0;
+        if (v && *v) {
+            swapped=menu_confirm_is_swapped(v);
+        } else {
+            swapped=spartanportgpu_menu_confirm_swap();
+        }
+        *value=swapped ? 0 : 1;                 /* enter button: 1 = cross, 0 = circle */
+        break;
+    }
     default: fprintf(stderr,"STOP: unsupported system parameter %d\n",id); exit(21);
     }
     return 0;
@@ -297,13 +318,26 @@ static void save_utf8(char *out, size_t size, const unsigned char *in, size_t li
     }
     out[n]=0;
 }
+/* Last-modified time (seconds) of a save; 0 when unavailable. */
+static int64_t save_mtime(const char *dir) {
+    if (!dir || !*dir) return 0;
+    int64_t t=runtime_savedata_mtime(USER_ID,dir);
+    if (t>0) return t;
+    unsigned char param[RUNTIME_SAVE_PARAM_SIZE];
+    if (runtime_savedata_param(USER_ID,dir,param)==0) {
+        memcpy(&t,param+1288,8);
+        if (t>0) return t;
+    }
+    return 0;
+}
 static void save_label(char *out, size_t size, const char *dir, int compact) {
     unsigned char param[RUNTIME_SAVE_PARAM_SIZE];
     const char *unknown=save_text("Difficulty / play time unavailable","Dificuldade / tempo de jogo indisponíveis");
     if (runtime_savedata_param(USER_ID,dir,param)) {
         snprintf(out,size,"%s\n%s",compact ? save_text("Location unavailable","Local indisponível") : dir,unknown); return;
     }
-    int64_t mtime; memcpy(&mtime,param+1288,8);
+    int64_t mtime=save_mtime(dir);
+    if (mtime<=0) memcpy(&mtime,param+1288,8);
     time_t t=(time_t)mtime; struct tm tm;
 #ifdef _WIN32
     int dated=mtime>0 && localtime_s(&tm,&t)==0;
@@ -358,6 +392,29 @@ static void save_read_preview(void) {
         save_dialog.new_icon=png; save_dialog.new_icon_size=(uint64_t)size;
     } else free(png);
 }
+typedef struct { char name[32]; int64_t mtime; } SaveSortEntry;
+/* Newest first; deterministic tie-breaking by name for equal timestamps.
+ * Missing and invalid timestamps (mtime <= 0) form a single category at the bottom. */
+static int save_sort_compare(const void *a, const void *b) {
+    const SaveSortEntry *x=(const SaveSortEntry *)a;
+    const SaveSortEntry *y=(const SaveSortEntry *)b;
+    int x_valid=x->mtime>0, y_valid=y->mtime>0;
+    if (x_valid!=y_valid) return x_valid ? -1 : 1;
+    if (!x_valid) return strcmp(x->name,y->name);
+    if (x->mtime!=y->mtime) return x->mtime>y->mtime ? -1 : 1;
+    return strcmp(x->name,y->name);
+}
+static void save_sort_dirs(void) {
+    if (save_dialog.dir_count<=1) return;
+    SaveSortEntry entries[32];
+    for (int i=0;i<save_dialog.dir_count;++i) {
+        memcpy(entries[i].name,save_dialog.dirs[i],32);
+        entries[i].name[31]=0;
+        entries[i].mtime=save_mtime(entries[i].name);
+    }
+    qsort(entries,(size_t)save_dialog.dir_count,sizeof(SaveSortEntry),save_sort_compare);
+    for (int i=0;i<save_dialog.dir_count;++i) memcpy(save_dialog.dirs[i],entries[i].name,32);
+}
 static ABI int32_t save_open(const unsigned char *p) {
     if (!p) return DIALOG_ARG_NULL;
     if (!dialogs[2].initialized) return DIALOG_NOT_INITIALIZED;
@@ -388,6 +445,7 @@ static ABI int32_t save_open(const unsigned char *p) {
     }
     if (save_dialog.mode!=SAVE_MODE_LIST) return dialog_open_mode(2,p,52,5);
     if (save_dialog.type==1 && !save_dialog.new_icon) save_read_preview();
+    save_sort_dirs();
     save_show_list(0);
     return 0;
 }
@@ -536,10 +594,16 @@ static uint32_t trophy_flags[4];
 static uint32_t trophy_total;
 static int trophy_ready;
 
+static const char *trophy_dir(void) {
+    const char *dir=getenv("SPARTAN_USER_DIR");
+    if (dir && dir[0]) return dir;
+    const char *rf=runtime_file_user_dir();
+    if (rf && rf[0]) return rf;
+    return "user";
+}
 static const char *trophy_state_path(void) {
     static char path[512];
-    const char *dir=getenv("SPARTAN_USER_DIR");
-    snprintf(path,sizeof(path),"%s/trophies.dat",dir && dir[0] ? dir : "user");
+    snprintf(path,sizeof(path),"%s/trophies.dat",trophy_dir());
     return path;
 }
 static uint32_t trp_be32(const unsigned char *p) { return (uint32_t)p[0]<<24|(uint32_t)p[1]<<16|(uint32_t)p[2]<<8|p[3]; }
@@ -576,15 +640,17 @@ static int trophy_icon(int32_t id,const unsigned char **png,uint64_t *size) {
 /* Texts: <user dir>/trophy_texts.txt (the launcher writes it in its language on every start) or, when
  * there is none, <user dir>/trophy_names.txt. One "ID=Name | Description" per line (the description is
  * optional), "@label=text" for the labels of the notice and of the trophy list, # starts a comment. */
-static const char *const trophy_label_keys[9]={"heading","notice","unlocked","locked","all","only_unlocked","only_locked","counter","hint"};
-static char trophy_label[9][200];
+#define TROPHY_LABELS 20
+static const char *const trophy_label_keys[TROPHY_LABELS]={"heading","notice","unlocked","locked","all","only_unlocked","only_locked","counter","hint",
+    "notifications","order_list","order_common","order_rare","rarity","common","rare","very_rare","ultra_rare","hint_order","hint_notifications"};
+static char trophy_label[TROPHY_LABELS][200];
 static char trophy_names[TROPHY_MAX][64];
 static char trophy_details[TROPHY_MAX][160];
 static FILE *trophy_open_text(char *path,size_t size) {
-    const char *dir=getenv("SPARTAN_USER_DIR");
+    const char *dir=trophy_dir();
     static const char *const files[2]={"trophy_texts.txt","trophy_names.txt"};
     for (int i=0;i<2;i++) {
-        snprintf(path,size,"%s/%s",dir && dir[0] ? dir : "user",files[i]);
+        snprintf(path,size,"%s/%s",dir,files[i]);
         FILE *f=fopen(path,"rb");
         if (f) return f;
     }
@@ -608,7 +674,7 @@ static void trophy_load_names(void) {
         while (*value==' ') value++;
         if (*p=='@') {
             *eq=0;
-            for (int k=0;k<9;k++) if (!strcmp(p+1,trophy_label_keys[k])) snprintf(trophy_label[k],sizeof(trophy_label[k]),"%s",value);
+            for (int k=0;k<TROPHY_LABELS;k++) if (!strcmp(p+1,trophy_label_keys[k])) snprintf(trophy_label[k],sizeof(trophy_label[k]),"%s",value);
             continue;
         }
         char *end; long id=strtol(p,&end,10);
@@ -684,12 +750,12 @@ static void trophy_load_once(void) {
         infos[i].id=id; infos[i].name=trophy_names[id]; infos[i].detail=trophy_details[id];
         infos[i].png=png; infos[i].png_size=png_size;
     }
-    SpartanGpuTrophyLabels labels={
-        trophy_label[0][0] ? trophy_label[0] : 0, trophy_label[1][0] ? trophy_label[1] : 0,
-        trophy_label[2][0] ? trophy_label[2] : 0, trophy_label[3][0] ? trophy_label[3] : 0,
-        trophy_label[4][0] ? trophy_label[4] : 0, trophy_label[5][0] ? trophy_label[5] : 0,
-        trophy_label[6][0] ? trophy_label[6] : 0, trophy_label[7][0] ? trophy_label[7] : 0,
-        trophy_label[8][0] ? trophy_label[8] : 0};
+    /* SpartanGpuTrophyLabels: one pointer per key, in the order of trophy_label_keys (0: English). */
+    const char *label_texts[TROPHY_LABELS];
+    for (int k=0;k<TROPHY_LABELS;k++) label_texts[k]=trophy_label[k][0] ? trophy_label[k] : 0;
+    SpartanGpuTrophyLabels labels;
+    _Static_assert(sizeof(labels)==sizeof(label_texts),"one label pointer per key");
+    memcpy(&labels,label_texts,sizeof(labels));
     spartanportgpu_trophy_setup(&labels,infos,(int)total,(const volatile uint32_t *)trophy_flags);
 }
 static ABI int32_t trophy_context(int32_t *ctx,int32_t user,uint32_t label,uint64_t options) {
@@ -713,7 +779,7 @@ static void trophy_notify(int32_t id) {
     snprintf(detail,sizeof(detail),"%s",trophy_details[id]);
     int has_icon=trophy_icon(id,&png,&png_size);
     pthread_mutex_unlock(&lock);
-    spartanportgpu_toast_trophy(notice,detail,has_icon ? png : 0,has_icon ? png_size : 0);
+    spartanportgpu_toast_trophy(id,notice,detail,has_icon ? png : 0,has_icon ? png_size : 0);
 }
 /* On a PlayStation the system grants the platinum (id 0) with the last trophy: 1 when every other
  * trophy of the package is unlocked and this call just unlocked the platinum. Lock held. */

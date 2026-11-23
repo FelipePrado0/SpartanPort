@@ -3,14 +3,17 @@
 
 #pragma once
 
+#include <chrono>
 #include <deque>
 
 #include <condition_variable>
 
 #include "core/libraries/videoout/buffer.h"
+#include "video_core/renderer_vulkan/host_passes/aa_pass.h"
 #include "video_core/renderer_vulkan/host_passes/fsr_pass.h"
 #include "video_core/renderer_vulkan/host_passes/pp_pass.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
+#include "video_core/renderer_vulkan/frame_generation_policy.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_swapchain.h"
@@ -38,6 +41,15 @@ struct Frame {
     bool is_hdr{false};
     u8 id{};
     vk::Format format{}; ///< spartanport: of `image` (screenshots)
+    /// spartanport: frame generation's frame, shown before this one (Present), or null.
+    Frame* generated = nullptr;
+    bool is_generated = false; ///< spartanport: a frame generation frame (screenshots say so)
+    /// spartanport: the SDR picture expanded to HDR10 (pp.hdr 2): the nits of its white, which
+    /// screenshots map back to white; 0 for any other frame.
+    float sdr_white_nits = 0.0f;
+    /// spartanport: with sdr_white_nits, the peak its highlights were rolled off towards, which
+    /// screenshots undo before mapping white back; 0 for any other frame.
+    float sdr_peak_nits = 0.0f;
 };
 
 enum SchedulerType {
@@ -73,12 +85,14 @@ public:
         return swapchain.HasHDR();
     }
 
+    /// Called on every flip with whether the game outputs BT.2020 PQ. spartanport: with HDR output
+    /// the swapchain is HDR10 from the start (Swapchain constructor) and stays so; the post process
+    /// pass passes the game's own PQ through (1) or expands its SDR picture (2).
     void SetHDR(bool enable) {
         if (!IsHDRSupported()) {
             return;
         }
-        swapchain.SetHDR(enable);
-        pp_settings.hdr = enable ? 1 : 0;
+        pp_settings.hdr = enable ? 1 : 2;
     }
 
     VideoCore::Image& RegisterVideoOutSurface(
@@ -117,6 +131,7 @@ private:
 
     Frontend::WindowSDL& window;
     Instance instance;
+    HostPasses::AaPass aa_pass;
     HostPasses::FsrPass fsr_pass;
     HostPasses::FsrPass::Settings fsr_settings{};
     HostPasses::PostProcessingPass::Settings pp_settings{};
@@ -138,6 +153,8 @@ private:
     std::condition_variable free_cv;
     std::condition_variable_any frame_cv;
     std::vector<VAddr> vo_buffers_addr;
+    /// spartanport: frame generation pacing, the generated frame halfway between real ones.
+    FrameGenerationPolicy::Pacing frame_pacing;
 };
 
 } // namespace Vulkan

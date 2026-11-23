@@ -39,6 +39,8 @@ public:
         float frame_ms, near_plane, far_plane, vertical_fov;
         float sharpness;
         bool sharpen, reset, auto_exposure;
+        vk::Format color_format = vk::Format::eR16G16B16A16Sfloat;
+        bool hdr = false;
     };
 
     /// Records FSR 4 into `frame.cmdbuf`; the output stays in General. False when FSR 4
@@ -49,6 +51,8 @@ public:
     [[nodiscard]] const char* Problem() const noexcept;
     /// Assets or device features are missing: FSR 4 will not run in this session.
     [[nodiscard]] bool Fatal() const noexcept;
+    [[nodiscard]] bool DriverAvailable() const noexcept;
+    [[nodiscard]] const char* DriverProblem() const noexcept;
 
 private:
     struct Impl;

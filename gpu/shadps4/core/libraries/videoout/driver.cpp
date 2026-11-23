@@ -18,6 +18,7 @@
 #include "spartanport_toggles.h"
 #include "spartanport_settings.h"
 #include "spartanport_graphics.h"
+#include "spartanport_overlay.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
 #include "common/debug.h"
 #include "common/thread.h"
@@ -32,6 +33,9 @@
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_wait_diagnostics.h"
+
+// spartanport: share hitch recovery and precise waits with the pacing tests.
+#include "spartanport_frame_pacing.h"
 
 extern std::unique_ptr<Vulkan::Presenter> presenter;
 extern std::unique_ptr<AmdGpu::Liverpool> liverpool;
@@ -659,11 +663,11 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
 
     Common::AccurateTimer timer{vblank_period};
 
-    // spartanport: frame limit (see EmulatorSettings::GetFrameLimit). A request waits in the queue
-    // until its slot; slots advance by one period (no drift) but never lag behind by more.
-    // spartanport: the in-game menu changes the limit and the engine rate live (SpartanSettings::fps_limit,
-    // engine_fps); the uncapped presets keep their fixed limit, still capped by the engine rate.
-    // SPARTAN_FPS_LIMIT (measurements) is used as given.
+    // spartanport: keep the limiter phase through wake jitter; rebase after a stall so queued
+    // frames cannot catch up in a burst.
+    // spartanport: the in-game menu changes the limit and the engine rate live
+    // (SpartanSettings::fps_limit, engine_fps); the uncapped presets keep their fixed limit, still
+    // capped by the engine rate. SPARTAN_FPS_LIMIT (measurements) is used as given.
     const bool measured_limit = std::getenv("SPARTAN_FPS_LIMIT") != nullptr;
     const int vblank_hz = int(EmulatorSettings.GetVblankFrequency());
     const auto current_limit = [&] {
@@ -694,6 +698,7 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
     // spartanport: with a frame limit (uncapped presets) a queued flip is presented as soon as it
     // arrives and its slot allows, between vblanks, instead of on the next vblank tick.
     bool immediate_flips = frame_limit != 0;
+    auto next_paused_draw = std::chrono::steady_clock::now();
 
     while (!token.stop_requested()) {
         SpartanSettings::SyncEngineFps();
@@ -720,13 +725,22 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
         if (flip_slot && vblank_status.count % (main_port.flip_rate + 1) == 0) {
             const auto request = receive_request();
             if (request && frame_limit) {
-                next_flip = std::max(next_flip + frame_period, now - frame_period);
+                // spartanport: timestamp after dequeue so lock delays cannot shorten the next
+                // interval.
+                next_flip = SpartanFramePacing::NextFlipDeadline(
+                    next_flip, std::chrono::steady_clock::now(), frame_period);
             }
             if (!request) {
                 if (timer.GetTotalWait().count() < 0) { // Dont draw too fast
                     if (!main_port.is_open) {
                         DrawBlankFrame();
                     } else if (ImGui::Core::MustKeepDrawing()) {
+                        DrawLastFrame();
+                    } else if (SpartanOverlay::GamePaused() && now >= next_paused_draw) {
+                        // spartanport: the game waits while the menu or the trophy list pauses it
+                        // (SpartanOverlay::WaitWhilePaused): its last frame is drawn again, about
+                        // 60 times a second, for the overlay over it.
+                        next_paused_draw = now + std::chrono::milliseconds(16);
                         DrawLastFrame();
                     }
                 }
@@ -776,17 +790,22 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
                 if (next_flip >= tick_deadline) {
                     break;
                 }
-                std::this_thread::sleep_until(next_flip);
+                // spartanport: use the runtime high-resolution timer on Windows.
+                SpartanFramePacing::SleepUntil(next_flip);
             }
-            const auto now = std::chrono::steady_clock::now();
+            // spartanport: sample submission time after taking the request.
             const auto request = receive_request();
             if (request) {
-                next_flip = std::max(next_flip + frame_period, now - frame_period);
+                // spartanport: timestamp after dequeue so lock delays cannot shorten the next
+                // interval.
+                next_flip = SpartanFramePacing::NextFlipDeadline(
+                    next_flip, std::chrono::steady_clock::now(), frame_period);
                 Flip(request);
                 FRAME_END;
             }
         }
-        std::this_thread::sleep_until(tick_deadline);
+        // spartanport: keep sub-millisecond vblank waits precise too.
+        SpartanFramePacing::SleepUntil(tick_deadline);
     }
 }
 

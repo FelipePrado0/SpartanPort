@@ -70,7 +70,7 @@ fn change(state: &mut State, key: &str, value: Value) {
 }
 
 /// Every view, in the table's order.
-const VIEWS: [View; 8] = [
+const VIEWS: [View; 9] = [
     View::Installation,
     View::Home,
     View::Patches,
@@ -79,6 +79,7 @@ const VIEWS: [View; 8] = [
     View::Aspect,
     View::Mods,
     View::Trophies,
+    View::TrophySound,
 ];
 
 fn text(path: &Path) -> String {
@@ -118,6 +119,7 @@ fn look(state: &State, view: View) -> String {
             state.trophies.icons.len(),
             state.trophies.unlocked
         ),
+        View::TrophySound => format!("{:?}", state.trophy_sound),
     }
 }
 
@@ -239,6 +241,22 @@ fn case(view: View) -> Case {
             },
             outside: ("mods_dir", mods_folder),
             inside: ("update_dir", update),
+        },
+        View::TrophySound => Case {
+            setup: nothing,
+            disk: |state, _| {
+                let dir = state.paths.user_dir("").join("custom_trophy");
+                std::fs::create_dir_all(&dir).unwrap();
+                std::fs::write(
+                    dir.join("notifications.ini"),
+                    "volume=30
+muted=1
+",
+                )
+                .unwrap();
+            },
+            outside: ("game_dir", |_, dir| folder(&dir.join("other-game"))),
+            inside: ("user_dir", |state, _| folder(&state.paths.user_dir(""))),
         },
     }
 }

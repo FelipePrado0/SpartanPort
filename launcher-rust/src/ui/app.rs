@@ -18,13 +18,17 @@ use crate::core::desktop::{linux_tools, open_path, LinuxTools};
 use crate::core::gpu::{list_displays, monitor_options, monitor_selection, Display, GpuRow};
 use crate::core::i18n::{is_rtl, launcher_language, system_language, tr};
 use crate::core::installation::Installation;
+use crate::core::joysticks::{JoyError, Joysticks};
 use crate::core::log::{LogBuffer, MAX_LOG_LINES};
 use crate::core::paths::Paths;
 use crate::core::platform;
 use crate::core::platform::tool::SystemTools;
+use crate::core::release::ReleaseId;
 use crate::core::settings::SettingsFile;
 use crate::core::store::Store;
+use crate::core::trophy_sound::TrophySound;
 use crate::core::update::{GitHubReleases, ReleaseHost};
+use crate::startup::confirm_window;
 use crate::ui::drawer::{self, DrawerState};
 use crate::ui::fire::{intensity_for, probe_gpu, Fire};
 use crate::ui::follow::{follow, Cause};
@@ -32,6 +36,7 @@ use crate::ui::home::{self, HomeFacts};
 use crate::ui::hover_menu::HoverMenu;
 use crate::ui::lang_menu::{self, LangMenu, LangMessage};
 use crate::ui::pages::advanced;
+use crate::ui::pages::control_center::{self, LivePad};
 use crate::ui::pages::controls::{self, ControlsMessage, ControlsView};
 use crate::ui::pages::game::{self, BackupMessage, PatchesView};
 use crate::ui::pages::log::{self, LogMessage};
@@ -50,7 +55,6 @@ use crate::ui::update::{self, UpdateMessage, Updater};
 use crate::ui::version_menu::{self, VersionMessage};
 use crate::ui::widgets;
 use crate::ui::widgets::modal::{Modal, ModalKind, ModalMessage};
-use crate::VERSION;
 
 /// Starting and minimum window size, in logical pixels.
 pub const WINDOW_SIZE: Size = Size::new(1280.0, 800.0);
@@ -69,6 +73,8 @@ pub struct State {
     /// What the files held after the last save (or at the start): Save is active while the
     /// window differs from it (`persist::dirty`).
     pub saved: Option<Persisted>,
+    /// The trophy notification sound, read from the saves folder's `custom_trophy` (#1243).
+    pub trophy_sound: TrophySound,
     pub page: Page,
     pub drawer: DrawerState,
     pub drawer_progress: Animation<bool>,
@@ -78,10 +84,12 @@ pub struct State {
     pub lang: String,
     /// Whether the interface language reads right to left (Arabic).
     pub rtl: bool,
-    /// The interface zoom (`theme::ui_scale`): screen pixels per logical pixel.
+    /// The interface zoom (`theme::zoom`): screen pixels per logical pixel.
     pub scale: f32,
     /// The desktop's own scale where the window opened; 1.0 until the window reports it.
     pub desktop_scale: f32,
+    /// The window's monitor in screen pixels, once known; GUI Scale Auto fits the window to it.
+    pub monitor_px: Option<Size>,
     pub splash: SplashState,
     pub game: GameState,
     /// The Home status line while the game starts, runs or its system files are copied; empty
@@ -107,11 +115,17 @@ pub struct State {
     pub controls: ControlsView,
     /// The "Set up a controller" page while it is open, with the joysticks it reads.
     pub mapper: Option<MapperState>,
+    /// The pad the Controls page reads while it shows the gamepad.
+    pub live_pad: Option<LivePad>,
+    /// What opens that pad; the tests hand in a scripted one.
+    pub joystick_opener: fn(&Paths) -> Result<Box<dyn Joysticks>, JoyError>,
     pub patches: PatchesView,
     /// The names of the save backups, newest first.
     pub backups: Vec<String>,
     /// The backup chosen in the Saves row.
     pub backup_choice: String,
+    pub backup_details: Vec<crate::core::save_restore::Snapshot>,
+    pub restoring_saves: bool,
     /// The release list, the installed release and the download; its host is a fake in the UI
     /// tests.
     pub updater: Updater,
@@ -144,6 +158,8 @@ pub struct State {
     pub window_size: Size,
     /// The launcher window, once it has opened.
     pub window: Option<window::Id>,
+    /// When the window opened, until `WINDOW_CONFIRM` later says it works.
+    pub window_unconfirmed: Option<Instant>,
     /// Clock of the animations, advanced by `Tick` and by the messages that start them.
     pub now: Instant,
 }
@@ -169,7 +185,7 @@ impl State {
     /// `new` over `host`: the tests give it a fake so nothing reaches GitHub or the browser.
     pub fn with_host(paths: Paths, host: Arc<dyn ReleaseHost>) -> State {
         let (store, unreadable) = Store::load(&paths);
-        // What the load found at `config_file`, after its portable migration.
+        // What the load found at `config_file`.
         let config = paths.config_file();
         let settings_file = if unreadable.contains(&config) {
             SettingsFile::Unreadable
@@ -180,7 +196,7 @@ impl State {
         };
         let lang = launcher_language(&store.text("ui_language"), system_language);
         // The desktop's scale, which `window_zoom` takes out, is known once the window opens.
-        let scale = theme::ui_scale(&store.text("ui_scale"));
+        let scale = theme::zoom(&store.text("ui_scale"), 1.0, None);
         let now = Instant::now();
         let rtl = is_rtl(&lang);
         let controls = ControlsView::new(store.app());
@@ -203,6 +219,7 @@ impl State {
             rtl,
             scale,
             desktop_scale: 1.0,
+            monitor_px: None,
             splash: SplashState::new(now),
             game: Default::default(),
             status: String::new(),
@@ -218,12 +235,17 @@ impl State {
             displays_backend,
             monitor_pairs: Vec::new(),
             trophies: Default::default(),
+            trophy_sound: Default::default(),
             mods: Default::default(),
             controls,
             mapper: None,
+            live_pad: None,
+            joystick_opener: control_center::open_sdl,
             patches: Default::default(),
             backups: Vec::new(),
             backup_choice: String::new(),
+            backup_details: Vec::new(),
+            restoring_saves: false,
             updater: Updater::new(host),
             lang_menu: Default::default(),
             version_menu: Default::default(),
@@ -244,6 +266,7 @@ impl State {
             focused: true,
             window_size: WINDOW_SIZE,
             window: None,
+            window_unconfirmed: None,
             now,
         };
         // Every view the start reads, at once: the Mods page's lists too, as the Python launcher
@@ -274,6 +297,10 @@ pub enum Message {
     Browsed(String, Option<PathBuf>),
     /// A game patch check box of the Game page.
     PatchToggled(String, bool),
+    /// Turn off all cheats (Game page): every cheat off, every multiplier 1x (#1135).
+    CheatsOff,
+    /// The trophy notification sound of the Game page (#1243).
+    TrophySound(TrophySound),
     Backup(BackupMessage),
     /// The monitors the probe listed, in the background.
     MonitorsListed(Vec<Display>),
@@ -327,6 +354,12 @@ pub enum Message {
     ClearShaderCacheConfirmed,
     /// Done, or the cache folder that would not go.
     ShaderCacheCleared(Result<(), String>),
+    /// Export recorded shaders (Advanced): the save dialog opens.
+    ExportShaders,
+    /// The file the dialog chose; none when cancelled.
+    ShaderExportPicked(Option<PathBuf>),
+    /// The file and how many recorded files went in (0: nothing recorded), or why not.
+    ShadersExported(PathBuf, Result<usize, String>),
     Noop,
 }
 
@@ -376,9 +409,20 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
             if state.mapper.is_some() {
                 return mapper::key_pressed(state, &key);
             }
+            // Esc gives up on a pad remap of the Controls page.
+            if control_center::capturing(state) && key == Key::Named(Named::Escape) {
+                control_center::stop_capture(state);
+                return Task::none();
+            }
             // While a key box of the Controls page waits, the key is its input.
             if state.controls.capturing.is_some() {
                 return controls::key_pressed(state, &key, location);
+            }
+            // The keyboard picture shows the arrows: there they do not change the page.
+            if controls::shows_keys(state)
+                && matches!(key, Key::Named(Named::ArrowLeft | Named::ArrowRight))
+            {
+                return Task::none();
             }
             return match key_message(state, &key) {
                 Some(Message::Play) => Task::done(Message::Play),
@@ -389,6 +433,7 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
         Message::Resized(size) => state.window_size = size,
         Message::WindowOpened(id, size) => {
             state.window = Some(id);
+            state.window_unconfirmed = Some(state.now);
             state.window_size = size;
             return Task::batch([
                 window::scale_factor(id).map(Message::DesktopScale),
@@ -404,30 +449,58 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
                 .discard(),
             ]);
         }
-        // The monitor the window opened on: the zoom takes its scale out of GUI Scale.
+        // The monitor the window opened on: the zoom takes its scale out of GUI Scale, and Auto
+        // follows it until `MonitorSize` caps it to the screen.
         Message::DesktopScale(factor) => {
             state.desktop_scale = factor;
-            state.scale = theme::ui_scale(&state.store.text("ui_scale"));
+            state.scale = current_zoom(state);
             return fit_window(state);
         }
-        // GUI Scale (1x or 1.5x) keeps its size on the new desktop; the window is neither refitted
-        // nor moved. Its logical size changes with the zoom, so it is read again.
+        // GUI Scale 1x or 1.5x keeps its size on the new desktop; the window is neither refitted
+        // nor moved. Its logical size changes with the zoom, so it is read again. Auto takes the
+        // new desktop's scale and fits the window to the new monitor.
         Message::DesktopRescaled(factor) => {
             state.desktop_scale = factor;
-            state.scale = theme::ui_scale(&state.store.text("ui_scale"));
+            state.scale = current_zoom(state);
+            if theme::ui_scale(&state.store.text("ui_scale")).is_none() {
+                return fit_window(state);
+            }
             if let Some(id) = state.window {
                 return window::size(id).map(Message::Resized);
             }
         }
-        Message::MonitorSize(monitor) => return size_window(state, monitor),
+        Message::MonitorSize(monitor) => {
+            // iced reports the monitor in logical pixels of the current zoom.
+            let monitor = known_monitor(monitor);
+            if let Some(monitor) = monitor {
+                state.monitor_px = Some(monitor * state.scale);
+            }
+            let zoom = current_zoom(state);
+            let monitor = match (monitor, state.monitor_px) {
+                (Some(_), Some(px)) if zoom != state.scale => {
+                    state.scale = zoom;
+                    Some(px * (1.0 / zoom))
+                }
+                _ => monitor,
+            };
+            return size_window(state, monitor);
+        }
         Message::Tick(at) => {
             tick(state, at);
+            if state
+                .window_unconfirmed
+                .is_some_and(|opened| at.saturating_duration_since(opened) >= WINDOW_CONFIRM)
+            {
+                state.window_unconfirmed = None;
+                confirm_window(&state.paths.data_dir);
+            }
             lang_menu::update(state, LangMessage::Tick(at));
             let check = version_menu::update(state, VersionMessage::Tick(at));
             if state.version_menu.open {
                 state.lang_menu.open = false;
             }
             controls::tick(state, at);
+            control_center::tick(state, at);
             update::drain(state);
             // The game's output arrives with the clock.
             return Task::batch([check, play::drain(state)]);
@@ -471,6 +544,8 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
         Message::Browsed(_, None) => {}
         Message::PatchToggled(name, on) => game::patch_toggled(state, &name, on),
         Message::Backup(message) => return game::backup_update(state, message),
+        Message::CheatsOff => return game::cheats_off(state),
+        Message::TrophySound(sound) => state.trophy_sound = sound,
         Message::WindowFocused(focused) => {
             state.focused = focused;
             // As the Python's <FocusOut>: a key box of the Controls page gives up.
@@ -521,7 +596,10 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
         | Message::ClearShaderCache
         | Message::ShaderCacheSized(_)
         | Message::ClearShaderCacheConfirmed
-        | Message::ShaderCacheCleared(_)) => return advanced::update(state, message),
+        | Message::ShaderCacheCleared(_)
+        | Message::ExportShaders
+        | Message::ShaderExportPicked(_)
+        | Message::ShadersExported(..)) => return advanced::update(state, message),
         Message::OpenFolder(folder) => {
             // As the Python's `mkdir`: Explorer would open Documents instead, and `xdg-open`
             // would fail without a word. A folder that cannot be made is opened all the same.
@@ -539,6 +617,7 @@ pub fn update(state: &mut State, message: Message) -> Task<Message> {
             if state.setup.is_some() || persist::collect_unless_unreadable(state) {
                 // The open controller mapper lets SDL go and saves nothing more.
                 mapper::close(state);
+                control_center::close_live(state);
                 return window::close(id);
             }
         }
@@ -580,7 +659,12 @@ fn browse(state: &State, key: String) -> Task<Message> {
 pub fn start_monitor_listing(state: &State) -> Task<Message> {
     let paths = state.paths.clone();
     let backend = state.store.text("video_backend");
-    blocking(move || list_displays(&SystemTools, &paths, &backend)).map(Message::MonitorsListed)
+    blocking(move || {
+        list_displays(&SystemTools, &paths, &backend, &|key| {
+            std::env::var(key).ok()
+        })
+    })
+    .map(Message::MonitorsListed)
 }
 
 /// Advances the clock, the fire and the splash.
@@ -625,6 +709,9 @@ pub fn scene_size(state: &State) -> Size {
 pub fn show_page(state: &mut State, page: Page) -> Task<Message> {
     if state.page == Page::Mapper && page != Page::Mapper {
         mapper::close(state);
+    }
+    if state.page == Page::Controls && page != Page::Controls {
+        control_center::close_live(state);
     }
     let now = Instant::now();
     state.now = now;
@@ -746,12 +833,12 @@ fn dim_close_catcher<'a>() -> Element<'a, Message> {
     mouse_area(dim).on_press(Message::CloseDrawer).into()
 }
 
-/// The version and the system at the right of the bar (ruling R82): `v2.6.0 · Windows`, or
-/// `· Linux` elsewhere (nothing tells a Steam Deck apart yet). `windows` is a parameter so tests
-/// can cover both systems.
-pub fn version_label(windows: bool) -> String {
+/// The installed release and the system at the right of the bar (ruling R82): `v2.8.0 · Windows`
+/// or `v2.8.0 · beta2 · Windows`, with `· Linux` elsewhere (nothing tells a Steam Deck apart
+/// yet). `windows` is a parameter so tests can cover both systems.
+pub fn version_label(installed: &ReleaseId, windows: bool) -> String {
     let system = if windows { "Windows" } else { "Linux" };
-    format!("v{VERSION} · {system}")
+    format!("v{} · {system}", installed.short())
 }
 
 /// The id of the red line along the bar's top edge.
@@ -764,7 +851,7 @@ fn bar(state: &State) -> Element<'_, Message> {
         .fold(row![].spacing(2).height(Fill), |tabs, page| {
             tabs.push(tab(state, page))
         });
-    let version = text(version_label(cfg!(windows)))
+    let version = text(version_label(state.updater.installed(), cfg!(windows)))
         .size(13)
         .style(theme::text_muted);
     // Right to left, the bar is mirrored: the tabs sit at the right, the version at the left.
@@ -846,6 +933,10 @@ pub fn subscription(state: &State) -> Subscription<Message> {
     ])
 }
 
+/// How long the window has to run before its start counts as good: past the first frames, which
+/// a broken driver dies on after the window has already opened.
+pub const WINDOW_CONFIRM: Duration = Duration::from_secs(2);
+
 /// How fast the clock runs.
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -885,6 +976,15 @@ pub fn window_message((id, event): (window::Id, window::Event)) -> Option<Messag
         window::Event::Unfocused => Some(Message::WindowFocused(false)),
         _ => None,
     }
+}
+
+/// The zoom of the stored GUI Scale on the window's desktop and monitor (`theme::zoom`).
+pub fn current_zoom(state: &State) -> f32 {
+    theme::zoom(
+        &state.store.text("ui_scale"),
+        state.desktop_scale,
+        state.monitor_px,
+    )
 }
 
 /// The monitor's size when it is a real one: Wayland reports 0 × 0 for an output without a current

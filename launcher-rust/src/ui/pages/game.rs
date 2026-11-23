@@ -1,4 +1,4 @@
-//! The Game page: cheats, folders, save backups, the game language and the game patches.
+//! The Game page: folders, save backups, the game language, audio, cheats and the game patches.
 //!
 //! Every read of the disk happens in `refresh_backups` and `refresh_game_patches`, which
 //! `follow` calls; `view` only draws what they stored in the state.
@@ -11,20 +11,126 @@ use iced::{Center, Element, Left, Right, Task};
 use serde_json::{Map, Value};
 
 use crate::core::i18n::{tr, tr_fmt};
-use crate::core::options::LANGUAGES;
+use crate::core::options::{AUDIO_CHANNELS, LANGUAGES};
 use crate::core::patches::{builtin_xml, game_patch_metas, selectable, PatchMeta};
 use crate::core::save_backup::{list_backups, restore, KEEP};
+use crate::core::save_restore;
+use crate::core::settings::mark_default_patches_offered;
+use crate::core::trophy_sound::{self, TrophySound};
 use crate::ui::app::{Message, State};
 use crate::ui::follow::{follow, Cause};
+use crate::ui::pages::controls::ini_number;
 use crate::ui::play::{refuse_while_live, LiveAction};
-use crate::ui::tasks::blocking;
 use crate::ui::theme;
 use crate::ui::widgets::{
-    checkbox, folder, min_width, row, section, select, toggle_row, Modal, SELECT_MIN, SELECT_TEXT,
+    checkbox, folder, min_width, row, section, select, slider, toggle_row, Modal, SELECT_MIN,
+    SELECT_TEXT,
 };
+
+/// The notes under the Audio rows (#968); the translation tables key on these texts.
+pub const VOLUME_NOTE: &str = "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.";
+pub const SPEAKERS_NOTE: &str = "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.";
 
 /// The note under the Game language row; the translation tables key on this text.
 pub const LANGUAGE_NOTE: &str = "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.";
+
+/// The in-game menu's cheats in its order, which F10 + 1 to 8 follows: (ini key, label, note).
+const CHEATS: [(&str, &str, &str); 8] = [
+    ("cheat_health", "Infinite health", "Health stays full. Only Kratos is protected. Turning it off does not undo past refills."),
+    ("cheat_magic", "Infinite magic", "Magic stays full."),
+    ("cheat_item", "Infinite item meter", "The item meter (bow, Helios' head, boots) stays full."),
+    ("cheat_rage", "Infinite Rage of Sparta", "Rage of Sparta stays full."),
+    ("cheat_orbs", "Max red orbs", "Red orbs stay at the maximum."),
+    ("cheat_very_hard", "Unlock Very Hard", "Select Very Hard without completing the game. Does not change existing save difficulty. In-game: enable before opening New Game."),
+    ("cheat_double_jumps", "Infinite Double Jumps", "Repeat air jumps without landing. Also available in the in-game Cheats menu."),
+    ("auto_qte", "Automatic QTE", "Quick-time prompts answer themselves: single presses, repeated presses, holds and stick rotations."),
+];
+
+/// The in-game menu's multipliers, 0.1x to 100x: (ini key, label, note).
+const MULTIPLIERS: [(&str, &str, &str); 6] = [
+    (
+        "red_orb_multiplier",
+        "Red orbs",
+        "Red orbs gained. Orbs you have and prices stay the same.",
+    ),
+    (
+        "green_orb_multiplier",
+        "Green orbs (health)",
+        "Health from each green orb. The bar stays within its maximum.",
+    ),
+    (
+        "blue_orb_multiplier",
+        "Blue orbs (magic)",
+        "Magic from each blue orb. The bar stays within its maximum.",
+    ),
+    (
+        "gold_orb_multiplier",
+        "Gold orbs (Rage of Sparta)",
+        "Rage of Sparta from each gold orb. The bar stays within its maximum.",
+    ),
+    (
+        "damage_dealt",
+        "Damage dealt",
+        "Damage Kratos does to enemies.",
+    ),
+    ("damage_taken", "Damage taken", "Damage Kratos takes."),
+];
+
+const MULTIPLIER_MIN: f32 = 0.1;
+const MULTIPLIER_MAX: f32 = 100.0;
+/// Slider positions: the multiplier follows them on a logarithmic scale, as the in-game slider.
+const MULTIPLIER_STEPS: f32 = 1000.0;
+
+fn multiplier_text(value: f32) -> String {
+    format!("{:.3}", value.clamp(MULTIPLIER_MIN, MULTIPLIER_MAX))
+}
+
+/// A multiplier as the in-game menu shows it: a logarithmic 0.1x to 100x slider and a 1x button.
+fn multiplier<'a>(key: &'static str, value: f32) -> Element<'a, Message> {
+    let value = if value.is_finite() {
+        value.clamp(MULTIPLIER_MIN, MULTIPLIER_MAX)
+    } else {
+        1.0
+    };
+    let span = (MULTIPLIER_MAX / MULTIPLIER_MIN).ln();
+    let position = (value / MULTIPLIER_MIN).ln() / span * MULTIPLIER_STEPS;
+    let track = iced::widget::slider(0.0..=MULTIPLIER_STEPS, position, move |at: f32| {
+        let chosen = MULTIPLIER_MIN * (at / MULTIPLIER_STEPS * span).exp();
+        Message::Set(key.to_string(), Value::String(multiplier_text(chosen)))
+    })
+    .width(220.0);
+    let one = button(text("1x"))
+        .style(theme::button_flat)
+        .on_press(Message::Set(
+            key.to_string(),
+            Value::String(multiplier_text(1.0)),
+        ));
+    layout![track, text(format!("{value:.2}x")), one]
+        .spacing(10)
+        .align_y(Center)
+        .into()
+}
+
+/// Turn off all cheats: the original game, every cheat off and every multiplier 1x (#1135).
+pub(crate) fn cheats_off(state: &mut State) -> Task<Message> {
+    let mut changed = Vec::new();
+    for (key, _, _) in CHEATS {
+        if state.store.set(key, Value::Bool(false)) {
+            changed.push(key);
+        }
+    }
+    for (key, _, _) in MULTIPLIERS {
+        if state.store.set(key, Value::String(multiplier_text(1.0))) {
+            changed.push(key);
+        }
+    }
+    follow(state, Cause::Keys(&changed))
+}
+
+/// The trophy sound of the saves folder (`follow`, when the folder changes).
+pub(crate) fn refresh_trophy_sound(state: &mut State) {
+    state.trophy_sound = trophy_sound::read(&user_dir(state));
+}
 
 /// Game patches of the current dump.
 #[derive(Debug, Clone, Default)]
@@ -71,7 +177,17 @@ fn user_dir(state: &State) -> PathBuf {
 
 /// Lists the backups of the saves folder and chooses the newest.
 pub(crate) fn refresh_backups(state: &mut State) {
-    state.backups = list_backups(&user_dir(state));
+    if state.restoring_saves {
+        return;
+    }
+    state.backup_details = save_restore::list(&user_dir(state), &state.paths.port_dir);
+    state.backups = state.backup_details.iter().map(|s| s.key.clone()).collect();
+    // Keep empty automatic directories visible as before; restoring one safely refuses it.
+    for name in list_backups(&user_dir(state)) {
+        if !state.backups.contains(&name) {
+            state.backups.push(name);
+        }
+    }
     state.backup_choice = state.backups.first().cloned().unwrap_or_default();
 }
 
@@ -88,9 +204,13 @@ pub fn restore_saves(user_dir: &Path, name: &str) -> Result<Option<String>, Stri
 pub fn backup_update(state: &mut State, message: BackupMessage) -> Task<Message> {
     let lang = state.lang.clone();
     match message {
-        BackupMessage::Refresh => refresh_backups(state),
-        BackupMessage::Choose(name) => state.backup_choice = name,
+        BackupMessage::Refresh if !state.restoring_saves => refresh_backups(state),
+        BackupMessage::Choose(name) if !state.restoring_saves => state.backup_choice = name,
+        BackupMessage::Refresh | BackupMessage::Choose(_) => {}
         BackupMessage::Restore => {
+            if state.restoring_saves {
+                return Task::none();
+            }
             let name = state.backup_choice.clone();
             if name.is_empty() {
                 return Task::none();
@@ -98,24 +218,44 @@ pub fn backup_update(state: &mut State, message: BackupMessage) -> Task<Message>
             if refuse_while_live(state, LiveAction::RestoreSaves) {
                 return Task::none();
             }
-            let text = tr_fmt(
+            let mut text = tr_fmt(
                 &lang,
                 "Replace the current saves with the backup {}? The current saves are backed up first.",
                 &[&name],
             );
+            if let Some(snapshot) = state.backup_details.iter().find(|s| s.key == name) {
+                text += &format!("\n\n{}", snapshot.path.display());
+                if state
+                    .installation
+                    .title_id()
+                    .is_some_and(|id| !snapshot.titles.is_empty() && !snapshot.titles.contains(id))
+                {
+                    text += &format!("\n\n{}", tr(&lang, "This backup is for a different game ID and may be incompatible. Game IDs will not be changed."));
+                }
+            }
             state.modal = Some(Modal::confirm(
                 text,
                 Message::Backup(BackupMessage::RestoreConfirmed),
             ));
         }
         BackupMessage::RestoreConfirmed => {
+            if state.restoring_saves || refuse_while_live(state, LiveAction::RestoreSaves) {
+                return Task::none();
+            }
             state.modal = None;
+            state.restoring_saves = true;
             let user = user_dir(state);
+            let port = state.paths.port_dir.clone();
             let name = state.backup_choice.clone();
-            return blocking(move || restore_saves(&user, &name))
+            return crate::ui::tasks::blocking_or(move || {
+                save_restore::restore(&user, &port, &name, None)
+                    .map(|path| path.map(|p| p.display().to_string()))
+                    .map_err(|e| e.to_string())
+            }, Err("Save restore stopped unexpectedly. Check the before-restore backup before trying again.".to_string()))
                 .map(|result| Message::Backup(BackupMessage::Restored(result)));
         }
         BackupMessage::Restored(Ok(safety)) => {
+            state.restoring_saves = false;
             // Every view of the saves folder follows, the trophies included; the backups are
             // listed again, which moves the choice: name the backup first.
             let name = state.backup_choice.clone();
@@ -128,6 +268,7 @@ pub fn backup_update(state: &mut State, message: BackupMessage) -> Task<Message>
             return saves;
         }
         BackupMessage::Restored(Err(error)) => {
+            state.restoring_saves = false;
             state.modal = Some(Modal::error(tr_fmt(
                 &lang,
                 "Could not restore: {}",
@@ -170,8 +311,16 @@ pub fn store_game_patches(state: &mut State) {
         Some(Value::Object(map)) => map.clone(),
         _ => Map::new(),
     };
-    all.insert(title_id, Value::Array(names));
+    all.insert(title_id.clone(), Value::Array(names));
     state.store.set("game_patches", Value::Object(all));
+    let mut offered = Map::new();
+    if let Some(saved) = state.store.json("patches_offered") {
+        offered.insert("patches_offered".into(), saved.clone());
+    }
+    mark_default_patches_offered(&mut offered, &title_id);
+    if let Some(list) = offered.remove("patches_offered") {
+        state.store.set("patches_offered", list);
+    }
 }
 
 /// Reads the built-in patches of the game in `state.installation` into `state.patches`, keeping
@@ -256,7 +405,7 @@ fn backups_row(state: &State) -> Element<'_, Message> {
     let refresh = button(text(tr(lang, "Refresh")))
         .style(theme::button_flat)
         .on_press(Message::Backup(BackupMessage::Refresh));
-    row(
+    let controls = row(
         state.rtl,
         &tr(lang, "Save backups"),
         layout![choose, restore, refresh]
@@ -265,12 +414,55 @@ fn backups_row(state: &State) -> Element<'_, Message> {
             .into(),
         Some(&tr_fmt(
             lang,
-            "Made before every start, newest first; the last {} are kept. Restoring backs up the current saves first.",
+            "Automatic backups keep the last {} starts. Before-restore backups are kept separately and are never automatically deleted.",
             &[&KEEP.to_string()],
         )),
-    )
+    );
+    let mut body = column![controls].spacing(4);
+    if let Some(snapshot) = state
+        .backup_details
+        .iter()
+        .find(|s| s.key == state.backup_choice)
+    {
+        let titles = snapshot
+            .titles
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        body = body.push(
+            text(tr_fmt(
+                lang,
+                "{} · {} files · {} bytes · Game IDs: {}",
+                &[
+                    &tr(lang, snapshot.source.label()),
+                    &snapshot.files.to_string(),
+                    &snapshot.bytes.to_string(),
+                    &titles,
+                ],
+            ))
+            .size(12),
+        );
+        body = body.push(
+            text(format!(
+                "{}\n{}",
+                snapshot.time_label(),
+                snapshot.path.display()
+            ))
+            .size(12),
+        );
+        if state
+            .installation
+            .title_id()
+            .is_some_and(|id| !snapshot.titles.is_empty() && !snapshot.titles.contains(id))
+        {
+            body = body.push(text(tr(lang, "This backup is for a different game ID and may be incompatible. Game IDs will not be changed.")).size(12));
+        }
+    }
+    body.into()
 }
 
+/// Renders translated built-in patch labels with original names as toggle identities.
 fn patches_section(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
     let mut body = column![section(state.rtl, &tr(lang, "Game patches"))].spacing(2);
@@ -290,8 +482,8 @@ fn patches_section(state: &State) -> Element<'_, Message> {
     );
     for meta in &patches.selectable {
         let label = match &meta.author {
-            Some(author) => format!("{}  ({author})", meta.name),
-            None => meta.name.clone(),
+            Some(author) => format!("{}  ({author})", tr(lang, &meta.name)),
+            None => tr(lang, &meta.name),
         };
         let name = meta.name.clone();
         let note = meta.note.as_deref().map(|note| tr(lang, note));
@@ -306,32 +498,81 @@ fn patches_section(state: &State) -> Element<'_, Message> {
     body.into()
 }
 
+/// Cheats, multipliers, the button that turns them all off and the trophy sound.
+fn cheats_section<'a>(state: &State) -> Element<'a, Message> {
+    let lang = state.lang.as_str();
+    let mut body = column![section(state.rtl, &tr(lang, "Cheats"))].spacing(2);
+    for (key, label, note) in CHEATS {
+        body = body.push(checkbox(
+            state.rtl,
+            key,
+            &tr(lang, label),
+            state.store.flag(key),
+            Some(&tr(lang, note)),
+        ));
+    }
+    body = body.push(section(state.rtl, &tr(lang, "Multipliers")));
+    for (key, label, note) in MULTIPLIERS {
+        body = body.push(row(
+            state.rtl,
+            &tr(lang, label),
+            multiplier(key, ini_number(state, key)),
+            Some(&tr(lang, note)),
+        ));
+    }
+    body = body.push(row(
+        state.rtl,
+        "",
+        button(text(tr(lang, "Turn off all cheats")))
+            .style(theme::button_flat)
+            .on_press(Message::CheatsOff)
+            .into(),
+        Some(&tr(
+            lang,
+            "Turns off every cheat and sets every multiplier back to 1x: the game as it was made. In game, hold F10 and press 1 to 8 to switch the cheats above, in their order.",
+        )),
+    ));
+    let sound = state.trophy_sound;
+    body = body.push(section(state.rtl, &tr(lang, "Trophy notifications")));
+    body = body.push(toggle_row(
+        state.rtl,
+        &tr(lang, "Mute the trophy sound"),
+        sound.muted,
+        Some(move |muted| Message::TrophySound(TrophySound { muted, ..sound })),
+        Some(&tr(
+            lang,
+            "The chime of an unlocked trophy. Also in the in-game menu (Insert): Trophies > Notifications.",
+        )),
+    ));
+    let volume = iced::widget::slider(0.0..=100.0, sound.volume as f32, move |v: f32| {
+        Message::TrophySound(TrophySound {
+            volume: v.round() as u32,
+            ..sound
+        })
+    })
+    .step(1.0_f32)
+    .width(220.0);
+    body = body.push(row(
+        state.rtl,
+        &tr(lang, "Trophy sound volume"),
+        layout![volume, text(format!("{} %", sound.volume))]
+            .spacing(10)
+            .align_y(Center)
+            .into(),
+        None,
+    ));
+    body.into()
+}
+
 pub fn view(state: &State) -> Element<'_, Message> {
     let lang = state.lang.as_str();
     let hint = |english: &str| tr(lang, english);
     let language = state.store.text("language");
-    let default_saves = state.paths.data_dir.join("user").display().to_string();
+    let default_saves = state.paths.user_dir("").display().to_string();
+    // The Python marks a row that needs a new start of the game with a small `restart` note.
+    let speakers_label = format!("{}  ·  {}", tr(lang, "Speakers"), tr(lang, "restart"));
 
     column![
-        section(state.rtl, &tr(lang, "Cheats")),
-        checkbox(
-            state.rtl,
-            "cheat_double_jumps",
-            &tr(lang, "Infinite Double Jumps"),
-            state.store.flag("cheat_double_jumps"),
-            Some(&hint(
-                "Repeat air jumps without landing. Also available in the in-game Cheats menu."
-            )),
-        ),
-        checkbox(
-            state.rtl,
-            "cheat_very_hard",
-            &tr(lang, "Unlock Very Hard"),
-            state.store.flag("cheat_very_hard"),
-            Some(&hint(
-                "Select Very Hard without completing the game. Does not change existing save difficulty. In-game: enable before opening New Game."
-            )),
-        ),
         section(state.rtl, &tr(lang, "Folders")),
         folder_row(
             state,
@@ -368,6 +609,31 @@ pub fn view(state: &State) -> Element<'_, Message> {
             select("language", LANGUAGES, &language, lang),
             Some(&hint(LANGUAGE_NOTE)),
         ),
+        section(state.rtl, &tr(lang, "Audio")),
+        row(
+            state.rtl,
+            &tr(lang, "Volume"),
+            slider(
+                "master_volume",
+                0.0,
+                200.0,
+                "%",
+                ini_number(state, "master_volume")
+            ),
+            Some(&hint(VOLUME_NOTE)),
+        ),
+        row(
+            state.rtl,
+            &speakers_label,
+            select(
+                "audio_channels",
+                AUDIO_CHANNELS,
+                &state.store.text("audio_channels"),
+                lang
+            ),
+            Some(&hint(SPEAKERS_NOTE)),
+        ),
+        cheats_section(state),
         patches_section(state),
     ]
     .spacing(2)

@@ -9,10 +9,10 @@ use serde_json::Value;
 
 use crate::core::catalog::{run_default, setting, Kind};
 use crate::core::controls::{control_map, keyboard_map, Kind as ControlKind};
-use crate::core::i18n::{tr, trophy_text};
+use crate::core::i18n::{tr, trophy_text, LANGS};
 use crate::core::installation::Installation;
-use crate::core::legacy::forward_environment;
 use crate::core::options::Choice;
+use crate::core::pad_model::MAX_DEADZONE;
 use crate::core::paths::Paths;
 use crate::core::settings::Settings;
 
@@ -27,43 +27,57 @@ const VULKAN_LAYERS_DISABLE: (&str, &str) = (
     "VK_LAYER_AMD_switchable_graphics",
 );
 
-/// What the launcher changes in its own environment before anything reads it, as the Python does
-/// on import: the old `GOW3_*` names are forwarded and, on Windows, the AMD switchable-graphics
-/// layer is disabled unless the player set the variable. The game and the probes inherit it.
+/// What the launcher changes in its own environment before anything reads it: on Windows, the AMD
+/// switchable-graphics layer is disabled unless the player set the variable. The game and the
+/// probes inherit it.
 pub fn start_up_environment(env: &mut IndexMap<String, String>, windows: bool) {
     if windows {
         let (key, value) = VULKAN_LAYERS_DISABLE;
         env.entry(key.to_string())
             .or_insert_with(|| value.to_string());
     }
-    forward_environment(env);
 }
 
 fn one_or_zero(on: bool) -> String {
     if on { "1" } else { "0" }.to_string()
 }
 
-/// `user/trophy_texts.txt`: the trophy names, descriptions and labels the game shows, in the
-/// launcher's language. A failure is harmless.
-pub fn write_trophy_texts(folder: &Path, lang: &str) {
-    let labels = [
-        ("heading", "Trophies"),
-        ("notice", "TROPHY UNLOCKED"),
-        ("unlocked", "UNLOCKED"),
-        ("locked", "LOCKED"),
-        ("all", "All trophies"),
-        ("only_unlocked", "Unlocked"),
-        ("only_locked", "Locked"),
-        ("counter", "{} of {} unlocked"),
-        (
-            "hint",
-            "Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close",
-        ),
-    ];
+/// The labels of the game's trophy notice and window, as (key, English).
+const TROPHY_LABELS: [(&str, &str); 20] = [
+    ("heading", "Trophies"),
+    ("notice", "TROPHY UNLOCKED"),
+    ("unlocked", "UNLOCKED"),
+    ("locked", "LOCKED"),
+    ("all", "All trophies"),
+    ("only_unlocked", "Unlocked"),
+    ("only_locked", "Locked"),
+    ("counter", "{} of {} unlocked"),
+    (
+        "hint",
+        "Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close",
+    ),
+    ("notifications", "Notifications"),
+    ("order_list", "List order"),
+    ("order_common", "Most earned first"),
+    ("order_rare", "Rarest first"),
+    ("rarity", "{}% of players"),
+    ("common", "Common"),
+    ("rare", "Rare"),
+    ("very_rare", "Very rare"),
+    ("ultra_rare", "Ultra rare"),
+    ("hint_order", "Triangle/Tab: order   L1/R1: notifications"),
+    (
+        "hint_notifications",
+        "L1/R1: trophies   F8 / R3+R2 / Esc: close",
+    ),
+];
+
+/// The text of a trophy_texts.txt in `lang`: the labels, then "ID=Name | Description" per trophy.
+pub fn trophy_texts(lang: &str) -> String {
     let mut lines = vec![format!(
         "# Written by the launcher on every start (language: {lang}); do not edit."
     )];
-    for (key, en) in labels {
+    for (key, en) in TROPHY_LABELS {
         let text = tr(lang, en);
         let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
         lines.push(format!("@{key}={collapsed}"));
@@ -72,8 +86,20 @@ pub fn write_trophy_texts(folder: &Path, lang: &str) {
         let (name, description) = trophy_text(lang, trophy);
         lines.push(format!("{trophy}={name} | {description}"));
     }
-    if fs::create_dir_all(folder).is_ok() {
-        let _ = fs::write(folder.join("trophy_texts.txt"), lines.join("\n") + "\n");
+    lines.join("\n") + "\n"
+}
+
+/// `user/trophy_texts.txt`: the trophy names, descriptions and labels the game shows, in the
+/// launcher's language, and the same in every language in `user/trophy_texts/<language>.txt`, for
+/// the language chosen inside the game. A failure is harmless.
+pub fn write_trophy_texts(folder: &Path, lang: &str) {
+    let each = folder.join("trophy_texts");
+    if fs::create_dir_all(&each).is_err() {
+        return;
+    }
+    let _ = fs::write(folder.join("trophy_texts.txt"), trophy_texts(lang));
+    for code in LANGS {
+        let _ = fs::write(each.join(format!("{code}.txt")), trophy_texts(code));
     }
 }
 
@@ -105,6 +131,22 @@ fn choices(key: &str) -> &'static [Choice] {
         Some(Kind::Choice(list)) => list,
         _ => &[],
     }
+}
+
+/// The custom colours of the four face buttons as `cross=blue,circle=orange`: only the buttons that
+/// are not gray, which is what an unpicked one is; a name outside the palette counts as gray.
+fn custom_key_colors(settings: &Settings) -> String {
+    ["cross", "circle", "square", "triangle"]
+        .iter()
+        .filter_map(|button| {
+            let color = settings.get_str(&format!("glyph_color_{button}"));
+            let named = crate::core::options::KEY_COLORS
+                .iter()
+                .any(|choice| choice.value == color);
+            (named && color != "gray").then(|| format!("{button}={color}"))
+        })
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// `1` or `0` for the flag `key`, always written.
@@ -143,8 +185,6 @@ pub fn environment(
     let mut env = base.clone();
     env.insert(var("game_dir").into(), settings.get_str("game_dir"));
     env.shift_remove(var("update_dir"));
-    // Temporal upscaling is parked: a switch saved on earlier has no control left to turn it off.
-    env.insert(var("experimental_upscaler").into(), "0".into());
     let update_dir = settings.get_str("update_dir");
     if !update_dir.is_empty() {
         env.insert(var("update_dir").into(), update_dir.clone());
@@ -245,6 +285,7 @@ pub fn environment(
         "partial_height_views",
         "disk_shaders",
         "shader_prefetch",
+        "shader_prefetch_wait",
         "shader_notes",
     ] {
         put_switch(&mut env, settings, key);
@@ -268,6 +309,20 @@ pub fn environment(
     if !value.is_empty() {
         env.insert("SPARTAN_PAD_MAP".into(), value);
     }
+    // 0 is the game's own stick, so only a real dead zone is sent.
+    for (key, name) in [
+        ("deadzone_left", "SPARTAN_DEADZONE_LEFT"),
+        ("deadzone_right", "SPARTAN_DEADZONE_RIGHT"),
+    ] {
+        env.shift_remove(name);
+        let percent = settings.get(key).and_then(Value::as_u64).unwrap_or(0);
+        if percent > 0 && percent <= u64::from(MAX_DEADZONE) {
+            env.insert(name.into(), percent.to_string());
+        }
+    }
+    // The saved choice wins over an inherited variable, as in the Python.
+    env.shift_remove(var("switch_attacks"));
+    put_if_on(&mut env, settings, "switch_attacks");
     // A saved value that is not a choice, or is the runner's own default, is left out.
     let put_choice = |env: &mut IndexMap<String, String>, key: &str| {
         let name = var(key);
@@ -280,6 +335,32 @@ pub fn environment(
     };
     put_choice(&mut env, "stick_prompts");
     put_choice(&mut env, "glyph_style");
+    put_choice(&mut env, "glyph_keys");
+    put_choice(&mut env, "glyph_key_colors");
+    // The four picks of a custom colouring travel together, only with that choice.
+    env.shift_remove("SPARTAN_GLYPH_KEY_COLOR_MAP");
+    if env.get("SPARTAN_GLYPH_KEY_COLORS").map(String::as_str) == Some("custom") {
+        let custom = custom_key_colors(settings);
+        if !custom.is_empty() {
+            env.insert("SPARTAN_GLYPH_KEY_COLOR_MAP".into(), custom);
+        }
+    }
+    env.shift_remove("SPARTAN_MENU_CONFIRM_SWAP");
+    env.shift_remove("SPARTAN_MENU_CONFIRM");
+    if let Some(val) = settings.get("menu_confirm_swap") {
+        let is_swapped = match val {
+            Value::String(s) => matches!(
+                s.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "circle" | "swapped" | "yes" | "on"
+            ),
+            Value::Number(n) => n.as_i64() == Some(1),
+            Value::Bool(b) => *b,
+            _ => false,
+        };
+        if is_swapped {
+            env.insert("SPARTAN_MENU_CONFIRM_SWAP".into(), "1".into());
+        }
+    }
     env.insert("PYTHONUNBUFFERED".into(), "1".into());
     env.insert("PYTHONIOENCODING".into(), "utf-8".into());
     env
@@ -299,21 +380,43 @@ mod tests {
     }
 
     #[test]
+    fn a_dead_zone_is_sent_only_when_it_is_set_and_sane() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut settings = Settings(app_defaults(&|_| None));
+        let paths = Paths::from_env(dir.path(), &|_| None);
+        let run =
+            |settings: &Settings| game_environment(settings, &paths, "en", &IndexMap::new(), true);
+        let env = run(&settings);
+        assert!(!env.contains_key("SPARTAN_DEADZONE_LEFT"));
+        assert!(!env.contains_key("SPARTAN_DEADZONE_RIGHT"));
+        settings.set("deadzone_left", json!(12));
+        settings.set("deadzone_right", json!(99));
+        let env = run(&settings);
+        assert_eq!(env["SPARTAN_DEADZONE_LEFT"], "12");
+        assert!(!env.contains_key("SPARTAN_DEADZONE_RIGHT"));
+    }
+
+    #[test]
     fn windows_hides_the_amd_switchable_layer() {
-        let mut env = variables(&[("GOW3_DATA_DIR", "/old")]);
+        let mut env = variables(&[]);
         start_up_environment(&mut env, true);
         assert_eq!(
             env.get("VK_LOADER_LAYERS_DISABLE").map(String::as_str),
             Some("VK_LAYER_AMD_switchable_graphics")
         );
-        // The old names are forwarded in the same step.
-        assert_eq!(
-            env.get("SPARTAN_DATA_DIR").map(String::as_str),
-            Some("/old")
-        );
         let mut env = IndexMap::new();
         start_up_environment(&mut env, false);
         assert!(!env.contains_key("VK_LOADER_LAYERS_DISABLE"));
+    }
+
+    #[test]
+    fn the_old_gow3_names_are_not_forwarded() {
+        for windows in [true, false] {
+            let mut env = variables(&[("GOW3_DATA_DIR", "/old")]);
+            start_up_environment(&mut env, windows);
+            assert_eq!(env.get("SPARTAN_DATA_DIR"), None, "{windows}");
+            assert_eq!(env.get("GOW3_DATA_DIR").map(String::as_str), Some("/old"));
+        }
     }
 
     #[test]
@@ -436,9 +539,10 @@ mod tests {
             (
                 env["SPARTAN_DISK_SHADERS"].as_str(),
                 env["SPARTAN_SHADER_PREFETCH"].as_str(),
+                env["SPARTAN_SHADER_PREFETCH_WAIT"].as_str(),
                 env["SPARTAN_SHADER_NOTES"].as_str()
             ),
-            ("1", "1", "0")
+            ("1", "1", "0", "0")
         );
         // In the Python's order: right after the screen effects switch.
         let keys: Vec<&str> = env.keys().map(String::as_str).collect();
@@ -447,24 +551,27 @@ mod tests {
             .position(|key| *key == "SPARTAN_PARTIAL_HEIGHT_VIEWS")
             .unwrap();
         assert_eq!(
-            &keys[at + 1..at + 4],
+            &keys[at + 1..at + 5],
             [
                 "SPARTAN_DISK_SHADERS",
                 "SPARTAN_SHADER_PREFETCH",
+                "SPARTAN_SHADER_PREFETCH_WAIT",
                 "SPARTAN_SHADER_NOTES"
             ]
         );
         let (off, paths, _dir) = setup(json!({
-            "disk_shaders": false, "shader_prefetch": false, "shader_notes": false
+            "disk_shaders": false, "shader_prefetch": false, "shader_notes": false,
+            "shader_prefetch_wait": true
         }));
         let env = game_environment(&off, &paths, "en", &IndexMap::new(), true);
         assert_eq!(
             (
                 env["SPARTAN_DISK_SHADERS"].as_str(),
                 env["SPARTAN_SHADER_PREFETCH"].as_str(),
+                env["SPARTAN_SHADER_PREFETCH_WAIT"].as_str(),
                 env["SPARTAN_SHADER_NOTES"].as_str()
             ),
-            ("0", "0", "0")
+            ("0", "0", "1", "0")
         );
     }
 
@@ -480,6 +587,160 @@ mod tests {
     }
 
     #[test]
+    fn switch_attacks_follow_the_saved_choice() {
+        // Off by default: no variable, also over an inherited one.
+        let (settings, paths, _dir) = setup(json!({}));
+        let inherited = base(&[("SPARTAN_SWITCH_ATTACKS", "1")]);
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert!(!env.contains_key("SPARTAN_SWITCH_ATTACKS"));
+        let (on, paths, _dir) = setup(json!({"switch_attacks": true}));
+        let env = game_environment(&on, &paths, "en", &IndexMap::new(), true);
+        assert_eq!(env["SPARTAN_SWITCH_ATTACKS"], "1");
+        // In the Python's order: after the key and gamepad maps.
+        let keys: Vec<&str> = env.keys().map(String::as_str).collect();
+        let at = keys.iter().position(|key| *key == "SPARTAN_SWITCH_ATTACKS");
+        let key_map = keys.iter().position(|key| *key == "SPARTAN_KEY_MAP");
+        assert!(key_map.is_some() && key_map < at, "{keys:?}");
+    }
+
+    #[test]
+    fn alternative_keys_reach_the_key_map() {
+        let (settings, paths, _dir) = setup(json!({"controls": {
+            "key": {"circle": "Left Ctrl"},
+            "key_alt": {"cross": "K", "circle": "L", "square": "J", "triangle": "I"}
+        }}));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert!(env["SPARTAN_KEY_MAP"].contains(
+            "cross=Space|K,circle=Left Ctrl|L,square=Mouse Left|J,triangle=Mouse Right|I,"
+        ));
+        // Without alternatives the map has no `|`, and the gamepad map never has one.
+        let (plain, paths, _dir) = setup(json!({}));
+        let env = game_environment(&plain, &paths, "en", &IndexMap::new(), true);
+        assert!(!env["SPARTAN_KEY_MAP"].contains('|'));
+        assert!(!env.contains_key("SPARTAN_PAD_MAP"));
+    }
+
+    #[test]
+    fn both_alternatives_reach_the_key_map() {
+        let (settings, paths, _dir) = setup(json!({"controls": {
+            "key": {"circle": "Left Ctrl"},
+            "key_alt": {"cross": "9", "circle": "0", "square": "7", "triangle": "8"},
+            "key_alt2": {"cross": "Keypad 2", "circle": "Keypad 6", "square": "Keypad 4", "triangle": "Keypad 8"}
+        }}));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert!(env["SPARTAN_KEY_MAP"].contains(
+            "cross=Space|9|Keypad 2,circle=Left Ctrl|0|Keypad 6,square=Mouse Left|7|Keypad 4,triangle=Mouse Right|8|Keypad 8,"
+        ));
+    }
+
+    #[test]
+    fn every_button_with_two_alternatives_reaches_the_key_map() {
+        let rows = crate::core::controls::table_rows(crate::core::controls::Kind::Key);
+        let alternatives: serde_json::Map<String, Value> = rows
+            .iter()
+            .map(|row| (row.button.to_string(), json!("Keypad Enter")))
+            .collect();
+        let second: serde_json::Map<String, Value> = rows
+            .into_iter()
+            .map(|row| (row.button.to_string(), json!("Keypad Period")))
+            .collect();
+        let keys: serde_json::Map<String, Value> =
+            crate::core::controls::table_rows(crate::core::controls::Kind::Key)
+                .into_iter()
+                .map(|row| (row.button.to_string(), json!("Mouse Forward")))
+                .collect();
+        let (settings, paths, _dir) = setup(json!({
+            "rage_one_input": false,
+            "controls": {"key": keys, "key_alt": alternatives, "key_alt2": second}
+        }));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        let bound: Vec<&str> = env["SPARTAN_KEY_MAP"]
+            .split(',')
+            .filter(|entry| entry.contains("Mouse Forward"))
+            .collect();
+        assert!(!bound.is_empty());
+        assert!(
+            bound
+                .iter()
+                .all(|entry| entry.ends_with("|Keypad Enter|Keypad Period")),
+            "{bound:?}"
+        );
+    }
+
+    #[test]
+    fn the_icon_keys_choice_is_sent_only_when_it_is_not_the_main_key() {
+        let inherited = base(&[("SPARTAN_GLYPH_KEYS", "alternative")]);
+        let (settings, paths, _dir) = setup(json!({}));
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert!(
+            !env.contains_key("SPARTAN_GLYPH_KEYS"),
+            "the saved choice wins"
+        );
+        let (chosen, paths, _dir) = setup(json!({"glyph_keys": "alternative"}));
+        let env = game_environment(&chosen, &paths, "en", &IndexMap::new(), true);
+        assert_eq!(env["SPARTAN_GLYPH_KEYS"], "alternative");
+        let (lyre, paths, _dir) = setup(json!({"glyph_keys": "lyre"}));
+        let env = game_environment(&lyre, &paths, "en", &IndexMap::new(), true);
+        assert_eq!(env["SPARTAN_GLYPH_KEYS"], "lyre");
+        let (unknown, paths, _dir) = setup(json!({"glyph_keys": "both"}));
+        let env = game_environment(&unknown, &paths, "en", &IndexMap::new(), true);
+        assert!(!env.contains_key("SPARTAN_GLYPH_KEYS"));
+    }
+
+    #[test]
+    fn the_key_colors_are_sent_only_when_they_change_a_label() {
+        // The style, and with Custom the picks of the four buttons.
+        let colors = |edits: Value| {
+            let (settings, paths, _dir) = setup(edits);
+            let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+            (
+                env.get("SPARTAN_GLYPH_KEY_COLORS").cloned(),
+                env.get("SPARTAN_GLYPH_KEY_COLOR_MAP").cloned(),
+            )
+        };
+        let style = |name: &str| (Some(name.to_string()), None);
+        assert_eq!(colors(json!({})), (None, None));
+        assert_eq!(colors(json!({"glyph_key_colors": "gray"})), (None, None));
+        assert_eq!(
+            colors(json!({"glyph_key_colors": "playstation"})),
+            style("playstation")
+        );
+        // Custom joins the four picks, in the order of the buttons, leaving out the gray ones.
+        let custom = json!({
+            "glyph_key_colors": "custom",
+            "glyph_color_square": "blue", "glyph_color_cross": "blue",
+            "glyph_color_triangle": "orange", "glyph_color_circle": "orange"
+        });
+        assert_eq!(
+            colors(custom),
+            (
+                Some("custom".to_string()),
+                Some("cross=blue,circle=orange,square=blue,triangle=orange".to_string())
+            )
+        );
+        assert_eq!(
+            colors(json!({"glyph_key_colors": "custom", "glyph_color_circle": "red"})),
+            (Some("custom".to_string()), Some("circle=red".to_string()))
+        );
+        // Custom with nothing picked, or a name outside the palette, has no picks to send; picks
+        // while the style is not custom, and an unknown style, send nothing.
+        assert_eq!(
+            colors(json!({"glyph_key_colors": "custom"})),
+            style("custom")
+        );
+        assert_eq!(
+            colors(json!({"glyph_key_colors": "custom", "glyph_color_cross": "chartreuse"})),
+            style("custom")
+        );
+        assert_eq!(colors(json!({"glyph_color_cross": "blue"})), (None, None));
+        assert_eq!(colors(json!({"glyph_key_colors": "rainbow"})), (None, None));
+        assert_eq!(
+            colors(json!({"glyph_key_colors": "playstation", "glyph_color_cross": "blue"})),
+            style("playstation")
+        );
+    }
+
+    #[test]
     fn trophy_texts_file_has_35_rows_and_the_labels() {
         let dir = tempfile::tempdir().unwrap();
         let folder = dir.path().join("user");
@@ -487,11 +748,111 @@ mod tests {
         let text = fs::read_to_string(folder.join("trophy_texts.txt")).unwrap();
         assert!(text.ends_with('\n'));
         let lines: Vec<&str> = text.lines().collect();
-        assert_eq!(lines.len(), 45);
+        assert_eq!(lines.len(), 56);
         assert!(lines[0].starts_with("# Written by the launcher on every start (language: pt)"));
         assert_eq!(lines[1], format!("@heading={}", tr("pt", "Trophies")));
         let (name, _) = trophy_text("pt", 0);
-        assert!(lines[10].starts_with(&format!("0={name} | ")));
-        assert!(lines[44].starts_with("34="));
+        assert!(lines[21].starts_with(&format!("0={name} | ")));
+        assert!(lines[55].starts_with("34="));
+    }
+
+    #[test]
+    fn trophy_texts_are_written_in_every_language() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join("user");
+        write_trophy_texts(&folder, "pt");
+        for code in LANGS {
+            let text = fs::read_to_string(folder.join("trophy_texts").join(format!("{code}.txt")))
+                .unwrap();
+            let lines: Vec<&str> = text.lines().collect();
+            let rows = lines
+                .iter()
+                .filter(|line| line.starts_with(|c: char| c.is_ascii_digit()));
+            assert_eq!(rows.count(), TROPHY_COUNT, "{code}");
+            let labels = lines.iter().filter(|line| line.starts_with('@')).count();
+            assert_eq!(labels, TROPHY_LABELS.len(), "{code}");
+        }
+        let ru = fs::read_to_string(folder.join("trophy_texts").join("ru.txt")).unwrap();
+        assert!(ru.contains("@heading=Трофеи"));
+        assert!(ru.contains("@rarity={}% игроков"));
+        let pt = fs::read_to_string(folder.join("trophy_texts").join("pt.txt")).unwrap();
+        assert!(pt.contains("@order_rare=Mais raros primeiro"));
+    }
+
+    #[test]
+    fn english_names_are_the_ps4_list() {
+        let names: Vec<String> = [12, 23, 28]
+            .iter()
+            .map(|&id| trophy_text("en", id).0)
+            .collect();
+        assert_eq!(names, ["Torn Up", "Depths Below", "Horn of Plenty"]);
+    }
+
+    #[test]
+    fn game_environment_honors_inherited_spartan_user_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let user_folder = dir.path().join("inherited_user");
+        let user_str = user_folder.to_string_lossy().into_owned();
+        let user_clone = user_str.clone();
+        let env_fn = move |key: &str| (key == "SPARTAN_USER_DIR").then(|| user_clone.clone());
+        let paths = Paths::from_env(dir.path(), &env_fn);
+        let settings = Settings(app_defaults(&|_| None));
+        let inherited = base(&[("SPARTAN_USER_DIR", &user_str)]);
+
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert_eq!(
+            env.get("SPARTAN_USER_DIR").map(String::as_str),
+            Some(user_str.as_str())
+        );
+        assert!(user_folder.join("trophy_texts.txt").is_file());
+    }
+
+    #[test]
+    fn game_environment_honors_explicit_user_dir_over_inherited_env() {
+        let dir = tempfile::tempdir().unwrap();
+        let inherited_folder = dir.path().join("inherited_user");
+        let custom_folder = dir.path().join("custom_user");
+        let inherited_str = inherited_folder.to_string_lossy().into_owned();
+        let custom_str = custom_folder.to_string_lossy().into_owned();
+        let inh_clone = inherited_str.clone();
+        let env_fn = move |key: &str| (key == "SPARTAN_USER_DIR").then(|| inh_clone.clone());
+        let paths = Paths::from_env(dir.path(), &env_fn);
+
+        let (mut settings, _, _temp) = setup(json!({}));
+        settings.set("user_dir", json!(custom_str));
+        let inherited = base(&[("SPARTAN_USER_DIR", &inherited_str)]);
+
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert_eq!(
+            env.get("SPARTAN_USER_DIR").map(String::as_str),
+            Some(custom_str.as_str())
+        );
+        assert!(custom_folder.join("trophy_texts.txt").is_file());
+        assert!(!inherited_folder.join("trophy_texts.txt").exists());
+    }
+
+    #[test]
+    fn inherited_menu_confirm_env_is_not_leaked() {
+        let (settings, paths, _dir) = setup(json!({}));
+        let inherited = base(&[
+            ("SPARTAN_MENU_CONFIRM_SWAP", "1"),
+            ("SPARTAN_MENU_CONFIRM", "circle"),
+        ]);
+        let env = game_environment(&settings, &paths, "en", &inherited, true);
+        assert!(!env.contains_key("SPARTAN_MENU_CONFIRM_SWAP"));
+        assert!(!env.contains_key("SPARTAN_MENU_CONFIRM"));
+    }
+
+    #[test]
+    fn menu_confirm_swap_in_settings_is_forwarded() {
+        let (settings, paths, _dir) = setup(json!({"menu_confirm_swap": "1"}));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert_eq!(
+            env.get("SPARTAN_MENU_CONFIRM_SWAP").map(String::as_str),
+            Some("1")
+        );
+        let (settings, paths, _dir) = setup(json!({"menu_confirm_swap": "0"}));
+        let env = game_environment(&settings, &paths, "en", &IndexMap::new(), true);
+        assert!(!env.contains_key("SPARTAN_MENU_CONFIRM_SWAP"));
     }
 }

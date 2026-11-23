@@ -746,6 +746,7 @@ fn presets_section<'a>(state: &State) -> Element<'a, Message> {
     body.into()
 }
 
+/// Renders translated third-party labels while keeping file/name keys for toggles.
 fn patches_section<'a>(state: &State) -> Element<'a, Message> {
     let lang = state.lang.as_str();
     let mut body = column![section(state.rtl, &tr(lang, "Third-party patches"))].spacing(2);
@@ -755,9 +756,14 @@ fn patches_section<'a>(state: &State) -> Element<'a, Message> {
             .into();
     }
     for (key, _, meta) in &state.mods.external {
+        // Translate presentation only; the original file/name key remains the stored identity.
+        let display = key.split_once('/').map_or_else(
+            || tr(lang, &meta.name),
+            |(file, _)| format!("{file}/{}", tr(lang, &meta.name)),
+        );
         let label = match &meta.author {
-            Some(author) if !author.is_empty() => format!("{key}  ·  {author}"),
-            _ => key.clone(),
+            Some(author) if !author.is_empty() => format!("{display}  ·  {author}"),
+            _ => display,
         };
         let toggled = key.clone();
         body = body.push(toggle_row(
@@ -765,7 +771,7 @@ fn patches_section<'a>(state: &State) -> Element<'a, Message> {
             &label,
             state.mods.external_enabled.contains(key),
             Some(move |_| Message::Mods(ModsMessage::ToggleExternal(toggled.clone()))),
-            None,
+            meta.note.as_deref().map(|note| tr(lang, note)).as_deref(),
         ));
     }
     body.into()

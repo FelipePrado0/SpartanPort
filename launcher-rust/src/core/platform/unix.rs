@@ -63,7 +63,7 @@ pub fn is_executable(path: &Path) -> bool {
 }
 
 /// Off Windows the installed RAM is not read (the Python returns `None` too): the warning's advice
-/// is about the Windows page file and error 1450.
+/// is about the Windows page file.
 pub fn physical_memory_mb() -> Option<u64> {
     None
 }

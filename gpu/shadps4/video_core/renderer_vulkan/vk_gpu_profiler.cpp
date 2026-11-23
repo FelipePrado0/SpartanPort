@@ -11,10 +11,10 @@ namespace Vulkan {
 
 void GpuProfiler::Init(const Instance& instance, Scheduler& scheduler) {
     const char* env = std::getenv("SPARTAN_GPU_PROFILE");
-    if (!env || env[0] != '1' || instance_ptr) {
+    if (!env || env[0] != '1' || Get()) {
         return;
     }
-    instance_ptr = new GpuProfiler(instance, scheduler);
+    instance_ptr.store(new GpuProfiler(instance, scheduler), std::memory_order_release);
 }
 
 GpuProfiler::GpuProfiler(const Instance& instance, Scheduler& scheduler_)
@@ -113,8 +113,10 @@ void GpuProfiler::Print() {
     }
     std::printf("GPU profile: %.2f ms/frame over %llu frames, %zu labels\n", sum / frames,
                 static_cast<unsigned long long>(frames), sorted.size());
-    for (size_t i = 0; i < std::min<size_t>(sorted.size(), 30); ++i) {
+    for (size_t i = 0; i < sorted.size(); ++i) {
         const auto& [key, total] = sorted[i];
+        // Keep the FG breakdown even when its small stages are outside the top passes.
+        if (i >= 30 && !described[key].starts_with("FG ")) continue;
         std::printf("  %6.3f ms/frame %5.1f/frame  %s\n", total.ms / frames,
                     double(total.segments) / frames, described[key].c_str());
     }

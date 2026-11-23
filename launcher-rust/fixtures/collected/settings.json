@@ -3,7 +3,6 @@
   "ui_scale": "auto",
   "game_dir": "D:\\Games\\GOW3",
   "update_dir": "",
-  "experimental_upscaler": false,
   "video_backend": "auto",
   "gamemode": false,
   "mangohud": false,
@@ -23,6 +22,7 @@
   "partial_height_views": true,
   "disk_shaders": true,
   "shader_prefetch": true,
+  "shader_prefetch_wait": false,
   "shader_notes": false,
   "background_warmup": true,
   "parallel_warmup": true,
@@ -37,7 +37,8 @@
   "check_updates": false,
   "game_patches": {
     "CUSA01623": [
-      "Skip Intro"
+      "Skip Intro",
+      "High FPS Wall Seam Fix"
     ]
   },
   "controls": {
@@ -52,6 +53,10 @@
   "pad_style": "playstation",
   "rage_one_input": true,
   "stick_prompts": "keyboard",
-  "controls_layout": 4,
-  "glyph_style": "off"
+  "controls_layout": 5,
+  "switch_attacks": false,
+  "glyph_style": "off",
+  "patches_offered": [
+    "CUSA01623:High FPS Wall Seam Fix"
+  ]
 }

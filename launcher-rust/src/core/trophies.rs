@@ -170,6 +170,111 @@ pub fn tier_color(tier: Tier) -> &'static str {
     }
 }
 
+/// How many players earned each trophy, in percent, by id (0 platinum, 1-18 bronze, 19-29 silver,
+/// 30-34 gold). The port has no PSN connection, so these are fixed numbers: the share of the players
+/// tracked by Exophase (exophase.com) who earned each trophy, as listed in October 2026. The same
+/// table as the game's window (`gpu/shim/spartanport_trophy_rarity.h`).
+const EARNED: [f32; TROPHY_COUNT] = [
+    17.58, // 0
+    96.17, 88.31, 77.38, 73.00, 68.89, 63.78, 74.60, 65.73, 61.36, 59.96, // 1-10
+    20.99, 74.21, 22.06, 22.69, 25.90, 24.58, 75.05, 61.74, // 11-18
+    81.22, 67.16, 65.39, 58.79, 76.16, 62.61, 63.58, 38.23, 44.92, 36.38, // 19-28
+    32.85, // 29
+    54.48, 20.21, 22.39, 20.98, 20.05, // 30-34
+];
+
+/// The share of players who earned trophy `id` (percent); `None` when the package does not hold
+/// this game's list of 35 (a different game or region has others).
+pub fn earned(id: u32, trophy_count: usize) -> Option<f32> {
+    if trophy_count != TROPHY_COUNT {
+        return None;
+    }
+    EARNED.get(id as usize).copied()
+}
+
+/// PlayStation's rarity tiers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Rarity {
+    Common,
+    Rare,
+    VeryRare,
+    UltraRare,
+}
+
+impl Rarity {
+    /// Common over 50%, rare over 15%, very rare over 5%, ultra rare below.
+    pub fn of(percent: f32) -> Rarity {
+        if percent > 50.0 {
+            Rarity::Common
+        } else if percent > 15.0 {
+            Rarity::Rare
+        } else if percent > 5.0 {
+            Rarity::VeryRare
+        } else {
+            Rarity::UltraRare
+        }
+    }
+
+    pub fn english(self) -> &'static str {
+        match self {
+            Rarity::Common => "Common",
+            Rarity::Rare => "Rare",
+            Rarity::VeryRare => "Very rare",
+            Rarity::UltraRare => "Ultra rare",
+        }
+    }
+
+    /// The colour the tier is drawn in, as in the game's window.
+    pub fn color(self) -> &'static str {
+        match self {
+            Rarity::Common => "#b8bfcc",
+            Rarity::Rare => "#f2c761",
+            Rarity::VeryRare => "#d194f5",
+            Rarity::UltraRare => "#6bccff",
+        }
+    }
+}
+
+/// The orders of the list; most earned first, as in the game's window.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Order {
+    #[default]
+    MostEarned,
+    Rarest,
+    List,
+}
+
+impl Order {
+    pub const ALL: [Order; 3] = [Order::MostEarned, Order::Rarest, Order::List];
+
+    pub fn english(self) -> &'static str {
+        match self {
+            Order::MostEarned => "Most earned first",
+            Order::Rarest => "Rarest first",
+            Order::List => "List order",
+        }
+    }
+}
+
+/// `ids` in `order`: by the share of players, the ones not known last; equal ones keep their order.
+pub fn sorted(ids: &[u32], order: Order) -> Vec<u32> {
+    let mut ids = ids.to_vec();
+    let count = ids.len();
+    let key = |id: &u32| earned(*id, count);
+    match order {
+        Order::List => {}
+        Order::MostEarned => ids.sort_by(|a, b| match (key(a), key(b)) {
+            (Some(a), Some(b)) => b.total_cmp(&a),
+            (a, b) => b.is_some().cmp(&a.is_some()),
+        }),
+        Order::Rarest => ids.sort_by(|a, b| match (key(a), key(b)) {
+            (Some(a), Some(b)) => a.total_cmp(&b),
+            (a, b) => b.is_some().cmp(&a.is_some()),
+        }),
+    }
+    ids
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -326,6 +431,30 @@ mod tests {
         let empty = write(&dir, "empty.dat", &[0, 0, 0, 0]);
         assert_eq!(reset_trophies(&empty).unwrap(), 0);
         assert!(empty.exists());
+    }
+
+    #[test]
+    fn rarity_is_only_known_for_this_games_list() {
+        assert_eq!(earned(0, TROPHY_COUNT), Some(17.58));
+        assert_eq!(earned(1, TROPHY_COUNT), Some(96.17));
+        assert_eq!(earned(35, TROPHY_COUNT), None);
+        assert_eq!(earned(0, 50), None);
+        assert_eq!(Rarity::of(96.17), Rarity::Common);
+        assert_eq!(Rarity::of(17.58), Rarity::Rare);
+        assert_eq!(Rarity::of(5.5), Rarity::VeryRare);
+        assert_eq!(Rarity::of(5.0), Rarity::UltraRare);
+    }
+
+    #[test]
+    fn orders_sort_by_the_share_of_players() {
+        let ids: Vec<u32> = (0..TROPHY_COUNT as u32).collect();
+        assert_eq!(sorted(&ids, Order::List), ids);
+        let most = sorted(&ids, Order::MostEarned);
+        assert_eq!((most[0], most[1], most[34]), (1, 2, 0));
+        let rarest = sorted(&ids, Order::Rarest);
+        assert_eq!((rarest[0], rarest[1], rarest[34]), (0, 34, 1));
+        // Another list: no share known, so every order keeps the list's.
+        assert_eq!(sorted(&[3, 1, 2], Order::Rarest), [3, 1, 2]);
     }
 
     #[test]

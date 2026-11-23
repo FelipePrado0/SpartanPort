@@ -5,6 +5,7 @@
 
 int spartanportgpu_overlay_captures_input(void) { return 0; }
 int spartanportgpu_vibration_percent(void) { return 100; }
+unsigned spartanportgpu_dualsense_features(int *speaker_gain) { *speaker_gain=4; return 0; }
 int spartanportgpu_mouse_prompt_distance(void) { return 48; }
 static int pause_keys;
 void spartanportgpu_mouse_pause_key(void) { ++pause_keys; }
@@ -12,9 +13,24 @@ static int aim_style;
 int spartanportgpu_mouse_aim_style(void) { return aim_style; }
 static int aim_sensitivity=100;
 int spartanportgpu_mouse_aim_sensitivity(void) { return aim_sensitivity; }
-void spartanportgpu_engine_fps_cycle(void) {}
+void spartanportgpu_engine_fps_step(int direction) { (void)direction; }
+static SpartanActorSlot test_actor_slots[2];
+uintptr_t spartanport_actor_slots_address(void) { return (uintptr_t)test_actor_slots; }
+int spartanport_camera_stick_enabled(void) { return 0; }
+float spartanport_camera_yaw(void) { return 0; }
+void spartanport_camera_toggle(void) {}
+void spartanport_camera_steer(float x, float y, float seconds, int recenter) { (void)x; (void)y; (void)seconds; (void)recenter; }
+void spartanport_camera_look(float right_degrees, float down_degrees) { (void)right_degrees; (void)down_degrees; }
+unsigned spartanport_camera_writes(void) { return 0; }
+int spartanport_camera_live(void) { return 0; }
+int spartanportgpu_mouse_locked(void) { return 0; }
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *name) {
     (void)table; (void)count; (void)name;
+    return 0;
+}
+/* The switch-attack scan asks for mapped guest memory; these tests map none. */
+int runtime_memory_is_mapped(uintptr_t address, uint64_t size) {
+    (void)address; (void)size;
     return 0;
 }
 
@@ -26,6 +42,37 @@ static uint32_t pressed_by(const ButtonMap *map, int source) {
 }
 
 int main(void) {
+    /* The triggers are gamepad sources, and a mapped PS4 trigger leaves its physical one. */
+    ButtonMap triggers=pad_map;
+    assert(!trigger_mapped[0] && !trigger_mapped[1]);
+    assert(apply_button_map(&triggers,"l1=lefttrigger,l2=leftshoulder",false)==2);
+    assert(pressed_by(&triggers,PAD_LEFT_TRIGGER)==BTN_L1);
+    assert(pressed_by(&triggers,SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)==BTN_L2);
+    assert(trigger_mapped[0] && !trigger_mapped[1]);
+    assert(apply_button_map(&triggers,"r2=None",false)==1 && trigger_mapped[1]);
+    trigger_mapped[0]=trigger_mapped[1]=false;
+
+    /* Photo mode on a button of its own, without L1. */
+    ButtonMap photo=pad_map;
+    assert(apply_button_map(&photo,"touchpad_left=guide",false)==1);
+    assert(pressed_by(&photo,SDL_GAMEPAD_BUTTON_GUIDE)==CLICK_LEFT);
+
+    /* Dead zone: off changes nothing, inside is centre, past it the stick starts from zero. */
+    uint8_t x=140, y=128;
+    apply_deadzone(&x,&y,0);
+    assert(x==140 && y==128);
+    apply_deadzone(&x,&y,20);
+    assert(x==128 && y==128);
+    x=153; y=128;   /* 25/127, just past 19% */
+    apply_deadzone(&x,&y,19);
+    assert(x>=128 && x<=132 && y==128);
+    x=255; y=128;
+    apply_deadzone(&x,&y,20);
+    assert(x==255 && y==128);
+    x=0; y=128;
+    apply_deadzone(&x,&y,20);
+    assert(x==1 && y==128);   /* length past 1 is cut back to full tilt */
+
     ButtonMap directions=key_map;
     assert(apply_button_map(&directions,"move_up=T,move_down=G,move_left=F,move_right=H,"
                                        "look_up=Keypad 8,look_down=Keypad 2,"
@@ -51,6 +98,52 @@ int main(void) {
     ButtonMap bad=key_map;
     assert(apply_button_map(&bad,"bogus=Q,cross=NotAKey,circle,=Q,square=,,",true)==0);
     assert(bad.count==key_map.count && pressed_by(&bad,SDL_SCANCODE_SPACE)==BTN_CROSS);
+
+    /* Alternative keys: every listed source presses the button, and none of its defaults remain. */
+    ButtonMap alternatives=key_map;
+    assert(apply_button_map(&alternatives,"cross=Space|K,square=Mouse Left | J,triangle=Mouse Right|I",true)==3);
+    assert(pressed_by(&alternatives,SDL_SCANCODE_SPACE)==BTN_CROSS && pressed_by(&alternatives,SDL_SCANCODE_K)==(BTN_CROSS|BTN_DOWN));
+    assert(pressed_by(&alternatives,MOUSE_LEFT)==BTN_SQUARE && pressed_by(&alternatives,SDL_SCANCODE_J)==(BTN_SQUARE|BTN_LEFT));
+    assert(pressed_by(&alternatives,MOUSE_RIGHT)==BTN_TRIANGLE && pressed_by(&alternatives,SDL_SCANCODE_I)==(BTN_TRIANGLE|BTN_UP));
+    assert(pressed_by(&alternatives,SDL_SCANCODE_E)==0 && pressed_by(&alternatives,SDL_SCANCODE_Q)==0);
+    assert(alternatives.count==key_map.count+3);
+    /* A bad name in the list is skipped alone; with no good name the button keeps its sources. */
+    ButtonMap partly=key_map;
+    assert(apply_button_map(&partly,"cross=NotAKey|K|,circle=Bogus|,l1=None|Q",true)==2);
+    assert(pressed_by(&partly,SDL_SCANCODE_SPACE)==0 && pressed_by(&partly,SDL_SCANCODE_K)==(BTN_CROSS|BTN_DOWN));
+    assert(pressed_by(&partly,SDL_SCANCODE_LSHIFT)==BTN_CIRCLE);
+    assert(pressed_by(&partly,SDL_SCANCODE_Q)==(BTN_TRIANGLE|BTN_L1) && pressed_by(&partly,SDL_SCANCODE_1)==0);
+    /* A name repeated in the list counts once, and None still empties the button. */
+    ButtonMap repeated=key_map;
+    const size_t before_repeat=repeated.count;
+    assert(apply_button_map(&repeated,"cross=K|k|K",true)==1 && repeated.count==before_repeat);
+    assert(apply_button_map(&repeated,"cross=None",true)==1 && pressed_by(&repeated,SDL_SCANCODE_K)==BTN_DOWN);
+    /* A later entry replaces the earlier list; the stick directions and rage/grab take lists too. */
+    ButtonMap replaced=key_map;
+    assert(apply_button_map(&replaced,"cross=Q|K,cross=Space|X",true)==2);
+    assert(pressed_by(&replaced,SDL_SCANCODE_Q)==BTN_TRIANGLE && pressed_by(&replaced,SDL_SCANCODE_X)==BTN_CROSS);
+    ButtonMap several=key_map;
+    assert(apply_button_map(&several,"move_up=W|T,rage=V|B,grab=Mouse Middle|N",true)==3);
+    assert(pressed_by(&several,SDL_SCANCODE_W)==MOVE_UP && pressed_by(&several,SDL_SCANCODE_T)==MOVE_UP);
+    assert(pressed_by(&several,SDL_SCANCODE_B)==RAGE && pressed_by(&several,MOUSE_MIDDLE)==GRAB);
+    PadData combo={0};
+    combo.buttons=RAGE;
+    apply_combos(&combo);
+    assert(combo.buttons==(BTN_L3|BTN_R3));
+    /* Every button with the limit of sources still fits the map. */
+    char everything[2048]="";
+    static const char *const all_buttons[]={"cross","circle","square","triangle","l1","r1","l2","r2","l3","r3","options",
+        "touchpad_left","touchpad_right","up","down","left","right","dodge","rage","grab","weapon_next","weapon_prev","camera",
+        "move_up","move_down","move_left","move_right","look_up","look_down","look_left","look_right"};
+    for (size_t i=0;i<sizeof(all_buttons)/sizeof(*all_buttons);++i)
+        snprintf(everything+strlen(everything),sizeof(everything)-strlen(everything),"%s%s=F1|F2|F3|F4",i ? "," : "",all_buttons[i]);
+    ButtonMap full=key_map;
+    assert(apply_button_map(&full,everything,true)==(int)(sizeof(all_buttons)/sizeof(*all_buttons)));
+    assert(full.count==sizeof(all_buttons)/sizeof(*all_buttons)*MAX_SOURCES_PER_BUTTON);
+    /* The gamepad map takes alternatives too. */
+    ButtonMap pad_alternatives=pad_map;
+    assert(apply_button_map(&pad_alternatives,"cross=a|y",false)==1);
+    assert(pressed_by(&pad_alternatives,SDL_GAMEPAD_BUTTON_SOUTH)==BTN_CROSS && pressed_by(&pad_alternatives,SDL_GAMEPAD_BUTTON_NORTH)==(BTN_CROSS|BTN_TRIANGLE));
 
     /* Gamepad: Xbox layout swap; 'touchpad' is the left click, Back stays the right click and
      * the real touchpad click keeps its fingers. */
@@ -507,6 +600,39 @@ int main(void) {
     assert(spartanport_qte.pass==1);
     key_map=original_keys;
     spartanport_qte.block=0;
+
+    /* A value longer than 2048 bytes is read whole: the last entry still applies. */
+    static char long_map[4096];
+    static const char *const long_names="Mouse Forward   |   Mouse Middle   |   Left Ctrl   |   Right Ctrl";
+    static const char *const last_names="Keypad 7   |   Keypad 9   |   Keypad 1   |   Right Ctrl";
+    const size_t all_count=sizeof(all_buttons)/sizeof(*all_buttons);
+    long_map[0]=0;
+    for (size_t i=0;i<all_count;++i)
+        snprintf(long_map+strlen(long_map),sizeof(long_map)-strlen(long_map),"%s  %s  =  %s  ",
+                 i ? "," : "",all_buttons[i],i+1==all_count ? last_names : long_names);
+    assert(strlen(long_map)>2048 && strlen(long_map)<sizeof(long_map));
+    ButtonMap long_keys=key_map;
+    assert(apply_button_map(&long_keys,long_map,true)==(int)all_count);
+    assert(pressed_by(&long_keys,SDL_SCANCODE_KP_7)==LOOK_RIGHT && pressed_by(&long_keys,SDL_SCANCODE_KP_1)==LOOK_RIGHT);
+    assert((pressed_by(&long_keys,SDL_SCANCODE_RCTRL) & BTN_CROSS)!=0 && (pressed_by(&long_keys,SDL_SCANCODE_RCTRL) & LOOK_RIGHT)!=0);
+    assert((pressed_by(&long_keys,MOUSE_FORWARD) & BTN_CROSS)!=0 && (pressed_by(&long_keys,MOUSE_FORWARD) & LOOK_RIGHT)==0);
+    /* Either source presses the button in a read of the keyboard, and the main one still works. */
+    const ButtonMap before_alternatives=key_map;
+    key_map=alternatives;
+    bool alternative_keys[SDL_SCANCODE_COUNT]={0};
+    const bool still_wheel[2]={false,false};
+    PadData alternative_pad={0};
+    alternative_keys[SDL_SCANCODE_J]=true;
+    sample_keyboard(&alternative_pad,alternative_keys,0,still_wheel);
+    assert((alternative_pad.buttons & BTN_SQUARE)!=0);
+    alternative_keys[SDL_SCANCODE_J]=false;
+    alternative_pad.buttons=0;
+    sample_keyboard(&alternative_pad,alternative_keys,SDL_BUTTON_LMASK,still_wheel);
+    assert((alternative_pad.buttons & BTN_SQUARE)!=0);
+    alternative_pad.buttons=0;
+    sample_keyboard(&alternative_pad,alternative_keys,0,still_wheel);
+    assert((alternative_pad.buttons & BTN_SQUARE)==0);
+    key_map=before_alternatives;
 
     puts("PASS: pad and key maps");
 }

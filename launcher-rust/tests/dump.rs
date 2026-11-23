@@ -17,7 +17,9 @@ use spartanport_launcher::core::patches::{apply, plan, External, PlanInput, Sele
 use spartanport_launcher::runner::link_modules::DEFAULT_MODULES;
 use spartanport_launcher::runner::pause_menu::{self, decode, MenuError, Op, Record, Script};
 use spartanport_launcher::runner::prepare::{prepare, read_self};
-use spartanport_launcher::runner::{glyphs, isa_rewrite, link_libc, link_modules, pause_menu_args};
+use spartanport_launcher::runner::{
+    glyphs, isa_rewrite, link_libc, link_modules, pause_menu_args, switch_text_mounts,
+};
 
 /// The interpreter the comparisons against the frozen Python use: `SPARTANPORT_PYTHON` as one
 /// program path, else `py -3` on Windows when `py.exe` is on `PATH`, `python` on Windows
@@ -455,13 +457,25 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
         if python_glyphs(&game, &python, style).is_none() {
             return;
         }
-        let mounts = glyphs::build(&game, &rust, style, None, "", "", &assets, &mut |line| {
-            println!("{line}")
-        })
+        let mounts = glyphs::build(
+            &game,
+            &rust,
+            style,
+            None,
+            "",
+            "",
+            "",
+            "",
+            &assets,
+            &mut |line| println!("{line}"),
+        )
         .unwrap();
-        let theirs = fs::read(python.join("glyphs/stamp.json")).unwrap();
+        // The drawing's version is the one thing that differs (deviation 18 of the parity spec).
+        let theirs = String::from_utf8(fs::read(python.join("glyphs/stamp.json")).unwrap())
+            .unwrap()
+            .replacen("[12,", &format!("[{},", glyphs::VERSION), 1);
         assert_eq!(
-            fs::read(rust.join("glyphs/stamp.json")).unwrap(),
+            fs::read_to_string(rust.join("glyphs/stamp.json")).unwrap(),
             theirs,
             "{style}: stamp.json"
         );
@@ -471,12 +485,15 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
                 rust.join("glyphs").join(file),
                 python.join("glyphs").join(file),
             );
+            // The Python leaves the lyre's PlayStation symbols with the keyboard style, and makes
+            // no copy of its WAD (deviation 18 of the parity spec).
+            let lyre_only_here = style == "keyboard" && name.ends_with("OLY150.WAD");
             assert_eq!(
                 ours.is_file(),
-                theirs.is_file(),
+                theirs.is_file() || lyre_only_here,
                 "{style}: {name} made by one side only"
             );
-            if !theirs.is_file() {
+            if !ours.is_file() {
                 continue;
             }
             assert!(
@@ -484,7 +501,12 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
                 "{style}: {name} not mounted"
             );
             let original = fs::read(game.join(name)).unwrap();
-            let (ours, theirs) = (fs::read(ours).unwrap(), fs::read(theirs).unwrap());
+            let ours = fs::read(ours).unwrap();
+            let theirs = if lyre_only_here {
+                original.clone()
+            } else {
+                fs::read(theirs).unwrap()
+            };
             assert_eq!(ours.len(), theirs.len(), "{style}: {name} size");
             assert_eq!(theirs.len(), original.len(), "{style}: {name} size");
             // Both sides repaint the same entries; inside those, a DXT block either side
@@ -494,14 +516,16 @@ fn real_glyph_wads_match_python_outside_the_painted_blocks() {
             for entry in glyphs::entries(&original) {
                 let (start, end) = (entry.offset + 0x40, entry.offset + 0x40 + entry.size);
                 let changed = |copy: &[u8]| copy[start..end] != original[start..end];
-                assert_eq!(
-                    changed(&ours),
-                    changed(&theirs),
-                    "{style}: {name}: {} repainted by one side only (Rust: {})",
-                    entry.name,
-                    changed(&ours)
-                );
-                if !changed(&theirs) {
+                if !lyre_only_here {
+                    assert_eq!(
+                        changed(&ours),
+                        changed(&theirs),
+                        "{style}: {name}: {} repainted by one side only (Rust: {})",
+                        entry.name,
+                        changed(&ours)
+                    );
+                }
+                if !changed(&ours) && !changed(&theirs) {
                     continue;
                 }
                 let Some(dds) = original[start..end]
@@ -627,6 +651,87 @@ fn real_menu_wad_matches_python() {
             );
         }
     }
+}
+
+// -- Switch attacks (scripts/switch_text.py): the Weapon Switching tutorials of the dump's
+// language WADs ------------------------------------------------------------------------------------
+
+/// Runs `switch_text.build(game, out)` of `scripts/switch_text.py`: what it printed (`None` when no
+/// interpreter starts).
+fn python_switch_text(game: &Path, out: &Path) -> Option<String> {
+    let env = |key: &str| std::env::var(key).ok();
+    let command = python_command(&env).ok()?;
+    let (program, args) = command.split_first()?;
+    let script = "import sys; sys.path.insert(0, sys.argv[1]); import switch_text; \
+         switch_text.build(sys.argv[2], sys.argv[3])";
+    let output = Command::new(program)
+        .args(args)
+        .args(["-B", "-c", script])
+        .arg(repo("scripts"))
+        .arg(game)
+        .arg(out)
+        .env("PYTHONIOENCODING", "utf-8")
+        .output()
+        .ok()?;
+    assert!(
+        output.status.success(),
+        "switch_text.build failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Some(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// The files of `folder`, by name.
+fn files_of(folder: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut files: Vec<_> = fs::read_dir(folder)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .map(|path| {
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            (name, fs::read(&path).unwrap())
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+#[test]
+fn real_switch_text_wads_match_python() {
+    let Some(game) = dump() else {
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let (python, rust) = (dir.path().join("python"), dir.path().join("rust"));
+    let Some(printed) = python_switch_text(&game, &python) else {
+        return;
+    };
+    let env = [("SPARTAN_SWITCH_ATTACKS".to_string(), "1".to_string())]
+        .into_iter()
+        .collect();
+    let mut log = Vec::new();
+    let args = switch_text_mounts(&env, &game, &rust, &mut |line| log.push(line));
+    // The languages the Python left as they are, said the same way.
+    let kept: Vec<&str> = log
+        .iter()
+        .map(String::as_str)
+        .filter(|line| line.ends_with(" keeps its tutorial text"))
+        .collect();
+    assert_eq!(kept, printed.lines().collect::<Vec<_>>());
+    let ours = files_of(&rust.join("switch_text"));
+    let theirs = files_of(&python.join("switch_text"));
+    let names = |files: &[(String, Vec<u8>)]| files.iter().map(|f| f.0.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&ours), names(&theirs));
+    for ((name, ours), (_, theirs)) in ours.iter().zip(&theirs) {
+        let first = ours.iter().zip(theirs).position(|(a, b)| a != b);
+        assert!(
+            ours == theirs,
+            "{name} differs (sizes {} and {}, first difference at {first:?})",
+            ours.len(),
+            theirs.len()
+        );
+    }
+    // One mount per copy (the stamp is no WAD).
+    assert_eq!(args.len(), 2 * (theirs.len() - 1));
 }
 
 /// The dump's `R_UI.WAD` and its copy patched in English (`GameScript.setUp`,
@@ -951,7 +1056,7 @@ fn real_menu_options_row() {
         new.one("PauseOptions").unwrap(),
         new.by_name("HLDisplay")[1],
     );
-    assert_eq!(new.records.len(), old.records.len() + 62);
+    assert_eq!(new.records.len(), old.records.len() + 67);
     assert_eq!(row.parent, options.at - 4);
     let cheats = new.one("HLNativeCheats").unwrap();
     let graphics = new.one("HLNativeGraphics").unwrap();
@@ -1176,7 +1281,7 @@ fn native_names(with_link: bool) -> Vec<String> {
         ]
         .map(String::from),
     );
-    names.extend((0..4).map(|i| format!("NativeGraphic{i}")));
+    names.extend((0..9).map(|i| format!("NativeGraphic{i}")));
     names.extend((0..8).map(|i| format!("NativeDisplay{i}")));
     names.extend(
         [

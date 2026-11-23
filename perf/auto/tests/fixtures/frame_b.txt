@@ -1,0 +1,13 @@
+presented buffer 0x1151600000
+
+#0 PASS draws 820 (indices 913000), vs/ps 0c20ededc9e7c40c 00000000bddafcc2
+  color0 0x10c52d0000 R8G8B8A8Srgb 1920x1080
+  depth  0x10c6b30000 D32SfloatS8Uint 1920x1080
+  samples 0x10d5dc5700 Bc1RgbaUnormBlock 128x128
+
+#1 COMPUTE dispatches 8, cs 000000009a9cf8a9
+  writes  0x10c76a0000 R32Sfloat 1920x1080
+
+#2 PASS draws 3 (indices 18), vs/ps 0000000002c65c47
+  color0 0x1151600000 R8G8B8A8Srgb 1920x1080
+  depth  -

@@ -5,6 +5,9 @@
 
 #include "spartanport_copy.h"
 
+#include <mutex>
+#include "spartanport_spin_lock.h"
+#include <array>
 #include <deque>
 #include <boost/container/small_vector.hpp>
 
@@ -90,6 +93,9 @@ public:
     void ReadMemory(VAddr device_addr, u64 size, bool is_write = false, bool assume_locks = false);
 
     /// Finds a buffer for the specified region.
+    /// spartanport: taken by ObtainBuffer while draw resolvers run in parallel (parallel
+    /// recording); null otherwise.
+    SpartanSpin::RecursiveLock* obtain_lock = nullptr;
     [[nodiscard]] std::pair<const Buffer*, u64> ObtainBuffer(VAddr device_addr, u32 size,
                                                              bool is_written,
                                                              bool is_texel_buffer = false);
@@ -187,7 +193,13 @@ private:
     };
     IntervalList<Backing> resident_ranges;
 
-    u32 arena_memory_type_index{};
+    /// spartanport: memory types for arena residency, device-local first; the next one is tried
+    /// when a type's heap is out of memory (integrated GPUs: a small carve-out heap). Arena bytes
+    /// are counted per heap, since several memory types can share one.
+    boost::container::small_vector<u32, VK_MAX_MEMORY_TYPES> arena_memory_types;
+    std::array<u64, VK_MAX_MEMORY_HEAPS> arena_heap_bytes{};
+    u32 arena_fallback_logged{};
+    u64 arena_limit_bytes{};
     u32 block_size{};
     u32 block_shift{};
     u32 blocks_per_arena_page{};

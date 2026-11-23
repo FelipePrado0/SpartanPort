@@ -20,8 +20,9 @@ class Instance;
 
 namespace SpartanOverlay {
 
-/// Present thread, once: the ImGui context and its Vulkan backend.
-void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count);
+/// Present thread, once: the ImGui context and its Vulkan backend. hdr10_white_nits: 0 on an SDR
+/// swapchain; on the HDR10 one (HDR output), the menu is encoded to PQ with its white at these nits.
+void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count, float hdr10_white_nits);
 
 /// Window thread, for every SDL event: true when the menu consumed it.
 bool HandleEvent(const SDL_Event& event);
@@ -30,6 +31,14 @@ void UpdateTextInput(SDL_Window* window);
 
 /// Start-up loading screen (pipeline cache warm-up): `total` 0 shows no count.
 void SetLoading(bool active, u32 done, u32 total);
+/// The shader preparation's steps, as bits; the loading screen lists the ones added.
+enum LoadingStep : u32 { LoadingShaders = 1, LoadingPipelines = 2, LoadingCache = 4 };
+/// Why the screen shows: Vulkan::PrecompileReason, or LoadingCacheOnly for a plain cache read.
+inline constexpr u32 LoadingCacheOnly = 4;
+void AddLoadingSteps(u32 steps);
+void SetLoadingReason(u32 reason);
+/// The step running now (one LoadingStep), 0 for none.
+void SetLoadingStage(u32 step);
 /// Background cache warm-up: a small corner note while the game runs; `total` 0 hides it.
 void SetBackgroundLoading(u32 done, u32 total);
 /// Saved shaders read into memory at start (any thread): a lower-right note; `total` 0 hides it.
@@ -44,14 +53,22 @@ bool Visible();
 /// Any thread: a short message in the lower right corner (a saved screenshot).
 void ShowNotice(const std::string& text, int milliseconds = 3000);
 
-/// Any thread (R3 + L1 + R1, F9): the next engine frame rate (60, 100, 120, 144, 180, 240), said on screen.
-void CycleEngineFps();
+/// Any thread (R3 + R1 / L1, F9 + Right / Left): the engine frame rate 5 FPS up (1) or down (-1),
+/// said on screen.
+void StepEngineFps(int direction);
 
 /// Present thread: draws into `view` (layout ColorAttachmentOptimal).
 void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent);
 
 /// The menu is open or a text entry is shown: the game's input is held neutral.
 bool CapturesInput();
+
+/// The menu or the trophy list is open and the player keeps the game stopped meanwhile
+/// (SpartanSettings::pause_game): the present thread draws the last frame again for the overlay.
+bool GamePaused();
+
+/// Game threads, where they hand in a frame or a sound buffer: waits while GamePaused().
+void WaitWhilePaused();
 
 /// Window thread: the game's text dialog (sceImeDialog). Shown as a box on screen until
 /// `active` is false; typing goes to the window (sdl_window), the box only displays it.

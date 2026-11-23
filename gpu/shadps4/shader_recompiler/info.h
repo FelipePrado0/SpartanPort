@@ -18,6 +18,7 @@
 #include "shader_recompiler/params.h"
 #include "shader_recompiler/resource.h"
 #include "shader_recompiler/runtime_info.h"
+#include "spartanport_guest_memory.h"
 
 namespace Serialization {
 struct Archive;
@@ -173,6 +174,8 @@ struct Info : InfoPersistent {
     static constexpr u32 MaxUdSnapshots = 6;
     static inline thread_local UdSnapshot ud_snapshots[MaxUdSnapshots];
     static inline thread_local u32 num_ud_snapshots = 0;
+    /// spartanport: on while ReplayTranslate runs. The resource table walk reads guest memory.
+    static inline thread_local bool replaying = false;
 
     const UdSnapshot* Snapshot() const noexcept {
         for (u32 i = 0; i < num_ud_snapshots; ++i) {
@@ -207,14 +210,43 @@ struct Info : InfoPersistent {
         return *reinterpret_cast<const T*>(&FlatUserData()[sharp_idx]);
     }
 
+    // spartanport: missing pointer pairs and low table addresses leave no vertex input to fetch.
+    bool UdPointerNull(u32 ptr_index) const noexcept {
+        if (ptr_index == IR::NumScalarRegs) {
+            return false;
+        }
+        const auto ud = UserData();
+        if (ptr_index >= ud.size() || ud.size() - ptr_index < 2) {
+            return true;
+        }
+        u64 pointer;
+        std::memcpy(&pointer, &ud[ptr_index], sizeof(pointer));
+        return (pointer & 0xFFFFFFFFFFFFULL) < 0x10000;
+    }
+
     template <typename T>
     T ReadUdReg(u32 ptr_index, u32 dword_offset) const noexcept {
-        T data;
+        // spartanport: null or short user data reads as an empty descriptor instead of faulting.
+        T data{};
         const auto ud = UserData();
         const u32* base = ud.data();
         if (ptr_index != IR::NumScalarRegs) {
+            if (ptr_index >= ud.size() || ud.size() - ptr_index < 2) {
+                return data;
+            }
             std::memcpy(&base, &ud[ptr_index], sizeof(base));
             base = reinterpret_cast<const u32*>(VAddr(base) & 0xFFFFFFFFFFFFULL);
+            if (VAddr(base) < 0x10000) {
+                return data;
+            }
+            // spartanport: a non-null table can be unmapped since the shader was built; a fault
+            // reads as an empty descriptor (evill33t 2756fa5dce).
+            SpartanGuest::Read(&data, reinterpret_cast<std::uintptr_t>(base + dword_offset),
+                               sizeof(T));
+            return data;
+        } else if (dword_offset > ud.size() ||
+                   sizeof(T) > (ud.size() - dword_offset) * sizeof(u32)) {
+            return data;
         }
         std::memcpy(&data, base + dword_offset, sizeof(T));
         return data;
@@ -241,7 +273,7 @@ struct Info : InfoPersistent {
         flattened_ud_buf.resize(srt_info.flattened_bufsize_dw);
         ASSERT(user_data.size() <= NUM_USER_DATA_REGS);
         std::memcpy(flattened_ud_buf.data(), user_data.data(), user_data.size_bytes());
-        if (srt_info.walker_func) {
+        if (srt_info.walker_func && !replaying) {
             srt_info.walker_func(user_data.data(), flattened_ud_buf.data());
         }
     }
@@ -251,9 +283,8 @@ struct Info : InfoPersistent {
         auto buf = ReadUdReg<AmdGpu::Buffer>(static_cast<u32>(tess_consts_ptr_base),
                                              static_cast<u32>(tess_consts_dword_offset));
         VAddr tess_constants_addr = buf.base_address;
-        memcpy(&tess_constants,
-               reinterpret_cast<TessellationDataConstantBuffer*>(tess_constants_addr),
-               sizeof(tess_constants));
+        // spartanport: a stale or null buffer reads as zeroed constants (evill33t 2756fa5dce).
+        SpartanGuest::Read(&tess_constants, tess_constants_addr, sizeof(tess_constants));
     }
 
     void Serialize(Serialization::Archive& ar) const;

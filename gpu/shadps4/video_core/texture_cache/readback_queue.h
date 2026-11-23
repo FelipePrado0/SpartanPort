@@ -16,6 +16,8 @@ public:
         Payload payload;
         bool valid = true;
         bool watched = true; ///< still protects its pages (see ReleaseOutside)
+        std::uint64_t release_hash = 0;
+        bool has_release_hash = false;
     };
     bool CanFit(std::uint64_t size) const {
         return entries.size() < 64 && size <= MaxBytes && bytes <= MaxBytes - size;
@@ -30,7 +32,9 @@ public:
     std::uint64_t RequiredTick(std::uint64_t address, std::uint64_t size, bool exact = false) const {
         std::uint64_t tick = 0;
         for (const auto& entry : entries) {
-            if (entry.valid && entry.watched && Overlaps(entry, address, size, exact)) tick = entry.tick;
+            if (entry.valid && (exact || entry.watched) && Overlaps(entry, address, size, exact)) {
+                tick = entry.tick;
+            }
         }
         return tick;
     }

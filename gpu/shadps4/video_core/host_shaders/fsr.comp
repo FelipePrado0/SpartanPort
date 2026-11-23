@@ -53,7 +53,12 @@ AH4 FsrEasuBH(AF2 p) { AH4 res = AH4(textureGather(sampler2D(InputTexture, Input
 
 #if SAMPLE_RCAS
 #define FSR_RCAS_H
-AH4 FsrRcasLoadH(ASW2 p) { return AH4(texelFetch(sampler2D(InputTexture, InputSampler), ASU2(p), 0)); }
+// spartanport: keep RCAS neighbourhood reads inside the picture at its edges.
+AH4 FsrRcasLoadH(ASW2 p) {
+    return AH4(texelFetch(sampler2D(InputTexture, InputSampler),
+                         clamp(ASU2(p), ASU2(0),
+                               textureSize(sampler2D(InputTexture, InputSampler), 0) - 1), 0));
+}
 void FsrRcasInputH(inout AH1 r, inout AH1 g, inout AH1 b) { }
 #endif// SAMPLE_RCAS
 

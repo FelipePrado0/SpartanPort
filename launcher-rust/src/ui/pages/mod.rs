@@ -2,6 +2,7 @@
 //! and the drawer body of each.
 
 pub mod advanced;
+pub mod control_center;
 pub mod controls;
 pub mod game;
 pub mod graphics;

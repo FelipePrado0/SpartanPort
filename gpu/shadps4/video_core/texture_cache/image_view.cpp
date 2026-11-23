@@ -59,7 +59,8 @@ ImageViewInfo::ImageViewInfo(const AmdGpu::Image& image, const Shader::ImageReso
         format = Vulkan::LiverpoolToVK::PromoteFormatToDepth(format);
     }
 
-    range.base.level = image.base_level;
+    // spartanport: a base level past the clamped mip chain selects the last level (#5453).
+    range.base.level = std::min<u32>(image.base_level, image.NumLevels() - 1);
     range.base.layer = std::min<u32>(image.base_array, image.NumLayers() - 1);
     range.extent.levels = image.NumViewLevels(desc.is_array);
     range.extent.layers = image.NumViewLayers(desc.is_array);

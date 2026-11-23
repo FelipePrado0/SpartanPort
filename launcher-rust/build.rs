@@ -1,7 +1,14 @@
 //! Embeds `assets/spartanport.ico` into the Windows executable, so Explorer, the taskbar and a
 //! shortcut to the exe show the SpartanPort icon (R92). Nothing happens on other systems.
+//! It also forwards the release tag (`SPARTAN_RELEASE_TAG`) into the binary.
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=SPARTAN_RELEASE_TAG");
+    if let Ok(tag) = std::env::var("SPARTAN_RELEASE_TAG") {
+        if !tag.is_empty() {
+            println!("cargo:rustc-env=SPARTAN_RELEASE_TAG={tag}");
+        }
+    }
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=assets/spartanport.ico");
     #[cfg(windows)]

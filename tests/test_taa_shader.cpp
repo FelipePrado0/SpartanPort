@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
     auto descriptors = device.createDescriptorSetLayoutUnique({
         .flags=vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR,
         .bindingCount=u32(bindings.size()),.pBindings=bindings.data()},nullptr,d).value;
-    const vk::PushConstantRange push{vk::ShaderStageFlagBits::eCompute,0,64};
+    const vk::PushConstantRange push{vk::ShaderStageFlagBits::eCompute,0,128};
     auto layout = device.createPipelineLayoutUnique({.setLayoutCount=1,.pSetLayouts=&*descriptors,
         .pushConstantRangeCount=1,.pPushConstantRanges=&push},nullptr,d).value;
     std::vector<u32> override_code;
@@ -148,8 +148,9 @@ int main(int argc, char** argv) {
         struct Params {
             float x,y;u32 reset,pad;
             std::array<float,4> proj,prev_proj,previous_z;
+            std::array<float,16> reproject;
         } params{jitter_x,0,reset,0,{1,1,1,-0.05f},{1,1,1,-0.05f},
-                 {0,0,1,z_translation}};
+                 {0,0,1,z_translation},{}};
         cmd.bindPipeline(vk::PipelineBindPoint::eCompute,*pipeline,d);
         cmd.pushDescriptorSetKHR(vk::PipelineBindPoint::eCompute,*layout,0,writes,d);
         cmd.pushConstants(*layout,vk::ShaderStageFlagBits::eCompute,0,sizeof(params),&params,d);

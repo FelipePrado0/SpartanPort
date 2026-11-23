@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "spartanport_image_state.h"
+#include "spartanport_readback_bounds.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -134,6 +136,13 @@ public:
     bool ResolveReadbacks(VAddr address, u64 size, bool assume_locks = true,
                           ReadbackSource source = ReadbackSource::Unknown);
     void CancelReadbacks(VAddr address, u64 size, bool exact = false);
+    // spartanport: whether a guest-view read of the range would fault on a pending readback, for
+    // readers that go through the backing view instead.
+    bool ReadbackBlocksRead(VAddr address, u64 size);
+    // spartanport: counts the readbacks that read-protect their pages. A backing-view reader that
+    // sees it change during its copy may have read a page a readback protected (and perhaps
+    // already retired) meanwhile. Zero when pending pages stay readable (stale readbacks).
+    u64 ReadbackGeneration() const;
 
     /// Retrieves the image handle of the image with the provided attributes.
     [[nodiscard]] ImageId FindImage(ImageDesc& desc, bool exact_fmt = false);
@@ -165,13 +174,26 @@ public:
         const Image& image = slot_images[image_id];
         const u32 flags = std::atomic_ref<u32>(const_cast<u32&>(reinterpret_cast<const u32&>(image.flags)))
                               .load(std::memory_order_acquire);
+        return UpToDate(image, flags);
+    }
+
+    /// spartanport: IsUpToDate and the fast path of UpdateImage (spartanport_image_state.h).
+    [[nodiscard]] bool UpToDate(const Image& image, u32 flags) const {
         constexpr u32 Dirty = static_cast<u32>(ImageFlagBits::Dirty);
         constexpr u32 Registered = static_cast<u32>(ImageFlagBits::Registered);
         constexpr u32 Aliased = static_cast<u32>(ImageFlagBits::Aliased);
-        return (flags & (Dirty | Registered | Aliased)) == Registered &&
-               !has_backing_writes.load(std::memory_order_acquire) &&
-               image.track_addr == image.guest_begin && image.track_addr_end == image.guest_end &&
-               image.lru_touched_tick == gc_tick;
+        const bool dirty = (flags & Dirty) != 0;
+        return SpartanImageState::UpToDate({
+            .registered = (flags & Registered) != 0,
+            .dirty = dirty,
+            .aliased = (flags & Aliased) != 0,
+            // Only read when it matters: the field sits in the large ImageInfo.
+            .guest_samples = dirty ? image.info.guest_samples : 1u,
+            .backing_writes = has_backing_writes.load(std::memory_order_acquire),
+            .tracked = image.track_addr == image.guest_begin && image.track_addr_end == image.guest_end,
+            .touched = image.lru_touched_tick == gc_tick,
+            .msaa_dirty_ignored = dirty && !SpartanToggle::Disabled(SpartanToggle::MsaaDirtyIgnored),
+        });
     }
 
     /// Updates image contents if it was modified by CPU.
@@ -184,14 +206,8 @@ public:
             const Image& image = slot_images[image_id];
             const u32 flags = std::atomic_ref<u32>(const_cast<u32&>(reinterpret_cast<const u32&>(image.flags)))
                                   .load(std::memory_order_acquire);
-            constexpr u32 Dirty = static_cast<u32>(ImageFlagBits::Dirty);
-            constexpr u32 Registered = static_cast<u32>(ImageFlagBits::Registered);
             // Images sharing memory with another take the locked path: SynchronizeAlias.
-            constexpr u32 Aliased = static_cast<u32>(ImageFlagBits::Aliased);
-            if ((flags & (Dirty | Registered | Aliased)) == Registered &&
-                !has_backing_writes.load(std::memory_order_acquire) &&
-                image.track_addr == image.guest_begin && image.track_addr_end == image.guest_end &&
-                image.lru_touched_tick == gc_tick) {
+            if (UpToDate(image, flags)) {
                 return;
             }
         }
@@ -363,6 +379,22 @@ public:
         }
     }
 
+    // spartanport: every image is registered in its first page; exact-address lookups need
+    // no other page. Entries here are unkeyed, so retain the full address comparison.
+    template <typename Func>
+    void ForEachImageWithAddress(VAddr cpu_addr, Func&& func) {
+        const auto it = page_table.find(cpu_addr >> Traits::PageBits);
+        if (it == nullptr) {
+            return;
+        }
+        for (const ImageId image_id : *it) {
+            Image& image = slot_images[image_id];
+            if (image.info.guest_address == cpu_addr) {
+                func(image_id, image);
+            }
+        }
+    }
+
 private:
     /// Iterate over all page indices in a range
     template <typename Func>
@@ -379,9 +411,6 @@ private:
             }
         }
     }
-
-    /// Copies image memory back to CPU.
-    void DownloadImageMemory(ImageId image_id, bool sync = false);
 
     /// spartanport: a recorded image-to-staging copy, written to guest memory after a GPU wait.
     struct PendingDownload {
@@ -413,6 +442,9 @@ private:
     void UntrackImage(ImageId image_id);
     void UntrackImageHead(ImageId image_id);
     void UntrackImageTail(ImageId image_id);
+
+    // spartanport: use the same mapped guest range when marking and checking a small image.
+    static std::optional<u64> MaybeDirtyHash(const Image& image);
 
     void MarkAsMaybeDirty(ImageId image_id, Image& image);
 
@@ -448,8 +480,11 @@ private:
     tsl::robin_map<u64, Sampler> samplers;
     std::unordered_set<ImageId> download_images;
     u64 total_used_memory = 0;
-    u64 gc_evictions = 0, gc_downloads = 0; ///< spartanport: pressure report
+    u64 gc_evictions = 0; ///< spartanport: pressure report
+    // spartanport: count old tiled images retained by the latest pass for pressure diagnostics.
+    u64 gc_kept = 0, gc_kept_bytes = 0;
     std::chrono::steady_clock::time_point gc_report_time{};
+    std::chrono::steady_clock::time_point heap_report_time{};
     u64 trigger_gc_memory = 0;
     u64 pressure_gc_memory = 0;
     u64 critical_gc_memory = 0;
@@ -517,6 +552,8 @@ private:
     ReadbackQueue<Vulkan::StagingBufferRef> pending_readbacks;
     std::mutex readback_mutex;
     std::atomic<bool> has_pending_readbacks{false};
+    SpartanReadback::Bounds readback_bounds; ///< the span of pending_readbacks (ReadbackBounds)
+    std::atomic<u64> readback_generation{0};
     u64 readbacks_queued = 0, readbacks_completed = 0, readbacks_waited = 0;
     u64 readbacks_canceled = 0, readbacks_peak_bytes = 0;
     std::chrono::steady_clock::time_point readback_report = std::chrono::steady_clock::now();

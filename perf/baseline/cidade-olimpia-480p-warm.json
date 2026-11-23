@@ -1,0 +1,67 @@
+{
+  "scenario": "cidade-olimpia-480p",
+  "cache": "warm",
+  "runs": 3,
+  "runs_requested": 3,
+  "summary": {
+    "fps_median": 99.2,
+    "us_per_draw_median": null,
+    "draws_per_frame_median": 2621.0,
+    "p99_frametime_ms": 18.07,
+    "frames_over_25ms": 12,
+    "frames_over_40ms": 4,
+    "window_compiles": 2,
+    "worst_frame_ms": 124.4,
+    "crashes": 0,
+    "crash_line": ""
+  },
+  "spread": {
+    "fps_median": [
+      94.75,
+      100.7
+    ],
+    "us_per_draw_median": [
+      null,
+      null
+    ],
+    "draws_per_frame_median": [
+      2615.0,
+      2621.5
+    ],
+    "p99_frametime_ms": [
+      17.59,
+      24.61
+    ],
+    "frames_over_25ms": [
+      6,
+      14
+    ],
+    "frames_over_40ms": [
+      1,
+      5
+    ],
+    "window_compiles": [
+      2,
+      2
+    ],
+    "worst_frame_ms": [
+      45.9,
+      125.5
+    ]
+  },
+  "infra_fail": null,
+  "limits": {},
+  "machine": {
+    "gpu": "AMD Radeon RX 6700 XT"
+  },
+  "build": "e54415b2+dirty",
+  "toggles": 0,
+  "date": "2026-11-18T22:37:52",
+  "run_ids": [
+    "cidade-olimpia-480p-warm-20261118-222601-2",
+    "cidade-olimpia-480p-warm-20261118-222601-3",
+    "cidade-olimpia-480p-warm-20261118-222601-4"
+  ],
+  "load_s": 37.7,
+  "source": "cidade-olimpia-480p-warm-20261118-222601.json"
+}

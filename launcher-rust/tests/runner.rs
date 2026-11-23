@@ -213,14 +213,14 @@ impl Port {
     }
 }
 
-/// This process's environment without the variables a run reads (`SPARTAN_*`, the old `GOW3_*`
-/// names and the fake probe's), so the developer's own settings never reach a test.
+/// This process's environment without the variables a run reads (`SPARTAN_*` and the fake
+/// probe's), so the developer's own settings never reach a test.
 fn clean_environment() -> IndexMap<String, String> {
     std::env::vars_os()
         .filter_map(|(key, value)| Some((key.into_string().ok()?, value.into_string().ok()?)))
         .filter(|(key, _)| {
             let key = key.to_uppercase();
-            !["SPARTAN_", "GOW3_", "FAKE_PROBE_"]
+            !["SPARTAN_", "FAKE_PROBE_"]
                 .iter()
                 .any(|prefix| key.starts_with(prefix))
         })
@@ -433,7 +433,8 @@ fn run_writes_every_derived_file_and_starts_the_probe_with_the_python_command_li
         var("SPARTAN_CONFIG"),
         Some(text(&port.root.join("spartanport.ini")))
     );
-    assert_eq!(var("SPARTAN_UPSCALER").as_deref(), Some("none"));
+    // The game reads spartanport.ini's upscaler (Off by default); the runner no longer forces it.
+    assert_eq!(var("SPARTAN_UPSCALER"), None);
     assert_eq!(var("SPARTAN_READBACK_LINEAR").as_deref(), Some("1"));
     assert_eq!(
         var("SPARTAN_WINDOW_ICON"),
@@ -634,6 +635,63 @@ fn a_relative_controller_file_is_the_ports() {
     );
 }
 
+/// `LAUNCHER --prepare <args>` in `port`, with the probe left as the empty file it is.
+fn prepare_in(port: &Port, args: &[&std::ffi::OsStr]) -> Ran {
+    let output = Command::new(LAUNCHER)
+        .arg("--prepare")
+        .args(args)
+        .env_clear()
+        .envs(port.environment(&[]))
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    Ran {
+        code: output.status.code(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    }
+}
+
+#[test]
+fn prepare_makes_the_image_and_the_profile_and_starts_nothing() {
+    let port = Port::new();
+    let ran = prepare_in(&port, &["--game".as_ref(), port.game().as_os_str()]);
+    assert_eq!(ran.code, Some(0), "{ran}");
+    in_order(
+        &ran.stdout,
+        &[
+            "progress 0.1 ",
+            "imported symbols",
+            "progress 0.8 ",
+            "AppContent profile",
+            "progress 1 ",
+        ],
+    );
+    for file in ["boot-linked.bin", "content.bin"] {
+        assert!(port.out().join(file).is_file(), "{file}: {ran}");
+    }
+}
+
+#[test]
+fn prepare_names_a_folder_without_eboot_and_a_missing_game() {
+    let port = Port::new();
+    let empty = port.root.join("not a game");
+    fs::create_dir_all(&empty).unwrap();
+    let ran = prepare_in(&port, &["--game".as_ref(), empty.as_os_str()]);
+    assert_eq!(ran.code, Some(1), "{ran}");
+    assert!(
+        ran.stdout
+            .contains(&format!("No eboot.bin in {}.", empty.display())),
+        "{ran}"
+    );
+    let ran = prepare_in(&port, &[]);
+    assert_eq!(ran.code, Some(1), "{ran}");
+    assert!(
+        ran.stdout.contains("--prepare needs --game <folder>"),
+        "{ran}"
+    );
+}
+
 #[test]
 fn a_missing_eboot_fails_with_the_python_message() {
     let port = Port::new();
@@ -708,6 +766,23 @@ fn a_relative_data_dir_is_from_the_port() {
     for call in calls.iter() {
         assert_eq!(call.cwd.as_deref(), Some(port.root.as_path()), "{call:?}");
     }
+}
+
+#[test]
+fn a_run_does_not_take_the_old_game_settings() {
+    let port = Port::in_folder("port");
+    let host = FakeHost::default();
+    let mut out = Vec::new();
+    let mut program = port.program(&[]);
+    program
+        .env
+        .insert("SPARTAN_DATA_DIR".into(), "data2".into());
+    fs::create_dir_all(port.root.join("data2")).unwrap();
+    fs::write(port.root.join("data2/gow3.ini"), "[OldName]\nmarker=gow3\n").unwrap();
+    let code = run_with(Port::context(&program, &mut out), &host);
+    assert_eq!(code, 0, "{}", String::from_utf8_lossy(&out));
+    let ini = fs::read_to_string(port.root.join("data2/spartanport.ini")).unwrap_or_default();
+    assert!(!ini.contains("marker=gow3"), "{ini}");
 }
 
 #[test]
@@ -904,7 +979,7 @@ fn a_pool_above_ram_warns() {
     host.memory_mb = Some(4096);
     let ran = port.run_on(host, &[("SPARTAN_DMEM_MB", "11200")], &[]);
     assert_eq!(ran.code, 0, "{ran}");
-    let warning = "Memory: the guest memory pool commits 12224 MiB and the game needs about \
+    let warning = "Memory: the guest memory pool holds up to 12224 MiB and the game needs about \
                    16320 MiB in all, more than the 4096 MiB of RAM.";
     assert!(
         ran.out.lines().any(|line| line.starts_with(warning)),
@@ -1167,6 +1242,29 @@ fn play_writes_last_run_log_with_the_advice() {
     assert_eq!(code, 0, "{log}");
     assert_eq!(log, console);
     assert!(told.is_empty());
+}
+
+#[test]
+fn play_writes_the_journal_next_to_the_run_log() {
+    let dir = tempfile::tempdir().unwrap();
+    let user = dir.path().join("saves");
+    let settings = play_settings(dir.path(), &user);
+    let line = "Runtime: cannot create 6080 MiB of guest memory (error 12)";
+    let args = ["--say", line, "--exit", "21"];
+    let (code, _, log, _) = played(&settings, dir.path(), &user, clean_environment(), &args);
+    assert_eq!(code, 21, "{log}");
+    let journal = fs::read_to_string(user.join("last_run.jsonl")).unwrap();
+    let records: Vec<serde_json::Value> = journal
+        .lines()
+        .map(|record| serde_json::from_str(record).unwrap())
+        .collect();
+    assert_eq!(records.first().unwrap()["type"], "start");
+    assert_eq!(records[1]["text"], line);
+    assert_eq!(records[1]["area"], "Runtime");
+    let exit = records.last().unwrap();
+    assert_eq!(exit["type"], "exit");
+    assert_eq!(exit["code"], 21);
+    assert!(exit["advice"].as_str().is_some(), "{journal}");
 }
 
 #[test]

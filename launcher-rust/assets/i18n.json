@@ -2027,6 +2027,162 @@
    "✓ Versi game {}: patch game diterapkan",
    "⚠ Versi game {}: patch game memerlukan {}; tidak ada yang diterapkan",
    "{} · {} patch lainnya"
+  ],
+  "cs": [
+   "Hrát",
+   "Grafika",
+   "Zobrazení a FPS",
+   "Hra a efekty",
+   "Módy a záplaty",
+   "Pokročilé",
+   "Záznam",
+   "HRÁT",
+   "Zastavit",
+   "PC port · Windows",
+   "Ve hře: Insert nebo R3+L2\notevře menu portu.",
+   "Kontrola připravenosti",
+   "Rychlé nastavení",
+   "Snímková frekvence",
+   "Upscaler",
+   "Celá obrazovka",
+   "{} · verze hry {}",
+   "Složka hry není nastavena",
+   "Vyberte složku hry (Hra a efekty)",
+   "✗ Ve složce hry není eboot.bin (Hra a efekty)",
+   "✓ Uložené hry nalezeny v {}",
+   "• Zatím žádné uložené hry: hra je vytvoří v {}",
+   "✓ Grafická karta: {}",
+   "• Grafická karta: nezkontrolována",
+   "• Kontroluji grafickou kartu…",
+   "✗ Nenalezena grafická karta s Vulkan 1.3 (aktualizujte ovladač)",
+   "Nejdřív vyberte složku hry.",
+   "Příprava hry; otevře se ve vlastním okně…",
+   "Hra běží.",
+   "Restartuji s novým nastavením…",
+   "\nHra skončila (kód {}).\n",
+   "Nelze spustit: {}",
+   "Vyberte složku hry s eboot.bin (CUSA01623).",
+   "Uloženo ve spartanport.ini; herní menu (Insert nebo R3+L2) mění stejné hodnoty.",
+   "Upscaling",
+   "Časový upscaling s vlastními vektory pohybu hry. FSR 4 potřebuje své soubory (níže) a GPU s INT8 skalárními součiny; jinak hra sama přejde na FSR 3.1.",
+   "Předvolba kvality",
+   "Měřítko vykreslování na osu: Kvalita vykresluje na 1/1,5 velikosti výstupu.",
+   "Výstupní rozlišení",
+   "Co upscaler vytvoří; HUD se kreslí také v této velikosti.",
+   "Změna rozlišení za chodu",
+   "Vypnuto: výstupy jiné než 1080p nastaví záplata při startu (nejrychlejší; změna ve hře restartuje hru). Zapnuto: výstup a předvolbu lze měnit ve hře bez restartu, za cenu výkonu.",
+   "Doostření (RCAS)",
+   "Ostrost",
+   "Vektory pohybu objektů",
+   "Méně duchů u postav, látek a zbraní; stojí asi 10 % FPS.",
+   "Soubory FSR 4",
+   "Stáhnout soubory FSR 4",
+   "Z FireBurn/Q2RTX na GitHubu (sestaveno ze zdrojů AMD FidelityFX pod licencí MIT), asi 30 MB, do složky fsr4_shaders portu.",
+   "Nainstalováno: {} souborů v {}.",
+   "Chybí {} z {} souborů v {}.",
+   "Stahování selhalo: {}",
+   "Zobrazit počítadlo FPS",
+   "FSR 4 (nejlepší kvalita)",
+   "FSR 4.1.1 (potřebuje soubory fsr4_411)",
+   "FSR 3.1 (každá GPU)",
+   "TAA (vyhlazování hran v nativním rozlišení)",
+   "Vypnuto",
+   "Auto (podle grafické karty)",
+   "Vypnuto (rychlejší)",
+   "Zapnuto (změna bez restartu)",
+   "Použije se při spuštění hry.",
+   "Snímků před GPU",
+   "1 drží rovnoměrné tempo snímků; víc může zvýšit FPS, když je limitem grafická karta.",
+   "Okno",
+   "Prezentace",
+   "Povolit výstup HDR",
+   "Když je ve Windows zapnuto HDR a displej ho podporuje.",
+   "Auto: obnovovací frekvence displeje, max. 120 (doporučeno)",
+   "Bez limitu",
+   "Mailbox (nízká latence, bez trhání)",
+   "Immediate (trhání obrazu)",
+   "1 (výchozí)",
+   "Neomezeno",
+   "Váš dump hry, uložené hry a záplaty hry.",
+   "Hra",
+   "Složka hry",
+   "Vyberte složku s eboot.bin",
+   "Složka uložených her",
+   "Vyberte složku uložených her",
+   "Prázdné: {} (tam se ukládají i mezipaměti shaderů).",
+   "Jazyk hry",
+   "Angličtina",
+   "Ruština",
+   "Japonština",
+   "Francouzština",
+   "Španělština",
+   "Němčina",
+   "Italština",
+   "Soubory hry se nikdy nemění: mody se při startu vrství přes ně.",
+   "Mody",
+   "Načítat mody",
+   "Složka modů",
+   "Vyberte složku modů",
+   "Prázdné: {}",
+   "Záplaty třetích stran",
+   "Složka záplat",
+   "Vyberte složku záplat",
+   "Obnovit",
+   "Zatím žádné mody v {}.",
+   "Co je níže v seznamu, načítá se později a vyhrává při konfliktech.",
+   "Možnosti launcheru, přepínače výkonu a diagnostika.",
+   "Launcher",
+   "Jazyk launcheru",
+   "Použije se po dalším otevření launcheru.",
+   "Zavřít launcher po spuštění hry",
+   "Zástupce na ploše",
+   "Složka portu",
+   "Zástupce vytvořen na ploše.",
+   "Výkon",
+   "Dvoufázová pipeline GPU",
+   "O 20–30 % rychlejší; vypněte, pokud je hra nestabilní.",
+   "Auto (8+ vláken)",
+   "Zapnuto",
+   "Vypnuto (stabilnější)",
+   "Čtení z GPU",
+   "Jak přesně se data zapsaná GPU kopírují zpět pro hru.",
+   "Uvolněné (výchozí)",
+   "Diagnostika",
+   "Statistiky snímků v záznamu (každých 5 s)",
+   "Čas GPU na průchod v záznamu",
+   "Vrstvy validace Vulkanu (vyžadují Vulkan SDK; mnohem pomalejší)",
+   "Další proměnné",
+   "Dvojice NÁZEV=hodnota oddělené mezerami (seznam je v README).",
+   "Systém",
+   "Kopírovat",
+   "Vymazat",
+   "Procházet…",
+   "Otevřít",
+   "Vymazat mezipaměť shaderů",
+   "Pokud hra ukazuje jen černou obrazovku, obvykle to pomůže.",
+   "Mezipaměť shaderů vymazána. Příští spuštění bude několik minut sekat, než se znovu vytvoří.",
+   "Je dostupná verze {}.",
+   "Aktualizovat",
+   "Co je nového",
+   "Nainstalovat teď verzi {}? Launcher se zavře, nainstaluje ji a znovu otevře. Uložené hry a nastavení zůstanou.",
+   "Stahuji verzi {}… {} %",
+   "Aktualizace selhala: {}",
+   "Před aktualizací zavřete hru.",
+   "Hledat aktualizace při otevření launcheru",
+   "Hledat aktualizace",
+   "Máte nejnovější verzi ({}).",
+   "Aktualizace nelze zkontrolovat: {}",
+   "Aktualizaci se nepodařilo nainstalovat. Stáhněte ji ze stránky vydání.",
+   "Záplaty hry",
+   "Komunitní záplaty vybrané hry, použité při startu.",
+   "{} · verze {} · {}",
+   "Nativní (1920 × 1080)",
+   "Rozlišení",
+   "Hra vykresluje v této velikosti; záplata rozlišení nahradí opravu textur a vyhradí paměť, kterou potřebuje.",
+   "Záplaty",
+   "✓ Verze hry {}: záplaty hry se použijí",
+   "⚠ Verze hry {}: záplaty hry potřebují {}; žádná se nepoužila",
+   "{} · dalších záplat: {}"
   ]
  },
  "extra": {
@@ -2196,6 +2352,34 @@
    "F12 in the game": "F12 no jogo",
    "Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves.": "Salva a imagem do jogo, sem o overlay, em PNG na pasta screenshots dos saves.",
    "Vibration": "Vibração",
+   "No game button uses this input.": "Nenhum botão do jogo usa esta entrada.",
+   "Connect a controller to remap by pressing a button.": "Conecte um controle para remapear apertando um botão.",
+   "SDL does not know this controller yet. Use Set up a controller first.": "O SDL ainda não conhece este controle. Use Configurar um controle primeiro.",
+   "No controller found. Connect one and it shows up here.": "Nenhum controle encontrado. Conecte um e ele aparece aqui.",
+   "Press any button on {}": "Aperte qualquer botão em {}",
+   "Press a key or click a key to change it": "Aperte uma tecla, ou clique nela para trocar",
+   "Press the new button for {} ({})": "Aperte o novo botão para {} ({})",
+   "{} presses more than one game button.": "{} aperta mais de um botão do jogo.",
+   "Measure stick drift": "Medir drift do analógico",
+   "Leave the sticks alone...": "Não toque nos analógicos...",
+   "Test left motor": "Testar motor esquerdo",
+   "Test right motor": "Testar motor direito",
+   "Suggested dead zone: left {}%, right {}%": "Zona morta sugerida: esquerda {}%, direita {}%",
+   "Apply": "Aplicar",
+   "New profile name": "Nome do novo perfil",
+   "Import": "Importar",
+   "Export": "Exportar",
+   "Control profiles": "Perfis de controle",
+   "Left stick dead zone": "Zona morta do analógico esquerdo",
+   "Right stick dead zone": "Zona morta do analógico direito",
+   "How far a stick must move before the game sees it. Raise it if the camera or Kratos moves by itself. 0% is the game's own stick. Applied when the game starts.": "Quanto o analógico precisa mover para o jogo perceber. Aumente se a câmera ou o Kratos se mexer sozinho. 0% é o analógico original. Aplicado ao iniciar o jogo.",
+   "Touchpad right opens the game's pause menu. Touchpad left (photo mode) is L1 + Touchpad right, or a button of its own if you choose one. R3+L2 always opens the port's menu. Applied when the game starts.": "Touchpad direito abre o menu de pausa do jogo. Touchpad esquerdo (modo foto) é L1 + Touchpad direito, ou um botão próprio se você escolher. R3+L2 sempre abre o menu do port. Aplicado ao iniciar o jogo.",
+   "Default": "Padrão",
+   "Mouse with side buttons": "Mouse com botões laterais",
+   "Could not read the profile file.": "Não foi possível ler o arquivo de perfis.",
+   "Could not save the profile file.": "Não foi possível salvar o arquivo de perfis.",
+   "This file is not a valid SpartanPort control profile.": "Este arquivo não é um perfil de controle válido do SpartanPort.",
+   "Enter a profile name of up to 40 characters.": "Digite um nome de perfil com até 40 caracteres.",
    "Strength of the gamepad's vibration; 0% turns it off.": "Força da vibração do controle; 0% desliga.",
    "Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.": "O Windows não conseguiu reservar a memória que o jogo precisa. Feche outros programas, ou deixe o arquivo de paginação do Windows crescer (por exemplo 16384 MB inicial, 32768 MB máximo), e inicie de novo.",
    "Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.": "O Linux não conseguiu alocar a memória que o jogo precisa. Feche outros programas, verifique a memória RAM disponível, swap ou /dev/shm, e inicie de novo.",
@@ -2269,6 +2453,8 @@
    "Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.": "Os shaders compilados em sessões anteriores carregam do cache de shaders em vez de compilar de novo: os objetos não aparecem mais alguns quadros atrasados depois de iniciar ou carregar um save, e o cache não é reescrito a cada sessão (o antivírus verifica cada arquivo gravado). A primeira inicialização com a opção ligada recria o cache uma vez. Desative se um objeto, efeito ou cor aparecer errado só depois de reiniciar e estiver certo na primeira execução de um cache novo.",
    "Read the shader cache into memory at start": "Ler o cache de shaders para a memória ao iniciar",
    "A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.": "Uma thread em segundo plano lê os shaders salvos para a memória enquanto o jogo inicia; uma nota no canto inferior direito mostra o progresso. Assim, carregar um shader não segura um quadro. Precisa da opção acima. Desative em um HD lento ou com pouca RAM livre se o primeiro minuto travar mais ou o jogo demorar mais para abrir.",
+   "Read the shader cache before the game starts": "Ler o cache de shaders antes de o jogo começar",
+   "Recommended on a hard disk (HDD): the loading screen waits until the saved shaders are read, so the disk does not serve the read and the game at once and the game does not stutter. Esc or Circle starts the game earlier. After a PC restart the read can take several minutes. Needs the option above.": "Recomendado em HD: a tela de carregamento espera os shaders salvos serem lidos, para o disco não atender a leitura e o jogo ao mesmo tempo e o jogo não travar. Esc ou Círculo começa o jogo antes. Depois de reiniciar o PC, a leitura pode levar vários minutos. Precisa da opção acima.",
    "Show shader notes in the corner": "Mostrar notas de shaders no canto",
    "A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.": "Uma nota no canto inferior direito mostra a leitura do cache de shaders ao iniciar e os shaders sendo compilados, para que uma travada curta tenha um motivo visível. Desative para manter a tela limpa.",
    "Shader cache": "Cache de shaders",
@@ -2340,6 +2526,17 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Bloquear de novo os {} troféus desbloqueados? Uma cópia fica guardada como trophies.dat.bak.",
    "No trophy is unlocked.": "Nenhum troféu está desbloqueado.",
    "Could not reset the trophies: {}": "Não foi possível redefinir os troféus: {}",
+   "Notifications": "Notificações",
+   "List order": "Ordem da lista",
+   "Most earned first": "Mais conquistados primeiro",
+   "Rarest first": "Mais raros primeiro",
+   "{}% of players": "{}% dos jogadores",
+   "Common": "Comum",
+   "Rare": "Raro",
+   "Very rare": "Muito raro",
+   "Ultra rare": "Ultrarraro",
+   "Triangle/Tab: order   L1/R1: notifications": "Triângulo/Tab: ordem   L1/R1: notificações",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: troféus   F8 / R3+R2 / Esc: fechar",
    "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Vale no primeiro início do jogo. Depois, o jogo guarda os próprios idiomas de texto e de falas no save de configurações: troque no jogo, em Opções → Configurações de jogo → Texto de jogo e Opções → Áudio → Falas.",
    "Move forward": "Mover para frente",
    "Move backward": "Mover para trás",
@@ -2409,7 +2606,45 @@
    "Controller ready": "Controle pronto",
    "Mapping saved for the next game start. Any game button remapping in Controls still applies.": "Mapeamento salvo para a próxima inicialização. Os remapeamentos de botões na seção Controles continuam valendo.",
    "Stop the game before setting up a controller.": "Feche o jogo antes de configurar um controle.",
-   "SDL3 was not found. Use a complete port installation or build the project first.": "A SDL3 não foi encontrada. Use uma instalação completa do port ou compile o projeto primeiro."
+   "SDL3 was not found. Use a complete port installation or build the project first.": "A SDL3 não foi encontrada. Use uma instalação completa do port ou compile o projeto primeiro.",
+   "Audio": "Áudio",
+   "Volume": "Volume",
+   "Speakers": "Alto-falantes",
+   "Stereo": "Estéreo",
+   "5.1 surround": "Surround 5.1",
+   "7.1 surround": "Surround 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Volume geral do áudio do jogo. 100% é a mixagem original do jogo; mais é mais alto, com um limitador suave para que cenas altas não distorçam. Também no menu do jogo.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Formato em que a mixagem 7.1 do jogo é enviada. Automático segue o seu dispositivo de som: estéreo, 5.1 ou 7.1. Aplicado quando o jogo inicia.",
+   "Motion blur": "Desfoque de movimento",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "O desfoque de movimento do próprio jogo em objetos rápidos e na câmera. Desligado, ele é removido.",
+   "Depth of field": "Profundidade de campo",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "O desfoque do próprio jogo em objetos distantes, mais forte nas cenas. Desligado, a imagem inteira fica nítida.",
+   "High Frame Rate Physics Fix": "Correção de física em FPS alto",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Em FPS alto, o motor roda a 60 enquanto um comando de QTE está na tela ou durante a puxada de lâminas do Cronos, e depois volta à taxa do motor.",
+   "Enable the upscaler": "Ativar o upscaler",
+   "Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "Fração da resolução de renderização (página Desempenho) em que o jogo renderiza; o upscaler reconstrói essa resolução completa. Menor roda mais rápido. AA nativo mantém a resolução completa.",
+   "Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.": "Desligado (padrão): o jogo roda sem upscaling temporal. Ligado: FSR 3.1 com o preset abaixo. Personagens animados ainda podem mostrar algum rastro.",
+   "Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "Fração da resolução de renderização acima em que o jogo renderiza; o upscaler reconstrói essa resolução completa. Menor roda mais rápido. AA nativo mantém a resolução completa.",
+   "Native AA (100%)": "AA nativo (100%)",
+   "Ultra Quality (77%)": "Qualidade ultra (77%)",
+   "Quality (67%)": "Qualidade (67%)",
+   "Balanced (59%)": "Equilibrado (59%)",
+   "Performance (50%)": "Desempenho (50%)",
+   "Ultra Performance (33%)": "Desempenho máximo (33%)",
+   "FSR 4.1 (AMD driver)": "FSR 4.1 (driver AMD)",
+   "FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.": "FSR 4.1 exige AMD Adrenalin 26.10.1 ou mais recente. O registro mostra o provedor ativo; usar FSR 3.1 como alternativa não significa FSR 4.1 ativo.",
+   "Frame generation": "Geração de quadros",
+   "Generated frames": "Quadros gerados",
+   "AMD FSR (every GPU)": "AMD FSR (qualquer placa)",
+   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card.": "Um quadro gerado entre os quadros do jogo: até o dobro de quadros na tela. Precisa de um upscaler. AMD FSR: qualquer placa de vídeo.",
+   "Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.": "Desligado (padrão): sem upscaling temporal. Ligado: usa o upscaler e a predefinição selecionados. Personagens animados ainda podem mostrar algum rastro.",
+   "Automatic backup": "Backup automático",
+   "Legacy backup": "Backup antigo",
+   "Before-restore backup": "Backup anterior à restauração",
+   "{} · {} files · {} bytes · Game IDs: {}": "{} · {} arquivos · {} bytes · IDs do jogo: {}",
+   "This backup is for a different game ID and may be incompatible. Game IDs will not be changed.": "Este backup pertence a outro ID de jogo e pode ser incompatível. Os IDs não serão alterados.",
+   "Wait for the save restore to finish before starting the game.": "Espere a restauração dos saves terminar antes de iniciar o jogo.",
+   "Automatic backups keep the last {} starts. Before-restore backups are kept separately and are never automatically deleted.": "Os backups automáticos guardam as últimas {} inicializações. Backups anteriores à restauração ficam separados e nunca são apagados automaticamente."
   },
   "es": {
    "The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?": "El launcher no puede escribir en {}, así que no puede reemplazarse ahí. ¿Abrir la página de releases para descargar la versión nueva a mano?",
@@ -2580,6 +2815,34 @@
    "F12 in the game": "F12 en el juego",
    "Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves.": "Guarda la imagen del juego, sin el overlay, como PNG en la carpeta screenshots de las partidas.",
    "Vibration": "Vibración",
+   "No game button uses this input.": "Ningún botón del juego usa esta entrada.",
+   "Connect a controller to remap by pressing a button.": "Conecta un mando para reasignar pulsando un botón.",
+   "SDL does not know this controller yet. Use Set up a controller first.": "SDL aún no reconoce este mando. Usa Configurar un mando primero.",
+   "No controller found. Connect one and it shows up here.": "No se encontró ningún mando. Conecta uno y aparecerá aquí.",
+   "Press any button on {}": "Pulsa cualquier botón en {}",
+   "Press a key or click a key to change it": "Pulsa una tecla, o haz clic en ella para cambiarla",
+   "Press the new button for {} ({})": "Pulsa el nuevo botón para {} ({})",
+   "{} presses more than one game button.": "{} pulsa más de un botón del juego.",
+   "Measure stick drift": "Medir drift del stick",
+   "Leave the sticks alone...": "No toques los sticks...",
+   "Test left motor": "Probar motor izquierdo",
+   "Test right motor": "Probar motor derecho",
+   "Suggested dead zone: left {}%, right {}%": "Zona muerta sugerida: izquierda {}%, derecha {}%",
+   "Apply": "Aplicar",
+   "New profile name": "Nombre del nuevo perfil",
+   "Import": "Importar",
+   "Export": "Exportar",
+   "Control profiles": "Perfiles de control",
+   "Left stick dead zone": "Zona muerta del stick izquierdo",
+   "Right stick dead zone": "Zona muerta del stick derecho",
+   "How far a stick must move before the game sees it. Raise it if the camera or Kratos moves by itself. 0% is the game's own stick. Applied when the game starts.": "Cuánto debe moverse el stick para que el juego lo note. Súbelo si la cámara o Kratos se mueven solos. 0% es el stick original. Se aplica al iniciar el juego.",
+   "Touchpad right opens the game's pause menu. Touchpad left (photo mode) is L1 + Touchpad right, or a button of its own if you choose one. R3+L2 always opens the port's menu. Applied when the game starts.": "Touchpad derecho abre el menú de pausa del juego. Touchpad izquierdo (modo foto) es L1 + Touchpad derecho, o un botón propio si lo eliges. R3+L2 siempre abre el menú del port. Se aplica al iniciar el juego.",
+   "Default": "Predeterminado",
+   "Mouse with side buttons": "Ratón con botones laterales",
+   "Could not read the profile file.": "No se pudo leer el archivo de perfiles.",
+   "Could not save the profile file.": "No se pudo guardar el archivo de perfiles.",
+   "This file is not a valid SpartanPort control profile.": "Este archivo no es un perfil de control válido de SpartanPort.",
+   "Enter a profile name of up to 40 characters.": "Escribe un nombre de perfil de hasta 40 caracteres.",
    "Strength of the gamepad's vibration; 0% turns it off.": "Fuerza de la vibración del mando; 0% la desactiva.",
    "(none)": "(ninguna)",
    "Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.": "Ratón adaptativo: cuánto se mueve el ratón para cada paso de un giro. También en el menú del juego.",
@@ -2619,6 +2882,8 @@
    "Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.": "Los shaders compilados en sesiones anteriores se cargan de la caché de shaders en vez de compilarse de nuevo: los objetos ya no aparecen unos fotogramas tarde al iniciar o cargar una partida, y la caché no se reescribe en cada sesión (el antivirus revisa cada archivo escrito). El primer inicio con la opción activada reconstruye la caché una vez. Desactívalo si un objeto, efecto o color se ve mal solo después de reiniciar y está bien en la primera ejecución de una caché nueva.",
    "Read the shader cache into memory at start": "Leer la caché de shaders en memoria al iniciar",
    "A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.": "Un hilo en segundo plano lee los shaders guardados en memoria mientras el juego inicia; una nota en la esquina inferior derecha muestra el progreso. Así, cargar un shader no retiene un fotograma. Necesita la opción de arriba. Desactívalo en un disco duro lento o con poca RAM libre si el primer minuto se traba más o el juego tarda más en abrir.",
+   "Read the shader cache before the game starts": "Leer la caché de shaders antes de que empiece el juego",
+   "Recommended on a hard disk (HDD): the loading screen waits until the saved shaders are read, so the disk does not serve the read and the game at once and the game does not stutter. Esc or Circle starts the game earlier. After a PC restart the read can take several minutes. Needs the option above.": "Recomendado en un disco duro (HDD): la pantalla de carga espera a que se lean los shaders guardados, para que el disco no atienda la lectura y el juego a la vez y el juego no tartamudee. Esc o Círculo empieza el juego antes. Tras reiniciar el PC, la lectura puede tardar varios minutos. Necesita la opción de arriba.",
    "Show shader notes in the corner": "Mostrar notas de shaders en la esquina",
    "A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.": "Una nota en la esquina inferior derecha muestra la lectura de la caché de shaders al iniciar y los shaders que se están compilando, para que un tirón corto tenga un motivo visible. Desactívalo para mantener la pantalla limpia.",
    "Shader cache": "Caché de shaders",
@@ -2718,6 +2983,17 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "¿Volver a bloquear los {} trofeos desbloqueados? Se guarda una copia como trophies.dat.bak.",
    "No trophy is unlocked.": "No hay ningún trofeo desbloqueado.",
    "Could not reset the trophies: {}": "No se pudieron restablecer los trofeos: {}",
+   "Notifications": "Notificaciones",
+   "List order": "Orden de la lista",
+   "Most earned first": "Más obtenidos primero",
+   "Rarest first": "Más raros primero",
+   "{}% of players": "{}% de los jugadores",
+   "Common": "Común",
+   "Rare": "Raro",
+   "Very rare": "Muy raro",
+   "Ultra rare": "Ultrarraro",
+   "Triangle/Tab: order   L1/R1: notifications": "Triángulo/Tab: orden   L1/R1: notificaciones",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofeos   F8 / R3+R2 / Esc: cerrar",
    "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Se usa en el primer inicio del juego. Después, el juego guarda sus propios idiomas de texto y de diálogos en su partida de ajustes: cambialos en el juego, en Opciones → Ajustes de juego → Texto del juego y Opciones → Audio → Diálogos.",
    "Move forward": "Mover hacia delante",
    "Move backward": "Mover hacia atrás",
@@ -2730,7 +3006,38 @@
    "Clear input": "Borrar entrada",
    "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.": "Teclado: introduce la rotación con tus entradas de movimiento. Con las teclas predeterminadas, las secuencias son A W D / D W A, D S A / A S D y D S A W / A S D W. Reasignar el movimiento también cambia estas entradas. Ratón adaptativo: dibuja la rotación con el ratón.",
    "Set up a controller": "Configurar un mando",
-   "Stop the game before setting up a controller.": "Cierra el juego antes de configurar un mando."
+   "Stop the game before setting up a controller.": "Cierra el juego antes de configurar un mando.",
+   "Audio": "Audio",
+   "Volume": "Volumen",
+   "Speakers": "Altavoces",
+   "Stereo": "Estéreo",
+   "5.1 surround": "Envolvente 5.1",
+   "7.1 surround": "Envolvente 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Volumen general del audio del juego. 100% es la mezcla original del juego; más es más alto, con un limitador suave para que las escenas fuertes no distorsionen. También en el menú del juego.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Formato en que se envía la mezcla 7.1 del juego. Automático sigue tu dispositivo de sonido: estéreo, 5.1 o 7.1. Se aplica al iniciar el juego.",
+   "Motion blur": "Desenfoque de movimiento",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "El desenfoque de movimiento del propio juego en objetos rápidos y en la cámara. Desactivado, se elimina.",
+   "Depth of field": "Profundidad de campo",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "El desenfoque del propio juego en objetos lejanos, más fuerte en las escenas. Desactivado, toda la imagen se ve nítida.",
+   "High Frame Rate Physics Fix": "Corrección de física a FPS altos",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Con FPS altos, el motor funciona a 60 mientras hay un QTE en pantalla o durante el tirón de las cuchillas en Cronos, y luego vuelve a la velocidad del motor.",
+   "Enable the upscaler": "Activar el escalador",
+   "Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "Fracción de la resolución de renderizado (página Rendimiento) a la que el juego renderiza; el escalador reconstruye esa resolución completa. Menor es más rápido. AA nativo mantiene la resolución completa.",
+   "Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.": "Desactivado (predet.): el juego funciona sin escalado temporal. Activado: FSR 3.1 con el preset de abajo. Los personajes animados aún pueden mostrar algo de estela.",
+   "Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "Fracción de la resolución de renderizado de arriba a la que el juego renderiza; el escalador reconstruye esa resolución completa. Menor es más rápido. AA nativo mantiene la resolución completa.",
+   "Native AA (100%)": "AA nativo (100%)",
+   "Ultra Quality (77%)": "Calidad ultra (77%)",
+   "Quality (67%)": "Calidad (67%)",
+   "Balanced (59%)": "Equilibrado (59%)",
+   "Performance (50%)": "Rendimiento (50%)",
+   "Ultra Performance (33%)": "Rendimiento máximo (33%)",
+   "FSR 4.1 (AMD driver)": "FSR 4.1 (controlador AMD)",
+   "FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.": "FSR 4.1 requiere AMD Adrenalin 26.10.1 o posterior. El registro muestra el proveedor activo; usar FSR 3.1 como alternativa no significa que FSR 4.1 esté activo.",
+   "Frame generation": "Generación de fotogramas",
+   "Generated frames": "Fotogramas generados",
+   "AMD FSR (every GPU)": "AMD FSR (cualquier GPU)",
+   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card.": "Un fotograma generado entre los fotogramas del juego: hasta el doble de fotogramas en pantalla. Requiere un escalador. AMD FSR: cualquier tarjeta gráfica.",
+   "Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.": "Desactivado (predeterminado): sin escalado temporal. Activado: usa el escalador y el ajuste seleccionados. Los personajes animados aún pueden mostrar estelas."
   },
   "pl": {
    "Polish": "Polski",
@@ -2756,7 +3063,35 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Zablokować ponownie wszystkie odblokowane trofea ({})? Kopia zostanie zachowana jako trophies.dat.bak.",
    "No trophy is unlocked.": "Żadne trofeum nie jest odblokowane.",
    "Could not reset the trophies: {}": "Nie udało się zresetować trofeów: {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Używany przy pierwszym uruchomieniu gry. Potem gra zapisuje własny język tekstu i dialogów w zapisie ustawień: zmień je w grze, w Opcje → Ustawienia gry → Tekst gry oraz Opcje → Dźwięk → Dialogi."
+   "Notifications": "Powiadomienia",
+   "List order": "Kolejność listy",
+   "Most earned first": "Najczęściej zdobywane najpierw",
+   "Rarest first": "Najrzadsze najpierw",
+   "{}% of players": "{}% graczy",
+   "Common": "Powszechne",
+   "Rare": "Rzadkie",
+   "Very rare": "Bardzo rzadkie",
+   "Ultra rare": "Ultrarzadkie",
+   "Triangle/Tab: order   L1/R1: notifications": "Trójkąt/Tab: kolejność   L1/R1: powiadomienia",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofea   F8 / R3+R2 / Esc: zamknij",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Używany przy pierwszym uruchomieniu gry. Potem gra zapisuje własny język tekstu i dialogów w zapisie ustawień: zmień je w grze, w Opcje → Ustawienia gry → Tekst gry oraz Opcje → Dźwięk → Dialogi.",
+   "Audio": "Dźwięk",
+   "Volume": "Głośność",
+   "Speakers": "Głośniki",
+   "Stereo": "Stereo",
+   "5.1 surround": "Przestrzenny 5.1",
+   "7.1 surround": "Przestrzenny 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Główna głośność dźwięku gry. 100% to oryginalny miks gry; więcej jest głośniej, z łagodnym limiterem, aby głośne sceny nie przesterowywały. Także w menu w grze.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Układ, w jakim wysyłany jest miks 7.1 gry. Automatycznie dopasowuje się do urządzenia dźwiękowego: stereo, 5.1 lub 7.1. Stosowane przy uruchomieniu gry.",
+   "Effects": "Efekty",
+   "Motion blur": "Rozmycie ruchu",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Własne rozmycie ruchu gry na szybko poruszających się obiektach i kamerze. Wyłączone usuwa je.",
+   "Depth of field": "Głębia ostrości",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Własne rozmycie gry na odległych obiektach, najsilniejsze w przerywnikach. Wyłączone zachowuje ostrość całego obrazu.",
+   "Automatic": "Automatycznie",
+   "restart": "restart",
+   "High Frame Rate Physics Fix": "Poprawka fizyki przy wysokim FPS",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Przy wysokim FPS silnik działa w 60 FPS, gdy na ekranie jest QTE lub podczas przyciągania ostrzami na Kronosie, a potem wraca do liczby klatek silnika."
   },
   "fr": {
    "Polish": "Polonais",
@@ -2782,7 +3117,35 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Verrouiller de nouveau les {} trophées débloqués ? Une copie est conservée sous le nom trophies.dat.bak.",
    "No trophy is unlocked.": "Aucun trophée n'est débloqué.",
    "Could not reset the trophies: {}": "Impossible de réinitialiser les trophées : {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Utilisée au premier lancement du jeu. Ensuite, le jeu garde ses propres langues de texte et de voix dans sa sauvegarde de réglages : changez-les dans le jeu, dans Options → Paramètres jeu → Texte du jeu et Options → Audio → Voix."
+   "Notifications": "Notifications",
+   "List order": "Ordre de la liste",
+   "Most earned first": "Les plus obtenus d'abord",
+   "Rarest first": "Les plus rares d'abord",
+   "{}% of players": "{} % des joueurs",
+   "Common": "Commun",
+   "Rare": "Rare",
+   "Very rare": "Très rare",
+   "Ultra rare": "Ultra rare",
+   "Triangle/Tab: order   L1/R1: notifications": "Triangle/Tab : ordre   L1/R1 : notifications",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1 : trophées   F8 / R3+R2 / Échap : fermer",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Utilisée au premier lancement du jeu. Ensuite, le jeu garde ses propres langues de texte et de voix dans sa sauvegarde de réglages : changez-les dans le jeu, dans Options → Paramètres jeu → Texte du jeu et Options → Audio → Voix.",
+   "Audio": "Audio",
+   "Volume": "Volume",
+   "Speakers": "Haut-parleurs",
+   "Stereo": "Stéréo",
+   "5.1 surround": "Surround 5.1",
+   "7.1 surround": "Surround 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Volume général du son du jeu. 100 % correspond au mixage d'origine du jeu ; au-delà, le son est plus fort, avec un limiteur doux pour que les scènes bruyantes ne saturent pas. Aussi dans le menu en jeu.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Format dans lequel le mixage 7.1 du jeu est envoyé. Automatique suit votre périphérique audio : stéréo, 5.1 ou 7.1. Appliqué au démarrage du jeu.",
+   "Effects": "Effets",
+   "Motion blur": "Flou de mouvement",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Le flou de mouvement propre au jeu sur les objets rapides et la caméra. Désactivé, il est supprimé.",
+   "Depth of field": "Profondeur de champ",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Le flou propre au jeu sur les objets lointains, plus fort dans les cinématiques. Désactivé, toute l'image reste nette.",
+   "Automatic": "Automatique",
+   "restart": "redémarrage",
+   "High Frame Rate Physics Fix": "Correctif physique à FPS élevé",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "À FPS élevé, le moteur tourne à 60 tant qu'un QTE est à l'écran ou pendant la traction aux lames sur Cronos, puis revient à la fréquence du moteur."
   },
   "de": {
    "Polish": "Polnisch",
@@ -2808,7 +3171,35 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Alle {} freigeschalteten Trophäen wieder sperren? Eine Kopie bleibt als trophies.dat.bak erhalten.",
    "No trophy is unlocked.": "Keine Trophäe ist freigeschaltet.",
    "Could not reset the trophies: {}": "Die Trophäen konnten nicht zurückgesetzt werden: {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Gilt beim ersten Start des Spiels. Danach speichert das Spiel seine eigene Text- und Sprachausgabe-Sprache im Einstellungsspeicherstand: ändere sie im Spiel unter Optionen → Spieleinstellungen → Spieltext und Optionen → Audio → Sprachausgabe."
+   "Notifications": "Benachrichtigungen",
+   "List order": "Listenreihenfolge",
+   "Most earned first": "Häufigste zuerst",
+   "Rarest first": "Seltenste zuerst",
+   "{}% of players": "{} % der Spieler",
+   "Common": "Häufig",
+   "Rare": "Selten",
+   "Very rare": "Sehr selten",
+   "Ultra rare": "Extrem selten",
+   "Triangle/Tab: order   L1/R1: notifications": "Dreieck/Tab: Reihenfolge   L1/R1: Benachrichtigungen",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: Trophäen   F8 / R3+R2 / Esc: schließen",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Gilt beim ersten Start des Spiels. Danach speichert das Spiel seine eigene Text- und Sprachausgabe-Sprache im Einstellungsspeicherstand: ändere sie im Spiel unter Optionen → Spieleinstellungen → Spieltext und Optionen → Audio → Sprachausgabe.",
+   "Audio": "Audio",
+   "Volume": "Lautstärke",
+   "Speakers": "Lautsprecher",
+   "Stereo": "Stereo",
+   "5.1 surround": "5.1-Surround",
+   "7.1 surround": "7.1-Surround",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Gesamtlautstärke des Spielsounds. 100 % ist die originale Abmischung des Spiels; mehr ist lauter, mit einem sanften Limiter, damit laute Szenen nicht übersteuern. Auch im Menü im Spiel.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Format, in dem die 7.1-Abmischung des Spiels ausgegeben wird. Automatisch folgt dem Audiogerät: Stereo, 5.1 oder 7.1. Gilt ab dem nächsten Spielstart.",
+   "Effects": "Effekte",
+   "Motion blur": "Bewegungsunschärfe",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Die eigene Bewegungsunschärfe des Spiels bei schnellen Objekten und der Kamera. Aus entfernt sie.",
+   "Depth of field": "Tiefenschärfe",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Die eigene Unschärfe des Spiels bei entfernten Objekten, am stärksten in Zwischensequenzen. Aus hält das ganze Bild scharf.",
+   "Automatic": "Automatisch",
+   "restart": "Neustart",
+   "High Frame Rate Physics Fix": "Physik-Fix bei hoher Bildrate",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Bei hoher Bildrate läuft die Engine mit 60, solange ein QTE auf dem Bildschirm ist oder während des Klingenzugs auf Kronos, und kehrt danach zur Engine-Bildrate zurück."
   },
   "it": {
    "Polish": "Polacco",
@@ -2834,7 +3225,35 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Bloccare di nuovo i {} trofei sbloccati? Una copia viene conservata come trophies.dat.bak.",
    "No trophy is unlocked.": "Nessun trofeo è sbloccato.",
    "Could not reset the trophies: {}": "Impossibile reimpostare i trofei: {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Usata al primo avvio del gioco. Poi il gioco conserva le proprie lingue di testo e dei dialoghi nel salvataggio delle impostazioni: cambiale nel gioco, in Opzioni → Impostazioni di gioco → Testo di gioco e Opzioni → Audio → Dialoghi."
+   "Notifications": "Notifiche",
+   "List order": "Ordine della lista",
+   "Most earned first": "Più ottenuti prima",
+   "Rarest first": "Più rari prima",
+   "{}% of players": "{}% dei giocatori",
+   "Common": "Comune",
+   "Rare": "Raro",
+   "Very rare": "Molto raro",
+   "Ultra rare": "Ultra raro",
+   "Triangle/Tab: order   L1/R1: notifications": "Triangolo/Tab: ordine   L1/R1: notifiche",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofei   F8 / R3+R2 / Esc: chiudi",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Usata al primo avvio del gioco. Poi il gioco conserva le proprie lingue di testo e dei dialoghi nel salvataggio delle impostazioni: cambiale nel gioco, in Opzioni → Impostazioni di gioco → Testo di gioco e Opzioni → Audio → Dialoghi.",
+   "Audio": "Audio",
+   "Volume": "Volume",
+   "Speakers": "Altoparlanti",
+   "Stereo": "Stereo",
+   "5.1 surround": "Surround 5.1",
+   "7.1 surround": "Surround 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Volume generale dell'audio del gioco. 100% è il mix originale del gioco; di più è più forte, con un limitatore morbido perché le scene rumorose non distorcano. Anche nel menu nel gioco.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Formato in cui viene inviato il mix 7.1 del gioco. Automatico segue il tuo dispositivo audio: stereo, 5.1 o 7.1. Applicato all'avvio del gioco.",
+   "Effects": "Effetti",
+   "Motion blur": "Sfocatura di movimento",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "La sfocatura di movimento del gioco sugli oggetti veloci e sulla telecamera. Disattivata, viene rimossa.",
+   "Depth of field": "Profondità di campo",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "La sfocatura del gioco sugli oggetti lontani, più forte nelle scene d'intermezzo. Disattivata, tutta l'immagine resta nitida.",
+   "Automatic": "Automatico",
+   "restart": "riavvio",
+   "High Frame Rate Physics Fix": "Correzione fisica ad alto framerate",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Ad alto framerate il motore gira a 60 finché un QTE è sullo schermo o durante la trazione con le lame su Crono, poi torna alla frequenza del motore."
   },
   "tr": {
    "Polish": "Lehçe",
@@ -2860,7 +3279,35 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Açılmış {} kupanın tümü yeniden kilitlensin mi? Bir kopya trophies.dat.bak olarak saklanır.",
    "No trophy is unlocked.": "Açılmış kupa yok.",
    "Could not reset the trophies: {}": "Kupalar sıfırlanamadı: {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Oyunun ilk açılışında kullanılır. Sonrasında oyun kendi metin ve konuşma dillerini ayar kaydında tutar: bunları oyunda, Seçenekler → Oyun Ayarları → Oyun Metni ve Seçenekler → Ses → Konuşma bölümünden değiştirin."
+   "Notifications": "Bildirimler",
+   "List order": "Liste sırası",
+   "Most earned first": "En çok kazanılan önce",
+   "Rarest first": "En nadir önce",
+   "{}% of players": "Oyuncuların %{}",
+   "Common": "Yaygın",
+   "Rare": "Nadir",
+   "Very rare": "Çok nadir",
+   "Ultra rare": "Ultra nadir",
+   "Triangle/Tab: order   L1/R1: notifications": "Üçgen/Tab: sıra   L1/R1: bildirimler",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: kupalar   F8 / R3+R2 / Esc: kapat",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Oyunun ilk açılışında kullanılır. Sonrasında oyun kendi metin ve konuşma dillerini ayar kaydında tutar: bunları oyunda, Seçenekler → Oyun Ayarları → Oyun Metni ve Seçenekler → Ses → Konuşma bölümünden değiştirin.",
+   "Audio": "Ses",
+   "Volume": "Ses düzeyi",
+   "Speakers": "Hoparlörler",
+   "Stereo": "Stereo",
+   "5.1 surround": "5.1 surround",
+   "7.1 surround": "7.1 surround",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Oyun sesinin ana ses düzeyi. %100 oyunun kendi miksidir; daha yüksek değer daha yüksek sestir ve gürültülü sahnelerin bozulmaması için yumuşak bir sınırlayıcı kullanılır. Oyun içi menüde de bulunur.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Oyunun 7.1 miksinin gönderildiği düzen. Otomatik, ses aygıtınızı izler: stereo, 5.1 veya 7.1. Oyun başlarken uygulanır.",
+   "Effects": "Efektler",
+   "Motion blur": "Hareket bulanıklığı",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Oyunun hızlı hareket eden nesnelerde ve kamerada kendi hareket bulanıklığı. Kapalı olduğunda kaldırılır.",
+   "Depth of field": "Alan derinliği",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Oyunun uzaktaki nesnelerdeki kendi bulanıklığı, en güçlüsü ara sahnelerde. Kapalı olduğunda tüm görüntü net kalır.",
+   "Automatic": "Otomatik",
+   "restart": "yeniden başlatma",
+   "High Frame Rate Physics Fix": "Yüksek FPS fizik düzeltmesi",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Yüksek FPS'de motor, ekranda bir QTE varken veya Kronos'taki bıçak çekişi sırasında 60'ta çalışır, sonra motor kare hızına geri döner."
   },
   "ar": {
    "Polish": "البولندية",
@@ -2885,7 +3332,35 @@
    "Close the game before resetting the trophies.": "أغلق اللعبة قبل إعادة ضبط الكؤوس.",
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "هل تريد إقفال جميع الكؤوس المفتوحة ({}) من جديد؟ سيتم الاحتفاظ بنسخة باسم trophies.dat.bak.",
    "No trophy is unlocked.": "لا يوجد أي كأس مفتوح.",
-   "Could not reset the trophies: {}": "تعذّرت إعادة ضبط الكؤوس: {}"
+   "Could not reset the trophies: {}": "تعذّرت إعادة ضبط الكؤوس: {}",
+   "Notifications": "الإشعارات",
+   "List order": "ترتيب القائمة",
+   "Most earned first": "الأكثر حصولًا أولًا",
+   "Rarest first": "الأندر أولًا",
+   "{}% of players": "{}% من اللاعبين",
+   "Common": "شائعة",
+   "Rare": "نادرة",
+   "Very rare": "نادرة جدًا",
+   "Ultra rare": "نادرة للغاية",
+   "Triangle/Tab: order   L1/R1: notifications": "المثلث/Tab: الترتيب   L1/R1: الإشعارات",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: الكؤوس   F8 / R3+R2 / Esc: إغلاق",
+   "Audio": "الصوت",
+   "Volume": "مستوى الصوت",
+   "Speakers": "مكبرات الصوت",
+   "Stereo": "ستيريو",
+   "5.1 surround": "محيطي 5.1",
+   "7.1 surround": "محيطي 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "مستوى الصوت الرئيسي لصوت اللعبة. 100% هو مزج اللعبة الأصلي؛ الأعلى أعلى صوتًا، مع محدِّد ناعم كي لا تتشوّه المشاهد الصاخبة. موجود أيضًا في قائمة اللعبة.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "التوزيع الذي يُرسَل به مزج 7.1 الخاص باللعبة. التلقائي يتبع جهاز الصوت لديك: ستيريو أو 5.1 أو 7.1. يُطبَّق عند بدء اللعبة.",
+   "Effects": "المؤثرات",
+   "Motion blur": "ضبابية الحركة",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "ضبابية الحركة الخاصة باللعبة على الأجسام السريعة والكاميرا. الإيقاف يزيلها.",
+   "Depth of field": "عمق المجال",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "ضبابية اللعبة الخاصة على الأجسام البعيدة، وهي الأقوى في المشاهد السينمائية. الإيقاف يُبقي الصورة كلها واضحة.",
+   "Automatic": "تلقائي",
+   "restart": "إعادة التشغيل",
+   "High Frame Rate Physics Fix": "إصلاح الفيزياء عند معدل إطارات مرتفع",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "عند معدل إطارات مرتفع يعمل المحرك بـ 60 أثناء ظهور حدث QTE على الشاشة أو أثناء السحب بالنصلين في كرونوس، ثم يعود إلى معدل إطارات المحرك."
   },
   "zh": {
    "Polish": "波兰语",
@@ -2904,7 +3379,7 @@
    "Add to Steam": "添加到 Steam",
    "Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.": "按住 L2 时用鼠标瞄准（赫利俄斯之首、阿波罗之弓）。相对模式：摇杆跟随鼠标移动，停止移动时回中。绝对模式：以按下 L2 时的鼠标位置为中心，按鼠标偏移控制摇杆。也可在游戏内菜单调整。",
    "Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.": "按住 L2 用鼠标瞄准时，数值越低，所需移动距离越大；越高则越小。也可在游戏内菜单调整。",
-   "Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.": "允许按 X 键跳过过场动画。感谢 illusion0001（illusionyy）的 PS3 补丁为此提供便利。",
+   "Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.": "允许按叉键（X）手动跳过过场动画。感谢 illusion0001（又名 illusionyy）提供的 PS3 补丁，让此功能易于实现。",
    "Anisotropic filtering": "各向异性过滤",
    "Asks GameMode (gamemoderun) for the performance governor while the game runs.": "游戏运行时请求 GameMode（gamemoderun）使用性能模式。",
    "Aspect ratio": "宽高比",
@@ -2962,8 +3437,8 @@
    "Fewer waits for the GPU. Switch it off if textures or shadows look wrong.": "减少等待 GPU；若纹理或阴影异常，请关闭。",
    "Files": "文件",
    "Files layered over the game at start; the game files are never changed.": "启动时覆盖加载的文件；原始游戏文件不会改变。",
-   "Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.": "增大视频内存区，修复纹理损坏，让游戏使用更多显存存放纹理与特效。DMEM 需至少 2048 MB，否则会崩溃。此补丁与分辨率补丁只能启用其中一个。",
-   "Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.": "修复启动时帧率计数仍在运行但画面黑屏的问题：帧调度索引从 2 开始，避免第二帧等待只能由自身触发的翻转事件。",
+   "Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.": "通过增大视频内存区域，让游戏可为贴图和特效使用更多内存，从而修复贴图损坏。DMEM 必须设为至少 2048 MB，否则游戏会崩溃。此补丁与分辨率补丁只能二选一，不能同时启用。",
+   "Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.": "修复帧率计数仍在运行却启动黑屏的问题：将帧节奏索引的初值从 0 改为 2，避免第二帧等待只能由自身触发的画面翻转。",
    "Folders": "目录",
    "For launcher only. Applies after Save.": "仅影响启动器，保存后生效。",
    "Frame rate and speed options.": "帧率与运行速度选项。",
@@ -3092,7 +3567,7 @@
    "Shows only the game name and the time played on your Discord profile.": "仅在 Discord 个人资料中显示游戏名称与游玩时长。",
    "Shows the render resolutions of this shape only.": "只显示所选宽高比的渲染分辨率。",
    "Shows where the frame waits for the GPU and which reads cause it. For performance tests.": "记录每帧等待 GPU 的位置及相关读取，供性能测试使用。",
-   "Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.": "跳过开场标志。感谢 illusion0001（illusionyy）的 PS3 补丁为此提供便利。",
+   "Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.": "跳过启动时的标志画面。感谢 illusion0001（又名 illusionyy）提供的 PS3 补丁，让此功能易于实现。",
    "Square": "方块",
    "Steam is open. Close it completely (Steam > Exit) and click again: Steam rewrites its shortcuts when it closes.": "Steam 正在运行。请完全退出（Steam → 退出）后重试；Steam 关闭时会重写快捷方式。",
    "Steam was not found for this user.": "未找到当前用户的 Steam。",
@@ -3191,6 +3666,17 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "要将已解锁的 {} 个奖杯全部重新锁定吗？会保留一份副本 trophies.dat.bak。",
    "No trophy is unlocked.": "没有已解锁的奖杯。",
    "Could not reset the trophies: {}": "无法重置奖杯：{}",
+   "Notifications": "通知",
+   "List order": "列表顺序",
+   "Most earned first": "获得最多的在前",
+   "Rarest first": "最稀有的在前",
+   "{}% of players": "{}% 的玩家",
+   "Common": "普通",
+   "Rare": "稀有",
+   "Very rare": "非常稀有",
+   "Ultra rare": "极其稀有",
+   "Triangle/Tab: order   L1/R1: notifications": "三角/Tab：顺序   L1/R1：通知",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1：奖杯   F8 / R3+R2 / Esc：关闭",
    "Version {} is out, but it has no Linux build yet.": "版本 {} 已发布，但还没有 Linux 版本。",
    "The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?": "启动器无法写入 {}，因此无法在此处替换自身。是否打开发布页面手动下载新版本？",
    "Monitor": "显示器",
@@ -3199,6 +3685,8 @@
    "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of up to three game files in the port's data folder (about 410 MB); your game folder is never changed. Applied when the game starts.": "将游戏中的 PlayStation 按键图标替换为你的控制器图标。使用移植版数据文件夹内最多三个游戏文件的副本（约 410 MB），不会更改游戏文件夹。启动游戏时生效。",
    "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "仅在游戏首次启动时生效。之后游戏会在自己的设置存档中保存文字和台词语言：请在游戏中通过選項 → 遊戲設定 → 遊戲資訊 和 選項 → 聲音 → 台詞 更改。",
    "A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.": "游戏启动时，后台线程会将已保存的着色器读入内存，右下角显示进度。随后加载着色器时无需因磁盘读取而阻塞帧。需要启用上一项。如果硬盘较慢或可用内存不足，导致启动变慢或第一分钟更卡顿，请关闭此项。",
+   "Read the shader cache before the game starts": "在游戏开始前读取着色器缓存",
+   "Recommended on a hard disk (HDD): the loading screen waits until the saved shaders are read, so the disk does not serve the read and the game at once and the game does not stutter. Esc or Circle starts the game earlier. After a PC restart the read can take several minutes. Needs the option above.": "推荐机械硬盘（HDD）使用：加载画面会等待已保存的着色器读取完毕，避免硬盘同时处理读取和游戏，从而防止游戏卡顿。按 Esc 或圆圈键可提前开始游戏。电脑重启后，读取可能需要几分钟。需要启用上面的选项。",
    "A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.": "右下角显示启动时的着色器缓存读取进度和着色器编译状态，便于了解短暂卡顿的原因。关闭此项可隐藏提示。",
    "Close the game before deleting the shader cache.": "删除着色器缓存前请先关闭游戏。",
    "Could not delete all of the shader cache; another program may be using it: {}": "无法删除全部着色器缓存，其他程序可能正在使用：{}",
@@ -3222,7 +3710,115 @@
    "Right stick left": "右摇杆向左",
    "Right stick right": "右摇杆向右",
    "Clear input": "清除绑定",
-   "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.": "键盘：使用移动绑定输入旋转。默认按键序列为 A W D / D W A、D S A / A S D 和 D S A W / A S D W。重新绑定移动按键后，这些输入也会随之改变。自适应鼠标：用鼠标画出旋转。"
+   "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.": "键盘：使用移动绑定输入旋转。默认按键序列为 A W D / D W A、D S A / A S D 和 D S A W / A S D W。重新绑定移动按键后，这些输入也会随之改变。自适应鼠标：用鼠标画出旋转。",
+   "Audio": "音频",
+   "Volume": "音量",
+   "Speakers": "扬声器",
+   "Stereo": "立体声",
+   "5.1 surround": "5.1 环绕声",
+   "7.1 surround": "7.1 环绕声",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "游戏音频的主音量。100% 为游戏自带的混音；调高会更响亮，并带有软限幅，避免嘈杂场景出现削波失真。游戏内菜单中也有此选项。",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "游戏的 7.1 混音输出所用的声道布局。“自动”会跟随你的声音设备：立体声、5.1 或 7.1。游戏启动时生效。",
+   "Effects": "画面效果",
+   "Motion blur": "动态模糊",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "游戏自带的动态模糊（快速移动的物体和镜头）。关闭后将其移除。",
+   "Depth of field": "景深",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "游戏自带的远景模糊，过场动画中最明显。关闭后整个画面保持清晰。",
+   "High Frame Rate Physics Fix": "高帧率物理修复",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "高帧率下，快速反应提示在屏幕上或在克洛诺斯身上用刀刃拉拽时，引擎以 60 运行，结束后回到引擎帧率。",
+   "Enable the upscaler": "启用超分辨率",
+   "Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "游戏以渲染分辨率（性能页面）的这一比例渲染，超分辨率重建完整渲染分辨率。越低越快。原生抗锯齿保持完整分辨率。",
+   "Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.": "默认关闭，游戏不使用时域超分辨率。开启：使用下方预设的 FSR 3.1。动画角色仍可能有少量拖影。",
+   "Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "游戏以上方渲染分辨率的这一比例渲染，超分辨率重建完整渲染分辨率。越低越快。原生抗锯齿保持完整分辨率。",
+   "Native AA (100%)": "原生抗锯齿 (100%)",
+   "Ultra Quality (77%)": "超高质量 (77%)",
+   "Quality (67%)": "质量 (67%)",
+   "Balanced (59%)": "平衡 (59%)",
+   "Performance (50%)": "性能 (50%)",
+   "Ultra Performance (33%)": "超高性能 (33%)",
+   "FSR 4.1 (AMD driver)": "FSR 4.1（AMD 驱动）",
+   "FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.": "FSR 4.1 需要 AMD Adrenalin 26.10.1 或更新版本。日志会显示实际使用的提供程序；回退至 FSR 3.1 并不表示 FSR 4.1 已启用。",
+   "Frame generation": "帧生成",
+   "Generated frames": "生成帧数",
+   "AMD FSR (every GPU)": "AMD FSR（所有显卡）",
+   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card.": "在游戏帧之间插入生成的帧：屏幕帧数最多翻倍。需要启用超分辨率。AMD FSR：所有显卡。",
+   "Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.": "默认关闭：不使用时域超分辨率。开启：使用所选超分辨率和预设。动画角色仍可能出现拖影。",
+   "Automatic backup": "自动备份",
+   "Legacy backup": "旧版备份",
+   "Before-restore backup": "恢复前备份",
+   "{} · {} files · {} bytes · Game IDs: {}": "{} · {} 个文件 · {} 字节 · 游戏编号：{}",
+   "This backup is for a different game ID and may be incompatible. Game IDs will not be changed.": "此备份的游戏编号不同，可能不兼容。不会更改游戏编号。",
+   "Wait for the save restore to finish before starting the game.": "请等待存档恢复完成后再启动游戏。",
+   "Automatic backups keep the last {} starts. Before-restore backups are kept separately and are never automatically deleted.": "自动备份保留最近 {} 次启动的存档。恢复前备份单独保存，不会被自动删除。",
+   "Assigned input": "已分配的输入",
+   "Axis {} ({})": "轴 {}（{}）",
+   "Back": "返回",
+   "Button {}": "按钮 {}",
+   "Cancel": "取消",
+   "Cancel capture": "取消捕获",
+   "Capture canceled. Previously saved changes are kept.": "已取消捕获。之前保存的更改会保留。",
+   "Close": "关闭",
+   "D-pad {}: {}": "方向键 {}：{}",
+   "Game control": "游戏操作",
+   "Hold the input briefly. It will be saved for this control only.": "短暂保持输入。仅保存到当前操作。",
+   "Menu confirmation": "菜单确认键",
+   "No": "否",
+   "Yes": "是",
+   "OK": "确定",
+   "No controller found. Connect it and choose Refresh.": "未找到手柄。请连接手柄并点击“刷新”。",
+   "Not configured": "未配置",
+   "Press {}": "请按 {}",
+   "Pressed: {}": "已按下：{}",
+   "Saved changes are kept when you close this window.": "关闭窗口后，已保存的更改仍会保留。",
+   "Saved: {}": "已保存：{}",
+   "Set up a controller": "设置手柄",
+   "Skip": "跳过",
+   "The change was not saved. Configure the control again to retry.": "未能保存更改。请重新配置该操作以重试。",
+   "{} buttons, {} axes, {} D-pad hats": "{} 个按钮，{} 个轴，{} 个方向键帽",
+   "✗ No eboot.bin in the game folder": "✗ 游戏文件夹中没有 eboot.bin",
+   "Choose Configure next to a control. Each change is saved immediately.": "点击操作旁的“配置”。每次更改都会立即保存。",
+   "Circle / B": "圆圈键 / B",
+   "Configure": "配置",
+   "Configure any control, in any order.": "可按任意顺序配置各项操作。",
+   "Connect your controller, select it, then choose Start mapping.": "连接并选择手柄，然后点击“开始映射”。",
+   "Controller disconnected. Reconnect it and choose Refresh.": "手柄已断开。请重新连接并点击“刷新”。",
+   "Controller ready": "手柄已就绪",
+   "Could not save mapping": "无法保存映射",
+   "Cross / A": "叉键 / A",
+   "Hold the requested input briefly. Skip controls your device does not have.": "短暂保持提示的输入。设备没有的操作可跳过。",
+   "Left stick horizontal": "左摇杆水平轴",
+   "Left stick vertical": "左摇杆垂直轴",
+   "Left stick: {} / {}   Right stick: {} / {}\nL2: {}   R2: {}": "左摇杆：{} / {}   右摇杆：{} / {}\nL2：{}   R2：{}",
+   "Listening…": "等待输入…",
+   "Map Cross / A before saving.": "保存前请先映射叉键 / A。",
+   "Mapping complete": "映射完成",
+   "Mapping saved for the next game start. Any game button remapping in Controls still applies.": "映射已保存，将在下次启动游戏时生效。“控制”页面中的游戏按键重映射仍然有效。",
+   "Move the left stick down": "向下推动左摇杆",
+   "Move the left stick to the right": "向右推动左摇杆",
+   "Move the right stick down": "向下推动右摇杆",
+   "Move the right stick to the right": "向右推动右摇杆",
+   "Press buttons and move the sticks to check them. Then choose Save mapping.": "按下按钮并移动摇杆进行检查，然后点击“保存映射”。",
+   "Release all buttons and let the sticks rest.": "松开所有按钮，并让摇杆回到中间。",
+   "Release all buttons and the D-pad before starting.": "开始前请松开所有按钮和方向键。",
+   "Release the previous input before continuing.": "继续前请先松开上一个输入。",
+   "Right stick horizontal": "右摇杆水平轴",
+   "Right stick vertical": "右摇杆垂直轴",
+   "SDL3 was not found. Use a complete port installation or build the project first.": "未找到 SDL3。请使用完整的移植版安装包，或先构建项目。",
+   "Save mapping": "保存映射",
+   "Square / X": "方块键 / X",
+   "Start mapping": "开始映射",
+   "Step {} of {}": "第 {} 步，共 {} 步",
+   "Stop the game before setting up a controller.": "设置手柄前请先停止游戏。",
+   "Test your controller": "测试手柄",
+   "That input is already mapped. Use another input or skip this step.": "该输入已被映射。请使用其他输入，或跳过此步骤。",
+   "That input is assigned to another control. Clear its row first or choose another input.": "该输入已分配给其他操作。请先清除对应行，或使用其他输入。",
+   "Triangle / Y": "三角键 / Y",
+   "Bug Fix - Texture Corruption Fix": "贴图损坏修复",
+   "High FPS Wall Seam Fix": "高帧率墙面接缝修复",
+   "Lets Kratos cross the Realm of Hades wall seam at high engine FPS: a ledge ray miss right after a hit reuses that hit. Swaps an equivalent xor encoding that SpartanPort turns into the fix. Validated on the first Realm of Hades wall at 240 FPS.": "修复高引擎帧率下奎托斯无法通过冥界墙面接缝的问题：攀爬射线在刚命中后出现短暂未命中时，沿用上次命中结果。通过替换等效的 xor 编码，由 SpartanPort 识别并应用修复。上游已在 240 FPS 下验证冥界第一段墙面。",
+   "Skip Intro": "跳过开场标志",
+   "Skip Any Video With X Button": "使用叉键跳过过场动画",
+   "Bug Fix - Startup Black Screen": "启动黑屏修复"
   },
   "ja": {
    "Polish": "ポーランド語",
@@ -3248,7 +3844,35 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "獲得済みの {} 個のトロフィーをすべて未獲得に戻しますか？コピーが trophies.dat.bak として残ります。",
    "No trophy is unlocked.": "獲得済みのトロフィーはありません。",
    "Could not reset the trophies: {}": "トロフィーをリセットできませんでした：{}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "ゲームの初回起動時に使われます。その後は、ゲームが設定セーブにテキストと台詞の言語を保存します。ゲーム内の オプション → ゲーム設定 → テキスト表示 と オプション → 音声設定 → 台詞 で変更してください。"
+   "Notifications": "通知",
+   "List order": "リスト順",
+   "Most earned first": "獲得率が高い順",
+   "Rarest first": "レア度が高い順",
+   "{}% of players": "プレイヤーの {}%",
+   "Common": "コモン",
+   "Rare": "レア",
+   "Very rare": "ベリーレア",
+   "Ultra rare": "ウルトラレア",
+   "Triangle/Tab: order   L1/R1: notifications": "トライアングル/Tab：並び順   L1/R1：通知",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1：トロフィー   F8 / R3+R2 / Esc：閉じる",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "ゲームの初回起動時に使われます。その後は、ゲームが設定セーブにテキストと台詞の言語を保存します。ゲーム内の オプション → ゲーム設定 → テキスト表示 と オプション → 音声設定 → 台詞 で変更してください。",
+   "Audio": "オーディオ",
+   "Volume": "音量",
+   "Speakers": "スピーカー",
+   "Stereo": "ステレオ",
+   "5.1 surround": "5.1 サラウンド",
+   "7.1 surround": "7.1 サラウンド",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "ゲーム音声のマスター音量。100% はゲーム本来のミックスです。上げると音が大きくなり、大きな音の場面で音割れしないようソフトリミッターがかかります。ゲーム内メニューにもあります。",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "ゲームの 7.1 ミックスを出力する形式。自動はサウンドデバイスに合わせます：ステレオ、5.1、7.1。ゲームの起動時に適用されます。",
+   "Effects": "エフェクト",
+   "Motion blur": "モーションブラー",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "速く動く物体やカメラにかかるゲーム本来のモーションブラー。オフにすると取り除かれます。",
+   "Depth of field": "被写界深度",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "遠くの物体にかかるゲーム本来のぼかし。カットシーンで最も強くなります。オフにすると画面全体がくっきりします。",
+   "Automatic": "自動",
+   "restart": "再起動",
+   "High Frame Rate Physics Fix": "高フレームレート物理修正",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "高フレームレート時、QTE の表示中やクロノスでのブレードの引き寄せ中はエンジンを 60 で動かし、その後エンジンのフレームレートに戻します。"
   },
   "ko": {
    "Polish": "폴란드어",
@@ -3274,7 +3898,35 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "획득한 트로피 {}개를 모두 다시 잠글까요? 복사본이 trophies.dat.bak으로 보관됩니다.",
    "No trophy is unlocked.": "획득한 트로피가 없습니다.",
    "Could not reset the trophies: {}": "트로피를 초기화하지 못했습니다: {}",
-   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "게임을 처음 시작할 때 사용됩니다. 그 후에는 게임이 설정 저장 데이터에 텍스트와 음성 언어를 저장합니다. 게임 안의 옵션 → 게임 설정 → 게임 텍스트 및 옵션 → 오디오 → 음성에서 변경하세요."
+   "Notifications": "알림",
+   "List order": "목록 순서",
+   "Most earned first": "많이 획득한 순",
+   "Rarest first": "희귀한 순",
+   "{}% of players": "플레이어의 {}%",
+   "Common": "일반",
+   "Rare": "희귀",
+   "Very rare": "매우 희귀",
+   "Ultra rare": "극히 희귀",
+   "Triangle/Tab: order   L1/R1: notifications": "세모/Tab: 정렬   L1/R1: 알림",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: 트로피   F8 / R3+R2 / Esc: 닫기",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "게임을 처음 시작할 때 사용됩니다. 그 후에는 게임이 설정 저장 데이터에 텍스트와 음성 언어를 저장합니다. 게임 안의 옵션 → 게임 설정 → 게임 텍스트 및 옵션 → 오디오 → 음성에서 변경하세요.",
+   "Audio": "오디오",
+   "Volume": "볼륨",
+   "Speakers": "스피커",
+   "Stereo": "스테레오",
+   "5.1 surround": "5.1 서라운드",
+   "7.1 surround": "7.1 서라운드",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "게임 오디오의 마스터 볼륨입니다. 100%는 게임 원래의 믹스이며, 높이면 더 커지고 큰 장면에서 소리가 찢어지지 않도록 소프트 리미터가 적용됩니다. 게임 내 메뉴에도 있습니다.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "게임의 7.1 믹스를 내보내는 방식입니다. 자동은 사운드 장치를 따릅니다: 스테레오, 5.1 또는 7.1. 게임을 시작할 때 적용됩니다.",
+   "Effects": "효과",
+   "Motion blur": "모션 블러",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "빠르게 움직이는 물체와 카메라에 적용되는 게임 자체의 모션 블러입니다. 끄면 제거됩니다.",
+   "Depth of field": "피사계 심도",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "먼 물체에 적용되는 게임 자체의 흐림 효과로, 컷신에서 가장 강합니다. 끄면 화면 전체가 선명하게 유지됩니다.",
+   "Automatic": "자동",
+   "restart": "재시작",
+   "High Frame Rate Physics Fix": "고프레임 물리 수정",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "고프레임에서 QTE가 화면에 있는 동안이나 크로노스에서 블레이드로 당겨질 때 엔진은 60으로 동작하고, 이후 엔진 프레임레이트로 돌아갑니다."
   },
   "id": {
    "Polish": "Polandia",
@@ -3300,6 +3952,17 @@
    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Kunci kembali semua {} trofi yang terbuka? Salinan akan disimpan sebagai trophies.dat.bak.",
    "No trophy is unlocked.": "Tidak ada trofi yang terbuka.",
    "Could not reset the trophies: {}": "Tidak dapat mengatur ulang trofi: {}",
+   "Notifications": "Notifikasi",
+   "List order": "Urutan daftar",
+   "Most earned first": "Paling banyak diraih dulu",
+   "Rarest first": "Paling langka dulu",
+   "{}% of players": "{}% pemain",
+   "Common": "Umum",
+   "Rare": "Langka",
+   "Very rare": "Sangat langka",
+   "Ultra rare": "Ultra langka",
+   "Triangle/Tab: order   L1/R1: notifications": "Segitiga/Tab: urutan   L1/R1: notifikasi",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofi   F8 / R3+R2 / Esc: tutup",
    "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Digunakan pada saat pertama kali game dimulai. Setelah itu, game menyimpan bahasa teks dan suaranya sendiri di penyimpanan pengaturan: ubah di dalam game, di Options → Game Settings → Game Text dan Options → Audio → Speech.",
    "The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?": "Launcher tidak dapat menulis ke {}, sehingga tidak dapat mengganti dirinya di sana. Buka halaman rilis untuk mengunduh versi baru secara manual?",
    "Version {} is out, but it has no Linux build yet.": "Versi {} telah tersedia, tetapi belum memiliki build Linux.",
@@ -3573,6 +4236,8 @@
    "Keyboard & Mouse Mapping": "Pemetaan Keyboard & Mouse",
    "Keyboard (native)": "Keyboard (asli)",
    "A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.": "Thread latar belakang membaca shader tersimpan ke memori saat game dimulai; kemajuannya ditampilkan di sudut kanan bawah. Pemuatan shader berikutnya tidak perlu menunggu pembacaan disk. Memerlukan opsi di atas. Nonaktifkan jika hard disk lambat atau RAM terbatas membuat menit pertama lebih tersendat atau waktu mulai lebih lama.",
+   "Read the shader cache before the game starts": "Baca cache shader sebelum game dimulai",
+   "Recommended on a hard disk (HDD): the loading screen waits until the saved shaders are read, so the disk does not serve the read and the game at once and the game does not stutter. Esc or Circle starts the game earlier. After a PC restart the read can take several minutes. Needs the option above.": "Disarankan untuk hard disk (HDD): layar pemuatan menunggu sampai shader yang tersimpan selesai dibaca, agar disk tidak melayani pembacaan dan game sekaligus dan game tidak tersendat. Esc atau Lingkaran memulai game lebih awal. Setelah PC dinyalakan ulang, pembacaan bisa memakan beberapa menit. Memerlukan opsi di atas.",
    "A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.": "Catatan di sudut kanan bawah menampilkan pembacaan cache saat mulai dan kompilasi shader, agar penyebab jeda singkat terlihat. Nonaktifkan untuk menyembunyikannya.",
    "Close the game before deleting the shader cache.": "Tutup game sebelum menghapus cache shader.",
    "Could not delete all of the shader cache; another program may be using it: {}": "Tidak dapat menghapus seluruh cache shader; program lain mungkin sedang menggunakannya: {}",
@@ -3596,7 +4261,465 @@
    "Right stick left": "Stik kanan ke kiri",
    "Right stick right": "Stik kanan ke kanan",
    "Clear input": "Hapus input",
-   "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.": "Keyboard: masukkan putaran dengan input gerakan Anda. Dengan tombol default, urutannya adalah A W D / D W A, D S A / A S D dan D S A W / A S D W. Mengubah pemetaan gerakan juga mengubah input ini. Mouse adaptif: gambar putaran dengan mouse."
+   "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.": "Keyboard: masukkan putaran dengan input gerakan Anda. Dengan tombol default, urutannya adalah A W D / D W A, D S A / A S D dan D S A W / A S D W. Mengubah pemetaan gerakan juga mengubah input ini. Mouse adaptif: gambar putaran dengan mouse.",
+   "Audio": "Audio",
+   "Volume": "Volume",
+   "Speakers": "Speaker",
+   "Stereo": "Stereo",
+   "5.1 surround": "Surround 5.1",
+   "7.1 surround": "Surround 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Volume utama audio game. 100% adalah campuran asli game; lebih tinggi berarti lebih keras, dengan pembatas lembut agar adegan yang keras tidak terpotong (clipping). Tersedia juga di menu dalam game.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Tata letak saluran untuk campuran 7.1 game. Otomatis mengikuti perangkat suara Anda: stereo, 5.1, atau 7.1. Diterapkan saat game dimulai.",
+   "Effects": "Efek",
+   "Motion blur": "Motion blur",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Motion blur bawaan game pada objek yang bergerak cepat dan kamera. Jika dimatikan, efek ini dihilangkan.",
+   "Depth of field": "Depth of field",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Blur bawaan game pada objek yang jauh, paling kuat di cutscene. Jika dimatikan, seluruh gambar tetap tajam.",
+   "High Frame Rate Physics Fix": "Perbaikan fisika FPS tinggi",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Pada FPS tinggi, mesin berjalan di 60 selama QTE tampil di layar atau saat tarikan bilah di Cronos, lalu kembali ke frame rate mesin.",
+   "Enable the upscaler": "Aktifkan upscaler",
+   "Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "Bagian dari resolusi render (halaman Performa) yang dipakai game untuk merender; upscaler membangun ulang resolusi render penuh. Lebih rendah lebih cepat. Native AA memakai resolusi penuh.",
+   "Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.": "Mati (bawaan): game berjalan tanpa upscaling temporal. Nyala: FSR 3.1 dengan preset di bawah. Karakter yang bergerak masih bisa sedikit berbayang.",
+   "Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "Bagian dari resolusi render di atas yang dipakai game untuk merender; upscaler membangun ulang resolusi render penuh. Lebih rendah lebih cepat. Native AA memakai resolusi penuh.",
+   "Native AA (100%)": "Native AA (100%)",
+   "Ultra Quality (77%)": "Kualitas Ultra (77%)",
+   "Quality (67%)": "Kualitas (67%)",
+   "Balanced (59%)": "Seimbang (59%)",
+   "Performance (50%)": "Performa (50%)",
+   "Ultra Performance (33%)": "Performa Ultra (33%)",
+   "FSR 4.1 (AMD driver)": "FSR 4.1 (driver AMD)",
+   "FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.": "FSR 4.1 memerlukan AMD Adrenalin 26.10.1 atau lebih baru. Log menampilkan penyedia aktif; fallback ke FSR 3.1 bukan berarti FSR 4.1 aktif.",
+   "Frame generation": "Pembuatan frame",
+   "Generated frames": "Frame yang dibuat",
+   "AMD FSR (every GPU)": "AMD FSR (semua GPU)",
+   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card.": "Frame buatan di antara frame game: hingga dua kali frame di layar. Memerlukan upscaler. AMD FSR: semua kartu grafis.",
+   "Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.": "Mati (bawaan): tanpa upscaling temporal. Nyala: memakai upscaler dan preset pilihan. Karakter yang bergerak masih dapat berbayang."
+  },
+  "cs": {
+   "Trophies": "Trofeje",
+   "The trophies this port recorded while you played.": "Trofeje, které si tento port zaznamenal při hraní.",
+   "All trophies": "Všechny",
+   "Unlocked": "Odemčené",
+   "Locked": "Zamčené",
+   "UNLOCKED": "ODEMČENO",
+   "LOCKED": "ZAMČENO",
+   "{} of {} unlocked": "Odemčeno {} z {}",
+   "Trophy {}": "Trofej {}",
+   "Platinum": "Platina",
+   "Gold": "Zlato",
+   "Silver": "Stříbro",
+   "Bronze": "Bronz",
+   "No trophy list: choose the game folder on the Game page (its sce_sys/trophy/trophy00.trp is read).": "Žádný seznam trofejí: vyberte složku hry na stránce Hra (čte se její soubor sce_sys/trophy/trophy00.trp).",
+   "Only trophies unlocked with this port are listed; the ones earned on a PlayStation are not known to it.": "Zobrazují se jen trofeje odemčené v tomto portu; ty získané na PlayStationu nezná.",
+   "TROPHY UNLOCKED": "TROFEJ ODEMČENA",
+   "Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close": "Nahoru/Dolů: posun   Vlevo/Vpravo: filtr   F8 / R3+R2 / Esc: zavřít",
+   "Reset trophies": "Resetovat trofeje",
+   "Close the game before resetting the trophies.": "Před resetem trofejí zavřete hru.",
+   "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Znovu zamknout všech {} odemčených trofejí? Kopie se uchová jako trophies.dat.bak.",
+   "No trophy is unlocked.": "Žádná trofej není odemčena.",
+   "Could not reset the trophies: {}": "Trofeje se nepodařilo resetovat: {}",
+   "Notifications": "Oznámení",
+   "List order": "Pořadí seznamu",
+   "Most earned first": "Nejčastěji získané první",
+   "Rarest first": "Nejvzácnější první",
+   "{}% of players": "{} % hráčů",
+   "Common": "Běžná",
+   "Rare": "Vzácná",
+   "Very rare": "Velmi vzácná",
+   "Ultra rare": "Ultra vzácná",
+   "Triangle/Tab: order   L1/R1: notifications": "Trojúhelník/Tab: pořadí   L1/R1: oznámení",
+   "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofeje   F8 / R3+R2 / Esc: zavřít",
+   "Used on the game's first start. After that, the game keeps its own text and speech languages in its settings save: change them in the game, in Options → Game Settings → Game Text and Options → Audio → Speech.": "Použije se při prvním spuštění hry. Potom si hra drží vlastní jazyk textu a mluveného slova v uloženém nastavení: změníte je ve hře v Možnosti → Nastavení hry → Text hry a Možnosti → Zvuk → Řeč.",
+   "Audio": "Zvuk",
+   "Volume": "Hlasitost",
+   "Speakers": "Reproduktory",
+   "Stereo": "Stereo",
+   "5.1 surround": "Prostorový zvuk 5.1",
+   "7.1 surround": "Prostorový zvuk 7.1",
+   "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Hlavní hlasitost zvuku hry. 100 % je původní mix hry; víc je hlasitěji, s jemným limiterem, aby hlasité scény nezkreslovaly. Také v herním menu.",
+   "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Rozložení, ve kterém se posílá 7.1 mix hry. Automaticky se řídí vaším zvukovým zařízením: stereo, 5.1 nebo 7.1. Použije se při spuštění hry.",
+   "Effects": "Efekty",
+   "Motion blur": "Rozmazání pohybu",
+   "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Vlastní rozmazání pohybu hry u rychle se pohybujících objektů a kamery. Vypnuto ho odstraní.",
+   "Depth of field": "Hloubka ostrosti",
+   "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Vlastní rozostření vzdálených objektů ve hře, nejsilnější v cutscénách. Vypnuto zachová celý obraz ostrý.",
+   "Automatic": "Automaticky",
+   "restart": "restart",
+   "High Frame Rate Physics Fix": "Oprava fyziky pro vysoké FPS",
+   "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "Při vysokém FPS engine běží na 60, dokud je na obrazovce QTE výzva nebo při tahu čepele Krona, a pak se vrátí na svou snímkovou frekvenci.",
+   "The launcher cannot write to {}, so it cannot replace itself there. Open the releases page to download the new version by hand?": "Launcher nemůže zapisovat do {}, a proto se tam nemůže nahradit. Otevřít stránku vydání, abyste novou verzi stáhli ručně?",
+   "Version {} is out, but it has no Linux build yet.": "Verze {} vyšla, ale zatím nemá sestavení pro Linux.",
+   "Show Discord Rich Presence": "Zobrazit Discord Rich Presence",
+   "Shows only the game name and the time played on your Discord profile.": "Na vašem profilu na Discordu zobrazí jen název hry a odehraný čas.",
+   "Game multisampling": "Multisampling hry",
+   "Automatic ({}: off)": "Automaticky ({}: vypnuto)",
+   "Automatic ({}: on)": "Automaticky ({}: zapnuto)",
+   "Off (fixes black lines)": "Vypnuto (opraví černé čáry)",
+   "The game's 2-sample depth buffer, read as a texture by its lighting. AMD's and Intel's Windows drivers read it wrong and the lighting shows black lines, so Automatic turns multisampling off on those cards (Radeon, Arc) and keeps it on elsewhere (NVIDIA). Off and On force the choice on any card.": "Dvouvzorkový hloubkový buffer hry, který její osvětlení čte jako texturu. Windowsové ovladače AMD a Intelu ho čtou špatně a osvětlení ukazuje černé čáry, proto Automaticky vypne multisampling u těchto karet (Radeon, Arc) a jinde (NVIDIA) ho nechá zapnutý. Vypnuto a Zapnuto vynutí volbu na jakékoli kartě.",
+   "Display": "Zobrazení",
+   "How the game appears on your screen.": "Jak se hra zobrazí na vaší obrazovce.",
+   "Display mode": "Režim zobrazení",
+   "Borderless covers the screen without changing the display mode.": "Okno bez rámečku zakryje obrazovku, aniž by změnilo režim zobrazení.",
+   "VSync": "VSync",
+   "Off allows tearing for the lowest latency.": "Vypnuto povolí trhání obrazu pro nejnižší latenci.",
+   "Enlarges a smaller game image to the window. With Render resolution 720p (Performance) it raises the FPS; at the size of the window it does nothing.": "Zvětší menší obraz hry na okno. S rozlišením vykreslování 720p (Výkon) zvýší FPS; při velikosti okna nedělá nic.",
+   "Overlay": "Překryv",
+   "Show performance overlay": "Zobrazit překryv s výkonem",
+   "Items, size and corner: in-game menu (Insert / R3+L2) > Overlay.": "Položky, velikost a roh: herní menu (Insert / R3+L2) > Překryv.",
+   "Frame rate and speed options.": "Možnosti snímkové frekvence a rychlosti.",
+   "Frame rate limit": "Limit snímkové frekvence",
+   "The engine frame rate (below) is the highest it can go.": "Nejvýše může být snímková frekvence enginu (níže).",
+   "Frames queued": "Snímky ve frontě",
+   "1 is the lowest input latency; more can raise FPS when the graphics card is the limit.": "1 je nejnižší latence vstupu; víc může zvýšit FPS, když je limitem grafická karta.",
+   "Engine frame rate": "Snímková frekvence enginu",
+   "The highest frame rate the game itself runs at (a game patch).": "Nejvyšší snímková frekvence, na které hra sama běží (záplata hry).",
+   "Render resolution": "Rozlišení vykreslování",
+   "The size the game draws at; higher is sharper and slower. A resolution patch replaces the texture fix and reserves the memory it needs.": "Velikost, ve které hra vykresluje; vyšší je ostřejší a pomalejší. Záplata rozlišení nahradí opravu textur a vyhradí paměť, kterou potřebuje.",
+   "Shaders": "Shadery",
+   "Use pipeline binary cache (A/B test)": "Použít binární mezipaměť pipeline (test A/B)",
+   "Reuse saved Vulkan pipelines. Disable to compare FPS with normal compilation. Takes effect on the next launch; saved caches are preserved.": "Znovu použije uložené pipeline Vulkanu. Vypněte pro porovnání FPS s běžnou kompilací. Projeví se při dalším spuštění; uložené mezipaměti zůstanou.",
+   "Load shader cache in the background": "Načítat mezipaměť shaderů na pozadí",
+   "The game opens at once and the saved shaders load while you play; a small note in the corner shows the progress. Switch it off to wait on the loading screen instead.": "Hra se otevře hned a uložené shadery se načítají během hraní; malá poznámka v rohu ukazuje průběh. Vypněte, pokud chcete raději čekat na načítací obrazovce.",
+   "Compile new shaders in the background": "Kompilovat nové shadery na pozadí",
+   "Fewer stutters in new areas: the game keeps running while new shaders compile. An object or effect may appear a moment later. Switch it off if something stays missing.": "Méně sekání v nových oblastech: hra běží dál, zatímco se kompilují nové shadery. Objekt nebo efekt se může objevit o chvíli později. Vypněte, pokud něco zůstane chybět.",
+   "Fast shader cache loading (parallel)": "Rychlé načítání mezipaměti shaderů (paralelně)",
+   "Loading screen only: builds the cached pipelines on several CPU threads.": "Jen na načítací obrazovce: vytváří pipeline z mezipaměti na více vláknech CPU.",
+   "GPU data": "Data GPU",
+   "Stream buffer memory": "Paměť streamovacího bufferu",
+   "System RAM can improve FPS on NVIDIA laptops. Choose GPU memory to restore the previous behavior. Applies on the next game launch.": "Systémová RAM může zlepšit FPS na noteboocích s NVIDIA. Pro obnovení dřívějšího chování zvolte paměť GPU. Použije se při dalším spuštění hry.",
+   "Game reads GPU data without waiting (big FPS gain)": "Hra čte data z GPU bez čekání (velký nárůst FPS)",
+   "About 40 to 66 FPS in a heavy scene. Needs deferred GPU readbacks. Switch it off if lighting or objects look wrong.": "Asi 40 až 66 FPS v náročné scéně. Vyžaduje odložené čtení z GPU. Vypněte, pokud vypadá špatně osvětlení nebo objekty.",
+   "Deferred GPU readbacks": "Odložené čtení z GPU",
+   "Fewer waits for the GPU. Switch it off if textures or shadows look wrong.": "Méně čekání na GPU. Vypněte, pokud vypadají špatně textury nebo stíny.",
+   "Your game dump, saves and language.": "Váš dump hry, uložené hry a jazyk.",
+   "Cheats": "Cheaty",
+   "Infinite Double Jumps": "Nekonečné dvojité skoky",
+   "Repeat air jumps without landing. Also available in the in-game Cheats menu.": "Opakované skoky ve vzduchu bez dopadu. Je také v herním menu Cheaty.",
+   "Unlock Very Hard": "Odemknout Very Hard",
+   "Select Very Hard without completing the game. Does not change existing save difficulty. In-game: enable before opening New Game.": "Umožní vybrat Very Hard bez dokončení hry. Nemění obtížnost existující uložené hry. Ve hře: zapněte před spuštěním Nové hry.",
+   "Folders": "Složky",
+   "Your own dump of the game (eboot.bin, sce_module, sce_sys); SpartanPort: CUSA01623, version 01.02 for the community patches.": "Váš vlastní dump hry (eboot.bin, sce_module, sce_sys); SpartanPort: CUSA01623, verze 01.02 pro komunitní záplaty.",
+   "Update folder (optional)": "Složka aktualizace (volitelné)",
+   "Choose the folder of the update (eboot.bin, sce_sys)": "Vyberte složku aktualizace (eboot.bin, sce_sys)",
+   "Only if the update is dumped apart from the game: it is laid over the game folder without changing either. Leave empty when the game folder already has the update.": "Jen pokud je aktualizace vydumpovaná zvlášť od hry: položí se přes složku hry, aniž by se změnila některá z nich. Nechte prázdné, pokud složka hry už aktualizaci obsahuje.",
+   "Saves": "Uložené hry",
+   "Language": "Jazyk",
+   "Save backups": "Zálohy uložených her",
+   "Changes applied to the game code at start.": "Změny použité na kód hry při startu.",
+   "Files layered over the game at start; the game files are never changed.": "Soubory vrstvené přes hru při startu; soubory hry se nikdy nemění.",
+   "Loose-file mods, each in its own folder with dvdroot_ps4.": "Mody z volných souborů, každý ve vlastní složce s dvdroot_ps4.",
+   "Controls": "Ovládání",
+   "Which key or gamepad button presses each button of the game.": "Která klávesa nebo tlačítko gamepadu stiskne které tlačítko hry.",
+   "Gamepad names": "Názvy gamepadu",
+   "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Insert and R3+L2 always open the port's menu. Applied when the game starts.": "Klávesy používají názvy SDL: písmena, číslice, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 až F12. Název, který hra nezná, ponechá výchozí hodnotu (záznam řekne která). L2/R2 na gamepadu zůstávají na spouštích. Insert a R3+L2 vždy otevřou menu portu. Použije se při spuštění hry.",
+   "Linux": "Linux",
+   "Window system": "Okenní systém",
+   "Launcher options, files and diagnostics.": "Možnosti launcheru, soubory a diagnostika.",
+   "Files": "Soubory",
+   "GPU wait and readback report in the log (every 5 s)": "Zpráva o čekání na GPU a čtení v záznamu (každých 5 s)",
+   "Shows where the frame waits for the GPU and which reads cause it. For performance tests.": "Ukáže, kde snímek čeká na GPU a která čtení to způsobují. Pro testy výkonu.",
+   "F11 captures a frame for analysis": "F11 zachytí snímek pro analýzu",
+   "Records how the next frame is drawn into the captures folder.": "Zaznamená, jak se vykreslí další snímek, do složky zachycení.",
+   "Home": "Domů",
+   "Choose the game folder": "Vyberte složku hry",
+   "Close the game before restoring saves.": "Před obnovením uložených her zavřete hru.",
+   "No built-in patches for this game.": "Pro tuto hru nejsou žádné vestavěné záplaty.",
+   "GAME BUTTON": "TLAČÍTKO HRY",
+   "KEYBOARD": "KLÁVESNICE",
+   "GAMEPAD": "GAMEPAD",
+   "GameMode": "GameMode",
+   "Asks GameMode (gamemoderun) for the performance governor while the game runs.": "Požádá GameMode (gamemoderun) o výkonový governor, dokud hra běží.",
+   "MangoHud overlay": "Překryv MangoHud",
+   "Shows MangoHud (FPS, frame times, temperatures) through its Vulkan layer.": "Zobrazí MangoHud (FPS, časy snímků, teploty) přes svou vrstvu Vulkanu.",
+   "{} · {} FPS engine · {} patches": "{} · engine {} FPS · záplat: {}",
+   "Type a name for the preset first.": "Nejdřív zadejte název předvolby.",
+   "RUNNING": "BĚŽÍ",
+   "{} · version {}": "{} · verze {}",
+   "Choose your game folder to play.": "Pro hraní vyberte složku hry.",
+   "Made before every start, newest first; the last {} are kept. Restoring backs up the current saves first.": "Vytváří se před každým spuštěním, nejnovější první; uchovává se posledních {}. Obnovení nejdřív zálohuje aktuální uložené hry.",
+   "shadPS4/GoldHEN XML patch files for this game version. Empty: {}": "Soubory záplat XML shadPS4/GoldHEN pro tuto verzi hry. Prázdné: {}",
+   "{} · version {} · {}. Resolution and frame rate patches follow Performance.": "{} · verze {} · {}. Záplaty rozlišení a snímkové frekvence se řídí stránkou Výkon.",
+   "Automatic lets SDL choose. Pick X11 if the window misbehaves on Wayland (it runs through XWayland).": "Automaticky nechá volbu na SDL. Zvolte X11, pokud se okno na Waylandu chová špatně (běží přes XWayland).",
+   "{} · 60 FPS engine · patches not available for this game build": "{} · engine 60 FPS · záplaty nejsou pro toto sestavení hry k dispozici",
+   "Shortcut created:": "Zástupce vytvořen:",
+   "Restore": "Obnovit",
+   "Replace the current saves with the backup {}? The current saves are backed up first.": "Nahradit aktuální uložené hry zálohou {}? Aktuální uložené hry se nejdřív zálohují.",
+   "Saves restored from {}.": "Uložené hry obnoveny ze zálohy {}.",
+   "Reset to defaults": "Obnovit výchozí hodnoty",
+   "⚠ {} file(s) replaced by more than one mod (the last one wins):": "⚠ Souborů nahrazených více mody: {} (vyhrává poslední):",
+   "   … and {} more": "   … a dalších {}",
+   "Could not restore: {}": "Obnovení se nezdařilo: {}",
+   " Previous saves: {}.": " Předchozí uložené hry: {}.",
+   "No Wayland session detected.": "Nebyla zjištěna relace Waylandu.",
+   "Not installed.": "Nenainstalováno.",
+   "Preset": "Předvolba",
+   "Load": "Načíst",
+   "Save": "Uložit",
+   "Could not save all settings. Check write permissions and free disk space, then try again.": "Nepodařilo se uložit všechna nastavení. Zkontrolujte oprávnění k zápisu a volné místo na disku a zkuste to znovu.",
+   "Delete": "Smazat",
+   "No patch files for this game version yet.": "Pro tuto verzi hry zatím nejsou soubory záplat.",
+   "{} trigger": "Spoušť {}",
+   "Diagnostics (for development)": "Diagnostika (pro vývoj)",
+   "Windowed": "V okně",
+   "Borderless": "Okno bez rámečku",
+   "Unlimited": "Neomezeno",
+   "Native AA (×1.0)": "Nativní AA (×1,0)",
+   "Quality (×1.5)": "Kvalita (×1,5)",
+   "Balanced (×1.7)": "Vyvážené (×1,7)",
+   "Performance (×2)": "Výkon (×2)",
+   "Ultra Performance (×3)": "Ultra výkon (×3)",
+   "Precise": "Přesné",
+   "System RAM (cached, default)": "Systémová RAM (s mezipamětí, výchozí)",
+   "System RAM (uncached)": "Systémová RAM (bez mezipaměti)",
+   "GPU memory (previous behavior)": "Paměť GPU (dřívější chování)",
+   "1 (lowest latency)": "1 (nejnižší latence)",
+   "Native (1080p)": "Nativní (1080p)",
+   "Graphics (experimental)": "Grafika (experimentální)",
+   "Experimental": "Experimentální",
+   "Enable the upscaler (experimental)": "Zapnout upscaler (experimentální)",
+   "Off (default): the game runs without temporal upscaling. These upscalers are not calibrated for this game yet: expect ghosting or flicker. FSR 3.1 needs nothing else; FSR 4 needs the assets below, and without them the game uses FSR 3.1. The options on this page only take effect with this switch on.": "Vypnuto (výchozí): hra běží bez časového upscalingu. Tyto upscalery zatím nejsou pro tuto hru zkalibrované: počítejte s duchy nebo blikáním. FSR 3.1 nepotřebuje nic dalšího; FSR 4 potřebuje soubory níže a bez nich hra použije FSR 3.1. Možnosti na této stránce se projeví jen se zapnutým přepínačem.",
+   "Add to Steam": "Přidat do Steamu",
+   "Steam is open. Close it completely (Steam > Exit) and click again: Steam rewrites its shortcuts when it closes.": "Steam je otevřený. Zavřete ho úplně (Steam > Konec) a klikněte znovu: Steam při zavření přepisuje své zástupce.",
+   "Steam was not found for this user.": "Steam pro tohoto uživatele nebyl nalezen.",
+   "The game folder has no sce_sys/pic1.png for the pictures.": "Složka hry nemá sce_sys/pic1.png pro obrázky.",
+   "The shortcut \"{}\" was updated in Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.": "Zástupce „{}“ byl ve Steamu aktualizován (účty: {}) s ikonou, kapslemi, pozadím a logem. Otevřete Steam a uvidíte ho v knihovně.",
+   "The shortcut \"{}\" was added to Steam (accounts: {}), with its icon, capsules, background and logo. Open Steam to see it in the library.": "Zástupce „{}“ byl přidán do Steamu (účty: {}) s ikonou, kapslemi, pozadím a logem. Otevřete Steam a uvidíte ho v knihovně.",
+   "Menu entry and icon (AppImage)": "Položka menu a ikona (AppImage)",
+   "Creates spartanport.desktop in ~/.local/share/applications so the launcher and the game show their icon in the dock and the menu. Turning it off removes the entry.": "Vytvoří spartanport.desktop v ~/.local/share/applications, aby launcher a hra ukazovaly ikonu v docku a v menu. Vypnutím se položka odstraní.",
+   "The game dump is incomplete. Missing or empty files:\n\n{}\n\nDump the game again, or copy these files from a complete dump.": "Dump hry je neúplný. Chybějící nebo prázdné soubory:\n\n{}\n\nVydumpujte hru znovu, nebo tyto soubory zkopírujte z úplného dumpu.",
+   "The files in {} look like a PKG extraction: the system files (param.sfo, icon0.png, pic1.png and the rest) are in\n\n{}\n\nCopy all of them into its sce_sys folder now? Files already there are kept.": "Soubory v {} vypadají jako rozbalení PKG: systémové soubory (param.sfo, icon0.png, pic1.png a další) jsou v\n\n{}\n\nZkopírovat je všechny teď do jeho složky sce_sys? Soubory, které tam už jsou, zůstanou.",
+   "Could not copy the files: {}": "Soubory se nepodařilo zkopírovat: {}",
+   "{} (empty)": "{} (prázdný)",
+   "{} (unreadable)": "{} (nečitelný)",
+   "{} (not a param.sfo)": "{} (není param.sfo)",
+   "{} (a folder, not a file)": "{} (složka, ne soubor)",
+   "Choose two separate folders for the game and its update, or leave the update folder empty.": "Vyberte dvě oddělené složky pro hru a její aktualizaci, nebo nechte složku aktualizace prázdnou.",
+   "Copying the system files…": "Kopíruji systémové soubory…",
+   "The update folder {} is incomplete. Missing or empty files:\n\n{}\n\nChoose the folder of the update (eboot.bin, sce_sys), or leave it empty.": "Složka aktualizace {} je neúplná. Chybějící nebo prázdné soubory:\n\n{}\n\nVyberte složku aktualizace (eboot.bin, sce_sys), nebo ji nechte prázdnou.",
+   "In-game button icons": "Ikony tlačítek ve hře",
+   "Original (default)": "Původní (výchozí)",
+   "Match my controller": "Podle mého ovladače",
+   "Keyboard": "Klávesnice",
+   "Replaces the PlayStation button icons inside the game with the ones of your controller. Works on a copy of up to three game files in the port's data folder (about 410 MB); your game folder is never changed. Applied when the game starts.": "Nahradí ikony tlačítek PlayStationu ve hře ikonami vašeho ovladače. Pracuje s kopií až tří souborů hry v datové složce portu (asi 410 MB); vaše složka hry se nikdy nemění. Použije se při spuštění hry.",
+   "Textures": "Textury",
+   "Anisotropic filtering": "Anizotropní filtrování",
+   "Game default": "Výchozí hodnota hry",
+   "Sharper floors and walls seen at an angle, at little cost on most graphics cards.": "Ostřejší podlahy a stěny při pohledu z úhlu, na většině grafických karet s malou zátěží.",
+   "Screenshots": "Snímky obrazovky",
+   "Open the screenshots folder": "Otevřít složku se snímky obrazovky",
+   "F12 in the game": "F12 ve hře",
+   "Saves the game's image, without the overlay, as a PNG in the screenshots folder of the saves.": "Uloží obraz hry bez překryvu jako PNG do složky snímků obrazovky v uložených hrách.",
+   "Vibration": "Vibrace",
+   "Strength of the gamepad's vibration; 0% turns it off.": "Síla vibrací gamepadu; 0 % je vypne.",
+   "Windows could not reserve the memory the game needs. Close other programs, or let the Windows page file grow (for example 16384 MB initial, 32768 MB maximum), and start again.": "Windows nedokázal vyhradit paměť, kterou hra potřebuje. Zavřete jiné programy, nebo nechte stránkovací soubor Windows růst (například 16384 MB počáteční, 32768 MB maximální) a spusťte znovu.",
+   "Linux could not allocate the memory the game needs. Close other programs, check available RAM, swap space, or /dev/shm, and start again.": "Linux nedokázal přidělit paměť, kterou hra potřebuje. Zavřete jiné programy, zkontrolujte dostupnou RAM, odkládací prostor nebo /dev/shm a spusťte znovu.",
+   "The game stopped while reading its files: the game dump may be incomplete. Extract the pkg again and check that the game folder is about 40 GB.": "Hra se zastavila při čtení svých souborů: dump hry může být neúplný. Rozbalte pkg znovu a zkontrolujte, že složka hry má asi 40 GB.",
+   "Native · 1920 × 1080 · 16:9": "Nativní · 1920 × 1080 · 16:9",
+   "Graphics card": "Grafická karta",
+   "The GPU the game runs on. Choose your dedicated card if the game uses the integrated one.": "GPU, na které hra běží. Pokud hra používá integrovanou, vyberte svou dedikovanou kartu.",
+   "Fast screen effects (Rage of Sparta, weapons)": "Rychlé efekty na obrazovce (Sparťanův hněv, zbraně)",
+   "Keeps powers and weapon effects at full FPS. Switch it off if a screen effect (blur, distortion, the color change of a power) looks stretched, shifted or wrong.": "Udrží síly a efekty zbraní na plném FPS. Vypněte, pokud efekt na obrazovce (rozmazání, zkreslení, změna barvy síly) vypadá natažený, posunutý nebo špatně.",
+   "Your own dump of the game (eboot.bin, sce_module, sce_sys): SpartanPort, any region and version.": "Váš vlastní dump hry (eboot.bin, sce_module, sce_sys): SpartanPort, libovolný region a verze.",
+   "L1 + Touchpad right": "L1 + Touchpad vpravo",
+   "Keys use SDL names: letters, digits, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 to F12. A name the game does not know keeps the default (the log says which). L2/R2 on the gamepad stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right on the gamepad. Insert and R3+L2 always open the port's menu. Applied when the game starts.": "Klávesy používají názvy SDL: písmena, číslice, Space, Return, Tab, Left Shift, Left Ctrl, Left Alt, Backspace, Up, Down, Left, Right, F1 až F12. Název, který hra nezná, ponechá výchozí hodnotu (záznam řekne která). L2/R2 na gamepadu zůstávají na spouštích. Touchpad vpravo otevře pauzové menu hry; Touchpad vlevo (fotorežim) je na gamepadu L1 + Touchpad vpravo. Insert a R3+L2 vždy otevřou menu portu. Použije se při spuštění hry.",
+   "{} · 60 FPS engine · no patches for this game": "{} · engine 60 FPS · pro tuto hru nejsou záplaty",
+   "{} not found in this eboot.bin at the last start (see Log)": "{} nebylo v tomto eboot.bin při posledním startu nalezeno (viz Záznam)",
+   "   (game patches)": "   (záplaty hry)",
+   "Cross": "Křížek",
+   "Circle": "Kolečko",
+   "Square": "Čtverec",
+   "Triangle": "Trojúhelník",
+   "Touchpad left": "Touchpad vlevo",
+   "Touchpad right": "Touchpad vpravo",
+   "D-pad up": "D-pad nahoru",
+   "D-pad down": "D-pad dolů",
+   "D-pad left": "D-pad vlevo",
+   "D-pad right": "D-pad vpravo",
+   "Touchpad click": "Klik touchpadu",
+   "PS button": "Tlačítko PS",
+   "Mute button": "Tlačítko ztlumení",
+   "LS (left stick click)": "LS (stisk levé páčky)",
+   "RS (right stick click)": "RS (stisk pravé páčky)",
+   "Xbox button": "Tlačítko Xbox",
+   "Fixes corrupted textures in the game by increasing the Video Arena size, allowing the game to use more video memory for textures and effects. Requires setting DMEM to 2048 MB or more, or the game crashes. Enable either this patch or one resolution patch, never both.": "Opraví poškozené textury ve hře zvětšením Video Arény, takže hra může použít víc grafické paměti pro textury a efekty. Vyžaduje nastavit DMEM na 2048 MB nebo víc, jinak hra spadne. Zapněte buď tuto záplatu, nebo jednu záplatu rozlišení, nikdy obě.",
+   "Skips the initial logos. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.": "Přeskočí úvodní loga. Děkujeme illusion0001 alias illusionyy za záplatu pro PS3, která to velmi usnadnila.",
+   "Allows manual skipping of cinematics any cinematic with the X button. Thanks to illusion0001 aka illusionyy for the PS3 patch which made this very easy.": "Umožní ručně přeskočit jakoukoli cinematiku tlačítkem X. Děkujeme illusion0001 alias illusionyy za záplatu pro PS3, která to velmi usnadnila.",
+   "Fixes the black screen at startup with the FPS counter running: the frame pacing index starts at 2 instead of 0, so the second frame no longer waits for a flip that only it can trigger.": "Opraví černou obrazovku při startu s běžícím počítadlem FPS: index tempa snímků začíná na 2 místo 0, takže druhý snímek už nečeká na přehození, které může spustit jen on sám.",
+   "(none)": "(žádné)",
+   "Adaptive mouse: how far the mouse moves for one step of a rotation. Also in the in-game menu.": "Adaptivní myš: jak daleko se myš pohne na jeden krok otočení. Také v herním menu.",
+   "Aiming with the mouse while L2 is held (Head of Helios, Bow of Apollo). Relative: the stick follows the movement and goes back to neutral when the mouse stops. Absolute: where the mouse was when L2 was pressed is the centre, and the stick points from it to the mouse. Also in the in-game menu.": "Míření myší při držení L2 (Heliova hlava, Apollónův luk). Relativní: páčka sleduje pohyb a když se myš zastaví, vrátí se do neutrálu. Absolutní: střed je místo, kde byla myš při stisku L2, a páčka míří od něj k myši. Také v herním menu.",
+   "Aiming with the mouse while L2 is held: lower needs more mouse movement for the same stick, higher less. Also in the in-game menu.": "Míření myší při držení L2: nižší hodnota vyžaduje víc pohybu myši pro stejnou výchylku páčky, vyšší méně. Také v herním menu.",
+   "Click a box, then press a key, click a mouse button or turn the wheel (it gives up after {} seconds). An input already used by another button swaps with it; the arrow puts one button back on its default. Rage of Sparta presses L3 and R3 together: tick the box above it to use one input instead of two. Grab presses L1 and Circle together. Dodge evades the way you are moving, or back when standing still. Touchpad right opens the game's pause menu. Insert always opens the port's menu and cannot be bound. Applied when the game starts.": "Klikněte na pole, pak stiskněte klávesu, klikněte tlačítkem myši nebo otočte kolečkem (po {} s to vzdá). Vstup, který už používá jiné tlačítko, se s ním prohodí; šipka vrátí tlačítko na výchozí hodnotu. Sparťanův hněv stiskne L3 a R3 společně: zaškrtněte pole nad ním, pokud chcete použít jeden vstup místo dvou. Chycení stiskne L1 a Kolečko společně. Úhyb uhne ve směru pohybu, nebo dozadu, když stojíte. Touchpad vpravo otevře pauzové menu hry. Insert vždy otevře menu portu a nelze ho přiřadit. Použije se při spuštění hry.",
+   "Gamepad Mapping": "Mapování gamepadu",
+   "General": "Obecné",
+   "How the stick-rotation prompts are answered. Keyboard: type the turn instead, half turns from the top D S A (clockwise) or A S D, from the bottom A W D or D W A, full turns D S A W or A S D W; a key out of turn starts again. Adaptive mouse: draw the turn with the mouse.": "Jak se odpovídá na výzvy s otáčením páčky. Klávesnice: otočení zadejte psaním, půlotáčky shora D S A (po směru) nebo A S D, zdola A W D nebo D W A, celé otáčky D S A W nebo A S D W; klávesa mimo pořadí začne znovu. Adaptivní myš: otočení nakreslete myší.",
+   "Joystick prompts": "Výzvy s páčkou",
+   "Keep the mouse in the game window": "Držet myš v okně hry",
+   "Key not supported": "Klávesa není podporována",
+   "Keyboard & Mouse Mapping": "Mapování klávesnice a myši",
+   "Keyboard and mouse, button icons and gamepad mapping.": "Klávesnice a myš, ikony tlačítek a mapování gamepadu.",
+   "L2/R2 stay on the triggers. Touchpad right opens the game's pause menu; Touchpad left (photo mode) is L1 + Touchpad right. R3+L2 always opens the port's menu. Applied when the game starts.": "L2/R2 zůstávají na spouštích. Touchpad vpravo otevře pauzové menu hry; Touchpad vlevo (fotorežim) je L1 + Touchpad vpravo. R3+L2 vždy otevře menu portu. Použije se při spuštění hry.",
+   "Mouse prompt distance": "Vzdálenost výzvy myší",
+   "Press a key": "Stiskněte klávesu",
+   "Press a key or mouse": "Stiskněte klávesu nebo myš",
+   "Rage of Sparta on one input (L3 + R3 together)": "Sparťanův hněv na jeden vstup (L3 + R3 společně)",
+   "Reset gamepad to defaults": "Obnovit výchozí hodnoty gamepadu",
+   "Reset keyboard & mouse to defaults": "Obnovit výchozí hodnoty klávesnice a myši",
+   "Right stick sensitivity": "Citlivost pravé páčky",
+   "Right stick style": "Styl pravé páčky",
+   "Which gamepad button presses each button of the game.": "Které tlačítko gamepadu stiskne které tlačítko hry.",
+   "Which key or mouse input presses each button of the game.": "Která klávesa nebo vstup myši stiskne které tlačítko hry.",
+   "While you play, the mouse stays in the game window, so a click cannot land on another monitor or app. The in-game menu and switching windows get it back. Also in the in-game menu.": "Při hraní zůstává myš v okně hry, takže kliknutí nemůže skončit na jiném monitoru nebo v jiné aplikaci. Herní menu a přepnutí oken ji uvolní. Také v herním menu.",
+   "Keyboard (native)": "Klávesnice (nativní)",
+   "Adaptive mouse (experimental)": "Adaptivní myš (experimentální)",
+   "Relative": "Relativní",
+   "Absolute": "Absolutní",
+   "Grab": "Chycení",
+   "Dodge": "Úhyb",
+   "Next weapon": "Další zbraň",
+   "Previous weapon": "Předchozí zbraň",
+   "Portuguese (Brazil)": "Portugalština (Brazílie)",
+   "Reuse compiled shaders from disk": "Znovu použít zkompilované shadery z disku",
+   "Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.": "Shadery zkompilované v dřívějších sezeních se načtou z mezipaměti shaderů místo nové kompilace, takže se objekty po startu nebo načtení uložené hry už neobjevují o pár snímků později a mezipaměť se nepřepisuje při každém sezení (antivirus kontroluje každý zapsaný soubor). První spuštění se zapnutou volbou mezipaměť jednou přestaví. Vypněte, pokud objekt, efekt nebo barva vypadá špatně jen po restartu a při prvním běhu nové mezipaměti je v pořádku.",
+   "Read the shader cache into memory at start": "Při startu načíst mezipaměť shaderů do paměti",
+   "A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.": "Vlákno na pozadí načítá uložené shadery do paměti, zatímco hra startuje; poznámka v pravém dolním rohu ukazuje průběh. Načtení shaderu pak nezdrží snímek. Vyžaduje volbu výše. Vypněte na pomalém pevném disku nebo při málo volné RAM, pokud první minuta víc sekaje nebo hra startuje pomaleji.",
+   "Read the shader cache before the game starts": "Načíst mezipaměť shaderů před spuštěním hry",
+   "Recommended on a hard disk (HDD): the loading screen waits until the saved shaders are read, so the disk does not serve the read and the game at once and the game does not stutter. Esc or Circle starts the game earlier. After a PC restart the read can take several minutes. Needs the option above.": "Doporučeno pro pevný disk (HDD): načítací obrazovka počká, než se načtou uložené shadery, aby disk neobsluhoval načítání a hru zároveň a hra se nesekala. Esc nebo Kolečko spustí hru dříve. Po restartu PC může načítání trvat několik minut. Vyžaduje volbu výše.",
+   "Show shader notes in the corner": "Zobrazovat poznámky o shaderech v rohu",
+   "A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.": "Poznámka v pravém dolním rohu ukazuje načítání mezipaměti shaderů při startu a kompilaci shaderů, takže krátké škubnutí má viditelný důvod. Vypněte, pokud chcete čistou obrazovku.",
+   "Shader cache": "Mezipaměť shaderů",
+   "Delete shader cache": "Smazat mezipaměť shaderů",
+   "Deletes the saved shaders and pipelines of this saves folder. Use it if graphics look wrong after an update or the cache grew too big; the next start compiles everything again.": "Smaže uložené shadery a pipeline této složky uložených her. Použijte, pokud grafika po aktualizaci vypadá špatně nebo mezipaměť příliš vyrostla; další start vše zkompiluje znovu.",
+   "Close the game before deleting the shader cache.": "Před smazáním mezipaměti shaderů zavřete hru.",
+   "The shader cache is already empty.": "Mezipaměť shaderů je už prázdná.",
+   "Delete the shader cache ({} MB in {})? The game compiles the shaders again, so the next start stutters for a few minutes.": "Smazat mezipaměť shaderů ({} MB v {})? Hra shadery zkompiluje znovu, takže další start několik minut sekne.",
+   "Could not delete all of the shader cache; another program may be using it: {}": "Nepodařilo se smazat celou mezipaměť shaderů; může ji používat jiný program: {}",
+   "GUI Scale": "Měřítko GUI",
+   "Auto": "Auto",
+   "For launcher only. Applies after Save.": "Jen pro launcher. Použije se po Uložení.",
+   "Monitor": "Monitor",
+   "Primary (default)": "Primární (výchozí)",
+   "The screen the game opens its window on. Primary is the monitor the system considers the main one.": "Obrazovka, na které hra otevře své okno. Primární je monitor, který systém považuje za hlavní.",
+   "1 file": "1 soubor",
+   "Change textures, sounds and text. Your game files stay untouched.": "Změňte textury, zvuky a texty. Soubory vaší hry zůstanou nedotčené.",
+   "Details": "Podrobnosti",
+   "Drop a mod folder or .zip in the mods folder.": "Složku modu nebo .zip přetáhněte do složky modů.",
+   "Hide": "Skrýt",
+   "Load order": "Pořadí načítání",
+   "Lower in the list wins": "Níže v seznamu vyhrává",
+   "No mods yet": "Zatím žádné mody",
+   "Open folder": "Otevřít složku",
+   "Open mod folder": "Otevřít složku modu",
+   "Open mods folder": "Otevřít složku modů",
+   "Presets": "Předvolby",
+   "Website": "Web",
+   "by {}": "od {}",
+   "game patches": "záplaty hry",
+   "{} files": "{} souborů",
+   "{} of {} active": "Aktivní: {} z {}",
+   "… and {} more": "… a dalších {}",
+   "⚠ 1 file is changed by two mods. {} wins.": "⚠ 1 soubor mění dva mody. Vyhrává {}.",
+   "⚠ {} also in {}. {} wins.": "⚠ {} je také v {}. Vyhrává {}.",
+   "⚠ {} files are changed by more than one mod. The lower one in the list wins.": "⚠ Souborů měněných více mody: {}. Vyhrává ten níže v seznamu.",
+   "Left stick click": "Stisk levé páčky",
+   "Right stick click": "Stisk pravé páčky",
+   "Plus (+)": "Plus (+)",
+   "Minus (−)": "Minus (−)",
+   "Home button": "Tlačítko Home",
+   "Capture": "Capture",
+   "Device": "Zařízení",
+   "Keyboard & mouse": "Klávesnice a myš",
+   "Gamepad": "Gamepad",
+   "Controller type": "Typ ovladače",
+   "Aspect ratio": "Poměr stran",
+   "Shows the render resolutions of this shape only.": "Zobrazí jen rozlišení vykreslování tohoto tvaru.",
+   "Polish": "Polština",
+   "Move forward": "Pohyb vpřed",
+   "Move backward": "Pohyb vzad",
+   "Move left": "Pohyb vlevo",
+   "Move right": "Pohyb vpravo",
+   "Right stick up": "Pravá páčka nahoru",
+   "Right stick down": "Pravá páčka dolů",
+   "Right stick left": "Pravá páčka vlevo",
+   "Right stick right": "Pravá páčka vpravo",
+   "Clear input": "Vymazat vstup",
+   "Keyboard: enter the rotation with your movement inputs. With default keys, the sequences are A W D / D W A, D S A / A S D and D S A W / A S D W. Remapping movement changes these inputs too. Adaptive mouse: draw the turn with the mouse.": "Klávesnice: otočení zadejte svými pohybovými vstupy. S výchozími klávesami jsou posloupnosti A W D / D W A, D S A / A S D a D S A W / A S D W. Přemapování pohybu mění i tyto vstupy. Adaptivní myš: otočení nakreslete myší.",
+   "Choose Configure next to a control. Each change is saved immediately.": "Zvolte Nastavit vedle ovládacího prvku. Každá změna se uloží okamžitě.",
+   "Game control": "Ovládací prvek hry",
+   "Assigned input": "Přiřazený vstup",
+   "Configure": "Nastavit",
+   "Clear": "Vymazat",
+   "Close": "Zavřít",
+   "Cancel capture": "Zrušit zachytávání",
+   "Listening…": "Poslouchám…",
+   "Not configured": "Nenastaveno",
+   "Button {}": "Tlačítko {}",
+   "D-pad {}: {}": "D-pad {}: {}",
+   "Axis {} ({})": "Osa {} ({})",
+   "Left stick horizontal": "Levá páčka vodorovně",
+   "Left stick vertical": "Levá páčka svisle",
+   "Right stick horizontal": "Pravá páčka vodorovně",
+   "Right stick vertical": "Pravá páčka svisle",
+   "Configure any control, in any order.": "Nastavte libovolný ovládací prvek v libovolném pořadí.",
+   "Saved changes are kept when you close this window.": "Uložené změny zůstanou i po zavření tohoto okna.",
+   "Hold the input briefly. It will be saved for this control only.": "Vstup krátce podržte. Uloží se jen pro tento ovládací prvek.",
+   "Saved: {}": "Uloženo: {}",
+   "Capture canceled. Previously saved changes are kept.": "Zachytávání zrušeno. Dříve uložené změny zůstávají.",
+   "The change was not saved. Configure the control again to retry.": "Změna nebyla uložena. Nastavte ovládací prvek znovu a zkuste to znovu.",
+   "That input is assigned to another control. Clear its row first or choose another input.": "Tento vstup je přiřazen jinému ovládacímu prvku. Nejdřív vymažte jeho řádek nebo zvolte jiný vstup.",
+   "Set up a controller": "Nastavit ovladač",
+   "Connect your controller, select it, then choose Start mapping.": "Připojte ovladač, vyberte ho a zvolte Začít mapování.",
+   "Start mapping": "Začít mapování",
+   "Save mapping": "Uložit mapování",
+   "Back": "Zpět",
+   "Skip": "Přeskočit",
+   "Cancel": "Zrušit",
+   "No controller found. Connect it and choose Refresh.": "Nenalezen žádný ovladač. Připojte ho a zvolte Obnovit.",
+   "{} buttons, {} axes, {} D-pad hats": "Tlačítek: {}, os: {}, D-pad hatů: {}",
+   "Release all buttons and let the sticks rest.": "Pusťte všechna tlačítka a nechte páčky v klidu.",
+   "Release all buttons and the D-pad before starting.": "Před začátkem pusťte všechna tlačítka a D-pad.",
+   "Step {} of {}": "Krok {} z {}",
+   "Press {}": "Stiskněte {}",
+   "Cross / A": "Křížek / A",
+   "Circle / B": "Kolečko / B",
+   "Square / X": "Čtverec / X",
+   "Triangle / Y": "Trojúhelník / Y",
+   "Release the previous input before continuing.": "Před pokračováním pusťte předchozí vstup.",
+   "Hold the requested input briefly. Skip controls your device does not have.": "Požadovaný vstup krátce podržte. Přeskočte ovládací prvky, které vaše zařízení nemá.",
+   "That input is already mapped. Use another input or skip this step.": "Tento vstup je už namapován. Použijte jiný vstup nebo tento krok přeskočte.",
+   "Map Cross / A before saving.": "Před uložením namapujte Křížek / A.",
+   "Test your controller": "Vyzkoušejte svůj ovladač",
+   "Mapping complete": "Mapování dokončeno",
+   "Press buttons and move the sticks to check them. Then choose Save mapping.": "Mačkejte tlačítka a hýbejte páčkami, abyste je zkontrolovali. Pak zvolte Uložit mapování.",
+   "Pressed: {}": "Stisknuto: {}",
+   "Left stick: {} / {}   Right stick: {} / {}\nL2: {}   R2: {}": "Levá páčka: {} / {}   Pravá páčka: {} / {}\nL2: {}   R2: {}",
+   "Move the left stick to the right": "Posuňte levou páčku doprava",
+   "Move the left stick down": "Posuňte levou páčku dolů",
+   "Move the right stick to the right": "Posuňte pravou páčku doprava",
+   "Move the right stick down": "Posuňte pravou páčku dolů",
+   "Controller disconnected. Reconnect it and choose Refresh.": "Ovladač byl odpojen. Připojte ho znovu a zvolte Obnovit.",
+   "Could not save mapping": "Mapování se nepodařilo uložit",
+   "Controller ready": "Ovladač je připraven",
+   "Mapping saved for the next game start. Any game button remapping in Controls still applies.": "Mapování uloženo pro další spuštění hry. Přemapování tlačítek hry v Ovládání se stále uplatní.",
+   "Stop the game before setting up a controller.": "Před nastavením ovladače zastavte hru.",
+   "SDL3 was not found. Use a complete port installation or build the project first.": "SDL3 nebylo nalezeno. Použijte úplnou instalaci portu nebo nejdřív sestavte projekt.",
+   "Enable the upscaler": "Zapnout upscaler",
+   "Share of the Render resolution (Performance page) the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "Podíl rozlišení vykreslování (stránka Výkon), ve kterém hra vykresluje; upscaler dopočítá plné rozlišení vykreslování. Nižší vykresluje rychleji. Nativní AA zachová plné rozlišení.",
+   "Off (default): the game runs without temporal upscaling. On: FSR 3.1 with the preset below. Animated characters can still show some ghosting.": "Vypnuto (výchozí): hra běží bez časového upscalingu. Zapnuto: FSR 3.1 s předvolbou níže. Animované postavy mohou stále vykazovat určité duchy.",
+   "Share of the Render resolution above the game renders at; the upscaler rebuilds the full Render resolution. Lower renders faster. Native AA keeps the full resolution.": "Podíl rozlišení vykreslování výše, ve kterém hra vykresluje; upscaler dopočítá plné rozlišení vykreslování. Nižší vykresluje rychleji. Nativní AA zachová plné rozlišení.",
+   "Native AA (100%)": "Nativní AA (100 %)",
+   "Ultra Quality (77%)": "Ultra kvalita (77 %)",
+   "Quality (67%)": "Kvalita (67 %)",
+   "Balanced (59%)": "Vyvážené (59 %)",
+   "Performance (50%)": "Výkon (50 %)",
+   "Ultra Performance (33%)": "Ultra výkon (33 %)",
+   "FSR 4.1 (AMD driver)": "FSR 4.1 (ovladač AMD)",
+   "FSR 4.1 requires AMD Adrenalin 26.10.1 or newer. The log shows the active provider; fallback to FSR 3.1 is not FSR 4.1.": "FSR 4.1 vyžaduje AMD Adrenalin 26.10.1 nebo novější. Záznam ukazuje aktivního poskytovatele; návrat na FSR 3.1 není FSR 4.1.",
+   "Frame generation": "Generování snímků",
+   "Generated frames": "Generované snímky",
+   "AMD FSR (every GPU)": "AMD FSR (každá GPU)",
+   "A generated frame between game frames: up to twice the frames on screen. Needs an upscaler. AMD FSR: any graphics card.": "Generovaný snímek mezi snímky hry: až dvojnásobek snímků na obrazovce. Vyžaduje upscaler. AMD FSR: libovolná grafická karta.",
+   "Off (default): no temporal upscaling. On: the selected upscaler and preset. Animated characters can still show some ghosting.": "Vypnuto (výchozí): bez časového upscalingu. Zapnuto: vybraný upscaler a předvolba. Animované postavy mohou stále vykazovat určité duchy."
   }
  },
  "ru": {
@@ -3612,6 +4735,17 @@
   "Locked": "Закрыты",
   "{} of {} unlocked": "{} из {} получено",
   "Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close": "Вверх/Вниз: прокрутка   Влево/Вправо: фильтр   F8 / R3+R2 / Esc: закрыть",
+  "Notifications": "Уведомления",
+  "List order": "Порядок списка",
+  "Most earned first": "Сначала частые",
+  "Rarest first": "Сначала редкие",
+  "{}% of players": "{}% игроков",
+  "Common": "Обычный",
+  "Rare": "Редкий",
+  "Very rare": "Очень редкий",
+  "Ultra rare": "Ультраредкий",
+  "Triangle/Tab: order   L1/R1: notifications": "Треугольник/Tab: порядок   L1/R1: уведомления",
+  "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: трофеи   F8 / R3+R2 / Esc: закрыть",
   "Graphics": "Графика",
   "Game": "Игра",
   "Controls": "Управление",
@@ -3627,6 +4761,8 @@
   "Shaders compiled in earlier sessions load from the shader cache instead of compiling again, so objects no longer appear a few frames late after starting or loading a save, and the cache is not rewritten every session (antivirus scans each written file). The first launch with it on rebuilds the cache once. Switch it off if an object, effect or color looks wrong only after a restart and is fine on the first run of a new cache.": "Шейдеры прошлых сессий загружаются из кэша, а не компилируются заново: объекты больше не появляются с опозданием после запуска или загрузки сохранения, и кэш не перезаписывается каждый раз (антивирус проверяет каждый записанный файл). Первый запуск с этой опцией один раз пересобирает кэш. Выключите, если объект, эффект или цвет выглядит неправильно только после перезапуска.",
   "Read the shader cache into memory at start": "Читать кэш шейдеров в память при запуске",
   "A background thread reads the saved shaders into memory while the game starts; a note in the lower right corner shows the progress. Loading a shader then does not hold up a frame. Needs the option above. Switch it off on a slow hard drive or with little free RAM if the first minute stutters more or the game starts slower.": "Фоновый поток читает сохранённые шейдеры в память при запуске игры; прогресс показан в правом нижнем углу. Тогда загрузка шейдера не задерживает кадр. Нужна опция выше. Выключите на медленном жёстком диске или при малом объёме свободной памяти, если первая минута дёргается сильнее или игра запускается дольше.",
+  "Read the shader cache before the game starts": "Читать кэш шейдеров до начала игры",
+  "Recommended on a hard disk (HDD): the loading screen waits until the saved shaders are read, so the disk does not serve the read and the game at once and the game does not stutter. Esc or Circle starts the game earlier. After a PC restart the read can take several minutes. Needs the option above.": "Рекомендуется для жёсткого диска (HDD): экран загрузки ждёт, пока сохранённые шейдеры будут прочитаны, чтобы диск не обслуживал чтение и игру одновременно и игра не тормозила. Esc или Круг запускает игру раньше. После перезагрузки ПК чтение может занять несколько минут. Нужна опция выше.",
   "Show shader notes in the corner": "Показывать заметки о шейдерах в углу",
   "A note in the lower right corner shows the shader cache being read at start and the shaders being compiled, so a short stutter has a visible reason. Switch it off to keep the screen clean.": "Заметка в правом нижнем углу показывает чтение кэша шейдеров при запуске и компиляцию новых шейдеров, чтобы было видно причину короткого рывка. Выключите, чтобы экран оставался чистым.",
   "Shader cache": "Кэш шейдеров",
@@ -3740,7 +4876,25 @@
   "You have the latest version ({}).": "У вас последняя версия ({}).",
   "Update failed: {}": "Не удалось обновить: {}",
   "Trophy {}": "Трофей {}",
-  "Could not check for updates: {}": "Не удалось проверить обновления: {}"
+  "Could not check for updates: {}": "Не удалось проверить обновления: {}",
+  "Audio": "Звук",
+  "Volume": "Громкость",
+  "Speakers": "Колонки",
+  "Stereo": "Стерео",
+  "5.1 surround": "Объёмный 5.1",
+  "7.1 surround": "Объёмный 7.1",
+  "Master volume of the game's audio. 100% is the game's own mix; more is louder, with a soft limiter so loud scenes do not clip. Also in the in-game menu.": "Общая громкость звука игры. 100% — собственное сведение игры; больше — громче, с мягким лимитером, чтобы громкие сцены не искажались. Также в меню игры.",
+  "Layout the game's 7.1 mix is sent in. Automatic follows your sound device: stereo, 5.1 or 7.1. Applied when the game starts.": "Формат, в котором выводится сведение 7.1 игры. «Автоматически» следует за звуковым устройством: стерео, 5.1 или 7.1. Применяется при запуске игры.",
+  "Motion blur": "Размытие в движении",
+  "The game's own motion blur on fast moving objects and the camera. Off removes it.": "Собственное размытие в движении игры на быстрых объектах и камере. Выключено — убирается.",
+  "Depth of field": "Глубина резкости",
+  "The game's own blur of distant objects, strongest in cutscenes. Off keeps the whole picture sharp.": "Собственное размытие игры на дальних объектах, сильнее всего в роликах. Выключено — вся картинка остаётся чёткой.",
+  "Automatic": "Автоматически",
+  "restart": "перезапуск",
+  "High Frame Rate Physics Fix": "Исправление физики при высоком FPS",
+  "At high frame rates the engine runs at 60 while a quick-time prompt is on screen or during the Cronos blade pull, then goes back to the engine frame rate.": "При высоком FPS движок работает на 60, пока на экране QTE или во время рывка на клинках на Кроносе, затем возвращается к частоте движка.",
+  "Upscaler": "Апскейлер",
+  "Quality preset": "Пресет"
  },
  "windows_languages": {
   "25": "ru",
@@ -3755,7 +4909,8 @@
   "4": "zh",
   "17": "ja",
   "18": "ko",
-  "33": "id"
+  "33": "id",
+  "5": "cs"
  },
  "trophies": {
   "count": 35,
@@ -3791,7 +4946,7 @@
     ],
     [
      "Handy Man",
-     "Sever Gaia's hand"
+     "Sever Gaia’s hand"
     ],
     [
      "Open Sesame",
@@ -3810,7 +4965,7 @@
      "Perform a 1000-hit combo"
     ],
     [
-     "Rip One!",
+     "Torn Up",
      "Rip apart 1 Olympus Sentry"
     ],
     [
@@ -3822,7 +4977,7 @@
      "Deliver 50 kicks to Hounds"
     ],
     [
-     "It's getting hot in here...",
+     "It’s getting hot in here...",
      "Burn 100 enemies with the Bow of Apollo"
     ],
     [
@@ -3854,7 +5009,7 @@
      "Kill Zeus"
     ],
     [
-     "Hooker",
+     "Depths Below",
      "Kill Hades"
     ],
     [
@@ -3862,7 +5017,7 @@
      "Acquire the Boreas Icestorm"
     ],
     [
-     "Seeing Things From a Different Perspective",
+     "Seeing things from a different perspective",
      "Solve Hera's Gardens"
     ],
     [
@@ -3874,7 +5029,7 @@
      "Collect all of the Phoenix Feathers"
     ],
     [
-     "Are You Horny to Win?",
+     "Horn of Plenty",
      "Collect all of the Minotaur Horns"
     ],
     [
@@ -3895,7 +5050,7 @@
     ],
     [
      "Priceless",
-     "Collect all of the 'Godly Possessions'"
+     "Collect all of the ‘Godly Possessions’"
     ],
     [
      "aMAZEd",
@@ -3905,143 +5060,143 @@
    "ru": [
     [
      "Царь горы",
-     "Получить все трофеи"
+     "Получите доступ ко всем призам"
     ],
     [
-     "Открытие шлюзов",
-     "Убить Посейдона"
+     "Открыть шлюзы!",
+     "Сразите Посейдона"
     ],
     [
-     "Поджарен до хруста",
-     "Получить Лук Аполлона"
+     "Хрустящая корочка",
+     "Добудьте лук Аполлона"
     ],
     [
-     "Мистер Рука",
-     "Найти тайную комнату «Рука Аида»"
+     "Ищейка",
+     "Найдите тайную комнату с Дланью Аида"
     ],
     [
-     "Властелин света",
-     "Убить Гелиоса"
+     "Ваше сиятельство",
+     "Убейте Гелиоса"
     ],
     [
-     "Доставка обуви",
-     "Убить Гермеса и получить его Сапоги"
+     "Обувь с доставкой",
+     "Убейте Гермеса и заберите его сандалии"
     ],
     [
      "Дамский угодник",
-     "Развлечь Афродиту"
+     "Развлеките Афродиту"
     ],
     [
-     "Мастер на все руки",
-     "Отрубить руку Гее"
+     "Ручная работа",
+     "Отрубите руку Гее"
     ],
     [
-     "Сезам, откройся",
-     "Открыть Врата Тисифоны"
+     "Сезам, откройся!",
+     "Откройте Врата Тизифоны"
     ],
     [
-     "Спаси меня",
-     "Спасти Пандору"
+     "Спаси меня!",
+     "Спасите Пандору"
     ],
     [
      "Три мудреца",
-     "Разгадать загадку Трёх судей"
+     "Заберите цепь у Трех Судей"
     ],
     [
-     "Мастер комбо",
-     "Выполнить комбо из 1000 ударов"
+     "Киллер",
+     "Выполните серию из 1000 ударов"
     ],
     [
-     "Разорванный",
-     "Разорвать 1 Стража Олимпа"
+     "Растерзание",
+     "Разорвите часового Олимпа"
     ],
     [
-     "Красивый загар",
-     "Ослепить 100 врагов Головой Гелиоса"
+     "Работай головой!",
+     "Ослепите 100 противников с помощью головы Гелиоса"
     ],
     [
-     "Школа послушания",
-     "Дать 50 пинков гончим"
+     "Урок послушания",
+     "50 раз пните диких псов"
     ],
     [
-     "Становится жарко...",
-     "Поджечь 100 врагов Луком Аполлона"
+     "Обстановка накаляется...",
+     "Сожгите 100 противников с помощью лука Аполлона"
     ],
     [
-     "Бездушный",
-     "Призвать все Души Когтями Аида"
+     "Душевный король",
+     "Призовите все души с помощью Когтей Аида"
     ],
     [
-     "Кровавый ад",
-     "Облить Кратоса кровью из 500 вёдер, убивая врагов"
+     "Кровавая пелена",
+     "Убивая противников, покройте Кратоса 500 ведрами крови"
     ],
     [
-     "Без кишок нет славы",
-     "Выпотрошить 3 Кентавров-генералов"
+     "Кишка тонка",
+     "Вырвите внутренности у 3 генералов-кентавров"
     ],
     [
-     "Шаг за шагом",
-     "Улучшить любое оружие до следующего уровня"
+     "Иди в рост!",
+     "Усильте любое оружие до следующего уровня"
     ],
     [
      "Братская вражда",
-     "Убить Геракла"
+     "Сразите Геракла"
     ],
     [
      "Убийца титанов",
-     "Убить Кроноса"
+     "Сразите Крона"
     ],
     [
      "Возмездие",
-     "Убить Зевса"
+     "Сразите Зевса"
     ],
     [
-     "В глубинах",
-     "Убить Аида"
+     "Глубина бездны",
+     "Сразите Аида"
     ],
     [
-     "Ледяной ожог",
-     "Получить Ледяную бурю Борея"
+     "Отмороженный",
+     "Добудьте ледяной дождь Борея"
     ],
     [
-     "Взгляд под другим углом",
-     "Разгадать загадку Садов Геры"
+     "C разных точек зрения",
+     "Решите головоломку садов Геры"
     ],
     [
-     "Радость для глаз",
-     "Собрать все Глаза Горгоны"
+     "Глаз радуется!",
+     "Соберите все глаза горгон"
     ],
     [
-     "Ощипывание",
-     "Собрать все Перья Феникса"
+     "Пух и перья",
+     "Соберите все перья феникса"
     ],
     [
-     "Рога изобилия",
-     "Собрать все Рога Минотавра"
+     "Рог изобилия",
+     "Соберите все рога минотавров"
     ],
     [
      "По максимуму!",
-     "Полностью улучшить всё оружие"
+     "Усильте все оружие до максимума"
     ],
     [
-     "Месть свершилась",
-     "Пройти игру"
+     "Мститель",
+     "Пройдите игру"
     ],
     [
-     "Под стать испытанию",
-     "Пройти Испытание Олимпа"
+     "Испытанный",
+     "Пройдите все испытания Олимпа"
     ],
     [
-     "Нечеловек",
-     "Пройти режим «Титан»"
+     "Титанический",
+     "Пройдите игру в режиме \"Титан\""
     ],
     [
-     "Бесценно",
-     "Собрать все «Сокровища богов»"
+     "Неслыханно богатый",
+     "Соберите все сокровища богов"
     ],
     [
-     "Лабиринтит",
-     "Пройти Лабиринт, ни разу не погибнув и не потерпев неудачу"
+     "Неудержимый",
+     "Пройдите через лабиринт, ни разу не погибнув и не потерпев поражение"
     ]
    ],
    "ar": [
@@ -4188,91 +5343,91 @@
    ],
    "es": [
     [
-     "Rey de la colina",
+     "El rey de la colina",
      "Desbloquea todos los trofeos"
     ],
     [
-     "Abriendo las compuertas",
-     "Elimina a Poseidón"
+     "Abrir las compuertas",
+     "Mata a Poseidón"
     ],
     [
-     "Churruscado",
-     "Consigue el Arco de Apolo"
+     "Reducido a cenizas",
+     "Obtén el Arco de Apolo"
     ],
     [
      "Señor Mano",
-     "Descubre la sala secreta del «Brazo de Hades»"
+     "Descubre la sala secreta de los brazos de Hades"
     ],
     [
-     "El señor del resplandor",
-     "Elimina a Helios"
+     "Señor del esplendor",
+     "Mata a Helios"
     ],
     [
-     "Reparto de calzado",
-     "Elimina a Hermes y consigue sus Botas"
+     "Entrega de zapatos",
+     "Mata a Hermes y consigue sus botas"
     ],
     [
      "Mujeriego",
-     "Entretén a Afrodita"
+     "Logra complacer a Afrodita"
     ],
     [
-     "Echando una mano",
-     "Mutila la mano de Gaia"
+     "Siempre a mano",
+     "Córtale la mano a Gaia"
     ],
     [
-     "Ábrete, sésamo",
+     "Ábrete, Sésamo",
      "Abre las Puertas de Tisífone"
     ],
     [
-     "Sálvame",
+     "Rescátame",
      "Salva a Pandora"
     ],
     [
      "Los tres sabios",
-     "Resuelve el enigma de los Tres Jueces"
+     "Libera la cadena de los tres jueces"
     ],
     [
-     "Golpeador",
+     "Sicario",
      "Realiza un combo de 1000 golpes"
     ],
     [
-     "Despedazado",
-     "Despedaza a 1 Centinela del Olimpo"
+     "Desgarrado",
+     "Destroza a 1 centinela del Olimpo"
     ],
     [
-     "Buen bronceado",
+     "Lindo bronceado",
      "Ciega a 100 enemigos con la Cabeza de Helios"
     ],
     [
      "Adiestramiento",
-     "Da 50 patadas a los sabuesos"
+     "Da 50 patadas a los perros"
     ],
     [
-     "Qué calor hace aquí...",
+     "Hace calor aquí...",
      "Quema a 100 enemigos con el Arco de Apolo"
     ],
     [
-     "Sin alma",
-     "Invoca todas las Almas con las Garras de Hades"
+     "Desalmado",
+     "Invoca todas las almas con las Garras de Hades"
     ],
     [
      "Infierno sangriento",
-     "Cubre a Kratos con 500 cubos de sangre matando enemigos"
+     "Cubre a Kratos con 500 cubos de sangre matando a enemigos"
     ],
     [
-     "Sin agallas no hay gloria",
-     "Destripa a 3 Generales Centauro"
+     "Sin entrañas, no hay gloria",
+     "Destripa a 3 generales centauro"
     ],
     [
-     "Paso a paso",
-     "Mejora cualquier arma al siguiente nivel"
+     "Un paso hacia la perfección",
+     "Mejora cualquier arma hasta el siguiente nivel"
     ],
     [
-     "Rivalidad entre hermanos",
+     "Rivalidad fraternal",
      "Mata a Hércules"
     ],
     [
-     "Matador de titanes",
+     "Asesino de Titanes",
      "Mata a Cronos"
     ],
     [
@@ -4284,48 +5439,48 @@
      "Mata a Hades"
     ],
     [
-     "Quemadura de hielo",
-     "Consigue la Tormenta de hielo de Bóreas"
+     "Quemadura glacial",
+     "Obtén la Tormenta de hielo de Bóreas"
     ],
     [
-     "Viendo las cosas desde otro ángulo",
-     "Resuelve el enigma de los Jardines de Hera"
+     "Ver las cosas desde una perspectiva diferente",
+     "Resuelve el jardín de Hera"
     ],
     [
-     "Un regalo para la vista",
-     "Recoge todos los Ojos de Gorgona"
+     "Con buenos ojos",
+     "Recoge todos los ojos de Gorgona"
     ],
     [
-     "Desplumando",
-     "Recoge todas las Plumas de Fénix"
+     "El desplumador",
+     "Recoge todas las plumas de fénix"
     ],
     [
-     "Cuerno de la abundancia",
-     "Recoge todos los Cuernos de Minotauro"
+     "Cuerno de plenitud",
+     "Recoge todos los cuernos de Minotauro"
     ],
     [
      "¡Al máximo!",
      "Mejora por completo todas las armas"
     ],
     [
-     "Venganza completada",
-     "Completa el juego"
+     "Venganza completa",
+     "Supera el juego"
     ],
     [
      "A la altura del desafío",
-     "Completa el Desafío del Olimpo"
+     "Supera el Desafío del Olimpo"
     ],
     [
      "Inhumano",
-     "Completa el modo Titán"
+     "Supera el modo Titán"
     ],
     [
-     "No tiene precio",
-     "Recoge todas las «Posesiones divinas»"
+     "Invaluable",
+     "Recoge todas las \"Posesiones divinas\""
     ],
     [
-     "Laberintitis",
-     "Completa el Laberinto sin morir ni fallar"
+     "Laberíntico",
+     "Atraviesa el laberinto sin morir ni fracasar"
     ]
    ],
    "pt": [
@@ -4473,540 +5628,540 @@
    "fr": [
     [
      "Roi de la colline",
-     "Débloquer tous les trophées"
+     "Débloquez tous les trophées"
     ],
     [
-     "Ouverture des vannes",
-     "Tuer Poséidon"
+     "Ouvrez les vannes",
+     "Tuez Poséidon"
     ],
     [
-     "Grillé à point",
-     "Obtenir l'Arc d'Apollon"
+     "Chaud devant",
+     "Acquérez l'arc d'Apollon"
     ],
     [
-     "Monsieur Main",
-     "Découvrir la salle secrète du « Bras d'Hadès »"
+     "M. Sbire",
+     "Découvrez la pièce secrète \"Bras d'Hadès\""
     ],
     [
-     "Seigneur de la lumière",
-     "Tuer Hélios"
+     "Soleil ardent",
+     "Tuez Hélios"
     ],
     [
      "Livraison de chaussures",
-     "Tuer Hermès et obtenir ses Bottes"
+     "Tuez Hermès et acquérez ses bottes"
     ],
     [
-     "Homme à femmes",
-     "Divertir Aphrodite"
+     "Tombeur",
+     "Distrayez Aphrodite"
     ],
     [
-     "Coup de main",
-     "Trancher la main de Gaïa"
+     "Homme de main",
+     "Tranchez la main de Gaïa"
     ],
     [
-     "Sésame, ouvre-toi",
-     "Ouvrir les Portes de Tisiphone"
+     "Sésame ouvre-toi",
+     "Ouvrez les portes de Tisiphone"
     ],
     [
-     "Sauvez-moi",
-     "Sauver Pandore"
+     "À la rescousse",
+     "Sauvez Pandore"
     ],
     [
-     "Les trois sages",
-     "Résoudre l'énigme des Trois Juges"
+     "Trois sages",
+     "Libérez la chaîne des trois juges"
     ],
     [
-     "Cogneur",
-     "Réaliser un combo de 1 000 coups"
+     "Forcené",
+     "Faites un combo de 1000 coups"
     ],
     [
-     "Mis en pièces",
-     "Mettre en pièces 1 Sentinelle de l'Olympe"
+     "Fracas",
+     "Mettez en pièces une sentinelle olympienne"
     ],
     [
-     "Beau bronzage",
-     "Aveugler 100 ennemis avec la Tête d'Hélios"
+     "Joli bronzage",
+     "Aveuglez 100 ennemis avec la tête d'Hélios"
     ],
     [
      "Dressage",
-     "Donner 50 coups de pied aux chiens"
+     "Donnez 50 coups de pied aux chiens sauvages"
     ],
     [
      "Il fait chaud ici...",
-     "Brûler 100 ennemis avec l'Arc d'Apollon"
+     "Brûlez 100 ennemis avec l'arc d'Apollon"
     ],
     [
-     "Sans âme",
-     "Invoquer toutes les Âmes avec les Griffes d'Hadès"
+     "Âmes à gogo",
+     "Invoquez toutes les âmes avec les griffes d'Hadès"
     ],
     [
-     "Enfer sanglant",
-     "Couvrir Kratos de 500 seaux de sang en tuant des ennemis"
+     "Bain de sang",
+     "Couvrez Kratos de 500 seaux remplis du sang de ses ennemis"
     ],
     [
-     "Pas de tripes, pas de gloire",
-     "Éventrer 3 Généraux Centaures"
+     "Affaire de tripes",
+     "Arrachez les entrailles de 3 généraux centaures"
     ],
     [
-     "Un pas à la fois",
-     "Améliorer n'importe quelle arme au niveau suivant"
+     "Toujours plus fort",
+     "Améliorez n'importe quelle arme d'un niveau"
     ],
     [
-     "Rivalité fraternelle",
-     "Tuer Hercule"
+     "Lutte fraternelle",
+     "Tuez Hercule"
     ],
     [
-     "Tueur de Titan",
-     "Tuer Cronos"
+     "Massacre titanesque",
+     "Tuez Chronos"
     ],
     [
-     "Rétribution",
-     "Tuer Zeus"
+     "Châtiment",
+     "Tuez Zeus"
     ],
     [
-     "Dans les profondeurs",
-     "Tuer Hadès"
+     "Entrailles infernales",
+     "Tuez Hadès"
     ],
     [
-     "Brûlure glaciale",
-     "Obtenir la Tempête de glace de Borée"
+     "Coup de froid",
+     "Acquérez la tempête de glace de Borias"
     ],
     [
-     "Un autre point de vue",
-     "Résoudre l'énigme des Jardins d'Héra"
+     "Une perspective différente",
+     "Résolvez le puzzle des jardins d'Héra"
     ],
     [
-     "Un régal pour les yeux",
-     "Collecter tous les Yeux de Gorgone"
+     "Collection de billes",
+     "Collectez tous les yeux de gorgone"
     ],
     [
-     "Plumage",
-     "Collecter toutes les Plumes de Phénix"
+     "Plumer le phénix",
+     "Collectez toutes les plumes de phénix"
     ],
     [
-     "Corne d'abondance",
-     "Collecter toutes les Cornes du Minotaure"
+     "Cornes en abondance",
+     "Collectez toutes les cornes de minotaures"
     ],
     [
-     "Au maximum !",
-     "Améliorer complètement toutes les armes"
+     "Puissance max !",
+     "Améliorez toutes les armes au maximum"
     ],
     [
      "Vengeance accomplie",
-     "Terminer le jeu"
+     "Terminez le jeu"
     ],
     [
-     "À la hauteur du défi",
-     "Terminer le Défi de l'Olympe"
+     "Jusqu'au bout",
+     "Terminez le défi de l'Olympe"
     ],
     [
      "Inhumain",
-     "Terminer le mode Titan"
+     "Terminez le mode Titan"
     ],
     [
-     "Sans prix",
-     "Collecter toutes les « Possessions divines »"
+     "Inestimable",
+     "Collectez tous les \"biens divins\""
     ],
     [
-     "Labyrinthite",
-     "Terminer le Labyrinthe sans mourir ni échouer"
+     "Sens de l'orientation",
+     "Réussissez le labyrinthe sans mourir ou échouer"
     ]
    ],
    "de": [
     [
-     "König des Berges",
-     "Alle Trophäen freischalten"
+     "Supersammler",
+     "Schalten Sie alle Trophäen frei."
     ],
     [
-     "Die Schleusen öffnen",
-     "Poseidon töten"
+     "Öffnung der Schleusentore",
+     "Erledigen Sie Poseidon."
     ],
     [
-     "Knusprig gebraten",
-     "Den Bogen des Apollon erhalten"
+     "Verkohlt",
+     "Bringen Sie den Bogen des Apollo in Ihren Besitz."
     ],
     [
-     "Herr Hand",
-     "Den Geheimraum „Arm des Hades“ entdecken"
+     "Forschung",
+     "Entdecken Sie den geheimen \"Hades-Arm\"-Raum."
     ],
     [
-     "Herr des Lichts",
-     "Helios töten"
+     "Einfach glänzend",
+     "Erledigen Sie Helios."
     ],
     [
      "Schuhlieferung",
-     "Hermes töten und seine Stiefel erhalten"
+     "Erledigen Sie Hermes und bringen Sie seine Stiefel in Ihren Besitz."
     ],
     [
      "Frauenheld",
-     "Aphrodite unterhalten"
+     "Unterhalten Sie Aphrodite erfolgreich."
     ],
     [
-     "Eine helfende Hand",
-     "Gaias Hand abtrennen"
+     "Gib mir deine Hand",
+     "Trennen Sie Gaias Hand ab."
     ],
     [
-     "Sesam, öffne dich",
-     "Die Tore der Tisiphone öffnen"
+     "Sesam öffne dich",
+     "Öffnen Sie die Tore von Tisiphone."
     ],
     [
      "Rette mich",
-     "Pandora retten"
+     "Retten Sie Pandora."
     ],
     [
-     "Die drei Weisen",
-     "Das Rätsel der Drei Richter lösen"
+     "Drei weise Männer",
+     "Sorgen Sie dafür, dass die drei Richter die Kette loslassen."
     ],
     [
-     "Schlagmeister",
-     "Eine 1000-Treffer-Combo ausführen"
+     "Unermüdlich",
+     "Führen Sie eine 1000-Treffer-Kombo aus."
     ],
     [
-     "Zerfetzt",
-     "1 Wächter des Olymp zerreißen"
+     "Entzweit",
+     "Nehmen Sie 1 Olympwächter auseinander."
     ],
     [
-     "Schöne Bräune",
-     "100 Gegner mit dem Haupt des Helios blenden"
+     "Blendend",
+     "Blenden Sie 100 Gegner mit Helios' Kopf."
     ],
     [
-     "Gehorsamsschule",
-     "50 Tritte gegen Hunde austeilen"
+     "Schule des Gehorsams",
+     "Versetzen Sie den Hunden 50 Tritte."
     ],
     [
-     "Es wird heiß hier ...",
-     "100 Gegner mit dem Bogen des Apollon verbrennen"
+     "Es wird heiß ...",
+     "Stecken Sie 100 Gegner mit dem Bogen des Apollo in Brand."
     ],
     [
      "Seelenlos",
-     "Alle Seelen mit den Klauen des Hades beschwören"
+     "Beschwören Sie alle Seelen mit den Hadesklauen."
     ],
     [
-     "Blutige Hölle",
-     "Kratos durch das Töten von Gegnern mit 500 Eimern Blut bedecken"
+     "Rote Hölle",
+     "Bedecken Sie Kratos mit 500 Kübeln Blut seiner Gegner."
     ],
     [
-     "Ohne Mumm kein Ruhm",
-     "3 Zentaurengeneräle ausweiden"
+     "Kein Mut, kein Ruhm",
+     "Weiden Sie 3 Zentaurengeneräle aus."
     ],
     [
-     "Schritt für Schritt",
-     "Eine beliebige Waffe auf die nächste Stufe verbessern"
+     "Richtig loslegen",
+     "Verbessern Sie eine Waffe um eine Stufe."
     ],
     [
-     "Brüderzwist",
-     "Herkules töten"
+     "Rivalität unter Geschwistern",
+     "Erledigen Sie Herkules."
     ],
     [
      "Titanentöter",
-     "Kronos töten"
+     "Erledigen Sie Kronos."
     ],
     [
      "Vergeltung",
-     "Zeus töten"
+     "Erledigen Sie Zeus."
     ],
     [
-     "In den Tiefen",
-     "Hades töten"
+     "Ganz unten",
+     "Erledigen Sie Hades."
     ],
     [
-     "Eisbrand",
-     "Den Eissturm des Boreas erhalten"
+     "Gefrierbrand",
+     "Bringen Sie Boreas' Eissturm in Ihren Besitz."
     ],
     [
-     "Andere Perspektive",
-     "Das Rätsel der Gärten der Hera lösen"
+     "Eine andere Sicht der Dinge",
+     "Lösen Sie das Rätsel von Heras Gärten."
     ],
     [
      "Augenweide",
-     "Alle Gorgonenaugen sammeln"
+     "Sammeln Sie alle Gorgonenaugen."
     ],
     [
-     "Federn lassen",
-     "Alle Phönixfedern sammeln"
+     "Federnrupfen",
+     "Sammeln Sie alle Phönixfedern."
     ],
     [
      "Füllhorn",
-     "Alle Minotaurushörner sammeln"
+     "Sammeln Sie alle Minotaurenhörner."
     ],
     [
-     "Voll aufgerüstet!",
-     "Alle Waffen vollständig verbessern"
+     "Voll ausgerüstet!",
+     "Verbessern Sie alle Waffen vollständig."
     ],
     [
-     "Rache vollendet",
-     "Das Spiel durchspielen"
+     "Gerächt",
+     "Schließen Sie das Spiel ab."
     ],
     [
      "Der Herausforderung gewachsen",
-     "Die Herausforderung des Olymp abschließen"
+     "Schließen Sie die Olymp-Herausforderung ab."
     ],
     [
      "Unmenschlich",
-     "Den Titanenmodus abschließen"
+     "Schließen Sie das Spiel im Titanen-Modus ab."
     ],
     [
      "Unbezahlbar",
-     "Alle „Göttlichen Besitztümer“ sammeln"
+     "Sammeln Sie alle \"Göttlichen Besitztümer\"."
     ],
     [
-     "Labyrinthitis",
-     "Das Labyrinth ohne Sterben oder Scheitern abschließen"
+     "Orientierungssinn",
+     "Schließen Sie das Labyrinth ab, ohne Ihr Leben zu lassen oder zu scheitern."
     ]
    ],
    "it": [
     [
      "Re della collina",
-     "Sblocca tutti i trofei"
+     "Sblocca tutti i trofei."
     ],
     [
-     "Aprire le chiuse",
-     "Uccidi Poseidone"
+     "Aprendo le chiuse",
+     "Uccidi Poseidone."
     ],
     [
-     "Ben cotto",
-     "Ottieni l'Arco di Apollo"
+     "Ridotto in cenere",
+     "Acquisisci l'Arco di Apollo."
     ],
     [
-     "Signor Mano",
-     "Scopri la stanza segreta del «Braccio di Ade»"
+     "Manolesta",
+     "Scopri la stanza segreta dentro Ade."
     ],
     [
      "Signore della luce",
-     "Uccidi Elio"
+     "Uccidi Elio."
     ],
     [
-     "Consegna di scarpe",
-     "Uccidi Ermes e ottieni i suoi Stivali"
+     "Ali ai piedi",
+     "Uccidi Ermes e acquisisci i suoi Sandali."
     ],
     [
-     "Rubacuori",
-     "Intrattieni Afrodite"
+     "Donnaiolo",
+     "Soddisfa Afrodite."
     ],
     [
-     "Dare una mano",
-     "Mozza la mano di Gaia"
+     "Qua la mano!",
+     "Taglia la mano di Gaia."
     ],
     [
      "Apriti sesamo",
-     "Apri le Porte di Tisifone"
+     "Apri i Cancelli di Tisifone."
     ],
     [
      "Salvami",
-     "Salva Pandora"
+     "Salva Pandora."
     ],
     [
-     "I tre saggi",
-     "Risolvi l'enigma dei Tre Giudici"
+     "Tre uomini saggi",
+     "Fai rilasciare la catena ai Tre giudici."
     ],
     [
-     "Picchiatore",
-     "Esegui una combo da 1.000 colpi"
+     "Killer",
+     "Esegui una combo da 1.000 colpi."
     ],
     [
-     "Fatto a pezzi",
-     "Fai a pezzi 1 Sentinella dell'Olimpo"
+     "Senza pietà",
+     "Fai a pezzi una Sentinella dell'Olimpo."
     ],
     [
-     "Bella abbronzatura",
-     "Acceca 100 nemici con la Testa di Elio"
+     "A bocca aperta",
+     "Acceca 100 nemici con la Testa di Elio."
     ],
     [
-     "Addestramento",
-     "Dai 50 calci ai segugi"
+     "Scuola d'obbedienza",
+     "Sferra 50 calci ai Cani selvatici."
     ],
     [
-     "Qui fa caldo...",
-     "Brucia 100 nemici con l'Arco di Apollo"
+     "Inizia a far caldo...",
+     "Dai fuoco a 100 nemici con l'Arco di Apollo."
     ],
     [
-     "Senz'anima",
-     "Evoca tutte le Anime con gli Artigli di Ade"
+     "Mettici l'anima",
+     "Evoca tutte le anime con gli Artigli di Ade."
     ],
     [
      "Inferno di sangue",
-     "Copri Kratos con 500 secchi di sangue uccidendo i nemici"
+     "Ricopri Kratos con 500 secchi di sangue dei suoi nemici."
     ],
     [
-     "Senza budella niente gloria",
-     "Sventra 3 Generali Centauri"
+     "Odio viscerale",
+     "Eviscera 3 Generali Centauri."
     ],
     [
-     "Un passo alla volta",
-     "Potenzia qualsiasi arma al livello successivo"
+     "La strada per il successo",
+     "Porta un'arma qualsiasi al livello successivo."
     ],
     [
-     "Rivalità tra fratelli",
-     "Uccidi Ercole"
+     "Rivalità fraterna",
+     "Uccidi Ercole."
     ],
     [
      "Ammazzatitani",
-     "Uccidi Crono"
+     "Uccidi Crono."
     ],
     [
-     "Retribuzione",
-     "Uccidi Zeus"
+     "Vendetta",
+     "Uccidi Zeus."
     ],
     [
-     "Nelle profondità",
-     "Uccidi Ade"
+     "De profundis",
+     "Uccidi Ade."
     ],
     [
-     "Bruciatura di ghiaccio",
-     "Ottieni la Tempesta di ghiaccio di Borea"
+     "Ghiaccio che scotta",
+     "Acquisisci la Tempesta di Borea."
     ],
     [
-     "Un altro punto di vista",
-     "Risolvi l'enigma dei Giardini di Era"
+     "Guardare le cose da un'altra prospettiva",
+     "Vieni a capo del Giardino di Era."
     ],
     [
-     "Un piacere per gli occhi",
-     "Raccogli tutti gli Occhi di Gorgone"
+     "Occhio per occhio",
+     "Raccogli tutti gli Occhi di Gorgone."
     ],
     [
-     "Spennando",
-     "Raccogli tutte le Piume di Fenice"
+     "Occhio alla penna!",
+     "Raccogli tutte le Piume di Fenice."
     ],
     [
-     "Corno dell'abbondanza",
-     "Raccogli tutte le Corna del Minotauro"
+     "Cornucopia",
+     "Raccogli tutti i Corni di Minotauro."
     ],
     [
-     "Al massimo!",
-     "Potenzia completamente tutte le armi"
+     "Vado al massimo!",
+     "Potenzia al massimo tutte le armi."
     ],
     [
      "Vendetta compiuta",
-     "Completa il gioco"
+     "Completa il gioco."
     ],
     [
-     "All'altezza della sfida",
-     "Completa la Sfida dell'Olimpo"
+     "L'ultima sfida",
+     "Completa la Sfida di Olimpo."
     ],
     [
-     "Disumano",
-     "Completa la modalità Titano"
+     "Inumano",
+     "Completa il gioco in modalità Titano."
     ],
     [
      "Inestimabile",
-     "Raccogli tutti i «Possedimenti divini»"
+     "Raccogli tutti i \"Tesori degli Dei\"."
     ],
     [
-     "Labirintite",
-     "Completa il Labirinto senza morire né fallire"
+     "Labirinto",
+     "Supera il Labirinto senza morire o fallire."
     ]
    ],
    "pl": [
     [
-     "Król wzgórza",
+     "Pan i władca",
      "Odblokuj wszystkie trofea"
     ],
     [
-     "Otwarcie śluz",
+     "Przerwanie tamy",
      "Zabij Posejdona"
     ],
     [
-     "Przypieczony",
+     "Grzanka",
      "Zdobądź Łuk Apolla"
     ],
     [
-     "Pan Ręka",
-     "Odkryj sekretną komnatę „Ramię Hadesa”"
+     "Ręce do góry!",
+     "Znajdź tajną komnatę \"Ręki Hadesa\""
     ],
     [
-     "Pan blasku",
+     "Władca światłości",
      "Zabij Heliosa"
     ],
     [
-     "Dostawa obuwia",
-     "Zabij Hermesa i zdobądź jego Buty"
+     "Dostawa butów",
+     "Zabij Hermesa i zdobądź jego buty"
     ],
     [
-     "Podrywacz",
+     "Kochaś",
      "Zabaw Afrodytę"
     ],
     [
-     "Pomocna dłoń",
-     "Odetnij dłoń Gai"
+     "Złota rączka",
+     "Oderwij rękę Gai"
     ],
     [
-     "Sezamie, otwórz się",
+     "Sezamie otwórz się",
      "Otwórz Wrota Tyzyfone"
     ],
     [
-     "Uratuj mnie",
+     "Na ratunek",
      "Uratuj Pandorę"
     ],
     [
-     "Trzej mędrcy",
-     "Rozwiąż zagadkę Trzech Sędziów"
+     "Trzech mędrców",
+     "Uwolnij Łańcuch z rąk Trzech Sędziów"
     ],
     [
-     "Mistrz uderzeń",
-     "Wykonaj kombinację 1000 uderzeń"
+     "Zabójca",
+     "Wykonaj combo 1000 trafień"
     ],
     [
-     "Rozerwany",
-     "Rozerwij 1 Strażnika Olimpu"
+     "Rozdarty",
+     "Rozerwij olimpijskiego strażnika na kawałki"
     ],
     [
-     "Piękna opalenizna",
-     "Oślep 100 przeciwników Głową Heliosa"
+     "Ładna opalenizna",
+     "Oślep 100 przeciwników za pomocą Głowy Heliosa"
     ],
     [
      "Tresura",
-     "Kopnij 50 razy ogary"
+     "Kopnij 50 wściekłych psów"
     ],
     [
-     "Gorąco tu...",
-     "Podpal 100 przeciwników Łukiem Apolla"
+     "Robi się gorąco...",
+     "Podpal 100 przeciwników za pomocą Łuku Apolla"
     ],
     [
-     "Bez duszy",
-     "Przywołaj wszystkie Dusze Szponami Hadesa"
+     "Co mi w duszy gra",
+     "Przyzwij wszystkie dusze Szponami Hadesa"
     ],
     [
-     "Krwawe piekło",
-     "Pokryj Kratosa 500 wiadrami krwi, zabijając przeciwników"
+     "Krwawa jatka",
+     "Zbryzgaj Kratosa 500 wiadrami krwi przeciwników"
     ],
     [
-     "Bez flaków nie ma chwały",
-     "Wypatrosz 3 Generałów Centaurów"
+     "Ktoś zamawiał flaczki?",
+     "Wypatrosz 3 generałów centaurów"
     ],
     [
-     "Krok po kroku",
-     "Ulepsz dowolną broń do następnego poziomu"
+     "Rozwój to podstawa",
+     "Zmodyfikuj dowolną broń na następny poziom"
     ],
     [
-     "Braterska rywalizacja",
+     "Rywalizacja rodzeństwa",
      "Zabij Herkulesa"
     ],
     [
-     "Pogromca tytanów",
+     "Zabójca Tytanów",
      "Zabij Kronosa"
     ],
     [
-     "Odwet",
+     "Zemsta",
      "Zabij Zeusa"
     ],
     [
-     "W głębinach",
+     "Podziemna otchłań",
      "Zabij Hadesa"
     ],
     [
-     "Lodowe oparzenie",
-     "Zdobądź Lodową Burzę Boreasza"
+     "Odmrażacz",
+     "Zdobądź Burzę Lodową Boreasza"
     ],
     [
-     "Z innej perspektywy",
-     "Rozwiąż zagadkę Ogrodów Hery"
+     "Inna perspektywa",
+     "Przejdź Ogrody Hery"
     ],
     [
-     "Uczta dla oczu",
+     "Okulista",
      "Zbierz wszystkie Oczy Gorgony"
     ],
     [
-     "Skubanie",
+     "Potęga pióra",
      "Zbierz wszystkie Pióra Feniksa"
     ],
     [
@@ -5015,169 +6170,169 @@
     ],
     [
      "Na maksa!",
-     "Całkowicie ulepsz całą broń"
+     "Całkowicie zmodyfikuj całe uzbrojenie"
     ],
     [
      "Zemsta dokonana",
-     "Ukończ grę"
+     "Przejdź grę"
     ],
     [
-     "Sprostać wyzwaniu",
+     "Pokonać wyzwanie",
      "Ukończ Wyzwanie Olimpu"
     ],
     [
      "Nieludzki",
-     "Ukończ tryb Tytana"
+     "Przejdź grę w trybie Tytana"
     ],
     [
-     "Bezcenne",
-     "Zbierz wszystkie „Boskie Skarby”"
+     "Bezcenny",
+     "Zbierz cały \"boski dobytek\""
     ],
     [
-     "Labiryntyt",
-     "Przejdź Labirynt bez śmierci i porażki"
+     "W labiryncie",
+     "Przejdź Labirynt nie ginąc i nie spadając"
     ]
    ],
    "tr": [
     [
      "Tepenin Kralı",
-     "Tüm kupaları aç"
+     "Tüm kupaların kilidini aç"
     ],
     [
-     "Savakları açmak",
+     "Baraj Kapakları Açılsın",
      "Poseidon'u öldür"
     ],
     [
-     "Kızarmış",
-     "Apollon'un Yayı'nı edin"
+     "Çıtır Çıtır Kızarmış",
+     "Apollo'nun yayını ele geçir"
     ],
     [
-     "Bay El",
-     "\"Hades'in Kolu\" gizli odasını keşfet"
+     "El Ele Kol Kola",
+     "Gizli 'Hades'in Kolu' odasını keşfet"
     ],
     [
-     "Işığın efendisi",
+     "Işık Saçıyorsun",
      "Helios'u öldür"
     ],
     [
-     "Ayakkabı teslimatı",
-     "Hermes'i öldür ve Çizmelerini edin"
+     "Ayakkabı Teslimatı",
+     "Hermes'i öldürüp çizmelerini ele geçir"
     ],
     [
-     "Kadın düşkünü",
-     "Afrodit'i eğlendir"
+     "Kadınların Gözdesi",
+     "Afrodit'i zevkten bulutlara çıkar"
     ],
     [
-     "Yardım eli",
+     "El Elden Üstündür",
      "Gaia'nın elini kopar"
     ],
     [
-     "Açıl susam açıl",
-     "Tisifone'nin Kapıları'nı aç"
+     "Açıl Susam Açıl",
+     "Tisifon'un Kapıları'nı aç"
     ],
     [
-     "Kurtar beni",
+     "Kurtar Beni",
      "Pandora'yı kurtar"
     ],
     [
-     "Üç bilge",
-     "Üç Yargıç'ın bilmecesini çöz"
+     "Üç Bilge Adam",
+     "Üç Yargıç bulmacasını çöz"
     ],
     [
-     "Vurucu",
-     "1000 vuruşluk bir kombo yap"
+     "Vur Kaç",
+     "1000 vuruşluk bir kombo gerçekleştir"
     ],
     [
-     "Parçalanmış",
-     "1 Olimpos Nöbetçisi'ni parçala"
+     "Paramparça",
+     "1 Olimpos nöbetçisini parçalara ayır"
     ],
     [
-     "Güzel bronzluk",
-     "Helios'un Başı ile 100 düşmanı kör et"
+     "Güzel Yanmışsın",
+     "Helios'un kafası ile 100 düşmanı kör et"
     ],
     [
-     "İtaat okulu",
-     "Tazılara 50 tekme at"
+     "Köpek Eğitimi",
+     "Köpeklere 50 tekme indir"
     ],
     [
-     "Burası ısındı...",
-     "Apollon'un Yayı ile 100 düşmanı yak"
+     "Burası Sıcak Mı Oldu Ne...",
+     "Apollo’nun yayı ile 100 düşman yak"
     ],
     [
-     "Ruhsuz",
-     "Hades'in Pençeleri ile tüm Ruhları çağır"
+     "Ruh Güzelliği",
+     "Hades'in pençeleri ile tüm ruhları çağır"
     ],
     [
-     "Kanlı cehennem",
-     "Düşmanları öldürerek Kratos'u 500 kova kanla kapla"
+     "Kan Banyosu",
+     "Düşmanları öldürerek Kratos'un üzerini 500 kova kanla kapla"
     ],
     [
-     "Cesaret yoksa zafer yok",
-     "3 Centaur Generali'nin bağırsaklarını çıkar"
+     "Bağırsak Temizliği",
+     "3 Sentor generalinin karnını deş"
     ],
     [
-     "Adım adım",
-     "Herhangi bir silahı bir sonraki seviyeye yükselt"
+     "Formunun Zirvesinde",
+     "Tüm silahları bir sonraki seviyeye yükselt"
     ],
     [
-     "Kardeş rekabeti",
+     "Kardeş Rekabeti",
      "Herkül'ü öldür"
     ],
     [
-     "Titan avcısı",
+     "Titan Katili",
      "Kronos'u öldür"
     ],
     [
-     "Karşılık",
+     "Öç",
      "Zeus'u öldür"
     ],
     [
-     "Derinliklerde",
+     "Derinlerde Bir Yerde",
      "Hades'i öldür"
     ],
     [
-     "Buz yanığı",
-     "Boreas'ın Buz Fırtınası'nı edin"
+     "Ayaz Yanığı",
+     "Boreas'ın buz fırtınasını ele geçir"
     ],
     [
-     "Farklı bir açıdan",
-     "Hera'nın Bahçeleri bilmecesini çöz"
+     "Olaylara Farklı Bir Açıdan Bakmak Gerek",
+     "Hera'nın Bahçeleri bulmacasını çöz"
     ],
     [
-     "Göze hoş gelen",
-     "Tüm Gorgon Gözleri'ni topla"
+     "Göze Hitap Eden",
+     "Tüm Gorgon gözlerini topla"
     ],
     [
-     "Tüy yolma",
-     "Tüm Anka Kuşu Tüyleri'ni topla"
+     "Tüy Yolucu",
+     "Tüm Zümrüdüanka tüylerini topla"
     ],
     [
-     "Bereket boynuzu",
-     "Tüm Minotor Boynuzları'nı topla"
+     "Bereket Boynuzu",
+     "Tüm Minotor boynuzlarını topla"
     ],
     [
-     "Sonuna kadar!",
-     "Tüm silahları tamamen yükselt"
+     "Maksimumda!",
+     "Silahların hepsini sonuna kadar geliştir"
     ],
     [
-     "İntikam tamam",
-     "Oyunu bitir"
+     "İntikam Sona Erdi",
+     "Oyunu tamamla"
     ],
     [
-     "Meydan okumaya hazır",
-     "Olimpos Meydan Okuması'nı tamamla"
+     "Mücadeleye Hazır",
+     "Olimpos'un Düellosu'nu tamamla"
     ],
     [
-     "İnsanlık dışı",
-     "Titan Modu'nu tamamla"
+     "İnsanlık Dışı",
+     "Titan modunu tamamla"
     ],
     [
-     "Paha biçilemez",
-     "Tüm \"Tanrısal Eşyalar\"ı topla"
+     "Paha Biçilmez",
+     "Tüm 'Tanrısal Eşyalar'ı topla"
     ],
     [
-     "Labirentit",
-     "Labirent'i ölmeden veya başarısız olmadan tamamla"
+     "Koridor Faresi",
+     "Ölmeden ya da başarısızlığa uğramadan Labirent'i tamamla"
     ]
    ],
    "zh": [
@@ -5324,286 +6479,428 @@
    ],
    "ja": [
     [
-     "丘の王者",
-     "すべてのトロフィーを獲得する"
+     "お山の大将",
+     "全部のトロフィーを集める"
     ],
     [
-     "水門を開け",
-     "ポセイドンを倒す"
+     "水門開放",
+     "ポセイドンを殺す"
     ],
     [
-     "こんがり焼ける",
-     "アポロンの弓を入手する"
+     "徹底燃焼",
+     "アポロの弓矢を手に入れる"
     ],
     [
-     "ミスター・ハンド",
-     "隠し部屋「ハデスの腕」を見つける"
+     "ザ・ハンド",
+     "冥界で秘密の部屋を見つける"
     ],
     [
-     "光の主",
-     "ヘリオスを倒す"
+     "輝く主",
+     "ヘリオスを殺す"
     ],
     [
-     "靴のお届け",
-     "ヘルメスを倒してブーツを入手する"
+     "靴の配達",
+     "ヘルメスを殺し、ブーツを手に入れる"
     ],
     [
-     "女たらし",
-     "アフロディーテをもてなす"
+     "色男",
+     "アフロディーテを楽しませることに成功する"
     ],
     [
-     "手を貸す",
-     "ガイアの手を切り落とす"
+     "手相占い",
+     "ガイアの手を切断する"
     ],
     [
-     "開け、ごま",
-     "ティシポネの門を開く"
+     "開けゴマ",
+     "ティシポネの扉を開ける"
     ],
     [
-     "助けて",
-     "パンドラを救出する"
+     "私を助けて",
+     "パンドラを助ける"
     ],
     [
      "三賢者",
-     "三人の審判の謎を解く"
+     "裁きの三神の鎖を解く"
     ],
     [
-     "コンボの達人",
-     "1000ヒットのコンボを決める"
+     "ヒットマン",
+     "1000 ヒットコンボを繰り出す"
     ],
     [
-     "バラバラ",
-     "オリンポスの衛兵を1体引き裂く"
+     "裂け！",
+     "オリュンポスの番兵を1匹引き裂く"
     ],
     [
-     "きれいな日焼け",
-     "ヘリオスの首で敵100体を盲目にする"
+     "ヘッドをどうぞ",
+     "ヘリオスの頭で敵100体の目をくらます"
     ],
     [
-     "しつけ教室",
-     "猟犬を50回蹴る"
+     "訓練学校",
+     "野良猟犬たちを50回蹴る"
     ],
     [
-     "ここは暑いな…",
-     "アポロンの弓で敵100体を燃やす"
+     "暑くなってきた...",
+     "敵100体アポロの弓矢で燃やす"
     ],
     [
-     "魂の抜け殻",
-     "ハデスの爪ですべての魂を召喚する"
+     "魂切れ",
+     "すべての魂をハデスの鉤爪で招集する"
     ],
     [
-     "血まみれの地獄",
-     "敵を倒してクレイトスに500杯分の血を浴びせる"
+     "なんてこった",
+     "バケツ500個分の返り血をクレイトスに浴びせる"
     ],
     [
-     "度胸なくして栄光なし",
-     "ケンタウロス将軍3体の腸を引きずり出す"
+     "勇気なくして栄光なし",
+     "ケンタウロス3匹の内臓をえぐり出す"
     ],
     [
-     "一歩ずつ",
-     "任意の武器を次のレベルに強化する"
+     "本領発揮",
+     "武器をどれかパワーアップする"
     ],
     [
-     "兄弟の争い",
-     "ヘラクレスを倒す"
+     "兄弟喧嘩",
+     "ヘラクレスを殺す"
     ],
     [
-     "タイタンスレイヤー",
-     "クロノスを倒す"
+     "タイタン スレイヤー",
+     "クロノスを殺す"
     ],
     [
-     "報い",
-     "ゼウスを倒す"
+     "報復",
+     "ゼウスを殺す"
     ],
     [
-     "深淵にて",
-     "ハデスを倒す"
+     "歌妓",
+     "ハデスを殺す"
     ],
     [
-     "凍傷",
-     "ボレアスのアイスストームを入手する"
+     "冷凍焼け",
+     "ボリアス・アイスストームを手に入れる"
     ],
     [
-     "別の角度から",
-     "ヘラの庭園の謎を解く"
+     "視点の転換",
+     "ヘラの庭園を解く"
     ],
     [
      "目の保養",
-     "ゴルゴンの目をすべて集める"
+     "ゴルゴンの目を全部集める"
     ],
     [
-     "羽むしり",
-     "フェニックスの羽をすべて集める"
+     "羽根突き",
+     "フェニックスの羽根を全部集める"
     ],
     [
-     "豊穣の角",
-     "ミノタウロスの角をすべて集める"
+     "募る",
+     "ミノタウロスの角を全部集める"
     ],
     [
-     "最大まで！",
-     "すべての武器を完全に強化する"
+     "最高！",
+     "すべての武器を最高レベルまでパワーアップする"
     ],
     [
-     "復讐完了",
+     "復讐達成",
      "ゲームをクリアする"
     ],
     [
-     "挑戦を受けて立つ",
-     "オリンポスの試練をクリアする"
+     "挑戦準備完了",
+     "オリュンポスの試練をクリアする"
     ],
     [
-     "非人間",
-     "タイタンモードをクリアする"
+     "超人的",
+     "タイタンモードでクリアする"
     ],
     [
      "プライスレス",
-     "すべての「神々の所持品」を集める"
+     "”神々の所有物”を全部集める"
     ],
     [
-     "迷宮病",
-     "死なず失敗せずに迷宮をクリアする"
+     "スバラシイ",
+     "死なずにラビリンスを抜ける"
     ]
    ],
    "ko": [
     [
-     "언덕의 왕",
-     "모든 트로피 획득"
+     "언덕 위의 제왕",
+     "모든 트로피 해제하기"
     ],
     [
-     "수문 열기",
-     "포세이돈 처치"
+     "대박 물난리",
+     "포세이돈 죽이기"
     ],
     [
-     "바싹 구워짐",
-     "아폴로의 활 획득"
+     "바짝 태워볼까",
+     "아폴로의 활 확보"
     ],
     [
-     "미스터 핸드",
-     "비밀의 방 '하데스의 팔' 발견"
+     "손을 위로 흔들어!",
+     "하데스의 '팔'이 있는 비밀의 방을 찾기"
     ],
     [
-     "빛의 군주",
-     "헬리오스 처치"
+     "빛나리 군주",
+     "헬리오스 죽이기"
     ],
     [
-     "신발 배달",
-     "헤르메스를 처치하고 그의 부츠 획득"
+     "택배를 해도 되겠군",
+     "헤르메스를 죽이고 군화를 획득"
     ],
     [
-     "바람둥이",
-     "아프로디테 접대"
+     "정력맨 납시다",
+     "아프로디테 만족시키기"
     ],
     [
-     "일손 돕기",
-     "가이아의 손 절단"
+     "손 쓸 데 없나?",
+     "가이아의 손 회손"
     ],
     [
      "열려라 참깨",
-     "티시포네의 문 열기"
+     "티시포네의 문을 열기"
     ],
     [
-     "구해줘",
-     "판도라 구출"
+     "살려줘요",
+     "판도라 구하기"
     ],
     [
-     "세 현자",
-     "세 심판관의 수수께끼 풀기"
+     "세명의 현자",
+     "세명의 재판관의 손에서 체인을 놓게 하기"
     ],
     [
-     "타격왕",
-     "1000타 콤보 달성"
+     "청부업자",
+     "1000개의 히트 콤보를 달성하기"
     ],
     [
-     "갈기갈기",
-     "올림푸스 파수병 1명 찢어 죽이기"
+     "만신창이",
+     "올림푸스 보초 한명 찟기"
     ],
     [
-     "멋진 태닝",
-     "헬리오스의 머리로 적 100명 실명시키기"
+     "선탠",
+     "헬리오스의 머리로 적 100명의 눈을 멀게 하기"
     ],
     [
-     "복종 훈련",
-     "사냥개 50마리 걷어차기"
+     "개 버릇 들이기",
+     "50마리의 개를 발로 걷어차기"
     ],
     [
-     "여기 덥네...",
-     "아폴로의 활로 적 100명 태우기"
+     "여기 완전 더워",
+     "100명의 적을 아폴로의 활로 태워버리기"
     ],
     [
-     "영혼이 없네",
-     "하데스의 발톱으로 모든 영혼 소환"
+     "혼이 빠졌네",
+     "하데스의 갈고리로 모든 영혼을 소환하기"
     ],
     [
-     "피의 지옥",
-     "적을 처치해 크레이토스에게 피 500통 뒤집어씌우기"
+     "피바다",
+     "적을 죽여서 크레토스가 바가지 500개분의 적의 피에 젖게 하기"
     ],
     [
-     "배짱 없인 영광도 없다",
-     "켄타우로스 장군 3명 내장 뽑기"
+     "막창 드실 분",
+     "3 마리의 켄타루스 장군의 내장을 뽑아 내기"
     ],
     [
-     "한 걸음씩",
-     "아무 무기나 다음 단계로 강화"
+     "쓸만해졌는데?",
+     "아무 무기나 다음 레벨로 업그레이드 하기"
     ],
     [
-     "형제의 경쟁",
-     "헤라클레스 처치"
+     "라이벌 형제",
+     "헤라클레스 죽이기"
     ],
     [
-     "타이탄 학살자",
-     "크로노스 처치"
+     "타이탄 헌터",
+     "크로노스 죽이기"
     ],
     [
-     "응징",
-     "제우스 처치"
+     "복수혈전",
+     "제우스 죽이기"
     ],
     [
-     "심연 속에서",
-     "하데스 처치"
+     "깊은 심연",
+     "하데스 죽이기"
     ],
     [
-     "동상",
-     "보레아스의 얼음 폭풍 획득"
+     "동상에 걸리다",
+     "보레아스 얼음폭풍우 획득하기"
     ],
     [
-     "다른 관점에서",
-     "헤라의 정원 수수께끼 풀기"
+     "다른 시점에서 사물 바라보기",
+     "헤라의 정원을 빠져 나오기"
     ],
     [
-     "눈요기",
-     "모든 고르곤의 눈 수집"
+     "눈깔 사탕",
+     "고르곤의 눈을 모두 모으기"
     ],
     [
-     "깃털 뽑기",
-     "모든 불사조 깃털 수집"
+     "깃털 달기",
+     "피닉스 날개를 모두 모으기"
     ],
     [
      "풍요의 뿔",
-     "모든 미노타우로스 뿔 수집"
+     "미노타우르스의 뿔을 모두 모으기"
     ],
     [
-     "최대로!",
-     "모든 무기를 완전히 강화"
+     "완전 대박 최고!",
+     "모든 무기를 완전히 업그레이드 하기"
     ],
     [
-     "복수 완료",
-     "게임 클리어"
+     "복수는 이루어지다",
+     "게임을 완수하기"
     ],
     [
-     "도전에 걸맞게",
-     "올림푸스의 도전 클리어"
+     "도전 완수",
+     "올림푸스의 도전을 완수하기"
     ],
     [
-     "비인간",
-     "타이탄 모드 클리어"
+     "인간을 넘어서",
+     "타이탄 모드를 완수하기"
     ],
     [
-     "값을 매길 수 없는",
-     "모든 '신들의 소유물' 수집"
+     "돈하고 바꿀 수 없는",
+     "신의 재물을 모두 모으기"
     ],
     [
-     "미로병",
-     "죽거나 실패하지 않고 미로 클리어"
+     "미궁은 없다",
+     "미궁에서 죽거나 실패 없이 살아 나오기"
+    ]
+   ],
+   "cs": [
+    [
+     "Král kopce",
+     "Odemkni všechny trofeje"
+    ],
+    [
+     "Otevření stavidel",
+     "Zabij Poseidona"
+    ],
+    [
+     "Dopečený do křupava",
+     "Získej Apollónův luk"
+    ],
+    [
+     "Pan Ruka",
+     "Objev tajnou místnost „Hádovy ruky“"
+    ],
+    [
+     "Pán lesku",
+     "Zabij Hélia"
+    ],
+    [
+     "Doručení bot",
+     "Zabij Herma a získej jeho boty"
+    ],
+    [
+     "Dámský švihák",
+     "Úspěšně pobav Afroditu"
+    ],
+    [
+     "Šikovné ruce",
+     "Usekni Gaie ruku"
+    ],
+    [
+     "Sezame, otevři se",
+     "Otevři Brány Tisifony"
+    ],
+    [
+     "Zachraň mě",
+     "Zachraň Pandoru"
+    ],
+    [
+     "Tři mudrci",
+     "Vyřeš hádanku Tří soudců"
+    ],
+    [
+     "Zabiják",
+     "Proveď kombo o 1000 zásazích"
+    ],
+    [
+     "Roztrhaný na kusy",
+     "Roztrhej jednoho olympského strážce"
+    ],
+    [
+     "Pěkná opálenina",
+     "Oslep 100 nepřátel Héliovou hlavou"
+    ],
+    [
+     "Výcvik poslušnosti",
+     "Dej 50 kopanců psům"
+    ],
+    [
+     "Začíná tu být horko…",
+     "Podpal 100 nepřátel Apollónovým lukem"
+    ],
+    [
+     "Duše venku",
+     "Přivolej všechny duše Hádovými drápy"
+    ],
+    [
+     "Krvavé peklo",
+     "Pokryj Krata 500 kbelíky krve zabíjením nepřátel"
+    ],
+    [
+     "Bez odvahy není slávy",
+     "Vykuchej 3 kentaury generály"
+    ],
+    [
+     "Rozjíždíš se",
+     "Vylepši libovolnou zbraň na další úroveň"
+    ],
+    [
+     "Sourozenecká rivalita",
+     "Zabij Herakla"
+    ],
+    [
+     "Zabiják titánů",
+     "Zabij Krona"
+    ],
+    [
+     "Odplata",
+     "Zabij Dia"
+    ],
+    [
+     "Hlubiny pod námi",
+     "Zabij Háda"
+    ],
+    [
+     "Mrazivé spálení",
+     "Získej Boreovu ledovou bouři"
+    ],
+    [
+     "Pohled z jiné perspektivy",
+     "Vyřeš Héřiny zahrady"
+    ],
+    [
+     "Pastva pro oči",
+     "Sesbírej všechna Gorgonina oka"
+    ],
+    [
+     "Škubač peří",
+     "Sesbírej všechna Fénixova pera"
+    ],
+    [
+     "Roh hojnosti",
+     "Sesbírej všechny Minotaurovy rohy"
+    ],
+    [
+     "Na maximum!",
+     "Plně vylepši všechny zbraně"
+    ],
+    [
+     "Pomsta dokonána",
+     "Dohraj hru"
+    ],
+    [
+     "Výzvě dorostl",
+     "Dohraj Výzvu Olympu"
+    ],
+    [
+     "Nelidský",
+     "Dohraj Titánský režim"
+    ],
+    [
+     "K nezaplacení",
+     "Sesbírej všechny „Božské poklady“"
+    ],
+    [
+     "Bludiště",
+     "Dohraj Labyrint, aniž bys zemřel nebo selhal"
     ]
    ]
   },
@@ -5630,7 +6927,18 @@
     "Close the game before resetting the trophies.": "أغلق اللعبة قبل إعادة ضبط الكؤوس.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "هل تريد إقفال جميع الكؤوس المفتوحة ({}) من جديد؟ سيتم الاحتفاظ بنسخة باسم trophies.dat.bak.",
     "No trophy is unlocked.": "لا يوجد أي كأس مفتوح.",
-    "Could not reset the trophies: {}": "تعذّرت إعادة ضبط الكؤوس: {}"
+    "Could not reset the trophies: {}": "تعذّرت إعادة ضبط الكؤوس: {}",
+    "Notifications": "الإشعارات",
+    "List order": "ترتيب القائمة",
+    "Most earned first": "الأكثر حصولًا أولًا",
+    "Rarest first": "الأندر أولًا",
+    "{}% of players": "{}% من اللاعبين",
+    "Common": "شائعة",
+    "Rare": "نادرة",
+    "Very rare": "نادرة جدًا",
+    "Ultra rare": "نادرة للغاية",
+    "Triangle/Tab: order   L1/R1: notifications": "المثلث/Tab: الترتيب   L1/R1: الإشعارات",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: الكؤوس   F8 / R3+R2 / Esc: إغلاق"
    },
    "es": {
     "Trophies": "Trofeos",
@@ -5654,7 +6962,18 @@
     "Close the game before resetting the trophies.": "Cierra el juego antes de restablecer los trofeos.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "¿Volver a bloquear los {} trofeos desbloqueados? Se guarda una copia como trophies.dat.bak.",
     "No trophy is unlocked.": "No hay ningún trofeo desbloqueado.",
-    "Could not reset the trophies: {}": "No se pudieron restablecer los trofeos: {}"
+    "Could not reset the trophies: {}": "No se pudieron restablecer los trofeos: {}",
+    "Notifications": "Notificaciones",
+    "List order": "Orden de la lista",
+    "Most earned first": "Más obtenidos primero",
+    "Rarest first": "Más raros primero",
+    "{}% of players": "{}% de los jugadores",
+    "Common": "Común",
+    "Rare": "Raro",
+    "Very rare": "Muy raro",
+    "Ultra rare": "Ultrarraro",
+    "Triangle/Tab: order   L1/R1: notifications": "Triángulo/Tab: orden   L1/R1: notificaciones",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofeos   F8 / R3+R2 / Esc: cerrar"
    },
    "pt": {
     "Trophies": "Troféus",
@@ -5678,7 +6997,18 @@
     "Close the game before resetting the trophies.": "Feche o jogo antes de redefinir os troféus.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Bloquear de novo os {} troféus desbloqueados? Uma cópia fica guardada como trophies.dat.bak.",
     "No trophy is unlocked.": "Nenhum troféu está desbloqueado.",
-    "Could not reset the trophies: {}": "Não foi possível redefinir os troféus: {}"
+    "Could not reset the trophies: {}": "Não foi possível redefinir os troféus: {}",
+    "Notifications": "Notificações",
+    "List order": "Ordem da lista",
+    "Most earned first": "Mais conquistados primeiro",
+    "Rarest first": "Mais raros primeiro",
+    "{}% of players": "{}% dos jogadores",
+    "Common": "Comum",
+    "Rare": "Raro",
+    "Very rare": "Muito raro",
+    "Ultra rare": "Ultrarraro",
+    "Triangle/Tab: order   L1/R1: notifications": "Triângulo/Tab: ordem   L1/R1: notificações",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: troféus   F8 / R3+R2 / Esc: fechar"
    },
    "fr": {
     "Trophies": "Trophées",
@@ -5702,7 +7032,18 @@
     "Close the game before resetting the trophies.": "Fermez le jeu avant de réinitialiser les trophées.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Verrouiller de nouveau les {} trophées débloqués ? Une copie est conservée sous le nom trophies.dat.bak.",
     "No trophy is unlocked.": "Aucun trophée n'est débloqué.",
-    "Could not reset the trophies: {}": "Impossible de réinitialiser les trophées : {}"
+    "Could not reset the trophies: {}": "Impossible de réinitialiser les trophées : {}",
+    "Notifications": "Notifications",
+    "List order": "Ordre de la liste",
+    "Most earned first": "Les plus obtenus d'abord",
+    "Rarest first": "Les plus rares d'abord",
+    "{}% of players": "{} % des joueurs",
+    "Common": "Commun",
+    "Rare": "Rare",
+    "Very rare": "Très rare",
+    "Ultra rare": "Ultra rare",
+    "Triangle/Tab: order   L1/R1: notifications": "Triangle/Tab : ordre   L1/R1 : notifications",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1 : trophées   F8 / R3+R2 / Échap : fermer"
    },
    "de": {
     "Trophies": "Trophäen",
@@ -5726,7 +7067,18 @@
     "Close the game before resetting the trophies.": "Beenden Sie das Spiel, bevor Sie die Trophäen zurücksetzen.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Alle {} freigeschalteten Trophäen wieder sperren? Eine Kopie bleibt als trophies.dat.bak erhalten.",
     "No trophy is unlocked.": "Keine Trophäe ist freigeschaltet.",
-    "Could not reset the trophies: {}": "Die Trophäen konnten nicht zurückgesetzt werden: {}"
+    "Could not reset the trophies: {}": "Die Trophäen konnten nicht zurückgesetzt werden: {}",
+    "Notifications": "Benachrichtigungen",
+    "List order": "Listenreihenfolge",
+    "Most earned first": "Häufigste zuerst",
+    "Rarest first": "Seltenste zuerst",
+    "{}% of players": "{} % der Spieler",
+    "Common": "Häufig",
+    "Rare": "Selten",
+    "Very rare": "Sehr selten",
+    "Ultra rare": "Extrem selten",
+    "Triangle/Tab: order   L1/R1: notifications": "Dreieck/Tab: Reihenfolge   L1/R1: Benachrichtigungen",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: Trophäen   F8 / R3+R2 / Esc: schließen"
    },
    "it": {
     "Trophies": "Trofei",
@@ -5750,7 +7102,18 @@
     "Close the game before resetting the trophies.": "Chiudi il gioco prima di reimpostare i trofei.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Bloccare di nuovo i {} trofei sbloccati? Una copia viene conservata come trophies.dat.bak.",
     "No trophy is unlocked.": "Nessun trofeo è sbloccato.",
-    "Could not reset the trophies: {}": "Impossibile reimpostare i trofei: {}"
+    "Could not reset the trophies: {}": "Impossibile reimpostare i trofei: {}",
+    "Notifications": "Notifiche",
+    "List order": "Ordine della lista",
+    "Most earned first": "Più ottenuti prima",
+    "Rarest first": "Più rari prima",
+    "{}% of players": "{}% dei giocatori",
+    "Common": "Comune",
+    "Rare": "Raro",
+    "Very rare": "Molto raro",
+    "Ultra rare": "Ultra raro",
+    "Triangle/Tab: order   L1/R1: notifications": "Triangolo/Tab: ordine   L1/R1: notifiche",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofei   F8 / R3+R2 / Esc: chiudi"
    },
    "pl": {
     "Trophies": "Trofea",
@@ -5774,7 +7137,18 @@
     "Close the game before resetting the trophies.": "Zamknij grę przed zresetowaniem trofeów.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Zablokować ponownie wszystkie odblokowane trofea ({})? Kopia zostanie zachowana jako trophies.dat.bak.",
     "No trophy is unlocked.": "Żadne trofeum nie jest odblokowane.",
-    "Could not reset the trophies: {}": "Nie udało się zresetować trofeów: {}"
+    "Could not reset the trophies: {}": "Nie udało się zresetować trofeów: {}",
+    "Notifications": "Powiadomienia",
+    "List order": "Kolejność listy",
+    "Most earned first": "Najczęściej zdobywane najpierw",
+    "Rarest first": "Najrzadsze najpierw",
+    "{}% of players": "{}% graczy",
+    "Common": "Powszechne",
+    "Rare": "Rzadkie",
+    "Very rare": "Bardzo rzadkie",
+    "Ultra rare": "Ultrarzadkie",
+    "Triangle/Tab: order   L1/R1: notifications": "Trójkąt/Tab: kolejność   L1/R1: powiadomienia",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofea   F8 / R3+R2 / Esc: zamknij"
    },
    "tr": {
     "Trophies": "Kupalar",
@@ -5798,7 +7172,18 @@
     "Close the game before resetting the trophies.": "Kupaları sıfırlamadan önce oyunu kapatın.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Açılmış {} kupanın tümü yeniden kilitlensin mi? Bir kopya trophies.dat.bak olarak saklanır.",
     "No trophy is unlocked.": "Açılmış kupa yok.",
-    "Could not reset the trophies: {}": "Kupalar sıfırlanamadı: {}"
+    "Could not reset the trophies: {}": "Kupalar sıfırlanamadı: {}",
+    "Notifications": "Bildirimler",
+    "List order": "Liste sırası",
+    "Most earned first": "En çok kazanılan önce",
+    "Rarest first": "En nadir önce",
+    "{}% of players": "Oyuncuların %{}",
+    "Common": "Yaygın",
+    "Rare": "Nadir",
+    "Very rare": "Çok nadir",
+    "Ultra rare": "Ultra nadir",
+    "Triangle/Tab: order   L1/R1: notifications": "Üçgen/Tab: sıra   L1/R1: bildirimler",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: kupalar   F8 / R3+R2 / Esc: kapat"
    },
    "zh": {
     "Trophies": "奖杯",
@@ -5822,7 +7207,18 @@
     "Close the game before resetting the trophies.": "重置奖杯前请先关闭游戏。",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "要将已解锁的 {} 个奖杯全部重新锁定吗？会保留一份副本 trophies.dat.bak。",
     "No trophy is unlocked.": "没有已解锁的奖杯。",
-    "Could not reset the trophies: {}": "无法重置奖杯：{}"
+    "Could not reset the trophies: {}": "无法重置奖杯：{}",
+    "Notifications": "通知",
+    "List order": "列表顺序",
+    "Most earned first": "获得最多的在前",
+    "Rarest first": "最稀有的在前",
+    "{}% of players": "{}% 的玩家",
+    "Common": "普通",
+    "Rare": "稀有",
+    "Very rare": "非常稀有",
+    "Ultra rare": "极其稀有",
+    "Triangle/Tab: order   L1/R1: notifications": "三角/Tab：顺序   L1/R1：通知",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1：奖杯   F8 / R3+R2 / Esc：关闭"
    },
    "ja": {
     "Trophies": "トロフィー",
@@ -5846,7 +7242,18 @@
     "Close the game before resetting the trophies.": "トロフィーをリセットする前にゲームを終了してください。",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "獲得済みの {} 個のトロフィーをすべて未獲得に戻しますか？コピーが trophies.dat.bak として残ります。",
     "No trophy is unlocked.": "獲得済みのトロフィーはありません。",
-    "Could not reset the trophies: {}": "トロフィーをリセットできませんでした：{}"
+    "Could not reset the trophies: {}": "トロフィーをリセットできませんでした：{}",
+    "Notifications": "通知",
+    "List order": "リスト順",
+    "Most earned first": "獲得率が高い順",
+    "Rarest first": "レア度が高い順",
+    "{}% of players": "プレイヤーの {}%",
+    "Common": "コモン",
+    "Rare": "レア",
+    "Very rare": "ベリーレア",
+    "Ultra rare": "ウルトラレア",
+    "Triangle/Tab: order   L1/R1: notifications": "トライアングル/Tab：並び順   L1/R1：通知",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1：トロフィー   F8 / R3+R2 / Esc：閉じる"
    },
    "ko": {
     "Trophies": "트로피",
@@ -5870,7 +7277,18 @@
     "Close the game before resetting the trophies.": "트로피를 초기화하기 전에 게임을 종료하세요.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "획득한 트로피 {}개를 모두 다시 잠글까요? 복사본이 trophies.dat.bak으로 보관됩니다.",
     "No trophy is unlocked.": "획득한 트로피가 없습니다.",
-    "Could not reset the trophies: {}": "트로피를 초기화하지 못했습니다: {}"
+    "Could not reset the trophies: {}": "트로피를 초기화하지 못했습니다: {}",
+    "Notifications": "알림",
+    "List order": "목록 순서",
+    "Most earned first": "많이 획득한 순",
+    "Rarest first": "희귀한 순",
+    "{}% of players": "플레이어의 {}%",
+    "Common": "일반",
+    "Rare": "희귀",
+    "Very rare": "매우 희귀",
+    "Ultra rare": "극히 희귀",
+    "Triangle/Tab: order   L1/R1: notifications": "세모/Tab: 정렬   L1/R1: 알림",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: 트로피   F8 / R3+R2 / Esc: 닫기"
    },
    "id": {
     "Trophies": "Trofi",
@@ -5894,7 +7312,53 @@
     "Close the game before resetting the trophies.": "Tutup game sebelum mengatur ulang trofi.",
     "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Kunci kembali semua {} trofi yang terbuka? Salinan akan disimpan sebagai trophies.dat.bak.",
     "No trophy is unlocked.": "Tidak ada trofi yang terbuka.",
-    "Could not reset the trophies: {}": "Tidak dapat mengatur ulang trofi: {}"
+    "Could not reset the trophies: {}": "Tidak dapat mengatur ulang trofi: {}",
+    "Notifications": "Notifikasi",
+    "List order": "Urutan daftar",
+    "Most earned first": "Paling banyak diraih dulu",
+    "Rarest first": "Paling langka dulu",
+    "{}% of players": "{}% pemain",
+    "Common": "Umum",
+    "Rare": "Langka",
+    "Very rare": "Sangat langka",
+    "Ultra rare": "Ultra langka",
+    "Triangle/Tab: order   L1/R1: notifications": "Segitiga/Tab: urutan   L1/R1: notifikasi",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofi   F8 / R3+R2 / Esc: tutup"
+   },
+   "cs": {
+    "Trophies": "Trofeje",
+    "The trophies this port recorded while you played.": "Trofeje, které si tento port zaznamenal při hraní.",
+    "All trophies": "Všechny",
+    "Unlocked": "Odemčené",
+    "Locked": "Zamčené",
+    "UNLOCKED": "ODEMČENO",
+    "LOCKED": "ZAMČENO",
+    "{} of {} unlocked": "Odemčeno {} z {}",
+    "Trophy {}": "Trofej {}",
+    "Platinum": "Platina",
+    "Gold": "Zlato",
+    "Silver": "Stříbro",
+    "Bronze": "Bronz",
+    "No trophy list: choose the game folder on the Game page (its sce_sys/trophy/trophy00.trp is read).": "Žádný seznam trofejí: vyberte složku hry na stránce Hra (čte se její soubor sce_sys/trophy/trophy00.trp).",
+    "Only trophies unlocked with this port are listed; the ones earned on a PlayStation are not known to it.": "Zobrazují se jen trofeje odemčené v tomto portu; ty získané na PlayStationu nezná.",
+    "TROPHY UNLOCKED": "TROFEJ ODEMČENA",
+    "Up/Down: scroll   Left/Right: filter   F8 / R3+R2 / Esc: close": "Nahoru/Dolů: posun   Vlevo/Vpravo: filtr   F8 / R3+R2 / Esc: zavřít",
+    "Reset trophies": "Resetovat trofeje",
+    "Close the game before resetting the trophies.": "Před resetem trofejí zavřete hru.",
+    "Lock all {} unlocked trophies again? A copy is kept as trophies.dat.bak.": "Znovu zamknout všech {} odemčených trofejí? Kopie se uchová jako trophies.dat.bak.",
+    "No trophy is unlocked.": "Žádná trofej není odemčena.",
+    "Could not reset the trophies: {}": "Trofeje se nepodařilo resetovat: {}",
+    "Notifications": "Oznámení",
+    "List order": "Pořadí seznamu",
+    "Most earned first": "Nejčastěji získané první",
+    "Rarest first": "Nejvzácnější první",
+    "{}% of players": "{} % hráčů",
+    "Common": "Běžná",
+    "Rare": "Vzácná",
+    "Very rare": "Velmi vzácná",
+    "Ultra rare": "Ultra vzácná",
+    "Triangle/Tab: order   L1/R1: notifications": "Trojúhelník/Tab: pořadí   L1/R1: oznámení",
+    "L1/R1: trophies   F8 / R3+R2 / Esc: close": "L1/R1: trofeje   F8 / R3+R2 / Esc: zavřít"
    }
   }
  }

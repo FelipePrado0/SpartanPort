@@ -34,13 +34,6 @@ struct DecidedDefault {
 /// The only differences from the Python's defaults the fixtures allow, each a user's ruling. They
 /// apply to a case whose input neither stores nor edits the key, so the file holds the default.
 const DECIDED_DEFAULTS: &[DecidedDefault] = &[
-    // R90: GUI Scale is 1x or 1.5x, 1x by default (the Python's "auto" followed the desktop).
-    DecidedDefault {
-        key: "ui_scale",
-        python: r#""auto""#,
-        rust: r#""1""#,
-        env: None,
-    },
     // R91: Discord Rich Presence is on by default, so the game gets SPARTAN_DISCORD=1.
     DecidedDefault {
         key: "discord_rpc",

@@ -31,9 +31,3 @@ fn core_and_runner_never_mention_iced() {
         }
     }
 }
-
-#[test]
-fn version_is_the_crates() {
-    // The crate's own version (the stamp and the exe's metadata) is the one the window shows.
-    assert_eq!(env!("CARGO_PKG_VERSION"), spartanport_launcher::VERSION);
-}

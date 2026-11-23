@@ -431,10 +431,12 @@ fn the_video_step_edits_the_ini_values() {
         row_shown(&state, "fps_limit"),
         ("0".into(), Some("Unlimited".into()))
     );
-    assert_eq!(row_shown(&state, "engine_fps").0, "120");
+    assert_eq!(state.store.text("engine_fps"), "120");
     for (key, value) in [
         ("fps_limit", "60"),
         ("display_mode", "fullscreen"),
+        ("engine_fps", "144"),
+        ("engine_fps", "75"),
         ("engine_fps", "144"),
     ] {
         let _ = app::update(&mut state, Message::Set(key.into(), value.into()));
@@ -442,7 +444,7 @@ fn the_video_step_edits_the_ini_values() {
     }
     assert_eq!(display_mode_label(&state).as_deref(), Some("Fullscreen"));
     assert_eq!(row_shown(&state, "fps_limit").0, "60");
-    assert_eq!(row_shown(&state, "engine_fps").0, "144");
+    assert_eq!(state.store.text("engine_fps"), "144");
 }
 
 #[test]

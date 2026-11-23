@@ -36,6 +36,11 @@ public:
         return *pipeline;
     }
 
+    // spartanport: an empty handle marks a refused pipeline so callers can skip its work.
+    bool IsValid() const noexcept {
+        return static_cast<bool>(pipeline);
+    }
+
     vk::PipelineLayout GetLayout() const noexcept {
         return *pipeline_layout;
     }

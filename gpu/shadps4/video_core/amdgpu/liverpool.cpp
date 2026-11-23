@@ -8,6 +8,7 @@
 #endif
 #include <time.h>
 #include "spartanport_copy.h"
+#include "spartanport_overlay.h"
 #include "spartanport_toggles.h"
 #include <cstdio>
 #include <boost/preprocessor/stringize.hpp>
@@ -15,6 +16,7 @@
 #include "common/assert.h"
 #include "common/debug.h"
 #include "common/polyfill_thread.h"
+#include "common/scope_exit.h"
 #include "common/thread.h"
 #include "core/debug_state.h"
 #include "core/emulator_settings.h"
@@ -86,8 +88,14 @@ Liverpool::~Liverpool() {
 }
 
 void Liverpool::ProcessCommands() {
-    if (num_commands && rasterizer) {
-        rasterizer->DrainDrawPipe(Vulkan::DrawPipe::ReasonCommands); // spartanport: commands touch the caches
+    if (num_commands == 0) {
+        return;
+    }
+    // spartanport: commands touch the caches and the scheduler. No command may run before the
+    // drain: one queued by a guest thread after a check that saw none would run beside the draw
+    // recording thread (both recording into the scheduler: null record chunk).
+    if (rasterizer) {
+        rasterizer->DrainDrawPipe(Vulkan::DrawPipe::ReasonCommands);
     }
     // Process incoming commands with high priority
     while (num_commands) {
@@ -152,14 +160,20 @@ void Liverpool::Process(std::stop_token stoken) {
             }
             task.resume();
 
+            if (!task.done() && SpartanOverlay::GamePaused()) {
+                // spartanport: while the menu pauses the game, a submission waiting on a label the
+                // stopped game would write spun this thread at 100% of a core (#1168).
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
             if (task.done()) {
                 task.destroy();
 
                 std::scoped_lock lock{queue.m_access};
                 queue.submits.pop();
 
-                --num_submits;
+                // spartanport: retire the task count under the publication lock, queue then submit.
                 std::scoped_lock lock2{submit_mutex};
+                --num_submits;
                 submit_cv.notify_all();
             }
         }
@@ -184,13 +198,22 @@ void Liverpool::Process(std::stop_token stoken) {
             rasterizer->DrainDrawPipe(Vulkan::DrawPipe::ReasonSubmissionEnd);
             rasterizer->WaitDeferredSignals();
         }
+        // spartanport: new submissions during the drain must finish before idle releases their
+        // command buffers; the generation also protects against a later submission lock.
+        bool idle;
+        u64 generation;
         {
             std::scoped_lock lk{submit_mutex};
-            if (num_submits == 0) {
+            idle = num_submits == 0;
+            generation = submissions_total;
+            if (idle) {
                 work_retired = true;
             }
         }
-        Platform::IrqC::Instance()->Signal(Platform::InterruptId::GpuIdle);
+        if (idle) {
+            idle_generation.store(generation, std::memory_order_release);
+            Platform::IrqC::Instance()->Signal(Platform::InterruptId::GpuIdle);
+        }
     }
 }
 
@@ -414,6 +437,8 @@ Liverpool::Task Liverpool::ProcessCeUpdate(std::span<const u32> ccb) {
         }
 
         const PM4ItOpcode opcode = header->type3.opcode;
+        // spartanport: save the size before execution can let the guest reuse this buffer.
+        const u32 packet_words = header->type3.NumWords() + 1;
         const auto* it_body = reinterpret_cast<const u32*>(header) + 1;
         switch (opcode) {
         case PM4ItOpcode::Nop: {
@@ -442,7 +467,9 @@ Liverpool::Task Liverpool::ProcessCeUpdate(std::span<const u32> ccb) {
         }
         case PM4ItOpcode::WaitOnDeCounterDiff: {
             const auto diff = it_body[0];
-            while ((cblock.de_count - cblock.ce_count) >= diff) {
+            // spartanport: compare ce_count - de_count, which cannot wrap below zero (#5406).
+            while (cblock.ce_count >= cblock.de_count &&
+                   (cblock.ce_count - cblock.de_count) >= diff) {
                 YIELD_CE();
             }
             break;
@@ -451,6 +478,10 @@ Liverpool::Task Liverpool::ProcessCeUpdate(std::span<const u32> ccb) {
             const auto* indirect_buffer = reinterpret_cast<const PM4CmdIndirectBuffer*>(header);
             auto task =
                 ProcessCeUpdate({indirect_buffer->Address<const u32>(), indirect_buffer->ib_size});
+            // spartanport: free the nested task's frame when this packet ends (#5446).
+            SCOPE_EXIT {
+                task.handle.destroy();
+            };
             RESUME_CE(task);
 
             while (!task.handle.done()) {
@@ -464,7 +495,8 @@ Liverpool::Task Liverpool::ProcessCeUpdate(std::span<const u32> ccb) {
             UNREACHABLE_MSG("Unknown PM4 type 3 opcode {:#x} with count {}",
                             static_cast<u32>(opcode), count);
         }
-        ccb = NextPacket(ccb, header->type3.NumWords() + 1);
+        // spartanport: advance by the saved size because execution may invalidate the header.
+        ccb = NextPacket(ccb, packet_words);
     }
 
     FIBER_EXIT;
@@ -1263,6 +1295,10 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 const auto* indirect_buffer = reinterpret_cast<const PM4CmdIndirectBuffer*>(header);
                 auto task = ProcessGraphics(
                     {indirect_buffer->Address<const u32>(), indirect_buffer->ib_size}, {});
+                // spartanport: free the nested task's frame when this packet ends (#5446).
+                SCOPE_EXIT {
+                    task.handle.destroy();
+                };
                 // Tasks start suspended: the nested body (and its scan) runs on this resume.
                 g_dcb_depth = dcb_depth + 1;
                 RESUME_GFX(task);
@@ -1279,7 +1315,9 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 break;
             }
             case PM4ItOpcode::WaitOnCeCounter: {
-                while (cblock.ce_count <= cblock.de_count && !ce_task.handle.done()) {
+                // spartanport: with no constant-engine task, skip the wait (#5406).
+                while (cblock.ce_count <= cblock.de_count && ce_task.handle &&
+                       !ce_task.handle.done()) {
                     RESUME_GFX(ce_task);
                 }
                 break;
@@ -1308,8 +1346,8 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 }
                 const auto skip = *cond_exec->Address() == false;
                 if (skip) {
-                    dcb = NextPacket(dcb,
-                                     header->type3.NumWords() + 1 + cond_exec->exec_count.Value());
+                    // spartanport: use the size saved before execution when skipping packets too.
+                    dcb = NextPacket(dcb, count + 1 + cond_exec->exec_count.Value());
                     continue;
                 }
                 break;
@@ -1318,7 +1356,8 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 UNREACHABLE_MSG("Unknown PM4 type 3 opcode {:#x} with count {}",
                                 static_cast<u32>(opcode), count);
             }
-            dcb = NextPacket(dcb, header->type3.NumWords() + 1);
+            // spartanport: use the saved size; flip or EOP signals let the guest reuse this buffer.
+            dcb = NextPacket(dcb, count + 1);
             break;
         }
     }
@@ -1424,6 +1463,10 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
             const auto* indirect_buffer = reinterpret_cast<const PM4CmdIndirectBuffer*>(header);
             auto task = ProcessCompute<true>(
                 {indirect_buffer->Address<const u32>(), indirect_buffer->ib_size}, vqid);
+            // spartanport: free the nested task's frame when this packet ends (#5446).
+            SCOPE_EXIT {
+                task.handle.destroy();
+            };
             RESUME_ASC(task, vqid);
 
             while (!task.handle.done()) {
@@ -1694,11 +1737,12 @@ void Liverpool::SubmitGfx(std::span<const u32> dcb, std::span<const u32> ccb) {
         }
         auto task = ProcessGraphics(dcb, ccb, seq);
         queue.submits.emplace(task.handle);
+        // spartanport: publish the task and its counts together, locking queue then submit.
+        std::scoped_lock lk{submit_mutex};
+        ++num_submits;
+        ++submissions_total;
+        work_retired = false;
     }
-
-    std::scoped_lock lk{submit_mutex};
-    ++num_submits;
-    work_retired = false;
     submit_cv.notify_one();
 }
 
@@ -1711,12 +1755,13 @@ void Liverpool::SubmitAsc(u32 gnm_vqid, std::span<const u32> acb) {
     {
         std::scoped_lock lock{queue.m_access};
         queue.submits.emplace(task.handle);
+        // spartanport: publish compute work and its counts together, locking queue then submit.
+        std::scoped_lock lk{submit_mutex};
+        num_mapped_queues = std::max(num_mapped_queues, gnm_vqid + 1);
+        ++num_submits;
+        ++submissions_total;
+        work_retired = false;
     }
-
-    std::scoped_lock lk{submit_mutex};
-    num_mapped_queues = std::max(num_mapped_queues, gnm_vqid + 1);
-    ++num_submits;
-    work_retired = false;
     submit_cv.notify_one();
 }
 

@@ -34,7 +34,9 @@ use windows_sys::Win32::System::Threading::{
     OpenProcess, WaitForSingleObject, CREATE_NO_WINDOW, PROCESS_SYNCHRONIZE,
 };
 use windows_sys::Win32::System::IO::DeviceIoControl;
-use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    AllowSetForegroundWindow, MessageBoxW, ASFW_ANY, MB_ICONERROR,
+};
 
 /// The user's UI language id (LANGID), or `None` when Windows reports 0.
 pub fn user_default_ui_language() -> Option<u32> {
@@ -88,6 +90,9 @@ pub fn steam_path_from_registry() -> Option<std::path::PathBuf> {
 
 /// Gives a console program no console window (the launcher, a windowed program, has none to share).
 pub fn hide_window(cmd: &mut Command) {
+    // Lets the game take the foreground when it opens its window, so the taskbar does not stay over
+    // fullscreen (#1020).
+    unsafe { AllowSetForegroundWindow(ASFW_ANY) };
     cmd.creation_flags(CREATE_NO_WINDOW);
 }
 

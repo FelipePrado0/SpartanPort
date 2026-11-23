@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <optional>
 #include <span>
+#include <string>
 #include <unordered_map>
 
 #include "video_core/renderer_vulkan/vk_platform.h"
@@ -444,6 +445,11 @@ public:
         return vk11_props.maxMemoryAllocationSize;
     }
 
+    /// Returns the physical device limits.
+    const vk::PhysicalDeviceLimits& GetLimits() const noexcept {
+        return properties.limits;
+    }
+
     /// Returns the vulkan 1.2 physical device properties.
     const vk::PhysicalDeviceVulkan12Properties& GetVk12Properties() const noexcept {
         return vk12_props;
@@ -535,6 +541,9 @@ public:
     /// (VK_EXT_memory_budget: what this process can use now, other processes included).
     [[nodiscard]] u64 GetDeviceMemoryBudgetNow() const;
 
+    /// spartanport: " N: used/budget MiB (size S)" for every heap, for the log.
+    [[nodiscard]] std::string HeapUsageText() const;
+
     /// Returns the total memory budget available to the device.
     [[nodiscard]] u64 GetTotalMemoryBudget() const {
         return total_memory_budget;
@@ -622,6 +631,7 @@ private:
     bool maintenance_8{};
     bool attachment_feedback_loop{};
     bool image_2d_view_of_3d{};
+    bool mutable_descriptor_type{}; ///< enabled for XeSS only (vk_xess.cpp)
     bool image_view_min_lod{};
     bool shader_clock{};
     bool pipeline_executable_properties{}; // spartanport: SPARTAN_WAVE_STATS=1 (vk_wave_stats.h)

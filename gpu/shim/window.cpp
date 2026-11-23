@@ -20,6 +20,13 @@ void ToggleMousePause() {
     mouse_paused.store(!mouse_paused.load(std::memory_order_relaxed), std::memory_order_relaxed);
 }
 
+// spartanport: the window's mouse_locked, for the pad thread (the free camera's mouse look).
+static std::atomic<bool> mouse_lock_shared{false};
+
+bool MouseLocked() {
+    return mouse_lock_shared.load(std::memory_order_relaxed);
+}
+
 // spartanport: the display the window opens on. SPARTAN_MONITOR is an index into SDL_GetDisplays() (the same
 // order a launcher's list would use); absent or empty means the primary display. An invalid,
 // negative or out-of-range value falls back to the primary with a diagnostic. SDL_WINDOWPOS_CENTERED
@@ -86,6 +93,12 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     }
     const SDL_DisplayID display = MonitorDisplay();
     const bool too_large = StartSize(width_, height_, display);
+    // spartanport: SPARTAN_FULLSCREEN=1 (older launchers) still asks for fullscreen.
+    if (const char* fullscreen = std::getenv("SPARTAN_FULLSCREEN"); fullscreen && fullscreen[0] == '1' &&
+        SpartanSettings::Get().display_mode == SpartanGraphics::Windowed) {
+        SpartanSettings::Get().display_mode = SpartanGraphics::Borderless;
+    }
+    const int initial_mode = SpartanSettings::Get().display_mode;
     SDL_PropertiesID props = SDL_CreateProperties();
     SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, SDL_WINDOWPOS_CENTERED_DISPLAY(display));
@@ -93,7 +106,8 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, width_);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height_);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
-    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, too_large);
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN,
+                           too_large && initial_mode == SpartanGraphics::Windowed);
     SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, true);
     base_title = title;
     window = SDL_CreateWindowWithProperties(props);
@@ -126,12 +140,11 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, const char* title) : width{width_}
     } else {
         UNREACHABLE_MSG("Unsupported SDL video driver {}", driver ? driver : "(none)");
     }
-    // spartanport: SPARTAN_FULLSCREEN=1 (older launchers) still asks for fullscreen.
-    if (const char* fullscreen = std::getenv("SPARTAN_FULLSCREEN"); fullscreen && fullscreen[0] == '1' &&
-        SpartanSettings::Get().display_mode == SpartanGraphics::Windowed) {
-        SpartanSettings::Get().display_mode = SpartanGraphics::Borderless;
-    }
-    ApplyDisplayMode(SpartanSettings::Get().display_mode);
+    ApplyDisplayMode(initial_mode);
+    window_info.sdr_white_level = SDL_GetFloatProperty(wp, SDL_PROP_WINDOW_SDR_WHITE_LEVEL_FLOAT, 1.0f);
+    window_info.hdr_headroom = SDL_GetFloatProperty(wp, SDL_PROP_WINDOW_HDR_HEADROOM_FLOAT, 1.0f);
+    window_info.hdr_enabled = SpartanGraphics::HdrOnForDisplay(
+        SDL_GetBooleanProperty(wp, SDL_PROP_WINDOW_HDR_ENABLED_BOOLEAN, false), window_info.sdr_white_level);
     // spartanport: the game has no mouse; the in-game menu draws its own cursor (SpartanOverlay::SetOpen).
     SDL_HideCursor();
     int w = 0, h = 0;
@@ -153,7 +166,12 @@ void WindowSDL::ApplyDisplayMode(int mode) {
         if (!SDL_SetWindowFullscreenMode(window, exclusive ? desktop : nullptr)) {
             LOG_WARNING(Frontend, "Fullscreen mode: {}", SDL_GetError());
         }
-        SDL_SetWindowFullscreen(window, true);
+        if (!SDL_SetWindowFullscreen(window, true) && exclusive) {
+            LOG_WARNING(Frontend, "Exclusive fullscreen failed ({}); falling back to borderless", SDL_GetError());
+            SDL_SetWindowFullscreenMode(window, nullptr);
+            SDL_SetWindowFullscreen(window, true);
+        }
+        SDL_RaiseWindow(window);
     }
     SDL_SyncWindow(window);
     std::printf("Window: %s\n", SpartanGraphics::DisplayModeNames[mode]);
@@ -218,12 +236,14 @@ bool WindowSDL::PollEvents() {
             UpdateTextTitle();
             continue;
         }
-        // The controller finishes the text dialog too: Cross (A) accepts, Circle (B) cancels.
+        // The controller finishes the text dialog too: Cross (A) accepts, Circle (B) cancels (or swapped).
         if (text_active && event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
             (event.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH ||
              event.gbutton.button == SDL_GAMEPAD_BUTTON_EAST)) {
             std::scoped_lock lock{text_mutex};
-            text_state = event.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH ? 1 : 2;
+            const bool swapped = SpartanSettings::Get().menu_confirm_swap.load(std::memory_order_relaxed) != 0;
+            const u8 confirm_btn = swapped ? SDL_GAMEPAD_BUTTON_EAST : SDL_GAMEPAD_BUTTON_SOUTH;
+            text_state = event.gbutton.button == confirm_btn ? 1 : 2;
             text_active = false;
             SDL_StopTextInput(window);
             UpdateTextTitle();
@@ -292,6 +312,7 @@ bool WindowSDL::PollEvents() {
     if (lock != mouse_locked) {
         if (lock) SDL_WarpMouseInWindow(window, width / 2.0f, height / 2.0f);
         if (SDL_SetWindowRelativeMouseMode(window, lock)) mouse_locked = lock;
+        mouse_lock_shared.store(mouse_locked, std::memory_order_relaxed);
     }
     if (const bool show = paused && !mouse_locked; show != cursor_shown) {
         show ? SDL_ShowCursor() : SDL_HideCursor();

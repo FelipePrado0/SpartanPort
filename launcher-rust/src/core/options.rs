@@ -74,15 +74,21 @@ pub static FPS_LIMITS: &[Choice] = &[
     c("0", "Unlimited"),
 ];
 
-/// GUI Scale (R90): absolute zooms, 1x by default.
-pub static UI_SCALES: &[Choice] = &[c("1", "1x"), c("1.5", "1.5x")];
+/// GUI Scale: Auto by default (the desktop's scale, fitted to the screen), or the absolute zooms
+/// of R90.
+pub static UI_SCALES: &[Choice] = &[
+    c("auto", "Auto (fits the screen)"),
+    c("1", "1x"),
+    c("1.5", "1.5x"),
+];
 
-/// The GUI Scale choice a stored value stands for: an older file's "2" is 1.5x, and its "auto"
-/// (which followed the desktop) or anything unknown is 1x.
+/// The GUI Scale choice a stored value stands for: an older file's "2" is 1.5x, and anything
+/// unknown is Auto.
 pub fn ui_scale_choice(stored: &str) -> &'static str {
     match stored {
+        "1" => "1",
         "1.5" | "2" => "1.5",
-        _ => "1",
+        _ => "auto",
     }
 }
 
@@ -93,6 +99,20 @@ pub static STICK_PROMPTS: &[Choice] = &[
 
 pub static AIM_STYLES: &[Choice] = &[c("0", "Relative"), c("1", "Absolute")];
 
+pub static MENU_CONFIRM_STYLES: &[Choice] = &[
+    c("0", "Cross confirms, Circle cancels (default)"),
+    c("1", "Circle confirms, Cross cancels"),
+];
+
+/// Speaker layout of the game's 7.1 mix (`audio_channels`): the values the runtime reads
+/// (`SpartanSettings::AudioChannelKeys`).
+pub static AUDIO_CHANNELS: &[Choice] = &[
+    c("auto", "Automatic"),
+    c("stereo", "Stereo"),
+    c("5.1", "5.1 surround"),
+    c("7.1", "7.1 surround"),
+];
+
 pub static GLYPH_STYLES: &[Choice] = &[
     c("off", "Original (default)"),
     c("auto", "Match my controller"),
@@ -101,22 +121,68 @@ pub static GLYPH_STYLES: &[Choice] = &[
     c("keyboard", "Keyboard"),
 ];
 
+/// Which input of a keyboard row the in-game keyboard icons show.
+pub static GLYPH_KEYS: &[Choice] = &[
+    c("main", "Main key (default)"),
+    c("alternative", "Alternative key"),
+    c("lyre", "Alternative key on the lyre only"),
+];
+
+/// How the keyboard icons colour the key labels of the four face buttons.
+pub static KEY_COLOR_STYLES: &[Choice] = &[
+    c("gray", "Gray (default)"),
+    c("playstation", "PlayStation colors"),
+    c("custom", "Custom"),
+];
+
+/// The palette of a custom colour; `gray` is the ink of every other label.
+pub static KEY_COLORS: &[Choice] = &[
+    c("gray", "Gray"),
+    c("white", "White"),
+    c("blue", "Blue"),
+    c("orange", "Orange"),
+    c("green", "Green"),
+    c("red", "Red"),
+    c("pink", "Pink"),
+    c("yellow", "Yellow"),
+    c("purple", "Purple"),
+];
+
 pub static UPSCALERS: &[Choice] = &[
+    cr("off", "Off", "Выключен"),
     cr("fsr3", "FSR 3.1 (every GPU)", "FSR 3.1 (любая видеокарта)"),
+    c("fsr3ui", "FSR 3.1 (native HUD and text)"),
+    c("fsr4", "FSR 4 (AMD Radeon, Intel Arc)"),
+    #[cfg(windows)]
+    c("fsr411", "FSR 4.1 (AMD driver)"),
     cr(
         "taa",
         "TAA (native resolution anti-aliasing)",
         "TAA (нативное сглаживание)",
     ),
-    cr("off", "Off", "Выключен"),
+    // Intel's library (libxess.dll) ships for Windows only.
+    #[cfg(windows)]
+    c("xess", "XeSS (Intel)"),
 ];
 
+/// Spatial anti-aliasing of the finished frame (`anti_aliasing` in spartanport.ini): FXAA or SMAA.
+/// The temporal TAA is the Upscaler choice "TAA", not a value of this key.
+pub static ANTI_ALIASING: &[Choice] = &[c("off", "Off"), c("fxaa", "FXAA"), c("smaa", "SMAA")];
+
+/// spartanport.ini frame_generation; the game reads the same values (frame_generation_policy.h).
+pub static FRAME_GENERATION: &[Choice] = &[
+    cr("off", "Off", "Выключен"),
+    c("fsr", "AMD FSR (every GPU)"),
+];
+
+/// Ordered by render scale; the values are the ini's preset numbers (Ultra Quality was added as 5).
 pub static PRESETS: &[Choice] = &[
-    c("0", "Native AA (×1.0)"),
-    c("1", "Quality (×1.5)"),
-    c("2", "Balanced (×1.7)"),
-    c("3", "Performance (×2)"),
-    c("4", "Ultra Performance (×3)"),
+    c("0", "Native AA (100%)"),
+    c("5", "Ultra Quality (77%)"),
+    c("1", "Quality (67%)"),
+    c("2", "Balanced (59%)"),
+    c("3", "Performance (50%)"),
+    c("4", "Ultra Performance (33%)"),
 ];
 
 pub static OUTPUTS: &[Choice] = &[
@@ -191,6 +257,7 @@ pub static UI_LANGUAGES: &[Choice] = &[
     c("de", "Deutsch"),
     c("it", "Italiano"),
     c("pl", "Polski"),
+    c("cs", "Čeština"),
     c("tr", "Türkçe"),
     c("zh", "简体中文"),
     c("ja", "日本語"),
@@ -203,6 +270,10 @@ pub static VIDEO_BACKENDS: &[Choice] = &[
     c("wayland", "Wayland"),
     c("x11", "X11 (XWayland)"),
 ];
+
+/// The engine frame rates the in-game menu can save (spartanport_graphics.h MinEngineFps..MaxEngineFps).
+pub const MIN_ENGINE_FPS: u32 = 30;
+pub const MAX_ENGINE_FPS: u32 = 240;
 
 pub static ENGINE_FPS_CHOICES: &[Choice] = &[
     c("60", "60 (original)"),
@@ -236,6 +307,9 @@ pub static RESOLUTIONS: &[&str] = &[
     "2048x1536",
     "2560x1920",
     "5120x2160",
+    "2880x1800",
+    "5120x2880",
+    "11520x2160",
     "8K",
 ];
 
@@ -271,6 +345,7 @@ const ASPECTS: &[(&str, f64)] = &[
     ("16:10", 16.0 / 10.0),
     ("21:9", 2.37),
     ("32:9", 32.0 / 9.0),
+    ("48:9", 48.0 / 9.0),
     ("4:3", 4.0 / 3.0),
 ];
 
@@ -447,6 +522,12 @@ mod tests {
         assert_eq!(aspect_of("2560x1080").as_deref(), Some("21:9"));
         assert_eq!(aspect_of("bogus"), None);
         assert_eq!(aspect_of("1000x800").as_deref(), Some("5:4"));
+        // #719: three 4K screens side by side.
+        assert_eq!(aspect_of("11520x2160").as_deref(), Some("48:9"));
+        assert_eq!(
+            resolutions_for("48:9", &strings(RESOLUTIONS)),
+            ["11520x2160"]
+        );
     }
 
     #[test]
@@ -472,14 +553,21 @@ mod tests {
 
     #[test]
     fn every_table_has_unique_values() {
-        let tables: [&[Choice]; 20] = [
+        let tables: [&[Choice]; 27] = [
+            ANTI_ALIASING,
+            FRAME_GENERATION,
             DISPLAY_MODES,
             ANISOTROPY,
             FPS_LIMITS,
             UI_SCALES,
             STICK_PROMPTS,
             AIM_STYLES,
+            MENU_CONFIRM_STYLES,
+            AUDIO_CHANNELS,
             GLYPH_STYLES,
+            GLYPH_KEYS,
+            KEY_COLOR_STYLES,
+            KEY_COLORS,
             UPSCALERS,
             PRESETS,
             OUTPUTS,
@@ -500,21 +588,22 @@ mod tests {
         }
         let names: HashSet<_> = RESOLUTIONS.iter().collect();
         assert_eq!(names.len(), RESOLUTIONS.len());
-        assert_eq!(RESOLUTIONS.len(), 23);
+        assert_eq!(RESOLUTIONS.len(), 26);
     }
 
     #[test]
-    fn gui_scale_is_1x_or_1_5x() {
-        // R90: two choices, 1x first; what an older file stored is shown as the closest one.
+    fn gui_scale_is_auto_1x_or_1_5x() {
+        // Auto first (the default), then the absolute zooms of R90; what an older file stored is
+        // shown as the closest one, and anything unknown as Auto.
         let values: Vec<&str> = UI_SCALES.iter().map(|choice| choice.value).collect();
-        assert_eq!(values, ["1", "1.5"]);
+        assert_eq!(values, ["auto", "1", "1.5"]);
         for (stored, shown) in [
             ("1", "1"),
             ("1.5", "1.5"),
-            ("auto", "1"),
+            ("auto", "auto"),
             ("2", "1.5"),
-            ("", "1"),
-            ("bogus", "1"),
+            ("", "auto"),
+            ("bogus", "auto"),
         ] {
             assert_eq!(ui_scale_choice(stored), shown, "{stored:?}");
         }
@@ -524,7 +613,16 @@ mod tests {
     fn beta_resolutions_are_the_untested_custom_ones() {
         assert_eq!(
             beta_resolutions(),
-            ["2560x1080", "1440x1080", "2048x1536", "2560x1920", "8K"]
+            [
+                "2560x1080",
+                "1440x1080",
+                "2048x1536",
+                "2560x1920",
+                "2880x1800",
+                "5120x2880",
+                "11520x2160",
+                "8K"
+            ]
         );
     }
 }

@@ -6,6 +6,7 @@
 #include "video_core/amdgpu/pixel_format.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 
+#include <atomic>
 #include <magic_enum/magic_enum.hpp>
 
 #define INVALID_NUMBER_FORMAT_COMBO                                                                \
@@ -785,11 +786,53 @@ vk::Format TrySurfaceFormat(AmdGpu::DataFormat data_format, AmdGpu::NumberFormat
 }
 
 vk::Format SurfaceFormat(AmdGpu::DataFormat data_format, AmdGpu::NumberFormat num_format) {
-    vk::Format result = surface_format_table[GetSurfaceFormatTableIndex(data_format, num_format)];
-    bool found =
-        result != vk::Format::eUndefined || data_format == AmdGpu::DataFormat::FormatInvalid;
-    ASSERT_MSG(found, "Unknown data_format={} and num_format={}", static_cast<u32>(data_format),
-               static_cast<u32>(num_format));
+    const size_t index = GetSurfaceFormatTableIndex(data_format, num_format);
+    vk::Format result = surface_format_table[index];
+    if (result != vk::Format::eUndefined || data_format == AmdGpu::DataFormat::FormatInvalid) {
+        return result;
+    }
+    // spartanport: a pair no real descriptor has (Polaris reports: 9/7, 6/5, 6/0, 10/7) is read
+    // from a descriptor the game is still rewriting. It stopped the game; now the same data format
+    // with a number format that exists keeps the element size, and that draw can read wrong
+    // values. Each pair is logged once. Textures (IsKnownFormat) and vertex inputs
+    // (RefreshGraphicsKey) with such a pair are skipped before this; it remains for colour
+    // targets and a vertex table rewritten between pipeline choice and recording.
+    for (const auto fallback :
+         {AmdGpu::NumberFormat::Unorm, AmdGpu::NumberFormat::Float, AmdGpu::NumberFormat::Uint}) {
+        result = surface_format_table[GetSurfaceFormatTableIndex(data_format, fallback)];
+        if (result != vk::Format::eUndefined) {
+            break;
+        }
+    }
+    if (result == vk::Format::eUndefined) {
+        // spartanport: if no number format exists for this data_format (such as unused
+        // data_format=15 on GPUs without VK_EXT_vertex_input_dynamic_state), provide a safe
+        // fallback format matching the numeric type so pipeline creation does not assert (#1181).
+        switch (num_format) {
+        case AmdGpu::NumberFormat::Sint:
+            result = vk::Format::eR32G32B32A32Sint;
+            break;
+        case AmdGpu::NumberFormat::Uint:
+            result = vk::Format::eR32G32B32A32Uint;
+            break;
+        case AmdGpu::NumberFormat::Float:
+            result = vk::Format::eR32G32B32A32Sfloat;
+            break;
+        default:
+            result = vk::Format::eR8G8B8A8Unorm;
+            break;
+        }
+    }
+    static std::array<std::atomic_bool, std::tuple_size_v<decltype(surface_format_table)>> logged{};
+    if (!logged[index].exchange(true, std::memory_order_relaxed)) {
+        LOG_WARNING(Render_Vulkan,
+                    "Unknown data_format={} and num_format={} (a stale descriptor?): "
+                    "read as {}",
+                    static_cast<u32>(data_format), static_cast<u32>(num_format),
+                    vk::to_string(result));
+    }
+    ASSERT_MSG(result != vk::Format::eUndefined, "Unknown data_format={} and num_format={}",
+               static_cast<u32>(data_format), static_cast<u32>(num_format));
     return result;
 }
 

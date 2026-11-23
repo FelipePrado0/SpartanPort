@@ -84,6 +84,9 @@ void Scheduler::RecordFullBarrier(vk::CommandBuffer cmdbuf) {
 }
 
 void Scheduler::BeginRendering(const RenderState& new_state) {
+    // spartanport: a block stream has its own pass state.
+    bool& is_rendering = block_stream ? block_stream->is_rendering : this->is_rendering;
+    RenderState& render_state = block_stream ? block_stream->render_state : this->render_state;
     if (is_rendering && render_state == new_state) {
         return;
     }
@@ -175,6 +178,7 @@ void Scheduler::BeginRendering(const RenderState& new_state) {
 }
 
 void Scheduler::EndRendering() {
+    bool& is_rendering = block_stream ? block_stream->is_rendering : this->is_rendering;
     if (!is_rendering) {
         return;
     }
@@ -275,11 +279,13 @@ void Scheduler::WaitDeferredSignals() {
 }
 
 void Scheduler::WaitHostCopies() {
-    if (host_copies_done.load(std::memory_order_acquire) < host_copies_issued) {
+    if (host_copies_done.load(std::memory_order_acquire) <
+        host_copies_issued.load(std::memory_order_relaxed)) {
         SpartanStats::WaitTimer timer{SpartanStats::host_copies_wait_ns};
         SpartanStats::host_copy_waits.fetch_add(1, std::memory_order_relaxed);
         KickRecording(true);
-        while (host_copies_done.load(std::memory_order_acquire) < host_copies_issued) {
+        while (host_copies_done.load(std::memory_order_acquire) <
+        host_copies_issued.load(std::memory_order_relaxed)) {
             std::this_thread::yield();
         }
     }
@@ -288,7 +294,8 @@ void Scheduler::WaitHostCopies() {
 }
 
 void Scheduler::KickRecording(bool force) {
-    if (!recording_threaded) {
+    // A block's commands reach the recording thread when the block is spliced.
+    if (!recording_threaded || block_stream) {
         return;
     }
     // Callers kick where nobody holds the raw command buffer: deferral resumes.
@@ -300,14 +307,17 @@ void Scheduler::KickRecording(bool force) {
     if (full_chunks.empty() && record_chunk->Empty()) {
         return;
     }
+    // spartanport: acquire before handoff so recording storage stays valid; AcquireChunk
+    // takes recorder_mutex itself, so it must run before the lock below.
+    std::unique_ptr<RecordChunk> next = record_chunk->Empty() ? nullptr : AcquireChunk();
     bool wake;
     {
         std::scoped_lock lk{recorder_mutex};
         for (auto& chunk : full_chunks) {
             recorder_queue.push_back(std::move(chunk));
         }
-        if (!record_chunk->Empty()) {
-            recorder_queue.push_back(std::move(record_chunk));
+        if (next) {
+            recorder_queue.push_back(std::exchange(record_chunk, std::move(next)));
         }
         wake = recorder_sleeping;
         queued_chunks.store(recorder_queue.size(), std::memory_order_release);
@@ -323,6 +333,7 @@ void Scheduler::KickRecording(bool force) {
 }
 
 void Scheduler::SyncRecording() {
+    BreakStream();
     if (!recording_threaded) {
         return;
     }

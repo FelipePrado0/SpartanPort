@@ -7,9 +7,17 @@
 #include "common/types.h"
 
 #include <cstddef>
+// spartanport: report damaged cache records through recoverable exceptions.
+#include <stdexcept>
 #include <vector>
 
 namespace Serialization {
+
+// spartanport: let cache loaders skip damaged records instead of stopping startup.
+struct CorruptData : std::runtime_error {
+    CorruptData()
+        : std::runtime_error{"Invalid or corrupted deserialization container/shader cache"} {}
+};
 
 template <typename T>
 concept Container = requires(T t) {
@@ -41,9 +49,15 @@ struct Archive {
         return container.data() + offset;
     }
 
+    // spartanport: check against remaining bytes without overflowing offset + size.
+    [[nodiscard]] size_t Remaining() const {
+        return container.size() - offset;
+    }
+
     void Advance(size_t size) {
-        ASSERT_MSG(offset + size <= container.size(),
-                   "Invalid or corrupted deserialization container/shader cache");
+        if (size > Remaining()) {
+            throw CorruptData{};
+        }
         offset += size;
     }
 
@@ -105,8 +119,10 @@ struct Writer {
 struct Reader {
     template <typename T>
     void Read(T* ptr, size_t size) {
-        ASSERT_MSG(ar.offset + size <= ar.container.size(),
-                   "Invalid or corrupted deserialization container/shader cache");
+        // spartanport: reject truncated records before copying from them.
+        if (size > ar.Remaining()) {
+            throw CorruptData{};
+        }
         std::memcpy(reinterpret_cast<void*>(ptr), ar.CurrPtr(), size);
         ar.Advance(size);
     }
@@ -121,7 +137,11 @@ struct Reader {
     void Read(auto& v) {
         size_t num_elements{};
         Read(num_elements);
-        for (int i = 0; i < num_elements; ++i) {
+        // spartanport: every element needs a byte; reject corrupt counts before allocating.
+        if (num_elements > ar.Remaining()) {
+            throw CorruptData{};
+        }
+        for (size_t i = 0; i < num_elements; ++i) {
             v.emplace_back();
             Read(v.back());
         }
@@ -130,6 +150,10 @@ struct Reader {
     void Read(std::string& s) {
         size_t length{};
         Read(length);
+        // spartanport: reject corrupt string lengths before resizing the destination.
+        if (length > ar.Remaining()) {
+            throw CorruptData{};
+        }
         s.resize(length);
         Read(s.data(), length);
     }

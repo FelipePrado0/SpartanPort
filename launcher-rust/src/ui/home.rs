@@ -16,6 +16,7 @@ use iced::{
     Rectangle, Renderer, Right, Size, Theme, Top, Vector,
 };
 
+use crate::core::catalog::{setting, Default};
 use crate::core::gpu::chosen_gpu;
 use crate::core::i18n::{tr, tr_fmt};
 use crate::core::options::{short_label, Choice, DISPLAY_MODES, FPS_LIMITS, OUTPUTS};
@@ -537,8 +538,15 @@ pub fn status_line(state: &State) -> String {
 /// counts from 1.
 pub fn quick_segments(state: &State) -> Vec<(String, bool)> {
     let lang = state.lang.as_str();
+    // A value the table does not know shows the default, which is what the game then uses.
     let short = |table: &[Choice], key: &str| {
-        short_label(&choice_label(table, &state.store.text(key), lang)).to_string()
+        let mut value = state.store.text(key);
+        if !table.iter().any(|choice| choice.value == value) {
+            if let Some(Default::Text(default)) = setting(key).map(|s| &s.default) {
+                value = (*default).to_string();
+            }
+        }
+        short_label(&choice_label(table, &value, lang)).to_string()
     };
     let fps = match state.store.text("fps_limit").as_str() {
         "0" => choice_label(FPS_LIMITS, "0", lang),

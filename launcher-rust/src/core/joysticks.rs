@@ -5,7 +5,9 @@
 use std::ffi::{c_char, c_int, c_void, CStr, CString, OsString};
 use std::path::{Path, PathBuf};
 use std::ptr;
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Mutex, PoisonError};
+use std::thread::{self, JoinHandle};
 
 use indexmap::IndexMap;
 use libloading::Library;
@@ -67,6 +69,9 @@ pub const PREVIEW_BUTTONS: [&str; 15] = [
     "D-pad right",
 ];
 
+/// SDL's buttons past `PREVIEW_BUTTONS` that the live view shows, by index.
+const PREVIEW_EXTRAS: [(c_int, &str); 2] = [(15, "Mute button"), (20, "Touchpad click")];
+
 /// What the mapper needs from the joysticks.
 pub trait Joysticks {
     /// SDL's name of this system (`Windows`, `Linux`, ...), as mapping lines name it.
@@ -83,10 +88,160 @@ pub trait Joysticks {
     /// The pressed buttons of the preview, by [`PREVIEW_BUTTONS`] name, and its 6 axes.
     fn preview_state(&mut self) -> Option<(Vec<&'static str>, [i16; 6])>;
     fn end_preview(&mut self);
+    /// Runs the preview's motors for `ms`; `false` when the controller has none or none is open.
+    fn rumble(&mut self, _low: u16, _high: u16, _ms: u32) -> bool {
+        false
+    }
     fn close_device(&mut self);
     /// What opening had to say: a profile file that could not be read (the Python printed it).
     fn warnings(&self) -> Vec<String> {
         Vec::new()
+    }
+    /// Why the joysticks could not start, once they know; see [`JoystickThread`].
+    fn failure(&mut self) -> Option<String> {
+        None
+    }
+}
+
+type Job = Box<dyn FnOnce(&mut dyn Joysticks) + Send>;
+
+/// Joysticks on a thread of their own. Starting SDL takes seconds on some PCs, and SDL must stay on
+/// the thread that started it, so the whole adapter lives there and the window never waits for it.
+/// Until it is up it lists no device. Dropping this stops it and waits, so that the next SDL3 opens
+/// after this one is gone.
+pub struct JoystickThread {
+    jobs: Option<Sender<Job>>,
+    opened: Receiver<Result<String, String>>,
+    platform: String,
+    ready: bool,
+    worker: Option<JoinHandle<()>>,
+}
+
+impl JoystickThread {
+    pub fn spawn<F>(open: F) -> JoystickThread
+    where
+        F: FnOnce() -> Result<Box<dyn Joysticks>, JoyError> + Send + 'static,
+    {
+        let (jobs, inbox) = channel::<Job>();
+        let (done, opened) = channel();
+        let worker = thread::spawn(move || {
+            let mut joysticks = match open() {
+                Ok(joysticks) => joysticks,
+                Err(error) => {
+                    let _ = done.send(Err(error.to_string()));
+                    return;
+                }
+            };
+            let _ = done.send(Ok(joysticks.platform().to_string()));
+            for job in inbox {
+                job(joysticks.as_mut());
+            }
+        });
+        JoystickThread {
+            jobs: Some(jobs),
+            opened,
+            platform: String::new(),
+            ready: false,
+            worker: Some(worker),
+        }
+    }
+
+    /// Runs `job` on the thread; `None` once the thread has gone.
+    fn call<R, J>(&self, job: J) -> Option<R>
+    where
+        R: Send + 'static,
+        J: FnOnce(&mut dyn Joysticks) -> R + Send + 'static,
+    {
+        let (reply, answer) = channel();
+        let job: Job = Box::new(move |joysticks| {
+            let _ = reply.send(job(joysticks));
+        });
+        self.jobs.as_ref()?.send(job).ok()?;
+        answer.recv().ok()
+    }
+}
+
+impl Joysticks for JoystickThread {
+    fn platform(&self) -> &str {
+        &self.platform
+    }
+
+    fn devices(&mut self) -> Result<Vec<Device>, JoyError> {
+        if !self.ready {
+            return Ok(Vec::new());
+        }
+        let listed = self.call(|joysticks| joysticks.devices().map_err(|e| e.to_string()));
+        match listed {
+            Some(listed) => listed.map_err(JoyError::Sdl),
+            None => Err(JoyError::Disconnected),
+        }
+    }
+
+    fn select(&mut self, device: &Device) -> Result<(), JoyError> {
+        let device = device.clone();
+        let done = self.call(move |joysticks| joysticks.select(&device).map_err(|e| e.to_string()));
+        match done {
+            Some(done) => done.map_err(JoyError::Sdl),
+            None => Err(JoyError::Disconnected),
+        }
+    }
+
+    fn state(&mut self) -> Result<State, JoyError> {
+        self.call(|joysticks| joysticks.state().ok())
+            .flatten()
+            .ok_or(JoyError::Disconnected)
+    }
+
+    fn current_mapping(&mut self) -> Option<String> {
+        self.call(|joysticks| joysticks.current_mapping()).flatten()
+    }
+
+    fn begin_preview(&mut self, line: &str) -> Result<(), JoyError> {
+        let line = line.to_string();
+        let done =
+            self.call(move |joysticks| joysticks.begin_preview(&line).map_err(|e| e.to_string()));
+        match done {
+            Some(done) => done.map_err(JoyError::Sdl),
+            None => Err(JoyError::Disconnected),
+        }
+    }
+
+    fn preview_state(&mut self) -> Option<(Vec<&'static str>, [i16; 6])> {
+        self.call(|joysticks| joysticks.preview_state()).flatten()
+    }
+
+    fn end_preview(&mut self) {
+        self.call(|joysticks| joysticks.end_preview());
+    }
+
+    fn rumble(&mut self, low: u16, high: u16, ms: u32) -> bool {
+        self.call(move |joysticks| joysticks.rumble(low, high, ms))
+            .unwrap_or(false)
+    }
+
+    fn close_device(&mut self) {
+        self.call(|joysticks| joysticks.close_device());
+    }
+
+    fn failure(&mut self) -> Option<String> {
+        match self.opened.try_recv() {
+            Ok(Ok(platform)) => {
+                self.platform = platform;
+                self.ready = true;
+                None
+            }
+            Ok(Err(error)) => Some(error),
+            Err(_) => None,
+        }
+    }
+}
+
+impl Drop for JoystickThread {
+    fn drop(&mut self) {
+        self.jobs = None;
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
     }
 }
 
@@ -157,6 +312,7 @@ sdl_api! {
     close_gamepad: "SDL_CloseGamepad": fn(*mut c_void);
     get_gamepad_button: "SDL_GetGamepadButton": fn(*mut c_void, c_int) -> bool;
     get_gamepad_axis: "SDL_GetGamepadAxis": fn(*mut c_void, c_int) -> i16;
+    rumble_gamepad: "SDL_RumbleGamepad": fn(*mut c_void, u16, u16, u32) -> bool;
 }
 
 /// SDL3's joysticks and gamepads. Dropping it closes the device, stops SDL's gamepad subsystem
@@ -396,6 +552,7 @@ impl Joysticks for Sdl3 {
         unsafe {
             let buttons = (0..)
                 .zip(PREVIEW_BUTTONS)
+                .chain(PREVIEW_EXTRAS)
                 .filter(|&(i, _)| (api.get_gamepad_button)(preview, i))
                 .map(|(_, name)| name)
                 .collect();
@@ -413,6 +570,11 @@ impl Joysticks for Sdl3 {
             unsafe { (self.api.close_gamepad)(self.preview) };
             self.preview = ptr::null_mut();
         }
+    }
+
+    fn rumble(&mut self, low: u16, high: u16, ms: u32) -> bool {
+        // SAFETY: a non-null `preview` is open until `end_preview`.
+        !self.preview.is_null() && unsafe { (self.api.rumble_gamepad)(self.preview, low, high, ms) }
     }
 
     fn close_device(&mut self) {

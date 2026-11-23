@@ -45,7 +45,7 @@ use crate::core::python::python_json;
 use crate::runner::glyphs::{entries, Entry};
 
 /// Of the patch: a change rebuilds the cached copy.
-pub const VERSION: u32 = 22;
+pub const VERSION: u32 = 26;
 pub const WAD: &str = "EXEC/WAD/PS4_LE/R_UI.WAD";
 
 /// The Exit to Desktop row's text in one language.
@@ -255,23 +255,44 @@ const MULTIPLIER_NAMES: [&str; 7] = [
     "Reset All to 1x",
 ];
 
+/// The builtin that reads Controls' control `index` (`selected`: with arrows): 0xfa4 + i (0xfb8 + i)
+/// for the first six, 0xf6d (0xf6e) for the free camera, the seventh.
+fn control_read(index: usize, selected: bool) -> usize {
+    match (index, selected) {
+        (6, false) => 0xf6d,
+        (6, true) => 0xf6e,
+        (_, false) => 0xfa4 + index,
+        (_, true) => 0xfb8 + index,
+    }
+}
+
+/// The builtin that moves Controls' control `index` left (-1) or right: 0xfaa + i and 0xfb1 + i
+/// for the first six; 0xf6f toggles the free camera either way.
+fn control_change(index: usize, direction: i32) -> usize {
+    match index {
+        6 => 0xf6f,
+        _ if direction < 0 => 0xfaa + index,
+        _ => 0xfb1 + index,
+    }
+}
+
 /// The texts of the native pages that follow the game's language.
 struct Texts {
-    /// The Graphics Settings page: its title, its five controls, Restore Defaults and Apply.
+    /// The Graphics Settings page: its title, its nine controls, Restore Defaults and Apply.
     graphics_title: &'static str,
-    graphics_names: [&'static str; 7],
+    graphics_names: [&'static str; 11],
     /// The question Restore Defaults asks, and its answers.
     restore_graphics: &'static str,
     yes_no: [&'static str; 2],
     /// The question Apply and Restart asks, and its answers.
     restart: &'static str,
     restart_answers: [&'static str; 2],
-    /// The rows Controls adds after the game's three: six controls, Restore Defaults and Apply.
-    controls_names: [&'static str; 8],
+    /// The rows Controls adds after the game's three: seven controls, Restore Defaults and Apply.
+    controls_names: [&'static str; 9],
     /// The question Controls' Restore Defaults asks (its answers are `yes_no`).
     restore_controls: &'static str,
-    /// The rows Display adds after the game's four: eight settings and Apply.
-    display_names: [&'static str; 9],
+    /// The rows Display adds after the game's four: eleven settings and Apply.
+    display_names: [&'static str; 12],
 }
 
 /// Every language but Portuguese.
@@ -283,6 +304,10 @@ static ENGLISH: Texts = Texts {
         "RCAS Sharpening",
         "Sharpening Strength",
         "Anisotropic Filtering",
+        "Texture Quality",
+        "Shadows",
+        "Motion Blur",
+        "Bloom",
         "Restore Graphics Defaults",
         "Apply and Restart",
     ],
@@ -297,6 +322,7 @@ static ENGLISH: Texts = Texts {
         "Mouse Aim Style",
         "Mouse QTE Distance",
         "Keep Mouse in Window",
+        "Free Camera (Experimental)",
         "Restore Controls Defaults",
         "Apply and Restart",
     ],
@@ -310,6 +336,9 @@ static ENGLISH: Texts = Texts {
         "Display Mode",
         "VSync",
         "HDR",
+        "Upscaler",
+        "Quality Preset",
+        "Frame Generation",
         "Apply and Restart",
     ],
 };
@@ -322,6 +351,10 @@ static PORTUGUESE: Texts = Texts {
         "Nitidez RCAS",
         "Intensidade da nitidez",
         "Filtragem anisotrópica",
+        "Qualidade das texturas",
+        "Sombras",
+        "Desfoque de movimento",
+        "Bloom",
         "Restaurar padrões gráficos",
         "Aplicar e reiniciar",
     ],
@@ -336,6 +369,7 @@ static PORTUGUESE: Texts = Texts {
         "Estilo da mira",
         "Distância do mouse nos QTEs",
         "Prender cursor à janela",
+        "Câmera livre (experimental)",
         "Restaurar padrões dos controles",
         "Aplicar e reiniciar",
     ],
@@ -349,9 +383,48 @@ static PORTUGUESE: Texts = Texts {
         "Modo de exibição",
         "VSync",
         "HDR",
+        "Upscaler",
+        "Preset de qualidade",
+        "Geração de quadros",
         "Aplicar e reiniciar",
     ],
 };
+
+/// Display's settings: the eight of `0xfc0` (resolution to HDR), then Upscaler, Quality Preset
+/// and Frame Generation.
+const DISPLAY_SETTINGS: usize = 11;
+/// Display's rows: the game's four, the settings and Apply.
+const DISPLAY_ROWS: usize = 4 + DISPLAY_SETTINGS + 1;
+
+/// The builtin reading Display setting `i` (spartanport_settings.cpp): 0xfc0 + i, 0xff0 + i with
+/// arrows; Upscaler and Quality Preset read 0xf61/0xf62, 0xf67/0xf68 with arrows (0xff8 is past
+/// the hook's 0xf00..0xff7).
+fn display_read(i: usize, selected: bool) -> usize {
+    // Frame Generation: 0xf69, 0xf6c with arrows.
+    if i == 10 {
+        return if selected { 0xf6c } else { 0xf69 };
+    }
+    match (i < 8, selected) {
+        (true, false) => 0xfc0 + i,
+        (true, true) => 0xff0 + i,
+        (false, false) => 0xf61 + i - 8,
+        (false, true) => 0xf67 + i - 8,
+    }
+}
+
+/// The builtin stepping Display setting `i` left (-1) or right: 0xfd0/0xfe0 + i, 0xf63/0xf65 + i - 8.
+fn display_step(i: usize, direction: i32) -> usize {
+    // Frame Generation: 0xf6a left, 0xf6b right.
+    if i == 10 {
+        return if direction < 0 { 0xf6a } else { 0xf6b };
+    }
+    match (i < 8, direction < 0) {
+        (true, true) => 0xfd0 + i,
+        (true, false) => 0xfe0 + i,
+        (false, true) => 0xf63 + i - 8,
+        (false, false) => 0xf65 + i - 8,
+    }
+}
 
 /// The six multiplier sliders (`sliderBar4` to `sliderBar9`).
 const ALL_BARS: [usize; 6] = [0, 1, 2, 3, 4, 5];
@@ -711,6 +784,10 @@ impl<'a> Script<'a> {
                 return Err(script(format!("no state record at {at:#x}")));
             }
             let size = be24(d, b + at + 1);
+            // A state holds at least its 12-byte head: a smaller one is the header table's count.
+            if size < 12 {
+                return Err(script(format!("no state record at {at:#x}")));
+            }
             let (parent, id) = (be32(d, b + at + 4)?, be32(d, b + at + 8)?);
             let (mut j, mut items) = (at + 12, Vec::new());
             while j < self.code && byte(d, b + j)? != 4 {
@@ -1374,8 +1451,6 @@ enum Redraw {
     Row,
     /// The Cheats page's visible rows (they scroll), then its value.
     Cheats,
-    /// The Graphics Settings page's titles and values.
-    Graphics,
 }
 
 /// A page whose rows scroll, with the names of the rows it keeps from the game.
@@ -1622,21 +1697,43 @@ impl Emitter<'_, '_> {
         self.scrollbar(11, first, 8, 7)
     }
 
-    /// The Graphics Settings page's title, rows and values (`selected` with its arrows), and the
-    /// Sharpening Strength slider, the only one it shows.
-    fn graphics_values(&mut self, selected: Option<usize>) -> Result<(), MenuError> {
+    /// The Graphics Settings page's title and the eight rows it shows from row `first` (`selected`
+    /// with its arrows; `change`, the builtin that changes it, runs instead of its query). The
+    /// Sharpening Strength slider shows only while the page is at the top; scrollbar 13 follows the
+    /// 8 rows of 11.
+    fn graphics_window(
+        &mut self,
+        first: usize,
+        selected: Option<usize>,
+        change: Option<usize>,
+    ) -> Result<(), MenuError> {
         self.string(self.texts.graphics_title.as_bytes())?;
         self.assign(0)?;
         for slot in 0..8 {
-            let name = self.texts.graphics_names.get(slot).copied().unwrap_or("");
+            let row = first + slot;
+            let name = self
+                .texts
+                .graphics_names
+                .get(row)
+                .ok_or_else(|| script("list index out of range"))?;
             self.string(name.as_bytes())?;
             self.assign(1 + slot)?;
+            if row < 9 {
+                let read = match change {
+                    Some(change) if selected == Some(row) => change,
+                    _ => 0xf70 + row,
+                };
+                self.query(slot, read, selected == Some(row))?;
+            } else {
+                self.string(b"")?;
+                self.assign(9 + slot)?;
+            }
         }
-        for index in 0..5 {
-            self.query(index, 0xf70 + index, selected == Some(index))?;
+        if first == 0 {
+            self.slider(3, Some(0xfa3))?;
         }
-        self.slider(3, Some(0xfa3))?;
-        self.bars(true, &[3])
+        self.bars(first == 0, &[3])?;
+        self.scrollbar(13, first, 11, 8)
     }
 
     fn selection(
@@ -1659,9 +1756,7 @@ impl Emitter<'_, '_> {
                         .is_some_and(|digit| digit >= 6);
                 self.cheat_window(usize::from(scrolled))?;
             }
-            if redraw == Redraw::Graphics {
-                self.graphics_values(Some(index))?;
-            } else if let Some(function) = function {
+            if let Some(function) = function {
                 self.query(index, function, true)?;
             }
         } else if function.is_some() {
@@ -1735,9 +1830,9 @@ impl Emitter<'_, '_> {
         }
     }
 
-    /// Display's game rows (`kept`; only Enemy Health Bar's value is the page's), then its eight
-    /// settings (builtins 0xfc0 + i read them, 0xff0 + i with arrows) and Apply. Brightness'
-    /// sliders show only while the page is at the top; scrollbar 10 follows the 8 rows of 13.
+    /// Display's game rows (`kept`; only Enemy Health Bar's value is the page's), then its eleven
+    /// settings (`display_read`) and Apply. Brightness' sliders show only while the page is at the
+    /// top; scrollbar 10 follows the 8 rows of 16.
     fn display_window(
         &mut self,
         kept: &[String],
@@ -1759,13 +1854,8 @@ impl Emitter<'_, '_> {
             self.assign(1 + slot)?;
             if index == 3 {
                 self.string(&arrows(index, selected == Some(index)))?;
-            } else if (4..12).contains(&index) {
-                let read = if selected == Some(index) {
-                    0xff0
-                } else {
-                    0xfc0
-                };
-                self.builtin(read + index - 4, false)?;
+            } else if (4..4 + DISPLAY_SETTINGS).contains(&index) {
+                self.builtin(display_read(index - 4, selected == Some(index)), false)?;
             } else {
                 self.string(b"")?;
             }
@@ -1775,12 +1865,12 @@ impl Emitter<'_, '_> {
         self.string(b"sliderBar2")?;
         self.integer(2)?;
         self.builtin(if first == 0 { 0x58 } else { 0x59 }, true)?;
-        self.scrollbar(10, first, 13, 8)
+        self.scrollbar(10, first, DISPLAY_ROWS, 8)
     }
 
     /// Controls' title and game rows (`kept`; the values of the two last are the page's), then
-    /// its six controls (builtins 0xfa4 + i read them, 0xfb8 + i with arrows), Restore Defaults
-    /// and Apply; scrollbar 12 follows the 8 rows of 11.
+    /// its seven controls (builtins [`control_read`] read them), Restore Defaults and Apply;
+    /// scrollbar 12 follows the 8 rows of 12.
     fn controls_window(
         &mut self,
         kept: &[String],
@@ -1805,9 +1895,8 @@ impl Emitter<'_, '_> {
                     .as_bytes(),
             )?;
             self.assign(1 + slot)?;
-            if (3..9).contains(&row) {
-                let read = if selected == Some(row) { 0xfb8 } else { 0xfa4 };
-                self.builtin(read + row - 3, false)?;
+            if (3..10).contains(&row) {
+                self.builtin(control_read(row - 3, selected == Some(row)), false)?;
             } else if matches!(row, 1 | 2) {
                 self.string(&arrows(row, selected == Some(row)))?;
             } else {
@@ -1818,7 +1907,7 @@ impl Emitter<'_, '_> {
         self.string(b"PauseText")?;
         self.integer(1)?;
         self.builtin(0x58, true)?;
-        self.scrollbar(12, first, 11, 8)
+        self.scrollbar(12, first, 12, 8)
     }
 
     /// The code block at `code`, with the texts of the locals in `replacements` replaced: states
@@ -1897,8 +1986,8 @@ fn kept_labels(
 }
 
 /// The Graphics Settings controls that move left and right (Frames Queued, Sharpening Strength,
-/// Anisotropic Filtering); the two others toggle.
-const SLIDING_GRAPHICS: [usize; 3] = [0, 3, 4];
+/// Anisotropic Filtering, Texture Quality); the others toggle.
+const SLIDING_GRAPHICS: [usize; 4] = [0, 3, 4, 5];
 
 /// Native Options > Graphics Settings and Options > Cheats > Multipliers, and the port's display
 /// and control settings after the game's rows of Display and Controls (both pages scroll), sharing
@@ -1933,13 +2022,13 @@ pub fn native_cheats(
         Spec::new("HLNativeGraphics", "options", link()),
         Spec::new("HLNativeCheats", "options", link()),
     ];
-    let mut controls_specs: Vec<Spec> = (0..6)
+    let mut controls_specs: Vec<Spec> = (0..7)
         .map(|i| Spec::new(&format!("NativeControl{i}"), "controls", slide()))
         .collect();
     for name in ["NativeControlsReset", "NativeControlsApply"] {
         controls_specs.push(Spec::new(name, "controls", link()));
     }
-    let mut display_specs: Vec<Spec> = (0..8)
+    let mut display_specs: Vec<Spec> = (0..DISPLAY_SETTINGS)
         .map(|i| Spec::new(&format!("NativeDisplay{i}"), "display", slide()))
         .collect();
     display_specs.push(Spec::new("NativeDisplayApply", "display", link()));
@@ -1968,7 +2057,7 @@ pub fn native_cheats(
         link(),
     ));
     specs.push(Spec::new("NativeGraphics", "pause", back()));
-    for i in 0..5 {
+    for i in 0..9 {
         let events = if SLIDING_GRAPHICS.contains(&i) {
             vec![left.clone(), right.clone(), up.clone(), down.clone()]
         } else {
@@ -2242,10 +2331,11 @@ pub fn native_cheats(
         }
     }
 
-    // Graphics Settings: five controls (builtins 0xf70 + i read them, 0xf80 + i and 0xf90 + i
-    // change them), Restore Defaults behind a Yes/No question (0xfb0 restores) and Apply and
-    // Restart, which asks only when a change waits for a restart (0xfc9).
-    let graphics_rows: Vec<String> = (0..5)
+    // Graphics Settings: nine controls (builtins 0xf70 + i read them, 0xf80 + i and 0xf90 + i
+    // change them; Texture Quality, Shadows, Motion Blur and Bloom apply live), Restore Defaults
+    // behind a Yes/No question (0xfb0 restores) and Apply and Restart, which asks only when a
+    // change waits for a restart (0xfc9); eight rows show at a time.
+    let graphics_rows: Vec<String> = (0..9)
         .map(|i| format!("NativeGraphic{i}"))
         .chain(["NativeGraphicsReset", "NativeGraphicsApply"].map(String::from))
         .collect();
@@ -2272,13 +2362,16 @@ pub fn native_cheats(
         e.blank(LOWER_LINES)?;
         e.bars(false, &ALL_BARS)?;
         if graphics {
-            e.graphics_values(None)?;
+            e.graphics_window(0, None, None)?;
         }
         // The question starts on No.
         e.goto_new(&rows[usize::from(!graphics)])?;
         e.end();
         e.begin(page, "update");
         e.bars(false, &ALL_BARS)?;
+        if graphics {
+            e.hide_scrollbar(13)?;
+        }
         e.end();
         e.begin(page, "back");
         e.sound(b"SND_MM_BACK")?;
@@ -2288,18 +2381,28 @@ pub fn native_cheats(
             "NativeGraphicsReset"
         })?;
         e.end();
-        let redraw = if graphics {
-            Redraw::Graphics
-        } else {
-            Redraw::Row
-        };
         let targets = new_states(rows);
         for (index, name) in rows.iter().enumerate() {
-            let function = (graphics && index < 5).then_some(0xf70 + index);
-            e.selection(name, index, function, true, redraw)?;
-            e.selection(name, index, function, false, Redraw::Row)?;
+            let control = graphics && index < 9;
+            let first = index.saturating_sub(7);
+            if graphics {
+                e.begin(name, "entry");
+                e.builtin(0x6b, true)?;
+                e.graphics_window(first, Some(index), None)?;
+                e.animation(index - first, 8)?;
+                e.end();
+                e.begin(name, "update");
+                if control {
+                    e.value(index - first, false)?;
+                }
+                e.animation(index - first, 9)?;
+                e.end();
+            } else {
+                e.selection(name, index, None, true, Redraw::Row)?;
+                e.selection(name, index, None, false, Redraw::Row)?;
+            }
             e.navigation(name, index, &targets)?;
-            if function.is_none() {
+            if !control {
                 e.begin(name, "confirm");
                 e.sound(b"SND_MM_SELECT")?;
                 if name == "NativeGraphicsResetYes" {
@@ -2326,30 +2429,22 @@ pub fn native_cheats(
             for (kind, function) in actions {
                 e.begin(name, kind);
                 e.call(repeat);
-                for other in 0..5 {
-                    let read = if other == index {
-                        function
-                    } else {
-                        0xf70 + other
-                    };
-                    e.query(other, read, other == index)?;
-                }
-                e.slider(3, Some(0xfa3))?;
+                e.graphics_window(first, Some(index), Some(function))?;
                 e.sound(b"SND_MM_NAV_LR")?;
                 e.end();
             }
         }
     }
 
-    // Controls: the game's three rows, then six controls (builtins 0xfaa + i and 0xfb1 + i change
-    // them), Restore Defaults and Apply and Restart; eight rows show at a time.
+    // Controls: the game's three rows, then seven controls ([`control_change`] changes them),
+    // Restore Defaults and Apply and Restart; eight rows show at a time.
     let controls_originals = ["HLContDis", "HLFreeCamera", "HLFlightControl"]
         .map(|name| s.one(name))
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
     let controls_kept = kept_labels(&s, &controls, 0..=3, "Controls labels not recognized")?;
     let controls_window = Window::Controls(&controls_kept);
-    let control_rows: Vec<String> = (0..6)
+    let control_rows: Vec<String> = (0..7)
         .map(|i| format!("NativeControl{i}"))
         .chain(["NativeControlsReset", "NativeControlsApply"].map(String::from))
         .collect();
@@ -2369,8 +2464,11 @@ pub fn native_cheats(
         e.animation(row - first, 9)?;
         e.end();
         e.navigation(name, row, &targets)?;
-        if index < 6 {
-            for (kind, function) in [("left", 0xfaa + index), ("right", 0xfb1 + index)] {
+        if index < 7 {
+            for (kind, function) in [
+                ("left", control_change(index, -1)),
+                ("right", control_change(index, 1)),
+            ] {
                 e.begin(name, kind);
                 e.call(repeat);
                 e.builtin(function, true)?;
@@ -2415,8 +2513,8 @@ pub fn native_cheats(
         })?;
     }
 
-    // Display: the game's four rows, then eight settings (builtins 0xfd0 + i and 0xfe0 + i change
-    // them) and Apply and Restart; eight rows show at a time.
+    // Display: the game's four rows, then eleven settings (`display_step` changes them) and Apply and
+    // Restart; eight rows show at a time.
     let display_ref = first_block(&display, 1)?;
     let display_kept = kept_labels(&s, &display, 1..=4, "Display labels not recognized")?;
     let display_window = Window::Display(&display_kept);
@@ -2431,7 +2529,7 @@ pub fn native_cheats(
         s.one("HLScreenLocY")?,
         health,
     ];
-    let display_rows: Vec<String> = (0..8)
+    let display_rows: Vec<String> = (0..DISPLAY_SETTINGS)
         .map(|i| format!("NativeDisplay{i}"))
         .chain(["NativeDisplayApply".to_string()])
         .collect();
@@ -2451,8 +2549,11 @@ pub fn native_cheats(
         e.animation(row - first, 9)?;
         e.end();
         e.navigation(name, row, &targets)?;
-        if index < 8 {
-            for (kind, function) in [("left", 0xfd0 + index), ("right", 0xfe0 + index)] {
+        if index < DISPLAY_SETTINGS {
+            for (kind, function) in [
+                ("left", display_step(index, -1)),
+                ("right", display_step(index, 1)),
+            ] {
                 e.begin(name, kind);
                 e.call(repeat);
                 e.builtin(function, true)?;
@@ -2743,10 +2844,11 @@ pub fn native_cheats(
     put_le32(data, base - 0x40 + 4, old_size + grown)?;
     repad(data, base + old_size + grown, old_size, old_size + grown);
     native_multiplier_bars(data)?;
-    // Display's rows, Cheats' unpinned rows and Controls' rows.
-    native_scrollbar(data, 10, 13, 8)?;
+    // Display's rows, Cheats' unpinned rows, Controls' rows and Graphics Settings' rows.
+    native_scrollbar(data, 10, DISPLAY_ROWS, 8)?;
     native_scrollbar(data, 11, 8, 7)?;
-    native_scrollbar(data, 12, 11, 8)
+    native_scrollbar(data, 12, 12, 8)?;
+    native_scrollbar(data, 13, 11, 8)
 }
 
 /// The highest id of the WAD's object instances (148-byte entries of kind 0x1f) that is in the
@@ -3497,25 +3599,41 @@ mod tests {
 
     /// [`tiny_script`] with `parent` as Root's parent word (0x14 is Root's own state ref).
     fn tiny_script_with_root_parent(parent: u32) -> Vec<u8> {
+        tiny_script_after(parent, &[])
+    }
+
+    /// [`tiny_script_with_root_parent`] with `table` between the header and the states.
+    fn tiny_script_after(parent: u32, table: &[u8]) -> Vec<u8> {
+        let shift = table.len() as u8;
         let mut smi = vec![0u8; 0x18];
-        let (code, symtab) = (0x44u32, 0x48u32 + 23);
+        smi.extend(table);
+        let (code, symtab) = (0x44u32 + u32::from(shift), 0x48u32 + 23 + u32::from(shift));
         smi[0x0c..0x10].copy_from_slice(&code.to_le_bytes());
         smi[0x10..0x14].copy_from_slice(&symtab.to_le_bytes());
         // Root at 0x18 (subtree 44 bytes), Child at 0x28 (28 bytes, parent ref 0x14).
         smi.extend([4, 0, 0, 44]);
         smi.extend(parent.to_be_bytes());
         smi.extend([0, 0, 0, 4, 1, 0, 0, 0]);
-        smi.extend([4, 0, 0, 28, 0, 0, 0, 0x14, 0, 0, 0, 12]);
+        smi.extend([4, 0, 0, 28, 0, 0, 0, 0x14 + shift, 0, 0, 0, 12]);
         smi.extend([1, 0, 0, 8, 3, 0, 0, 13, 0x80, 0, 0, 0xe0, 0, 0, 0, 0xec]);
         smi.extend([0; 4]); // code start .. code refs' base
         smi.extend([0x16, 0x00, 0x13, 0x09, 0xe0, 0x06, 0x43, 0x49]); // 0: line5 = ""
         smi.extend([0x16, 0x00, 0x14, 0x43, 0x49]); // 8
-        smi.extend([0x47, 0, 0, 0, 0x14, 0x49]); // 13: go to Root
+        smi.extend([0x47, 0, 0, 0, 0x14 + shift, 0x49]); // 13: go to Root
         smi.extend(b"\0Hi\0"); // 19, 20
         smi.extend([0; 8]);
         smi.extend([0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 25]);
         smi.extend(b"Root\0Child\0");
         wad("SMI_R_UI", &smi)
+    }
+
+    #[test]
+    fn a_header_table_entry_of_4_is_not_a_state() {
+        // The real script's table has (count, code) pairs: a count of 4 reads as `04 000000`.
+        let data = tiny_script_after(0xffff_ffff, &[4, 0, 0, 0, 0x44, 1, 0, 0]);
+        let s = Script::parse(&data).unwrap();
+        assert_eq!(s.records.len(), 2);
+        assert_eq!(s.one("Root").unwrap().at, 0x20);
     }
 
     #[test]
@@ -4474,14 +4592,77 @@ mod tests {
         let entry = texts(&s, &block(&s, s.one("NativeGraphics").unwrap(), 1, None));
         // Hidden with the others, positioned, shown.
         assert_eq!(entry.iter().filter(|t| *t == "sliderBar7").count(), 3);
-        assert!(entry.iter().any(|t| t == "Restore Graphics Defaults"));
-        for name in ["NativeGraphic1", "NativeGraphic2"] {
-            let toggle = Script::blocks(s.one(name).unwrap())
+        // Row 9: shown once the page scrolls.
+        assert!(!entry.iter().any(|t| t == "Restore Graphics Defaults"));
+        for index in [1, 2, 6, 7, 8] {
+            let name = format!("NativeGraphic{index}");
+            let toggle = Script::blocks(s.one(&name).unwrap())
                 .into_iter()
                 .find(|b| b.kind == 3 && b.triggers.contains(&0xe9))
                 .unwrap();
             assert_eq!(toggle.triggers, [0xe6, 0xe2, 0xee, 0xf2, 0xe9], "{name}");
         }
+    }
+
+    #[test]
+    fn graphics_live_rows_query_and_change_their_settings() {
+        let data = native("en");
+        let s = Script::parse(&data).unwrap();
+        let page = s.one("NativeGraphics").unwrap();
+        for index in 5..9 {
+            let row = s.one(&format!("NativeGraphic{index}")).unwrap();
+            assert_eq!(row.parent, page.at - 4);
+            assert!(calls(&block(&s, row, 1, None)).contains(&(0xf70 + index)));
+            if SLIDING_GRAPHICS.contains(&index) {
+                // Texture Quality: left steps toward High, right toward Very Low.
+                let left = calls(&block(&s, row, 3, Some(&[0xe6, 0xf2])));
+                let right = calls(&block(&s, row, 3, Some(&[0xe2, 0xee])));
+                assert!(left.contains(&(0xf80 + index)), "{index}");
+                assert!(right.contains(&(0xf90 + index)), "{index}");
+                assert!(!left.contains(&(0xf90 + index)), "{index}");
+            } else {
+                let toggle = block(&s, row, 3, Some(&[0xe6, 0xe2, 0xee, 0xf2, 0xe9]));
+                assert!(calls(&toggle).contains(&(0xf90 + index)), "{index}");
+            }
+        }
+    }
+
+    #[test]
+    fn graphics_scrolls_and_hides_the_slider_and_its_scrollbar() {
+        let data = native("en");
+        let s = Script::parse(&data).unwrap();
+        let entry = |name: &str| block(&s, s.one(name).unwrap(), 1, None);
+        // The eight first rows fit; Bloom, Restore Defaults and Apply scroll the page by one row
+        // each.
+        let tops = [
+            "Frames Queued",
+            "Async Shader Compilation",
+            "RCAS Sharpening",
+            "Sharpening Strength",
+        ];
+        for (name, first) in [
+            ("NativeGraphic0", 0),
+            ("NativeGraphic7", 0),
+            ("NativeGraphic8", 1),
+            ("NativeGraphicsReset", 2),
+            ("NativeGraphicsApply", 3),
+        ] {
+            let code = entry(name);
+            let shown = assignments(&s, &code);
+            assert_eq!(shown[&0], "Graphics Settings", "{name}");
+            assert_eq!(shown[&1], tops[first], "{name}");
+            let pushed = texts(&s, &code);
+            assert!(pushed.iter().any(|t| t == "sliderBar13"), "{name}");
+            // The Sharpening Strength slider only lines up with its row at the top.
+            let sliders = pushed.iter().filter(|t| *t == "sliderBar7").count();
+            assert_eq!(sliders, if first == 0 { 2 } else { 1 }, "{name}");
+        }
+        assert_eq!(
+            assignments(&s, &entry("NativeGraphicsApply"))[&8],
+            "Apply and Restart"
+        );
+        let update = block(&s, s.one("NativeGraphics").unwrap(), 2, None);
+        assert!(texts(&s, &update).iter().any(|t| t == "sliderBar13"));
     }
 
     #[test]
@@ -4491,7 +4672,7 @@ mod tests {
         let names = ["NativeGraphics", "NativeGraphicsReset"]
             .map(String::from)
             .into_iter()
-            .chain((0..4).map(|i| format!("NativeGraphic{i}")));
+            .chain((0..9).map(|i| format!("NativeGraphic{i}")));
         for name in names {
             let record = s.one(&name).unwrap();
             for b in Script::blocks(record) {
@@ -4550,7 +4731,7 @@ mod tests {
                 }
             }
         }
-        // Controls: Apply and Restart and Restore Defaults, each with its question, and six
+        // Controls: Apply and Restart and Restore Defaults, each with its question, and seven
         // controls after the game's three rows.
         s.one("NativeControlsApply").unwrap();
         s.one("NativeControlsReset").unwrap();
@@ -4561,14 +4742,17 @@ mod tests {
             state_ref(&s, "NativeControlsRestartNo")
         );
         let controls = s.one("PauseControls").unwrap();
-        for index in 0..6 {
+        for index in 0..7 {
             let row = s.one(&format!("NativeControl{index}")).unwrap();
             assert_eq!(row.parent, controls.at - 4, "{index}");
             for (trigger, function) in [(&[0xe6, 0xf2], 0xfaa), (&[0xe2, 0xee], 0xfb1)] {
                 let code = block(&s, row, 3, Some(trigger));
-                assert!(calls(&code).contains(&(function + index)), "{index}");
+                let function = if index == 6 { 0xf6f } else { function + index };
+                assert!(calls(&code).contains(&function), "{index}");
             }
         }
+        let free_camera = block(&s, s.one("NativeControl6").unwrap(), 1, None);
+        assert!(calls(&free_camera).contains(&0xf6e));
         for name in ["HLContDis", "HLFreeCamera", "HLFlightControl"] {
             s.one(name).unwrap();
         }
@@ -4616,7 +4800,7 @@ mod tests {
         assert!(objects.contains_key("gosliderbar10"));
         let (mesh, size) = objects["MG_95eaf70c_0"];
         assert_eq!(size, 880);
-        assert!((thumb_width(&data, mesh) - 2.98 * 8.0 / 13.0).abs() < 5e-5);
+        assert!((thumb_width(&data, mesh) - 2.98 * 8.0 / 16.0).abs() < 5e-5);
         let (go, _) = objects["gosliderbar10"];
         assert_eq!(le16(&data, go + 0x76).unwrap(), 10);
         assert_eq!(le32(&data, go + 0x3c).unwrap() >> 16, 1);
@@ -4694,8 +4878,8 @@ mod tests {
                 name.starts_with("NativeControl") || name.starts_with("NativeGraphicsRestart")
             })
             .collect();
-        // Six controls, Reset and Apply, two questions with their answers, and Graphics' restart.
-        assert_eq!(names.len(), 17, "{names:?}");
+        // Seven controls, Reset and Apply, two questions with their answers, and Graphics' restart.
+        assert_eq!(names.len(), 18, "{names:?}");
         for name in names {
             let record = s.one(name).unwrap();
             for b in Script::blocks(record) {
@@ -4743,11 +4927,11 @@ mod tests {
     }
 
     #[test]
-    fn display_contains_eight_new_controls_and_keeps_its_original_rows() {
+    fn display_contains_eleven_new_controls_and_keeps_its_original_rows() {
         let data = native("en");
         let s = Script::parse(&data).unwrap();
         let page = s.one("PauseDisplay").unwrap();
-        for index in 0..8 {
+        for index in 0..11 {
             let row = s.one(&format!("NativeDisplay{index}")).unwrap();
             assert_eq!(row.parent, page.at - 4, "{index}");
         }
@@ -4772,14 +4956,21 @@ mod tests {
     fn display_scrolls_without_overwriting_original_setting_values() {
         let data = native("en");
         let s = Script::parse(&data).unwrap();
-        for index in 0..8 {
+        for index in 0..11 {
             let entry = block(
                 &s,
                 s.one(&format!("NativeDisplay{index}")).unwrap(),
                 1,
                 None,
             );
-            assert!(calls(&entry).contains(&(0xff0 + index)), "{index}");
+            // Upscaler and Quality Preset (8 and 9) read 0xf67/0xf68 (0xff8 is past the hook's range),
+            // Frame Generation (10) 0xf6c.
+            let selected = match index {
+                0..=7 => 0xff0 + index,
+                10 => 0xf6c,
+                _ => 0xf67 + index - 8,
+            };
+            assert!(calls(&entry).contains(&selected), "{index}");
             // The game's own values (locals 0x11-0x14) are left alone.
             assert!(
                 !entry

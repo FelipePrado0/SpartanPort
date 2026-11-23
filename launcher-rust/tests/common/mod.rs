@@ -8,6 +8,7 @@ use iced::widget::text;
 use iced::{Element, Font, Size};
 use iced_test::simulator::simulator;
 use spartanport_launcher::core::gpu::{parse_display_list, Display, GpuRow};
+use spartanport_launcher::core::joysticks::JoyError;
 use spartanport_launcher::core::paths::Paths;
 use spartanport_launcher::core::trophies::TROPHY_COUNT;
 use spartanport_launcher::core::update::ReleaseHost;
@@ -33,6 +34,8 @@ pub fn state_with(dir: &Path, host: Arc<dyn ReleaseHost>) -> State {
     };
     let mut state = State::with_host(Paths::from_env(dir, &env), host);
     state.splash.done = true;
+    // No test reaches the machine's own SDL3 or pads: they get a scripted one.
+    state.joystick_opener = |_| Err(JoyError::Missing);
     state
 }
 

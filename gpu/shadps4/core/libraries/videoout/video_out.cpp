@@ -12,6 +12,7 @@
 #include "core/libraries/videoout/videoout_error.h"
 #include "core/platform.h"
 #include "video_core/renderer_vulkan/vk_presenter.h"
+#include "spartanport_overlay.h"
 
 extern std::unique_ptr<Vulkan::Presenter> presenter;
 
@@ -153,6 +154,8 @@ s32 PS4_SYSV_ABI sceVideoOutIsFlipPending(s32 handle) {
 }
 
 s32 PS4_SYSV_ABI sceVideoOutSubmitFlip(s32 handle, s32 bufferIndex, s32 flipMode, s64 flipArg) {
+    // spartanport: the game stops here while the menu or the trophy list pauses it.
+    SpartanOverlay::WaitWhilePaused();
     auto* port = driver->GetPort(handle);
     if (!port) {
         LOG_ERROR(Lib_VideoOut, "Invalid handle = {}", handle);

@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// spartanport: camera motion vectors from depth and one 4x4 matrix, previous view-projection *
+// inverse(current view-projection) (renderer_vulkan/camera_view_projection.h). God of War III's
+// depth is z / w with z = w - near: 0 at the near plane, 1 at infinity, so the sky (depth 1) is a
+// direction and reprojects with the camera's rotation alone.
+#version 450
+#extension GL_EXT_samplerless_texture_functions : require
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(binding = 0) uniform texture2D depth_tex;
+layout(binding = 1, rg16f) uniform writeonly image2D motion_img; // pixels, previous - current
+
+layout(push_constant) uniform Constants {
+    mat4 reproject; // column-major, current clip (ndc.xy, depth, 1) to previous clip
+    vec2 size;      // pixels
+    vec2 jitter;    // viewport shift of the depth in pixels (x right, y down)
+    vec2 depth_range; // the game's depth scale and offset: depth = offset + scale * clip z / w
+    vec4 viewport;  // the game's viewport: x scale, y scale, x offset, y offset (screen = offset + scale * ndc)
+};
+
+void main() {
+    const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(size.x) || pixel.y >= int(size.y)) {
+        return;
+    }
+    const float depth = texelFetch(depth_tex, pixel, 0).r;
+    // The depth was rasterised through a shifted viewport: its unjittered position, in the
+    // framebuffer's pixels. The viewport maps ndc to pixels (its signs carry the axis directions).
+    const vec2 position = vec2(pixel) + 0.5 - jitter;
+    const vec2 ndc = (position - viewport.zw) / viewport.xy;
+    const vec4 previous = reproject * vec4(ndc, (depth - depth_range.y) / depth_range.x, 1.0);
+    vec2 motion;
+    if (previous.w > 1e-6) {
+        const vec2 previous_position = viewport.zw + viewport.xy * (previous.xy / previous.w);
+        motion = clamp(previous_position - position, vec2(-4096.0), vec2(4096.0));
+    } else {
+        motion = vec2(4096.0); // behind the previous camera: no history
+    }
+    imageStore(motion_img, pixel, vec4(motion, 0.0, 0.0));
+}

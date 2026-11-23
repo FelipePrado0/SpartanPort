@@ -591,6 +591,26 @@ struct Upscaler::Impl {
         if (!uploaded) {
             Upload(cmd);
         }
+        // spartanport: scene resets discard the old temporal buffers and exposure before
+        // reconstruction so another save cannot reuse the previous scene's history.
+        if (f.reset) {
+            VkMemoryBarrier mb{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+            mb.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            mb.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &mb, 0, nullptr, 0, nullptr);
+            const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            const VkClearColorValue zero{};
+            for (Img* img : {&recurrent, &history, &reprojected}) {
+                vkCmdClearColorImage(cmd, img->image, VK_IMAGE_LAYOUT_GENERAL, &zero, 1, &range);
+            }
+            mb.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            mb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &mb, 0, nullptr, 0,
+                                 nullptr);
+            previous_pre_exposure = 0.0f;
+        }
         const uint32_t aw = (ow + 7) & ~7u, ah = (oh + 7) & ~7u;
         const float pre_exposure = f.pre_exposure > 0.0f ? f.pre_exposure : 1.0f;
 

@@ -34,6 +34,8 @@ pub struct Script {
     pub previewed: Vec<String>,
     /// How many times `close_device` ran.
     pub closed: usize,
+    /// What `rumble` was asked for.
+    pub rumbles: Vec<(u16, u16)>,
 }
 
 #[derive(Debug, Clone)]
@@ -138,6 +140,11 @@ impl Joysticks for FakeJoysticks {
 
     fn end_preview(&mut self) {
         self.script().preview = None;
+    }
+
+    fn rumble(&mut self, low: u16, high: u16, _ms: u32) -> bool {
+        self.script().rumbles.push((low, high));
+        true
     }
 
     fn close_device(&mut self) {

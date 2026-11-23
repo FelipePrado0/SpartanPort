@@ -7,17 +7,21 @@ use std::path::Path;
 use iced::{window, Point, Size};
 use spartanport_launcher::core::i18n::launcher_language;
 use spartanport_launcher::core::paths::Paths;
+use spartanport_launcher::core::release::ReleaseId;
 use spartanport_launcher::core::settings::app_defaults;
-use spartanport_launcher::startup::{migrates, route, route_on, start, Route};
+use spartanport_launcher::startup::{
+    confirm_window, log_failure, prepare_window, route, route_on, start, Route, WINDOW_STATE,
+};
 use spartanport_launcher::ui::app::{
     self, centred_position, fitted_window, window_message, Message, State, WINDOW_SIZE,
 };
 use spartanport_launcher::ui::theme::window_zoom;
+use spartanport_launcher::VERSION;
 
 #[test]
 fn arguments_route_to_their_roles() {
     let none: [&str; 0] = [];
-    assert_eq!(route(&none), Route::Launcher { migrate: true });
+    assert_eq!(route(&none), Route::Launcher);
     assert_eq!(route(&["--version"]), Route::Version);
     // The update installer: `--install-update TARGET PID`, on Windows only.
     let update = ["--install-update", r"C:\Port", "1234"];
@@ -28,25 +32,22 @@ fn arguments_route_to_their_roles() {
             pid: 1234
         }
     );
-    // Not the installer elsewhere, so it is the window, and it still does not migrate.
-    assert_eq!(route_on(&update, false), Route::Launcher { migrate: false });
+    // Not the installer elsewhere, so it is the window.
+    assert_eq!(route_on(&update, false), Route::Launcher);
     assert_eq!(
         route_on(&["--install-update", "a.zip"], true),
-        Route::Launcher { migrate: false }
+        Route::Launcher
     );
     assert_eq!(
         route_on(&["--install-update", "a", "1", "b"], true),
-        Route::Launcher { migrate: false }
+        Route::Launcher
     );
     // `--script` is an ordinary argument now.
-    assert_eq!(
-        route(&["--script", "prepare.py"]),
-        Route::Launcher { migrate: true }
-    );
+    assert_eq!(route(&["--script", "prepare.py"]), Route::Launcher);
     assert_eq!(route(&["--script", "x.py", "--version"]), Route::Version);
     // Anything else opens the window; the Python ignores unknown arguments too.
-    assert_eq!(route(&["--fullscreen"]), Route::Launcher { migrate: true });
-    assert_eq!(route(&["play"]), Route::Launcher { migrate: true });
+    assert_eq!(route(&["--fullscreen"]), Route::Launcher);
+    assert_eq!(route(&["play"]), Route::Launcher);
 }
 
 #[test]
@@ -81,20 +82,44 @@ fn run_carries_everything_after_it() {
 }
 
 #[test]
-fn run_and_play_are_their_own_routes() {
-    // `--play` counts anywhere, as in the Python `main`.
-    assert_eq!(route(&["--play"]), Route::Play { migrate: true });
+fn update_dir_is_used_only_when_it_holds_an_eboot() {
+    use spartanport_launcher::startup::update_dir_arg;
+    let args = |list: &[&std::ffi::OsStr]| list.iter().map(OsString::from).collect::<Vec<_>>();
+    let dir = tempfile::tempdir().unwrap();
+    let given = args(&[
+        "--play".as_ref(),
+        "--update-dir".as_ref(),
+        dir.path().as_os_str(),
+    ]);
     assert_eq!(
-        route(&["--fullscreen", "--play"]),
-        Route::Play { migrate: true }
+        update_dir_arg(&given),
+        None,
+        "a skipped pick has no eboot.bin"
     );
+    std::fs::write(dir.path().join("eboot.bin"), b"x").unwrap();
+    assert_eq!(update_dir_arg(&given), Some(dir.path().to_path_buf()));
+    assert_eq!(update_dir_arg(&args(&["--play".as_ref()])), None);
+    assert_eq!(update_dir_arg(&args(&["--update-dir".as_ref()])), None);
 }
 
 #[test]
-fn the_update_installer_does_not_migrate() {
-    assert!(!migrates(&["--install-update", r"C:\P", "1"]));
-    assert!(migrates(&["--play"]));
-    assert!(migrates::<&str>(&[]));
+fn prepare_carries_everything_after_it() {
+    let args = |list: &[&str]| list.iter().map(OsString::from).collect::<Vec<_>>();
+    assert_eq!(
+        route(&["--prepare", "--game", "C:/dump"]),
+        Route::Prepare {
+            args: args(&["--game", "C:/dump"])
+        }
+    );
+    // Only as the first argument, like `--run`: elsewhere it is ignored.
+    assert_eq!(route(&["--game", "x", "--prepare"]), Route::Launcher);
+}
+
+#[test]
+fn run_and_play_are_their_own_routes() {
+    // `--play` counts anywhere, as in the Python `main`.
+    assert_eq!(route(&["--play"]), Route::Play);
+    assert_eq!(route(&["--fullscreen", "--play"]), Route::Play);
 }
 
 #[cfg(windows)]
@@ -153,10 +178,9 @@ fn version_prints_the_name_and_the_version() {
         .output()
         .unwrap();
     assert!(out.status.success());
-    // The version itself is pinned to the Python launcher's in `core_boundary.rs`.
     assert_eq!(
         String::from_utf8_lossy(&out.stdout).trim(),
-        format!("SpartanPort {}", spartanport_launcher::VERSION)
+        format!("SpartanPort {}", ReleaseId::this().plain())
     );
 }
 
@@ -329,8 +353,8 @@ fn a_new_desktop_scale_keeps_the_chosen_zoom() {
     assert_eq!((state.desktop_scale, state.scale), (1.0, 1.5));
     assert_eq!(window_zoom(state.scale, state.desktop_scale), 1.5);
 
-    // A file from before R90: "auto" no longer follows the desktop, it is 1x; "2" is 1.5x.
-    for (stored, scale) in [("auto", 1.0), ("2", 1.5)] {
+    // An older file's "2" is 1.5x; "auto" follows the new desktop (no monitor known here).
+    for (stored, scale) in [("2", 1.5), ("auto", 2.0)] {
         let dir = tempfile::tempdir().unwrap();
         let mut state = state_with(dir.path(), &format!(r#"{{"ui_scale": "{stored}"}}"#));
         let _ = app::update(&mut state, Message::WindowOpened(id, WINDOW_SIZE));
@@ -338,6 +362,50 @@ fn a_new_desktop_scale_keeps_the_chosen_zoom() {
         let _ = app::update(&mut state, Message::DesktopRescaled(2.0));
         assert_eq!((state.desktop_scale, state.scale), (2.0, scale), "{stored}");
     }
+}
+
+#[test]
+fn auto_scale_follows_the_desktop_and_fits_the_monitor() {
+    let id = window::Id::unique();
+    // No GUI Scale stored: Auto. A Retina Mac (2x, 2940 × 1912 screen pixels), reported by iced in
+    // logical pixels of the zoom when asked (2x): the interface at 2x, the window at full size.
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_with(dir.path(), "{}");
+    assert_eq!(state.store.text("ui_scale"), "auto");
+    let _ = app::update(&mut state, Message::WindowOpened(id, WINDOW_SIZE));
+    let _ = app::update(&mut state, Message::DesktopScale(2.0));
+    assert_eq!(state.scale, 2.0);
+    let _ = app::update(
+        &mut state,
+        Message::MonitorSize(Some(Size::new(1470.0, 956.0))),
+    );
+    assert_eq!(state.scale, 2.0);
+    assert_eq!(window_zoom(state.scale, state.desktop_scale), 1.0);
+    assert_eq!(state.window_size, WINDOW_SIZE);
+
+    // A 1080p laptop at 125 %: 1.25 would not fit, so the zoom that keeps 800 within 90 % of
+    // 1080, and the whole 1280 × 800 window.
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_with(dir.path(), r#"{"ui_scale": "auto"}"#);
+    let _ = app::update(&mut state, Message::WindowOpened(id, WINDOW_SIZE));
+    let _ = app::update(&mut state, Message::DesktopScale(1.25));
+    assert_eq!(state.scale, 1.25);
+    let _ = app::update(
+        &mut state,
+        Message::MonitorSize(Some(Size::new(1536.0, 864.0))),
+    );
+    assert!((state.scale - 1.215).abs() < 1e-4, "{}", state.scale);
+    assert_eq!(state.window_size.width, WINDOW_SIZE.width);
+    assert!(state.window_size.height >= WINDOW_SIZE.height - 1.0);
+
+    // Dragged to a 100 % monitor: Auto is 1x there.
+    let _ = app::update(&mut state, Message::DesktopRescaled(1.0));
+    assert_eq!(state.scale, 1.0);
+    let _ = app::update(
+        &mut state,
+        Message::MonitorSize(Some(Size::new(1920.0, 1080.0))),
+    );
+    assert_eq!((state.scale, state.window_size), (1.0, WINDOW_SIZE));
 }
 
 #[test]
@@ -365,6 +433,8 @@ fn the_desktop_scale_is_read_when_the_window_opens() {
         "APPDATA" | "USERPROFILE" | "HOME" | "XDG_CONFIG_HOME" => Some(root.clone()),
         _ => None,
     };
+    // GUI Scale 1x (R90); the default, Auto, is `auto_scale_follows_the_desktop_and_fits_the_monitor`.
+    std::fs::write(dir.path().join("settings.json"), r#"{"ui_scale": "1"}"#).unwrap();
     let mut state = State::new(Paths::from_env(dir.path(), &env));
     let id = window::Id::unique();
     let _ = app::update(
@@ -373,7 +443,7 @@ fn the_desktop_scale_is_read_when_the_window_opens() {
     );
     assert_eq!(state.window_size, Size::new(1000.0, 700.0));
     assert_eq!(state.scale, 1.0);
-    // The default GUI Scale is 1x (R90): the zoom takes the desktop's 150 % back out.
+    // 1x takes the desktop's 150 % back out.
     let _ = app::update(&mut state, Message::DesktopScale(1.5));
     assert_eq!(state.desktop_scale, 1.5);
     assert_eq!(state.scale, 1.0);
@@ -413,30 +483,6 @@ fn vars(pairs: &[(&str, &str)]) -> Vec<(OsString, OsString)> {
 }
 
 #[test]
-fn every_route_forwards_old_names_before_paths() {
-    let dir = tempfile::tempdir().unwrap();
-    let data = dir.path().join("d");
-    let data_text = data.to_string_lossy().into_owned();
-    let routes: [&[&str]; 4] = [
-        &["--run"],
-        &["--play"],
-        &["--install-update", "C:/t", "7"],
-        &[],
-    ];
-    for args in routes {
-        let args: Vec<OsString> = args.iter().map(OsString::from).collect();
-        let (_, context) = start(
-            &args,
-            dir.path(),
-            vars(&[("GOW3_DATA_DIR", &data_text)]),
-            true,
-        );
-        assert_eq!(context.paths.data_dir, data, "{args:?}");
-        assert_eq!(context.env["SPARTAN_DATA_DIR"], data_text, "{args:?}");
-    }
-}
-
-#[test]
 fn run_paths_start_at_the_resolved_port() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir(dir.path().join("a")).unwrap();
@@ -455,4 +501,133 @@ fn windows_names_are_upper_case() {
     let (_, context) = start(&[], Path::new("."), vars(&[("spartan_x", "1")]), true);
     assert_eq!(context.env["SPARTAN_X"], "1");
     assert!(!context.env.contains_key("spartan_x"));
+}
+
+#[test]
+fn a_window_start_that_never_finished_moves_one_step_away() {
+    const DX12: Option<(&str, &str)> = Some(("WGPU_BACKEND", "dx12"));
+    const SOFTWARE: Option<(&str, &str)> = Some(("ICED_BACKEND", "tiny-skia"));
+    let dir = tempfile::tempdir().unwrap();
+    let state = dir.path().join(WINDOW_STATE);
+    let read = || std::fs::read_to_string(&state).unwrap();
+    // Each start here comes long after the last one, as a player opens it again after a crash.
+    let prepare = |dx12| {
+        if state.exists() {
+            let file = std::fs::File::options().write(true).open(&state).unwrap();
+            let past = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+            file.set_modified(past).unwrap();
+        }
+        prepare_window(dir.path(), false, dx12)
+    };
+
+    // First start: the default, and a mark for the next one to find.
+    assert_eq!(prepare(true), None);
+    assert_eq!(read(), format!("starting {VERSION}"));
+
+    // The window came up: the mark goes and the default stays.
+    confirm_window(dir.path());
+    assert!(!state.exists());
+    assert_eq!(prepare(true), None);
+
+    // It died before that: Direct3D 12, which stays once it has worked.
+    assert_eq!(prepare(true), DX12);
+    assert_eq!(read(), format!("trying-dx12 {VERSION}"));
+    confirm_window(dir.path());
+    assert_eq!(read(), format!("dx12 {VERSION}"));
+    assert_eq!(prepare(true), DX12);
+    confirm_window(dir.path());
+
+    // Direct3D 12 died too: software, which stays with no crash in between.
+    assert_eq!(prepare(true), DX12);
+    assert_eq!(prepare(true), SOFTWARE);
+    assert_eq!(read(), format!("software {VERSION}"));
+    confirm_window(dir.path());
+    assert_eq!(read(), format!("software {VERSION}"));
+    assert_eq!(prepare(true), SOFTWARE);
+
+    // A system with no Direct3D 12 goes straight to software.
+    std::fs::remove_file(&state).unwrap();
+    assert_eq!(prepare(false), None);
+    assert_eq!(prepare(false), SOFTWARE);
+
+    // A new version tries the default again.
+    for old in [
+        "starting 0.0.1",
+        "trying-dx12 0.0.1",
+        "dx12 0.0.1",
+        "software 0.0.1",
+    ] {
+        std::fs::write(&state, old).unwrap();
+        assert_eq!(prepare(true), None);
+        assert_eq!(read(), format!("starting {VERSION}"));
+    }
+}
+
+#[test]
+fn a_second_click_does_not_count_as_a_dead_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = dir.path().join(WINDOW_STATE);
+    let read = || std::fs::read_to_string(&state).unwrap();
+    for _ in 0..3 {
+        assert_eq!(prepare_window(dir.path(), false, true), None);
+        assert_eq!(read(), format!("starting {VERSION}"));
+    }
+    std::fs::write(&state, format!("trying-dx12 {VERSION}")).unwrap();
+    for _ in 0..3 {
+        assert_eq!(
+            prepare_window(dir.path(), false, true),
+            Some(("WGPU_BACKEND", "dx12"))
+        );
+        assert_eq!(read(), format!("trying-dx12 {VERSION}"));
+    }
+}
+
+#[test]
+fn a_chosen_backend_leaves_the_window_state_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = dir.path().join(WINDOW_STATE);
+    assert_eq!(prepare_window(dir.path(), true, true), None);
+    assert!(!state.exists());
+    std::fs::write(&state, format!("software {VERSION}")).unwrap();
+    assert_eq!(prepare_window(dir.path(), true, true), None);
+    assert_eq!(
+        std::fs::read_to_string(&state).unwrap(),
+        format!("software {VERSION}")
+    );
+}
+
+#[test]
+fn an_unwritable_folder_never_stops_the_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing");
+    assert_eq!(prepare_window(&missing, false, true), None);
+    confirm_window(&missing);
+    log_failure(&missing, "boom");
+}
+
+#[test]
+fn failures_add_up_in_the_error_log() {
+    let dir = tempfile::tempdir().unwrap();
+    log_failure(dir.path(), "first");
+    log_failure(dir.path(), "second");
+    let log = std::fs::read_to_string(dir.path().join("launcher_error.log")).unwrap();
+    assert_eq!(log.lines().count(), 2);
+    assert!(log.contains(VERSION) && log.contains("first") && log.contains("second"));
+}
+
+#[test]
+fn the_window_start_is_confirmed_after_it_has_run_a_while() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut state = state_with(dir.path(), "{}");
+    let marker = dir.path().join(WINDOW_STATE);
+    prepare_window(dir.path(), false, true);
+    let opened = state.now;
+    let _ = app::update(
+        &mut state,
+        Message::WindowOpened(window::Id::unique(), WINDOW_SIZE),
+    );
+    let _ = app::update(&mut state, Message::Tick(opened));
+    assert!(marker.exists());
+    let _ = app::update(&mut state, Message::Tick(opened + app::WINDOW_CONFIRM));
+    assert!(!marker.exists());
 }
