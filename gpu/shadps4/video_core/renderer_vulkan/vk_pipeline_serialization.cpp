@@ -1081,6 +1081,20 @@ bool PipelineCache::CheckCacheProfile() {
         return false;
     }
 
+    // spartanport: extensions outside Shader::Profile (maintenance8, feedback loop, mixed
+    // samples, ...) shape pipeline keys too, so keys written under another extension set may be
+    // invalid here. Keep the disk cache closed for the session; Save checks IsOpened(), so
+    // nothing is written either.
+    if (!instance.GetDisabledExtensions().empty()) {
+        LOG_WARNING(Render, "Pipeline cache skipped: SPARTAN_VK_DISABLE_EXT is active");
+        return false;
+    }
+    // spartanport: SPARTAN_EMPTY_FS=1 changes pipelines without changing their keys.
+    if (EmulatorSettings.IsEmptyFragmentShader()) {
+        LOG_WARNING(Render, "Pipeline cache skipped: SPARTAN_EMPTY_FS is active");
+        return false;
+    }
+
     Storage::DataBase::Instance().Open();
 
     // spartanport: the profile blob is the shader profile plus one byte: whether the guest's

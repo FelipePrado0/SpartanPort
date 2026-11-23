@@ -52,6 +52,8 @@ public:
     bool IsCopyGpuBuffers() { static const auto value = Flag("SPARTAN_COPY_GPU_BUFFERS", false); return value; }
     bool IsDirectMemoryAccessEnabled() { static const auto value = Flag("SPARTAN_DIRECT_MEMORY_ACCESS", false); return value; }
     bool IsDumpShaders() { static const auto value = Flag("SPARTAN_DUMP_SHADERS", false); return value; }
+    /// spartanport: every graphics pipeline without a fragment stage gets an empty one (#334 test).
+    bool IsEmptyFragmentShader() { static const auto value = Flag("SPARTAN_EMPTY_FS", false); return value; }
     bool IsHdrAllowed() { static const auto value = Flag("SPARTAN_HDR", false); return value; }
     bool IsNullGPU() { static const auto value = Flag("SPARTAN_NULL_GPU", false); return value; }
     bool IsPatchShaders() { return false; }

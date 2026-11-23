@@ -6,6 +6,7 @@
 #include "spartanport_depth_of_field.h"
 #include "spartanport_settings.h"
 #include "spartanport_toggles.h"
+#include "video_core/renderer_vulkan/vk_checkpoints.h"
 #include "spartanport_vertex_table.h"
 #include "spartanport_cpu_sampler.h"
 #include "video_core/renderer_vulkan/vk_frame_capture.h"
@@ -37,6 +38,43 @@
 #include <vulkan/vulkan_format_traits.hpp>
 
 namespace Vulkan {
+
+// spartanport: CheckpointRecord::z of a draw of `pipeline`: its primitive type and whether the
+// port's own tessellation stages expand it (rect and quad lists without a game TCS).
+static u32 DrawPrimitiveOf(const GraphicsPipeline& pipeline) {
+    const auto prim = pipeline.GetGraphicsKey().prim_type;
+    const bool aux_tess =
+        (prim == AmdGpu::PrimitiveType::RectList || prim == AmdGpu::PrimitiveType::QuadList) &&
+        (!pipeline.GetStages()[u32(Shader::SwStage::TessellationControl)] ||
+         !pipeline.GetStages()[u32(Shader::SwStage::TessellationEval)]);
+    return DrawPrimitive(static_cast<u32>(prim), aux_tess);
+}
+
+// spartanport: a draw with no pixel shader, no colour target, no depth/stencil attachment and no
+// shader writing a buffer or an image changes nothing (GoW3 issues one as a 3-vertex rect list).
+// Intel's Gen9 Windows driver hangs the GPU on it (#1055), so it is not recorded on any GPU; the
+// first one is named in last_run.log whatever the GPU log level.
+static bool DrawsNothing(const GraphicsPipeline& pipeline, const AmdGpu::Regs& regs) {
+    const auto stages = pipeline.GetStages();
+    if (stages[u32(Shader::SwStage::Fragment)] || pipeline.GetGraphicsKey().mrt_mask ||
+        GetEffectiveDepthStencilState(regs).needs_attachment) {
+        return false;
+    }
+    for (const Shader::Info* stage : stages) {
+        if (stage && (std::ranges::any_of(stage->buffers, &Shader::BufferResource::is_written) ||
+                      std::ranges::any_of(stage->images, &Shader::ImageResource::is_written))) {
+            return false;
+        }
+    }
+    static std::atomic_flag reported;
+    if (!reported.test_and_set()) {
+        std::printf("GPU: draws without a pixel shader and without attachments are skipped "
+                    "(first: vs 0x%llx)\n",
+                    static_cast<unsigned long long>(
+                        pipeline.GetStage(Shader::SwStage::Vertex).pgm_hash));
+    }
+    return true;
+}
 
 static u32 UiColorMask(const GraphicsPipeline* pipeline, bool upscale) {
     const auto& key = pipeline->GetGraphicsKey();
@@ -1722,6 +1760,9 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         // ponytail: assumes flips rotate display buffers; a single-buffer game counts one frame.
         NoteFrameStart();
     }
+    if (DrawsNothing(*pipeline, regs)) {
+        return;
+    }
     bind_prepared = used_prepared;
     motion_draw = pipeline->GetGraphicsKey().motion_vectors;
     motion_geometry = 0;
@@ -1922,7 +1963,16 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     const u32 num_instances = regs.num_instances.NumInstances();
     const u32 first_vertex = vertex_offset;
     const u32 first_instance = instance_offset;
+    // spartanport: marker naming this draw if the GPU is lost on it (vk_checkpoints.h).
+    const void* checkpoint =
+        Checkpoints::Enabled()
+            ? Checkpoints::Get().Push(StageCheckpoint(pipeline->GetStages(), false,
+                                                      CheckpointKind::Draw, scheduler.CurrentTick(),
+                                                      num_indices, num_instances,
+                                                      DrawPrimitiveOf(*pipeline)))
+            : nullptr;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
+        Checkpoints::Set(cmdbuf, checkpoint);
         const auto draw = [&] {
             if (is_indexed) {
                 cmdbuf.drawIndexed(num_indices, num_instances, 0, s32(first_vertex),
@@ -2003,6 +2053,9 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
     motion_draw = false;
     motion_geometry = 0;
     upscaler->RunPending();
+    if (DrawsNothing(*pipeline, Regs())) {
+        return;
+    }
     PrepareRenderState(pipeline);
     if (upscaler->Enabled() && pipeline->GetGraphicsKey().mrt_mask) {
         upscaler->OnGraphicsDraw(pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
@@ -2063,7 +2116,16 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
     const u64 args_offset = base;
     const vk::Buffer counts = count_address != 0 ? count_buffer->Handle() : vk::Buffer{};
     const u64 counts_offset = count_address != 0 ? count_offset : 0;
+    // spartanport: marker naming this draw if the GPU is lost on it (vk_checkpoints.h).
+    const void* checkpoint =
+        Checkpoints::Enabled()
+            ? Checkpoints::Get().Push(StageCheckpoint(pipeline->GetStages(), false,
+                                                      CheckpointKind::DrawIndirect,
+                                                      scheduler.CurrentTick(), max_count, 0,
+                                                      DrawPrimitiveOf(*pipeline)))
+            : nullptr;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
+        Checkpoints::Set(cmdbuf, checkpoint);
         for (const vk::Pipeline bound : {handle, square}) {
             if (!bound) {
                 break;
@@ -2154,7 +2216,15 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
     if (FrameCapture::Active()) {
         FrameCapture::Dispatch(cs.pgm_hash, dim_x, dim_y, dim_z);
     }
+    // spartanport: marker naming this dispatch if the GPU is lost on it (vk_checkpoints.h).
+    const void* checkpoint =
+        Checkpoints::Enabled()
+            ? Checkpoints::Get().Push(StageCheckpoint(pipeline->GetStages(), true,
+                                                      CheckpointKind::Dispatch,
+                                                      scheduler.CurrentTick(), dim_x, dim_y, dim_z))
+            : nullptr;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
+        Checkpoints::Set(cmdbuf, checkpoint);
         if (Scheduler::FullBarriers()) {
             Scheduler::RecordFullBarrier(cmdbuf);
         }
@@ -2226,7 +2296,15 @@ void Rasterizer::DispatchIndirectRecord(const ComputePipeline* pipeline, VAddr a
     const vk::Pipeline handle = pipeline->Handle();
     const vk::Buffer args = buffer->Handle();
     const u64 args_offset = base;
+    // spartanport: marker naming this dispatch if the GPU is lost on it (vk_checkpoints.h).
+    const void* checkpoint =
+        Checkpoints::Enabled()
+            ? Checkpoints::Get().Push(StageCheckpoint(pipeline->GetStages(), true,
+                                                      CheckpointKind::DispatchIndirect,
+                                                      scheduler.CurrentTick(), 0, 0, 0))
+            : nullptr;
     scheduler.Record([=](vk::CommandBuffer cmdbuf) {
+        Checkpoints::Set(cmdbuf, checkpoint);
         if (Scheduler::FullBarriers()) {
             Scheduler::RecordFullBarrier(cmdbuf);
         }
