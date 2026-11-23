@@ -226,7 +226,6 @@ MaterializeStats Materialize(const Manifest& manifest, const fs::path& game_dir,
             }
         }
     }
-    stats.stopped = stop;
     stats.written = written;
     stats.no_code = no_code;
     stats.failed = failed;
@@ -274,17 +273,19 @@ MaterializeStats Materialize(const Manifest& manifest, const fs::path& game_dir,
         ++stats.keys;
     }
 
-    // The game lists the cache next (PipelineCache::StartOnDemand): the files must be on disk.
-    // progress keeps the loading screen painting meanwhile, its answer is not asked: a skip waits
-    // for them too. A start that kept every shader waits here for every key (#1422).
-    const auto flush_end = std::chrono::steady_clock::now() + std::chrono::minutes(2);
-    while (!Storage::DataBase::Instance().Flush(std::chrono::milliseconds(33))) {
-        if (std::chrono::steady_clock::now() >= flush_end) {
+    // The game lists the cache next (PipelineCache::StartOnDemand), so the files should be on
+    // disk: a start that kept every shader waits here for every key (#1422). The screen counts
+    // the writes meanwhile, and a skip ends this wait as it ends the step (#1405).
+    if (!stop) {
+        const auto paint = [&](u32 written, u32 queued) {
+            stop = !progress(written, queued);
+            return !stop;
+        };
+        if (!Storage::DataBase::Instance().Flush(std::chrono::minutes(2), paint) && !stop) {
             LOG_WARNING(Render_Vulkan, "Shader preparation: cache writes still queued");
-            break;
         }
-        progress(done, total);
     }
+    stats.stopped = stop;
     return stats;
 }
 

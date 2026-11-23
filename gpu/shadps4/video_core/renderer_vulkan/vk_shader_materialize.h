@@ -42,8 +42,9 @@ Replay DefaultReplay(const Shader::Profile& profile);
 /// resume: keep the permutations already saved. A saved permutation at an index the manifest uses
 /// must be the manifest's own, or nothing is written and conflict is set: clear the cache and run
 /// again. progress(done, total) runs on the calling thread, a few times per second (after every
-/// program with threads 0, which works on the calling thread); false stops. Returns when the
-/// files are on disk (two minutes at most), calling progress while they are written.
+/// program with threads 0, which works on the calling thread); false stops. Then waits for the
+/// files to be on disk (two minutes at most): progress(written, queued) counts the cache writes
+/// there, and false ends that wait too.
 MaterializeStats Materialize(const Manifest& manifest, const std::filesystem::path& game_dir,
                              const Replay& replay, u32 threads, bool resume,
                              const std::function<bool(u32, u32)>& progress);

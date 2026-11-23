@@ -13,6 +13,7 @@
 
 #include <miniz.h>
 
+#include <algorithm>
 #include <condition_variable>
 // spartanport: callbacks report write exceptions instead of hiding them in unused futures.
 #include <exception>
@@ -143,6 +144,27 @@ bool DataBase::Flush(std::chrono::milliseconds timeout) {
     }
     std::unique_lock lk{m_request};
     return idle_cv.wait_for(lk, timeout, [] { return req_queue.empty() && !io_busy; });
+}
+
+bool DataBase::Flush(std::chrono::milliseconds timeout,
+                     const std::function<bool(u32, u32)>& progress) {
+    if (!IsOpened()) {
+        return true;
+    }
+    const auto pending = [] { return u32(req_queue.size() + io_busy); };
+    std::unique_lock lk{m_request};
+    const u32 queued = pending();
+    const auto end = std::chrono::steady_clock::now() + timeout;
+    while (!idle_cv.wait_for(lk, std::chrono::milliseconds(33), [&] { return pending() == 0; })) {
+        const u32 left = std::min(queued, pending());
+        lk.unlock();
+        const bool go_on = progress(queued - left, queued);
+        lk.lock();
+        if (!go_on || std::chrono::steady_clock::now() >= end) {
+            return pending() == 0;
+        }
+    }
+    return true;
 }
 
 template <typename T>
