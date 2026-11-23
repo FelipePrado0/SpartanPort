@@ -50,6 +50,32 @@ static u32 DrawPrimitiveOf(const GraphicsPipeline& pipeline) {
     return DrawPrimitive(static_cast<u32>(prim), aux_tess);
 }
 
+// spartanport: a draw with no pixel shader, no colour target, no depth/stencil attachment and no
+// shader writing a buffer or an image changes nothing (GoW3 issues one as a 3-vertex rect list).
+// Intel's Gen9 Windows driver hangs the GPU on it (#1055), so it is not recorded on any GPU; the
+// first one is named in last_run.log whatever the GPU log level.
+static bool DrawsNothing(const GraphicsPipeline& pipeline, const AmdGpu::Regs& regs) {
+    const auto stages = pipeline.GetStages();
+    if (stages[u32(Shader::SwStage::Fragment)] || pipeline.GetGraphicsKey().mrt_mask ||
+        GetEffectiveDepthStencilState(regs).needs_attachment) {
+        return false;
+    }
+    for (const Shader::Info* stage : stages) {
+        if (stage && (std::ranges::any_of(stage->buffers, &Shader::BufferResource::is_written) ||
+                      std::ranges::any_of(stage->images, &Shader::ImageResource::is_written))) {
+            return false;
+        }
+    }
+    static std::atomic_flag reported;
+    if (!reported.test_and_set()) {
+        std::printf("GPU: draws without a pixel shader and without attachments are skipped "
+                    "(first: vs 0x%llx)\n",
+                    static_cast<unsigned long long>(
+                        pipeline.GetStage(Shader::SwStage::Vertex).pgm_hash));
+    }
+    return true;
+}
+
 static u32 UiColorMask(const GraphicsPipeline* pipeline, bool upscale) {
     const auto& key = pipeline->GetGraphicsKey();
     return upscale && key.mrt_mask == 3
@@ -1734,6 +1760,9 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
         // ponytail: assumes flips rotate display buffers; a single-buffer game counts one frame.
         NoteFrameStart();
     }
+    if (DrawsNothing(*pipeline, regs)) {
+        return;
+    }
     bind_prepared = used_prepared;
     motion_draw = pipeline->GetGraphicsKey().motion_vectors;
     motion_geometry = 0;
@@ -2024,6 +2053,9 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
     motion_draw = false;
     motion_geometry = 0;
     upscaler->RunPending();
+    if (DrawsNothing(*pipeline, Regs())) {
+        return;
+    }
     PrepareRenderState(pipeline);
     if (upscaler->Enabled() && pipeline->GetGraphicsKey().mrt_mask) {
         upscaler->OnGraphicsDraw(pipeline->GetStage(Shader::SwStage::Fragment).pgm_hash,
