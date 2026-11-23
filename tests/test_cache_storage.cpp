@@ -6,6 +6,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -31,6 +32,11 @@ public:
 } // namespace Core
 
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    // A failed assert writes to stderr instead of opening a dialog that waits for a click.
+    _set_error_mode(_OUT_TO_STDERR);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#endif
     assert(argc == 2); // Supply a new, test-owned directory inside the workspace.
     const auto root = std::filesystem::absolute(argv[1]);
     assert(!std::filesystem::exists(root));
@@ -158,6 +164,23 @@ int main(int argc, char** argv) {
     assert(!cache.Flush(std::chrono::milliseconds(50)));
     release.set_value();
     assert(cache.Flush(std::chrono::seconds(5)) && ran);
+    // The loading screen's Flush: progress runs while a write is held and counts none written,
+    // false ends the wait with the write still queued, and a released queue drains.
+    std::promise<void> hold;
+    {
+        std::scoped_lock lock{m_request};
+        req_queue.emplace([gate = hold.get_future().share()] { gate.wait(); });
+        req_queue.emplace([] {});
+    }
+    request_cv.notify_one();
+    unsigned paints = 0;
+    assert(!cache.Flush(std::chrono::seconds(5), [&](u32 written, u32 queued) {
+        assert(written == 0 && queued == 2);
+        return ++paints < 3;
+    }));
+    assert(paints == 3);
+    hold.set_value();
+    assert(cache.Flush(std::chrono::seconds(5), [](u32, u32) { return true; }));
     // A saved blob is on disk when Flush returns; a closed cache has nothing to flush.
     assert(cache.Save(Storage::BlobType::ShaderBinary, "flushed", std::vector<u32>{7}));
     assert(cache.Flush(std::chrono::seconds(5)));

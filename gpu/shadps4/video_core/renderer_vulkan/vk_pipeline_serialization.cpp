@@ -1368,10 +1368,6 @@ void PipelineCache::PrepareShaders(const std::filesystem::path& manifest_path,
             now.shaders_done = true;
             save_marker();
         }
-        // StartOnDemand lists the files next: they must be on disk.
-        if (!db.Flush(std::chrono::minutes(2))) {
-            LOG_WARNING(Render_Vulkan, "Shader preparation: cache writes still queued");
-        }
         std::printf("Shader preparation: %u written, %u kept, %u without code, %u refused, %u "
                     "pipeline keys in %.1f s (%u threads)%s\n",
                     stats.written, stats.kept, stats.no_code, stats.failed, stats.keys,

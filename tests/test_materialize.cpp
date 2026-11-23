@@ -2,7 +2,9 @@
 // Writes a small manifest into an empty shader cache with a stand-in translation: file names,
 // permutation hashes, pipeline keys, stopping and resuming, missing code, a cache that disagrees.
 #include <atomic>
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <fmt/format.h>
@@ -99,6 +101,11 @@ static std::vector<u8> MakeShader(u64 hash, u32 words) {
 }
 
 int main() {
+#ifdef _WIN32
+    // A failed assert writes to stderr instead of opening a dialog that waits for a click.
+    _set_error_mode(_OUT_TO_STDERR);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#endif
     const auto dir = fs::temp_directory_path() / "spartanport-materialize-test";
     fs::remove_all(dir);
     const auto game = dir / "game";
@@ -236,6 +243,25 @@ int main() {
                                   [](u32, u32) { return true; });
     flush();
     assert(stats.written == 1 && stats.no_code == 1 && replays == 1);
+
+    // A start that keeps every shader still writes each pipeline key again. Materialize waits for
+    // them itself, where progress keeps the loading screen painting: nothing is left in the queue
+    // when it returns (the game lists the cache next). The caller used to wait instead, and the
+    // screen stood at 100% for as long as the disk took (#1422).
+    Manifest::Manifest many{.serial = "TEST00000", .versions = Manifest::CurrentVersions()};
+    for (u32 i = 0; i < 1000; ++i) {
+        many.programs.push_back({0x10000 + i, u32(HwStage::Vertex), u32(SwStage::Vertex),
+                                 "EXEC/WAD/a.WAD", 0, 32, xxh(0)});
+        many.permutations.push_back({.program = i, .perm_idx = 0, .spec = Spec(70)});
+        many.pipelines.push_back(graphics);
+        many.pipelines.back().stages[0].permutation = i;
+    }
+    stats = Manifest::Materialize(many, game, StandIn, 4, false, [](u32, u32) { return true; });
+    flush();
+    assert(stats.written == 1000 && stats.keys == 1000);
+    stats = Manifest::Materialize(many, game, StandIn, 4, true, [](u32, u32) { return true; });
+    assert(stats.kept == 1000 && stats.keys == 1000);
+    assert(db.Flush(std::chrono::milliseconds(0)));
 
     db.Close();
     fs::remove_all(dir);
