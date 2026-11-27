@@ -124,6 +124,10 @@ struct Info : InfoPersistent {
 
     AttributeFlags loads{};
     AttributeFlags stores{};
+    /// spartanport: whether `stores` describes the outputs. True for a translated shader. A
+    /// shader loaded from the cache has no stores saved (Deserialize clears it); a vertex shader
+    /// gets them back when RestoreVertexOutputStores reads its SPIR-V. Not serialized.
+    bool output_stores_known{true};
 
     ReadConstType readconst_types{};
     CopyShaderData gs_copy_data;

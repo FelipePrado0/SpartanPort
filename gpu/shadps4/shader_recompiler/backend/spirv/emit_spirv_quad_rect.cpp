@@ -543,6 +543,7 @@ void RestoreVertexOutputStores(Info& info, std::span<const u32> spv) {
             info.stores.Set(IR::Attribute::ClipDistance);
         }
     }
+    info.output_stores_known = true; // even with no parameter outputs: the VS writes none
 }
 
 } // namespace Shader::Backend::SPIRV

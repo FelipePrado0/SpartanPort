@@ -45,8 +45,9 @@ using VsOutputs = std::array<u8, 32>;
 bool AuxTessInputsFromSpirv(std::span<const u32> tcs, HwFragmentRuntimeInfo& fs_info);
 
 /// spartanport: sets the parameter (and emulated clip distance) stores of a vertex shader Info
-/// from its SPIR-V. Info::stores is not saved with the shader meta, so a vertex shader loaded from
-/// the cache would otherwise look like it writes nothing. Does nothing for other stages.
+/// from its SPIR-V, and marks them known (Info::output_stores_known). Info::stores is not saved
+/// with the shader meta, so a vertex shader loaded from the cache would otherwise look like it
+/// writes nothing. Does nothing for other stages or when `spv` cannot be read.
 void RestoreVertexOutputStores(Info& info, std::span<const u32> spv);
 
 } // namespace Shader::Backend::SPIRV

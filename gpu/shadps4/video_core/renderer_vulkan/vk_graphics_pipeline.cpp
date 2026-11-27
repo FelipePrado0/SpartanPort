@@ -37,19 +37,13 @@ u64 NsSince(Clock::time_point start) {
 // spartanport: what the vertex shader writes at each output location, so the rect/quad TCS reads
 // the same interface (VUID-RuntimeSpirv-OpEntryPoint-08743; Intel's compiler crashes on a mismatch,
 // #1408). The locations follow EmitContext::DefineOutputs: param N at location N, one further with
-// the emulated clip distances at location 0. A vertex shader with no known parameter stores gives
-// every location as a full vec4, the interface the TCS had before.
+// the emulated clip distances at location 0. A vertex shader whose outputs are not known (stores
+// not restored from its SPIR-V) gives every location as a full vec4, the interface the TCS had
+// before; known outputs give zero width where nothing is written, even at every location.
 Shader::Backend::SPIRV::VsOutputs VertexOutputs(const Shader::Info* vs,
                                                 const Shader::Profile& profile) {
     using Shader::IR::Attribute;
-    if (!vs || vs->hw_stage != Shader::HwStage::Vertex) {
-        return Shader::Backend::SPIRV::AllVec4Outputs();
-    }
-    bool any_param = false;
-    for (u32 i = 0; i < Shader::IR::NumParams; i++) {
-        any_param |= vs->stores.GetAny(Attribute::Param0 + i);
-    }
-    if (!any_param) {
+    if (!vs || vs->hw_stage != Shader::HwStage::Vertex || !vs->output_stores_known) {
         return Shader::Backend::SPIRV::AllVec4Outputs();
     }
     Shader::Backend::SPIRV::VsOutputs outputs{};

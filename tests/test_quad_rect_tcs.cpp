@@ -146,7 +146,9 @@ int main(int argc, char** argv) {
         Info info{};
         info.hw_stage = HwStage::Vertex;
         info.sw_stage = SwStage::Vertex;
+        info.output_stores_known = false; // as Info::Deserialize leaves it
         RestoreVertexOutputStores(info, spv);
+        assert(info.output_stores_known);
         for (int i = 0; i < int(IR::NumParams); i++) {
             const bool expect = i == 0 || i == 1 || i == 5;
             assert(info.stores.GetAny(IR::Attribute::Param0 + i) == expect);
@@ -173,12 +175,37 @@ int main(int argc, char** argv) {
             assert(vs_out.contains(location) && vs_out.at(location) == comps);
         }
     }
+    // A vertex shader that writes no parameters is known to write none, so the TCS reads nothing
+    // from it; one whose SPIR-V cannot be read stays unknown (the TCS keeps every vec4 input).
+    {
+        Info none{};
+        none.hw_stage = HwStage::Vertex;
+        none.sw_stage = SwStage::Vertex;
+        none.output_stores_known = false;
+        RestoreVertexOutputStores(none, MakeVertexShader({}, false));
+        assert(none.output_stores_known);
+        for (int i = 0; i < int(IR::NumParams); i++) {
+            assert(!none.stores.GetAny(IR::Attribute::Param0 + i));
+        }
+        assert(Interface(EmitAuxilaryTessShader(AuxShaderType::RectListTCS, fs, VsOutputs{}),
+                         spv::StorageClass::Input)
+                   .empty());
+
+        Info unreadable{};
+        unreadable.hw_stage = HwStage::Vertex;
+        unreadable.sw_stage = SwStage::Vertex;
+        unreadable.output_stores_known = false;
+        RestoreVertexOutputStores(unreadable, std::vector<u32>{1, 2, 3});
+        assert(!unreadable.output_stores_known);
+    }
     // Other stages are left alone.
     Info fragment{};
     fragment.hw_stage = HwStage::Fragment;
     fragment.sw_stage = SwStage::Fragment;
+    fragment.output_stores_known = false;
     RestoreVertexOutputStores(fragment, MakeVertexShader({{0, 4}}, false));
     assert(!fragment.stores.GetAny(IR::Attribute::Param0));
+    assert(!fragment.output_stores_known);
 
     // Modules for spirv-val: every TCS shape (vec4, vec2, scalar, absent inputs) and the TES.
     VsOutputs mixed{};

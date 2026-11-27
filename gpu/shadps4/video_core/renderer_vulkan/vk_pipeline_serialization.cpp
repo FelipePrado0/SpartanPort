@@ -2219,6 +2219,7 @@ bool Info::Deserialize(Serialization::Archive& ar) {
 
     info.Read(this, sizeof(Shader::InfoPersistent));
     info.Read(flattened_ud_buf);
+    output_stores_known = false; // stores are not saved (RestoreVertexOutputStores)
 
     return srt_info.Deserialize(ar);
 }
