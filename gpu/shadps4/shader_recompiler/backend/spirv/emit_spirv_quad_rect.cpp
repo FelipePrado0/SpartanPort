@@ -1,8 +1,12 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstring>
+#include <string_view>
+#include <unordered_map>
 #include <sirit/sirit.h>
 #include "shader_recompiler/backend/spirv/emit_spirv_quad_rect.h"
+#include "shader_recompiler/info.h"
 #include "shader_recompiler/runtime_info.h"
 
 namespace Shader::Backend::SPIRV {
@@ -12,8 +16,9 @@ using Sirit::Id;
 constexpr u32 SPIRV_VERSION_1_5 = 0x00010500;
 
 struct QuadRectListEmitter : public Sirit::Module {
-    explicit QuadRectListEmitter(const HwFragmentRuntimeInfo& fs_info_)
-        : Sirit::Module{SPIRV_VERSION_1_5}, fs_info{fs_info_} {
+    explicit QuadRectListEmitter(const HwFragmentRuntimeInfo& fs_info_,
+                                 const VsOutputs& vs_outputs_)
+        : Sirit::Module{SPIRV_VERSION_1_5}, fs_info{fs_info_}, vs_outputs{vs_outputs_} {
         void_id = TypeVoid();
         bool_id = TypeBool();
         float_id = TypeFloat(32);
@@ -26,7 +31,9 @@ struct QuadRectListEmitter : public Sirit::Module {
 
         float_one = Constant(float_id, 1.0f);
         float_min_one = Constant(float_id, -1.0f);
+        float_zero = Constant(float_id, 0.0f);
         int_zero = Constant(int_id, 0);
+        vec4_zero = ConstantComposite(vec4_id, float_zero, float_zero, float_zero, float_zero);
 
         const Id float_arr{TypeArray(float_id, Constant(uint_id, 1U))};
         gl_per_vertex_type = TypeStruct(vec4_id, float_id, float_arr, float_arr);
@@ -118,12 +125,12 @@ struct QuadRectListEmitter : public Sirit::Module {
         // Set attributes
         for (int i = 0; i < inputs.size(); i++) {
             // vec4 in_paramN3 = interpolate(bary_coord, in_paramN[0], in_paramN[1], in_paramN[2]);
-            const Id v0{OpLoad(vec4_id, OpAccessChain(input_vec4, inputs[i], Int(0)))};
-            const Id v1{OpLoad(vec4_id, OpAccessChain(input_vec4, inputs[i], Int(1)))};
-            const Id v2{OpLoad(vec4_id, OpAccessChain(input_vec4, inputs[i], Int(2)))};
+            const Id v0{LoadInput(i, Int(0))};
+            const Id v1{LoadInput(i, Int(1))};
+            const Id v2{LoadInput(i, Int(2))};
             const Id in_param3{interpolate(v0, v1, v2)};
             // out_paramN[gl_InvocationID] = gl_InvocationID == 3 ? in_paramN3 : in_paramN[index];
-            const Id in_param{OpLoad(vec4_id, OpAccessChain(input_vec4, inputs[i], index))};
+            const Id in_param{LoadInput(i, index)};
             const Id out_param{OpSelect(vec4_id, invocation_3, in_param3, in_param)};
             OpStore(OpAccessChain(output_vec4, outputs[i], invocation_id), out_param);
         }
@@ -163,7 +170,7 @@ struct QuadRectListEmitter : public Sirit::Module {
 
         for (int i = 0; i < inputs.size(); i++) {
             // out_paramN[gl_InvocationID] = in_paramN[gl_InvocationID];
-            const Id in_param{OpLoad(vec4_id, OpAccessChain(input_vec4, inputs[i], index))};
+            const Id in_param{LoadInput(i, index)};
             OpStore(OpAccessChain(output_vec4, outputs[i], invocation_id), in_param);
         }
 
@@ -275,20 +282,63 @@ private:
         }
         const Id gl_per_vertex_array{TypeArray(gl_per_vertex_type, Constant(uint_id, 32U))};
         gl_in = AddInput(gl_per_vertex_array);
-        const Id float_arr{TypeArray(vec4_id, Int(32))};
         inputs.reserve(fs_info.num_inputs);
+        input_components.reserve(fs_info.num_inputs);
         for (int i = 0; i < fs_info.num_inputs; i++) {
             const auto& input = fs_info.inputs[i];
             if (input.IsDefault()) {
                 continue;
             }
-            inputs.emplace_back(AddInput(float_arr));
+            // spartanport: the TES reads the TCS outputs, which are always vec4. The TCS reads the
+            // vertex shader outputs, so it mirrors them: same location, same component count, and
+            // no input at all where the vertex shader writes nothing (LoadInput gives zero there).
+            u32 components = 4;
+            if (model == spv::ExecutionModel::TessellationControl) {
+                components = input.param_index < vs_outputs.size()
+                                 ? std::min<u32>(vs_outputs[input.param_index], 4)
+                                 : 0;
+            }
+            input_components.push_back(components);
+            if (components == 0) {
+                inputs.push_back(vec4_zero);
+                continue;
+            }
+            inputs.emplace_back(AddInput(TypeArray(ComponentType(components), Int(32))));
             Decorate(inputs.back(), spv::Decoration::Location, input.param_index);
         }
     }
 
+    Id ComponentType(u32 components) {
+        return components == 1 ? float_id : TypeVector(float_id, components);
+    }
+
+    /// spartanport: input i at control point `index`, as a vec4. Inputs narrower than a vec4 are
+    /// padded with (0, 0, 0, 1); inputs the vertex shader does not write read as zero.
+    Id LoadInput(size_t i, Id index) {
+        const u32 components = input_components[i];
+        if (components == 0) {
+            return vec4_zero;
+        }
+        const Id type{ComponentType(components)};
+        const Id pointer{TypePointer(spv::StorageClass::Input, type)};
+        const Id value{OpLoad(type, OpAccessChain(pointer, inputs[i], index))};
+        if (components == 4) {
+            return value;
+        }
+        std::array<Id, 4> parts;
+        for (u32 c = 0; c < 4; c++) {
+            if (c < components) {
+                parts[c] = components == 1 ? value : OpCompositeExtract(float_id, value, c);
+            } else {
+                parts[c] = c == 3 ? float_one : float_zero;
+            }
+        }
+        return OpCompositeConstruct(vec4_id, parts);
+    }
+
 private:
     HwFragmentRuntimeInfo fs_info;
+    VsOutputs vs_outputs;
     Id main;
     Id void_id;
     Id bool_id;
@@ -301,7 +351,9 @@ private:
     Id vec4_id;
     Id float_one;
     Id float_min_one;
+    Id float_zero;
     Id int_zero;
+    Id vec4_zero;
     Id gl_per_vertex_type;
     Id gl_in;
     union {
@@ -315,12 +367,14 @@ private:
         Id gl_invocation_id;
     };
     std::vector<Id> inputs;
+    std::vector<u32> input_components; ///< One per entry of `inputs`; 0 = not written by the VS.
     std::vector<Id> outputs;
     std::vector<Id> interfaces;
 };
 
-std::vector<u32> EmitAuxilaryTessShader(AuxShaderType type, const HwFragmentRuntimeInfo& fs_info) {
-    QuadRectListEmitter ctx{fs_info};
+std::vector<u32> EmitAuxilaryTessShader(AuxShaderType type, const HwFragmentRuntimeInfo& fs_info,
+                                        const VsOutputs& vs_outputs) {
+    QuadRectListEmitter ctx{fs_info, vs_outputs};
     switch (type) {
     case AuxShaderType::RectListTCS:
         ctx.EmitRectListTCS();
@@ -333,6 +387,162 @@ std::vector<u32> EmitAuxilaryTessShader(AuxShaderType type, const HwFragmentRunt
         break;
     }
     return ctx.Assemble();
+}
+
+namespace {
+
+// spartanport: the few SPIR-V module facts the helpers below need, read in one pass.
+struct ModuleScan {
+    struct Variable {
+        u32 id;
+        u32 pointer_type;
+    };
+    std::unordered_map<u32, std::string_view> names;
+    std::unordered_map<u32, u32> locations;
+    std::unordered_map<u32, bool> builtins;
+    std::unordered_map<u32, u32> pointee_types; ///< OpTypePointer -> pointee
+    std::unordered_map<u32, u32> vector_sizes;  ///< OpTypeVector -> component count
+    std::unordered_map<u32, bool> float_types;
+    std::vector<Variable> outputs; ///< Output storage class variables, in module order.
+};
+
+bool ScanModule(std::span<const u32> spv, ModuleScan& scan) {
+    constexpr u32 HeaderWords = 5;
+    if (spv.size() < HeaderWords || spv[0] != spv::MagicNumber) {
+        return false;
+    }
+    for (size_t pos = HeaderWords; pos < spv.size();) {
+        const u32 count = spv[pos] >> 16;
+        const auto op = spv::Op(spv[pos] & 0xffff);
+        if (count == 0 || pos + count > spv.size()) {
+            return false;
+        }
+        const auto words = spv.subspan(pos + 1, count - 1);
+        switch (op) {
+        case spv::Op::OpName:
+            if (words.size() >= 2) {
+                const auto* chars = reinterpret_cast<const char*>(words.data() + 1);
+                const size_t max_len = (words.size() - 1) * sizeof(u32);
+                scan.names[words[0]] = std::string_view{chars, strnlen(chars, max_len)};
+            }
+            break;
+        case spv::Op::OpDecorate:
+            if (words.size() >= 3 && spv::Decoration(words[1]) == spv::Decoration::Location) {
+                scan.locations[words[0]] = words[2];
+            } else if (words.size() >= 2 && spv::Decoration(words[1]) == spv::Decoration::BuiltIn) {
+                scan.builtins[words[0]] = true;
+            }
+            break;
+        case spv::Op::OpTypeFloat:
+            if (words.size() >= 2 && words[1] == 32) {
+                scan.float_types[words[0]] = true;
+            }
+            break;
+        case spv::Op::OpTypeVector:
+            if (words.size() >= 3) {
+                scan.vector_sizes[words[0]] = words[2];
+            }
+            break;
+        case spv::Op::OpTypePointer:
+            if (words.size() >= 3) {
+                scan.pointee_types[words[0]] = words[2];
+            }
+            break;
+        case spv::Op::OpVariable:
+            if (words.size() >= 3 && spv::StorageClass(words[2]) == spv::StorageClass::Output) {
+                scan.outputs.push_back({words[1], words[0]});
+            }
+            break;
+        case spv::Op::OpFunction:
+            return true; // the global declarations are all read
+        default:
+            break;
+        }
+        pos += count;
+    }
+    return true;
+}
+
+/// Components of a float scalar or vector output; 0 for any other type.
+u32 FloatComponents(const ModuleScan& scan, u32 pointer_type) {
+    const auto pointee = scan.pointee_types.find(pointer_type);
+    if (pointee == scan.pointee_types.end()) {
+        return 0;
+    }
+    if (scan.float_types.contains(pointee->second)) {
+        return 1;
+    }
+    const auto vector = scan.vector_sizes.find(pointee->second);
+    return vector != scan.vector_sizes.end() ? std::min<u32>(vector->second, 4) : 0;
+}
+
+/// The N of a name "<prefix>N", or -1.
+s32 NameIndex(std::string_view name, std::string_view prefix) {
+    if (!name.starts_with(prefix) || name.size() == prefix.size() ||
+        name.size() > prefix.size() + 2) {
+        return -1;
+    }
+    s32 index = 0;
+    for (const char c : name.substr(prefix.size())) {
+        if (c < '0' || c > '9') {
+            return -1;
+        }
+        index = index * 10 + (c - '0');
+    }
+    return index;
+}
+
+} // namespace
+
+bool AuxTessInputsFromSpirv(std::span<const u32> tcs, HwFragmentRuntimeInfo& fs_info) {
+    ModuleScan scan;
+    if (!ScanModule(tcs, scan)) {
+        return false;
+    }
+    // The auxiliary TCS has one output per non-default fragment input, at its param_index, in the
+    // order of the fragment inputs; the other outputs (gl_out, tessellation levels) have none.
+    fs_info = {};
+    for (const auto& output : scan.outputs) {
+        const auto location = scan.locations.find(output.id);
+        if (location == scan.locations.end() || scan.builtins.contains(output.id)) {
+            continue;
+        }
+        if (fs_info.num_inputs == fs_info.inputs.size() || location->second > 0xff) {
+            return false;
+        }
+        auto& input = fs_info.inputs[fs_info.num_inputs++];
+        input.param_index = u8(location->second);
+        input.is_default = false;
+        input.is_flat = false;
+    }
+    return true;
+}
+
+void RestoreVertexOutputStores(Info& info, std::span<const u32> spv) {
+    if (info.hw_stage != HwStage::Vertex || info.sw_stage != SwStage::Vertex) {
+        return;
+    }
+    ModuleScan scan;
+    if (!ScanModule(spv, scan)) {
+        return;
+    }
+    // The vertex shader names its outputs out_attr<param> (and cldist_attr0 for the emulated clip
+    // distances), see EmitContext::DefineOutputs.
+    for (const auto& output : scan.outputs) {
+        const auto name = scan.names.find(output.id);
+        if (name == scan.names.end()) {
+            continue;
+        }
+        const u32 components = FloatComponents(scan, output.pointer_type);
+        if (const s32 param = NameIndex(name->second, "out_attr");
+            param >= 0 && u32(param) < IR::NumParams) {
+            for (u32 c = 0; c < components; c++) {
+                info.stores.Set(IR::Attribute::Param0 + param, c);
+            }
+        } else if (NameIndex(name->second, "cldist_attr") == 0) {
+            info.stores.Set(IR::Attribute::ClipDistance);
+        }
+    }
 }
 
 } // namespace Shader::Backend::SPIRV

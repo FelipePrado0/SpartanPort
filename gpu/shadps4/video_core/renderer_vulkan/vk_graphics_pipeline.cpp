@@ -10,6 +10,7 @@
 #include "common/assert.h"
 #include "shader_recompiler/backend/spirv/emit_spirv_discard_frag.h"
 #include "shader_recompiler/backend/spirv/emit_spirv_quad_rect.h"
+#include "shader_recompiler/info.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_blend_rewrite.h"
 #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
@@ -31,6 +32,40 @@ namespace {
 using Clock = std::chrono::steady_clock;
 u64 NsSince(Clock::time_point start) {
     return u64(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
+}
+
+// spartanport: what the vertex shader writes at each output location, so the rect/quad TCS reads
+// the same interface (VUID-RuntimeSpirv-OpEntryPoint-08743; Intel's compiler crashes on a mismatch,
+// #1408). The locations follow EmitContext::DefineOutputs: param N at location N, one further with
+// the emulated clip distances at location 0. A vertex shader with no known parameter stores gives
+// every location as a full vec4, the interface the TCS had before.
+Shader::Backend::SPIRV::VsOutputs VertexOutputs(const Shader::Info* vs,
+                                                const Shader::Profile& profile) {
+    using Shader::IR::Attribute;
+    if (!vs || vs->hw_stage != Shader::HwStage::Vertex) {
+        return Shader::Backend::SPIRV::AllVec4Outputs();
+    }
+    bool any_param = false;
+    for (u32 i = 0; i < Shader::IR::NumParams; i++) {
+        any_param |= vs->stores.GetAny(Attribute::Param0 + i);
+    }
+    if (!any_param) {
+        return Shader::Backend::SPIRV::AllVec4Outputs();
+    }
+    Shader::Backend::SPIRV::VsOutputs outputs{};
+    const bool clip_emulation =
+        profile.needs_clip_distance_emulation && vs->stores.GetAny(Attribute::ClipDistance);
+    const u32 base = clip_emulation ? 1 : 0;
+    if (clip_emulation) {
+        outputs[0] = u8(Shader::MaxEmulatedClipDistances);
+    }
+    for (u32 i = 0; i < Shader::IR::NumParams && base + i < outputs.size(); i++) {
+        const auto param = Attribute::Param0 + i;
+        if (vs->stores.GetAny(param)) {
+            outputs[base + i] = u8(vs->stores.NumComponents(param));
+        }
+    }
+    return outputs;
 }
 } // namespace
 
@@ -212,9 +247,17 @@ GraphicsPipeline::GraphicsPipeline(
         });
     } else if (is_rect_list || is_quad_list) {
         const auto type = is_quad_list ? AuxShaderType::QuadListTCS : AuxShaderType::RectListTCS;
+        const auto* vs_info = infos[u32(Shader::SwStage::Vertex)];
         if (!preloading) {
             const auto& fs_info = runtime_infos[u32(Shader::SwStage::Fragment)].hw.fs;
-            sdata.tcs = Shader::Backend::SPIRV::EmitAuxilaryTessShader(type, fs_info);
+            sdata.tcs = Shader::Backend::SPIRV::EmitAuxilaryTessShader(
+                type, fs_info, VertexOutputs(vs_info, profile));
+        } else if (Shader::HwFragmentRuntimeInfo stored_fs{};
+                   Shader::Backend::SPIRV::AuxTessInputsFromSpirv(sdata.tcs, stored_fs)) {
+            // spartanport: a saved TCS (the cache, the shipped shader list) may predate the VS
+            // mirroring; emit it again from its own fragment inputs and the loaded vertex shader.
+            sdata.tcs = Shader::Backend::SPIRV::EmitAuxilaryTessShader(
+                type, stored_fs, VertexOutputs(vs_info, profile));
         }
         shader_stages.emplace_back(vk::PipelineShaderStageCreateInfo{
             .stage = vk::ShaderStageFlagBits::eTessellationControl,
