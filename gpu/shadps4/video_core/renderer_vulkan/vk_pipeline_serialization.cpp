@@ -1545,22 +1545,30 @@ bool PipelineCache::DiskShadersActive() const {
 
 void PipelineCache::IndexDiskShaders() {
     auto& db = Storage::DataBase::Instance();
-    for (const auto& name : db.ListBlobs(Storage::BlobType::ShaderBinary)) {
-        const auto sep = name.rfind('_');
-        if (sep == std::string::npos) {
-            continue;
-        }
-        const u64 hash = std::strtoull(name.substr(0, sep).c_str(), nullptr, 16);
-        const auto idx = std::strtoul(name.c_str() + sep + 1, nullptr, 10);
-        if (hash && idx < 64) {
-            disk_permutations[hash].push_back(u32(idx));
+    if (!db.IsOpened() || !db.ConcurrentReads()) {
+        return;
+    }
+    const auto cache_path = Common::FS::GetUserPath(Common::FS::PathType::CacheDir) /
+                            Common::ElfInfo::Instance().GameSerial();
+    std::error_code error;
+    for (const auto& entry : std::filesystem::directory_iterator{cache_path, error}) {
+        const auto ext = entry.path().extension();
+        if (ext == ".spv") {
+            const auto stem = entry.path().stem().string();
+            const auto sep = stem.rfind('_');
+            if (sep != std::string::npos) {
+                const u64 hash = std::strtoull(stem.substr(0, sep).c_str(), nullptr, 16);
+                const auto idx = std::strtoul(stem.c_str() + sep + 1, nullptr, 10);
+                if (hash && idx < 64) {
+                    disk_permutations[hash].push_back(u32(idx));
+                }
+            }
+        } else if (ext == ".key") {
+            disk_pipeline_keys.insert(entry.path().stem().string());
         }
     }
     for (auto& [hash, indices] : disk_permutations) {
         std::ranges::sort(indices);
-    }
-    for (auto& name : db.ListBlobs(Storage::BlobType::PipelineKey)) {
-        disk_pipeline_keys.insert(std::move(name));
     }
 }
 
@@ -1586,16 +1594,14 @@ static std::vector<DiskBlob> ReadDiskProgram(u64 hash, const std::vector<u32>& i
     return blobs;
 }
 
-// spartanport: one low-priority thread reads every saved program once at startup, so the GPU thread
-// finds the files in the system's file cache instead of waiting on the disk. The data is not kept:
-// with the shipped list that is about 1 GB, and the system frees its file cache when memory runs
-// short. A program the GPU thread needs first is claimed and read there instead.
+// spartanport: worker threads read saved programs in sorted directory order at startup, so the GPU
+// thread finds the files in the system's file cache instead of waiting on mechanical disk seeks.
 struct PipelineCache::DiskPrefetch {
     std::mutex mutex;
     std::unordered_set<u64> claimed;
     std::atomic<u32> done{}, total{};
     std::atomic<bool> finished{};
-    std::jthread thread;
+    std::vector<std::jthread> threads;
 };
 
 void PipelineCache::StartDiskPrefetch() {
@@ -1604,47 +1610,69 @@ void PipelineCache::StartDiskPrefetch() {
     if (work.empty()) {
         return;
     }
+    // spartanport: sort by program hash so reads traverse the directory sequentially instead
+    // of seeking randomly across an HDD platter.
+    std::ranges::sort(work, {}, [](const auto& p) { return p.first; });
+
     disk_prefetch = new DiskPrefetch;
     disk_prefetch->total = u32(work.size());
-    disk_prefetch->thread = std::jthread{[prefetch = disk_prefetch, work = std::move(work)](
-                                             std::stop_token stop) {
-        Common::SetCurrentThreadName("spartanport:ShaderPrefetch");
-        Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
-        // Whatever happens here, the loading screen waiting on it must not wait forever.
-        struct Finished {
-            DiskPrefetch* prefetch;
-            ~Finished() {
-                prefetch->finished = true;
-            }
-        } finished{prefetch};
-        const auto started = std::chrono::steady_clock::now();
-        const u32 total = prefetch->total;
-        u64 programs = 0, bytes = 0;
-        for (const auto& [hash, indices] : work) {
-            if (stop.stop_requested()) {
-                SpartanOverlay::SetShaderPrefetch(0, 0);
-                return;
-            }
-            SpartanOverlay::SetShaderPrefetch(prefetch->done++, total);
-            {
-                std::scoped_lock lock{prefetch->mutex};
-                if (prefetch->claimed.contains(hash)) {
-                    continue;
+    const u32 total = disk_prefetch->total;
+    const u32 num_threads = std::clamp(
+        std::thread::hardware_concurrency() > 2 ? std::thread::hardware_concurrency() - 2 : 1u,
+        1u, 4u);
+    auto next_index = std::make_shared<std::atomic<size_t>>(0);
+    auto shared_work =
+        std::make_shared<std::vector<std::pair<u64, std::vector<u32>>>>(std::move(work));
+    auto active_workers = std::make_shared<std::atomic<u32>>(num_threads);
+    const auto started = std::chrono::steady_clock::now();
+
+    for (u32 t = 0; t < num_threads; ++t) {
+        disk_prefetch->threads.emplace_back([prefetch = disk_prefetch, shared_work, next_index,
+                                             active_workers, total, started, t, num_threads](std::stop_token stop) {
+            Common::SetCurrentThreadName(fmt::format("spartanport:Prefetch{}", t));
+            Common::SetCurrentThreadPriority(Common::ThreadPriority::Low);
+            auto& db = Storage::DataBase::Instance();
+            while (!stop.stop_requested()) {
+                const size_t i = next_index->fetch_add(1, std::memory_order_relaxed);
+                if (i >= total) {
+                    break;
+                }
+                const auto& [hash, indices] = (*shared_work)[i];
+                bool skip = false;
+                {
+                    std::scoped_lock lock{prefetch->mutex};
+                    skip = prefetch->claimed.contains(hash);
+                }
+                if (!skip) {
+                    for (const u32 idx : indices) {
+                        db.Prefetch(Storage::BlobType::ShaderMeta,
+                                    fmt::format("{:#018x}", HashCombine(hash, u64{idx})));
+                        db.Prefetch(Storage::BlobType::ShaderBinary,
+                                    fmt::format("{:#018x}_{}", hash, idx));
+                    }
+                }
+                const u32 d = prefetch->done.fetch_add(1, std::memory_order_relaxed) + 1;
+                if ((d & 63) == 0 || d >= total) {
+                    SpartanOverlay::SetShaderPrefetch(d, total);
                 }
             }
-            for (const auto& blob : ReadDiskProgram(hash, indices)) {
-                bytes += blob.meta.size() + blob.spv.size() * sizeof(u32);
+            if (active_workers->fetch_sub(1, std::memory_order_acq_rel) == 1) {
+                if (stop.stop_requested()) {
+                    SpartanOverlay::SetShaderPrefetch(0, 0);
+                } else {
+                    prefetch->done = total;
+                    SpartanOverlay::SetShaderPrefetch(total, total);
+                    prefetch->finished = true;
+                    std::printf("Disk shaders: prefetch read %u programs in %.0f ms (%u threads)\n",
+                                total,
+                                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+                                                                          started)
+                                    .count(),
+                                num_threads);
+                }
             }
-            ++programs;
-        }
-        prefetch->done = total;
-        SpartanOverlay::SetShaderPrefetch(total, total);
-        std::printf("Disk shaders: prefetch read %llu programs (%.1f MB) in %.0f ms\n",
-                    static_cast<unsigned long long>(programs), bytes / 1048576.0,
-                    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
-                                                              started)
-                        .count());
-    }};
+        });
+    }
 }
 
 // spartanport (SpartanToggle::SharedBinaries): files written before shared storage (or with the bit off)
@@ -1686,6 +1714,7 @@ void PipelineCache::StopBinaryConversion() {
 void PipelineCache::WaitDiskPrefetch(const std::function<bool(u32, u32)>& progress) {
     while (disk_prefetch && !disk_prefetch->finished) {
         if (!progress(disk_prefetch->done, disk_prefetch->total)) {
+            StopDiskPrefetch();
             return;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(33));

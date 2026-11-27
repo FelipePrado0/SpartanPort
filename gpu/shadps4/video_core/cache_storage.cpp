@@ -13,6 +13,13 @@
 
 #include <miniz.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#endif
+
 #include <condition_variable>
 // spartanport: callbacks report write exceptions instead of hiding them in unused futures.
 #include <exception>
@@ -257,6 +264,36 @@ void DataBase::Load(BlobType type, const std::string& name, std::vector<u32>& da
     auto path = EmulatorSettings.IsPipelineCacheArchived() ? std::filesystem::path{name}
                                                            : cache_path / name;
     return LoadVector(type, path, data);
+}
+
+void DataBase::Prefetch(BlobType type, const std::string& name) {
+    if (!opened || EmulatorSettings.IsPipelineCacheArchived()) {
+        return;
+    }
+
+    auto path = cache_path / name;
+    path.replace_extension(GetBlobFileExtension(type));
+#ifdef _WIN32
+    const HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                 nullptr, OPEN_EXISTING,
+                                 FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    if (h != INVALID_HANDLE_VALUE) {
+        char buf[4096];
+        DWORD read_bytes = 0;
+        while (ReadFile(h, buf, sizeof(buf), &read_bytes, nullptr) && read_bytes > 0) {}
+        CloseHandle(h);
+    }
+#else
+    const int fd = open(path.c_str(), O_RDONLY);
+    if (fd >= 0) {
+#ifdef __linux__
+        posix_fadvise(fd, 0, 0, POSIX_FADV_WILLNEED);
+#endif
+        char buf[4096];
+        while (read(fd, buf, sizeof(buf)) > 0) {}
+        close(fd);
+    }
+#endif
 }
 
 size_t DataBase::CountBlobs(BlobType type) {
