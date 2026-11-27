@@ -33,6 +33,7 @@
 #include "spartanport_overlay.h"
 #include "spartanport_toggles.h"
 #include "core/emulator_settings.h"
+#include "shader_recompiler/backend/spirv/emit_spirv_quad_rect.h"
 #include "shader_recompiler/frontend/fetch_shader.h"
 #include "shader_recompiler/info.h"
 #include "video_core/amdgpu/spartanport_msaa.h"
@@ -1030,6 +1031,7 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
     if (spv.empty()) {
         return false;
     }
+    Shader::Backend::SPIRV::RestoreVertexOutputStores(program->info, spv);
 
     // Permutation hash depends on shader variation index. To prevent collisions, we need insert it
     // at the exact position rather than append
@@ -1491,6 +1493,7 @@ bool PipelineCache::PreparePipelines(const std::filesystem::path& cache_dir, u64
                 ++skipped;
                 return;
             }
+            Shader::Backend::SPIRV::RestoreVertexOutputStores(stage_infos[stage], spv);
             infos[stage] = &stage_infos[stage];
             if (stage_fetch) {
                 fetch = stage_fetch;
@@ -1733,6 +1736,7 @@ bool PipelineCache::LoadDiskProgram(u64 hash) {
         if (!module) {
             continue;
         }
+        Shader::Backend::SPIRV::RestoreVertexOutputStores(info, blob.spv);
         if (!have_info) {
             program->info = std::move(info);
             have_info = true;
@@ -1984,6 +1988,8 @@ void PipelineCache::ReadWarmEntry(BackgroundWarmup& warm, std::vector<u8>&& data
                                         stage->perm_idx),
                             spv);
                     if (!spv.empty()) {
+                        Shader::Backend::SPIRV::RestoreVertexOutputStores(stage->program->info,
+                                                                          spv);
                         const auto module_started = std::chrono::steady_clock::now();
                         stage->module = CompileSPV(spv, stage->device);
                         module_time = ElapsedNs(module_started);
@@ -2213,6 +2219,7 @@ bool Info::Deserialize(Serialization::Archive& ar) {
 
     info.Read(this, sizeof(Shader::InfoPersistent));
     info.Read(flattened_ud_buf);
+    output_stores_known = false; // stores are not saved (RestoreVertexOutputStores)
 
     return srt_info.Deserialize(ar);
 }
